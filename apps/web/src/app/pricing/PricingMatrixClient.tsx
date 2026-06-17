@@ -153,7 +153,7 @@ const SOURCE_TONE: Record<string, string> = {
   CHANNEL_OVERRIDE: 'bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-900',
   CHANNEL_RULE: 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-900',
   PRICING_RULE: 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
-  MASTER_INHERIT: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800',
+  MASTER_INHERIT: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800',
   FALLBACK: 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
 }
 
@@ -760,7 +760,7 @@ export default function PricingMatrixClient() {
           <div className="relative flex-1 min-w-[240px] max-w-sm">
             <Search
               size={13}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500 pointer-events-none"
             />
             <input
               ref={searchInputRef}
@@ -771,7 +771,7 @@ export default function PricingMatrixClient() {
                 setSearch(e.target.value)
                 setPage(0)
               }}
-              className="w-full h-8 pl-8 pr-3 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-600"
+              className="w-full h-8 pl-8 pr-3 text-sm border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-tertiary dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-600"
             />
           </div>
         }
@@ -790,7 +790,7 @@ export default function PricingMatrixClient() {
           <button
             type="button"
             onClick={() => setPreferencesOpen(true)}
-            className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
+            className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
             title={t('grid.preferences.trigger')}
             aria-haspopup="dialog"
           >
@@ -817,7 +817,7 @@ export default function PricingMatrixClient() {
           <button
             type="button"
             onClick={() => setShortcutsOpen(true)}
-            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            className="h-7 w-7 inline-flex items-center justify-center border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
             title="Keyboard shortcuts (?)"
             aria-label="Keyboard shortcuts"
           >
@@ -880,7 +880,7 @@ export default function PricingMatrixClient() {
               value={bulkValue}
               onChange={(e) => setBulkValue(e.target.value)}
               aria-label={bulkMode === 'SET_FIXED' ? 'New price' : 'Discount %'}
-              className="h-8 w-28 px-2.5 rounded-md border border-slate-500 bg-slate-700 text-white text-sm tabular-nums placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              className="h-8 w-28 px-2.5 rounded-md border border-slate-500 bg-slate-700 text-white text-sm tabular-nums placeholder:text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
             />
           )}
 
@@ -970,7 +970,7 @@ export default function PricingMatrixClient() {
           />
 
           {/* Pagination — by parent product, not by snapshot. */}
-          <div className="px-4 py-2.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-base text-slate-600 dark:text-slate-400">
+          <div className="px-4 py-2.5 border-t border-default dark:border-slate-800 flex items-center justify-between text-base text-slate-600 dark:text-slate-400">
             <span>
               {t('pricing.grid.productsFooter', { n: data.total, s: data.total === 1 ? '' : 's' })}
               {' · '}page {data.page + 1} / {Math.max(1, totalPages)}
@@ -1108,7 +1108,7 @@ export default function PricingMatrixClient() {
                 {t('pricing.bulk.confirm.audit')}
               </div>
             </div>
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-default dark:border-slate-800">
               <Button
                 variant="secondary"
                 size="md"
@@ -1226,7 +1226,7 @@ function renderParentCell(row: ParentRow, key: string, ctx: RenderCellCtx): Reac
         <span className="tabular-nums font-semibold text-slate-900 dark:text-slate-100">
           {row.avgPriceCents != null ? `€${formatPriceCents(row.avgPriceCents)}` : '—'}
           {row.snapshotCount > 0 && (
-            <span className="ml-1 text-xs font-normal text-slate-400 dark:text-slate-500">
+            <span className="ml-1 text-xs font-normal text-tertiary dark:text-slate-500">
               {t('pricing.grid.avgSuffix', { n: row.snapshotCount })}
             </span>
           )}
@@ -1260,7 +1260,7 @@ function renderParentCell(row: ParentRow, key: string, ctx: RenderCellCtx): Reac
             </span>
           )}
           {row.clampedCount === 0 && row.warningsCount === 0 && (
-            <span className="text-slate-400 dark:text-slate-500">—</span>
+            <span className="text-tertiary dark:text-slate-500">—</span>
           )}
         </div>
       )
@@ -1274,7 +1274,7 @@ function renderParentCell(row: ParentRow, key: string, ctx: RenderCellCtx): Reac
 const CHIP_TONE: Record<string, string> = {
   FALLBACK: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
   CLAMPED:  'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
-  NEUTRAL:  'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+  NEUTRAL:  'bg-slate-50 text-slate-600 border-default dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
 }
 
 function ChannelChip({
@@ -1404,7 +1404,7 @@ function renderVariantCell(row: VariantRow, key: string, ctx: RenderCellCtx): Re
       return (
         <div className="flex items-center gap-1 flex-wrap">
           {row.channelChips.length === 0 ? (
-            <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+            <span className="text-xs text-tertiary dark:text-slate-500">—</span>
           ) : (
             row.channelChips.map((chip) => (
               <ChannelChip
@@ -1444,7 +1444,7 @@ function renderVariantCell(row: VariantRow, key: string, ctx: RenderCellCtx): Re
               <AlertCircle size={11} /> {primary.warnings.length}
             </span>
           ) : (
-            <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+            <span className="text-xs text-tertiary dark:text-slate-500">—</span>
           )}
         </div>
       )
@@ -1453,7 +1453,7 @@ function renderVariantCell(row: VariantRow, key: string, ctx: RenderCellCtx): Re
         <button
           type="button"
           onClick={() => ctx.openDrawer(primary)}
-          className="text-slate-400 dark:text-slate-500 hover:text-slate-700"
+          className="text-tertiary dark:text-slate-500 hover:text-slate-700"
           title="Open detail drawer"
         >
           <ChevronRight size={14} />
@@ -1607,7 +1607,7 @@ function PricingDetailDrawer({
         />
 
         {/* Push action */}
-        <div className="border border-slate-200 dark:border-slate-800 rounded p-3">
+        <div className="border border-default dark:border-slate-800 rounded p-3">
           <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
             {t('pricing.drawer.pushTitle')}
           </div>
@@ -1629,7 +1629,7 @@ function PricingDetailDrawer({
         </div>
 
         {row.computedAt && (
-          <div className="text-sm text-slate-400 dark:text-slate-500">
+          <div className="text-sm text-tertiary dark:text-slate-500">
             {t('pricing.drawer.lastComputed', {
               when: new Date(row.computedAt).toLocaleString(),
             })}
@@ -1663,7 +1663,7 @@ function Item({
       <dt className="text-slate-500 dark:text-slate-400">{label}</dt>
       <dd className="font-mono text-slate-800 dark:text-slate-200 text-right tabular-nums">
         {display}
-        {suffix ? <span className="text-slate-400 dark:text-slate-500 ml-1">{suffix}</span> : null}
+        {suffix ? <span className="text-tertiary dark:text-slate-500 ml-1">{suffix}</span> : null}
       </dd>
     </>
   )
@@ -1819,27 +1819,27 @@ function PriceHistorySection({
   const currency = events[0]?.currency ?? 'EUR'
 
   return (
-    <div className="border border-slate-200 dark:border-slate-800 rounded p-3">
+    <div className="border border-default dark:border-slate-800 rounded p-3">
       <div className="flex items-center gap-1.5 text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
         <Clock size={12} />
         Price history
         {!loading && events.length > 0 && (
-          <span className="ml-1 text-slate-400 dark:text-slate-500 normal-case font-normal tracking-normal">
+          <span className="ml-1 text-tertiary dark:text-slate-500 normal-case font-normal tracking-normal">
             ({events.length})
           </span>
         )}
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-base text-slate-400 dark:text-slate-500 py-2">
+        <div className="flex items-center gap-2 text-base text-tertiary dark:text-slate-500 py-2">
           <Loader2 size={14} className="animate-spin" /> Loading…
         </div>
       ) : error ? (
-        <div className="text-base text-slate-400 dark:text-slate-500 py-2">
+        <div className="text-base text-tertiary dark:text-slate-500 py-2">
           Couldn’t load history ({error}).
         </div>
       ) : events.length === 0 ? (
-        <div className="text-base text-slate-400 dark:text-slate-500 py-2">
+        <div className="text-base text-tertiary dark:text-slate-500 py-2">
           No recorded price changes yet. Changes from bulk edits, the
           repricer, and promotions will appear here.
         </div>
@@ -1857,7 +1857,7 @@ function PriceHistorySection({
                   className={cn(
                     'mt-0.5 px-1.5 py-0.5 rounded border text-xs font-medium whitespace-nowrap',
                     PRICE_SOURCE_CHIP[e.source] ??
-                      'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+                      'bg-slate-50 text-slate-600 border-default dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
                   )}
                 >
                   {PRICE_SOURCE_LABEL[e.source] ?? e.source}
@@ -1865,11 +1865,11 @@ function PriceHistorySection({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 font-mono tabular-nums text-slate-800 dark:text-slate-200">
                     {e.oldPrice != null && (
-                      <span className="text-slate-400 dark:text-slate-500 line-through">
+                      <span className="text-tertiary dark:text-slate-500 line-through">
                         {e.oldPrice.toFixed(2)}
                       </span>
                     )}
-                    {e.oldPrice != null && <ChevronRight size={12} className="text-slate-400" />}
+                    {e.oldPrice != null && <ChevronRight size={12} className="text-tertiary" />}
                     <span className="font-semibold">
                       {e.newPrice != null ? `${e.newPrice.toFixed(2)} ${currency}` : 'cleared'}
                     </span>
@@ -1881,7 +1881,7 @@ function PriceHistorySection({
                   )}
                 </div>
                 <span
-                  className="text-sm text-slate-400 dark:text-slate-500 whitespace-nowrap"
+                  className="text-sm text-tertiary dark:text-slate-500 whitespace-nowrap"
                   title={new Date(e.changedAt).toLocaleString()}
                 >
                   {relativeTime(e.changedAt)}

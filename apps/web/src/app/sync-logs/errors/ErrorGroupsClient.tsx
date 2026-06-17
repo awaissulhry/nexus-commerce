@@ -217,7 +217,7 @@ export default function ErrorGroupsClient() {
                   'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                   urlStatus === s
                     ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
-                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
                 )}
               >
                 {t(`syncLogs.errorStatus.${s}`)}
@@ -241,7 +241,7 @@ export default function ErrorGroupsClient() {
                       'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                       urlChannel === c
                         ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
-                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
                     )}
                   >
                     {c}
@@ -285,7 +285,7 @@ export default function ErrorGroupsClient() {
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="h-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md animate-pulse"
+              className="h-20 bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md animate-pulse"
             />
           ))}
         </div>
@@ -318,7 +318,7 @@ export default function ErrorGroupsClient() {
                     ? 'border-emerald-200 dark:border-emerald-900'
                     : g.resolutionStatus === 'MUTED'
                       ? 'border-amber-200 dark:border-amber-900'
-                      : 'border-slate-200 dark:border-slate-800',
+                      : 'border-default dark:border-slate-800',
               )}
             >
               <div className="flex items-start gap-3">

@@ -85,12 +85,12 @@ export function CampaignTrendChart({
   const hasData = data.some((d) => d.impressions || d.clicks || d.spend || d.sales)
 
   return (
-    <div className="mb-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3">
+    <div className="mb-4 rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-950 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <div className="flex flex-wrap items-center gap-1.5">
           {METRICS.map((m) => (
             <button key={m.key} onClick={() => toggle(m.key)}
-              className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border transition ${active.has(m.key) ? 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+              className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border transition ${active.has(m.key) ? 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'border-transparent text-tertiary hover:text-slate-600'}`}>
               <span className="inline-block h-2 w-2 rounded-full" style={{ background: active.has(m.key) ? m.color : '#cbd5e1' }} />
               {m.label}
             </button>
@@ -99,15 +99,15 @@ export function CampaignTrendChart({
         <div className="inline-flex items-center gap-1" hidden={hideWindow}>
           {TREND_WINDOWS.map((w) => (
             <button key={w} onClick={() => onWindowChange(w)}
-              className={`px-2 py-0.5 text-xs rounded border ${windowDays === w ? 'border-blue-500 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40' : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-700'}`}>{w}d</button>
+              className={`px-2 py-0.5 text-xs rounded border ${windowDays === w ? 'border-blue-500 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40' : 'border-default dark:border-slate-700 text-slate-500 hover:text-slate-700'}`}>{w}d</button>
           ))}
         </div>
       </div>
       <div style={{ width: '100%', height: 240 }}>
         {rows == null || loading ? (
-          <div className="h-full grid place-items-center text-sm text-slate-400">Loading…</div>
+          <div className="h-full grid place-items-center text-sm text-tertiary">Loading…</div>
         ) : !hasData ? (
-          <div className="h-full grid place-items-center text-sm text-slate-400">No performance data in this window yet.</div>
+          <div className="h-full grid place-items-center text-sm text-tertiary">No performance data in this window yet.</div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>

@@ -115,7 +115,7 @@ export default async function ExecutionDetailPage({
       )}
 
       {log.items.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
           No actions recorded for this execution.
         </div>
       ) : (
@@ -126,10 +126,10 @@ export default async function ExecutionDetailPage({
               className={`bg-white dark:bg-slate-900 border rounded-md ${
                 it.rolledBackAt
                   ? 'border-slate-300 dark:border-slate-700 opacity-60'
-                  : 'border-slate-200 dark:border-slate-800'
+                  : 'border-default dark:border-slate-800'
               }`}
             >
-              <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 flex-wrap">
+              <div className="px-3 py-2 border-b border-default dark:border-slate-800 flex items-center gap-2 flex-wrap">
                 <span className="font-mono text-xs text-slate-500 w-6">#{i + 1}</span>
                 <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
                   {it.actionType}

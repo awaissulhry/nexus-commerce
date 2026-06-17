@@ -132,7 +132,7 @@ export default function ScopeUploadModal({
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
 
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-default dark:border-slate-700">
           <div>
             <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               {t('products.edit.images.scopeUpload.title', { count: files.length })}
@@ -147,7 +147,7 @@ export default function ScopeUploadModal({
         </div>
 
         {/* File list */}
-        <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 max-h-32 overflow-y-auto">
+        <div className="px-5 py-3 border-b border-subtle dark:border-slate-800 max-h-32 overflow-y-auto">
           <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-0.5 font-mono">
             {files.slice(0, 8).map((f) => (
               <li key={f.name} className="truncate" title={f.name}>
@@ -155,7 +155,7 @@ export default function ScopeUploadModal({
               </li>
             ))}
             {files.length > 8 && (
-              <li className="text-slate-400">+{files.length - 8} more…</li>
+              <li className="text-tertiary">+{files.length - 8} more…</li>
             )}
           </ul>
         </div>
@@ -204,7 +204,7 @@ export default function ScopeUploadModal({
           </fieldset>
 
           {kind === 'variant' && (
-            <div className="ml-6 space-y-3 pl-2 border-l-2 border-slate-100 dark:border-slate-800">
+            <div className="ml-6 space-y-3 pl-2 border-l-2 border-subtle dark:border-slate-800">
               <div className="grid grid-cols-2 gap-2">
                 <label className="block">
                   <span className="text-xs text-slate-500 dark:text-slate-400">
@@ -213,7 +213,7 @@ export default function ScopeUploadModal({
                   <select
                     value={axis}
                     onChange={(e) => setAxis(e.target.value)}
-                    className="mt-1 w-full text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5"
+                    className="mt-1 w-full text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5"
                   >
                     {availableAxes.map((a) => (
                       <option key={a} value={a}>{a}</option>
@@ -227,7 +227,7 @@ export default function ScopeUploadModal({
                   <select
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
-                    className="mt-1 w-full text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5"
+                    className="mt-1 w-full text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5"
                   >
                     <option value="">—</option>
                     {axisValues.map((v) => (
@@ -264,7 +264,7 @@ export default function ScopeUploadModal({
             <select
               value={type}
               onChange={(e) => setType(e.target.value as ImageType)}
-              className="mt-1 w-full max-w-xs text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5"
+              className="mt-1 w-full max-w-xs text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5"
             >
               {IMAGE_TYPES.map((tt) => (
                 <option key={tt} value={tt}>{tt}</option>
@@ -273,7 +273,7 @@ export default function ScopeUploadModal({
           </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-subtle dark:border-slate-800">
           <Button size="sm" variant="ghost" onClick={onCancel} className="text-xs">
             {t('products.edit.images.lightbox.cancel')}
           </Button>

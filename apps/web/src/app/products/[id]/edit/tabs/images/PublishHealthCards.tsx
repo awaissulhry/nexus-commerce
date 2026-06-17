@@ -207,7 +207,7 @@ function HealthCard({
   error: string | null
 }) {
   const rateTone = stats.successRate === null
-    ? 'text-slate-400'
+    ? 'text-tertiary'
     : stats.successRate >= 90
       ? 'text-emerald-600 dark:text-emerald-400'
       : stats.successRate >= 70
@@ -215,13 +215,13 @@ function HealthCard({
         : 'text-rose-600 dark:text-rose-400'
 
   return (
-    <div className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 space-y-1.5">
+    <div className="px-3 py-2.5 rounded-xl border border-default dark:border-slate-700 bg-white dark:bg-slate-900 space-y-1.5">
       <div className="flex items-center gap-1.5">
         <span className={cn('inline-flex items-center justify-center w-5 h-5 rounded font-semibold flex-shrink-0', accent)}>
           {icon}
         </span>
         <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{title}</span>
-        {loading && <Loader2 className="w-3 h-3 animate-spin text-slate-400 ml-auto" />}
+        {loading && <Loader2 className="w-3 h-3 animate-spin text-tertiary ml-auto" />}
         {!loading && stats.inFlight > 0 && (
           <span className="text-[10px] font-mono px-1.5 py-px rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ml-auto">
             {stats.inFlight} in flight
@@ -252,7 +252,7 @@ function HealthCard({
               valueClass="font-mono tabular-nums"
             />
           </div>
-          <div className="flex items-center gap-2 text-[10px] text-slate-400">
+          <div className="flex items-center gap-2 text-[10px] text-tertiary">
             <span className="inline-flex items-center gap-0.5">
               <Clock className="w-2.5 h-2.5" />
               {stats.total30d} in 30d
@@ -290,7 +290,7 @@ function Stat({
 }) {
   return (
     <div className="flex flex-col">
-      <span className="text-[9px] uppercase font-semibold tracking-wide text-slate-400">{label}</span>
+      <span className="text-[9px] uppercase font-semibold tracking-wide text-tertiary">{label}</span>
       <span className={cn('text-[11px] text-slate-700 dark:text-slate-300', valueClass)}>{value}</span>
     </div>
   )

@@ -153,7 +153,7 @@ export default function BulkApplyModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden">
-        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-start justify-between px-5 py-4 border-b border-default dark:border-slate-700">
           <div className="flex items-start gap-3">
             <Layers className="w-5 h-5 text-blue-500 mt-0.5" />
             <div>
@@ -173,7 +173,7 @@ export default function BulkApplyModal({
         <div className="px-5 py-4 space-y-5">
           {/* Image preview */}
           <div className="flex items-center gap-3">
-            <div className="w-20 h-20 rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden border border-slate-200 dark:border-slate-700 flex-shrink-0">
+            <div className="w-20 h-20 rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden border border-default dark:border-slate-700 flex-shrink-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={image.url} alt={image.alt ?? ''} className="w-full h-full object-contain" />
             </div>
@@ -205,14 +205,14 @@ export default function BulkApplyModal({
                     'text-[11px] px-2 py-0.5 rounded-full border transition-colors',
                     selectedValues.has(v)
                       ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-400 text-blue-700 dark:text-blue-300'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                      : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
                   )}
                 >
                   {v}
                 </button>
               ))}
               {axisValues.length === 0 && (
-                <span className="text-xs text-slate-400 italic">No values for axis "{activeAxis}"</span>
+                <span className="text-xs text-tertiary italic">No values for axis "{activeAxis}"</span>
               )}
             </div>
           </div>
@@ -232,7 +232,7 @@ export default function BulkApplyModal({
                     'text-[11px] px-2 py-0.5 rounded-full border transition-colors font-mono',
                     selectedSlot === s
                       ? 'bg-orange-50 dark:bg-orange-950/40 border-orange-400 text-orange-700 dark:text-orange-300'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                      : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
                   )}
                 >
                   {s}
@@ -256,7 +256,7 @@ export default function BulkApplyModal({
                     'text-[11px] px-2 py-0.5 rounded-full border transition-colors',
                     selectedMarketplace === m
                       ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-400 text-purple-700 dark:text-purple-300'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                      : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
                   )}
                 >
                   {m === 'ALL' ? 'All Markets' : m}
@@ -282,7 +282,7 @@ export default function BulkApplyModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-subtle dark:border-slate-800">
           <Button size="sm" variant="ghost" onClick={onClose} className="text-xs">Cancel</Button>
           <Button size="sm" onClick={handleSubmit} disabled={!canSubmit} className="text-xs gap-1.5">
             <Layers className="w-3 h-3" />

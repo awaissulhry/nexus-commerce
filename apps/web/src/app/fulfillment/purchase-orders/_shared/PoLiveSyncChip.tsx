@@ -47,7 +47,7 @@ export function PoLiveSyncChip({ connected, lastEventAt }: PoLiveSyncChipProps) 
   if (!connected) {
     return (
       <span
-        className="inline-flex items-center gap-1.5 px-2 h-7 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+        className="inline-flex items-center gap-1.5 px-2 h-7 text-sm rounded-md border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
         title="Reconnecting to the live event stream…"
       >
         <span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500 animate-pulse" />

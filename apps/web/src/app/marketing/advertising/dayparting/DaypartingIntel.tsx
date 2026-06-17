@@ -16,7 +16,7 @@ const eur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', c
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 function heat(index: number | null): string {
-  if (index == null) return 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+  if (index == null) return 'bg-slate-100 dark:bg-slate-800 text-tertiary'
   if (index >= 1.2) return 'bg-emerald-500 text-white'
   if (index >= 1.0) return 'bg-emerald-200 text-emerald-900 dark:bg-emerald-900/50 dark:text-emerald-200'
   if (index >= 0.6) return 'bg-amber-200 text-amber-900 dark:bg-amber-900/50 dark:text-amber-200'
@@ -49,13 +49,13 @@ export function DaypartingIntel({ onCreated }: { onCreated?: () => void }) {
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-4 mb-5">
-      <div className="flex items-center gap-2 mb-1"><CalendarClock size={18} className="text-indigo-500" /><h2 className="font-semibold text-slate-900 dark:text-slate-100">When does it convert?</h2>{loading && <span className="text-xs text-slate-400">loading…</span>}</div>
+    <div className="rounded-lg border border-default dark:border-slate-800 p-4 mb-5">
+      <div className="flex items-center gap-2 mb-1"><CalendarClock size={18} className="text-indigo-500" /><h2 className="font-semibold text-slate-900 dark:text-slate-100">When does it convert?</h2>{loading && <span className="text-xs text-tertiary">loading…</span>}</div>
       <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Conversion rate by day of week (vs your weekly average). Bid up on green days, pause the red ones.{intel?.campaignId ? ` Campaign ${intel.campaignId}.` : ' All campaigns.'}</p>
 
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <div className="flex gap-1">{[30, 60, 90].map((d) => <button key={d} onClick={() => setDays(d)} className={`px-2.5 py-1 text-xs rounded-md border ${days === d ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{d}d</button>)}</div>
-        <input value={campaignId} onChange={(e) => setCampaignId(e.target.value)} placeholder="Campaign id (optional — filters + apply target)" className="px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 w-72" />
+        <div className="flex gap-1">{[30, 60, 90].map((d) => <button key={d} onClick={() => setDays(d)} className={`px-2.5 py-1 text-xs rounded-md border ${days === d ? 'bg-blue-600 text-white border-blue-600' : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{d}d</button>)}</div>
+        <input value={campaignId} onChange={(e) => setCampaignId(e.target.value)} placeholder="Campaign id (optional — filters + apply target)" className="px-2 py-1 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950 w-72" />
       </div>
 
       <div className="grid grid-cols-7 gap-1.5 mb-3">
@@ -71,8 +71,8 @@ export function DaypartingIntel({ onCreated }: { onCreated?: () => void }) {
       {/* AME.10 — hour-of-day profile (Amazon Marketing Stream). */}
       <div className="mb-3">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Hour of day (UTC)</span>
-          {!intel?.hourlyAvailable && <span className="text-[11px] text-slate-400">Activate Amazon Marketing Stream for live hourly signal →</span>}
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-tertiary">Hour of day (UTC)</span>
+          {!intel?.hourlyAvailable && <span className="text-[11px] text-tertiary">Activate Amazon Marketing Stream for live hourly signal →</span>}
         </div>
         <div className="grid grid-cols-12 gap-1 sm:grid-cols-24" style={{ gridTemplateColumns: 'repeat(24, minmax(0, 1fr))' }}>
           {Array.from({ length: 24 }, (_, h) => {

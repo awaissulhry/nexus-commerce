@@ -281,7 +281,7 @@ export default async function AdvertisingLandingPage() {
       <V1OverviewSection v1={v1} />
 
       {/* Status footer */}
-      <div className="bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-3">
+      <div className="bg-slate-50 dark:bg-slate-950/40 border border-default dark:border-slate-800 rounded-md px-3 py-3">
         <div className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
           Pillar 2 · Inventory-Aware Advertising · 5 waves shipped
         </div>
@@ -307,7 +307,7 @@ export default async function AdvertisingLandingPage() {
             URGENCY_WEIGHTED) + cross-marketplace rebalancer
           </li>
         </ul>
-        <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-2">
+        <div className="text-[11px] text-tertiary dark:text-slate-500 mt-2">
           {summary.mode === 'sandbox'
             ? 'Sandbox mode · set NEXUS_AMAZON_ADS_MODE=live + AmazonAdsConnection.writesEnabledAt for production.'
             : 'Live mode · writes go through ads-write-gate with a 5-min undo window.'}
@@ -343,7 +343,7 @@ function Card({
   return (
     <Link
       href={href}
-      className="group block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
+      className="group block bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
     >
       <div className="flex items-center gap-2 mb-2">
         <Icon className="h-4 w-4 text-slate-500 dark:text-slate-400" />
@@ -392,13 +392,13 @@ function V1OverviewSection({ v1 }: { v1: V1Overview }) {
       </div>
 
       {/* Adapter health row */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-3">
         <div className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
           Adapter status
         </div>
         <div className="flex flex-wrap gap-2">
           {v1.adapters.length === 0 ? (
-            <span className="text-xs text-slate-400">No adapters registered yet</span>
+            <span className="text-xs text-tertiary">No adapters registered yet</span>
           ) : (
             v1.adapters.map((a) => (
               <div
@@ -433,7 +433,7 @@ function V1OverviewSection({ v1 }: { v1: V1Overview }) {
 
       {/* Per-currency spend grid */}
       {v1.spend.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-3">
           <div className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
             Per-currency spend ({v1.windowDays}d)
           </div>
@@ -441,7 +441,7 @@ function V1OverviewSection({ v1 }: { v1: V1Overview }) {
             {v1.spend.map((s) => (
               <div
                 key={s.currencyCode}
-                className="border border-slate-200 dark:border-slate-800 rounded p-2 bg-slate-50 dark:bg-slate-950/40"
+                className="border border-default dark:border-slate-800 rounded p-2 bg-slate-50 dark:bg-slate-950/40"
               >
                 <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   {s.currencyCode}
@@ -468,7 +468,7 @@ function V1OverviewSection({ v1 }: { v1: V1Overview }) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Link
           href="/marketing/advertising"
-          className="block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3 hover:border-blue-300 dark:hover:border-blue-700"
+          className="block bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-3 hover:border-blue-300 dark:hover:border-blue-700"
         >
           <div className="flex items-center gap-2 mb-1">
             <FileText className="h-4 w-4 text-slate-500" />
@@ -500,7 +500,7 @@ function V1OverviewSection({ v1 }: { v1: V1Overview }) {
 
         <Link
           href="/marketing/advertising"
-          className="block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3 hover:border-blue-300 dark:hover:border-blue-700"
+          className="block bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-3 hover:border-blue-300 dark:hover:border-blue-700"
         >
           <div className="flex items-center gap-2 mb-1">
             <Search className="h-4 w-4 text-slate-500" />
@@ -521,7 +521,7 @@ function V1OverviewSection({ v1 }: { v1: V1Overview }) {
           className={`block border rounded-md p-3 transition-colors ${
             v1.searchTerms.negativeKeywordCandidates > 0
               ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900 hover:border-amber-300 dark:hover:border-amber-700'
-              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700'
+              : 'bg-white dark:bg-slate-900 border-default dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700'
           }`}
         >
           <div className="flex items-center gap-2 mb-1">

@@ -77,7 +77,7 @@ export function ForecastAccuracyCard({
         <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
           Forecast accuracy (last 30d)
         </div>
-        <div className="text-base text-slate-400 dark:text-slate-500">
+        <div className="text-base text-tertiary dark:text-slate-500">
           Loading…
         </div>
       </div>
@@ -115,7 +115,7 @@ export function ForecastAccuracyCard({
         Forecast accuracy (last 30d)
       </div>
       <div className="grid grid-cols-3 gap-2 text-base mb-2">
-        <div className="border border-slate-200 dark:border-slate-800 rounded px-2 py-1 bg-slate-50 dark:bg-slate-900">
+        <div className="border border-default dark:border-slate-800 rounded px-2 py-1 bg-slate-50 dark:bg-slate-900">
           <div className="uppercase tracking-wider text-xs text-slate-500 dark:text-slate-400 font-semibold">
             MAPE
           </div>
@@ -123,7 +123,7 @@ export function ForecastAccuracyCard({
             {mape}
           </div>
         </div>
-        <div className="border border-slate-200 dark:border-slate-800 rounded px-2 py-1 bg-slate-50 dark:bg-slate-900">
+        <div className="border border-default dark:border-slate-800 rounded px-2 py-1 bg-slate-50 dark:bg-slate-900">
           <div className="uppercase tracking-wider text-xs text-slate-500 dark:text-slate-400 font-semibold">
             MAE
           </div>
@@ -131,7 +131,7 @@ export function ForecastAccuracyCard({
             {mae}
           </div>
         </div>
-        <div className="border border-slate-200 dark:border-slate-800 rounded px-2 py-1 bg-slate-50 dark:bg-slate-900">
+        <div className="border border-default dark:border-slate-800 rounded px-2 py-1 bg-slate-50 dark:bg-slate-900">
           <div className="uppercase tracking-wider text-xs text-slate-500 dark:text-slate-400 font-semibold">
             Calibration
           </div>
@@ -162,7 +162,7 @@ export function ForecastAccuracyCard({
                 </span>
                 <span className="tabular-nums text-slate-700 dark:text-slate-300">
                   {s.mape == null ? '—' : `${Number(s.mape).toFixed(1)}%`}{' '}
-                  <span className="text-slate-400 dark:text-slate-500">
+                  <span className="text-tertiary dark:text-slate-500">
                     (n={s.sampleCount})
                   </span>
                 </span>
@@ -239,7 +239,7 @@ export function ForecastHealthCard() {
         </div>
         <button
           onClick={() => setRefreshTick((n) => n + 1)}
-          className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1"
+          className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1"
           title="Refresh"
         >
           <RefreshCw size={11} /> Refresh
@@ -250,7 +250,7 @@ export function ForecastHealthCard() {
           {groups.map((g) => (
             <div
               key={g.key}
-              className="border border-slate-200 dark:border-slate-800 rounded px-2 py-1.5"
+              className="border border-default dark:border-slate-800 rounded px-2 py-1.5"
             >
               <div className="uppercase tracking-wider text-xs text-slate-500 dark:text-slate-400 font-semibold">
                 {g.key}

@@ -59,7 +59,7 @@ export default async function ProbeConsolePage() {
       </div>
       <AdvertisingNav />
 
-      <Suspense fallback={<div className="text-sm text-slate-400">Loading…</div>}>
+      <Suspense fallback={<div className="text-sm text-tertiary">Loading…</div>}>
         <ProbeRunnerClient profiles={profiles} backendUrl={getBackendUrl()} />
       </Suspense>
     </div>

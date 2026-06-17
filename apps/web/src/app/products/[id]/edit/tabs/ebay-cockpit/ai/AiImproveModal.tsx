@@ -150,10 +150,10 @@ export default function AiImproveModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="ai-improve-title"
-        className="w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl"
+        className="w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-subtle dark:border-slate-800 flex items-center justify-between">
           <div>
             <div id="ai-improve-title" className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-amber-500" />
@@ -167,7 +167,7 @@ export default function AiImproveModal({
             type="button"
             onClick={onClose}
             disabled={loading}
-            className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded"
+            className="p-1 text-tertiary hover:text-slate-700 dark:hover:text-slate-200 rounded"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -234,7 +234,7 @@ export default function AiImproveModal({
                           'flex items-start gap-2 px-2.5 py-2 rounded border cursor-pointer transition-colors',
                           kept
                             ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-950/20'
-                            : 'border-slate-200 dark:border-slate-800',
+                            : 'border-default dark:border-slate-800',
                         )}
                       >
                         <input
@@ -251,9 +251,9 @@ export default function AiImproveModal({
                             {current ? (
                               <span className="text-slate-500 line-through font-mono">{current}</span>
                             ) : (
-                              <span className="text-slate-400 italic">(empty)</span>
+                              <span className="text-tertiary italic">(empty)</span>
                             )}
-                            <ArrowRight className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                            <ArrowRight className="w-3 h-3 text-tertiary flex-shrink-0" />
                             <span className="font-mono text-emerald-700 dark:text-emerald-300">{val}</span>
                           </div>
                         </div>
@@ -266,14 +266,14 @@ export default function AiImproveModal({
           )}
         </div>
 
-        <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
-          <span className="text-[10.5px] text-slate-400 mr-auto">
+        <div className="px-4 py-3 border-t border-subtle dark:border-slate-800 flex items-center justify-end gap-2">
+          <span className="text-[10.5px] text-tertiary mr-auto">
             {operation === 'essentials' ? 'ESC to cancel' : `${keptCount} aspect${keptCount === 1 ? '' : 's'} selected`}
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="px-3 py-1.5 text-xs font-medium rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             Cancel
           </button>
@@ -315,14 +315,14 @@ function DiffRow({
             className="w-3.5 h-3.5"
           />
           Apply {label}
-          {unchanged && <span className="text-[10px] text-slate-400 ml-1">(unchanged)</span>}
+          {unchanged && <span className="text-[10px] text-tertiary ml-1">(unchanged)</span>}
         </label>
       </div>
       <div className={cn('grid gap-2', isLong ? 'grid-cols-1' : 'grid-cols-2')}>
         <div className="space-y-1">
-          <div className="text-[10.5px] uppercase tracking-wide text-slate-400 font-medium">Current</div>
-          <div className="rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-2 text-xs whitespace-pre-wrap break-words font-mono text-slate-700 dark:text-slate-300 min-h-[2.5rem]">
-            {current || <em className="not-italic text-slate-400">(empty)</em>}
+          <div className="text-[10.5px] uppercase tracking-wide text-tertiary font-medium">Current</div>
+          <div className="rounded border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-2 text-xs whitespace-pre-wrap break-words font-mono text-slate-700 dark:text-slate-300 min-h-[2.5rem]">
+            {current || <em className="not-italic text-tertiary">(empty)</em>}
           </div>
         </div>
         <div className="space-y-1">
@@ -330,10 +330,10 @@ function DiffRow({
           <div className={cn(
             'rounded border p-2 text-xs whitespace-pre-wrap break-words font-mono min-h-[2.5rem]',
             unchanged
-              ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-500'
+              ? 'border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-500'
               : 'border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/30 text-blue-900 dark:text-blue-200',
           )}>
-            {next || <em className="not-italic text-slate-400">(empty)</em>}
+            {next || <em className="not-italic text-tertiary">(empty)</em>}
           </div>
         </div>
       </div>

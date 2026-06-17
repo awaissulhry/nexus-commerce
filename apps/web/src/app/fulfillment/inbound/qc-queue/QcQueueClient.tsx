@@ -194,7 +194,7 @@ export default function QcQueueClient() {
                 'px-3 py-1 text-sm font-medium rounded border transition-colors',
                 filter === f
                   ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
+                  : 'bg-white text-slate-700 border-default hover:border-slate-300',
               )}
             >
               {f === 'all' ? 'All' : f === 'HOLD' ? 'On Hold' : 'Failed'}
@@ -222,7 +222,7 @@ export default function QcQueueClient() {
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="h-24 bg-white border border-slate-200 rounded-lg animate-pulse"
+              className="h-24 bg-white border border-default rounded-lg animate-pulse"
             />
           ))}
         </div>
@@ -249,7 +249,7 @@ export default function QcQueueClient() {
             return (
               <div
                 key={item.itemId}
-                className="bg-white border border-slate-200 rounded-lg p-4"
+                className="bg-white border border-default rounded-lg p-4"
               >
                 <div className="flex items-start gap-3">
                   <div className="flex-shrink-0 mt-0.5">
@@ -258,7 +258,7 @@ export default function QcQueueClient() {
                     ) : isFail ? (
                       <XCircle className="w-5 h-5 text-red-600" />
                     ) : (
-                      <ClipboardList className="w-5 h-5 text-slate-400" />
+                      <ClipboardList className="w-5 h-5 text-tertiary" />
                     )}
                   </div>
 
@@ -299,7 +299,7 @@ export default function QcQueueClient() {
                     </div>
 
                     {item.qcNotes && (
-                      <div className="mt-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded text-sm text-slate-700 whitespace-pre-wrap break-words">
+                      <div className="mt-2 px-3 py-2 bg-slate-50 border border-default rounded text-sm text-slate-700 whitespace-pre-wrap break-words">
                         {item.qcNotes}
                       </div>
                     )}
@@ -366,7 +366,7 @@ export default function QcQueueClient() {
             className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <div className="px-4 py-3 border-b border-default flex items-center justify-between">
               <h3 className="font-medium text-slate-900">
                 {photoFor.sku} — {photoFor.urls.length}{' '}
                 {photoFor.urls.length === 1 ? 'photo' : 'photos'}
@@ -374,7 +374,7 @@ export default function QcQueueClient() {
               <button
                 type="button"
                 onClick={() => setPhotoFor(null)}
-                className="text-slate-400 hover:text-slate-700"
+                className="text-tertiary hover:text-slate-700"
                 aria-label="Close"
               >
                 <XCircle className="w-5 h-5" />
@@ -418,7 +418,7 @@ export default function QcQueueClient() {
             onClick={(e) => e.stopPropagation()}
             className="relative bg-white dark:bg-slate-900 rounded-lg shadow-2xl max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto"
           >
-            <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700">
+            <header className="px-5 py-3 border-b border-default dark:border-slate-700">
               <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                 Scrap {scrapTarget.sku}
               </div>
@@ -441,7 +441,7 @@ export default function QcQueueClient() {
                   rows={4}
                   autoFocus
                   placeholder="e.g. damaged in transit — supplier file PR-2025-04 opened"
-                  className="w-full px-3 py-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  className="w-full px-3 py-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                 />
                 <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   Captured on the StockMovement audit row and the inbound discrepancy log. Empty reason allowed but discouraged.
@@ -450,7 +450,7 @@ export default function QcQueueClient() {
               <div className="text-xs text-rose-700 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded p-2">
                 Scrapping is irreversible. Stock will not be received; the supplier-claim audit trail starts here.
               </div>
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-subtle dark:border-slate-800">
                 <button
                   onClick={() => !scrapping && setScrapTarget(null)}
                   disabled={scrapping}

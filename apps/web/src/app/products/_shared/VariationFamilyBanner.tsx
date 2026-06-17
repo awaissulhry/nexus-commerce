@@ -69,12 +69,12 @@ export function VariationFamilyBanner({
         <span className="font-semibold text-slate-800 dark:text-slate-200">
           {parentProduct.name}
         </span>
-        <span className="font-mono text-slate-400 dark:text-slate-500 text-xs">
+        <span className="font-mono text-tertiary dark:text-slate-500 text-xs">
           {parentProduct.sku}
         </span>
         <Link
           href={`/products/${parentProduct.id}/edit`}
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-blue-300 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-400 transition-colors flex-shrink-0"
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-white dark:bg-slate-700 border border-default dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-blue-300 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-400 transition-colors flex-shrink-0"
         >
           <ArrowUpRight className="w-3 h-3" />
           Go to parent
@@ -106,7 +106,7 @@ export function VariationFamilyBanner({
                   'inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border whitespace-nowrap transition-colors flex-shrink-0',
                   isCurrent
                     ? 'bg-blue-600 text-white border-blue-700 dark:bg-blue-500 dark:border-blue-400 cursor-default pointer-events-none'
-                    : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-blue-300 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-400',
+                    : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-default dark:border-slate-600 hover:border-blue-300 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-400',
                 )}
               >
                 {isCurrent && (
@@ -124,8 +124,8 @@ export function VariationFamilyBanner({
 
 function ChannelIdBadge({ label, value }: { label: string; value: string }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-1.5 py-0.5 text-xs">
-      <span className="font-medium text-slate-400 dark:text-slate-500">{label}:</span>
+    <span className="inline-flex items-center gap-1 rounded border border-default dark:border-slate-600 bg-white dark:bg-slate-700 px-1.5 py-0.5 text-xs">
+      <span className="font-medium text-tertiary dark:text-slate-500">{label}:</span>
       <span className="font-mono text-slate-700 dark:text-slate-200 max-w-[140px] truncate">
         {value}
       </span>

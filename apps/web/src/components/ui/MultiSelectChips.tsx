@@ -127,7 +127,7 @@ function Chip({
         'min-h-11 sm:min-h-7 sm:h-7 px-2.5 text-sm border rounded-full inline-flex items-center transition-colors',
         active
           ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
-          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-800',
+          : 'bg-white text-slate-700 border-default hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-800',
       )}
     >
       {children}

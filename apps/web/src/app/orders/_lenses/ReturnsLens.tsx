@@ -67,7 +67,7 @@ export function ReturnsLens() {
     <Card noPadding>
       <div className="overflow-x-auto">
         <table className="w-full text-md">
-          <thead className="bg-slate-50 border-b border-slate-200">
+          <thead className="bg-slate-50 border-b border-default">
             <tr>
               <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
                 {t('orders.table.header.rma')}
@@ -91,7 +91,7 @@ export function ReturnsLens() {
             {items.map((r) => (
               <tr
                 key={r.id}
-                className="border-b border-slate-100 hover:bg-slate-50"
+                className="border-b border-subtle hover:bg-slate-50"
               >
                 <td className="px-3 py-2 font-mono text-base text-slate-700">
                   {r.rmaNumber ?? '—'}
@@ -117,7 +117,7 @@ export function ReturnsLens() {
                       {t('orders.table.viewOrder')}
                     </Link>
                   ) : (
-                    <span className="text-slate-400 text-sm">—</span>
+                    <span className="text-tertiary text-sm">—</span>
                   )}
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700">

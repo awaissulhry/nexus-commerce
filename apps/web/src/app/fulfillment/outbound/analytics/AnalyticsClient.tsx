@@ -148,7 +148,7 @@ export default function AnalyticsClient() {
         ]}
         actions={
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 p-0.5">
+            <div className="flex items-center gap-1 border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 p-0.5">
               {WINDOWS.map((d) => (
                 <button
                   key={d}
@@ -163,7 +163,7 @@ export default function AnalyticsClient() {
             </div>
             <button
               onClick={fetchData}
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <RefreshCw size={12} /> {t('common.refresh')}
             </button>
@@ -258,7 +258,7 @@ export default function AnalyticsClient() {
               {data.trend.some((d) => d.ships > 0) ? (
                 renderTrend()
               ) : (
-                <div className="text-md text-slate-400 dark:text-slate-500 py-8 text-center">{t('analytics.empty')}</div>
+                <div className="text-md text-tertiary dark:text-slate-500 py-8 text-center">{t('analytics.empty')}</div>
               )}
             </div>
           </Card>
@@ -266,7 +266,7 @@ export default function AnalyticsClient() {
           {/* Per-carrier breakdown */}
           <Card noPadding>
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+              <thead className="border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <tr>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     {t('analytics.col.carrier')}
@@ -285,13 +285,13 @@ export default function AnalyticsClient() {
               <tbody>
                 {data.byCarrier.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-3 py-8 text-center text-md text-slate-400 dark:text-slate-500">
+                    <td colSpan={4} className="px-3 py-8 text-center text-md text-tertiary dark:text-slate-500">
                       {t('analytics.empty')}
                     </td>
                   </tr>
                 ) : (
                   data.byCarrier.map((c) => (
-                    <tr key={c.carrierCode} className="border-b border-slate-100 dark:border-slate-800">
+                    <tr key={c.carrierCode} className="border-b border-subtle dark:border-slate-800">
                       <td className="px-3 py-2 text-base text-slate-900 dark:text-slate-100 font-medium">
                         {c.carrierCode}
                       </td>
@@ -319,7 +319,7 @@ export default function AnalyticsClient() {
           {data.byPicker && data.byPicker.length > 0 && (
             <Card noPadding>
               <table className="w-full text-md">
-                <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                <thead className="border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                   <tr>
                     <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                       <span className="inline-flex items-center gap-1.5">
@@ -336,7 +336,7 @@ export default function AnalyticsClient() {
                 </thead>
                 <tbody>
                   {data.byPicker.map((p, idx) => (
-                    <tr key={p.operator} className="border-b border-slate-100 dark:border-slate-800">
+                    <tr key={p.operator} className="border-b border-subtle dark:border-slate-800">
                       <td className="px-3 py-2 text-base text-slate-900 dark:text-slate-100 font-medium">
                         {idx === 0 && <span className="mr-1 text-amber-500">★</span>}
                         {p.operator}
@@ -349,7 +349,7 @@ export default function AnalyticsClient() {
                           ? `${Math.round(p.medianCycleMinutes)}m`
                           : `${(p.medianCycleMinutes / 60).toFixed(1)}h`}
                         {p.samples > 0 && (
-                          <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">({p.samples})</span>
+                          <span className="ml-1 text-xs text-tertiary dark:text-slate-500">({p.samples})</span>
                         )}
                       </td>
                     </tr>
@@ -374,7 +374,7 @@ export default function AnalyticsClient() {
                       return (
                         <div
                           key={ch}
-                          className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded"
+                          className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 rounded"
                         >
                           <span className="text-base font-medium text-slate-900 dark:text-slate-100">{ch}</span>
                           <span className="text-sm tabular-nums text-slate-600 dark:text-slate-400">
@@ -401,7 +401,7 @@ export default function AnalyticsClient() {
                   {t('analytics.slaByChannel.title')}
                 </div>
                 <table className="w-full text-base">
-                  <thead className="border-b border-slate-200 dark:border-slate-700">
+                  <thead className="border-b border-default dark:border-slate-700">
                     <tr>
                       <th className="px-3 py-1.5 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">
                         {t('analytics.slaByChannel.col.channel')}
@@ -429,7 +429,7 @@ export default function AnalyticsClient() {
                           ? 'text-amber-700 dark:text-amber-300'
                           : 'text-slate-700 dark:text-slate-300'
                       return (
-                        <tr key={row.channel} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                        <tr key={row.channel} className="border-b border-subtle dark:border-slate-800 last:border-0">
                           <td className="px-3 py-1.5 font-medium text-slate-900 dark:text-slate-100">{row.channel}</td>
                           <td className="px-3 py-1.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{row.count}</td>
                           <td className={`px-3 py-1.5 text-right tabular-nums ${tone}`}>{row.lateCount}</td>
@@ -465,7 +465,7 @@ export default function AnalyticsClient() {
                           ? 'border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40'
                           : row.lateRate != null && row.lateRate > 0.05
                           ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40'
-                          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800'
+                          : 'border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800'
                       return (
                         <div
                           key={key}
@@ -478,7 +478,7 @@ export default function AnalyticsClient() {
                           </div>
                           <div className="flex items-center gap-2 text-sm tabular-nums">
                             <span className="text-slate-600 dark:text-slate-400">{row.count}</span>
-                            <span className="text-slate-400 dark:text-slate-500">·</span>
+                            <span className="text-tertiary dark:text-slate-500">·</span>
                             <span className="font-medium text-slate-900 dark:text-slate-100">{formatPct(row.lateRate)}</span>
                           </div>
                         </div>

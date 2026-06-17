@@ -399,7 +399,7 @@ export default function GeneratorPage() {
               <select
                 value={channel}
                 onChange={(e) => setChannel(e.target.value as Channel)}
-                className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded"
+                className="w-full h-9 px-2 text-md border border-default dark:border-slate-700 rounded"
               >
                 <option value="AMAZON">Amazon</option>
                 <option value="EBAY">eBay</option>
@@ -413,7 +413,7 @@ export default function GeneratorPage() {
               <select
                 value={provider}
                 onChange={(e) => setProvider(e.target.value)}
-                className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded"
+                className="w-full h-9 px-2 text-md border border-default dark:border-slate-700 rounded"
               >
                 {PROVIDER_OPTIONS.map((opt) => (
                   <option key={opt.id} value={opt.id}>{opt.label}</option>
@@ -432,7 +432,7 @@ export default function GeneratorPage() {
                     className={`h-7 px-2 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                       fields.includes(f.id)
                         ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 text-blue-700 dark:text-blue-300'
-                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                        : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                     }`}
                     aria-pressed={fields.includes(f.id)}
                     aria-label={`Toggle ${f.label} field`}
@@ -471,13 +471,13 @@ export default function GeneratorPage() {
                   className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                     marketplaces.includes(opt.id)
                       ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 text-blue-700 dark:text-blue-300'
-                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                      : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                   }`}
                   aria-pressed={marketplaces.includes(opt.id)}
                   aria-label={`Toggle ${opt.label} marketplace`}
                 >
                   {opt.label}{' '}
-                  <span className="text-xs text-slate-400 dark:text-slate-500 ml-0.5 font-mono">
+                  <span className="text-xs text-tertiary dark:text-slate-500 ml-0.5 font-mono">
                     {opt.id}
                   </span>
                 </button>
@@ -490,7 +490,7 @@ export default function GeneratorPage() {
       {/* Search + cost rollup */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-1 min-w-[200px] max-w-md">
-          <Search size={14} className="text-slate-400 dark:text-slate-500" />
+          <Search size={14} className="text-tertiary dark:text-slate-500" />
           <Input
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -612,7 +612,7 @@ function ProductRow({
             <button
               onClick={onToggle}
               aria-label={expanded ? 'Collapse result' : 'Expand result'}
-              className="h-8 w-8 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              className="h-8 w-8 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             >
               {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
@@ -655,7 +655,7 @@ function ProductRow({
         </div>
       </div>
       {expanded && state && (
-        <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-3">
+        <div className="mt-3 border-t border-subtle dark:border-slate-800 pt-3">
           {/* Marketplace tabs */}
           {Object.keys(state.byMarketplace).length > 1 && (
             <div className="flex items-center gap-1 mb-3 flex-wrap">
@@ -663,7 +663,7 @@ function ProductRow({
                 const tone = slice.error
                   ? 'border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300'
                   : slice.loading
-                    ? 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
+                    ? 'border-default dark:border-slate-700 text-slate-500 dark:text-slate-400'
                     : 'border-emerald-200 dark:border-emerald-900 text-emerald-700 dark:text-emerald-300'
                 const isActive = mp === activeTab
                 return (
@@ -779,7 +779,7 @@ function GenerationResultView({ result }: { result: GenerationResult }) {
             {result.bullets.content.map((b, i) => (
               <li key={i}>
                 {b}
-                <span className="text-xs text-slate-400 dark:text-slate-500 ml-2 tabular-nums">
+                <span className="text-xs text-tertiary dark:text-slate-500 ml-2 tabular-nums">
                   ({result.bullets!.charCounts[i]})
                 </span>
               </li>
@@ -827,20 +827,20 @@ function FieldBlock({
   children: React.ReactNode
 }) {
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded p-3">
+    <div className="border border-default dark:border-slate-700 rounded p-3">
       <div className="flex items-center justify-between mb-1.5">
         <div className="inline-flex items-center gap-2">
           <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             {label}
           </div>
           {subtitle && (
-            <div className="text-xs text-slate-400 dark:text-slate-500">{subtitle}</div>
+            <div className="text-xs text-tertiary dark:text-slate-500">{subtitle}</div>
           )}
         </div>
         <button
           onClick={onCopy}
           aria-label={`Copy ${label}`}
-          className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-blue-600 rounded"
+          className="h-6 w-6 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-blue-600 rounded"
         >
           <Copy size={11} />
         </button>

@@ -193,7 +193,7 @@ export default function PublishReviewModal({
         {preflight && (
           <>
             {/* Mode banner */}
-            <div className="rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 px-3 py-2 text-xs text-slate-600 dark:text-slate-400 space-y-0.5">
+            <div className="rounded-md border border-default dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 px-3 py-2 text-xs text-slate-600 dark:text-slate-400 space-y-0.5">
               <div>
                 <span className="font-medium text-slate-700 dark:text-slate-300">Amazon:</span>{' '}
                 {!preflight.amazonConfigured
@@ -209,7 +209,7 @@ export default function PublishReviewModal({
             </div>
 
             {/* Per-coordinate rows */}
-            <ul className="divide-y divide-slate-100 dark:divide-slate-800 rounded-lg border border-slate-200 dark:border-slate-800">
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800 rounded-lg border border-default dark:border-slate-800">
               {preflight.coordinates.map((c) => {
                 const k = coordKey(c)
                 const meta = actionMeta(c.action)
@@ -248,7 +248,7 @@ export default function PublishReviewModal({
                     </div>
                     {/* Result */}
                     <div className="flex-shrink-0 pt-0.5">
-                      {result === 'publishing' && <Loader2 aria-hidden className="h-4 w-4 animate-spin text-slate-400" />}
+                      {result === 'publishing' && <Loader2 aria-hidden className="h-4 w-4 animate-spin text-tertiary" />}
                       {result === 'ok' && <CheckCircle2 aria-hidden className="h-4 w-4 text-emerald-500" />}
                       {result === 'dry-run' && <span className="text-[10.5px] font-medium text-amber-600 dark:text-amber-400">dry-run ✓</span>}
                       {result === 'failed' && <AlertTriangle aria-hidden className="h-4 w-4 text-rose-500" />}

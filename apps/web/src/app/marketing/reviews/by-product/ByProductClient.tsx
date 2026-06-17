@@ -83,9 +83,9 @@ export function ByProductClient({ initial }: { initial: ProductBucket[] }) {
         </span>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-x-auto">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
+          <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-default dark:border-slate-800">
             <tr className="text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <th className="px-3 py-2">SKU</th>
               <th className="px-3 py-2">Product</th>
@@ -133,7 +133,7 @@ export function ByProductClient({ initial }: { initial: ProductBucket[] }) {
                       </span>
                     ))}
                     {b.topCategories.length === 0 && (
-                      <span className="text-[11px] text-slate-400">—</span>
+                      <span className="text-[11px] text-tertiary">—</span>
                     )}
                   </div>
                 </td>
@@ -157,7 +157,7 @@ export function ByProductClient({ initial }: { initial: ProductBucket[] }) {
 function NegativePctBadge({ pct }: { pct: number }) {
   if (pct === 0) {
     return (
-      <span className="text-[11px] text-slate-400 tabular-nums">0%</span>
+      <span className="text-[11px] text-tertiary tabular-nums">0%</span>
     )
   }
   const cls =

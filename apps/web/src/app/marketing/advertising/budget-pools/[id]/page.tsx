@@ -153,7 +153,7 @@ export default async function BudgetPoolDetailPage({
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Rebalance history ({pool.rebalances.length})
         </h2>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md">
           {pool.rebalances.length === 0 ? (
             <div className="px-3 py-4 text-sm text-slate-500">
               No rebalances recorded. Run a dry-run from the button above.
@@ -211,7 +211,7 @@ function Stat({
   tone?: 'amber' | null
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
         {label}
       </div>

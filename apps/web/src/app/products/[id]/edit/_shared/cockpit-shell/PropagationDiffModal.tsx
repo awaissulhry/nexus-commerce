@@ -89,9 +89,9 @@ export default function PropagationDiffModal({
         role="dialog"
         aria-modal="true"
         aria-label={`Propagate ${fieldLabel}`}
-        className="relative flex max-h-[80vh] w-full max-w-lg flex-col rounded-lg border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+        className="relative flex max-h-[80vh] w-full max-w-lg flex-col rounded-lg border border-default bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900"
       >
-        <div className="flex items-start justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+        <div className="flex items-start justify-between border-b border-default px-4 py-3 dark:border-slate-800">
           <div>
             <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               Propagate · {fieldLabel}
@@ -105,7 +105,7 @@ export default function PropagationDiffModal({
             onClick={onClose}
             disabled={busy}
             aria-label="Close"
-            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:hover:bg-slate-800"
+            className="rounded p-1 text-tertiary hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:hover:bg-slate-800"
           >
             <X className="h-4 w-4" />
           </button>
@@ -125,8 +125,8 @@ export default function PropagationDiffModal({
                   className={cn(
                     'rounded-md border px-2.5 py-2 text-sm',
                     disabled
-                      ? 'border-slate-100 opacity-60 dark:border-slate-800'
-                      : 'border-slate-200 dark:border-slate-700',
+                      ? 'border-subtle opacity-60 dark:border-slate-800'
+                      : 'border-default dark:border-slate-700',
                   )}
                 >
                   <label className="flex items-start gap-2">
@@ -145,10 +145,10 @@ export default function PropagationDiffModal({
                         {e.action === 'translate' && (
                           <span className="text-[10px] text-sky-600 dark:text-sky-400">🤖 translated</span>
                         )}
-                        {e.unchanged && <span className="text-[10px] text-slate-400">unchanged</span>}
-                        {e.action === 'skip' && <span className="text-[10px] text-slate-400">skipped</span>}
+                        {e.unchanged && <span className="text-[10px] text-tertiary">unchanged</span>}
+                        {e.action === 'skip' && <span className="text-[10px] text-tertiary">skipped</span>}
                       </span>
-                      <span className="mt-0.5 block truncate text-xs text-slate-400 line-through">
+                      <span className="mt-0.5 block truncate text-xs text-tertiary line-through">
                         {e.currentValue ?? '—'}
                       </span>
                       <span className="block truncate text-xs text-slate-700 dark:text-slate-300">
@@ -170,7 +170,7 @@ export default function PropagationDiffModal({
           )}
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3 dark:border-slate-800">
+        <div className="flex items-center justify-between border-t border-default px-4 py-3 dark:border-slate-800">
           <span className="text-xs text-slate-500">{selectedCount} selected</span>
           <div className="flex gap-2">
             <button

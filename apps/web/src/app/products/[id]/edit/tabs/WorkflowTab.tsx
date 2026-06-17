@@ -129,7 +129,7 @@ interface WorkflowAssignmentRow {
 const ROLE_COLORS: Record<string, string> = {
   OWNER: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
   APPROVER: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
-  REVIEWER: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+  REVIEWER: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-default dark:border-slate-700',
 }
 
 // ── Assignments card ────────────────────────────────────────────────────
@@ -215,7 +215,7 @@ function AssignmentsCard({ productId, discardSignal }: { productId: string; disc
     }
   }
 
-  const inputCls = 'w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+  const inputCls = 'w-full rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
   return (
     <Card className="p-4 space-y-3">
@@ -231,7 +231,7 @@ function AssignmentsCard({ productId, discardSignal }: { productId: string; disc
 
       {/* Add form */}
       {showForm && (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 space-y-2.5 bg-slate-50 dark:bg-slate-800/40">
+        <div className="border border-default dark:border-slate-700 rounded-lg p-3 space-y-2.5 bg-slate-50 dark:bg-slate-800/40">
           <div>
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
               {t('products.edit.workflow.assignUser')}
@@ -243,7 +243,7 @@ function AssignmentsCard({ productId, discardSignal }: { productId: string; disc
               className={inputCls}
             />
             {userResults.length > 0 && !selectedUser && (
-              <ul className="mt-1 border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+              <ul className="mt-1 border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
                 {userResults.map((u) => (
                   <li
                     key={u.id}
@@ -290,7 +290,7 @@ function AssignmentsCard({ productId, discardSignal }: { productId: string; disc
 
       {/* Current assignees */}
       {loading ? (
-        <div className="flex items-center gap-1.5 text-sm text-slate-400 py-2">
+        <div className="flex items-center gap-1.5 text-sm text-tertiary py-2">
           <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
         </div>
       ) : assignments.length === 0 ? (
@@ -322,7 +322,7 @@ function AssignmentsCard({ productId, discardSignal }: { productId: string; disc
               <button
                 onClick={() => handleRemove(a.id)}
                 disabled={removingId === a.id}
-                className="p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-50 rounded"
+                className="p-1.5 text-tertiary hover:text-red-500 disabled:opacity-50 rounded"
                 aria-label="Remove assignee"
               >
                 {removingId === a.id
@@ -584,7 +584,7 @@ export default function WorkflowTab({
         title={t('products.edit.workflow.title')}
         description={t('products.edit.workflow.description')}
       >
-        <div className="border border-dashed border-slate-200 dark:border-slate-800 rounded-lg p-6 text-center space-y-4">
+        <div className="border border-dashed border-default dark:border-slate-800 rounded-lg p-6 text-center space-y-4">
           <GitBranch className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600" />
           <div>
             <div className="text-md font-medium text-slate-700 dark:text-slate-300">
@@ -603,7 +603,7 @@ export default function WorkflowTab({
               <select
                 value={attachPicker}
                 onChange={(e) => setAttachPicker(e.target.value)}
-                className="flex-1 h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3"
+                className="flex-1 h-8 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3"
               >
                 <option value="">
                   {t('products.edit.workflow.attachPicker')}
@@ -712,7 +712,7 @@ export default function WorkflowTab({
               <select
                 value={moveTo}
                 onChange={(e) => setMoveTo(e.target.value)}
-                className="w-full h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3"
+                className="w-full h-8 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3"
               >
                 <option value="">
                   {t('products.edit.workflow.movePicker')}
@@ -756,7 +756,7 @@ export default function WorkflowTab({
               value={moveComment}
               onChange={(e) => setMoveComment(e.target.value)}
               placeholder={t('products.edit.workflow.movePlaceholder')}
-              className="w-full h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3"
+              className="w-full h-8 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3"
             />
           </div>
         </Card>
@@ -771,7 +771,7 @@ export default function WorkflowTab({
       >
         <div className="space-y-2">
           {stageComments.length === 0 ? (
-            <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center">
+            <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-default dark:border-slate-800 rounded p-4 text-center">
               {t('products.edit.workflow.commentsEmpty')}
             </div>
           ) : (
@@ -779,7 +779,7 @@ export default function WorkflowTab({
               {stageComments.slice(0, 20).map((c) => (
                 <li
                   key={c.id}
-                  className="border border-slate-200 dark:border-slate-800 rounded px-3 py-2 text-md text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900"
+                  className="border border-default dark:border-slate-800 rounded px-3 py-2 text-md text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900"
                 >
                   <div className="text-xs text-slate-500 dark:text-slate-400 mb-1 tabular-nums">
                     {new Date(c.createdAt).toLocaleString()}
@@ -797,7 +797,7 @@ export default function WorkflowTab({
               onChange={(e) => setCommentBody(e.target.value)}
               rows={2}
               placeholder={t('products.edit.workflow.commentPlaceholder')}
-              className="flex-1 px-3 py-2 text-md rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              className="flex-1 px-3 py-2 text-md rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
             <Button
               variant="primary"
@@ -819,7 +819,7 @@ export default function WorkflowTab({
         description={t('products.edit.workflow.historyDescription')}
       >
         {snap.transitions.length === 0 ? (
-          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center">
+          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-default dark:border-slate-800 rounded p-4 text-center">
             {t('products.edit.workflow.historyEmpty')}
           </div>
         ) : (
@@ -827,7 +827,7 @@ export default function WorkflowTab({
             {snap.transitions.map((tr) => (
               <li
                 key={tr.id}
-                className="flex items-start justify-between gap-3 border border-slate-200 dark:border-slate-800 rounded px-3 py-2 bg-white dark:bg-slate-900"
+                className="flex items-start justify-between gap-3 border border-default dark:border-slate-800 rounded px-3 py-2 bg-white dark:bg-slate-900"
               >
                 <div className="min-w-0 text-md">
                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -835,7 +835,7 @@ export default function WorkflowTab({
                       {tr.fromStage?.label ??
                         t('products.edit.workflow.initialMarker')}
                     </Badge>
-                    <span className="text-slate-400 dark:text-slate-600">
+                    <span className="text-tertiary dark:text-slate-600">
                       →
                     </span>
                     <Badge variant="info">{tr.toStage.label}</Badge>

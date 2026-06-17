@@ -206,8 +206,8 @@ export default function CompatibilityCard(props: Props) {
   if (!motors) {
     return (
       <Card noPadding>
-        <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
-          <Package className="w-4 h-4 text-slate-400" />
+        <div className="px-4 py-2.5 border-b border-subtle dark:border-slate-800 flex items-center gap-2">
+          <Package className="w-4 h-4 text-tertiary" />
           <div className="text-md font-medium text-slate-700 dark:text-slate-300">{t('products.edit.cockpit.ebay.compat.title')}</div>
           <Badge variant="info">EC.13</Badge>
           <span className="text-xs text-slate-500 dark:text-slate-400 ml-auto">
@@ -220,7 +220,7 @@ export default function CompatibilityCard(props: Props) {
 
   return (
     <Card noPadding>
-      <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
+      <div className="px-4 py-2.5 border-b border-subtle dark:border-slate-800 flex items-center gap-2 flex-wrap">
         <Package className="w-4 h-4 text-blue-500" />
         <div className="text-md font-medium text-slate-900 dark:text-slate-100">
           {t('products.edit.cockpit.ebay.compat.motorsTitle')}
@@ -275,24 +275,24 @@ export default function CompatibilityCard(props: Props) {
                 type="button"
                 onClick={handleAddFitment}
                 disabled={fitments.length >= FITMENT_CAP}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
               >
                 <Plus className="w-3 h-3" /> {t('products.edit.cockpit.ebay.compat.addFitment')}
               </button>
               <button
                 type="button"
                 onClick={() => setBulkOpen(true)}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 <FileText className="w-3 h-3" /> {t('products.edit.cockpit.ebay.compat.bulkPaste')}
               </button>
-              <span className="text-[10.5px] text-slate-400 ml-auto">
+              <span className="text-[10.5px] text-tertiary ml-auto">
                 {fitments.length} / {FITMENT_CAP}
               </span>
             </div>
 
             {fitments.length === 0 && (
-              <div className="text-xs text-slate-400 italic py-2">
+              <div className="text-xs text-tertiary italic py-2">
                 {t('products.edit.cockpit.ebay.compat.emptyFitments')}
               </div>
             )}
@@ -301,7 +301,7 @@ export default function CompatibilityCard(props: Props) {
               <div className="max-h-72 overflow-y-auto -mx-2 px-2">
                 <table className="w-full text-xs border-collapse">
                   <thead>
-                    <tr className="text-[10.5px] uppercase tracking-wide text-slate-400">
+                    <tr className="text-[10.5px] uppercase tracking-wide text-tertiary">
                       <th className="text-left py-1 px-1 font-medium">{t('products.edit.cockpit.ebay.compat.colYear')}</th>
                       <th className="text-left py-1 px-1 font-medium">{t('products.edit.cockpit.ebay.compat.colMake')}</th>
                       <th className="text-left py-1 px-1 font-medium">{t('products.edit.cockpit.ebay.compat.colModel')}</th>
@@ -331,12 +331,12 @@ export default function CompatibilityCard(props: Props) {
           </div>
         )}
 
-        <div className="text-[10.5px] text-slate-400 italic pt-1 border-t border-slate-100 dark:border-slate-800">
+        <div className="text-[10.5px] text-tertiary italic pt-1 border-t border-subtle dark:border-slate-800">
           {t('products.edit.cockpit.ebay.compat.persistenceNote')}
         </div>
       </div>
 
-      <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+      <div className="px-4 py-2.5 border-t border-subtle dark:border-slate-800 flex items-center gap-2">
         <span className="text-xs text-slate-500 dark:text-slate-400">
           {isDirty ? t('products.edit.cockpit.ebay.compat.unsavedChanges') : t('products.edit.cockpit.ebay.compat.allSaved')}
         </span>
@@ -373,14 +373,14 @@ function FitmentRow({
 }) {
   const { t } = useTranslations()
   return (
-    <tr className="border-t border-slate-100 dark:border-slate-800">
+    <tr className="border-t border-subtle dark:border-slate-800">
       <td className="py-1 px-1">
         <input
           type="text"
           value={fitment.year}
           onChange={(e) => onChange({ year: e.target.value })}
           placeholder="2024"
-          className="w-16 text-xs border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+          className="w-16 text-xs border border-default dark:border-slate-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
         />
       </td>
       <td className="py-1 px-1">
@@ -389,7 +389,7 @@ function FitmentRow({
           value={fitment.make}
           onChange={(e) => onChange({ make: e.target.value })}
           placeholder="Ducati"
-          className="w-24 text-xs border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+          className="w-24 text-xs border border-default dark:border-slate-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
         />
       </td>
       <td className="py-1 px-1">
@@ -398,7 +398,7 @@ function FitmentRow({
           value={fitment.model}
           onChange={(e) => onChange({ model: e.target.value })}
           placeholder="Panigale V4"
-          className="w-32 text-xs border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+          className="w-32 text-xs border border-default dark:border-slate-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
         />
       </td>
       <td className="py-1 px-1">
@@ -407,14 +407,14 @@ function FitmentRow({
           value={fitment.submodel ?? ''}
           onChange={(e) => onChange({ submodel: e.target.value })}
           placeholder={t('products.edit.cockpit.ebay.compat.submodelPlaceholder')}
-          className="w-24 text-xs border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+          className="w-24 text-xs border border-default dark:border-slate-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
         />
       </td>
       <td className="py-1 px-1">
         <button
           type="button"
           onClick={onDelete}
-          className="p-0.5 text-slate-400 hover:text-rose-600"
+          className="p-0.5 text-tertiary hover:text-rose-600"
           aria-label={t('products.edit.cockpit.ebay.compat.deleteFitment')}
         >
           <Trash2 className="w-3 h-3" />
@@ -434,10 +434,10 @@ function BulkPasteModal({
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-lg mx-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl"
+        className="w-full max-w-lg mx-4 rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="px-4 py-3 border-b border-subtle dark:border-slate-800">
           <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('products.edit.cockpit.ebay.compat.bulkModalTitle')}</div>
           <div className="text-xs text-slate-500 mt-0.5">
             {t('products.edit.cockpit.ebay.compat.bulkFormatPrefix')} <span className="font-mono">year,make,model[,submodel]</span> {t('products.edit.cockpit.ebay.compat.bulkFormatSuffix')}
@@ -450,14 +450,14 @@ function BulkPasteModal({
             rows={10}
             autoFocus
             placeholder={'2024,Ducati,Panigale V4\n2023,Yamaha,MT-09\n2022,Honda,CBR1000RR'}
-            className="w-full text-xs font-mono border border-slate-200 dark:border-slate-700 rounded p-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+            className="w-full text-xs font-mono border border-default dark:border-slate-700 rounded p-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
           />
-          <div className="text-[10.5px] text-slate-400 inline-flex items-center gap-1">
+          <div className="text-[10.5px] text-tertiary inline-flex items-center gap-1">
             <ExternalLink className="w-3 h-3" /> {t('products.edit.cockpit.ebay.compat.bulkTip')}
           </div>
         </div>
-        <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
-          <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+        <div className="px-4 py-3 border-t border-subtle dark:border-slate-800 flex items-center justify-end gap-2">
+          <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-medium rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
             {t('products.edit.cockpit.ebay.compat.cancel')}
           </button>
           <button

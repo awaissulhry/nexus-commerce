@@ -233,9 +233,9 @@ export default async function TranslationsTab({
         </div>
       </div>
 
-      <div className="border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900 overflow-x-auto">
+      <div className="border border-default dark:border-slate-800 rounded bg-white dark:bg-slate-900 overflow-x-auto">
         <table className="w-full text-xs">
-          <thead className="bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800">
+          <thead className="bg-slate-50 dark:bg-slate-800/40 border-b border-default dark:border-slate-800">
             <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <th className="py-2 px-3 font-medium sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/40 min-w-[140px]">
                 {t('products.datasheetHub.translations.col.language')}
@@ -266,7 +266,7 @@ export default async function TranslationsTab({
                 return (
                   <tr
                     key={code}
-                    className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30"
+                    className="border-b border-default dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30"
                   >
                     <td className="py-2 px-3 sticky left-0 z-10 bg-slate-50/60 dark:bg-slate-800/30 align-middle">
                       <div className="font-medium text-slate-900 dark:text-slate-100">
@@ -294,10 +294,10 @@ export default async function TranslationsTab({
                       count={master.keywords.length}
                       t={t}
                     />
-                    <td className="py-2 px-3 align-middle text-slate-400 italic">
+                    <td className="py-2 px-3 align-middle text-tertiary italic">
                       {t('products.datasheetHub.translations.source.master')}
                     </td>
-                    <td className="py-2 px-3 align-middle text-slate-400">
+                    <td className="py-2 px-3 align-middle text-tertiary">
                       —
                     </td>
                   </tr>
@@ -308,7 +308,7 @@ export default async function TranslationsTab({
               return (
                 <tr
                   key={code}
-                  className="border-b border-slate-100 dark:border-slate-800 last:border-b-0"
+                  className="border-b border-subtle dark:border-slate-800 last:border-b-0"
                 >
                   <td className="py-2 px-3 sticky left-0 z-10 bg-white dark:bg-slate-900 align-middle">
                     <div className="text-slate-900 dark:text-slate-100 font-medium">
@@ -324,7 +324,7 @@ export default async function TranslationsTab({
                           )}
                         </span>
                       ) : (
-                        <span className="text-slate-400">
+                        <span className="text-tertiary">
                           ·{' '}
                           {t('products.datasheetHub.translations.extraFlag')}
                         </span>
@@ -427,7 +427,7 @@ function FieldCell({
   if (!value || value.trim().length === 0) {
     return (
       <td className="py-2 px-3 align-middle">
-        <span className="inline-flex items-center gap-1 text-slate-400">
+        <span className="inline-flex items-center gap-1 text-tertiary">
           <XCircle className="w-3 h-3" />
           <span className="text-[10px]">
             {t('products.datasheetHub.translations.empty')}

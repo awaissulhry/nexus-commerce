@@ -206,7 +206,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
 
 function DeliveryNote() {
   return (
-    <div className="flex items-start gap-2 p-3 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 text-xs text-slate-600 dark:text-slate-400">
+    <div className="flex items-start gap-2 p-3 rounded-md border border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 text-xs text-slate-600 dark:text-slate-400">
       <Clock size={12} className="mt-0.5 shrink-0" />
       <span>
         Subscription CRUD + test-payload are live. Real event-triggered delivery
@@ -258,7 +258,7 @@ function CreateForm({
   return (
     <form
       onSubmit={submit}
-      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5 space-y-4"
+      className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-5 space-y-4"
     >
       <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
         New webhook
@@ -499,7 +499,7 @@ function SubscriptionRow({
   return (
     <li
       className={cn(
-        'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4',
+        'bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-4',
         !row.isActive && 'opacity-60',
       )}
     >
@@ -522,7 +522,7 @@ function SubscriptionRow({
             <span>
               Events: <span className="text-slate-700 dark:text-slate-300">{eventsLabel}</span>
             </span>
-            <span className="text-slate-400 dark:text-slate-500">·</span>
+            <span className="text-tertiary dark:text-slate-500">·</span>
             <span>
               Secret <code className="font-mono">{row.secretPrefix}…</code>
             </span>

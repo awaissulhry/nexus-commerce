@@ -127,17 +127,17 @@ export function ProductTypeCell({ ctx }: Props) {
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full h-7 flex items-center justify-between gap-1 rounded-md border border-transparent hover:border-slate-200 hover:bg-white px-2 text-base text-left"
+        className="w-full h-7 flex items-center justify-between gap-1 rounded-md border border-transparent hover:border-default hover:bg-white px-2 text-base text-left"
         title={`${channel}${marketplace ? ':' + marketplace : ''} category`}
       >
         <span className="truncate">
           {draft || (
-            <span className="italic text-slate-400">
+            <span className="italic text-tertiary">
               {channel === 'EBAY' ? 'Pick eBay category…' : 'Pick productType…'}
             </span>
           )}
         </span>
-        <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0" />
+        <ChevronDown className="w-3 h-3 text-tertiary flex-shrink-0" />
       </button>
       {open && popoverPos && (
         <div
@@ -148,7 +148,7 @@ export function ProductTypeCell({ ctx }: Props) {
             width: POPOVER_WIDTH,
             maxHeight: POPOVER_HEIGHT,
           }}
-          className="z-50 bg-white border border-slate-200 rounded-md shadow-lg p-2 overflow-auto"
+          className="z-50 bg-white border border-default rounded-md shadow-lg p-2 overflow-auto"
         >
           <ProductTypePicker
             channel={channel}

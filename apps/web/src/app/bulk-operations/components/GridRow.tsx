@@ -82,7 +82,7 @@ export const TableRow = memo(
     }, [findMatchSig])
     return (
       <div
-        className="absolute left-0 right-0 flex border-b border-slate-100"
+        className="absolute left-0 right-0 flex border-b border-subtle"
         style={{
           height: ROW_HEIGHT,
           transform: `translateY(${top}px)`,
@@ -156,10 +156,10 @@ export const TableRow = memo(
                   ? cn(
                       tone.cell,
                       tone.isGroupEdge
-                        ? 'border-r-2 border-slate-200'
-                        : 'border-r border-slate-100/60',
+                        ? 'border-r-2 border-default'
+                        : 'border-r border-subtle/60',
                     )
-                  : 'border-r border-slate-100/60 last:border-r-0',
+                  : 'border-r border-subtle/60 last:border-r-0',
                 isReadOnlyCell && 'bg-slate-50/40',
                 selectable && 'hover:bg-slate-50',
                 // W4.2 — Conditional-format tint. Sits BELOW the
@@ -280,7 +280,7 @@ export function SelectionOverlays({
 export function SkeletonRow({ top, colCount }: { top: number; colCount: number }) {
   return (
     <div
-      className="absolute left-0 right-0 flex border-b border-slate-100 animate-pulse"
+      className="absolute left-0 right-0 flex border-b border-subtle animate-pulse"
       style={{ height: ROW_HEIGHT, transform: `translateY(${top}px)` }}
     >
       {Array.from({ length: colCount }).map((_, i) => (

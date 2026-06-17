@@ -102,7 +102,7 @@ function Key({ k, size }: { k: string; size: 'xs' | 'sm' }) {
     <kbd
       className={cn(
         'inline-flex items-center justify-center font-mono font-medium',
-        'bg-slate-100 text-slate-600 border border-slate-200 rounded',
+        'bg-slate-100 text-slate-600 border border-default rounded',
         KEY_CLASS_BY_SIZE[size],
       )}
     >
@@ -130,7 +130,7 @@ export function KeyboardShortcut({
       >
         {parts.map((part, i) => (
           <span key={i} className="inline-flex items-center gap-1">
-            {i > 0 && <span className="text-xs text-slate-400">then</span>}
+            {i > 0 && <span className="text-xs text-tertiary">then</span>}
             <Key k={translateKey(part, isMac)} size={size} />
           </span>
         ))}
@@ -147,7 +147,7 @@ export function KeyboardShortcut({
       >
         {keys.map((k, i) => (
           <span key={i} className="inline-flex items-center gap-0.5">
-            {i > 0 && <span className="text-xs text-slate-400">+</span>}
+            {i > 0 && <span className="text-xs text-tertiary">+</span>}
             <Key k={translateKey(k, isMac)} size={size} />
           </span>
         ))}

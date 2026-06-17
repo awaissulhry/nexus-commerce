@@ -273,9 +273,9 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
       </div>
 
       {/* Table */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
+          <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-default dark:border-slate-800">
             <tr className="text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <ThSort label="Name" k="name" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('name')} />
               <ThSort label="Mkt" k="marketplace" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('marketplace')} />
@@ -334,7 +334,7 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
                             if (e.key === 'Enter') saveBudget(c)
                             if (e.key === 'Escape') setBudgetEdits((m) => ({ ...m, [c.id]: '' }))
                           }}
-                          className="w-20 text-sm bg-transparent border-b border-slate-200 dark:border-slate-700 focus:border-blue-500 focus:outline-none"
+                          className="w-20 text-sm bg-transparent border-b border-default dark:border-slate-700 focus:border-blue-500 focus:outline-none"
                         />
                         {editing && (
                           <button
@@ -375,7 +375,7 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
                       {margin != null ? (
                         <MarginBadge marginPct={margin} />
                       ) : (
-                        <span className="text-slate-400">—</span>
+                        <span className="text-tertiary">—</span>
                       )}
                     </td>
                     <td className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
@@ -410,7 +410,7 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
         </table>
       </div>
 
-      <div className="mt-3 text-[11px] text-slate-400 dark:text-slate-500">
+      <div className="mt-3 text-[11px] text-tertiary dark:text-slate-500">
         Refreshes every 30s · {formatNumber(items.reduce((a, c) => a + c.impressions, 0))} total impressions
       </div>
     </div>
@@ -503,7 +503,7 @@ const DELIVERY_REASON_LABEL: Record<string, string> = {
 }
 function DeliveryChip({ status, reasons }: { status: string | null; reasons: string[] }) {
   if (!status) {
-    return <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+    return <span className="text-xs text-tertiary dark:text-slate-500">—</span>
   }
   if (status === 'DELIVERING') {
     return (

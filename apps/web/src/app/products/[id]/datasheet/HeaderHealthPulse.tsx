@@ -174,7 +174,7 @@ export default async function HeaderHealthPulse({
             ? 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950'
             : overall === 'red'
               ? 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950'
-              : 'border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900')
+              : 'border-default bg-slate-50 dark:border-slate-800 dark:bg-slate-900')
       }
       role="status"
       aria-live="polite"

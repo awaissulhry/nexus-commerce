@@ -127,7 +127,7 @@ export function PortfolioClient({
               </span>
             )}
           </span>
-          <div className="ml-auto inline-flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-0.5">
+          <div className="ml-auto inline-flex items-center bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded p-0.5">
             {(['auto', 'official', 'live'] as const).map((s) => (
               <button
                 key={s}
@@ -182,7 +182,7 @@ export function PortfolioClient({
       </div>
 
       {/* Portfolio table */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md overflow-hidden">
         {displayed.length === 0 ? (
           <div className="px-6 py-10 text-center text-sm text-slate-500">
             {filter === 'attention'
@@ -191,7 +191,7 @@ export function PortfolioClient({
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-default dark:border-slate-800">
               <tr>
                 <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-slate-500 font-medium">Health</th>
                 <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-slate-500 font-medium">Product</th>
@@ -217,7 +217,7 @@ export function PortfolioClient({
                     >
                       {p.name}
                     </Link>
-                    <div className="text-[10px] font-mono text-slate-400">{p.sku}</div>
+                    <div className="text-[10px] font-mono text-tertiary">{p.sku}</div>
                   </td>
                   <td className="px-3 py-2">
                     {p.qualityScore != null ? (
@@ -225,7 +225,7 @@ export function PortfolioClient({
                         {p.qualityScore}/100
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-400">—</span>
+                      <span className="text-xs text-tertiary">—</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-right text-xs tabular-nums">{p.totalUnits30d}</td>
@@ -262,9 +262,9 @@ export function PortfolioClient({
           <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
             Inventory-to-Ad-Spend (30d)
           </h2>
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800">
+              <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-default dark:border-slate-800">
                 <tr>
                   {['SKU', '30d Revenue', '30d Ad Spend', 'ROAS', 'Net Contribution'].map((h) => (
                     <th key={h} className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-slate-500 font-medium">{h}</th>

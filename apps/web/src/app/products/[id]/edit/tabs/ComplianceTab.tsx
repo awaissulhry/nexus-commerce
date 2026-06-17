@@ -233,10 +233,10 @@ function AddCertForm({ productId, onCreated, onCancel }: AddCertFormProps) {
   }
 
   const inputCls =
-    'w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400'
+    'w-full rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400'
 
   return (
-    <form onSubmit={handleSubmit} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3 bg-slate-50 dark:bg-slate-800/40">
+    <form onSubmit={handleSubmit} className="border border-default dark:border-slate-700 rounded-lg p-4 space-y-3 bg-slate-50 dark:bg-slate-800/40">
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
@@ -506,15 +506,15 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
   const updateProtector = (i: number, key: keyof Protector, val: string) =>
     setProtectors((ps) => ps.map((p, idx) => (idx === i ? { ...p, [key]: val } : p)))
   const fieldCls =
-    'w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
+    'w-full rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
 
   const isDirty = dirtyRef.current > 0
 
   return (
     <div className="space-y-6">
       {/* ── PPE Classification ───────────────────────────────────────── */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-subtle dark:border-slate-800 flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-blue-500" />
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             {t('products.edit.compliance.ppeTitle')}
@@ -535,7 +535,7 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
                   'flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors',
                   ppeCategory === cat.value
                     ? 'border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
+                    : 'border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                 )}
               >
                 <input
@@ -559,7 +559,7 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
                 'flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors',
                 ppeCategory === ''
                   ? 'border-slate-400 dark:border-slate-500 bg-slate-50 dark:bg-slate-800/40'
-                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
+                  : 'border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
               )}
             >
               <input
@@ -581,8 +581,8 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
       </div>
 
       {/* ── Protective equipment (CE/PPE structured data) ────────────── */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-subtle dark:border-slate-800 flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-indigo-500" />
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Protective equipment (CE/PPE)</h2>
           <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">EN 17092 · EN 1621</span>
@@ -618,7 +618,7 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
               </Button>
             </div>
             {protectors.length === 0 ? (
-              <p className="text-xs text-slate-400 dark:text-slate-500">No protectors added.</p>
+              <p className="text-xs text-tertiary dark:text-slate-500">No protectors added.</p>
             ) : (
               <div className="space-y-2">
                 {protectors.map((p, i) => (
@@ -635,7 +635,7 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
                       <option value="">lvl</option>
                       {PROTECTOR_LEVELS.map((l) => <option key={l} value={l}>Level {l}</option>)}
                     </select>
-                    <IconButton onClick={() => removeProtector(i)} size="sm" aria-label="Remove protector" className="text-slate-400 hover:text-red-500">
+                    <IconButton onClick={() => removeProtector(i)} size="sm" aria-label="Remove protector" className="text-tertiary hover:text-red-500">
                       <Trash2 className="w-3.5 h-3.5" />
                     </IconButton>
                   </div>
@@ -647,8 +647,8 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
       </div>
 
       {/* ── Hazmat ──────────────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-subtle dark:border-slate-800 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-amber-500" />
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             {t('products.edit.compliance.hazmatTitle')}
@@ -683,7 +683,7 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
                   value={hazmatClass}
                   onChange={(e) => setHazmatClass(e.target.value)}
                   placeholder="e.g. 3, 8, 9"
-                  className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  className="w-full rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
                 />
               </div>
               <div>
@@ -694,7 +694,7 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
                   value={hazmatUnNumber}
                   onChange={(e) => setHazmatUnNumber(e.target.value)}
                   placeholder="e.g. UN1950"
-                  className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  className="w-full rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
                 />
               </div>
             </div>
@@ -714,8 +714,8 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
       )}
 
       {/* ── Certificates ─────────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-subtle dark:border-slate-800 flex items-center gap-2">
           <Award className="w-4 h-4 text-purple-500" />
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             {t('products.edit.compliance.certsTitle')}
@@ -744,7 +744,7 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
           )}
 
           {certsLoading ? (
-            <div className="flex items-center justify-center py-8 text-slate-400">
+            <div className="flex items-center justify-center py-8 text-tertiary">
               <Loader2 className="w-5 h-5 animate-spin mr-2" />
               Loading certificates…
             </div>
@@ -769,8 +769,8 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
                         aria-expanded={expanded}
                       >
                         {expanded
-                          ? <ChevronUp className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                          : <ChevronDown className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />}
+                          ? <ChevronUp className="w-3.5 h-3.5 text-tertiary flex-shrink-0" />
+                          : <ChevronDown className="w-3.5 h-3.5 text-tertiary flex-shrink-0" />}
                         <span className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
                           {typeLabel}
                           {cert.certNumber && (
@@ -781,7 +781,7 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
                         </span>
                         <CertStatusBadge expiresAt={cert.expiresAt} />
                         {cert.expiresAt && (
-                          <span className="text-xs text-slate-400 dark:text-slate-500 flex-shrink-0">
+                          <span className="text-xs text-tertiary dark:text-slate-500 flex-shrink-0">
                             exp {formatDate(cert.expiresAt)}
                           </span>
                         )}
@@ -791,7 +791,7 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
                           href={cert.fileUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-1 text-slate-400 hover:text-blue-500"
+                          className="p-1 text-tertiary hover:text-blue-500"
                           title="Open certificate file"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
@@ -802,7 +802,7 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
                         disabled={deletingId === cert.id}
                         size="sm"
                         aria-label="Delete certificate"
-                        className="text-slate-400 hover:text-red-500"
+                        className="text-tertiary hover:text-red-500"
                       >
                         {deletingId === cert.id
                           ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -853,8 +853,8 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
       </div>
 
       {/* ── Channel compliance status ─────────────────────────────────── */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-subtle dark:border-slate-800 flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             {t('products.edit.compliance.channelStatusTitle')}

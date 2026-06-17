@@ -95,7 +95,7 @@ export function CashFlowCard() {
         <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
           Cash flow projection
         </div>
-        <div className="text-base text-slate-400 dark:text-slate-500 mt-2">Loading…</div>
+        <div className="text-base text-tertiary dark:text-slate-500 mt-2">Loading…</div>
       </Card>
     )
   }
@@ -114,7 +114,7 @@ export function CashFlowCard() {
           <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
             Cash flow projection
           </span>
-          <span className="text-xs text-slate-400 dark:text-slate-500">
+          <span className="text-xs text-tertiary dark:text-slate-500">
             {buckets.length} weeks · {data.openPoCount} open POs ·{' '}
             {data.speculativeRecCount} recs
           </span>
@@ -172,7 +172,7 @@ export function CashFlowCard() {
                   setEditingCash(false)
                   setCashInput('')
                 }}
-                className="text-slate-400 dark:text-slate-500 hover:underline"
+                className="text-tertiary dark:text-slate-500 hover:underline"
               >
                 cancel
               </button>
@@ -195,7 +195,7 @@ export function CashFlowCard() {
               ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-900'
               : b.health === 'AMBER'
                 ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-900'
-                : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800'
+                : 'bg-slate-50 dark:bg-slate-950 border-default dark:border-slate-800'
           return (
             <div
               key={b.weekStart}

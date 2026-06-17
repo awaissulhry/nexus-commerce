@@ -350,7 +350,7 @@ function DriftSection({
                 })}
               </span>
             </summary>
-            <div className="border-t border-slate-200 dark:border-slate-800">
+            <div className="border-t border-default dark:border-slate-800">
               <table className="w-full text-xs">
                 <thead className="bg-slate-50 dark:bg-slate-800/40 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   <tr className="text-left">
@@ -370,14 +370,14 @@ function DriftSection({
                   {d.affectedListings.map((l) => (
                     <tr
                       key={l.listingId}
-                      className="border-t border-slate-100 dark:border-slate-800"
+                      className="border-t border-subtle dark:border-slate-800"
                     >
                       <td className="py-1.5 px-3 align-middle text-slate-700 dark:text-slate-200">
                         {l.label}
                       </td>
                       <td className="py-1.5 px-3 align-middle text-slate-600 dark:text-slate-300">
                         {l.channelPreview || (
-                          <span className="text-slate-400 italic">
+                          <span className="text-tertiary italic">
                             {t(
                               'products.datasheetHub.overview.drift.channelEmpty',
                             )}
@@ -390,7 +390,7 @@ function DriftSection({
                       <td className="py-1.5 px-2 align-middle">
                         <Link
                           href={`/sync-logs/live?listingId=${l.listingId}`}
-                          className="inline-flex items-center justify-center w-5 h-5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          className="inline-flex items-center justify-center w-5 h-5 rounded text-tertiary hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                           title={t(
                             'products.datasheetHub.overview.drift.openLog',
                           )}

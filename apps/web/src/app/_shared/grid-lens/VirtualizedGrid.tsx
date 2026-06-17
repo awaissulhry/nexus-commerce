@@ -435,7 +435,7 @@ export function VirtualizedGrid<T extends GridLensRow>({
             >
               {/* ── Header ───────────────────────────────────────────── */}
               <div
-                className="flex border-b border-slate-200 bg-slate-50 sticky top-0 z-10"
+                className="flex border-b border-default bg-slate-50 sticky top-0 z-10"
                 role="row"
               >
                 {draggable && (
@@ -568,7 +568,7 @@ export function VirtualizedGrid<T extends GridLensRow>({
                               hover; operators had to know-or-guess
                               which columns sorted. */}
                           {isActive ? (
-                            <span className="text-slate-400" aria-hidden="true">
+                            <span className="text-tertiary" aria-hidden="true">
                               {sortDir === 'ascending' ? '↑' : '↓'}
                             </span>
                           ) : sortable ? (
@@ -583,7 +583,7 @@ export function VirtualizedGrid<T extends GridLensRow>({
                           // baseline. Hide the subLabel hint in compact
                           // mode; keep it in comfortable + spacious where
                           // there's vertical room.
-                          <span className="text-[10px] font-normal normal-case tracking-normal text-slate-400 dark:text-slate-500 leading-none mt-0.5">
+                          <span className="text-[10px] font-normal normal-case tracking-normal text-tertiary dark:text-slate-500 leading-none mt-0.5">
                             {col.subLabel}
                           </span>
                         )}
@@ -637,7 +637,7 @@ export function VirtualizedGrid<T extends GridLensRow>({
                       data-index={vRow.index}
                       ref={rowVirtualizer.measureElement}
                       role="row"
-                      className={`border-b border-slate-100 flex${draggable ? ' relative' : ''}`}
+                      className={`border-b border-subtle flex${draggable ? ' relative' : ''}`}
                       onContextMenu={
                         rowData
                           ? (e) => onRowContextMenu(e, rowData)
@@ -743,7 +743,7 @@ export function VirtualizedGrid<T extends GridLensRow>({
                 role="menu"
                 onContextMenu={(e) => e.preventDefault()}
                 style={{ left: adjX, top: adjY }}
-                className="fixed z-50 w-60 bg-white border border-slate-200 rounded-md shadow-xl p-1 dark:bg-slate-900 dark:border-slate-800 animate-fade-in"
+                className="fixed z-50 w-60 bg-white border border-default rounded-md shadow-xl p-1 dark:bg-slate-900 dark:border-slate-800 animate-fade-in"
               >
                 {renderRowContextMenu(contextMenu.row, () => setContextMenu(null))}
               </div>,

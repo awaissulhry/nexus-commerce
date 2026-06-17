@@ -132,7 +132,7 @@ export function ThreeWayMatchPanel({ poId }: { poId: string }) {
 
   if (loading && !data) {
     return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-6 text-base text-slate-500 dark:text-slate-400 inline-flex items-center gap-2">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg p-6 text-base text-slate-500 dark:text-slate-400 inline-flex items-center gap-2">
         <Loader2 className="w-4 h-4 animate-spin" /> Loading match…
       </div>
     )
@@ -155,8 +155,8 @@ export function ThreeWayMatchPanel({ poId }: { poId: string }) {
   const { totals, flags, currencyCode } = data
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-      <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center justify-between">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg overflow-hidden">
+      <div className="px-4 py-2 border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center justify-between">
         <span>Three-way match</span>
         <span className="text-sm font-normal text-slate-500 dark:text-slate-400 normal-case tracking-normal">
           {data.linkedShipmentCount} {data.linkedShipmentCount === 1 ? 'shipment' : 'shipments'}
@@ -166,7 +166,7 @@ export function ThreeWayMatchPanel({ poId }: { poId: string }) {
       </div>
 
       {/* Roll-up tiles */}
-      <div className="grid grid-cols-2 md:grid-cols-4 border-b border-slate-200 dark:border-slate-700">
+      <div className="grid grid-cols-2 md:grid-cols-4 border-b border-default dark:border-slate-700">
         <Tile
           label="Ordered"
           primary={`${totals.orderedQty} u`}
@@ -249,7 +249,7 @@ export function ThreeWayMatchPanel({ poId }: { poId: string }) {
       {/* Per-line table */}
       <div className="overflow-x-auto">
         <table className="w-full text-base">
-          <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+          <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-default dark:border-slate-700">
             <tr>
               <th className="text-left font-medium px-3 py-1.5">SKU</th>
               <th className="text-right font-medium px-3 py-1.5" colSpan={2}>
@@ -334,7 +334,7 @@ function LandedCostBreakdown({
   }
 
   return (
-    <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+    <div className="px-4 py-3 border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
       <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
           Landed cost (EUR)
@@ -353,7 +353,7 @@ function LandedCostBreakdown({
       </div>
 
       {pushableLines.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2 flex-wrap">
+        <div className="mt-3 pt-3 border-t border-default dark:border-slate-700 flex items-center justify-between gap-2 flex-wrap">
           <div className="text-sm text-slate-600 dark:text-slate-400">
             {pushableLines.length} line{pushableLines.length === 1 ? '' : 's'} can
             push landed cost back to SupplierProduct as "true cost" for
@@ -376,7 +376,7 @@ function LandedCostBreakdown({
               type="button"
               onClick={pushAll}
               disabled={pushing}
-              className="h-7 px-3 inline-flex items-center gap-1.5 text-sm font-medium rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+              className="h-7 px-3 inline-flex items-center gap-1.5 text-sm font-medium rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
               title="Update SupplierProduct.lastLandedCostCents for these lines"
             >
               {pushing ? (
@@ -434,7 +434,7 @@ function MatchRow({ line, currency }: { line: MatchLine; currency: string }) {
   }
 
   return (
-    <tr className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+    <tr className="border-b border-subtle dark:border-slate-800 last:border-0">
       <td className="px-3 py-2 font-mono text-sm">
         {line.sku}
         {line.supplierSku && line.supplierSku !== line.sku && (
@@ -491,10 +491,10 @@ function MatchRow({ line, currency }: { line: MatchLine; currency: string }) {
             {formatCurrency(line.landedUnitCentsEur, 'EUR')}
           </span>
         ) : (
-          <span className="text-slate-400 dark:text-slate-500">—</span>
+          <span className="text-tertiary dark:text-slate-500">—</span>
         )}
       </td>
-      <td className="px-3 py-2 text-sm text-slate-400 dark:text-slate-500">
+      <td className="px-3 py-2 text-sm text-tertiary dark:text-slate-500">
         <span className="inline-flex items-center gap-1">
           <Minus className="w-3 h-3" /> not tracked
         </span>
@@ -527,7 +527,7 @@ function Tile({
   } as any
   const Icon = tone === 'green' ? CheckCircle2 : tone === 'red' || tone === 'amber' ? AlertCircle : null
   return (
-    <div className="px-4 py-3 border-r last:border-r-0 border-slate-200 dark:border-slate-700">
+    <div className="px-4 py-3 border-r last:border-r-0 border-default dark:border-slate-700">
       <div className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">
         {label}
       </div>

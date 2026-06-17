@@ -72,7 +72,7 @@ export function RebalanceControlsClient({ poolId }: { poolId: string }) {
   }
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-3 mb-3">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-3 mb-3">
       <div className="flex items-center gap-2 flex-wrap">
         <button
           type="button"
@@ -112,7 +112,7 @@ export function RebalanceControlsClient({ poolId }: { poolId: string }) {
       )}
 
       {preview && (
-        <div className="mt-3 border-t border-slate-200 dark:border-slate-800 pt-3">
+        <div className="mt-3 border-t border-default dark:border-slate-800 pt-3">
           <div className="text-sm font-medium text-slate-900 dark:text-slate-100 mb-2">
             Preview: strategy {preview.strategy} · total shift {formatEur(preview.totalShiftCents)}
           </div>

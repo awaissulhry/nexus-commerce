@@ -1310,7 +1310,7 @@ export default function ProductsWorkspace() {
                 reachable by URL; surface it next to the photo upload. */}
             <Link
               href="/products/upload"
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
+              className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
               title="Bulk-create / update products from an Excel/CSV spreadsheet"
             >
               <FileUp size={12} /> Bulk upload
@@ -1337,7 +1337,7 @@ export default function ProductsWorkspace() {
             </Button>
             <Link
               href="/analytics/products"
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
+              className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
               title="Portfolio Intelligence — health scores, stockout risk, ROAS"
             >
               <BarChart2 size={12} /> Portfolio
@@ -1345,7 +1345,7 @@ export default function ProductsWorkspace() {
             {/* OL.H.1 — listing automation rules (price/inventory/health/content) */}
             <Link
               href="/products/automation"
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
+              className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
               title="Listing automation — cross-market price / inventory / health / content rules"
             >
               <Sparkles size={12} /> Automation
@@ -1456,14 +1456,14 @@ export default function ProductsWorkspace() {
       <GridToolbar
         searchSlot={
           <div className="relative flex-1 min-w-[180px] max-w-sm">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500 pointer-events-none" />
             <input
               ref={searchInputRef}
               type="text"
               placeholder="Search products…"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full h-8 pl-8 pr-3 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-600"
+              className="w-full h-8 pl-8 pr-3 text-sm border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-tertiary dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-600"
             />
           </div>
         }
@@ -1494,7 +1494,7 @@ export default function ProductsWorkspace() {
               <button
                 type="button"
                 onClick={onClearFilters}
-                className="h-8 px-2.5 text-sm inline-flex items-center gap-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 rounded-md transition-colors"
+                className="h-8 px-2.5 text-sm inline-flex items-center gap-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 border border-transparent hover:border-default dark:hover:border-slate-700 rounded-md transition-colors"
               >
                 <X size={13} /> Clear
               </button>
@@ -1706,7 +1706,7 @@ export default function ProductsWorkspace() {
           <button
             type="button"
             onClick={() => setShortcutsOpen(true)}
-            className="h-8 w-8 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            className="h-8 w-8 inline-flex items-center justify-center border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
             title="Keyboard shortcuts (?)"
             aria-label="Keyboard shortcuts"
           >
@@ -1739,21 +1739,21 @@ export default function ProductsWorkspace() {
             <button
               type="button"
               onClick={() => updateUrl({ status: '', page: undefined })}
-              className={`h-7 px-3 rounded-full text-sm font-medium border transition-colors ${statusFilters.length === 0 ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'}`}
+              className={`h-7 px-3 rounded-full text-sm font-medium border transition-colors ${statusFilters.length === 0 ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100' : 'bg-white text-slate-600 border-default hover:border-slate-400 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'}`}
             >
               All <span className="text-xs opacity-70 tabular-nums">({stats.total.toLocaleString()})</span>
             </button>
             <button
               type="button"
               onClick={() => updateUrl({ status: 'ACTIVE', stockLevel: 'all', missingChannels: '', page: undefined })}
-              className={`h-7 px-3 rounded-full text-sm font-medium border transition-colors ${statusFilters.includes('ACTIVE') && statusFilters.length === 1 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'}`}
+              className={`h-7 px-3 rounded-full text-sm font-medium border transition-colors ${statusFilters.includes('ACTIVE') && statusFilters.length === 1 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-slate-600 border-default hover:border-slate-400 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'}`}
             >
               Fix <span className="text-xs opacity-70 tabular-nums">({Math.max(0, stats.active - stats.inStock).toLocaleString()})</span>
             </button>
             <button
               type="button"
               onClick={() => updateUrl({ status: 'DRAFT', page: undefined })}
-              className={`h-7 px-3 rounded-full text-sm font-medium border transition-colors ${statusFilters.includes('DRAFT') && statusFilters.length === 1 ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'}`}
+              className={`h-7 px-3 rounded-full text-sm font-medium border transition-colors ${statusFilters.includes('DRAFT') && statusFilters.length === 1 ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800' : 'bg-white text-slate-600 border-default hover:border-slate-400 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'}`}
             >
               Draft <span className="text-xs opacity-70 tabular-nums">({stats.draft.toLocaleString()})</span>
             </button>
@@ -1791,7 +1791,7 @@ export default function ProductsWorkspace() {
                     key={opt.value || 'all'}
                     type="button"
                     onClick={() => updateUrl({ stockLevel: opt.value || undefined, page: undefined })}
-                    className={`h-7 px-2.5 text-sm border rounded-full transition-colors ${active ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-800'}`}
+                    className={`h-7 px-2.5 text-sm border rounded-full transition-colors ${active ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100' : 'bg-white text-slate-700 border-default hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-800'}`}
                   >
                     {opt.label}
                   </button>
@@ -2278,7 +2278,7 @@ function GridLens(props: any) {
           {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
-              className="flex items-center gap-3 px-3 py-3 border-b border-slate-100 dark:border-slate-800 last:border-b-0"
+              className="flex items-center gap-3 px-3 py-3 border-b border-subtle dark:border-slate-800 last:border-b-0"
               aria-hidden="true"
             >
               <div className="w-4 h-4 rounded bg-slate-200 dark:bg-slate-800 animate-pulse flex-shrink-0" />
@@ -2309,7 +2309,7 @@ function GridLens(props: any) {
     return (
       <Card>
         <div className="py-12 px-6 text-center max-w-md mx-auto space-y-3">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 mb-1">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-tertiary dark:text-slate-500 mb-1">
             <Boxes className="w-6 h-6" />
           </div>
           <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -2332,7 +2332,7 @@ function GridLens(props: any) {
             )}
             <Link
               href="/products/new"
-              className={`h-8 px-3 text-base inline-flex items-center gap-1.5 rounded ${filtered ? 'border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800' : 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200'}`}
+              className={`h-8 px-3 text-base inline-flex items-center gap-1.5 rounded ${filtered ? 'border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800' : 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200'}`}
             >
               <Plus size={12} /> New product
             </Link>
@@ -2361,7 +2361,7 @@ function GridLens(props: any) {
           always-visible sticky slot. Operators set density / columns /
           page-size once and forget; pulling the action bar to the top
           gives the high-frequency surface the better real estate. */}
-      <div className="-mx-2 px-2 py-1.5 flex items-center gap-2 justify-between border-b border-slate-200 dark:border-slate-800">
+      <div className="-mx-2 px-2 py-1.5 flex items-center gap-2 justify-between border-b border-default dark:border-slate-800">
         <div className="flex items-center gap-2">
           <span className="text-sm text-slate-500 dark:text-slate-400">
             <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{total}</span> products · page {page} of {totalPages}
@@ -2369,14 +2369,14 @@ function GridLens(props: any) {
           <select
             value={pageSize}
             onChange={(e) => onPageSize(Number(e.target.value))}
-            className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+            className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
           >
             {[50, 100, 200, 500].map((n) => <option key={n} value={n}>{n}/page</option>)}
           </select>
         </div>
         {/* F7 — density picker. Three-segment toggle adjacent to the
             columns picker. Persisted per-user via localStorage. */}
-        <div className="inline-flex items-center border border-slate-200 dark:border-slate-700 rounded overflow-hidden h-7 text-sm">
+        <div className="inline-flex items-center border border-default dark:border-slate-700 rounded overflow-hidden h-7 text-sm">
           {(['compact', 'comfortable', 'spacious'] as const).map((d) => {
             // U.6 — Lucide icons replace the ASCII glyphs (≡ ☰ ☲) which
             // didn't visually align across fonts. The icon vocabulary
@@ -2665,7 +2665,7 @@ function AddSortButton({
         type="button"
         onClick={() => setOpen((s) => !s)}
         title="Add a sort dimension"
-        className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-800 rounded text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+        className="h-7 px-2 text-sm border border-default dark:border-slate-800 rounded text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
       >
         + Sort
       </button>
@@ -2673,7 +2673,7 @@ function AddSortButton({
         <AnchoredPopover
           anchorRef={btnRef}
           onClose={() => setOpen(false)}
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md shadow-lg py-1 min-w-[200px] text-sm"
+          className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md shadow-lg py-1 min-w-[200px] text-sm"
           ariaLabel="Add sort"
         >
             <div className="px-3 py-1 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">

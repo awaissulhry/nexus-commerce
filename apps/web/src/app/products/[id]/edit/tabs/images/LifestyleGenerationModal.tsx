@@ -79,7 +79,7 @@ export default function LifestyleGenerationModal({ productId, onClose, onGenerat
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
       />
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-xl flex flex-col overflow-hidden max-h-[85vh]">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-default dark:border-slate-700 flex-shrink-0">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
             <Sparkles className="w-4 h-4 text-purple-500" />
             {t('products.edit.images.lifestyle.title')}
@@ -88,7 +88,7 @@ export default function LifestyleGenerationModal({ productId, onClose, onGenerat
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+            className="p-1 text-tertiary hover:text-slate-700 dark:hover:text-slate-200"
             disabled={generating}
           >
             <X className="w-4 h-4" />
@@ -100,7 +100,7 @@ export default function LifestyleGenerationModal({ productId, onClose, onGenerat
           <div>
             <label className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1 block">
               {t('products.edit.images.lifestyle.promptLabel')}
-              <span className="text-slate-400 ml-1 font-normal">({prompt.length}/2000)</span>
+              <span className="text-tertiary ml-1 font-normal">({prompt.length}/2000)</span>
             </label>
             <textarea
               value={prompt}
@@ -108,7 +108,7 @@ export default function LifestyleGenerationModal({ productId, onClose, onGenerat
               disabled={generating}
               rows={4}
               placeholder={t('products.edit.images.lifestyle.promptPlaceholder')}
-              className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-purple-400 resize-none"
+              className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-purple-400 resize-none"
             />
           </div>
 
@@ -124,7 +124,7 @@ export default function LifestyleGenerationModal({ productId, onClose, onGenerat
                   type="button"
                   onClick={() => applyPreset(key)}
                   disabled={generating}
-                  className="text-[11px] px-2 py-1 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-purple-950/30 hover:border-purple-300"
+                  className="text-[11px] px-2 py-1 rounded border border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-purple-950/30 hover:border-purple-300"
                 >
                   {t(`products.edit.images.lifestyle.presetLabel.${key}`)}
                 </button>
@@ -148,7 +148,7 @@ export default function LifestyleGenerationModal({ productId, onClose, onGenerat
                     'text-xs px-2.5 py-1 rounded border transition-colors font-mono',
                     aspectRatio === r
                       ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-400 text-purple-700 dark:text-purple-300'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                      : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
                   )}
                 >
                   {r}
@@ -161,12 +161,12 @@ export default function LifestyleGenerationModal({ productId, onClose, onGenerat
             <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
           )}
 
-          <p className="text-[10px] text-slate-400 dark:text-slate-500">
+          <p className="text-[10px] text-tertiary dark:text-slate-500">
             {t('products.edit.images.lifestyle.audit')}
           </p>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex-shrink-0">
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-default dark:border-slate-700 flex-shrink-0">
           <Button variant="ghost" onClick={onClose} disabled={generating} className="text-xs">
             {t('products.edit.images.lifestyle.cancel')}
           </Button>

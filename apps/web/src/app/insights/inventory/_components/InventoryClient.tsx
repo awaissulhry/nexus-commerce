@@ -198,7 +198,7 @@ export default function InventoryClient() {
             {r.abcClass}
           </span>
         ) : (
-          <span className="text-slate-400">—</span>
+          <span className="text-tertiary">—</span>
         ),
       format: 'text',
       width: '40px',
@@ -387,7 +387,7 @@ export default function InventoryClient() {
               centerValue={formatCurrency(report.totals.inventoryValue, 'EUR')}
             />
           ) : (
-            <div className="h-[220px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[220px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No data'}
             </div>
           )}
@@ -413,7 +413,7 @@ export default function InventoryClient() {
               dense
             />
           ) : (
-            <div className="text-sm text-slate-400 py-6 text-center">
+            <div className="text-sm text-tertiary py-6 text-center">
               {loading ? 'Loading…' : 'No dead stock — every SKU moved this window'}
             </div>
           )}
@@ -455,7 +455,7 @@ export default function InventoryClient() {
             emptyLabel="No inventory data"
           />
         ) : (
-          <div className="text-sm text-slate-400 py-6 text-center">
+          <div className="text-sm text-tertiary py-6 text-center">
             {loading ? 'Loading…' : ''}
           </div>
         )}

@@ -83,8 +83,8 @@ const STAR_TONE: Record<number, string> = {
 export function RatingPanel({ ratings }: { ratings: RatingsPayload }) {
   const total = Object.values(ratings.distribution).reduce((a, b) => a + (b ?? 0), 0)
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
-      <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md">
+      <div className="px-3 py-2 border-b border-default dark:border-slate-800 flex items-center gap-2">
         <Star className="h-4 w-4 text-amber-500 dark:text-amber-400" />
         <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
           Star ratings

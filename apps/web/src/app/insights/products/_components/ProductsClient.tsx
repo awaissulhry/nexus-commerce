@@ -430,7 +430,7 @@ export default function ProductsClient() {
               centerValue={formatNum(report.totals.activeSkus)}
             />
           ) : (
-            <div className="h-[220px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[220px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No data'}
             </div>
           )}
@@ -450,7 +450,7 @@ export default function ProductsClient() {
               emptyLabel="No sales in this window"
             />
           ) : (
-            <div className="text-sm text-slate-400 py-6 text-center">
+            <div className="text-sm text-tertiary py-6 text-center">
               {loading ? 'Loading…' : ''}
             </div>
           )}
@@ -472,7 +472,7 @@ export default function ProductsClient() {
             emptyLabel="No data"
           />
         ) : (
-          <div className="text-sm text-slate-400 py-6 text-center">
+          <div className="text-sm text-tertiary py-6 text-center">
             {loading ? 'Loading…' : ''}
           </div>
         )}
@@ -508,7 +508,7 @@ export default function ProductsClient() {
             emptyLabel="No data"
           />
         ) : (
-          <div className="text-sm text-slate-400 py-6 text-center">
+          <div className="text-sm text-tertiary py-6 text-center">
             {loading ? 'Loading…' : ''}
           </div>
         )}

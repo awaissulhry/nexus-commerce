@@ -12,17 +12,17 @@ interface SideState { enabled: boolean; targetAcos: string; dailyBudgetEur: stri
 
 function SideCard({ title, accent, s, set }: { title: string; accent: string; s: SideState; set: (p: Partial<SideState>) => void }) {
   return (
-    <div className={`rounded-lg border p-3 ${s.enabled ? 'border-slate-200 dark:border-slate-800' : 'border-slate-100 dark:border-slate-900 opacity-60'}`}>
+    <div className={`rounded-lg border p-3 ${s.enabled ? 'border-default dark:border-slate-800' : 'border-subtle dark:border-slate-900 opacity-60'}`}>
       <div className="flex items-center justify-between mb-2">
         <span className={`font-medium ${accent}`}>{title}</span>
         <label className="inline-flex items-center gap-1 text-xs text-slate-500"><input type="checkbox" checked={s.enabled} onChange={(e) => set({ enabled: e.target.checked })} /> on</label>
       </div>
       <div className="flex gap-2 mb-2">
-        <label className="flex-1 text-[11px] text-slate-500">Target ACoS %<input type="number" value={s.targetAcos} onChange={(e) => set({ targetAcos: e.target.value })} disabled={!s.enabled} className="w-full mt-0.5 px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
-        <label className="flex-1 text-[11px] text-slate-500">Daily budget €<input type="number" value={s.dailyBudgetEur} onChange={(e) => set({ dailyBudgetEur: e.target.value })} disabled={!s.enabled} className="w-full mt-0.5 px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+        <label className="flex-1 text-[11px] text-slate-500">Target ACoS %<input type="number" value={s.targetAcos} onChange={(e) => set({ targetAcos: e.target.value })} disabled={!s.enabled} className="w-full mt-0.5 px-2 py-1 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+        <label className="flex-1 text-[11px] text-slate-500">Daily budget €<input type="number" value={s.dailyBudgetEur} onChange={(e) => set({ dailyBudgetEur: e.target.value })} disabled={!s.enabled} className="w-full mt-0.5 px-2 py-1 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
       </div>
-      <label className="block text-[11px] text-slate-500">Keywords (one per line)<textarea value={s.keywords} onChange={(e) => set({ keywords: e.target.value })} disabled={!s.enabled} rows={5} className="w-full mt-0.5 px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 font-mono" /></label>
-      <div className="text-[10px] text-slate-400 mt-0.5">{s.keywords.split('\n').filter((x) => x.trim()).length} phrases</div>
+      <label className="block text-[11px] text-slate-500">Keywords (one per line)<textarea value={s.keywords} onChange={(e) => set({ keywords: e.target.value })} disabled={!s.enabled} rows={5} className="w-full mt-0.5 px-2 py-1 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950 font-mono" /></label>
+      <div className="text-[10px] text-tertiary mt-0.5">{s.keywords.split('\n').filter((x) => x.trim()).length} phrases</div>
     </div>
   )
 }
@@ -74,11 +74,11 @@ export function GoalBuilderClient() {
 
       <div className="space-y-3 mb-4">
         <div className="flex gap-2">
-          <label className="flex-1 text-xs text-slate-500">Goal name<input value={goalName} onChange={(e) => setGoalName(e.target.value)} placeholder="Spring Collection 2026" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
-          <label className="flex-1 text-xs text-slate-500">Market<select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">{['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK'].map((m) => <option key={m}>{m}</option>)}</select></label>
-          <label className="flex-1 text-xs text-slate-500">Brand terms (comma)<input value={brandTerms} onChange={(e) => setBrandTerms(e.target.value)} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+          <label className="flex-1 text-xs text-slate-500">Goal name<input value={goalName} onChange={(e) => setGoalName(e.target.value)} placeholder="Spring Collection 2026" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+          <label className="flex-1 text-xs text-slate-500">Market<select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">{['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK'].map((m) => <option key={m}>{m}</option>)}</select></label>
+          <label className="flex-1 text-xs text-slate-500">Brand terms (comma)<input value={brandTerms} onChange={(e) => setBrandTerms(e.target.value)} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
         </div>
-        <label className="block text-xs text-slate-500">Bulk ASIN add (one per line / comma-separated)<textarea value={asins} onChange={(e) => setAsins(e.target.value)} rows={3} placeholder="B0XXXXXXXX&#10;B0YYYYYYYY" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 font-mono" /></label>
+        <label className="block text-xs text-slate-500">Bulk ASIN add (one per line / comma-separated)<textarea value={asins} onChange={(e) => setAsins(e.target.value)} rows={3} placeholder="B0XXXXXXXX&#10;B0YYYYYYYY" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950 font-mono" /></label>
         <div className="flex items-center gap-3 text-sm">
           <span className="text-xs text-slate-500">Match types:</span>
           {['EXACT', 'PHRASE', 'BROAD'].map((m) => <label key={m} className="flex items-center gap-1"><input type="checkbox" checked={matchTypes[m]} onChange={(e) => setMatchTypes((s) => ({ ...s, [m]: e.target.checked }))} /> {m[0]}{m.slice(1).toLowerCase()}</label>)}

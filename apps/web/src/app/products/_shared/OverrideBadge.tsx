@@ -260,16 +260,16 @@ function OverrideBadgeInner({
         <div
           ref={popoverRef}
           style={{ position: 'fixed', top: popoverPos.top, left: popoverPos.left, zIndex: 9999 }}
-          className="w-60 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden"
+          className="w-60 rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-subtle dark:border-slate-800">
             <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
               Field Overrides
             </span>
-            <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+            <button onClick={() => setOpen(false)} className="text-tertiary hover:text-slate-600 dark:hover:text-slate-300">
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -292,7 +292,7 @@ function OverrideBadgeInner({
                       ) : (
                         <span className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 flex-1">
                           <GitBranch className="h-3 w-3" /> Override
-                          {masterVal && <span className="text-slate-400 ml-1">↩{masterVal}</span>}
+                          {masterVal && <span className="text-tertiary ml-1">↩{masterVal}</span>}
                         </span>
                       )}
                       {state === 'OVERRIDE' && listingId && (
@@ -350,14 +350,14 @@ function OverrideBadgeInner({
 
           {/* Error */}
           {error && (
-            <div className="px-3 py-1.5 text-[10px] text-red-600 dark:text-red-400 border-t border-slate-100 dark:border-slate-800">
+            <div className="px-3 py-1.5 text-[10px] text-red-600 dark:text-red-400 border-t border-subtle dark:border-slate-800">
               {error}
             </div>
           )}
 
           {/* Reset all — single listing only */}
           {!isEbay && listingId && countOverrides(fieldStates) > 0 && (
-            <div className="px-3 py-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="px-3 py-2 border-t border-subtle dark:border-slate-800">
               <button
                 onClick={resetAll}
                 disabled={!!resetting}

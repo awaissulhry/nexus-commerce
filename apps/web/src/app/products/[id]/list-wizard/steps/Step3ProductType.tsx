@@ -411,7 +411,7 @@ export default function Step3ProductType({
 
       {/* GTIN / Identifiers — merged from the former Step 3 */}
       {hasAmazon && (
-        <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800">
+        <div className="mt-6 pt-5 border-t border-subtle dark:border-slate-800">
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-0.5">
             Product Identifiers
           </h3>
@@ -459,7 +459,7 @@ export default function Step3ProductType({
                   value={gtinValue}
                   onChange={(e) => setGtinValue(e.target.value)}
                   placeholder="e.g. 1234567890123"
-                  className="flex-1 h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="flex-1 h-8 px-2 text-sm border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
                 {gtinValue.trim().length > 0 && (
                   <span
@@ -492,7 +492,7 @@ export default function Step3ProductType({
                   value={trademarkNumber}
                   onChange={(e) => setTrademarkNumber(e.target.value)}
                   placeholder="Trademark number (optional, e.g. EU 018937481)"
-                  className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
                 {!exemptCache?.approved && !amazonInferredExempt && (
                   <p className="text-xs text-amber-700 dark:text-amber-300">
@@ -517,7 +517,7 @@ export default function Step3ProductType({
 
           {/* Embedded exemption application form (apply-now path) */}
           {gtinPath === 'apply-now' && (
-            <div className="mt-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-4">
+            <div className="mt-3 border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-4">
               <Step2GtinExemption
                 wizardId={wizardId}
                 wizardState={wizardState}
@@ -589,7 +589,7 @@ function GtinStatusBanner({
     ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800'
     : status.reason === 'in_progress'
     ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-800'
-    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+    : 'border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
   const headline = (() => {
     switch (status.reason) {
       case 'has_gtin':
@@ -632,9 +632,9 @@ function NonPickableRow({
   platform: string
 }) {
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50/50 px-4 py-3 flex items-center justify-between">
+    <div className="border border-default dark:border-slate-700 rounded-lg bg-slate-50/50 px-4 py-3 flex items-center justify-between">
       <div className="flex items-center gap-2 min-w-0">
-        <span className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500 font-medium">
+        <span className="text-xs uppercase tracking-wide text-tertiary dark:text-slate-500 font-medium">
           Skipped
         </span>
         <span className="font-mono text-base text-slate-600 dark:text-slate-400 truncate">
@@ -695,7 +695,7 @@ function ChannelRow({
     <div
       className={cn(
         'border rounded-lg bg-white dark:bg-slate-900',
-        hasPick ? 'border-slate-200 dark:border-slate-700' : 'border-amber-200 dark:border-amber-900 bg-amber-50/30',
+        hasPick ? 'border-default dark:border-slate-700' : 'border-amber-200 dark:border-amber-900 bg-amber-50/30',
       )}
     >
       <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -721,7 +721,7 @@ function ChannelRow({
             {hasPick ? (
               <div className="text-sm text-slate-500 dark:text-slate-400 truncate">
                 {pick.displayName ?? pick.productType}{' '}
-                <span className="text-slate-400 dark:text-slate-500">
+                <span className="text-tertiary dark:text-slate-500">
                   · {pick.productType}
                 </span>
                 {pick.source === 'mirror' && pick.mirrorOf && (
@@ -754,7 +754,7 @@ function ChannelRow({
       )}
 
       {expanded && (
-        <div className="border-t border-slate-100 dark:border-slate-800">
+        <div className="border-t border-subtle dark:border-slate-800">
           <Picker
             wizardId={wizardId}
             channel={platform}
@@ -825,7 +825,7 @@ function MirrorMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded shadow-md py-1 min-w-[200px]"
+          className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded shadow-md py-1 min-w-[200px]"
         >
           {candidates.map((c) => {
             const p = picks[c]
@@ -1052,9 +1052,9 @@ function Picker({
         />
       )}
 
-      <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-700">
-          <Search className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+      <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-default dark:border-slate-700">
+          <Search className="w-4 h-4 text-tertiary dark:text-slate-500" />
           <input
             value={search}
             onChange={(e) => {
@@ -1066,7 +1066,7 @@ function Picker({
             className="flex-1 h-7 text-md focus:outline-none bg-transparent"
           />
           {listLoading && (
-            <Loader2 className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 animate-spin" />
+            <Loader2 className="w-3.5 h-3.5 text-tertiary dark:text-slate-500 animate-spin" />
           )}
         </div>
         <div
@@ -1099,7 +1099,7 @@ function Picker({
                 onClick={() => handleSelect(item, 'manual')}
                 onMouseEnter={() => setActiveIdx(idx)}
                 className={cn(
-                  'w-full text-left px-3 py-2 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 last:border-b-0 transition-colors',
+                  'w-full text-left px-3 py-2 flex items-center gap-3 border-b border-subtle dark:border-slate-800 last:border-b-0 transition-colors',
                   isActive && !isSelected && 'bg-slate-50 dark:bg-slate-800',
                   isSelected && 'bg-blue-50 dark:bg-blue-950/40',
                 )}
@@ -1114,7 +1114,7 @@ function Picker({
                 </div>
                 {item.bundled && (
                   <span
-                    className="text-xs text-slate-400 dark:text-slate-500"
+                    className="text-xs text-tertiary dark:text-slate-500"
                     title="From bundled fallback list — connect Amazon SP-API for live results"
                   >
                     bundled
@@ -1165,7 +1165,7 @@ function BrowseNodeInput({
     setDraft(value.join(', '))
   }, [value])
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-3 py-2">
+    <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-3 py-2">
       <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
         Browse-node IDs
         <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">
@@ -1184,9 +1184,9 @@ function BrowseNodeInput({
           onChange(parts)
         }}
         placeholder="e.g. 1571265031, 1400717031"
-        className="w-full h-7 px-2 text-base font-mono border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        className="w-full h-7 px-2 text-base font-mono border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
       />
-      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+      <p className="mt-1 text-xs text-tertiary dark:text-slate-500">
         Look these up in Amazon Seller Central → Inventory → Add a Product →
         the category page footer shows the node ID. The wizard publishes
         them as <span className="font-mono">recommended_browse_nodes</span>.
@@ -1224,8 +1224,8 @@ function SuggestionsPanel({
     return 'Suggestions'
   })()
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
-      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-700">
+    <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-default dark:border-slate-700">
         <div className="flex items-center gap-2 text-base font-medium text-slate-700 dark:text-slate-300">
           <Sparkles className="w-3.5 h-3.5 text-blue-500" />
           {sourceLabel}
@@ -1234,7 +1234,7 @@ function SuggestionsPanel({
           type="button"
           onClick={onFetch}
           disabled={loading}
-          className="inline-flex items-center gap-1 h-6 px-2 text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-40"
+          className="inline-flex items-center gap-1 h-6 px-2 text-sm text-slate-600 dark:text-slate-400 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-40"
         >
           {loading ? (
             <Loader2 className="w-3 h-3 animate-spin" />
@@ -1390,7 +1390,7 @@ function GtinOption({
         'block px-3 py-2.5 rounded-lg border cursor-pointer transition-colors',
         checked
           ? 'border-blue-400 bg-blue-50/50 dark:border-blue-700 dark:bg-blue-950/20'
-          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600',
+          : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600',
       )}
     >
       <div className="flex items-start gap-2.5">
@@ -1416,7 +1416,7 @@ function ConfidenceBadge({ value }: { value: number }) {
       ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900'
       : pct >= 50
       ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900'
-      : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+      : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700'
   return (
     <span
       className={cn(

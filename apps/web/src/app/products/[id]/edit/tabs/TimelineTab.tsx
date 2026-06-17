@@ -191,12 +191,12 @@ function EventRow({ event }: { event: ProductEvent }) {
               </span>
             )}
             {event.metadata?.bulkOperationId && (
-              <span className="text-xs text-slate-400 font-mono">
+              <span className="text-xs text-tertiary font-mono">
                 bulk:{event.metadata.bulkOperationId.slice(-6)}
               </span>
             )}
           </div>
-          <span className="shrink-0 text-xs text-slate-400 whitespace-nowrap">
+          <span className="shrink-0 text-xs text-tertiary whitespace-nowrap">
             {relativeTime(event.createdAt)}
           </span>
         </div>
@@ -214,11 +214,11 @@ function EventRow({ event }: { event: ProductEvent }) {
                 : 'Show changes'}
             </button>
             {expanded && (
-              <div className="mt-2 rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden text-xs">
+              <div className="mt-2 rounded-md border border-default dark:border-slate-700 overflow-hidden text-xs">
                 {dataEntries.map(([key, value]) => (
                   <div
                     key={key}
-                    className="flex gap-2 px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 last:border-0 font-mono"
+                    className="flex gap-2 px-3 py-1.5 border-b border-subtle dark:border-slate-800 last:border-0 font-mono"
                   >
                     <span className="text-slate-500 dark:text-slate-400 shrink-0 w-32 truncate">
                       {key}
@@ -252,7 +252,7 @@ function AuditRow({ row }: { row: AuditRow }) {
             <Badge variant="default" size="sm">{row.action}</Badge>
             <span className="text-sm text-slate-700 dark:text-slate-300">{row.entityType}</span>
           </div>
-          <span className="shrink-0 text-xs text-slate-400">{relativeTime(row.createdAt)}</span>
+          <span className="shrink-0 text-xs text-tertiary">{relativeTime(row.createdAt)}</span>
         </div>
         {afterEntries.length > 0 && (
           <div className="mt-1.5">
@@ -264,9 +264,9 @@ function AuditRow({ row }: { row: AuditRow }) {
               Show changes
             </button>
             {expanded && (
-              <div className="mt-2 rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden text-xs">
+              <div className="mt-2 rounded-md border border-default dark:border-slate-700 overflow-hidden text-xs">
                 {afterEntries.map(([key, value]) => (
-                  <div key={key} className="flex gap-2 px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 last:border-0 font-mono">
+                  <div key={key} className="flex gap-2 px-3 py-1.5 border-b border-subtle dark:border-slate-800 last:border-0 font-mono">
                     <span className="text-slate-500 w-32 truncate shrink-0">{key}</span>
                     <span className="text-slate-800 dark:text-slate-200 truncate">
                       {typeof value === 'object' ? JSON.stringify(value) : String(value ?? '—')}
@@ -404,7 +404,7 @@ export function TimelineTab({ product, discardSignal }: Props) {
       {/* Loading */}
       {loading && (
         <div className="flex justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+          <Loader2 className="h-6 w-6 animate-spin text-tertiary" />
         </div>
       )}
 

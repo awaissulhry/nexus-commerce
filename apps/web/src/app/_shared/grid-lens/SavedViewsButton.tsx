@@ -85,7 +85,7 @@ export function SavedViewsButton({
         <AnchoredPopover
           anchorRef={btnRef}
           onClose={() => setOpen(false)}
-          className="w-72 bg-white border border-slate-200 rounded-md shadow-lg p-2 dark:bg-slate-900 dark:border-slate-800"
+          className="w-72 bg-white border border-default rounded-md shadow-lg p-2 dark:bg-slate-900 dark:border-slate-800"
           ariaLabel="Saved views"
         >
           {!saveMode ? (
@@ -106,7 +106,7 @@ export function SavedViewsButton({
                       ? 'text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300'
                       : alertCount > 0
                         ? 'text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300'
-                        : 'text-slate-400 hover:text-purple-600 dark:text-slate-500 dark:hover:text-purple-400'
+                        : 'text-tertiary hover:text-purple-600 dark:text-slate-500 dark:hover:text-purple-400'
                     return (
                       <li
                         key={v.id}
@@ -154,7 +154,7 @@ export function SavedViewsButton({
                           title={t(`${p}.savedViews.setDefault`)}
                           aria-label={t(`${p}.savedViews.setDefaultAria`, { name: v.name })}
                           size="sm"
-                          className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-slate-400 hover:text-amber-500 dark:text-slate-500 dark:hover:text-amber-400"
+                          className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-tertiary hover:text-amber-500 dark:text-slate-500 dark:hover:text-amber-400"
                         >
                           <Star size={12} />
                         </IconButton>
@@ -174,7 +174,7 @@ export function SavedViewsButton({
                           title={t(`${p}.savedViews.deleteLabel`)}
                           aria-label={t(`${p}.savedViews.deleteAria`, { name: v.name })}
                           size="sm"
-                          className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-slate-400 hover:text-rose-600 dark:text-slate-500 dark:hover:text-rose-400"
+                          className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-tertiary hover:text-rose-600 dark:text-slate-500 dark:hover:text-rose-400"
                         >
                           <Trash2 size={12} />
                         </IconButton>
@@ -202,7 +202,7 @@ export function SavedViewsButton({
                 placeholder={t(`${p}.savedViews.namePlaceholder`)}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full h-8 px-2 text-md border border-slate-200 rounded dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                className="w-full h-8 px-2 text-md border border-default rounded dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
               />
               <label className="flex items-center gap-2 px-2 text-base text-slate-700 dark:text-slate-300">
                 <input

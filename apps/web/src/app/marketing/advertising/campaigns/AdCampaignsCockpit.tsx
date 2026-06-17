@@ -64,7 +64,7 @@ const pct = (v: number | null | undefined, dp = 1) => (v == null ? '—' : `${(v
 const x2 = (v: number | null | undefined) => (v == null ? '—' : `${v.toFixed(2)}×`)
 // ACOS colour (fraction 0-1): green low, amber mid, rose high.
 const acosTone = (v: number | null | undefined) => (v == null ? 'bg-slate-300' : v <= 0.2 ? 'bg-emerald-500' : v <= 0.35 ? 'bg-amber-500' : 'bg-rose-500')
-const acosText = (v: number | null | undefined) => (v == null ? 'text-slate-400' : v <= 0.2 ? 'text-emerald-600 dark:text-emerald-400' : v <= 0.35 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400')
+const acosText = (v: number | null | undefined) => (v == null ? 'text-tertiary' : v <= 0.2 ? 'text-emerald-600 dark:text-emerald-400' : v <= 0.35 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400')
 const TYPE_TONE: Record<string, string> = { SP: 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300', SB: 'bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300', SD: 'bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300' }
 
 // ── Column registry (Amazon-grade) ───────────────────────────────────────
@@ -271,7 +271,7 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
       <div className="flex items-center justify-between mb-3">
         <DateRangePicker value={range} onChange={setRange} />
         <span className="inline-flex items-center gap-1.5 text-xs">
-          {loading && <span className="text-slate-400">updating…</span>}
+          {loading && <span className="text-tertiary">updating…</span>}
           <span className={`inline-flex h-2 w-2 rounded-full ${liveTs ? 'bg-emerald-500 animate-pulse' : 'bg-emerald-500/70'}`} />
           <span className="text-emerald-600 dark:text-emerald-400 font-medium">{liveTs ? 'Updated just now' : 'Live'}</span>
         </span>
@@ -280,11 +280,11 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
 
       {/* Performance chart */}
       {trend.length > 0 && (
-        <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 mb-4">
+        <div className="rounded-lg border border-default dark:border-slate-800 p-3 mb-4">
           <div className="flex flex-wrap gap-1.5 mb-2">
             {CHART_METRICS.map((m) => {
               const on = chartMetrics.has(m.key)
-              return <button key={m.key} onClick={() => setChartMetrics((s) => { const n = new Set(s); n.has(m.key) ? n.delete(m.key) : n.add(m.key); return n })} className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs rounded-full border transition ${on ? 'border-transparent text-white' : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`} style={on ? { backgroundColor: m.color } : undefined}><span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: on ? '#fff' : m.color }} />{m.label}</button>
+              return <button key={m.key} onClick={() => setChartMetrics((s) => { const n = new Set(s); n.has(m.key) ? n.delete(m.key) : n.add(m.key); return n })} className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs rounded-full border transition ${on ? 'border-transparent text-white' : 'border-default dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`} style={on ? { backgroundColor: m.color } : undefined}><span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: on ? '#fff' : m.color }} />{m.label}</button>
             })}
           </div>
           <div className="h-60">
@@ -306,25 +306,25 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 mb-2">
-        <div className="relative"><Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a campaign…" className="pl-7 pr-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 w-56" /></div>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status" className="py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="">All status</option>{['ENABLED', 'PAUSED', 'ARCHIVED', 'DRAFT'].map((s) => <option key={s}>{s}</option>)}</select>
-        <select value={marketplaceFilter} onChange={(e) => setMarketplaceFilter(e.target.value)} aria-label="Filter by marketplace" className="py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="">All markets</option>{markets.map((m) => <option key={m} value={m}>{marketplaceCode(m)}</option>)}</select>
-        <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="relative"><Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-tertiary" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a campaign…" className="pl-7 pr-2 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 w-56" /></div>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status" className="py-1.5 px-2 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900"><option value="">All status</option>{['ENABLED', 'PAUSED', 'ARCHIVED', 'DRAFT'].map((s) => <option key={s}>{s}</option>)}</select>
+        <select value={marketplaceFilter} onChange={(e) => setMarketplaceFilter(e.target.value)} aria-label="Filter by marketplace" className="py-1.5 px-2 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900"><option value="">All markets</option>{markets.map((m) => <option key={m} value={m}>{marketplaceCode(m)}</option>)}</select>
+        <div className="inline-flex rounded-md border border-default dark:border-slate-700 overflow-hidden">
           {[['', 'All'], ['SP', 'SP'], ['SB', 'SB'], ['SD', 'SD']].map(([v, label]) => (
-            <button key={v} onClick={() => setTypeFilter(v)} className={`px-2.5 py-1.5 text-xs border-l first:border-l-0 border-slate-200 dark:border-slate-700 ${typeFilter === v ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{label}</button>
+            <button key={v} onClick={() => setTypeFilter(v)} className={`px-2.5 py-1.5 text-xs border-l first:border-l-0 border-default dark:border-slate-700 ${typeFilter === v ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{label}</button>
           ))}
         </div>
-        <div className="inline-flex items-center rounded-md border border-slate-200 dark:border-slate-700 p-0.5" title="Channel — eBay/Shopify have no keyword PPC yet">
+        <div className="inline-flex items-center rounded-md border border-default dark:border-slate-700 p-0.5" title="Channel — eBay/Shopify have no keyword PPC yet">
           {[['Amazon', true], ['eBay', false], ['Shopify', false]].map(([label, on]) => (
             <span key={label as string} className={`px-2 py-1 text-xs rounded ${on ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium' : 'text-slate-300 dark:text-slate-600 cursor-not-allowed'}`}>{label}</span>
           ))}
         </div>
         <Link href="/marketing/advertising/create" className="inline-flex items-center gap-1 py-1.5 px-3 text-sm rounded-md bg-slate-900 text-white dark:bg-slate-700 hover:bg-slate-800">+ Create campaign</Link>
         <div className="ml-auto flex items-center gap-2">
-          {importMsg && <span className={`text-xs ${importMsg.startsWith('✓') ? 'text-emerald-600' : 'text-slate-400'}`}>{importMsg}</span>}
-          <span className="text-xs text-slate-400">{filtered.length} campaigns</span>
+          {importMsg && <span className={`text-xs ${importMsg.startsWith('✓') ? 'text-emerald-600' : 'text-tertiary'}`}>{importMsg}</span>}
+          <span className="text-xs text-tertiary">{filtered.length} campaigns</span>
           {layout === 'cards' && (
-            <select value={`${sortKey}:${sortDir}`} onChange={(e) => { const [k, d] = e.target.value.split(':'); setSortKey(k); setSortDir(d as 'asc' | 'desc') }} aria-label="Sort" className="py-1.5 px-2 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+            <select value={`${sortKey}:${sortDir}`} onChange={(e) => { const [k, d] = e.target.value.split(':'); setSortKey(k); setSortDir(d as 'asc' | 'desc') }} aria-label="Sort" className="py-1.5 px-2 text-xs rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900">
               {[['spendC', 'Spend'], ['salesC', 'Sales'], ['acos', 'ACOS'], ['roas', 'ROAS'], ['impressions', 'Impressions'], ['clicks', 'Clicks'], ['orders', 'Orders'], ['name', 'Name']].map(([k, label]) => (
                 <optgroup key={k} label={label}>
                   <option value={`${k}:desc`}>{label} ↓</option>
@@ -333,18 +333,18 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
               ))}
             </select>
           )}
-          <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden" title="Layout">
-            <button onClick={() => setLayout('cards')} className={`px-1.5 py-1.5 ${layout === 'cards' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`} title="Polished rows"><Rows size={14} /></button>
-            <button onClick={() => setLayout('table')} className={`px-1.5 py-1.5 border-l border-slate-200 dark:border-slate-700 ${layout === 'table' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`} title="Dense table"><SlidersHorizontal size={14} /></button>
+          <div className="inline-flex rounded-md border border-default dark:border-slate-700 overflow-hidden" title="Layout">
+            <button onClick={() => setLayout('cards')} className={`px-1.5 py-1.5 ${layout === 'cards' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'text-tertiary hover:bg-slate-50 dark:hover:bg-slate-800'}`} title="Polished rows"><Rows size={14} /></button>
+            <button onClick={() => setLayout('table')} className={`px-1.5 py-1.5 border-l border-default dark:border-slate-700 ${layout === 'table' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'text-tertiary hover:bg-slate-50 dark:hover:bg-slate-800'}`} title="Dense table"><SlidersHorizontal size={14} /></button>
           </div>
-          <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden" title="Row density">
-            <button onClick={() => setDensity('comfortable')} className={`px-1.5 py-1.5 ${density === 'comfortable' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}><Rows size={14} /></button>
-            <button onClick={() => setDensity('compact')} className={`px-1.5 py-1.5 border-l border-slate-200 dark:border-slate-700 ${density === 'compact' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}><AlignJustify size={14} /></button>
+          <div className="inline-flex rounded-md border border-default dark:border-slate-700 overflow-hidden" title="Row density">
+            <button onClick={() => setDensity('comfortable')} className={`px-1.5 py-1.5 ${density === 'comfortable' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'text-tertiary hover:bg-slate-50 dark:hover:bg-slate-800'}`}><Rows size={14} /></button>
+            <button onClick={() => setDensity('compact')} className={`px-1.5 py-1.5 border-l border-default dark:border-slate-700 ${density === 'compact' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'text-tertiary hover:bg-slate-50 dark:hover:bg-slate-800'}`}><AlignJustify size={14} /></button>
           </div>
-          <button onClick={exportCsv} className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800" title="Export CSV"><FileDown size={14} /></button>
-          <label className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer" title="Import bulksheet CSV (id, budget, status)"><Download size={14} className="rotate-180" /><input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importCsv(f); e.target.value = '' }} /></label>
-          <button onClick={() => setPrefsOpen(true)} className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><SlidersHorizontal size={14} /> Columns ({visibleCols.length})</button>
-          <button onClick={() => void refetch()} className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><RefreshCw size={14} className={loading ? 'animate-spin' : ''} /></button>
+          <button onClick={exportCsv} className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800" title="Export CSV"><FileDown size={14} /></button>
+          <label className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer" title="Import bulksheet CSV (id, budget, status)"><Download size={14} className="rotate-180" /><input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importCsv(f); e.target.value = '' }} /></label>
+          <button onClick={() => setPrefsOpen(true)} className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><SlidersHorizontal size={14} /> Columns ({visibleCols.length})</button>
+          <button onClick={() => void refetch()} className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><RefreshCw size={14} className={loading ? 'animate-spin' : ''} /></button>
         </div>
       </div>
 
@@ -359,14 +359,14 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
           <button onClick={() => void bulkBudget('pct', 10)} className="px-2 py-0.5 rounded border border-blue-300 text-blue-700 hover:bg-blue-100">+10%</button>
           <button onClick={() => void bulkBudget('pct', -10)} className="px-2 py-0.5 rounded border border-blue-300 text-blue-700 hover:bg-blue-100">−10%</button>
           <span className="inline-flex items-center gap-1">set €<input type="number" step="0.01" value={bulkBudgetVal} onChange={(e) => setBulkBudgetVal(e.target.value)} className="w-16 px-1 py-0.5 rounded border border-blue-300 bg-white dark:bg-slate-900" /><button disabled={!bulkBudgetVal} onClick={() => { const n = parseFloat(bulkBudgetVal); if (Number.isFinite(n) && n > 0) void bulkBudget('set', n) }} className="px-2 py-0.5 rounded border border-blue-300 text-blue-700 hover:bg-blue-100 disabled:opacity-40">Apply</button></span>
-          <button onClick={() => setSelected(new Set())} className="text-slate-400 ml-auto">Clear</button>
+          <button onClick={() => setSelected(new Set())} className="text-tertiary ml-auto">Clear</button>
         </div>
       )}
 
       {/* PCG.3 — polished 2-line rows (default) */}
       {layout === 'cards' ? (
-        <div className="rounded-lg border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
-          {filtered.length === 0 && <div className="px-3 py-10 text-center text-slate-400">No campaigns. Run the Amazon Ads sync to import.</div>}
+        <div className="rounded-lg border border-default dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+          {filtered.length === 0 && <div className="px-3 py-10 text-center text-tertiary">No campaigns. Run the Amazon Ads sync to import.</div>}
           {filtered.map((r) => {
             const b = r.base
             const editing = budgetEdits[b.id] != null
@@ -377,29 +377,29 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
                   <Link href={`/marketing/advertising/campaigns/${b.id}`} className="font-medium text-sm text-slate-800 dark:text-slate-100 hover:underline truncate max-w-[26rem]" title={b.name}>{b.name}</Link>
                   <StatusChip status={b.status} dot />
                   <span className={`px-1.5 py-px text-[10px] font-medium rounded flex-shrink-0 ${TYPE_TONE[b.type] ?? 'bg-slate-100 text-slate-600'}`}>{b.type}</span>
-                  <span className="text-xs text-slate-400 flex-shrink-0" title={marketplaceCountryName(b.marketplace)}>{marketplaceCode(b.marketplace)}</span>
+                  <span className="text-xs text-tertiary flex-shrink-0" title={marketplaceCountryName(b.marketplace)}>{marketplaceCode(b.marketplace)}</span>
                   {editing ? (
                     <span className="inline-flex items-center gap-1 flex-shrink-0">€<input autoFocus type="number" step="0.01" value={budgetEdits[b.id]} onChange={(e) => setBudgetEdits((s) => ({ ...s, [b.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') saveBudget(b); if (e.key === 'Escape') setBudgetEdits((s) => { const { [b.id]: _, ...rest } = s; return rest }) }} onBlur={() => saveBudget(b)} className="w-16 px-1 py-0.5 text-xs text-right rounded border border-blue-400 bg-white dark:bg-slate-900" disabled={busy === b.id} />/d</span>
                   ) : (
                     <button onClick={() => setBudgetEdits((s) => ({ ...s, [b.id]: (r.budgetC / 100).toFixed(2) }))} className="text-xs text-slate-500 hover:text-slate-700 hover:underline decoration-dotted flex-shrink-0" title="Edit daily budget">{eur(r.budgetC)}/d</button>
                   )}
                   <div className="ml-auto flex items-center gap-1 flex-shrink-0 md:opacity-0 md:group-hover:opacity-100 transition">
-                    <button onClick={() => void toggleStatus(b)} disabled={busy === b.id} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50">{b.status === 'ENABLED' ? <><Pause size={11} /> Pause</> : <><Play size={11} /> Enable</>}</button>
+                    <button onClick={() => void toggleStatus(b)} disabled={busy === b.id} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded border border-default dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50">{b.status === 'ENABLED' ? <><Pause size={11} /> Pause</> : <><Play size={11} /> Enable</>}</button>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1 pl-6 text-xs">
                   {([['Impr', num(r.impressions)], ['CTR', pct(r.ctr, 2)], ['Spend', eur(r.spendC)], ['Sales', eur(r.salesC)], ['ROAS', x2(r.roas)], ['Orders', num(r.orders)]] as const).map(([label, val]) => (
-                    <span key={label} className="inline-flex items-center gap-1"><span className="text-slate-400">{label}</span><span className="tabular-nums text-slate-700 dark:text-slate-200">{val}</span></span>
+                    <span key={label} className="inline-flex items-center gap-1"><span className="text-tertiary">{label}</span><span className="tabular-nums text-slate-700 dark:text-slate-200">{val}</span></span>
                   ))}
-                  <span className="inline-flex items-center gap-1"><span className={`h-1.5 w-1.5 rounded-full ${acosTone(r.acos)}`} /><span className="text-slate-400">ACOS</span><span className={`tabular-nums font-medium ${acosText(r.acos)}`}>{pct(r.acos)}</span></span>
-                  {r.marginPct != null && <span className="inline-flex items-center gap-1"><span className="text-slate-400">Margin</span><span className={`tabular-nums ${r.marginPct >= 0 ? 'text-slate-600 dark:text-slate-300' : 'text-rose-600'}`}>{pct(r.marginPct)}</span></span>}
+                  <span className="inline-flex items-center gap-1"><span className={`h-1.5 w-1.5 rounded-full ${acosTone(r.acos)}`} /><span className="text-tertiary">ACOS</span><span className={`tabular-nums font-medium ${acosText(r.acos)}`}>{pct(r.acos)}</span></span>
+                  {r.marginPct != null && <span className="inline-flex items-center gap-1"><span className="text-tertiary">Margin</span><span className={`tabular-nums ${r.marginPct >= 0 ? 'text-slate-600 dark:text-slate-300' : 'text-rose-600'}`}>{pct(r.marginPct)}</span></span>}
                 </div>
               </div>
             )
           })}
         </div>
       ) : (
-      <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+      <div className="overflow-x-auto rounded-lg border border-default dark:border-slate-800">
         <table className="text-sm border-collapse" style={{ minWidth: 'max-content' }}>
           <thead className="bg-slate-50 dark:bg-slate-900/60 text-slate-500 text-xs">
             <tr>
@@ -412,7 +412,7 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {filtered.length === 0 && <tr><td colSpan={visibleCols.length + 1} className="px-3 py-10 text-center text-slate-400">No campaigns. Run the Amazon Ads sync to import.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={visibleCols.length + 1} className="px-3 py-10 text-center text-tertiary">No campaigns. Run the Amazon Ads sync to import.</td></tr>}
             {filtered.map((r) => (
               <tr key={r.base.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
                 <td className={`sticky left-0 z-10 bg-white dark:bg-slate-950 px-2 ${rowPad}`}><input type="checkbox" checked={selected.has(r.base.id)} onChange={(e) => setSelected((s) => { const n = new Set(s); e.target.checked ? n.add(r.base.id) : n.delete(r.base.id); return n })} /></td>
@@ -476,9 +476,9 @@ function COLUMN_DEFS(
     { key: 'ntbSales', label: 'NTB sales', width: 90, align: 'right', num: true, render: (r) => eur(r.ntbSalesC) },
     { key: 'viewImpr', label: 'Viewable impr', width: 110, align: 'right', num: true, render: (r) => num(r.viewImpr) },
     { key: 'dpv', label: 'Detail views', width: 100, align: 'right', num: true, render: (r) => num(r.dpv) },
-    { key: 'startDate', label: 'Start', width: 100, render: (r) => <span className="text-xs text-slate-400">{r.base.startDate?.slice(0, 10) ?? '—'}</span> },
-    { key: 'endDate', label: 'End', width: 100, render: (r) => <span className="text-xs text-slate-400">{r.base.endDate?.slice(0, 10) ?? '—'}</span> },
-    { key: 'lastSynced', label: 'Last synced', width: 130, render: (r) => <span className="text-xs text-slate-400">{r.base.lastSyncedAt ? new Date(r.base.lastSyncedAt).toLocaleString() : '—'}</span> },
+    { key: 'startDate', label: 'Start', width: 100, render: (r) => <span className="text-xs text-tertiary">{r.base.startDate?.slice(0, 10) ?? '—'}</span> },
+    { key: 'endDate', label: 'End', width: 100, render: (r) => <span className="text-xs text-tertiary">{r.base.endDate?.slice(0, 10) ?? '—'}</span> },
+    { key: 'lastSynced', label: 'Last synced', width: 130, render: (r) => <span className="text-xs text-tertiary">{r.base.lastSyncedAt ? new Date(r.base.lastSyncedAt).toLocaleString() : '—'}</span> },
     { key: 'actions', label: '', width: 50, locked: true, render: (r) => <button disabled={busy === r.base.id} onClick={() => toggleStatus(r.base)} title={r.base.status === 'ENABLED' ? 'Pause' : 'Enable'} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40">{r.base.status === 'ENABLED' ? <Pause size={14} className="text-amber-600" /> : <Play size={14} className="text-emerald-600" />}</button> },
   ]
 }

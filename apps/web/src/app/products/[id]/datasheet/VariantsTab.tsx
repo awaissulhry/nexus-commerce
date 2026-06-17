@@ -323,7 +323,7 @@ export default async function VariantsTab({
 
   if (children.length === 0) {
     return (
-      <div className="border border-slate-200 dark:border-slate-800 rounded p-6 text-center text-sm text-slate-500">
+      <div className="border border-default dark:border-slate-800 rounded p-6 text-center text-sm text-slate-500">
         <Package className="w-6 h-6 mx-auto mb-2 text-slate-300" />
         <div className="font-medium text-slate-700 dark:text-slate-300">
           {t('products.datasheetHub.variants.empty.title')}

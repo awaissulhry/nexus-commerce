@@ -215,7 +215,7 @@ export default function RecallDetailClient({ recallId }: { recallId: string }) {
           <div className="inline-flex items-center gap-2">
             <Link
               href="/fulfillment/stock/recalls"
-              className="h-8 px-3 inline-flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 border border-slate-200 dark:border-slate-700 rounded"
+              className="h-8 px-3 inline-flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 border border-default dark:border-slate-700 rounded"
             >
               <ChevronLeft size={12} aria-hidden="true" /> {t('common.back')}
             </Link>
@@ -247,7 +247,7 @@ export default function RecallDetailClient({ recallId }: { recallId: string }) {
             </Badge>
             <div className="min-w-0 flex-1">
               <div className="text-md font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
-                <Package size={14} aria-hidden="true" className="text-slate-400" />
+                <Package size={14} aria-hidden="true" className="text-tertiary" />
                 <span className="font-mono">{recall.lot.lotNumber}</span>
                 <span className="text-slate-500 dark:text-slate-400 font-normal truncate">
                   {recall.lot.product.sku} · {recall.lot.product.name}
@@ -288,7 +288,7 @@ export default function RecallDetailClient({ recallId }: { recallId: string }) {
           Default to "affected" since recall workflow is read-affected
           first, source-trace second. */}
       {(backward || forward) && (
-        <div role="tablist" aria-label={t('stock.recallDetail.tabsAria')} className="border-b border-slate-200 dark:border-slate-700 -mx-3 px-3 sm:mx-0 sm:px-0 flex items-center gap-0">
+        <div role="tablist" aria-label={t('stock.recallDetail.tabsAria')} className="border-b border-default dark:border-slate-700 -mx-3 px-3 sm:mx-0 sm:px-0 flex items-center gap-0">
           {[
             { key: 'affected' as const, label: t('stock.recallDetail.tabAffected', { n: forward?.affected.orderIds.length ?? 0 }) },
             { key: 'provenance' as const, label: t('stock.recallDetail.tabProvenance') },
@@ -324,7 +324,7 @@ export default function RecallDetailClient({ recallId }: { recallId: string }) {
               <dd className="text-slate-700 dark:text-slate-300">
                 {backward.originReceiveMovement
                   ? <>+{backward.originReceiveMovement.change} · {formatRelative(backward.originReceiveMovement.createdAt, t)} · {backward.originReceiveMovement.actor ?? '—'}</>
-                  : <span className="text-slate-400">—</span>}
+                  : <span className="text-tertiary">—</span>}
               </dd>
             </div>
             <div>
@@ -332,7 +332,7 @@ export default function RecallDetailClient({ recallId }: { recallId: string }) {
                 {t('stock.recallDetail.originPo')}
               </dt>
               <dd className="text-slate-700 dark:text-slate-300 font-mono">
-                {backward.originPoId ?? <span className="text-slate-400">—</span>}
+                {backward.originPoId ?? <span className="text-tertiary">—</span>}
               </dd>
             </div>
             <div>
@@ -340,7 +340,7 @@ export default function RecallDetailClient({ recallId }: { recallId: string }) {
                 {t('stock.recallDetail.originInbound')}
               </dt>
               <dd className="text-slate-700 dark:text-slate-300 font-mono">
-                {backward.originInboundShipmentId ?? <span className="text-slate-400">—</span>}
+                {backward.originInboundShipmentId ?? <span className="text-tertiary">—</span>}
               </dd>
             </div>
             <div>
@@ -348,7 +348,7 @@ export default function RecallDetailClient({ recallId }: { recallId: string }) {
                 {t('stock.recallDetail.supplierLotRef')}
               </dt>
               <dd className="text-slate-700 dark:text-slate-300 font-mono">
-                {backward.supplierLotRef ?? <span className="text-slate-400">—</span>}
+                {backward.supplierLotRef ?? <span className="text-tertiary">—</span>}
               </dd>
             </div>
           </dl>
@@ -377,7 +377,7 @@ export default function RecallDetailClient({ recallId }: { recallId: string }) {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="border-b border-slate-200 dark:border-slate-700 text-left">
+                <thead className="border-b border-default dark:border-slate-700 text-left">
                   <tr>
                     <th className="px-2 py-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{t('stock.recallDetail.col.when')}</th>
                     <th className="px-2 py-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{t('stock.recallDetail.col.change')}</th>
@@ -388,7 +388,7 @@ export default function RecallDetailClient({ recallId }: { recallId: string }) {
                 </thead>
                 <tbody>
                   {forward.movements.map((m) => (
-                    <tr key={m.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                    <tr key={m.id} className="border-b border-subtle dark:border-slate-800 last:border-0">
                       <td className="px-2 py-1.5 text-slate-500 dark:text-slate-400 tabular-nums whitespace-nowrap">
                         {formatRelative(m.createdAt, t)}
                       </td>
@@ -407,7 +407,7 @@ export default function RecallDetailClient({ recallId }: { recallId: string }) {
                             ? <span className="inline-flex items-center gap-1"><ArrowRight size={10} aria-hidden="true" />{m.shipmentId.slice(0, 8)}</span>
                             : m.returnId
                               ? <span>↩ {m.returnId.slice(0, 8)}</span>
-                              : <span className="text-slate-400">—</span>}
+                              : <span className="text-tertiary">—</span>}
                       </td>
                       <td className="px-2 py-1.5 text-slate-500 dark:text-slate-400 text-xs truncate max-w-[160px]">
                         {m.actor ?? '—'}

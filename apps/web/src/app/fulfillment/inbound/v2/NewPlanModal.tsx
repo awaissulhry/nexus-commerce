@@ -448,12 +448,12 @@ function ItemRow({
   }, [row.sku, row.picked])
 
   return (
-    <div className="border border-slate-200 dark:border-slate-800 rounded p-2 bg-slate-50/40 dark:bg-slate-900/30">
+    <div className="border border-default dark:border-slate-800 rounded p-2 bg-slate-50/40 dark:bg-slate-900/30">
       <div className="flex items-start gap-2">
         <span className="text-[11px] tabular-nums text-slate-500 dark:text-slate-400 pt-2 w-5 text-right">{index + 1}.</span>
         <div className="flex-1 relative">
           <div className="relative">
-            <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
+            <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500 pointer-events-none" />
             <input
               type="text"
               placeholder="SKU (start typing to search)"
@@ -476,13 +476,13 @@ function ItemRow({
                   key={s.id}
                   type="button"
                   onClick={() => onChange({ ...row, sku: s.sku, productName: s.name, picked: true })}
-                  className="block w-full text-left px-2.5 py-1.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800 last:border-0"
+                  className="block w-full text-left px-2.5 py-1.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 border-b border-subtle dark:border-slate-800 last:border-0"
                 >
                   <span className="font-mono text-xs">{s.sku}</span>
                   {s.name && <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">{s.name}</span>}
                 </button>
               ))}
-              {searching && <div className="px-2.5 py-1.5 text-[11px] text-slate-400">Searching…</div>}
+              {searching && <div className="px-2.5 py-1.5 text-[11px] text-tertiary">Searching…</div>}
             </div>
           )}
         </div>
@@ -501,7 +501,7 @@ function ItemRow({
             type="button"
             onClick={onRemove}
             disabled={disabled}
-            className="h-9 w-9 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-30"
+            className="h-9 w-9 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-30"
             title="Remove item"
           >
             <X size={14} />

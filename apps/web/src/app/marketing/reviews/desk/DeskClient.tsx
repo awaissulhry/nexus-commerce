@@ -138,7 +138,7 @@ export function DeskClient({
               }`}
             >
               {s.label}
-              <span className={`tabular-nums text-xs ${active ? 'opacity-80' : 'text-slate-400'}`}>
+              <span className={`tabular-nums text-xs ${active ? 'opacity-80' : 'text-tertiary'}`}>
                 {count}
               </span>
             </button>
@@ -148,7 +148,7 @@ export function DeskClient({
 
       {/* List */}
       {loading ? (
-        <div className="flex items-center justify-center py-12 text-slate-400">
+        <div className="flex items-center justify-center py-12 text-tertiary">
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
       ) : reviews.length === 0 ? (
@@ -263,7 +263,7 @@ function ReviewDeskCard({
   }
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-3">
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-4">
         {/* Review content */}
         <div>
@@ -292,7 +292,7 @@ function ReviewDeskCard({
             {review.verifiedPurchase && (
               <span className="text-[10px] text-emerald-600 dark:text-emerald-400">Verified</span>
             )}
-            <span className="text-[10px] text-slate-400 ml-auto">
+            <span className="text-[10px] text-tertiary ml-auto">
               {new Date(review.postedAt).toLocaleDateString()}
             </span>
           </div>
@@ -313,7 +313,7 @@ function ReviewDeskCard({
             {review.body}
           </p>
           {review.authorName && (
-            <div className="text-[11px] italic text-slate-400 mt-1">— {review.authorName}</div>
+            <div className="text-[11px] italic text-tertiary mt-1">— {review.authorName}</div>
           )}
           {review.sentiment && review.sentiment.categories.length > 0 && (
             <div className="flex items-center gap-1 flex-wrap mt-1.5">
@@ -329,9 +329,9 @@ function ReviewDeskCard({
           )}
 
           {/* Triage row */}
-          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+          <div className="mt-3 pt-3 border-t border-subtle dark:border-slate-800 space-y-2">
             <div className="flex items-center gap-2">
-              <User className="h-3.5 w-3.5 text-slate-400" />
+              <User className="h-3.5 w-3.5 text-tertiary" />
               <input
                 value={assignee}
                 onChange={(e) => setAssignee(e.target.value)}
@@ -389,7 +389,7 @@ function ReviewDeskCard({
         </div>
 
         {/* Reply panel */}
-        <div className="lg:border-l lg:border-slate-100 lg:dark:border-slate-800 lg:pl-4">
+        <div className="lg:border-l lg:border-subtle lg:dark:border-slate-800 lg:pl-4">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Reply
@@ -400,7 +400,7 @@ function ReviewDeskCard({
               </span>
             )}
             {(review._count?.responses ?? 0) > 0 && (
-              <span className="text-[10px] text-slate-400">
+              <span className="text-[10px] text-tertiary">
                 {review._count!.responses} prior
               </span>
             )}
@@ -462,7 +462,7 @@ function ReviewDeskCard({
               {isEbay ? 'Post reply to eBay' : 'Mark as responded'}
             </button>
             {!isEbay && (
-              <span className="text-[10px] text-slate-400">
+              <span className="text-[10px] text-tertiary">
                 {review.channel} has no public reply API — copy & post manually.
               </span>
             )}

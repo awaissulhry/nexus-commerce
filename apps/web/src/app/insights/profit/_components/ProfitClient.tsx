@@ -363,7 +363,7 @@ export default function ProfitClient() {
               height={300}
             />
           ) : (
-            <div className="h-[300px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[300px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No data'}
             </div>
           )}
@@ -390,7 +390,7 @@ export default function ProfitClient() {
               showDelta
             />
           ) : (
-            <div className="text-sm text-slate-400 py-6 text-center">
+            <div className="text-sm text-tertiary py-6 text-center">
               {loading ? 'Loading…' : 'No data'}
             </div>
           )}
@@ -398,14 +398,14 @@ export default function ProfitClient() {
         <Card
           title="Fee notes"
           description="How fees are estimated"
-          action={<Info className="w-3.5 h-3.5 text-slate-400" />}
+          action={<Info className="w-3.5 h-3.5 text-tertiary" />}
         >
           {report ? (
             <ul className="space-y-2">
               {report.feeNotes.map((n) => (
                 <li
                   key={n.label}
-                  className="rounded-md border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 text-xs"
+                  className="rounded-md border border-default dark:border-slate-700 px-2.5 py-1.5 text-xs"
                 >
                   <span className="font-semibold text-slate-700 dark:text-slate-200">
                     {n.label}:
@@ -417,7 +417,7 @@ export default function ProfitClient() {
               ))}
             </ul>
           ) : (
-            <div className="text-sm text-slate-400 py-6 text-center">
+            <div className="text-sm text-tertiary py-6 text-center">
               {loading ? 'Loading…' : ''}
             </div>
           )}
@@ -434,7 +434,7 @@ export default function ProfitClient() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <tr className="border-b border-default dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   <th className="text-left font-medium px-3 py-2">Channel</th>
                   <th className="text-left font-medium px-3 py-2">Market</th>
                   <th className="text-right font-medium px-3 py-2">Revenue</th>
@@ -452,7 +452,7 @@ export default function ProfitClient() {
                   return (
                     <tr
                       key={`${row.channel}|${row.marketplace}|${row.currency}`}
-                      className="border-b border-slate-100 dark:border-slate-800/60 last:border-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/30"
+                      className="border-b border-subtle dark:border-slate-800/60 last:border-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/30"
                     >
                       <td className="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">
                         {row.channel}
@@ -461,7 +461,7 @@ export default function ProfitClient() {
                         <span className="text-slate-700 dark:text-slate-300">
                           {row.marketplace}
                         </span>
-                        <span className="ml-1.5 text-[11px] text-slate-400 dark:text-slate-500 font-mono">
+                        <span className="ml-1.5 text-[11px] text-tertiary dark:text-slate-500 font-mono">
                           {row.currency}
                         </span>
                       </td>
@@ -493,7 +493,7 @@ export default function ProfitClient() {
                       <td
                         className={`px-3 py-2 text-right tabular-nums ${
                           row.marginPct == null
-                            ? 'text-slate-400'
+                            ? 'text-tertiary'
                             : row.marginPct >= 0
                               ? 'text-emerald-600 dark:text-emerald-400'
                               : 'text-rose-600 dark:text-rose-400'
@@ -550,7 +550,7 @@ export default function ProfitClient() {
             emptyLabel="No sales in this window"
           />
         ) : (
-          <div className="text-sm text-slate-400 py-6 text-center">
+          <div className="text-sm text-tertiary py-6 text-center">
             {loading ? 'Loading…' : 'No data'}
           </div>
         )}

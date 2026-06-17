@@ -400,7 +400,7 @@ export default function ChannelListingTab({
                     'inline-flex items-center gap-1 h-7 px-2.5 text-xs font-medium rounded border transition-colors disabled:opacity-50',
                     autoPublish
                       ? 'bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-emerald-400'
-                      : 'bg-slate-50 border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400',
+                      : 'bg-slate-50 border-default text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400',
                   )}
                 >
                   {autoPublishing ? (
@@ -431,7 +431,7 @@ export default function ChannelListingTab({
         </div>
         {/* ── Variant sub-tabs (parent products only) ───────────── */}
         {childrenList.length > 0 && (
-          <div className="border-t border-slate-100 dark:border-slate-800 px-4 py-1.5 flex items-center gap-1 flex-wrap overflow-x-auto">
+          <div className="border-t border-subtle dark:border-slate-800 px-4 py-1.5 flex items-center gap-1 flex-wrap overflow-x-auto">
             <button
               type="button"
               onClick={() => setSelectedChildId(null)}
@@ -439,7 +439,7 @@ export default function ChannelListingTab({
                 'px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap',
                 selectedChildId === null
                   ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:border-slate-200 dark:hover:border-slate-700',
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:border-default dark:hover:border-slate-700',
               )}
             >
               Parent
@@ -453,7 +453,7 @@ export default function ChannelListingTab({
                   'px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap font-mono',
                   selectedChildId === child.id
                     ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                    : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:border-slate-200 dark:hover:border-slate-700',
+                    : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:border-default dark:hover:border-slate-700',
                 )}
                 title={child.name ?? child.sku}
               >
@@ -468,7 +468,7 @@ export default function ChannelListingTab({
               'border-t px-4 py-2 text-base flex items-center gap-2',
               statusMsg.kind === 'success' && 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300',
               statusMsg.kind === 'error' && 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300',
-              statusMsg.kind === 'info' && 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300',
+              statusMsg.kind === 'info' && 'border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300',
             )}
           >
             {statusMsg.kind === 'error' && <AlertTriangle className="w-3.5 h-3.5" />}
@@ -634,22 +634,22 @@ function PricingPanel({
         className="w-full px-4 py-3 flex items-center justify-between text-left"
       >
         <div className="flex items-center gap-2">
-          <DollarSign className="w-4 h-4 text-slate-400" />
+          <DollarSign className="w-4 h-4 text-tertiary" />
           <span className="text-md font-medium text-slate-900 dark:text-slate-100">
             Marketplace Pricing
           </span>
           <span className="text-sm text-slate-500 dark:text-slate-400">
             {currentDisplay}
             {listing?.pricingRule && listing.pricingRule !== 'FIXED' && (
-              <span className="ml-1 text-xs text-slate-400">({listing.pricingRule})</span>
+              <span className="ml-1 text-xs text-tertiary">({listing.pricingRule})</span>
             )}
           </span>
         </div>
-        <span className="text-slate-400 text-sm">{open ? '▲' : '▼'}</span>
+        <span className="text-tertiary text-sm">{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
-        <div className="border-t border-slate-100 dark:border-slate-800 px-4 py-4 space-y-4">
+        <div className="border-t border-subtle dark:border-slate-800 px-4 py-4 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* Pricing rule */}
             <div>
@@ -659,7 +659,7 @@ function PricingPanel({
               <select
                 value={rule}
                 onChange={(e) => setRule(e.target.value)}
-                className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               >
                 <option value="FIXED">Fixed price</option>
                 <option value="MATCH_AMAZON">Match Amazon</option>
@@ -680,7 +680,7 @@ function PricingPanel({
                   placeholder="0.00"
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
-                  className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                 />
               </div>
             )}
@@ -697,9 +697,9 @@ function PricingPanel({
                   placeholder="0"
                   value={adj}
                   onChange={(e) => setAdj(e.target.value)}
-                  className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                 />
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-tertiary mt-1">
                   e.g. 10 = master + 10%. Negative = discount.
                 </p>
               </div>
@@ -818,7 +818,7 @@ function ReplicationPanel({
         className="w-full px-4 py-3 flex items-center justify-between text-left"
       >
         <div className="flex items-center gap-2">
-          <Copy className="w-4 h-4 text-slate-400" />
+          <Copy className="w-4 h-4 text-tertiary" />
           <span className="text-md font-medium text-slate-900 dark:text-slate-100">
             Replicate to Markets
           </span>
@@ -826,11 +826,11 @@ function ReplicationPanel({
             Push {marketplace} content to other {channel} markets
           </span>
         </div>
-        <span className="text-slate-400 text-sm">{open ? '▲' : '▼'}</span>
+        <span className="text-tertiary text-sm">{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
-        <div className="border-t border-slate-100 dark:border-slate-800 px-4 py-4 space-y-4">
+        <div className="border-t border-subtle dark:border-slate-800 px-4 py-4 space-y-4">
           {/* Target markets */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -855,7 +855,7 @@ function ReplicationPanel({
                     'px-2.5 py-1 rounded text-sm font-mono border transition-colors',
                     selected.has(m.code)
                       ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
-                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400',
+                      : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-600 dark:text-slate-400',
                   )}
                 >
                   {m.code}
@@ -890,11 +890,11 @@ function ReplicationPanel({
                     'text-left px-3 py-2 rounded border text-sm transition-colors',
                     mode === value
                       ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
-                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300',
+                      : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-700 dark:text-slate-300',
                   )}
                 >
                   <div className="font-medium">{label}</div>
-                  <div className="text-xs text-slate-400 mt-0.5">{desc}</div>
+                  <div className="text-xs text-tertiary mt-0.5">{desc}</div>
                 </button>
               ))}
             </div>
@@ -924,7 +924,7 @@ function ReplicationPanel({
               Replicate to {selected.size > 0 ? `${selected.size} market${selected.size !== 1 ? 's' : ''}` : '…'}
             </Button>
             {selected.size === 0 && (
-              <span className="text-xs text-slate-400">Select at least one target market</span>
+              <span className="text-xs text-tertiary">Select at least one target market</span>
             )}
           </div>
 
@@ -1090,15 +1090,15 @@ function PublishReviewModal({
         aria-hidden="true"
       />
       {/* Modal card */}
-      <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+      <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-default dark:border-slate-700 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-default dark:border-slate-700 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             Publish to {CHANNEL_LABEL[channel] ?? channel} {marketplace}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+            className="text-tertiary hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
             aria-label="Close"
           >
             <XCircle className="w-5 h-5" />
@@ -1138,7 +1138,7 @@ function PublishReviewModal({
                       {item.label}
                     </span>
                     {item.preview && (
-                      <span className="ml-2 text-xs text-slate-400 dark:text-slate-500 truncate">
+                      <span className="ml-2 text-xs text-tertiary dark:text-slate-500 truncate">
                         {item.preview}
                       </span>
                     )}
@@ -1154,7 +1154,7 @@ function PublishReviewModal({
               <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                 Fields to publish ({fieldRows.length})
               </div>
-              <div className="rounded-lg border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800 max-h-64 overflow-y-auto">
+              <div className="rounded-lg border border-default dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800 max-h-64 overflow-y-auto">
                 {fieldRows.map((row, i) => (
                   <div key={i} className="flex gap-3 px-3 py-2 text-sm">
                     <span className="flex-shrink-0 w-32 text-slate-500 dark:text-slate-400 font-medium truncate">
@@ -1212,7 +1212,7 @@ function PublishReviewModal({
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-3">
+        <div className="px-6 py-4 border-t border-default dark:border-slate-700 flex items-center justify-end gap-3">
           <Button variant="ghost" size="sm" onClick={onClose}>
             {result?.ok ? 'Close' : 'Cancel'}
           </Button>
@@ -1275,7 +1275,7 @@ function ReadinessChecklist({
 
   return (
     <Card noPadding>
-      <div className="px-4 py-3 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800">
+      <div className="px-4 py-3 flex items-center gap-3 border-b border-subtle dark:border-slate-800">
         <div className="flex-1 min-w-0">
           <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
             {t('products.edit.readiness.label')}

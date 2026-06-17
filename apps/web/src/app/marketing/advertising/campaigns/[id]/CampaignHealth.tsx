@@ -60,7 +60,7 @@ export function CampaignHealth({ score, factors, marketplace, refreshKey }: { sc
   }, [marketplace, refreshKey])
 
   return (
-    <div className="mb-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3">
+    <div className="mb-4 rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-950 p-3">
       <div className="flex items-start gap-3">
         <Ring score={score} />
         <div className="min-w-0 flex-1">
@@ -80,15 +80,15 @@ export function CampaignHealth({ score, factors, marketplace, refreshKey }: { sc
       </div>
 
       {rules.length > 0 && (
-        <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div className="mt-3 pt-2 border-t border-subtle dark:border-slate-800">
           <div className="flex items-center justify-between">
             <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-300"><Zap size={12} className="text-violet-500" /> Automation applied ({rules.length})</span>
             <Link href="/marketing/advertising/automation" className="inline-flex items-center gap-0.5 text-xs text-blue-600 hover:underline">Rules <ExternalLink size={10} /></Link>
           </div>
           <div className="flex flex-wrap gap-1.5 mt-1.5">
             {rules.map((r) => (
-              <span key={r.id} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300" title={r.trigger}>
-                {r.name}{r.scopeMarketplace ? <span className="text-slate-400">· {r.scopeMarketplace}</span> : null}
+              <span key={r.id} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border border-default dark:border-slate-700 text-slate-600 dark:text-slate-300" title={r.trigger}>
+                {r.name}{r.scopeMarketplace ? <span className="text-tertiary">· {r.scopeMarketplace}</span> : null}
               </span>
             ))}
           </div>
@@ -98,8 +98,8 @@ export function CampaignHealth({ score, factors, marketplace, refreshKey }: { sc
                 <li key={e.id} className="text-xs text-slate-500 flex items-center gap-2">
                   <span className={`inline-block h-1.5 w-1.5 rounded-full ${e.status === 'SUCCESS' || e.status === 'COMPLETED' ? 'bg-emerald-500' : e.status === 'FAILED' ? 'bg-rose-500' : 'bg-slate-400'}`} />
                   <span className="text-slate-600 dark:text-slate-300">{e.rule?.name}</span>
-                  <span className="text-slate-400">{e.status.toLowerCase()}</span>
-                  <span className="text-slate-400 ml-auto">{new Date(e.startedAt).toLocaleString()}</span>
+                  <span className="text-tertiary">{e.status.toLowerCase()}</span>
+                  <span className="text-tertiary ml-auto">{new Date(e.startedAt).toLocaleString()}</span>
                 </li>
               ))}
             </ul>

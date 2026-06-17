@@ -322,7 +322,7 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
               {/* CR.9: secondary-account list. Hidden until the primary
                   is connected so operators don't add stranded accounts. */}
               {isConnected && def.code === 'SENDCLOUD' && (
-                <div className="mt-6 pt-5 border-t border-slate-200 dark:border-slate-700">
+                <div className="mt-6 pt-5 border-t border-default dark:border-slate-700">
                   <AccountsSection carrierCode={def.code} />
                 </div>
               )}
@@ -455,7 +455,7 @@ function CredentialsTab({
             type={f.password ? 'password' : f.type === 'number' ? 'number' : 'text'}
             value={fields[f.key] ?? ''}
             onChange={(e) => onField(f.key, e.target.value)}
-            className="h-9 w-full px-3 text-base font-mono border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="h-9 w-full px-3 text-base font-mono border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
             autoComplete="off"
             spellCheck={false}
           />
@@ -635,7 +635,7 @@ function AccountsSection({ carrierCode }: { carrierCode: string }) {
           {t('carriers.empty.noAccounts')}
         </div>
       ) : (
-        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+        <div className="border border-default dark:border-slate-700 rounded overflow-hidden">
           <table className="w-full text-base">
             <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300">
               <tr>
@@ -699,7 +699,7 @@ function AccountsSection({ carrierCode }: { carrierCode: string }) {
       )}
 
       {adding ? (
-        <div className="space-y-2 p-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded">
+        <div className="space-y-2 p-3 border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded">
           <div>
             <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Label</label>
             <input
@@ -707,7 +707,7 @@ function AccountsSection({ carrierCode }: { carrierCode: string }) {
               value={draft.accountLabel}
               onChange={(e) => setDraft({ ...draft, accountLabel: e.target.value })}
               placeholder="e.g. Sendcloud Bologna"
-              className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+              className="h-9 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -717,7 +717,7 @@ function AccountsSection({ carrierCode }: { carrierCode: string }) {
                 type="text"
                 value={draft.publicKey}
                 onChange={(e) => setDraft({ ...draft, publicKey: e.target.value })}
-                className="h-9 w-full px-2 text-base font-mono border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+                className="h-9 w-full px-2 text-base font-mono border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
                 autoComplete="off"
                 spellCheck={false}
               />
@@ -728,7 +728,7 @@ function AccountsSection({ carrierCode }: { carrierCode: string }) {
                 type="password"
                 value={draft.privateKey}
                 onChange={(e) => setDraft({ ...draft, privateKey: e.target.value })}
-                className="h-9 w-full px-2 text-base font-mono border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+                className="h-9 w-full px-2 text-base font-mono border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
                 autoComplete="off"
                 spellCheck={false}
               />
@@ -741,7 +741,7 @@ function AccountsSection({ carrierCode }: { carrierCode: string }) {
                 type="number"
                 value={draft.integrationId}
                 onChange={(e) => setDraft({ ...draft, integrationId: e.target.value })}
-                className="h-9 w-full px-2 text-base font-mono border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+                className="h-9 w-full px-2 text-base font-mono border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
               />
             </div>
             <div>
@@ -749,7 +749,7 @@ function AccountsSection({ carrierCode }: { carrierCode: string }) {
               <select
                 value={draft.mode}
                 onChange={(e) => setDraft({ ...draft, mode: e.target.value as 'sandbox' | 'production' })}
-                className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+                className="h-9 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
               >
                 <option value="sandbox">Sandbox</option>
                 <option value="production">Production</option>
@@ -941,7 +941,7 @@ function ServicesTab({ carrierCode }: { carrierCode: string }) {
           {t('carriers.empty.noMappings')}
         </div>
       ) : (
-        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+        <div className="border border-default dark:border-slate-700 rounded overflow-hidden">
           <table className="w-full text-base">
             <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300">
               <tr>
@@ -980,14 +980,14 @@ function ServicesTab({ carrierCode }: { carrierCode: string }) {
 
       {/* Add new mapping */}
       {adding ? (
-        <div className="space-y-2 p-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded">
+        <div className="space-y-2 p-3 border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div>
               <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Channel</label>
               <select
                 value={draft.channel}
                 onChange={(e) => setDraft({ ...draft, channel: e.target.value })}
-                className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+                className="h-9 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
               >
                 {CHANNELS.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -997,7 +997,7 @@ function ServicesTab({ carrierCode }: { carrierCode: string }) {
               <select
                 value={draft.marketplace}
                 onChange={(e) => setDraft({ ...draft, marketplace: e.target.value })}
-                className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+                className="h-9 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
               >
                 {COMMON_MARKETPLACES.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
@@ -1007,7 +1007,7 @@ function ServicesTab({ carrierCode }: { carrierCode: string }) {
               <select
                 value={draft.serviceExternalId}
                 onChange={(e) => setDraft({ ...draft, serviceExternalId: e.target.value })}
-                className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+                className="h-9 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
               >
                 <option value="">— pick —</option>
                 {services.map((s) => (
@@ -1175,7 +1175,7 @@ function WarehousesTab({ carrierCode }: { carrierCode: string }) {
           No warehouses configured. Add one at /fulfillment/stock first.
         </div>
       ) : (
-        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+        <div className="border border-default dark:border-slate-700 rounded overflow-hidden">
           <table className="w-full text-base">
             <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300">
               <tr>
@@ -1200,7 +1200,7 @@ function WarehousesTab({ carrierCode }: { carrierCode: string }) {
                       onChange={(e) =>
                         setSender(w.id, e.target.value === '' ? null : Number(e.target.value))
                       }
-                      className="h-8 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+                      className="h-8 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
                     >
                       <option value="">— integration default —</option>
                       {senders.map((s) => (
@@ -1218,7 +1218,7 @@ function WarehousesTab({ carrierCode }: { carrierCode: string }) {
                       onChange={(e) =>
                         setAccount(w.id, e.target.value === '' ? null : e.target.value)
                       }
-                      className="h-8 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+                      className="h-8 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
                       title={accounts.length === 0 ? 'Add a secondary account in Credentials tab to bind one' : undefined}
                     >
                       <option value="">— primary account —</option>
@@ -1439,7 +1439,7 @@ function RulesTab({ carrierCode }: { carrierCode: string }) {
       </p>
 
       {matching.length > 0 && (
-        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+        <div className="border border-default dark:border-slate-700 rounded overflow-hidden">
           <table className="w-full text-base">
             <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300">
               <tr>
@@ -1465,7 +1465,7 @@ function RulesTab({ carrierCode }: { carrierCode: string }) {
                       : <Badge variant="default" size="sm">Off</Badge>}
                   </td>
                   <td className="px-3 py-2 text-sm text-slate-600 dark:text-slate-300">
-                    {r.triggerCount} {r.lastFiredAt && (<span className="text-xs text-slate-400">· last {relTime(r.lastFiredAt)}</span>)}
+                    {r.triggerCount} {r.lastFiredAt && (<span className="text-xs text-tertiary">· last {relTime(r.lastFiredAt)}</span>)}
                   </td>
                 </tr>
               ))}
@@ -1537,12 +1537,12 @@ function PerformanceTab({ carrierCode }: { carrierCode: string }) {
   return (
     <div className="space-y-4">
       {/* Window selector */}
-      <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
+      <div className="inline-flex rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
         {WINDOWS.map((w) => (
           <button
             key={w}
             onClick={() => setWindowDays(w)}
-            className={`px-3 h-8 text-base border-r last:border-r-0 border-slate-200 dark:border-slate-700 ${
+            className={`px-3 h-8 text-base border-r last:border-r-0 border-default dark:border-slate-700 ${
               windowDays === w
                 ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
@@ -1592,7 +1592,7 @@ function PerformanceTab({ carrierCode }: { carrierCode: string }) {
           {metrics.byMarketplace.length > 0 && (
             <div>
               <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">By marketplace</div>
-              <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+              <div className="border border-default dark:border-slate-700 rounded overflow-hidden">
                 <table className="w-full text-base">
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
                     {metrics.byMarketplace.map((row) => (
@@ -1621,7 +1621,7 @@ function PerformanceTab({ carrierCode }: { carrierCode: string }) {
 
 function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded">
+    <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 rounded">
       <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{label}</div>
       <div className="text-lg font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{value}</div>
       {hint && <div className="text-xs text-slate-500 dark:text-slate-400">{hint}</div>}
@@ -1688,7 +1688,7 @@ function ActivityTab({ carrierId }: { carrierId: string }) {
         {entries.map((e) => (
           <li
             key={e.id}
-            className="flex items-start gap-2 px-2 py-1.5 border border-slate-200 dark:border-slate-700 rounded text-sm"
+            className="flex items-start gap-2 px-2 py-1.5 border border-default dark:border-slate-700 rounded text-sm"
           >
             <span className="font-mono text-xs text-slate-500 dark:text-slate-400 flex-shrink-0 w-32">
               {new Date(e.createdAt).toLocaleString()}
@@ -1881,7 +1881,7 @@ function PickupsTab({ carrierCode }: { carrierCode: string }) {
           No active pickups.
         </div>
       ) : (
-        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+        <div className="border border-default dark:border-slate-700 rounded overflow-hidden">
           <table className="w-full text-base">
             <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300">
               <tr>
@@ -1930,14 +1930,14 @@ function PickupsTab({ carrierCode }: { carrierCode: string }) {
 
       {/* Add new */}
       {adding ? (
-        <div className="space-y-2 p-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded">
+        <div className="space-y-2 p-3 border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Warehouse</label>
               <select
                 value={draft.warehouseId}
                 onChange={(e) => setDraft({ ...draft, warehouseId: e.target.value })}
-                className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+                className="h-9 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
               >
                 <option value="">— integration default —</option>
                 {warehouses.map((w) => (
@@ -1951,7 +1951,7 @@ function PickupsTab({ carrierCode }: { carrierCode: string }) {
                 type="date"
                 value={draft.scheduledFor}
                 onChange={(e) => setDraft({ ...draft, scheduledFor: e.target.value })}
-                className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+                className="h-9 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
               />
             </div>
           </div>
@@ -1962,7 +1962,7 @@ function PickupsTab({ carrierCode }: { carrierCode: string }) {
               value={draft.notes}
               onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
               placeholder="Driver instructions, gate code, etc."
-              className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+              className="h-9 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -2065,7 +2065,7 @@ function WebhooksTab() {
           Webhook URL
         </div>
         <div className="flex items-stretch gap-1">
-          <code className="flex-1 px-3 py-2 text-sm font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-800 dark:text-slate-100 break-all">
+          <code className="flex-1 px-3 py-2 text-sm font-mono bg-slate-50 dark:bg-slate-900 border border-default dark:border-slate-700 rounded text-slate-800 dark:text-slate-100 break-all">
             {url}
           </code>
           <Button variant="secondary" size="sm" onClick={copy} icon={copied ? <Check size={11} /> : <Copy size={11} />}>

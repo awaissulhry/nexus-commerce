@@ -89,7 +89,7 @@ export default function ComplianceCard({ attributes, onJumpToClassic }: Props) {
     <Card noPadding>
       <div
         data-jump-target="compliance"
-        className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2"
+        className="px-4 py-2.5 border-b border-subtle dark:border-slate-800 flex items-center gap-2"
       >
         <ShieldCheck aria-hidden className="w-4 h-4 text-blue-500" />
         <div className="text-md font-medium text-slate-900 dark:text-slate-100">
@@ -134,7 +134,7 @@ export default function ComplianceCard({ attributes, onJumpToClassic }: Props) {
                     'text-[10.5px] px-1.5 py-0.5 rounded shrink-0',
                     item.required
                       ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
-                      : 'bg-slate-100 text-slate-400 dark:bg-slate-800',
+                      : 'bg-slate-100 text-tertiary dark:bg-slate-800',
                   )}
                 >
                   {item.required

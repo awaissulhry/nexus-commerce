@@ -131,7 +131,7 @@ export default function MarketplaceSelector({
             ? 'border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100'
             : pulse
             ? 'border-amber-300 bg-amber-50 text-amber-800 ring-2 ring-amber-200 ring-offset-1 animate-pulse-slow'
-            : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
+            : 'border-default bg-white text-slate-700 hover:bg-slate-50',
         )}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -150,11 +150,11 @@ export default function MarketplaceSelector({
       {open && (
         <div
           ref={panelRef}
-          className="absolute right-0 top-full mt-1 w-80 max-h-[440px] bg-white border border-slate-200 rounded-lg shadow-lg z-30 flex flex-col"
+          className="absolute right-0 top-full mt-1 w-80 max-h-[440px] bg-white border border-default rounded-lg shadow-lg z-30 flex flex-col"
           role="listbox"
           aria-multiselectable="true"
         >
-          <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between">
+          <div className="px-3 py-2 border-b border-default flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
               Edit targets
             </span>
@@ -186,7 +186,7 @@ export default function MarketplaceSelector({
               return (
                 <div key={channel}>
                   <div className="px-3 pt-2 pb-1 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-tertiary uppercase tracking-wider">
                       {channel === 'AMAZON' ? 'Amazon' : 'eBay'}
                       {selectedInChannel > 0 && (
                         <span className="ml-1.5 text-blue-600">
@@ -241,14 +241,14 @@ export default function MarketplaceSelector({
                               'font-mono text-xs tabular-nums px-1.5 py-0.5 rounded border',
                               active
                                 ? 'bg-white border-blue-200 text-blue-700'
-                                : 'bg-slate-100 border-slate-200 text-slate-600',
+                                : 'bg-slate-100 border-default text-slate-600',
                             )}
                           >
                             {o.code}
                           </span>
                           <span className="text-base truncate">{o.name}</span>
                         </span>
-                        <span className="text-xs text-slate-400 flex-shrink-0">
+                        <span className="text-xs text-tertiary flex-shrink-0">
                           {COUNTRY_NAMES[o.code] ?? o.currency}
                         </span>
                       </button>
@@ -258,7 +258,7 @@ export default function MarketplaceSelector({
               )
             })}
           </div>
-          <div className="border-t border-slate-200 px-3 py-2 text-xs text-slate-500">
+          <div className="border-t border-default px-3 py-2 text-xs text-slate-500">
             Channel-field edits fan out to every selected target in one
             save.
           </div>

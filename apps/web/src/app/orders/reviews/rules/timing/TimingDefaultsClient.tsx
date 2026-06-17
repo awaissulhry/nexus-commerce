@@ -66,7 +66,7 @@ export default function TimingDefaultsClient() {
   }
 
   const labelCls = 'text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold'
-  const inputCls = 'h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900'
+  const inputCls = 'h-8 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900'
 
   return (
     <div className="space-y-5">
@@ -98,7 +98,7 @@ export default function TimingDefaultsClient() {
           <div className="p-4 space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-default dark:border-slate-800">
               <tr className="text-left">
                 <th className="px-3 py-2"><span className={labelCls}>Order</span></th>
                 <th className="px-3 py-2"><span className={labelCls}>Product type (display)</span></th>
@@ -113,23 +113,23 @@ export default function TimingDefaultsClient() {
                 <tr key={r.id ?? `new-${i}`} className="hover:bg-slate-50 dark:hover:bg-slate-950/40">
                   <td className="px-3 py-1.5">
                     <div className="flex flex-col">
-                      <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up" className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30"><ArrowUp size={12} /></button>
-                      <button type="button" onClick={() => move(i, 1)} disabled={i === rows.length - 1} aria-label="Move down" className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30"><ArrowDown size={12} /></button>
+                      <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up" className="text-tertiary hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30"><ArrowUp size={12} /></button>
+                      <button type="button" onClick={() => move(i, 1)} disabled={i === rows.length - 1} aria-label="Move down" className="text-tertiary hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30"><ArrowDown size={12} /></button>
                     </div>
                   </td>
                   <td className="px-3 py-1.5"><input value={r.label} onChange={(e) => setRow(i, { label: e.target.value })} placeholder="Helmets" className={`${inputCls} w-full`} /></td>
                   <td className="px-3 py-1.5"><input value={r.pattern} onChange={(e) => setRow(i, { pattern: e.target.value })} placeholder="casco" className={`${inputCls} w-full font-mono`} /></td>
                   <td className="px-3 py-1.5 text-right"><input type="number" min={1} max={60} value={r.delayDays} onChange={(e) => setRow(i, { delayDays: Number(e.target.value) })} className={`${inputCls} w-20 text-right tabular-nums`} /></td>
                   <td className="px-3 py-1.5 text-center"><input type="checkbox" checked={r.isActive} onChange={(e) => setRow(i, { isActive: e.target.checked })} aria-label="Active" /></td>
-                  <td className="px-3 py-1.5 text-right"><button type="button" onClick={() => delRow(i)} aria-label="Delete row" className="text-slate-400 hover:text-rose-600"><Trash2 size={13} /></button></td>
+                  <td className="px-3 py-1.5 text-right"><button type="button" onClick={() => delRow(i)} aria-label="Delete row" className="text-tertiary hover:text-rose-600"><Trash2 size={13} /></button></td>
                 </tr>
               ))}
               {rows.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-500 dark:text-slate-400">No timing defaults — add one, or Reset to restore the built-ins.</td></tr>}
             </tbody>
           </table>
         )}
-        <div className="px-3 py-2 border-t border-slate-200 dark:border-slate-800">
-          <button type="button" onClick={addRow} className="h-7 px-2 text-sm text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"><Plus size={12} /> Add product type</button>
+        <div className="px-3 py-2 border-t border-default dark:border-slate-800">
+          <button type="button" onClick={addRow} className="h-7 px-2 text-sm text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"><Plus size={12} /> Add product type</button>
         </div>
       </Card>
       <p className="text-xs text-slate-500 dark:text-slate-400">

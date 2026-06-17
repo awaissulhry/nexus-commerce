@@ -274,7 +274,7 @@ export default function Step7Images({
 
       {loading && (
         <div
-          className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-6 space-y-3"
+          className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-6 space-y-3"
           aria-busy="true"
           aria-label="Loading images"
         >
@@ -298,8 +298,8 @@ export default function Step7Images({
         <>
           {/* Per-channel validation summary */}
           {channels.length > 0 && (
-            <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 mb-4">
-              <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 text-base font-medium text-slate-700 dark:text-slate-300">
+            <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 mb-4">
+              <div className="px-3 py-2 border-b border-default dark:border-slate-700 text-base font-medium text-slate-700 dark:text-slate-300">
                 Per-channel resolved set
               </div>
               <div className="px-3 py-2 space-y-1.5">
@@ -334,8 +334,8 @@ export default function Step7Images({
           )}
 
           {data.images.length === 0 ? (
-            <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-12 text-center">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 mb-4">
+            <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-12 text-center">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-tertiary dark:text-slate-500 mb-4">
                 <ImageOff className="w-6 h-6" />
               </div>
               <p className="text-lg text-slate-700 dark:text-slate-300">
@@ -349,8 +349,8 @@ export default function Step7Images({
           ) : (
             <>
               {/* Quick-reorder list */}
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
-                <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between text-base text-slate-600 dark:text-slate-400">
+              <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
+                <div className="px-3 py-2 border-b border-default dark:border-slate-700 flex items-center justify-between text-base text-slate-600 dark:text-slate-400">
                   <span>
                     <span className="font-medium">{orderedUrls.length}</span>{' '}
                     / {MAX_IMAGES} images included in master order
@@ -371,11 +371,11 @@ export default function Step7Images({
                     <div
                       key={url}
                       className={cn(
-                        'flex items-center gap-3 px-3 py-2 border-b border-slate-100 dark:border-slate-800 last:border-b-0',
+                        'flex items-center gap-3 px-3 py-2 border-b border-subtle dark:border-slate-800 last:border-b-0',
                         idx === 0 && 'bg-blue-50/40',
                       )}
                     >
-                      <span className="text-sm font-mono text-slate-400 dark:text-slate-500 w-5 tabular-nums">
+                      <span className="text-sm font-mono text-tertiary dark:text-slate-500 w-5 tabular-nums">
                         {idx + 1}
                       </span>
                       <Thumb url={url} alt={img?.alt ?? ''} />
@@ -383,7 +383,7 @@ export default function Step7Images({
                         <div className="text-base text-slate-700 dark:text-slate-300 truncate">
                           {img?.alt ?? '(no alt text)'}
                         </div>
-                        <div className="text-sm text-slate-400 dark:text-slate-500 truncate">
+                        <div className="text-sm text-tertiary dark:text-slate-500 truncate">
                           {url}
                         </div>
                       </div>
@@ -400,7 +400,7 @@ export default function Step7Images({
                           Set as main
                         </button>
                       )}
-                      <div className="flex items-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded">
+                      <div className="flex items-center gap-0.5 border border-default dark:border-slate-700 rounded">
                         <button
                           type="button"
                           onClick={() => move(idx, -1)}
@@ -437,7 +437,7 @@ export default function Step7Images({
 
               {/* Available-but-not-selected pool */}
               {removedAvailable.length > 0 && (
-                <div className="mt-4 border border-dashed border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 px-3 py-2">
+                <div className="mt-4 border border-dashed border-default dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 px-3 py-2">
                   <div className="text-sm uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">
                     Available but excluded
                   </div>
@@ -454,7 +454,7 @@ export default function Step7Images({
                           )
                         }
                         disabled={orderedUrls.length >= MAX_IMAGES}
-                        className="flex items-center gap-2 px-2 py-1 text-sm text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:border-blue-300 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 px-2 py-1 text-sm text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded hover:border-blue-300 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <Thumb url={img.url} alt={img.alt ?? ''} small />
                         <span className="truncate max-w-[140px]">
@@ -506,7 +506,7 @@ function ChannelValidationRow({
       ? 'border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40'
       : status === 'warned'
       ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40'
-      : 'border-slate-200 dark:border-slate-700'
+      : 'border-default dark:border-slate-700'
   const Icon =
     status === 'blocked'
       ? AlertCircle
@@ -529,7 +529,7 @@ function ChannelValidationRow({
         <span className="text-slate-500 dark:text-slate-400">
           · {imageCount} image{imageCount === 1 ? '' : 's'}
         </span>
-        <span className="text-slate-400 dark:text-slate-500">· source: {humanSource(source)}</span>
+        <span className="text-tertiary dark:text-slate-500">· source: {humanSource(source)}</span>
       </div>
       {validation && (validation.blocking.length > 0 || validation.warnings.length > 0) && (
         <ul className="mt-1 ml-5 space-y-0.5">
@@ -615,7 +615,7 @@ function Thumb({
       src={url}
       alt={alt}
       className={cn(
-        'rounded border border-slate-200 dark:border-slate-700 object-cover bg-slate-50 dark:bg-slate-800 flex-shrink-0',
+        'rounded border border-default dark:border-slate-700 object-cover bg-slate-50 dark:bg-slate-800 flex-shrink-0',
         small ? 'w-8 h-8' : 'w-12 h-12',
       )}
       onError={(e) => {

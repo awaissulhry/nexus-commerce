@@ -39,7 +39,7 @@ export function CampaignsViewSwitch({ initial }: { initial: ComponentProps<typeo
 
   return (
     <div>
-      <div className="inline-flex items-center rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 mb-4 bg-slate-50 dark:bg-slate-900">
+      <div className="inline-flex items-center rounded-lg border border-default dark:border-slate-700 p-0.5 mb-4 bg-slate-50 dark:bg-slate-900">
         {([['product', 'By product', LayoutGrid], ['campaign', 'By campaign', List]] as const).map(([v, label, Icon]) => (
           <button key={v} onClick={() => change(v)}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition ${view === v ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm font-medium' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}

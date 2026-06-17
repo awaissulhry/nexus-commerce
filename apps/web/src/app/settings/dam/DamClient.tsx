@@ -206,20 +206,20 @@ export default function DamClient({
         <div className="relative">
           <Search
             size={14}
-            className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
+            className="absolute left-2 top-1/2 -translate-y-1/2 text-tertiary"
           />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('pim.dam.search.placeholder')}
-            className="h-8 pl-7 pr-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 w-72"
+            className="h-8 pl-7 pr-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 w-72"
           />
         </div>
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
-          className="h-8 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+          className="h-8 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
         >
           {TYPE_OPTIONS.map((opt) => (
             <option key={opt} value={opt}>
@@ -300,7 +300,7 @@ function AssetCard({
   const Icon = TYPE_ICONS[asset.type] ?? FileText
   const isImage = asset.type === 'image'
   return (
-    <div className="border border-slate-200 dark:border-slate-800 rounded overflow-hidden bg-white dark:bg-slate-900 group">
+    <div className="border border-default dark:border-slate-800 rounded overflow-hidden bg-white dark:bg-slate-900 group">
       <button
         type="button"
         onClick={onOpen}
@@ -316,7 +316,7 @@ function AssetCard({
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Icon className="w-8 h-8 text-slate-400 dark:text-slate-500" />
+            <Icon className="w-8 h-8 text-tertiary dark:text-slate-500" />
           </div>
         )}
         <span className="absolute top-1 left-1 px-1.5 py-0.5 text-xs font-medium bg-slate-900/70 text-white rounded uppercase tracking-wider">
@@ -452,7 +452,7 @@ function AssetDetailModal({
                   (() => {
                     const Icon = TYPE_ICONS[asset.type] ?? FileText
                     return (
-                      <Icon className="w-12 h-12 text-slate-400 dark:text-slate-500" />
+                      <Icon className="w-12 h-12 text-tertiary dark:text-slate-500" />
                     )
                   })()
                 )}
@@ -473,7 +473,7 @@ function AssetDetailModal({
                           if (e.key === 'Escape') setEditingLabel(false)
                         }}
                         autoFocus
-                        className="flex-1 h-8 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+                        className="flex-1 h-8 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
                       />
                       <Button
                         variant="primary"
@@ -526,11 +526,11 @@ function AssetDetailModal({
                 Used by ({asset.usages.length})
               </div>
               {asset.usages.length === 0 ? (
-                <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-800 rounded p-3 text-center">
+                <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-default dark:border-slate-800 rounded p-3 text-center">
                   Not attached to any product yet.
                 </div>
               ) : (
-                <ul className="border border-slate-200 dark:border-slate-800 rounded divide-y divide-slate-100 dark:divide-slate-800">
+                <ul className="border border-default dark:border-slate-800 rounded divide-y divide-slate-100 dark:divide-slate-800">
                   {asset.usages.map((u) => (
                     <li
                       key={u.id}

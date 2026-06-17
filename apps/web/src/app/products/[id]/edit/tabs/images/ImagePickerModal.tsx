@@ -58,7 +58,7 @@ export default function ImagePickerModal({ productId, masterImages, onSelect, on
       {/* Modal */}
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-default dark:border-slate-700 flex-shrink-0">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Select image</h2>
           <IconButton size="sm" onClick={onClose} aria-label="Close">
             <X className="w-4 h-4" />
@@ -68,7 +68,7 @@ export default function ImagePickerModal({ productId, masterImages, onSelect, on
         {/* Master image grid */}
         <div className="flex-1 overflow-y-auto p-5">
           {masterImages.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 text-sm">
+            <div className="text-center py-8 text-tertiary text-sm">
               No master images yet — upload one below.
             </div>
           ) : (
@@ -78,7 +78,7 @@ export default function ImagePickerModal({ productId, masterImages, onSelect, on
                   key={img.id}
                   type="button"
                   onClick={() => { onSelect(img.url, img.id); onClose() }}
-                  className="group aspect-square rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 overflow-hidden bg-slate-50 dark:bg-slate-800 transition-all focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="group aspect-square rounded-xl border-2 border-default dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 overflow-hidden bg-slate-50 dark:bg-slate-800 transition-all focus:outline-none focus:ring-2 focus:ring-blue-400"
                   title={img.alt ?? img.type}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -100,7 +100,7 @@ export default function ImagePickerModal({ productId, masterImages, onSelect, on
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-default dark:border-slate-700 flex-shrink-0">
           <Button
             size="sm"
             variant="ghost"

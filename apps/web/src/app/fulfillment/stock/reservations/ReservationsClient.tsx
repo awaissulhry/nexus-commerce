@@ -177,7 +177,7 @@ export default function ReservationsClient() {
             {row.product?.thumbnailUrl ? (
               <img src={row.product.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100 dark:bg-slate-800 flex-shrink-0" />
             ) : (
-              <div className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 flex-shrink-0">
+              <div className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-tertiary flex-shrink-0">
                 <Package size={14} />
               </div>
             )}
@@ -185,14 +185,14 @@ export default function ReservationsClient() {
               <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{row.product?.name ?? '—'}</div>
               <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
                 {row.product?.sku ?? ''}
-                {row.orderId && <span className="ml-1.5 text-slate-400">· {t('stock.reservations.orderRef', { id: row.orderId.slice(0, 8) })}</span>}
+                {row.orderId && <span className="ml-1.5 text-tertiary">· {t('stock.reservations.orderRef', { id: row.orderId.slice(0, 8) })}</span>}
               </div>
             </div>
           </div>
         )
       case 'location':
         return (
-          <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700" title={row.location.name}>
+          <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700" title={row.location.name}>
             {row.location.code}
           </span>
         )
@@ -231,7 +231,7 @@ export default function ReservationsClient() {
             type="button"
             onClick={() => handleRelease(row)}
             disabled={actingId === row.id}
-            className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+            className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
           >
             <X size={11} /> {t('stock.drawer.release')}
           </button>
@@ -268,7 +268,7 @@ export default function ReservationsClient() {
                 className={cn('min-h-[44px] sm:min-h-0 px-3 py-1 text-sm font-medium rounded border transition-colors',
                   filter === f.key
                     ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600')}>
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600')}>
                 {t(f.labelKey)}
               </button>
             ))}
@@ -299,7 +299,7 @@ export default function ReservationsClient() {
 
       {loading && !reservations && (
         <div className="space-y-2">
-          {[0,1,2,3].map(i => <div key={i} className="h-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse" />)}
+          {[0,1,2,3].map(i => <div key={i} className="h-16 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg animate-pulse" />)}
         </div>
       )}
 

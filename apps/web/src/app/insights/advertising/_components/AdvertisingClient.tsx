@@ -424,7 +424,7 @@ export default function AdvertisingClient() {
               rightAxisFormat="percent"
             />
           ) : (
-            <div className="h-[280px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[280px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No advertising data in this window'}
             </div>
           )}
@@ -447,7 +447,7 @@ export default function AdvertisingClient() {
               centerValue={formatCurrency(report.totals.spend, currency)}
             />
           ) : (
-            <div className="h-[220px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[220px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No data'}
             </div>
           )}
@@ -465,7 +465,7 @@ export default function AdvertisingClient() {
               total={report.totals.spend}
             />
           ) : (
-            <div className="h-[220px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[220px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No data'}
             </div>
           )}
@@ -486,7 +486,7 @@ export default function AdvertisingClient() {
             emptyLabel="No campaign data in this window"
           />
         ) : (
-          <div className="text-sm text-slate-400 py-6 text-center">
+          <div className="text-sm text-tertiary py-6 text-center">
             {loading ? 'Loading…' : 'No data'}
           </div>
         )}

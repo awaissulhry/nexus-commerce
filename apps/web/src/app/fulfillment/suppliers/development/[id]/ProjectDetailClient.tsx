@@ -52,7 +52,7 @@ const CERT_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' 
 const TABS = ['Overview', 'Spec', 'Sourcing', 'Files', 'Compliance', 'Pack'] as const
 type Tab = (typeof TABS)[number]
 
-const inputCls = 'h-9 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500'
+const inputCls = 'h-9 w-full rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500'
 const labelCls = 'text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400'
 
 export default function ProjectDetailClient() {
@@ -131,12 +131,12 @@ export default function ProjectDetailClient() {
       />
 
       {/* Tab bar */}
-      <div className="flex items-center gap-1 border-b border-slate-200 dark:border-slate-800">
+      <div className="flex items-center gap-1 border-b border-default dark:border-slate-800">
         {TABS.map((t) => {
           const count = t === 'Sourcing' ? p.candidates.length : t === 'Files' ? p.attachments.length : t === 'Compliance' ? p.certifications.length : undefined
           return (
             <button key={t} onClick={() => setTab(t)} className={`-mb-px border-b-2 px-3 py-2 text-base font-medium ${tab === t ? 'border-blue-600 text-blue-700 dark:text-blue-300' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>
-              {t}{count != null ? <span className="ml-1.5 text-xs text-slate-400">{count}</span> : null}
+              {t}{count != null ? <span className="ml-1.5 text-xs text-tertiary">{count}</span> : null}
             </button>
           )
         })}
@@ -190,7 +190,7 @@ function PackTab({ p }: { p: ProjectDetail }) {
         <div className="space-y-2.5">
           <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="factory@example.com" className={inputCls} />
           <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject (optional)" className={inputCls} />
-          <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} placeholder="Message (optional)…" className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} placeholder="Message (optional)…" className="w-full rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
           <Button variant="primary" icon={<Send size={14} />} loading={sending} disabled={!to.trim()} onClick={send}>Send pack</Button>
         </div>
       </Card>
@@ -203,7 +203,7 @@ function OverviewTab({ p, onPatch, onReload }: { p: ProjectDetail; onPatch: (b: 
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
       <div className="lg:col-span-2 space-y-5">
         <Card title="Brief & specs">
-          <textarea defaultValue={p.brief ?? ''} rows={6} onBlur={(e) => onPatch({ brief: e.target.value })} placeholder="What are we developing — target specs, construction notes, references…" className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <textarea defaultValue={p.brief ?? ''} rows={6} onBlur={(e) => onPatch({ brief: e.target.value })} placeholder="What are we developing — target specs, construction notes, references…" className="w-full rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
         </Card>
         <Card title="Sample purchase orders" action={<SamplePoButton projectId={p.id} onReload={onReload} />}>
           {p.purchaseOrders.length === 0 ? (
@@ -211,12 +211,12 @@ function OverviewTab({ p, onPatch, onReload }: { p: ProjectDetail; onPatch: (b: 
           ) : (
             <div className="space-y-1.5">
               {p.purchaseOrders.map((po) => (
-                <a key={po.id} href={`/fulfillment/purchase-orders/${po.id}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border border-slate-200 dark:border-slate-800 px-2.5 py-1.5 text-base hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                <a key={po.id} href={`/fulfillment/purchase-orders/${po.id}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border border-default dark:border-slate-800 px-2.5 py-1.5 text-base hover:bg-slate-50 dark:hover:bg-slate-800/50">
                   <Badge variant="info" size="sm">{po.poKind}</Badge>
                   <span className="font-mono text-slate-700 dark:text-slate-300">{po.poNumber}</span>
                   <span className="text-sm text-slate-500">{po.status}</span>
                   <span className="ml-auto tabular-nums text-slate-600 dark:text-slate-400">{eur(po.totalCents)}</span>
-                  <ExternalLink size={13} className="text-slate-400" />
+                  <ExternalLink size={13} className="text-tertiary" />
                 </a>
               ))}
             </div>
@@ -296,7 +296,7 @@ function SourcingTab({ p, suppliers, onReload, onPatchCandidate }: { p: ProjectD
             const fastest = minLt != null && c.supplier.leadTimeDays === minLt
             const over = p.targetCostCents != null && c.quotedCostCents != null && c.quotedCostCents > p.targetCostCents
             return (
-              <div key={c.id} className={`flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 ${c.isSelected ? 'border-emerald-300 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20' : 'border-slate-200 dark:border-slate-800'}`}>
+              <div key={c.id} className={`flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 ${c.isSelected ? 'border-emerald-300 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20' : 'border-default dark:border-slate-800'}`}>
                 <button onClick={() => onPatchCandidate(c.id, { isSelected: !c.isSelected })} title="Select supplier" className={c.isSelected ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400'}><Star size={16} className={c.isSelected ? 'fill-amber-400' : ''} /></button>
                 <span className="font-medium text-slate-900 dark:text-slate-100">{c.supplier.name}</span>
                 <span className="text-sm text-slate-500">LT {c.supplier.leadTimeDays}d</span>
@@ -304,13 +304,13 @@ function SourcingTab({ p, suppliers, onReload, onPatchCandidate }: { p: ProjectD
                 {fastest && <Badge variant="info" size="sm">fastest</Badge>}
                 {over && <Badge variant="danger" size="sm">over target</Badge>}
                 <span className="ml-auto inline-flex items-center gap-1.5 text-sm text-slate-500">quote €
-                  <input type="number" step="0.01" defaultValue={c.quotedCostCents != null ? (c.quotedCostCents / 100).toFixed(2) : ''} onBlur={(e) => onPatchCandidate(c.id, { quotedCostEur: e.target.value })} className="h-8 w-20 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-right text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  <input type="number" step="0.01" defaultValue={c.quotedCostCents != null ? (c.quotedCostCents / 100).toFixed(2) : ''} onBlur={(e) => onPatchCandidate(c.id, { quotedCostEur: e.target.value })} className="h-8 w-20 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-right text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
                 </span>
-                <select defaultValue={c.sampleStatus ?? ''} onChange={(e) => onPatchCandidate(c.id, { sampleStatus: e.target.value })} className="h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none">
+                <select defaultValue={c.sampleStatus ?? ''} onChange={(e) => onPatchCandidate(c.id, { sampleStatus: e.target.value })} className="h-8 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none">
                   <option value="">sample…</option>
                   {['REQUESTED', 'RECEIVED', 'APPROVED', 'REJECTED'].map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
-                <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${p.id}/candidates/${c.id}`, { method: 'DELETE' }); onReload() }} className="text-slate-400 hover:text-rose-500"><Trash2 size={14} /></button>
+                <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${p.id}/candidates/${c.id}`, { method: 'DELETE' }); onReload() }} className="text-tertiary hover:text-rose-500"><Trash2 size={14} /></button>
               </div>
             )
           })}
@@ -334,7 +334,7 @@ function FilesTab({ p, onReload }: { p: ProjectDetail; onReload: () => void }) {
   }
   return (
     <Card title="Tech packs, references & sample photos" description="What goes in the factory pack — toggle, caption, and order each file." action={
-      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-base font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800">
+      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-base font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800">
         {uploading ? '…' : <><Upload size={14} /> Upload</>}
         <input type="file" className="hidden" disabled={uploading} onChange={async (e) => {
           const f = e.target.files?.[0]; if (!f) return
@@ -355,10 +355,10 @@ function FilesTab({ p, onReload }: { p: ProjectDetail; onReload: () => void }) {
           {p.attachments.map((a, i) => {
             const img = isImageFile(a)
             return (
-              <div key={a.id} className="flex items-start gap-3 rounded-md border border-slate-200 dark:border-slate-800 p-2">
+              <div key={a.id} className="flex items-start gap-3 rounded-md border border-default dark:border-slate-800 p-2">
                 <div className="flex flex-col gap-0.5 pt-1">
-                  <button onClick={() => move(i, -1)} disabled={i === 0} className="text-slate-400 hover:text-slate-700 disabled:opacity-30">▲</button>
-                  <button onClick={() => move(i, 1)} disabled={i === p.attachments.length - 1} className="text-slate-400 hover:text-slate-700 disabled:opacity-30">▼</button>
+                  <button onClick={() => move(i, -1)} disabled={i === 0} className="text-tertiary hover:text-slate-700 disabled:opacity-30">▲</button>
+                  <button onClick={() => move(i, 1)} disabled={i === p.attachments.length - 1} className="text-tertiary hover:text-slate-700 disabled:opacity-30">▼</button>
                 </div>
                 {img ? (
                   <a href={a.url} target="_blank" rel="noopener noreferrer" className="shrink-0">
@@ -367,21 +367,21 @@ function FilesTab({ p, onReload }: { p: ProjectDetail; onReload: () => void }) {
                   </a>
                 ) : (
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-slate-100 dark:bg-slate-800">
-                    {isPdfFile(a) ? <FileText size={20} className="text-rose-500" /> : <FileText size={20} className="text-slate-400" />}
+                    {isPdfFile(a) ? <FileText size={20} className="text-rose-500" /> : <FileText size={20} className="text-tertiary" />}
                   </div>
                 )}
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-center gap-2">
-                    <select defaultValue={a.kind} onChange={(e) => patchAtt(a.id, { kind: e.target.value })} className="h-7 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none">
+                    <select defaultValue={a.kind} onChange={(e) => patchAtt(a.id, { kind: e.target.value })} className="h-7 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none">
                       {ATT_KINDS.map((k) => <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>)}
                     </select>
                     <a href={a.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate text-base text-blue-700 hover:underline dark:text-blue-300">{a.filename ?? 'file'}</a>
                     <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400">
                       <input type="checkbox" defaultChecked={a.includeInPack !== false} onChange={(e) => patchAtt(a.id, { includeInPack: e.target.checked })} /> in pack
                     </label>
-                    <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${p.id}/attachments/${a.id}`, { method: 'DELETE' }); onReload() }} className="text-slate-400 hover:text-rose-500"><Trash2 size={14} /></button>
+                    <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${p.id}/attachments/${a.id}`, { method: 'DELETE' }); onReload() }} className="text-tertiary hover:text-rose-500"><Trash2 size={14} /></button>
                   </div>
-                  <input defaultValue={a.caption ?? ''} onBlur={(e) => patchAtt(a.id, { caption: e.target.value })} placeholder="Caption (e.g. logo placement, stitching detail)…" className="h-8 w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  <input defaultValue={a.caption ?? ''} onBlur={(e) => patchAtt(a.id, { caption: e.target.value })} placeholder="Caption (e.g. logo placement, stitching detail)…" className="h-8 w-full rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
                 </div>
               </div>
             )
@@ -413,7 +413,7 @@ function SpecTab({ p, onPatch }: { p: ProjectDetail; onPatch: (b: Record<string,
         </Card>
       </div>
       <Card title="Construction & special instructions">
-        <textarea defaultValue={p.specNotes ?? ''} rows={5} onBlur={(e) => onPatch({ specNotes: e.target.value })} placeholder="Stitching, seams, reinforcement, tolerances, packaging…" className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        <textarea defaultValue={p.specNotes ?? ''} rows={5} onBlur={(e) => onPatch({ specNotes: e.target.value })} placeholder="Stitching, seams, reinforcement, tolerances, packaging…" className="w-full rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
       </Card>
     </div>
   )
@@ -423,7 +423,7 @@ function MaterialsEditor({ value, onSave }: { value: BomRow[] | null; onSave: (r
   const [rows, setRows] = useState<BomRow[]>(value ?? [])
   const [structVer, setStructVer] = useState(0)
   const save = (next: BomRow[], structural = false) => { setRows(next); onSave(next); if (structural) setStructVer((v) => v + 1) }
-  const fieldCls = 'h-8 w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500'
+  const fieldCls = 'h-8 w-full rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500'
   return (
     <div className="space-y-2" key={structVer}>
       {rows.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">No materials yet.</p>}
@@ -432,7 +432,7 @@ function MaterialsEditor({ value, onSave }: { value: BomRow[] | null; onSave: (r
           <input defaultValue={r.component} placeholder="Component (shell…)" onBlur={(e) => save(rows.map((x, j) => j === i ? { ...x, component: e.target.value } : x))} className={fieldCls} />
           <input defaultValue={r.material} placeholder="Material (polycarb…)" onBlur={(e) => save(rows.map((x, j) => j === i ? { ...x, material: e.target.value } : x))} className={fieldCls} />
           <input defaultValue={r.spec} placeholder="Spec / grade" onBlur={(e) => save(rows.map((x, j) => j === i ? { ...x, spec: e.target.value } : x))} className={fieldCls} />
-          <button onClick={() => save(rows.filter((_, j) => j !== i), true)} className="text-slate-400 hover:text-rose-500"><Trash2 size={14} /></button>
+          <button onClick={() => save(rows.filter((_, j) => j !== i), true)} className="text-tertiary hover:text-rose-500"><Trash2 size={14} /></button>
         </div>
       ))}
       <Button variant="secondary" size="sm" icon={<Plus size={13} />} onClick={() => save([...rows, { component: '', material: '', spec: '' }], true)}>Add material</Button>
@@ -444,7 +444,7 @@ function ColorwaysEditor({ value, onSave }: { value: Colorway[] | null; onSave: 
   const [rows, setRows] = useState<Colorway[]>(value ?? [])
   const [structVer, setStructVer] = useState(0)
   const save = (next: Colorway[], structural = false) => { setRows(next); onSave(next); if (structural) setStructVer((v) => v + 1) }
-  const fieldCls = 'h-8 w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500'
+  const fieldCls = 'h-8 w-full rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500'
   return (
     <div className="space-y-2" key={structVer}>
       {rows.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">No colorways yet.</p>}
@@ -452,8 +452,8 @@ function ColorwaysEditor({ value, onSave }: { value: Colorway[] | null; onSave: 
         <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto] items-center gap-1.5">
           <input defaultValue={r.name} placeholder="Name (Matte Black…)" onBlur={(e) => save(rows.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} className={fieldCls} />
           <input defaultValue={r.pantone ?? ''} placeholder="Pantone (e.g. 426 C)" onBlur={(e) => save(rows.map((x, j) => j === i ? { ...x, pantone: e.target.value } : x))} className={fieldCls} />
-          <input type="color" defaultValue={r.hex ?? '#000000'} onBlur={(e) => save(rows.map((x, j) => j === i ? { ...x, hex: e.target.value } : x))} className="h-8 w-9 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" />
-          <button onClick={() => save(rows.filter((_, j) => j !== i), true)} className="text-slate-400 hover:text-rose-500"><Trash2 size={14} /></button>
+          <input type="color" defaultValue={r.hex ?? '#000000'} onBlur={(e) => save(rows.map((x, j) => j === i ? { ...x, hex: e.target.value } : x))} className="h-8 w-9 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900" />
+          <button onClick={() => save(rows.filter((_, j) => j !== i), true)} className="text-tertiary hover:text-rose-500"><Trash2 size={14} /></button>
         </div>
       ))}
       <Button variant="secondary" size="sm" icon={<Plus size={13} />} onClick={() => save([...rows, { name: '', pantone: '', hex: '#000000' }], true)}>Add colorway</Button>
@@ -473,7 +473,7 @@ function SizeChartEditor({ value, onSave }: { value: SizeChart | null; onSave: (
   const setCell = (ri: number, ci: number, v: string) => { const rows = chart.rows.map((r, i) => i === ri ? { ...r, values: r.values.map((x, j) => j === ci ? v : x) } : r); save({ ...chart, rows }) }
   const applyPreset = (sizes: string[]) => save({ ...chart, rows: sizes.map((s) => ({ size: s, values: chart.columns.map(() => '') })) }, true)
 
-  const cellCls = 'h-8 w-20 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-right text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500'
+  const cellCls = 'h-8 w-20 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-right text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500'
   return (
     <div className="space-y-3" key={structVer}>
       {chart.rows.length === 0 && chart.columns.length > 0 && (
@@ -490,7 +490,7 @@ function SizeChartEditor({ value, onSave }: { value: SizeChart | null; onSave: (
               {chart.columns.map((c, ci) => (
                 <th key={ci} className="px-2 py-1 text-left">
                   <span className="inline-flex items-center gap-1">
-                    <input defaultValue={c} onBlur={(e) => { const cols = chart.columns.map((x, i) => i === ci ? e.target.value : x); save({ ...chart, columns: cols }) }} className="h-7 w-20 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1 text-sm font-medium text-slate-700 dark:text-slate-200 focus:outline-none" />
+                    <input defaultValue={c} onBlur={(e) => { const cols = chart.columns.map((x, i) => i === ci ? e.target.value : x); save({ ...chart, columns: cols }) }} className="h-7 w-20 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1 text-sm font-medium text-slate-700 dark:text-slate-200 focus:outline-none" />
                     <button onClick={() => removeColumn(ci)} className="text-slate-300 hover:text-rose-500"><Trash2 size={12} /></button>
                   </span>
                 </th>
@@ -500,8 +500,8 @@ function SizeChartEditor({ value, onSave }: { value: SizeChart | null; onSave: (
           </thead>
           <tbody>
             {chart.rows.map((r, ri) => (
-              <tr key={ri} className="border-t border-slate-100 dark:border-slate-800">
-                <td className="px-2 py-1"><input defaultValue={r.size} onBlur={(e) => { const rows = chart.rows.map((x, i) => i === ri ? { ...x, size: e.target.value } : x); save({ ...chart, rows }) }} className="h-8 w-16 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base font-medium text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" /></td>
+              <tr key={ri} className="border-t border-subtle dark:border-slate-800">
+                <td className="px-2 py-1"><input defaultValue={r.size} onBlur={(e) => { const rows = chart.rows.map((x, i) => i === ri ? { ...x, size: e.target.value } : x); save({ ...chart, rows }) }} className="h-8 w-16 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base font-medium text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" /></td>
                 {chart.columns.map((_, ci) => (
                   <td key={ci} className="px-2 py-1"><input defaultValue={r.values[ci] ?? ''} onBlur={(e) => setCell(ri, ci, e.target.value)} className={cellCls} /></td>
                 ))}
@@ -514,7 +514,7 @@ function SizeChartEditor({ value, onSave }: { value: SizeChart | null; onSave: (
       <div className="flex items-center gap-3">
         <Button variant="secondary" size="sm" icon={<Plus size={13} />} onClick={addRow}>Add size</Button>
         <label className="inline-flex items-center gap-1.5 text-sm text-slate-500">Tolerance
-          <input defaultValue={chart.tolerance ?? ''} onBlur={(e) => save({ ...chart, tolerance: e.target.value })} placeholder="± 1cm" className="h-8 w-24 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <input defaultValue={chart.tolerance ?? ''} onBlur={(e) => save({ ...chart, tolerance: e.target.value })} placeholder="± 1cm" className="h-8 w-24 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
         </label>
       </div>
     </div>
@@ -535,16 +535,16 @@ function ComplianceTab({ p, onReload }: { p: ProjectDetail; onReload: () => void
       ) : (
         <div className="space-y-2">
           {p.certifications.map((cert) => (
-            <div key={cert.id} className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 dark:border-slate-800 px-3 py-2">
+            <div key={cert.id} className="flex flex-wrap items-center gap-2 rounded-md border border-default dark:border-slate-800 px-3 py-2">
               <span className="font-medium text-slate-900 dark:text-slate-100">{cert.type.replace(/_/g, ' ')}</span>
               {cert.required && <Badge variant="default" size="sm">required</Badge>}
-              <select defaultValue={cert.status} onChange={(e) => patchCert(cert.id, { status: e.target.value })} className="h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none">
+              <select defaultValue={cert.status} onChange={(e) => patchCert(cert.id, { status: e.target.value })} className="h-8 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none">
                 {['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED'].map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
               </select>
               <Badge variant={CERT_VARIANT[cert.status] ?? 'default'} size="sm">{cert.status.replace(/_/g, ' ')}</Badge>
-              <input defaultValue={cert.certNumber ?? ''} onBlur={(e) => patchCert(cert.id, { certNumber: e.target.value })} placeholder="cert #" className="h-8 w-28 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-              <input type="date" defaultValue={cert.expiresAt ? cert.expiresAt.slice(0, 10) : ''} onBlur={(e) => patchCert(cert.id, { expiresAt: e.target.value })} className="h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-              <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${p.id}/certifications/${cert.id}`, { method: 'DELETE' }); onReload() }} className="ml-auto text-slate-400 hover:text-rose-500"><Trash2 size={14} /></button>
+              <input defaultValue={cert.certNumber ?? ''} onBlur={(e) => patchCert(cert.id, { certNumber: e.target.value })} placeholder="cert #" className="h-8 w-28 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+              <input type="date" defaultValue={cert.expiresAt ? cert.expiresAt.slice(0, 10) : ''} onBlur={(e) => patchCert(cert.id, { expiresAt: e.target.value })} className="h-8 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+              <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${p.id}/certifications/${cert.id}`, { method: 'DELETE' }); onReload() }} className="ml-auto text-tertiary hover:text-rose-500"><Trash2 size={14} /></button>
             </div>
           ))}
         </div>

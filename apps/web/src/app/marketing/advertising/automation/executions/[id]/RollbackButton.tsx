@@ -56,7 +56,7 @@ export function RollbackButton({ executionId, count }: { executionId: string; co
 
   if (result) {
     return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-3">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-3">
         <div className="text-sm font-medium text-slate-900 dark:text-slate-100 mb-1">
           Rollback complete
         </div>

@@ -115,11 +115,11 @@ export default function MarketsModal({
       aria-label={`All ${channelLabel} markets`}
     >
       <div
-        className="bg-white rounded-lg shadow-xl border border-slate-200 w-[560px] max-w-[92vw] flex flex-col max-h-[80vh]"
+        className="bg-white rounded-lg shadow-xl border border-default w-[560px] max-w-[92vw] flex flex-col max-h-[80vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-default flex-shrink-0">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">
               All {channelLabel} markets
@@ -127,7 +127,7 @@ export default function MarketsModal({
             <p className="text-sm text-slate-500 mt-0.5 tabular-nums">
               {totalAll} marketplace{totalAll === 1 ? '' : 's'}
               {search.trim() && totalShown !== totalAll && (
-                <span className="text-slate-400">
+                <span className="text-tertiary">
                   {' '}
                   · {totalShown} matching
                 </span>
@@ -137,7 +137,7 @@ export default function MarketsModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 -mr-1 p-1 rounded hover:bg-slate-50"
+            className="text-tertiary hover:text-slate-700 -mr-1 p-1 rounded hover:bg-slate-50"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -145,16 +145,16 @@ export default function MarketsModal({
         </div>
 
         {/* Search */}
-        <div className="px-5 py-3 border-b border-slate-100 flex-shrink-0">
+        <div className="px-5 py-3 border-b border-subtle flex-shrink-0">
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tertiary pointer-events-none" />
             <input
               ref={inputRef}
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by country or code…"
-              className="w-full h-8 pl-7 pr-3 text-md border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full h-8 pl-7 pr-3 text-md border border-default rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -212,7 +212,7 @@ export default function MarketsModal({
                             {count} active
                           </span>
                         ) : (
-                          <span className="text-sm text-slate-400">
+                          <span className="text-sm text-tertiary">
                             0 listings
                           </span>
                         )}
@@ -227,7 +227,7 @@ export default function MarketsModal({
 
         {/* Footer */}
         {connectionStatus === 'not-connected' && (
-          <div className="px-5 py-3 border-t border-slate-100 flex-shrink-0">
+          <div className="px-5 py-3 border-t border-subtle flex-shrink-0">
             <Link
               href="/settings/channels"
               onClick={onClose}

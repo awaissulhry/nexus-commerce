@@ -73,7 +73,7 @@ export function TimeframePicker({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-8 items-center gap-1.5 rounded border border-slate-200 px-3 text-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
+        className="inline-flex h-8 items-center gap-1.5 rounded border border-default px-3 text-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
       >
         <span className="text-slate-500 dark:text-slate-400">{labelPrefix}:</span>
         <span className="font-medium text-slate-900 dark:text-slate-100">{current}</span>
@@ -83,7 +83,7 @@ export function TimeframePicker({
         />
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-30 mt-1 w-64 space-y-1 rounded-md border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+        <div className="absolute left-0 top-full z-30 mt-1 w-64 space-y-1 rounded-md border border-default bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
           {presets.map((p) => {
             const active = !value.from && !value.to && value.preset === p.key
             return (
@@ -104,7 +104,7 @@ export function TimeframePicker({
               </button>
             )
           })}
-          <div className="space-y-1.5 border-t border-slate-200 pt-2 dark:border-slate-700">
+          <div className="space-y-1.5 border-t border-default pt-2 dark:border-slate-700">
             <div className="px-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
               Custom range
             </div>
@@ -115,17 +115,17 @@ export function TimeframePicker({
                 onChange={(e) =>
                   onChange({ preset: '', from: e.target.value || undefined, to: value.to })
                 }
-                className="h-7 flex-1 rounded border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                className="h-7 flex-1 rounded border border-default bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
                 aria-label="Start date"
               />
-              <span className="text-slate-400">→</span>
+              <span className="text-tertiary">→</span>
               <input
                 type="date"
                 defaultValue={value.to}
                 onChange={(e) =>
                   onChange({ preset: '', from: value.from, to: e.target.value || undefined })
                 }
-                className="h-7 flex-1 rounded border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                className="h-7 flex-1 rounded border border-default bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
                 aria-label="End date"
               />
             </div>

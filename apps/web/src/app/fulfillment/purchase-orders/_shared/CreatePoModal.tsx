@@ -470,8 +470,8 @@ export function CreatePoModal({
       aria-modal="true"
       aria-labelledby="create-po-title"
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-900 z-10">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-default dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-900 z-10">
           <h2
             id="create-po-title"
             className="text-lg font-semibold text-slate-900 dark:text-slate-100"
@@ -554,7 +554,7 @@ export function CreatePoModal({
                 value={supplierId}
                 onChange={(e) => setSupplierId(e.target.value)}
                 disabled={submitting}
-                className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               >
                 <option value="">{t('po.create.supplierNone')}</option>
                 {suppliers?.map((s) => (
@@ -579,7 +579,7 @@ export function CreatePoModal({
                 value={warehouseId}
                 onChange={(e) => setWarehouseId(e.target.value)}
                 disabled={submitting}
-                className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               >
                 <option value="">— Default —</option>
                 {warehouses?.map((w) => (
@@ -599,14 +599,14 @@ export function CreatePoModal({
               <div className="relative">
                 <Calendar
                   size={12}
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none"
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500 pointer-events-none"
                 />
                 <input
                   type="date"
                   value={expectedDate}
                   onChange={(e) => setExpectedDate(e.target.value)}
                   disabled={submitting}
-                  className="w-full h-9 pl-7 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  className="w-full h-9 pl-7 pr-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                 />
               </div>
               {selectedSupplier && expectedDate === todayPlusDays(selectedSupplier.leadTimeDays ?? 14) && (
@@ -629,7 +629,7 @@ export function CreatePoModal({
                     setCurrency(v)
                   }}
                   disabled={submitting}
-                  className="flex-1 h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  className="flex-1 h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                 >
                   {CURRENCY_CHOICES.map((c) => (
                     <option key={c} value={c}>
@@ -645,7 +645,7 @@ export function CreatePoModal({
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value.toUpperCase())}
                     disabled={submitting}
-                    className="w-16 h-9 px-2 text-base font-mono uppercase border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    className="w-16 h-9 px-2 text-base font-mono uppercase border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                     placeholder="XXX"
                   />
                 )}
@@ -672,14 +672,14 @@ export function CreatePoModal({
                 type="button"
                 onClick={addLine}
                 disabled={submitting}
-                className="text-sm px-2 py-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+                className="text-sm px-2 py-1 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
               >
                 <Plus size={11} /> {t('po.create.addLine')}
               </button>
             </div>
-            <div className="border border-slate-200 dark:border-slate-700 rounded overflow-visible">
+            <div className="border border-default dark:border-slate-700 rounded overflow-visible">
               <table className="w-full text-base">
-                <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-default dark:border-slate-700">
                   <tr>
                     <th className="text-left font-medium px-2 py-1.5">SKU / Product</th>
                     <th className="text-right font-medium px-2 py-1.5 w-32">Qty</th>
@@ -711,7 +711,7 @@ export function CreatePoModal({
                 {formatMoney(totalCents, currency)}
               </span>
               {totalEurCents != null && currency !== 'EUR' && (
-                <span className="ml-2 text-slate-400 dark:text-slate-500">
+                <span className="ml-2 text-tertiary dark:text-slate-500">
                   ≈ {formatMoney(totalEurCents, 'EUR')}
                 </span>
               )}
@@ -721,7 +721,7 @@ export function CreatePoModal({
           {/* PO-Plus.8 — Drop-ship override. Defaults closed; the
               toggle reveals an inline address form. When committed,
               the factory PDF lists this address as the destination. */}
-          <div className="border border-slate-200 dark:border-slate-700 rounded">
+          <div className="border border-default dark:border-slate-700 rounded">
             <button
               type="button"
               onClick={() => setShipToOpen((v) => !v)}
@@ -736,14 +736,14 @@ export function CreatePoModal({
               </span>
             </button>
             {shipToOpen && (
-              <div className="p-3 border-t border-slate-200 dark:border-slate-700 grid grid-cols-2 gap-2">
+              <div className="p-3 border-t border-default dark:border-slate-700 grid grid-cols-2 gap-2">
                 <ShipToField label="Contact name">
                   <input
                     type="text"
                     value={shipToContact}
                     onChange={(e) => setShipToContact(e.target.value)}
                     disabled={submitting}
-                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                    className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                   />
                 </ShipToField>
                 <ShipToField label="Company">
@@ -752,7 +752,7 @@ export function CreatePoModal({
                     value={shipToCompany}
                     onChange={(e) => setShipToCompany(e.target.value)}
                     disabled={submitting}
-                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                    className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                   />
                 </ShipToField>
                 <ShipToField label="Address line 1" full>
@@ -761,7 +761,7 @@ export function CreatePoModal({
                     value={shipToLine1}
                     onChange={(e) => setShipToLine1(e.target.value)}
                     disabled={submitting}
-                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                    className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                   />
                 </ShipToField>
                 <ShipToField label="Address line 2" full>
@@ -770,7 +770,7 @@ export function CreatePoModal({
                     value={shipToLine2}
                     onChange={(e) => setShipToLine2(e.target.value)}
                     disabled={submitting}
-                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                    className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                   />
                 </ShipToField>
                 <ShipToField label="City">
@@ -779,7 +779,7 @@ export function CreatePoModal({
                     value={shipToCity}
                     onChange={(e) => setShipToCity(e.target.value)}
                     disabled={submitting}
-                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                    className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                   />
                 </ShipToField>
                 <ShipToField label="Postal code">
@@ -788,7 +788,7 @@ export function CreatePoModal({
                     value={shipToPostalCode}
                     onChange={(e) => setShipToPostalCode(e.target.value)}
                     disabled={submitting}
-                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                    className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                   />
                 </ShipToField>
                 <ShipToField label="Country (ISO)">
@@ -798,7 +798,7 @@ export function CreatePoModal({
                     onChange={(e) => setShipToCountry(e.target.value.toUpperCase())}
                     maxLength={2}
                     disabled={submitting}
-                    className="w-full h-9 px-2 text-base font-mono uppercase border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                    className="w-full h-9 px-2 text-base font-mono uppercase border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                   />
                 </ShipToField>
                 <ShipToField label="Phone">
@@ -807,7 +807,7 @@ export function CreatePoModal({
                     value={shipToPhone}
                     onChange={(e) => setShipToPhone(e.target.value)}
                     disabled={submitting}
-                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                    className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                   />
                 </ShipToField>
                 <ShipToField label="Delivery instructions" full>
@@ -817,7 +817,7 @@ export function CreatePoModal({
                     onChange={(e) => setShipToInstructions(e.target.value)}
                     disabled={submitting}
                     placeholder="e.g. Leave with reception"
-                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                    className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                   />
                 </ShipToField>
               </div>
@@ -835,7 +835,7 @@ export function CreatePoModal({
               disabled={submitting}
               rows={3}
               placeholder={t('po.create.notesPlaceholder')}
-              className="w-full px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              className="w-full px-2 py-1.5 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-tertiary dark:placeholder:text-slate-500"
             />
           </div>
 
@@ -847,7 +847,7 @@ export function CreatePoModal({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-900">
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-default dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-900">
           <Button variant="secondary" size="sm" onClick={onClose} disabled={submitting}>
             {t('po.create.cancel')}
           </Button>
@@ -922,7 +922,7 @@ function LineRow({
   const subtotalCents = qty * parseCentsField(line.unitCostCents)
 
   return (
-    <tr className="border-b border-slate-100 dark:border-slate-800 last:border-0 align-top">
+    <tr className="border-b border-subtle dark:border-slate-800 last:border-0 align-top">
       <td className="px-2 py-1.5">
         <SkuAutocomplete
           line={line}
@@ -962,7 +962,7 @@ function LineRow({
               disabled={submitting}
               rows={1}
               placeholder="Line note (e.g. lot code, defect spec)"
-              className="w-full px-2 py-1 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              className="w-full px-2 py-1 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 placeholder:text-tertiary dark:placeholder:text-slate-500"
             />
           </div>
         ) : (
@@ -986,7 +986,7 @@ function LineRow({
             'w-full h-8 px-2 text-base text-right tabular-nums border rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100',
             moqViolation
               ? 'border-red-300 dark:border-red-700 bg-red-50/30 dark:bg-red-950/20'
-              : 'border-slate-200 dark:border-slate-700',
+              : 'border-default dark:border-slate-700',
           )}
         />
         {moqViolation && (
@@ -1016,7 +1016,7 @@ function LineRow({
           onChange={(e) => onUpdate(line.uid, { unitCostCents: e.target.value })}
           disabled={submitting}
           placeholder="0.00"
-          className="w-full h-8 px-2 text-base text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+          className="w-full h-8 px-2 text-base text-right tabular-nums border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
         />
       </td>
       <td className="px-2 py-1.5 text-right tabular-nums font-medium text-slate-900 dark:text-slate-100">
@@ -1027,7 +1027,7 @@ function LineRow({
           type="button"
           onClick={onRemove}
           disabled={submitting || !canRemove}
-          className="h-8 w-8 inline-flex items-center justify-center rounded text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-30"
+          className="h-8 w-8 inline-flex items-center justify-center rounded text-tertiary dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-30"
           aria-label="Remove line"
         >
           <Trash2 size={12} />
@@ -1111,7 +1111,7 @@ function SkuAutocomplete({
         onFocus={() => setOpen(true)}
         placeholder={supplierId ? 'Type SKU or product name…' : 'SKU'}
         disabled={submitting}
-        className="w-full h-8 px-2 text-base font-mono border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+        className="w-full h-8 px-2 text-base font-mono border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-tertiary dark:placeholder:text-slate-500"
       />
       {line.productId && (
         <div className="text-xs text-green-700 dark:text-green-300 mt-0.5 inline-flex items-center gap-1">
@@ -1120,7 +1120,7 @@ function SkuAutocomplete({
         </div>
       )}
       {open && supplierId && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded shadow-lg max-h-64 overflow-y-auto">
+        <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded shadow-lg max-h-64 overflow-y-auto">
           {loading && (
             <div className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400 inline-flex items-center gap-2">
               <Loader2 className="w-3 h-3 animate-spin" /> Searching…
@@ -1129,7 +1129,7 @@ function SkuAutocomplete({
           {!loading && results.length === 0 && (
             <div className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
               No catalog matches.{' '}
-              <span className="text-slate-400 dark:text-slate-500">Type to create a free SKU.</span>
+              <span className="text-tertiary dark:text-slate-500">Type to create a free SKU.</span>
             </div>
           )}
           {!loading &&
@@ -1143,10 +1143,10 @@ function SkuAutocomplete({
                     onPick(r)
                     setOpen(false)
                   }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800 last:border-0"
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-subtle dark:border-slate-800 last:border-0"
                 >
                   <div className="flex items-center gap-2">
-                    <Package className="w-3 h-3 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                    <Package className="w-3 h-3 text-tertiary dark:text-slate-500 flex-shrink-0" />
                     <span className="font-mono text-sm text-slate-900 dark:text-slate-100">
                       {p?.sku ?? r.supplierSku ?? '—'}
                     </span>
@@ -1327,7 +1327,7 @@ function LineHints({
           <button
             type="button"
             onClick={() => onApplyCost(costHistory.avgUnitCostCents!)}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-default dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
             title="Apply the trailing-N average from prior POs"
           >
             avg {(costHistory.avgUnitCostCents / 100).toFixed(2)} {currency}

@@ -159,7 +159,7 @@ export default async function ProductDatasheetHubPage({
         listingIds={productListingIds}
       />
       {/* ── Header ─────────────────────────────────────────────────── */}
-      <header className="flex items-start justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-3">
+      <header className="flex items-start justify-between gap-4 border-b border-default dark:border-slate-800 pb-3">
         <div className="min-w-0 flex-1">
           <Link
             href={`/products/${product.id}/edit`}
@@ -228,7 +228,7 @@ export default async function ProductDatasheetHubPage({
 
       {/* ── Tab nav ────────────────────────────────────────────────── */}
       <nav
-        className="flex items-center gap-1 border-b border-slate-200 dark:border-slate-800 overflow-x-auto"
+        className="flex items-center gap-1 border-b border-default dark:border-slate-800 overflow-x-auto"
         aria-label={t('products.datasheetHub.tabsAria')}
       >
         {tabs.map((tabKey) => {

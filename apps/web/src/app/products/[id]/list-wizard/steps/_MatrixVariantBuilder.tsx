@@ -383,8 +383,8 @@ export default function MatrixVariantBuilder({
   }
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
-      <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+    <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
+      <div className="px-5 py-4 border-b border-subtle dark:border-slate-800">
         <div className="flex items-center gap-2">
           <Layers className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           <div className="text-md font-medium text-slate-900 dark:text-slate-100">
@@ -426,7 +426,7 @@ export default function MatrixVariantBuilder({
               setAxisDrafts({})
               setOverrides({})
             }}
-            className="w-full h-9 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
+            className="w-full h-9 px-3 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
           >
             {allThemes.map((t) => (
               <option key={t.id} value={t.id}>
@@ -465,7 +465,7 @@ export default function MatrixVariantBuilder({
                 <div key={attr}>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {attr}
-                    <span className="ml-1 text-slate-400 dark:text-slate-500">
+                    <span className="ml-1 text-tertiary dark:text-slate-500">
                       ({values.length})
                     </span>
                   </label>
@@ -479,7 +479,7 @@ export default function MatrixVariantBuilder({
                         <button
                           type="button"
                           onClick={() => onRemoveAxisValue(attr, v)}
-                          className="text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400"
+                          className="text-tertiary dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400"
                           aria-label={`Remove ${v}`}
                         >
                           <X className="w-3 h-3" />
@@ -504,12 +504,12 @@ export default function MatrixVariantBuilder({
                         }
                       }}
                       placeholder={`Add ${attr.toLowerCase()} (Enter, or comma-separated)`}
-                      className="flex-1 h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
+                      className="flex-1 h-8 px-2 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
                     />
                     <button
                       type="button"
                       onClick={() => onAddAxisValue(attr)}
-                      className="h-8 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+                      className="h-8 px-3 text-sm border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
                     >
                       <Plus className="w-3 h-3" />
                       Add
@@ -535,7 +535,7 @@ export default function MatrixVariantBuilder({
               value={defaultPrice}
               onChange={(e) => setDefaultPrice(e.target.value)}
               placeholder="0.00"
-              className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 tabular-nums"
+              className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 tabular-nums"
             />
           </div>
           <div>
@@ -549,7 +549,7 @@ export default function MatrixVariantBuilder({
               min="0"
               value={defaultStock}
               onChange={(e) => setDefaultStock(e.target.value)}
-              className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 tabular-nums"
+              className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 tabular-nums"
             />
           </div>
           <div>
@@ -561,7 +561,7 @@ export default function MatrixVariantBuilder({
               value={skuPattern}
               onChange={(e) => setSkuPattern(e.target.value)}
               placeholder="{parent}-{values}"
-              className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 font-mono"
+              className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 font-mono"
             />
           </div>
         </div>
@@ -587,7 +587,7 @@ export default function MatrixVariantBuilder({
                     ? `${selectedTheme.requiredAttributes.join('\t')}\nS\tRed\nM\tBlack\n…`
                     : 'Paste TSV/CSV here'
                 }
-                className="w-full px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 font-mono"
+                className="w-full px-2 py-1.5 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 font-mono"
               />
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Header row optional. Recognised columns map to the
@@ -617,7 +617,7 @@ export default function MatrixVariantBuilder({
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Preview
-              <span className="ml-1 text-slate-400 dark:text-slate-500">
+              <span className="ml-1 text-tertiary dark:text-slate-500">
                 ({variants.length} variant{variants.length === 1 ? '' : 's'}
                 {skuConflicts.size > 0 ? `, ${skuConflicts.size} SKU conflicts` : ''})
               </span>
@@ -633,13 +633,13 @@ export default function MatrixVariantBuilder({
             )}
           </div>
           {variants.length === 0 ? (
-            <div className="text-center py-6 border border-dashed border-slate-200 dark:border-slate-700 rounded-lg text-base text-slate-500 dark:text-slate-400">
+            <div className="text-center py-6 border border-dashed border-default dark:border-slate-700 rounded-lg text-base text-slate-500 dark:text-slate-400">
               {selectedTheme && selectedTheme.requiredAttributes.length > 0
                 ? 'Add at least one value to every axis to generate variants.'
                 : 'Pick a theme with variation axes to generate the matrix.'}
             </div>
           ) : (
-            <div className="border border-slate-200 dark:border-slate-700 rounded-md overflow-x-auto">
+            <div className="border border-default dark:border-slate-700 rounded-md overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 dark:bg-slate-800">
                   <tr>
@@ -690,7 +690,7 @@ export default function MatrixVariantBuilder({
                               'w-full h-7 px-1.5 text-sm border rounded-md font-mono bg-white dark:bg-slate-900',
                               isDup
                                 ? 'border-rose-400 dark:border-rose-700'
-                                : 'border-slate-200 dark:border-slate-700',
+                                : 'border-default dark:border-slate-700',
                             )}
                           />
                         </td>
@@ -708,7 +708,7 @@ export default function MatrixVariantBuilder({
                               }))
                             }
                             placeholder={defaultPrice || '0.00'}
-                            className="w-full h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 tabular-nums text-right"
+                            className="w-full h-7 px-1.5 text-sm border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 tabular-nums text-right"
                           />
                         </td>
                         <td className="px-2 py-1">
@@ -725,7 +725,7 @@ export default function MatrixVariantBuilder({
                               }))
                             }
                             placeholder={defaultStock || '0'}
-                            className="w-full h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 tabular-nums text-right"
+                            className="w-full h-7 px-1.5 text-sm border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 tabular-nums text-right"
                           />
                         </td>
                       </tr>
@@ -733,7 +733,7 @@ export default function MatrixVariantBuilder({
                   })}
                 </tbody>
               </table>
-              <p className="text-xs text-slate-500 dark:text-slate-400 px-2 py-1.5 border-t border-slate-100 dark:border-slate-800">
+              <p className="text-xs text-slate-500 dark:text-slate-400 px-2 py-1.5 border-t border-subtle dark:border-slate-800">
                 Empty cells fall back to the defaults above. Per-variant
                 price / stock are applied at create time — the edit page
                 handles further per-listing overrides.

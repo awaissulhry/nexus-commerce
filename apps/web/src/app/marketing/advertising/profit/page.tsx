@@ -95,9 +95,9 @@ export default async function ProfitPage() {
         />
       </div>
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
+          <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-default dark:border-slate-800">
             <tr className="text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <th className="px-3 py-2">Date</th>
               <th className="px-3 py-2">SKU</th>
@@ -219,7 +219,7 @@ function Stat({
   band?: 'good' | 'warn' | 'bad' | 'none'
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
         {label}
       </div>

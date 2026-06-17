@@ -30,7 +30,7 @@ export default function ExportsTabs() {
 
   return (
     <div className="space-y-3">
-      <div className="px-3 md:px-6 border-b border-slate-200 dark:border-slate-800">
+      <div className="px-3 md:px-6 border-b border-default dark:border-slate-800">
         <div className="inline-flex items-center gap-1" role="tablist">
           <TabButton
             active={tab === 'recent'}

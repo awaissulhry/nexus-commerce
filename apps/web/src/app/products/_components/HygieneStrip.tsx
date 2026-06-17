@@ -122,7 +122,7 @@ export function HygieneStrip({
       {chips.map((c) => {
         const empty = c.count === 0
         const tone = empty
-          ? 'border-slate-200 bg-white text-slate-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-500'
+          ? 'border-default bg-white text-tertiary dark:border-slate-800 dark:bg-slate-900 dark:text-slate-500'
           : c.active
             ? 'border-rose-500 bg-rose-100 text-rose-800 dark:border-rose-400 dark:bg-rose-950/60 dark:text-rose-200'
             : 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-900/40'

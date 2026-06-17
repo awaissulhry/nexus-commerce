@@ -1095,11 +1095,11 @@ export default function CommandPalette() {
       aria-label="Command palette"
     >
       <div
-        className="bg-white rounded-lg shadow-2xl w-[600px] max-w-[90vw] overflow-hidden border border-slate-200"
+        className="bg-white rounded-lg shadow-2xl w-[600px] max-w-[90vw] overflow-hidden border border-default"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-200">
-          <Search className="w-4 h-4 text-slate-400" />
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-default">
+          <Search className="w-4 h-4 text-tertiary" />
           <input
             ref={inputRef}
             type="text"
@@ -1110,7 +1110,7 @@ export default function CommandPalette() {
             }}
             onKeyDown={onKeyDown}
             placeholder="Type a command or search…"
-            className="flex-1 bg-transparent text-lg text-slate-900 placeholder:text-slate-400 outline-none"
+            className="flex-1 bg-transparent text-lg text-slate-900 placeholder:text-tertiary outline-none"
           />
           <kbd className="text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-mono">
             ESC
@@ -1125,7 +1125,7 @@ export default function CommandPalette() {
           ) : (
             GROUP_ORDER.filter((g) => grouped[g]).map((group) => (
               <div key={group} className="mb-1 last:mb-0">
-                <div className="px-3 pt-2 pb-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                <div className="px-3 pt-2 pb-1 text-xs font-semibold text-tertiary uppercase tracking-wider">
                   {group}
                 </div>
                 {grouped[group]!.map((cmd) => {
@@ -1148,7 +1148,7 @@ export default function CommandPalette() {
                       <Icon
                         className={cn(
                           'w-4 h-4 flex-shrink-0',
-                          isActive ? 'text-blue-600' : 'text-slate-400'
+                          isActive ? 'text-blue-600' : 'text-tertiary'
                         )}
                       />
                       <span className="flex-1 truncate">{cmd.label}</span>
@@ -1172,7 +1172,7 @@ export default function CommandPalette() {
           )}
         </div>
 
-        <div className="border-t border-slate-100 px-3 py-1.5 text-xs text-slate-400 flex items-center justify-between gap-2">
+        <div className="border-t border-subtle px-3 py-1.5 text-xs text-tertiary flex items-center justify-between gap-2">
           <span>↑↓ navigate · ↵ open</span>
           <button
             type="button"
@@ -1245,10 +1245,10 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
       aria-label="Keyboard shortcuts"
     >
       <div
-        className="bg-white rounded-lg shadow-2xl w-[560px] max-w-[90vw] overflow-hidden border border-slate-200"
+        className="bg-white rounded-lg shadow-2xl w-[560px] max-w-[90vw] overflow-hidden border border-default"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-default">
           <div className="flex items-center gap-2">
             <Keyboard className="w-4 h-4 text-slate-500" />
             <h2 className="text-lg font-semibold text-slate-900">
@@ -1258,7 +1258,7 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-0.5"
+            className="text-tertiary hover:text-slate-600 p-0.5"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -1267,7 +1267,7 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
 
         <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
           <section>
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+            <div className="text-xs font-semibold text-tertiary uppercase tracking-wider mb-2">
               General
             </div>
             <ul className="space-y-1.5">
@@ -1287,7 +1287,7 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
 
           {pageShortcuts && (
             <section>
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+              <div className="text-xs font-semibold text-tertiary uppercase tracking-wider mb-2">
                 On {pageShortcuts.title}
               </div>
               <ul className="space-y-1.5">
@@ -1307,7 +1307,7 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
           )}
 
           <section>
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+            <div className="text-xs font-semibold text-tertiary uppercase tracking-wider mb-2">
               Navigation (chord — press {'g'} then …)
             </div>
             <ul className="space-y-1.5">

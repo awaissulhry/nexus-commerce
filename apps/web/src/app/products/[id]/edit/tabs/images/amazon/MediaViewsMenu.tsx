@@ -98,21 +98,21 @@ export function MediaViewsMenu({
         <Bookmark className="w-3.5 h-3.5" /> Views <ChevronDown className="w-3 h-3" />
       </button>
       {open && (
-        <div className="absolute z-40 mt-1 w-60 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-1.5 text-sm">
+        <div className="absolute z-40 mt-1 w-60 rounded-xl border border-default dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-1.5 text-sm">
           <button
             type="button"
             onClick={saveCurrent}
             className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
           >
-            <Plus className="w-3.5 h-3.5 text-slate-400" /> Save current layout…
+            <Plus className="w-3.5 h-3.5 text-tertiary" /> Save current layout…
           </button>
-          <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+          <div className="my-1 border-t border-subtle dark:border-slate-800" />
           {loading ? (
-            <div className="px-2 py-2 text-xs text-slate-400 flex items-center gap-1.5">
+            <div className="px-2 py-2 text-xs text-tertiary flex items-center gap-1.5">
               <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
             </div>
           ) : views.length === 0 ? (
-            <div className="px-2 py-2 text-xs text-slate-400">No saved views yet</div>
+            <div className="px-2 py-2 text-xs text-tertiary">No saved views yet</div>
           ) : (
             views.map((v) => (
               <div key={v.id} className="group flex items-center gap-1 rounded-lg px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800">

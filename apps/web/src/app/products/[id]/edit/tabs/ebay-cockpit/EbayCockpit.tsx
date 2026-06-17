@@ -315,7 +315,7 @@ export default function EbayCockpit(props: Props) {
         ariaLabel="eBay Listing Cockpit header"
         chipStrip={
           chips.length > 1 ? (
-            <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 flex items-center gap-3 flex-wrap">
+            <div className="px-4 py-2 border-b border-subtle dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 flex items-center gap-3 flex-wrap">
               <span className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 {t('products.edit.cockpit.ebay.markets')}
               </span>
@@ -396,7 +396,7 @@ export default function EbayCockpit(props: Props) {
             <button
               type="button"
               onClick={() => setXChannelOpen(true)}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
               title={t('products.edit.cockpit.ebay.crossChannelTitle')}
             >
               <Link2 className="w-3 h-3" /> {t('products.edit.cockpit.ebay.crossChannel')}
@@ -404,7 +404,7 @@ export default function EbayCockpit(props: Props) {
             <button
               type="button"
               onClick={() => setSiblingsModalOpen(true)}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
               title={t('products.edit.cockpit.ebay.applyToSiblingsTitle')}
             >
               <Layers className="w-3 h-3" /> {t('products.edit.cockpit.ebay.applyToSiblings')}
@@ -412,7 +412,7 @@ export default function EbayCockpit(props: Props) {
             <button
               type="button"
               onClick={() => setVersionDrawerOpen(true)}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
               title={t('products.edit.cockpit.ebay.historyTitle')}
             >
               <History className="w-3 h-3" /> {t('products.edit.cockpit.ebay.history')}
@@ -426,7 +426,7 @@ export default function EbayCockpit(props: Props) {
               <button
                 type="button"
                 onClick={() => setAllFieldsOpen(true)}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                 title={t('products.edit.cockpit.ebay.allFieldsTitle')}
               >
                 <ListTree className="w-3 h-3" /> {t('products.edit.cockpit.ebay.allFields')}
@@ -437,7 +437,7 @@ export default function EbayCockpit(props: Props) {
               href={`/products/ebay-flat-file?marketplace=${encodeURIComponent(marketInfo.code)}&familyId=${encodeURIComponent(product.id)}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
               title={t('products.edit.cockpit.ebay.editInBulkTitle')}
             >
               {t('products.edit.cockpit.ebay.editInBulk')} <ExternalLink className="w-3 h-3" />

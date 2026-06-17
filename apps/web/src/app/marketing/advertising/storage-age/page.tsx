@@ -95,7 +95,7 @@ export default async function StorageAgePage() {
       </div>
 
       {rows.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
           No data. Run the ingest:{' '}
           <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
             POST /api/advertising/cron/fba-storage-age-ingest/trigger
@@ -105,7 +105,7 @@ export default async function StorageAgePage() {
         <StorageAgeHeatmap rows={rows} />
       )}
 
-      <div className="mt-4 text-[11px] text-slate-400 dark:text-slate-500">
+      <div className="mt-4 text-[11px] text-tertiary dark:text-slate-500">
         Cron:{' '}
         <Link
           href="/sync-logs"
@@ -133,7 +133,7 @@ function Stat({
       className={`bg-white dark:bg-slate-900 border rounded-md px-3 py-2 ${
         accent === 'rose'
           ? 'border-rose-200 dark:border-rose-900'
-          : 'border-slate-200 dark:border-slate-800'
+          : 'border-default dark:border-slate-800'
       }`}
     >
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">

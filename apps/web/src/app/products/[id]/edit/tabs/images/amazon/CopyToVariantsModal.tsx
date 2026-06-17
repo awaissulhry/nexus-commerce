@@ -35,12 +35,12 @@ export function CopyToVariantsModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-700 p-4"
+        className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-default dark:border-slate-700 p-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-1">
           <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Copy {sourceLabel} → other variants</span>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+          <button type="button" onClick={onClose} className="text-tertiary hover:text-slate-600 dark:hover:text-slate-300">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -49,7 +49,7 @@ export function CopyToVariantsModal({
         </p>
 
         {targetOptions.length === 0 ? (
-          <p className="px-2 py-3 text-xs text-slate-400">No other variants to copy to.</p>
+          <p className="px-2 py-3 text-xs text-tertiary">No other variants to copy to.</p>
         ) : (
           <div className="space-y-1 mb-3 max-h-56 overflow-y-auto">
             <label className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer text-sm">

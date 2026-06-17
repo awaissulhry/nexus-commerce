@@ -366,7 +366,7 @@ function CountTile({
   const toneClasses = {
     emerald: 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300',
     blue: 'border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300',
-    slate: 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400',
+    slate: 'border-default dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400',
   }[tone]
   return (
     <Card noPadding className={toneClasses}>
@@ -413,7 +413,7 @@ function EventSection({
       <Card noPadding>
         <div className="overflow-x-auto">
           <table className="w-full text-md">
-            <thead className={cn('border-b border-slate-200 dark:border-slate-800', headerToneCls)}>
+            <thead className={cn('border-b border-default dark:border-slate-800', headerToneCls)}>
               <tr>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider">
                   {t('pricing.promotions.table.event')}
@@ -444,7 +444,7 @@ function EventSection({
                 return (
                   <tr
                     key={e.id}
-                    className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                   >
                     <td className="px-3 py-2">
                       <div className="font-medium text-slate-800 dark:text-slate-200">{e.name}</div>
@@ -454,7 +454,7 @@ function EventSection({
                         </div>
                       )}
                       {e.source && (
-                        <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 mt-0.5 border rounded bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800">
+                        <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 mt-0.5 border rounded bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800">
                           {e.source}
                         </span>
                       )}
@@ -480,7 +480,7 @@ function EventSection({
                     </td>
                     <td className="px-3 py-2">
                       {e.priceActions.length === 0 ? (
-                        <span className="text-sm text-slate-400 dark:text-slate-500">
+                        <span className="text-sm text-tertiary dark:text-slate-500">
                           {t('pricing.promotions.action.none')}
                         </span>
                       ) : (

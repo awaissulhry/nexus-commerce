@@ -74,7 +74,7 @@ export default async function HeatmapPage() {
       </div>
 
       {data.cells.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
           No data in {data.sinceDays} days. Run the ingest:{' '}
           <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
             POST /api/reviews/cron/ingest/trigger
@@ -97,7 +97,7 @@ function Stat({
   tone?: 'rose' | null
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
         {label}
       </div>

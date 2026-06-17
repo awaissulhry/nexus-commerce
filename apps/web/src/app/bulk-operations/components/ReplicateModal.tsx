@@ -155,17 +155,17 @@ export default function ReplicateModal({
       onClick={() => !submitting && onClose()}
     >
       <div
-        className="bg-white rounded-lg shadow-xl border border-slate-200 w-[640px] max-w-[92vw] flex flex-col max-h-[90vh]"
+        className="bg-white rounded-lg shadow-xl border border-default w-[640px] max-w-[92vw] flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-default">
           <h2 className="text-lg font-semibold text-slate-900">
             Replicate marketplace data
           </h2>
           <button
             type="button"
             onClick={() => !submitting && onClose()}
-            className="text-slate-400 hover:text-slate-700"
+            className="text-tertiary hover:text-slate-700"
             disabled={submitting}
             aria-label="Close"
           >
@@ -208,7 +208,7 @@ export default function ReplicateModal({
                             'h-7 px-2 text-sm font-mono border rounded transition-colors',
                             active
                               ? 'bg-blue-50 border-blue-500 text-blue-900'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50',
+                              : 'bg-white border-default text-slate-700 hover:bg-slate-50',
                           )}
                         >
                           {o.code}
@@ -222,7 +222,7 @@ export default function ReplicateModal({
           </Section>
 
           {/* Arrow visual */}
-          <div className="flex items-center justify-center text-slate-400">
+          <div className="flex items-center justify-center text-tertiary">
             <ArrowRight className="w-4 h-4" />
           </div>
 
@@ -268,7 +268,7 @@ export default function ReplicateModal({
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {list.length === 0 ? (
-                        <span className="text-sm text-slate-400 italic">
+                        <span className="text-sm text-tertiary italic">
                           source disabled
                         </span>
                       ) : (
@@ -292,7 +292,7 @@ export default function ReplicateModal({
                                 'h-7 px-2 text-sm font-mono border rounded transition-colors',
                                 active
                                   ? 'bg-emerald-50 border-emerald-500 text-emerald-900'
-                                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50',
+                                  : 'bg-white border-default text-slate-700 hover:bg-slate-50',
                               )}
                             >
                               {o.code}
@@ -366,7 +366,7 @@ export default function ReplicateModal({
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-slate-200">
+        <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-default">
           <span className="text-sm text-slate-500 tabular-nums">
             {productIds.length} {scopeLabel} ×{' '}
             {targets.length || '0'} target

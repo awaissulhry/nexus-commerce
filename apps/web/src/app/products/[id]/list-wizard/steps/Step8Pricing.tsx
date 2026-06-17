@@ -629,7 +629,7 @@ export default function Step8Pricing({
                   return (
                     <li
                       key={channelKey}
-                      className="flex items-start justify-between gap-3 py-1.5 px-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                      className="flex items-start justify-between gap-3 py-1.5 px-2 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -690,7 +690,7 @@ export default function Step8Pricing({
 
       {loading && (
         <div
-          className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-6 space-y-3"
+          className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-6 space-y-3"
           aria-busy="true"
           aria-label="Loading pricing context"
         >
@@ -710,7 +710,7 @@ export default function Step8Pricing({
       {ctx && !loading && (
         <>
           {/* Base pricing */}
-          <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3 mb-4">
+          <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3 mb-4">
             <div className="text-base font-medium text-slate-700 dark:text-slate-300 mb-2">
               Base pricing (applies to every channel by default)
             </div>
@@ -791,8 +791,8 @@ export default function Step8Pricing({
           )}
 
           {/* Per-channel override grid */}
-          <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
-            <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 text-base font-medium text-slate-700 dark:text-slate-300">
+          <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
+            <div className="px-3 py-2 border-b border-default dark:border-slate-700 text-base font-medium text-slate-700 dark:text-slate-300">
               Per-channel overrides &amp; margins
             </div>
             <div className="overflow-x-auto">
@@ -849,7 +849,7 @@ export default function Step8Pricing({
                           isFirstBlocked ? 'true' : undefined
                         }
                         className={cn(
-                          'border-t border-slate-100 dark:border-slate-800 scroll-mt-24',
+                          'border-t border-subtle dark:border-slate-800 scroll-mt-24',
                           tone,
                         )}
                       >
@@ -860,7 +860,7 @@ export default function Step8Pricing({
                           <div className="text-xs text-slate-500 dark:text-slate-400">
                             {c.currency}{' '}
                             {r.inheritsBase && (
-                              <span className="ml-1 text-slate-400 dark:text-slate-500 italic">
+                              <span className="ml-1 text-tertiary dark:text-slate-500 italic">
                                 · inherits base
                               </span>
                             )}
@@ -1032,7 +1032,7 @@ function BaseField({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        className="w-full h-8 px-2 text-md border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
       />
     </div>
   )
@@ -1054,7 +1054,7 @@ function CompactInput({
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className="w-20 h-7 px-1.5 text-base border border-slate-200 dark:border-slate-700 rounded text-right tabular-nums focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-300"
+      className="w-20 h-7 px-1.5 text-base border border-default dark:border-slate-700 rounded text-right tabular-nums focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-300"
     />
   )
 }
@@ -1094,7 +1094,7 @@ function GroupBulkActions({
 }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-3 py-2 mb-3">
+    <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-3 py-2 mb-3">
       <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
         Set price per channel group (bulk)
       </div>
@@ -1118,7 +1118,7 @@ function GroupBulkActions({
                 setDrafts((prev) => ({ ...prev, [g.id]: e.target.value }))
               }
               placeholder="price"
-              className="w-24 h-7 px-1.5 text-base border border-slate-200 dark:border-slate-700 rounded text-right tabular-nums focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-300"
+              className="w-24 h-7 px-1.5 text-base border border-default dark:border-slate-700 rounded text-right tabular-nums focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-300"
             />
             <Button
               variant="primary"

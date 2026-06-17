@@ -410,7 +410,7 @@ export default function FiscalClient() {
               dense
             />
           ) : (
-            <div className="text-sm text-slate-400 py-6 text-center">
+            <div className="text-sm text-tertiary py-6 text-center">
               {loading ? 'Loading…' : 'No VAT data'}
             </div>
           )}
@@ -441,7 +441,7 @@ export default function FiscalClient() {
               )}
             />
           ) : (
-            <div className="h-[220px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[220px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No data'}
             </div>
           )}
@@ -449,14 +449,14 @@ export default function FiscalClient() {
         <Card
           title="Currency bridge"
           description="Multi-currency revenue mix"
-          action={<Info className="w-3.5 h-3.5 text-slate-400" />}
+          action={<Info className="w-3.5 h-3.5 text-tertiary" />}
         >
           {report && report.currencyBridge.length > 0 ? (
             <ul className="space-y-1.5">
               {report.currencyBridge.map((row) => (
                 <li
                   key={row.code}
-                  className="flex items-center justify-between gap-2 rounded-md border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 text-xs"
+                  className="flex items-center justify-between gap-2 rounded-md border border-default dark:border-slate-700 px-2.5 py-1.5 text-xs"
                 >
                   <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
                     {row.code}
@@ -471,7 +471,7 @@ export default function FiscalClient() {
               ))}
             </ul>
           ) : (
-            <div className="text-sm text-slate-400 py-6 text-center">
+            <div className="text-sm text-tertiary py-6 text-center">
               {loading ? 'Loading…' : ''}
             </div>
           )}
@@ -493,7 +493,7 @@ export default function FiscalClient() {
               emptyLabel="No OSS-eligible sales"
             />
           ) : (
-            <div className="text-sm text-slate-400 py-6 text-center">
+            <div className="text-sm text-tertiary py-6 text-center">
               {loading ? 'Loading…' : 'No OSS-eligible sales this window'}
             </div>
           )}
@@ -512,7 +512,7 @@ export default function FiscalClient() {
               emptyLabel="No EU dispatches"
             />
           ) : (
-            <div className="text-sm text-slate-400 py-6 text-center">
+            <div className="text-sm text-tertiary py-6 text-center">
               {loading ? 'Loading…' : 'No EU dispatches this window'}
             </div>
           )}
@@ -533,7 +533,7 @@ export default function FiscalClient() {
             dense
           />
         ) : (
-          <div className="text-sm text-slate-400 py-6 text-center">
+          <div className="text-sm text-tertiary py-6 text-center">
             {loading ? 'Loading…' : 'No settlement data'}
           </div>
         )}

@@ -294,7 +294,7 @@ export function ChannelsClient() {
         {[1, 2, 3].map((i) => (
           <div
             key={i}
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 animate-pulse"
+            className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg p-4 animate-pulse"
           >
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded" />
@@ -318,7 +318,7 @@ export function ChannelsClient() {
             'border rounded-lg px-4 py-3 text-base flex items-start gap-2',
             statusMsg.kind === 'success' && 'bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-900 text-green-700 dark:text-green-300',
             statusMsg.kind === 'error' && 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900 text-red-700 dark:text-red-300',
-            statusMsg.kind === 'info' && 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+            statusMsg.kind === 'info' && 'bg-slate-50 dark:bg-slate-800 border-default dark:border-slate-700 text-slate-700 dark:text-slate-300'
           )}
         >
           {statusMsg.kind === 'error' && (
@@ -390,7 +390,7 @@ export function ChannelsClient() {
               </div>
 
               {isConnected && connection && (
-                <div className="space-y-1.5 mb-3 text-base border-t border-slate-100 dark:border-slate-800 pt-3">
+                <div className="space-y-1.5 mb-3 text-base border-t border-subtle dark:border-slate-800 pt-3">
                   {connection.sellerName && (
                     <div className="flex justify-between gap-2">
                       <span className="text-slate-500 dark:text-slate-400">Seller</span>

@@ -79,7 +79,7 @@ export default function MarketplaceMatrix({
           <div
             role="tablist"
             aria-label={t('overview.matrix.metricAria')}
-            className="inline-flex items-center border border-slate-200 dark:border-slate-700 rounded-md p-0.5 bg-white dark:bg-slate-900"
+            className="inline-flex items-center border border-default dark:border-slate-700 rounded-md p-0.5 bg-white dark:bg-slate-900"
           >
             {(['revenue', 'orders', 'listings'] as const).map((m) => (
               <button
@@ -151,7 +151,7 @@ export default function MarketplaceMatrix({
               return (
                 <tr
                   key={c}
-                  className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50/40 dark:hover:bg-slate-800/40"
+                  className="border-t border-subtle dark:border-slate-800 hover:bg-slate-50/40 dark:hover:bg-slate-800/40"
                 >
                   <td className="px-3 py-2 font-medium text-slate-900 dark:text-slate-100 align-top">
                     {CHANNEL_LABELS[c] ?? c}

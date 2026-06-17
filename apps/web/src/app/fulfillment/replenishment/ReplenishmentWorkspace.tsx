@@ -142,7 +142,7 @@ const URGENCY_TONE: Record<Urgency, string> = {
   CRITICAL: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-900',
   HIGH:     'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-400 dark:border-orange-900',
   MEDIUM:   'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900',
-  LOW:      'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+  LOW:      'bg-slate-100 text-slate-600 border-default dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
 }
 
 type RepColumnKey = 'product' | 'urgency' | 'stock' | 'daysLeft' | 'velocity' | 'salesPeriod' | 'demand' | 'reorderQty' | 'orderBy' | 'actions'
@@ -1009,7 +1009,7 @@ export default function ReplenishmentWorkspace() {
         return row.thumbnailUrl ? (
           <img src={row.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100 flex-shrink-0" />
         ) : (
-          <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+          <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-tertiary flex-shrink-0">
             <Package size={14} />
           </div>
         )
@@ -1068,7 +1068,7 @@ export default function ReplenishmentWorkspace() {
       case 'reorderQty':
         if (row.reorderQty === 0) return <span className="text-slate-300 dark:text-slate-600">—</span>
         return (
-          <span className={`tabular-nums font-semibold ${row.needsReorder ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400'}`}>
+          <span className={`tabular-nums font-semibold ${row.needsReorder ? 'text-slate-900 dark:text-slate-100' : 'text-tertiary'}`}>
             {row.reorderQty}
           </span>
         )
@@ -1346,7 +1346,7 @@ export default function ReplenishmentWorkspace() {
           the velocity backend does per-channel attribution math; an [All]
           chip + per-channel single-select keeps the UX consistent with
           /products and /listings. */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 flex items-center gap-x-5 gap-y-2 flex-wrap">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2 flex items-center gap-x-5 gap-y-2 flex-wrap">
         <MultiSelectChips
           label="Channel"
           mode="single"
@@ -1453,7 +1453,7 @@ export default function ReplenishmentWorkspace() {
             <select
               value={channelFilter}
               onChange={(e) => setChannelFilter(e.target.value)}
-              className="h-8 px-2 border border-slate-200 dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              className="h-8 px-2 border border-default dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
             >
               <option value="">All channels</option>
               <option value="AMAZON">Amazon</option>
@@ -1464,7 +1464,7 @@ export default function ReplenishmentWorkspace() {
             <select
               value={marketplaceFilter}
               onChange={(e) => setMarketplaceFilter(e.target.value)}
-              className="h-8 px-2 border border-slate-200 dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              className="h-8 px-2 border border-default dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
             >
               <option value="">All marketplaces</option>
               {marketplaceOptions.map((m) => (
@@ -1476,7 +1476,7 @@ export default function ReplenishmentWorkspace() {
             {/* RX.S1 — sales timeframe for the "Sales" column. */}
             <TimeframePicker value={salesTf} onChange={setSalesTf} labelPrefix="Sales" />
             {/* S4 — recommendation basis toggle + promo/event uplift. */}
-            <div className="inline-flex h-8 items-center gap-1.5 rounded border border-slate-200 px-2 text-sm dark:border-slate-700 dark:bg-slate-900">
+            <div className="inline-flex h-8 items-center gap-1.5 rounded border border-default px-2 text-sm dark:border-slate-700 dark:bg-slate-900">
               <span className="text-slate-500 dark:text-slate-400">Recommend:</span>
               <div className="inline-flex items-center rounded bg-slate-100 p-0.5 dark:bg-slate-800">
                 <button
@@ -1499,7 +1499,7 @@ export default function ReplenishmentWorkspace() {
                   type="number"
                   value={upliftPct}
                   onChange={(e) => setUpliftPct(Number(e.target.value) || 0)}
-                  className="h-6 w-12 rounded border border-slate-200 bg-white px-1 text-right text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  className="h-6 w-12 rounded border border-default bg-white px-1 text-right text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                   aria-label="Uplift percent"
                 />
                 <span className="text-xs">% uplift</span>
@@ -1532,7 +1532,7 @@ export default function ReplenishmentWorkspace() {
           <button
             type="button"
             onClick={() => setPreferencesOpen(true)}
-            className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
+            className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
             title={t('grid.preferences.trigger')}
             aria-haspopup="dialog"
           >
@@ -1580,7 +1580,7 @@ export default function ReplenishmentWorkspace() {
         shortcuts={
           <button
             onClick={() => setHelpOpen(true)}
-            className="h-8 w-8 grid place-items-center text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            className="h-8 w-8 grid place-items-center text-base border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
             title="Keyboard shortcuts (?)"
             aria-label="Keyboard shortcuts"
           >

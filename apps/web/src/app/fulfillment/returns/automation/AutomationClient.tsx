@@ -122,10 +122,10 @@ export default function AutomationClient() {
         <>
           {/* Auto-approve diff. */}
           <Card noPadding>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-default dark:border-slate-700">
               <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 inline-flex items-center gap-2">
                 <Zap size={15} className="text-amber-500" /> Auto-approve candidates
-                <span className="text-slate-400 font-normal">({data.autoApprove.length})</span>
+                <span className="text-tertiary font-normal">({data.autoApprove.length})</span>
               </h2>
               <div className="flex items-center gap-2">
                 {data.autoApprove.length > 0 && (
@@ -149,7 +149,7 @@ export default function AutomationClient() {
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <tr className="border-b border-default dark:border-slate-700 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     <th className="px-3 py-2 w-8"><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all" /></th>
                     <th className="px-3 py-2 font-semibold">RMA</th>
                     <th className="px-3 py-2 font-semibold">Channel</th>
@@ -160,12 +160,12 @@ export default function AutomationClient() {
                 </thead>
                 <tbody>
                   {data.autoApprove.map((c) => (
-                    <tr key={c.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <tr key={c.id} className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                       <td className="px-3 py-2"><input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Select ${c.rmaNumber ?? c.id}`} /></td>
                       <td className="px-3 py-2 font-mono text-xs">{c.rmaNumber ?? c.id.slice(-6)}</td>
                       <td className="px-3 py-2">
                         <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[c.channel] ?? ''}`}>{c.channel}</span>
-                        {c.marketplace && <span className="ml-1 text-xs text-slate-400">{c.marketplace}</span>}
+                        {c.marketplace && <span className="ml-1 text-xs text-tertiary">{c.marketplace}</span>}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">{eur(c.refundCents)}</td>
                       <td className="px-3 py-2 text-slate-500 dark:text-slate-400 text-xs">{c.reason}</td>
@@ -186,14 +186,14 @@ export default function AutomationClient() {
             <Card>
               <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 inline-flex items-center gap-2 mb-2">
                 <PackageX size={14} className="text-violet-500" /> Returnless candidates
-                <span className="text-slate-400 font-normal">({data.returnless.length})</span>
+                <span className="text-tertiary font-normal">({data.returnless.length})</span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
                 Low-value returns (≤ {eur(data.returnlessMaxCents)}) where the return-leg cost may exceed recovery.
                 Suggestion only — issue a refund-and-keep from the drawer if it makes sense.
               </p>
               {data.returnless.length === 0 ? (
-                <p className="text-sm text-slate-400">None.</p>
+                <p className="text-sm text-tertiary">None.</p>
               ) : (
                 <ul className="space-y-1">
                   {data.returnless.map((r) => (
@@ -214,7 +214,7 @@ export default function AutomationClient() {
             {/* Skip breakdown — why other REQUESTED returns weren't flagged. */}
             <Card>
               <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 inline-flex items-center gap-2 mb-2">
-                <AlertTriangle size={14} className="text-slate-400" /> Not auto-approved ({skippedTotal})
+                <AlertTriangle size={14} className="text-tertiary" /> Not auto-approved ({skippedTotal})
               </h3>
               <dl className="space-y-1.5 text-sm">
                 <SkipRow label="Policy is manual (autoApprove off)" value={data.skipped.policyManual} hint="Enable auto-approve on the policy to include these." />
@@ -223,7 +223,7 @@ export default function AutomationClient() {
                 <SkipRow label="No delivery date" value={data.skipped.noDeliveryDate} hint="Window can't be confirmed." />
                 <SkipRow label="FBA (Amazon-managed)" value={data.skipped.fba} />
               </dl>
-              <p className="mt-3 text-xs text-slate-400">
+              <p className="mt-3 text-xs text-tertiary">
                 Tune eligibility on the{' '}
                 <a href="/fulfillment/returns/policies" className="text-blue-700 dark:text-blue-300 hover:underline">Return Policies</a> page.
               </p>
@@ -238,7 +238,7 @@ export default function AutomationClient() {
 function SkipRow({ label, value, hint }: { label: string; value: number; hint?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <dt className="text-slate-600 dark:text-slate-300">{label}{hint && <span className="block text-xs text-slate-400">{hint}</span>}</dt>
+      <dt className="text-slate-600 dark:text-slate-300">{label}{hint && <span className="block text-xs text-tertiary">{hint}</span>}</dt>
       <dd className="tabular-nums font-semibold text-slate-700 dark:text-slate-300">{value}</dd>
     </div>
   )

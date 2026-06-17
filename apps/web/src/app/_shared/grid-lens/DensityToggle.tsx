@@ -26,7 +26,7 @@ const OPTIONS: ReadonlyArray<{ value: Density; Icon: typeof AlignJustify; label:
 export function DensityToggle({ density, onChange, className }: DensityToggleProps) {
   return (
     <div
-      className={`inline-flex items-center border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden h-8 text-sm ${className ?? ''}`}
+      className={`inline-flex items-center border border-default dark:border-slate-700 rounded-md overflow-hidden h-8 text-sm ${className ?? ''}`}
       role="group"
       aria-label="Row density"
     >

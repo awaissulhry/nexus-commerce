@@ -79,7 +79,7 @@ export function CampaignDetailClient({ campaign, initialActions }: { campaign: C
         </div>
         <div className="ml-auto flex items-center gap-2">
           {(c.status === 'ACTIVE' || c.status === 'PAUSED') && (
-            <button disabled={busy} onClick={() => void mutate({ status: c.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE' })} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40">
+            <button disabled={busy} onClick={() => void mutate({ status: c.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE' })} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40">
               {c.status === 'ACTIVE' ? <><Pause size={14} className="text-amber-600" /> Pause</> : <><Play size={14} className="text-emerald-600" /> Resume</>}
             </button>
           )}
@@ -96,8 +96,8 @@ export function CampaignDetailClient({ campaign, initialActions }: { campaign: C
           ['ACOS', c.acos ? `${(Number(c.acos) * 100).toFixed(1)}%` : '—'],
           ['ROAS', c.roas ? Number(c.roas).toFixed(2) : '—'],
         ].map(([label, val]) => (
-          <div key={label as string} className="rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2">
-            <div className="text-[10px] uppercase text-slate-400">{label}</div>
+          <div key={label as string} className="rounded-lg border border-default dark:border-slate-800 px-3 py-2">
+            <div className="text-[10px] uppercase text-tertiary">{label}</div>
             {label === 'Budget' && editing ? (
               <div className="flex items-center gap-1 mt-0.5">
                 <input autoFocus type="number" step="0.01" value={budgetVal} onChange={(e) => setBudgetVal(e.target.value)} className="w-20 px-1 py-0.5 text-sm rounded border border-blue-400 bg-white dark:bg-slate-900" />
@@ -113,39 +113,39 @@ export function CampaignDetailClient({ campaign, initialActions }: { campaign: C
       <div className="grid md:grid-cols-2 gap-4">
         {/* Channel detail */}
         {detailBlock.length > 0 && (
-          <section className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
-            <h2 className="text-xs uppercase text-slate-400 mb-2">Channel detail</h2>
+          <section className="rounded-lg border border-default dark:border-slate-800 p-3">
+            <h2 className="text-xs uppercase text-tertiary mb-2">Channel detail</h2>
             <dl className="space-y-1 text-sm">{detailBlock.map(([k, v]) => <div key={k} className="flex justify-between"><dt className="text-slate-500">{k}</dt><dd className="text-slate-800 dark:text-slate-200">{v}</dd></div>)}</dl>
           </section>
         )}
         {/* Markets / links */}
-        <section className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
-          <h2 className="text-xs uppercase text-slate-400 mb-2">Markets ({c.links.length})</h2>
-          <div className="space-y-1 text-sm">{c.links.map((l) => <div key={l.id} className="flex justify-between"><span className="text-slate-700 dark:text-slate-200">{l.marketplace}</span><span className="text-xs text-slate-400">{l.externalId ?? 'no ext id'} · {l.status}</span></div>)}{c.links.length === 0 && <span className="text-xs text-slate-400">No market links.</span>}</div>
+        <section className="rounded-lg border border-default dark:border-slate-800 p-3">
+          <h2 className="text-xs uppercase text-tertiary mb-2">Markets ({c.links.length})</h2>
+          <div className="space-y-1 text-sm">{c.links.map((l) => <div key={l.id} className="flex justify-between"><span className="text-slate-700 dark:text-slate-200">{l.marketplace}</span><span className="text-xs text-tertiary">{l.externalId ?? 'no ext id'} · {l.status}</span></div>)}{c.links.length === 0 && <span className="text-xs text-tertiary">No market links.</span>}</div>
         </section>
       </div>
 
       {/* Targets */}
       {c.targets.length > 0 && (
-        <section className="rounded-lg border border-slate-200 dark:border-slate-800 mt-4 overflow-hidden">
-          <h2 className="text-xs uppercase text-slate-400 px-3 py-2 bg-slate-50 dark:bg-slate-900/60">Targets ({c.targets.length})</h2>
+        <section className="rounded-lg border border-default dark:border-slate-800 mt-4 overflow-hidden">
+          <h2 className="text-xs uppercase text-tertiary px-3 py-2 bg-slate-50 dark:bg-slate-900/60">Targets ({c.targets.length})</h2>
           <table className="w-full text-sm"><tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {c.targets.slice(0, 30).map((t) => <tr key={t.id}><td className="px-3 py-1.5">{t.kind} <span className="text-slate-400 text-xs">{t.expressionType}</span> {t.expressionValue}</td><td className="px-3 py-1.5 text-right text-slate-500">{t.bidCents != null ? eur(t.bidCents) : '—'}</td><td className="px-3 py-1.5 text-right text-slate-500">{eur(t.spendCents)}</td></tr>)}
+            {c.targets.slice(0, 30).map((t) => <tr key={t.id}><td className="px-3 py-1.5">{t.kind} <span className="text-tertiary text-xs">{t.expressionType}</span> {t.expressionValue}</td><td className="px-3 py-1.5 text-right text-slate-500">{t.bidCents != null ? eur(t.bidCents) : '—'}</td><td className="px-3 py-1.5 text-right text-slate-500">{eur(t.spendCents)}</td></tr>)}
           </tbody></table>
         </section>
       )}
 
       {/* Action audit */}
-      <section className="rounded-lg border border-slate-200 dark:border-slate-800 mt-4 overflow-hidden">
-        <h2 className="text-xs uppercase text-slate-400 px-3 py-2 bg-slate-50 dark:bg-slate-900/60">Action history ({actions.actions.length})</h2>
+      <section className="rounded-lg border border-default dark:border-slate-800 mt-4 overflow-hidden">
+        <h2 className="text-xs uppercase text-tertiary px-3 py-2 bg-slate-50 dark:bg-slate-900/60">Action history ({actions.actions.length})</h2>
         <table className="w-full text-sm"><tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-          {actions.actions.length === 0 && <tr><td className="px-3 py-3 text-xs text-slate-400">No actions yet.</td></tr>}
+          {actions.actions.length === 0 && <tr><td className="px-3 py-3 text-xs text-tertiary">No actions yet.</td></tr>}
           {actions.actions.map((a) => (
             <tr key={a.id}>
               <td className="px-3 py-1.5 text-slate-700 dark:text-slate-200">{a.actionType}</td>
               <td className="px-3 py-1.5"><span className={`text-xs px-1.5 py-0.5 rounded ${a.channelResponseStatus === 'SUCCESS' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : a.channelResponseStatus === 'FAILED' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{a.channelResponseStatus ?? 'PENDING'}{a.rolledBackAt ? ' · rolled back' : ''}</span></td>
-              <td className="px-3 py-1.5 text-xs text-slate-400">{a.userId ?? 'system'}</td>
-              <td className="px-3 py-1.5 text-right text-xs text-slate-400">{new Date(a.createdAt).toLocaleString()}</td>
+              <td className="px-3 py-1.5 text-xs text-tertiary">{a.userId ?? 'system'}</td>
+              <td className="px-3 py-1.5 text-right text-xs text-tertiary">{new Date(a.createdAt).toLocaleString()}</td>
             </tr>
           ))}
         </tbody></table>

@@ -66,7 +66,7 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const STATUS_TONE: Record<string, string> = {
-  DRAFT: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+  DRAFT: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700',
   PACKAGE_READY:
     'bg-blue-50 dark:bg-blue-950/40 text-blue-900 border-blue-200 dark:border-blue-900',
   SUBMITTED:
@@ -75,7 +75,7 @@ const STATUS_TONE: Record<string, string> = {
     'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 border-emerald-200 dark:border-emerald-900',
   REJECTED: 'bg-red-50 dark:bg-red-950/40 text-red-900 dark:text-red-100 border-red-200 dark:border-red-900',
   ABANDONED:
-    'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+    'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700',
 }
 
 interface Step1Slice {
@@ -471,7 +471,7 @@ function ApplyFlow({
             className={cn(
               'inline-flex items-center gap-1.5 h-7 px-2.5 text-base rounded-md border transition-colors',
               validating
-                ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                ? 'border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
                 : 'border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 text-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/60',
             )}
           >
@@ -513,7 +513,7 @@ function ApplyFlow({
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                    <ImageIcon className="w-3 h-3 text-slate-400 dark:text-slate-500" />
+                    <ImageIcon className="w-3 h-3 text-tertiary dark:text-slate-500" />
                     <span className="font-mono text-xs tabular-nums w-12">
                       img-{String(idx + 1).padStart(2, '0')}
                     </span>
@@ -523,7 +523,7 @@ function ApplyFlow({
                       </span>
                     )}
                     {item.format && (
-                      <span className="text-slate-400 dark:text-slate-500">·</span>
+                      <span className="text-tertiary dark:text-slate-500">·</span>
                     )}
                     {item.format && (
                       <span className="text-slate-500 dark:text-slate-400">{item.format}</span>
@@ -561,7 +561,7 @@ function ApplyFlow({
             href={downloadUrl('pdf')}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-base rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-base rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             <FileText className="w-3.5 h-3.5" />
             Preview brand-letter.pdf
@@ -598,7 +598,7 @@ function ApplyFlow({
             }/`}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             <ExternalLink className="w-3.5 h-3.5" />
             Open Seller Central
@@ -642,7 +642,7 @@ function ApplyFlow({
                 type="button"
                 onClick={() => setRejectDialog(true)}
                 disabled={savingStatus}
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-md font-medium border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-md font-medium border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 Mark as rejected
               </button>
@@ -729,7 +729,7 @@ function ApplyFlow({
             value={pasteRejection}
             onChange={(e) => setPasteRejection(e.target.value)}
             placeholder="Paste Amazon's rejection email text"
-            className="w-full h-24 px-2 py-1 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full h-24 px-2 py-1 text-md border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
         </SmallDialog>
       )}
@@ -747,7 +747,7 @@ function Section({
   children: React.ReactNode
 }) {
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-5 py-4">
+    <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-5 py-4">
       <div className="mb-3">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           {title}
@@ -787,7 +787,7 @@ function Input({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-500"
+        className="w-full h-8 px-2 text-md border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-500"
       />
     </div>
   )

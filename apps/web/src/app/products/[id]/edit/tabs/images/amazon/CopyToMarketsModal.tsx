@@ -34,14 +34,14 @@ export function CopyToMarketsModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-700 p-4"
+        className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-default dark:border-slate-700 p-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-1">
           <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
             Copy {whatLabel} → other markets
           </span>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+          <button type="button" onClick={onClose} className="text-tertiary hover:text-slate-600 dark:hover:text-slate-300">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -54,7 +54,7 @@ export function CopyToMarketsModal({
           <label className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer text-sm">
             <input type="checkbox" checked={sel.has(SHARED_TARGET)} onChange={() => toggle(SHARED_TARGET)} className="rounded" />
             <span className="font-medium">All Markets (shared)</span>
-            <span className="text-[11px] text-slate-400">applies to every market</span>
+            <span className="text-[11px] text-tertiary">applies to every market</span>
           </label>
           {others.map((m) => (
             <label key={m} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer text-sm">

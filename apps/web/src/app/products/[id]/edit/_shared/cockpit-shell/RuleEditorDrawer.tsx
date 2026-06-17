@@ -261,14 +261,14 @@ export default function RuleEditorDrawer({
         role="dialog"
         aria-modal="true"
         aria-label="Mapping rule editor"
-        className="flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900"
+        className="flex h-full w-full max-w-md flex-col border-l border-default bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+        <div className="flex items-center justify-between border-b border-subtle px-4 py-3 dark:border-slate-800">
           <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             {editMode ? 'Edit mapping rule' : 'Add mapping rule'}
           </div>
-          <button type="button" onClick={onClose} disabled={saving} aria-label="Close" className="rounded p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+          <button type="button" onClick={onClose} disabled={saving} aria-label="Close" className="rounded p-1 text-tertiary hover:text-slate-700 dark:hover:text-slate-200">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -335,7 +335,7 @@ export default function RuleEditorDrawer({
                 </div>
               )}
               {!loading && coord && fields.length > 0 && unmappedFields.length === 0 && (
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-tertiary">
                   Every field on this coordinate already has a rule — edit them from the matrix cells.
                 </div>
               )}
@@ -370,7 +370,7 @@ export default function RuleEditorDrawer({
                   )}
                 </div>
                 {(activeField?.maxLength || allowed) && (
-                  <div className="mt-1 text-[10.5px] text-slate-400">
+                  <div className="mt-1 text-[10.5px] text-tertiary">
                     {activeField?.maxLength ? `max ${activeField.maxLength} chars` : ''}
                     {allowed ? `${activeField?.maxLength ? ' · ' : ''}allowed: ${allowed.slice(0, 8).join(', ')}${allowed.length > 8 ? '…' : ''}` : ''}
                   </div>
@@ -411,7 +411,7 @@ export default function RuleEditorDrawer({
           )}
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 dark:border-slate-800">
+        <div className="flex items-center justify-between border-t border-subtle px-4 py-3 dark:border-slate-800">
           {editMode && activeField?.rule ? (
             <button
               type="button"
@@ -425,7 +425,7 @@ export default function RuleEditorDrawer({
             <span />
           )}
           <div className="flex items-center gap-2">
-            <button type="button" onClick={onClose} disabled={saving} className="rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+            <button type="button" onClick={onClose} disabled={saving} className="rounded border border-default px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
               Cancel
             </button>
             <button

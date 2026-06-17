@@ -86,7 +86,7 @@ export default async function ReportsPipelinePage({ searchParams }: PageProps) {
     <div className="px-4 py-4">
       <div className="mb-3">
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-          <ClipboardList className="h-5 w-5 text-slate-400" aria-hidden />
+          <ClipboardList className="h-5 w-5 text-tertiary" aria-hidden />
           Report Jobs
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -102,7 +102,7 @@ export default async function ReportsPipelinePage({ searchParams }: PageProps) {
         <KpiTile
           label="Pending"
           value={pending}
-          color="border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+          color="border-default dark:border-slate-700 text-slate-700 dark:text-slate-300"
         />
         <KpiTile
           label="In Progress"
@@ -120,7 +120,7 @@ export default async function ReportsPipelinePage({ searchParams }: PageProps) {
           color={
             failed > 0
               ? 'border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 bg-red-50/50 dark:bg-red-900/10'
-              : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
+              : 'border-default dark:border-slate-700 text-slate-500 dark:text-slate-400'
           }
         />
       </div>
@@ -132,7 +132,7 @@ export default async function ReportsPipelinePage({ searchParams }: PageProps) {
       />
 
       {data.count >= Number(limit) && (
-        <p className="mt-2 text-xs text-slate-400 text-center">
+        <p className="mt-2 text-xs text-tertiary text-center">
           Showing {limit} most recent jobs.{' '}
           <a
             href={`?${new URLSearchParams({ ...(statusFilter ? { status: statusFilter } : {}), limit: '200' }).toString()}`}

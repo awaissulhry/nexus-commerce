@@ -216,8 +216,8 @@ function Card({
   children: React.ReactNode
 }) {
   return (
-    <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5">
-      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+    <section className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-5">
+      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-subtle dark:border-slate-800">
         {icon && (
           <div className="shrink-0 w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400">
             {icon}
@@ -294,7 +294,7 @@ function ExportCard({
             <div className="text-xs uppercase tracking-wide font-semibold text-slate-500 dark:text-slate-400 mb-1.5 inline-flex items-center gap-1.5">
               <History size={11} /> Recent exports
             </div>
-            <ul className="divide-y divide-slate-100 dark:divide-slate-800 rounded border border-slate-200 dark:border-slate-800">
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800 rounded border border-default dark:border-slate-800">
               {rows.map((r) => (
                 <ExportRowItem key={r.id} row={r} />
               ))}
@@ -470,7 +470,7 @@ function RetentionCard({
             </div>
           )
         })}
-        <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-2 pt-2 border-t border-subtle dark:border-slate-800">
           <button
             type="button"
             onClick={reset}
@@ -659,7 +659,7 @@ function DeleteAccountCard({ onError }: { onError: (msg: string) => void }) {
         </button>
 
         {preview && (
-          <div className="rounded-md border border-slate-200 dark:border-slate-800 p-3 text-sm space-y-3">
+          <div className="rounded-md border border-default dark:border-slate-800 p-3 text-sm space-y-3">
             <div>
               <div className="text-xs uppercase tracking-wide font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
                 Would be deleted

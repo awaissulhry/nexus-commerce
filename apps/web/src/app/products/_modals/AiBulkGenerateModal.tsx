@@ -294,7 +294,7 @@ export default function AiBulkGenerateModal({
       header={null}
       className="overflow-hidden"
     >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-default dark:border-slate-700">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-purple-600" />
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -308,7 +308,7 @@ export default function AiBulkGenerateModal({
             onClick={onClose}
             aria-label="Close"
             size="md"
-            className="text-slate-400 dark:text-slate-500 hover:text-slate-600"
+            className="text-tertiary dark:text-slate-500 hover:text-slate-600"
           >
             <X className="w-4 h-4" />
           </IconButton>
@@ -325,7 +325,7 @@ export default function AiBulkGenerateModal({
                 value={marketplace}
                 onChange={(e) => setMarketplace(e.target.value.toUpperCase())}
                 placeholder="IT"
-                className="w-32 h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 focus:outline-none focus:border-blue-300 uppercase"
+                className="w-32 h-8 px-2 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 focus:outline-none focus:border-blue-300 uppercase"
               />
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                 Drives the language + per-marketplace terminology (IT, DE,
@@ -345,7 +345,7 @@ export default function AiBulkGenerateModal({
                     setProvider(e.target.value)
                     setModel('') // reset model when switching providers
                   }}
-                  className="w-44 h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 focus:outline-none focus:border-blue-300"
+                  className="w-44 h-8 px-2 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 focus:outline-none focus:border-blue-300"
                 >
                   <option value="">Auto (server default)</option>
                   {providers
@@ -372,7 +372,7 @@ export default function AiBulkGenerateModal({
                 <select
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
-                  className="w-64 h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 focus:outline-none focus:border-blue-300"
+                  className="w-64 h-8 px-2 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 focus:outline-none focus:border-blue-300"
                 >
                   <option value="">Haiku 4.5 — fast, cheap (default)</option>
                   <option value="claude-haiku-4-5-20251001">Haiku 4.5 — fast, cheap</option>
@@ -409,7 +409,7 @@ export default function AiBulkGenerateModal({
               </div>
             </div>
 
-            <label className="flex items-start gap-2 text-base text-slate-700 dark:text-slate-300 cursor-pointer pt-1 border-t border-slate-100 dark:border-slate-800">
+            <label className="flex items-start gap-2 text-base text-slate-700 dark:text-slate-300 cursor-pointer pt-1 border-t border-subtle dark:border-slate-800">
               <input
                 type="checkbox"
                 checked={previewFirst}
@@ -432,7 +432,7 @@ export default function AiBulkGenerateModal({
               </div>
             )}
 
-            <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-subtle dark:border-slate-800">
               <span className="text-sm text-slate-500 dark:text-slate-400">
                 {previewFirst
                   ? `Will generate previews for ${productIds.length} product${productIds.length === 1 ? '' : 's'} — no writes yet.`
@@ -459,7 +459,7 @@ export default function AiBulkGenerateModal({
 
         {phase === 'preview' && (
           <div className="flex flex-col max-h-[70vh]">
-            <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 flex-shrink-0">
+            <div className="px-5 py-3 border-b border-subtle dark:border-slate-800 flex items-center justify-between gap-3 flex-shrink-0">
               <div className="text-base text-slate-700 dark:text-slate-300">
                 <span className="font-medium">
                   {previewResults.filter((r) => r.ok).length} preview
@@ -528,10 +528,10 @@ export default function AiBulkGenerateModal({
                     className={`border rounded-md ${
                       accepted
                         ? 'border-purple-300 bg-purple-50/40'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'
+                        : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900'
                     }`}
                   >
-                    <label className="flex items-start gap-2 px-3 py-2 cursor-pointer border-b border-slate-100 dark:border-slate-800">
+                    <label className="flex items-start gap-2 px-3 py-2 cursor-pointer border-b border-subtle dark:border-slate-800">
                       <input
                         type="checkbox"
                         checked={accepted}
@@ -607,7 +607,7 @@ export default function AiBulkGenerateModal({
               </div>
             )}
 
-            <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 flex-shrink-0">
+            <div className="px-5 py-3 border-t border-subtle dark:border-slate-800 flex items-center justify-between gap-3 flex-shrink-0">
               <Button
                 variant="ghost"
                 onClick={() => {
@@ -655,7 +655,7 @@ export default function AiBulkGenerateModal({
                 same numbers in-modal so operators see what each
                 bulk run cost without leaving for /settings/ai. */}
             {summary && (
-              <div className="border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-md p-2 text-sm text-slate-700 dark:text-slate-300 space-y-0.5">
+              <div className="border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-md p-2 text-sm text-slate-700 dark:text-slate-300 space-y-0.5">
                 {typeof summary.totalCostUSD === 'number' && (
                   <div>
                     Spent{' '}
@@ -695,7 +695,7 @@ export default function AiBulkGenerateModal({
                   ))}
               </ul>
             )}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-subtle dark:border-slate-800">
               <button
                 type="button"
                 onClick={onComplete}

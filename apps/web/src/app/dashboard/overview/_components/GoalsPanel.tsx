@@ -79,7 +79,7 @@ export default function GoalsPanel({
                   >
                     {fmt(g.current)}
                   </span>
-                  <span className="text-slate-400 dark:text-slate-500">
+                  <span className="text-tertiary dark:text-slate-500">
                     {' / '}
                     {fmt(g.target)}
                   </span>

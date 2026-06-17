@@ -90,7 +90,7 @@ const STATUS_STYLES: Record<
   unknown: {
     dot: '▣',
     chip:
-      'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+      'bg-slate-50 text-slate-700 border-default dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
     label: () => 'No push events',
   },
 }
@@ -199,10 +199,10 @@ function PushHealthModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl overflow-hidden"
+        className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+        <header className="flex items-center justify-between px-4 py-3 border-b border-default dark:border-slate-800">
           <div>
             <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               Push pipeline health
@@ -215,7 +215,7 @@ function PushHealthModal({
             <button
               type="button"
               onClick={onRefresh}
-              className="text-xs px-2 py-1 rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="text-xs px-2 py-1 rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
             >
               Refresh
             </button>
@@ -230,7 +230,7 @@ function PushHealthModal({
           </div>
         </header>
 
-        <div className="p-4 grid grid-cols-3 gap-3 border-b border-slate-200 dark:border-slate-800">
+        <div className="p-4 grid grid-cols-3 gap-3 border-b border-default dark:border-slate-800">
           <Stat label="Last event" value={relativeAgo(health.summary.lastEventAt)} />
           <Stat label="24h processed" value={String(health.summary.processed24h)} />
           <Stat
@@ -252,7 +252,7 @@ function PushHealthModal({
                   <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                     {SOURCE_LABEL[s.source]}
                   </span>
-                  <span className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  <span className="text-[10px] uppercase tracking-wider text-tertiary dark:text-slate-500">
                     {s.status}
                   </span>
                 </div>
@@ -268,7 +268,7 @@ function PushHealthModal({
                     {relativeAgo(s.lastEventAt)}
                   </span>
                   {s.lastEventType && (
-                    <span className="text-slate-400 dark:text-slate-500"> · {s.lastEventType}</span>
+                    <span className="text-tertiary dark:text-slate-500"> · {s.lastEventType}</span>
                   )}
                 </div>
                 {s.source === 'AMAZON' && health.sqs.queueDepth !== null && (
@@ -278,7 +278,7 @@ function PushHealthModal({
                       {health.sqs.queueDepth}
                     </span>
                     {health.sqs.region && (
-                      <span className="text-slate-400 dark:text-slate-500"> · {health.sqs.region}</span>
+                      <span className="text-tertiary dark:text-slate-500"> · {health.sqs.region}</span>
                     )}
                   </div>
                 )}
@@ -301,7 +301,7 @@ function PushHealthModal({
           ))}
         </div>
 
-        <footer className="px-4 py-2 border-t border-slate-200 dark:border-slate-800 text-[10px] text-slate-500 dark:text-slate-400">
+        <footer className="px-4 py-2 border-t border-default dark:border-slate-800 text-[10px] text-slate-500 dark:text-slate-400">
           Status thresholds: live &lt; 5min · quiet 5min-1h · silent &gt; 1h. Sources with no
           events ever (status: never) don&apos;t count toward the overall — they may not be wired up.
         </footer>
@@ -324,7 +324,7 @@ function Stat({
       ? 'text-rose-600 dark:text-rose-400'
       : 'text-slate-900 dark:text-slate-100'
   return (
-    <div className="rounded border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 px-3 py-2">
+    <div className="rounded border border-default dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 px-3 py-2">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
         {label}
       </div>

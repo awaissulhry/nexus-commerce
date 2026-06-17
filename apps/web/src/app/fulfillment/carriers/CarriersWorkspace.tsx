@@ -209,22 +209,22 @@ export default function CarriersWorkspace() {
       {/* Search + region filter */}
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
         <div className="relative flex-1">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" aria-hidden />
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500" aria-hidden />
           <input
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('carriers.search.placeholder')}
-            className="h-9 w-full pl-8 pr-3 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-slate-100"
+            className="h-9 w-full pl-8 pr-3 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-slate-100"
             aria-label={t('common.search')}
           />
         </div>
-        <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
+        <div className="inline-flex rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
           {REGION_FILTER.map((r) => (
             <button
               key={r.region}
               onClick={() => setRegion(r.region)}
-              className={`px-3 h-9 text-base border-r last:border-r-0 border-slate-200 dark:border-slate-700 transition-colors ${
+              className={`px-3 h-9 text-base border-r last:border-r-0 border-default dark:border-slate-700 transition-colors ${
                 region === r.region
                   ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
@@ -441,7 +441,7 @@ function CarrierCard({
           {def.regions.map((r) => (
             <span
               key={r}
-              className="inline-flex items-center gap-0.5 px-1.5 h-5 rounded text-xs bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+              className="inline-flex items-center gap-0.5 px-1.5 h-5 rounded text-xs bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-default dark:border-slate-700"
             >
               {r === 'IT' ? <Building2 size={9} /> : <Globe2 size={9} />}
               {t(`carriers.region.${r.toLowerCase()}`)}

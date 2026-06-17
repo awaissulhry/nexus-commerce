@@ -76,7 +76,7 @@ export function GridFooter({
               value={pageSize}
               onChange={(e) => onPageSize(Number(e.target.value))}
               aria-label="Rows per page"
-              className="h-6 px-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 cursor-pointer"
+              className="h-6 px-1.5 text-xs border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 cursor-pointer"
             >
               {pageSizeOptions.map((n) => (
                 <option key={n} value={n}>{n}/page</option>
@@ -94,7 +94,7 @@ export function GridFooter({
             onClick={() => onPage!(Math.max(1, page! - 1))}
             disabled={page! <= 1}
             aria-label="Previous page"
-            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="h-7 w-7 inline-flex items-center justify-center border border-default dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronLeft size={13} />
           </button>
@@ -103,7 +103,7 @@ export function GridFooter({
             onClick={() => onPage!(Math.min(totalPages!, page! + 1))}
             disabled={page! >= totalPages!}
             aria-label="Next page"
-            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="h-7 w-7 inline-flex items-center justify-center border border-default dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronRight size={13} />
           </button>

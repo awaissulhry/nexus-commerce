@@ -170,9 +170,9 @@ export default function FamiliesClient({ initial, initialError }: Props) {
           </div>
         </div>
       ) : (
-        <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+        <div className="border border-default dark:border-slate-800 rounded-lg overflow-hidden">
           <table className="w-full text-base">
-            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-default dark:border-slate-800">
               <tr className="text-left">
                 <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.families.col.code')}</th>
                 <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.families.col.label')}</th>
@@ -191,7 +191,7 @@ export default function FamiliesClient({ initial, initialError }: Props) {
                 return (
                   <tr
                     key={f.id}
-                    className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40"
+                    className="border-t border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40"
                   >
                     <td className="px-3 py-2 font-mono text-sm text-slate-700 dark:text-slate-300">
                       <Link
@@ -199,7 +199,7 @@ export default function FamiliesClient({ initial, initialError }: Props) {
                         className="hover:underline inline-flex items-center gap-1"
                       >
                         {f.code}
-                        <ChevronRight className="w-3 h-3 text-slate-400" />
+                        <ChevronRight className="w-3 h-3 text-tertiary" />
                       </Link>
                     </td>
                     <td className="px-3 py-2 text-slate-900 dark:text-slate-100">
@@ -216,7 +216,7 @@ export default function FamiliesClient({ initial, initialError }: Props) {
                           {parent.label}
                         </span>
                       ) : (
-                        <span className="text-slate-400 dark:text-slate-500 italic text-sm">
+                        <span className="text-tertiary dark:text-slate-500 italic text-sm">
                           {t('pim.families.parent.root')}
                         </span>
                       )}
@@ -337,7 +337,7 @@ function CreateFamilyModal({
             onChange={(e) => setCode(e.target.value.toLowerCase())}
             placeholder="motorcycle_jacket"
             autoFocus
-            className={`w-full h-9 px-2 text-base font-mono border rounded ${codeValid ? 'border-slate-200 dark:border-slate-800' : 'border-rose-300 dark:border-rose-700'} dark:bg-slate-900 dark:text-slate-100`}
+            className={`w-full h-9 px-2 text-base font-mono border rounded ${codeValid ? 'border-default dark:border-slate-800' : 'border-rose-300 dark:border-rose-700'} dark:bg-slate-900 dark:text-slate-100`}
           />
           {!codeValid && (
             <p className="text-sm text-rose-600 dark:text-rose-400">
@@ -363,7 +363,7 @@ function CreateFamilyModal({
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Motorcycle Jacket"
-            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+            className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           />
         </div>
         <div className="space-y-1">
@@ -379,7 +379,7 @@ function CreateFamilyModal({
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
             placeholder="Optional short description for the operator UI."
-            className="w-full px-2 py-1.5 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+            className="w-full px-2 py-1.5 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           />
         </div>
         <div className="space-y-1">
@@ -393,7 +393,7 @@ function CreateFamilyModal({
             id="family-parent"
             value={parentFamilyId}
             onChange={(e) => setParentFamilyId(e.target.value)}
-            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+            className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           >
             <option value="">— root (no parent) —</option>
             {allFamilies.map((f) => (

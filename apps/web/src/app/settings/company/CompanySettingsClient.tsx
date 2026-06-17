@@ -338,8 +338,8 @@ function Card({
   children: React.ReactNode
 }) {
   return (
-    <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5">
-      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+    <section className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-5">
+      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-subtle dark:border-slate-800">
         {icon && (
           <div className="shrink-0 w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400">
             {icon}
@@ -520,7 +520,7 @@ function LogoSection({
       icon={<ImageIcon size={14} />}
     >
       <div className="flex items-start gap-4">
-        <div className="shrink-0 w-32 h-16 border border-slate-200 dark:border-slate-700 rounded bg-white flex items-center justify-center overflow-hidden">
+        <div className="shrink-0 w-32 h-16 border border-default dark:border-slate-700 rounded bg-white flex items-center justify-center overflow-hidden">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -766,7 +766,7 @@ function FiscalSection({
           </select>
         </Field>
 
-        <div className="flex items-start gap-2 p-3 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 text-xs text-slate-600 dark:text-slate-400">
+        <div className="flex items-start gap-2 p-3 rounded-md border border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 text-xs text-slate-600 dark:text-slate-400">
           <Info size={12} className="mt-0.5 shrink-0" />
           <span>
             Legacy free-text "Tax ID" field is preserved below for non-IT
@@ -925,7 +925,7 @@ function PoApprovalSection({
           hint="POs at-or-below this total auto-advance through REVIEW → APPROVED. POs above stop at REVIEW. Leave empty to disable the threshold (legacy boolean alone gates)."
         >
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-base pointer-events-none">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500 text-base pointer-events-none">
               €
             </span>
             <input

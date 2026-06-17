@@ -662,11 +662,11 @@ export default function BulkOperationModal({
       onClick={() => !executing && onClose()}
     >
       <div
-        className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 w-[640px] max-w-[92vw] flex flex-col max-h-[90vh]"
+        className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-default dark:border-slate-700 w-[640px] max-w-[92vw] flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-default dark:border-slate-700 flex-shrink-0">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             Bulk apply
             {appliedTemplateId && (
@@ -703,7 +703,7 @@ export default function BulkOperationModal({
             <button
               type="button"
               onClick={() => !executing && onClose()}
-              className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 disabled:opacity-50 ml-1"
+              className="text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 disabled:opacity-50 ml-1"
               disabled={executing}
               aria-label="Close"
             >
@@ -725,7 +725,7 @@ export default function BulkOperationModal({
                     'text-left rounded-md border px-3 py-2 transition-colors',
                     opType === o.type
                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-900'
-                      : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
+                      : 'border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                   )}
                 >
                   <div className="text-md font-medium">{o.label}</div>
@@ -741,7 +741,7 @@ export default function BulkOperationModal({
                   'text-left rounded-md border px-3 py-2 transition-colors',
                   isSchemaOp
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-900'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
+                    : 'border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                 )}
               >
                 <div className="text-md font-medium inline-flex items-center gap-1.5">
@@ -1047,7 +1047,7 @@ export default function BulkOperationModal({
                     </div>
                   )}
                   {preview.sampleItems.length > 0 && (
-                    <div className="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+                    <div className="border border-default dark:border-slate-700 rounded-md overflow-hidden">
                       <table className="w-full text-base">
                         <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
                           <tr>
@@ -1069,7 +1069,7 @@ export default function BulkOperationModal({
                           {preview.sampleItems.map((s) => (
                             <tr
                               key={s.id}
-                              className="border-t border-slate-100 dark:border-slate-800"
+                              className="border-t border-subtle dark:border-slate-800"
                             >
                               <td className="px-3 py-1.5 font-mono text-sm text-slate-700 dark:text-slate-300 truncate max-w-[220px]">
                                 {s.sku ?? '—'}
@@ -1097,7 +1097,7 @@ export default function BulkOperationModal({
                         </tbody>
                       </table>
                       {preview.affectedCount > preview.sampleItems.length && (
-                        <div className="px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border-t border-slate-100 dark:border-slate-800">
+                        <div className="px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border-t border-subtle dark:border-slate-800">
                           + {preview.affectedCount - preview.sampleItems.length}{' '}
                           more
                         </div>
@@ -1294,7 +1294,7 @@ export default function BulkOperationModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex-shrink-0">
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-default dark:border-slate-700 flex-shrink-0">
           <Button
             variant="secondary"
             size="sm"
@@ -1318,7 +1318,7 @@ export default function BulkOperationModal({
                 'h-7 px-2 inline-flex items-center gap-1 rounded border text-xs font-medium transition-colors',
                 scheduleMode === 'schedule'
                   ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300'
-                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                  : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
                 'disabled:opacity-50',
               )}
               aria-pressed={scheduleMode === 'schedule'}

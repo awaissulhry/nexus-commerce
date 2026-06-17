@@ -236,7 +236,7 @@ export function AdvancedFiltersButton({
           'h-8 px-2 inline-flex items-center gap-1.5 text-sm border rounded transition-colors',
           active > 0
             ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900'
-            : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
+            : 'border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
         )}
         title="Advanced filters"
         aria-label="Advanced filters"
@@ -252,9 +252,9 @@ export function AdvancedFiltersButton({
       {open && (
         <div
           ref={popoverRef}
-          className="absolute right-0 top-full mt-1 z-40 w-96 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg"
+          className="absolute right-0 top-full mt-1 z-40 w-96 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-lg"
         >
-          <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <div className="px-4 py-2 border-b border-default dark:border-slate-700 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
               Filters
             </span>
@@ -324,7 +324,7 @@ export function AdvancedFiltersButton({
                   onChange={(e) =>
                     setDraft((d) => ({ ...d, warehouseId: e.target.value || null }))
                   }
-                  className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                 >
                   <option value="">Any</option>
                   {warehouses?.map((w) => (
@@ -344,7 +344,7 @@ export function AdvancedFiltersButton({
                   onChange={(e) =>
                     setDraft((d) => ({ ...d, currencyCode: e.target.value || null }))
                   }
-                  className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                 >
                   <option value="">Any</option>
                   {CURRENCIES.map((c) => (
@@ -376,7 +376,7 @@ export function AdvancedFiltersButton({
             </div>
           </div>
 
-          <div className="border-t border-slate-200 dark:border-slate-700 px-4 py-2 flex items-center justify-between">
+          <div className="border-t border-default dark:border-slate-700 px-4 py-2 flex items-center justify-between">
             <button
               type="button"
               onClick={reset}
@@ -422,7 +422,7 @@ export function SavedViewChips({
             'h-7 px-2 inline-flex items-center text-sm rounded border transition-colors',
             activeViewId === v.id
               ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900'
-              : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+              : 'border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
           )}
         >
           {v.label}
@@ -511,13 +511,13 @@ function DateField({
       <div className="relative">
         <Calendar
           size={12}
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none"
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500 pointer-events-none"
         />
         <input
           type="date"
           value={value ?? ''}
           onChange={(e) => onChange(e.target.value || null)}
-          className="w-full h-9 pl-7 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+          className="w-full h-9 pl-7 pr-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
         />
       </div>
     </div>
@@ -537,7 +537,7 @@ function CentsField({
     <div>
       <div className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">{label}</div>
       <div className="relative">
-        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none text-sm">
+        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500 pointer-events-none text-sm">
           €
         </span>
         <input
@@ -554,7 +554,7 @@ function CentsField({
             }
           }}
           placeholder="0"
-          className="w-full h-9 pl-6 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+          className="w-full h-9 pl-6 pr-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
         />
       </div>
     </div>
@@ -606,7 +606,7 @@ function SupplierChips({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search suppliers…"
-          className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 mb-1.5"
+          className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 mb-1.5"
         />
       )}
       <div className="flex items-center gap-1 flex-wrap">
@@ -621,7 +621,7 @@ function SupplierChips({
                 'h-7 px-2 inline-flex items-center text-sm rounded border transition-colors',
                 on
                   ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                  : 'border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
               )}
             >
               {s.name}

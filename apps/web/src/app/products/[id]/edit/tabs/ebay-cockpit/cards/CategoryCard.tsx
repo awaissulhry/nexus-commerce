@@ -44,7 +44,7 @@ export default function CategoryCard({
 
   return (
     <Card noPadding>
-      <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+      <div className="px-4 py-2.5 border-b border-subtle dark:border-slate-800 flex items-center gap-2">
         <Tag className="w-4 h-4 text-blue-500" />
         <div className="text-md font-medium text-slate-900 dark:text-slate-100">
           {t('products.edit.cockpit.ebay.category.title')}
@@ -63,7 +63,7 @@ export default function CategoryCard({
                   {current.path}
                 </div>
               )}
-              <div className="text-[10.5px] text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+              <div className="text-[10.5px] text-tertiary mt-1 flex items-center gap-2 flex-wrap">
                 <span>id: {current.id}</span>
                 <span>·</span>
                 <span>{marketName}</span>
@@ -72,7 +72,7 @@ export default function CategoryCard({
             <button
               type="button"
               onClick={() => setOpen(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap"
             >
               {t('products.edit.cockpit.ebay.category.change')} <ChevronRight className="w-3 h-3" />
             </button>
@@ -91,7 +91,7 @@ export default function CategoryCard({
             </button>
           </div>
         )}
-        <div className="text-[10.5px] text-slate-400 italic pt-1 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1">
+        <div className="text-[10.5px] text-tertiary italic pt-1 border-t border-subtle dark:border-slate-800 flex items-center gap-1">
           <History className="w-3 h-3" />
           {t('products.edit.cockpit.ebay.category.footer')}
         </div>

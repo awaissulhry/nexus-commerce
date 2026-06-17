@@ -61,7 +61,7 @@ export default function CronField({ value, onChange, label, required }: Props) {
       </div>
 
       {presetsOpen && (
-        <ul className="space-y-1 rounded-md border border-slate-200 bg-white p-1.5 dark:border-slate-700 dark:bg-slate-900">
+        <ul className="space-y-1 rounded-md border border-default bg-white p-1.5 dark:border-slate-700 dark:bg-slate-900">
           {CRON_PRESETS.map((preset) => (
             <li key={preset.expression}>
               <button

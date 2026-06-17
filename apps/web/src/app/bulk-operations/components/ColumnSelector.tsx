@@ -280,20 +280,20 @@ export default function ColumnSelector({
       {open && (
         <div
           ref={panelRef}
-          className="absolute right-0 top-full mt-1 w-[360px] max-h-[640px] bg-white border border-slate-200 rounded-lg shadow-lg z-30 flex flex-col"
+          className="absolute right-0 top-full mt-1 w-[360px] max-h-[640px] bg-white border border-default rounded-lg shadow-lg z-30 flex flex-col"
           role="dialog"
           aria-label="Column selector"
         >
           {/* Header — search */}
-          <div className="px-3 py-2 border-b border-slate-200 flex-shrink-0">
+          <div className="px-3 py-2 border-b border-default flex-shrink-0">
             <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-tertiary absolute left-2 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search fields"
-                className="w-full h-7 pl-7 pr-2 text-base border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="w-full h-7 pl-7 pr-2 text-base border border-default rounded focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 autoFocus
               />
             </div>
@@ -324,14 +324,14 @@ export default function ColumnSelector({
                         )}
                       />
                       <span className="truncate">{v.name}</span>
-                      <span className="text-xs text-slate-400 flex-shrink-0">
+                      <span className="text-xs text-tertiary flex-shrink-0">
                         {v.columnIds.length}
                       </span>
                     </span>
                     {!isDefaultView(v.id) && (
                       <button
                         type="button"
-                        className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600"
+                        className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-50 text-tertiary hover:text-red-600"
                         onClick={(e) => {
                           e.stopPropagation()
                           onDeleteView(v.id)
@@ -360,7 +360,7 @@ export default function ColumnSelector({
                       }
                     }}
                     placeholder="View name"
-                    className="flex-1 h-6 px-2 text-base border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    className="flex-1 h-6 px-2 text-base border border-default rounded focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                     autoFocus
                   />
                   <button
@@ -378,7 +378,7 @@ export default function ColumnSelector({
                       setSavePromptName('')
                     }}
                     aria-label="Cancel save"
-                    className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 flex items-center justify-center text-slate-400 hover:text-slate-700"
+                    className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 flex items-center justify-center text-tertiary hover:text-slate-700"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -416,7 +416,7 @@ export default function ColumnSelector({
                         <ChevronDown className="w-3 h-3" />
                       )}
                       <span>{label}</span>
-                      <span className="text-xs text-slate-400 tabular-nums">
+                      <span className="text-xs text-tertiary tabular-nums">
                         {visibleInSection}/{fields.length}
                       </span>
                     </button>
@@ -524,7 +524,7 @@ export default function ColumnSelector({
           </div>
 
           {/* Footer */}
-          <div className="px-3 py-2 border-t border-slate-200 flex items-center justify-between flex-shrink-0">
+          <div className="px-3 py-2 border-t border-default flex items-center justify-between flex-shrink-0">
             <button
               type="button"
               onClick={handleResetToDefault}
@@ -555,7 +555,7 @@ function Section({
   children: React.ReactNode
 }) {
   return (
-    <div className="px-3 py-2 border-b border-slate-100 last:border-b-0">
+    <div className="px-3 py-2 border-b border-subtle last:border-b-0">
       <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center justify-between">
         <span>{title}</span>
       </div>
@@ -593,7 +593,7 @@ function FieldRow({
       <span className="text-base text-slate-700 flex-1 truncate">{field.label}</span>
       {!field.editable && (
         <span
-          className="flex items-center gap-0.5 text-xs text-slate-400"
+          className="flex items-center gap-0.5 text-xs text-tertiary"
           title={field.helpText ?? 'Read-only'}
         >
           <Lock className="w-2.5 h-2.5" />

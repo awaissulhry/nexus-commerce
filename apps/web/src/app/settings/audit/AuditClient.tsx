@@ -227,8 +227,8 @@ export default function AuditClient({
                 isActive
                   ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500'
                   : c.count > 0
-                    ? 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600'
-                    : 'bg-slate-50 text-slate-400 border-slate-200 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-600',
+                    ? 'bg-white text-slate-700 border-default hover:border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600'
+                    : 'bg-slate-50 text-tertiary border-default dark:bg-slate-900 dark:border-slate-800 dark:text-slate-600',
               )}
             >
               {c.label}
@@ -294,7 +294,7 @@ export default function AuditClient({
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
                 {group.day}
               </div>
-              <ul className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800">
+              <ul className="rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800">
                 {group.rows.map((row) => (
                   <AuditRowItem
                     key={row.id}
@@ -362,7 +362,7 @@ function AuditRowItem({
               · {eventLabel}
             </span>
           )}
-          <span className="text-xs text-slate-400 dark:text-slate-500 font-mono tabular-nums">
+          <span className="text-xs text-tertiary dark:text-slate-500 font-mono tabular-nums">
             {time} · {userLabel}
           </span>
         </div>
@@ -380,8 +380,8 @@ function AuditRowItem({
           className={cn(
             'inline-flex items-center gap-1 h-7 px-2 rounded text-xs border transition-colors',
             revertDisabled || busyRevert
-              ? 'text-slate-400 border-slate-200 dark:border-slate-800 cursor-not-allowed'
-              : 'text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-800',
+              ? 'text-tertiary border-default dark:border-slate-800 cursor-not-allowed'
+              : 'text-slate-700 border-default hover:bg-slate-50 hover:border-slate-300 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-800',
           )}
         >
           {busyRevert ? (
@@ -407,7 +407,7 @@ function AuditRowItem({
                 <Value v={row.before?.[field]} tone="before" />
                 <CornerDownLeft
                   size={11}
-                  className="text-slate-400 dark:text-slate-500 rotate-180 shrink-0"
+                  className="text-tertiary dark:text-slate-500 rotate-180 shrink-0"
                   aria-hidden
                 />
                 <Value v={row.after?.[field]} tone="after" />

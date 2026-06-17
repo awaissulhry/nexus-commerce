@@ -225,7 +225,7 @@ export default function AspectsCard({
 
   return (
     <Card noPadding>
-      <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+      <div className="px-4 py-2.5 border-b border-subtle dark:border-slate-800 flex items-center gap-2">
         <div className="text-md font-medium text-slate-900 dark:text-slate-100">
           {t('products.edit.cockpit.ebay.aspects.title')}
         </div>
@@ -331,7 +331,7 @@ export default function AspectsCard({
       </div>
 
       {schema && (
-        <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+        <div className="px-4 py-2.5 border-t border-subtle dark:border-slate-800 flex items-center gap-2">
           <span className="text-xs text-slate-500 dark:text-slate-400">
             {dirtyCount === 0
               ? t('products.edit.cockpit.ebay.aspects.allSaved')
@@ -381,7 +381,7 @@ const GROUP_TONES = {
   required:    { rim: 'border-rose-200 dark:border-rose-800',     dot: 'bg-rose-500',    chip: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300' },
   recommended: { rim: 'border-amber-200 dark:border-amber-800',   dot: 'bg-amber-500',   chip: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300' },
   variation:   { rim: 'border-violet-200 dark:border-violet-800', dot: 'bg-violet-500',  chip: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300' },
-  optional:    { rim: 'border-slate-200 dark:border-slate-700',   dot: 'bg-slate-400',   chip: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400' },
+  optional:    { rim: 'border-default dark:border-slate-700',   dot: 'bg-slate-400',   chip: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400' },
 } as const
 
 function AspectGroup({
@@ -511,7 +511,7 @@ function AspectInput({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+        className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
       >
         <option value="">{t('products.edit.cockpit.ebay.aspects.pickOption')}</option>
         {aspect.options.map((opt) => (
@@ -526,7 +526,7 @@ function AspectInput({
         type="number"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+        className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
       />
     )
   }
@@ -536,7 +536,7 @@ function AspectInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={aspect.required ? t('products.edit.cockpit.ebay.aspects.requiredPlaceholder') : ''}
-      className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+      className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
     />
   )
 }

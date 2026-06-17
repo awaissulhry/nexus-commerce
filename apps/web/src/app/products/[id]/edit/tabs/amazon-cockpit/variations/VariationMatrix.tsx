@@ -308,7 +308,7 @@ export default function VariationMatrix({
     return (
       <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-900/40 p-3.5">
         <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 inline-flex items-center gap-2">
-          <Layers className="w-4 h-4 text-slate-400" />
+          <Layers className="w-4 h-4 text-tertiary" />
           {t('products.edit.cockpit.amazon.cards.variations')}
         </div>
         <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -321,7 +321,7 @@ export default function VariationMatrix({
   return (
     <div
       data-jump-target="variations"
-      className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-3"
+      className="rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-3"
     >
       {/* Header */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -395,7 +395,7 @@ export default function VariationMatrix({
         channelListings.some((l) =>
           children.some((c) => c.id === l.productId),
         ) && (
-        <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div className="pt-2 border-t border-subtle dark:border-slate-800">
           <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
             Sibling markets
           </div>
@@ -409,7 +409,7 @@ export default function VariationMatrix({
                   className={cn(
                     'inline-flex items-center gap-1 h-6 px-2 rounded border text-[11px] font-medium',
                     pct === 0
-                      ? 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
+                      ? 'border-default dark:border-slate-700 text-slate-500 dark:text-slate-400'
                       : pct < 1
                       ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300'
                       : 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300',
@@ -428,7 +428,7 @@ export default function VariationMatrix({
         </div>
       )}
 
-      <div className="text-[10.5px] text-slate-400 italic">
+      <div className="text-[10.5px] text-tertiary italic">
         Click a cell to edit price + stock. Use the ▾ on a row or column
         header to fill that whole row/column with one value.
         Cells show the colour-locked image when one is set on the Images tab.
@@ -780,7 +780,7 @@ function TwoAxisGrid({
                       key={c}
                       className="align-top w-[140px]"
                     >
-                      <div className="rounded border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 h-[88px] flex items-center justify-center text-[10.5px] text-slate-400 italic">
+                      <div className="rounded border border-dashed border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 h-[88px] flex items-center justify-center text-[10.5px] text-tertiary italic">
                         Not modelled
                       </div>
                     </td>
@@ -993,7 +993,7 @@ function CellTile({
     <div
       className={cn(
         'w-full text-left rounded border bg-white dark:bg-slate-900 transition-colors group relative',
-        'border-slate-200 dark:border-slate-700',
+        'border-default dark:border-slate-700',
         compact ? 'p-1.5' : 'p-2',
         savedFlash && 'ring-1 ring-emerald-400',
         !editing && 'hover:border-blue-400 dark:hover:border-blue-500',
@@ -1007,14 +1007,14 @@ function CellTile({
             src={img}
             alt=""
             className={cn(
-              'object-contain rounded border border-slate-100 dark:border-slate-800 bg-white flex-shrink-0',
+              'object-contain rounded border border-subtle dark:border-slate-800 bg-white flex-shrink-0',
               compact ? 'w-10 h-10' : 'w-12 h-12',
             )}
           />
         ) : (
           <div
             className={cn(
-              'rounded border border-dashed border-slate-200 dark:border-slate-700 grid place-items-center text-slate-300 flex-shrink-0',
+              'rounded border border-dashed border-default dark:border-slate-700 grid place-items-center text-slate-300 flex-shrink-0',
               compact ? 'w-10 h-10' : 'w-12 h-12',
             )}
           >
@@ -1079,7 +1079,7 @@ function CellTile({
           <button
             type="button"
             onClick={openEditor}
-            className="w-5 h-5 rounded bg-white/95 dark:bg-slate-800/95 border border-slate-200 dark:border-slate-700 grid place-items-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+            className="w-5 h-5 rounded bg-white/95 dark:bg-slate-800/95 border border-default dark:border-slate-700 grid place-items-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
             title="Edit base price + stock"
             aria-label="Edit cell"
           >
@@ -1092,7 +1092,7 @@ function CellTile({
                 e.stopPropagation()
                 onClick()
               }}
-              className="w-5 h-5 rounded bg-white/95 dark:bg-slate-800/95 border border-slate-200 dark:border-slate-700 grid place-items-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+              className="w-5 h-5 rounded bg-white/95 dark:bg-slate-800/95 border border-default dark:border-slate-700 grid place-items-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
               title="Open variant in classic editor"
               aria-label="Open in classic editor"
             >
@@ -1102,7 +1102,7 @@ function CellTile({
         </div>
       ) : (
         <div
-          className="mt-1.5 pt-1.5 border-t border-slate-200 dark:border-slate-700 space-y-1"
+          className="mt-1.5 pt-1.5 border-t border-default dark:border-slate-700 space-y-1"
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !editBusy) void saveEdit()
             else if (e.key === 'Escape' && !editBusy) {
@@ -1199,10 +1199,10 @@ function BulkPopover({
   return (
     <div
       role="menu"
-      className="absolute top-full left-0 z-20 mt-1 min-w-[220px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg p-1"
+      className="absolute top-full left-0 z-20 mt-1 min-w-[220px] rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg p-1"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="px-2 py-1 text-[10px] uppercase tracking-wide font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
+      <div className="px-2 py-1 text-[10px] uppercase tracking-wide font-semibold text-slate-500 dark:text-slate-400 border-b border-subtle dark:border-slate-800">
         {t('products.edit.cockpit.amazon.variations.bulkApply')} · {label}
       </div>
       <button
@@ -1233,7 +1233,7 @@ function BulkPopover({
         type="button"
         onClick={onClose}
         disabled={busy}
-        className="w-full text-left px-2 py-1 text-[10.5px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+        className="w-full text-left px-2 py-1 text-[10.5px] text-tertiary hover:text-slate-600 dark:hover:text-slate-200"
       >
         {t('products.edit.cockpit.amazon.variations.cancel')}
       </button>

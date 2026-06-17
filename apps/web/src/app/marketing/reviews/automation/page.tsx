@@ -97,7 +97,7 @@ export default async function ReviewAutomationPage() {
 
       <ReviewAutomationActionsClient hasRules={rules.length > 0} />
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md overflow-hidden">
         {rules.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-slate-500">
             No rules yet. Click <strong>Load templates</strong> above to seed the 3 starter
@@ -160,7 +160,7 @@ export default async function ReviewAutomationPage() {
                         </div>
                       </div>
                       <ChevronRight
-                        className="h-4 w-4 text-slate-400 dark:text-slate-600 mt-1"
+                        className="h-4 w-4 text-tertiary dark:text-slate-600 mt-1"
                         aria-hidden="true"
                       />
                     </div>
@@ -225,7 +225,7 @@ function Stat({
         ? 'text-amber-700 dark:text-amber-300'
         : 'text-slate-900 dark:text-slate-100'
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
         {label}
       </div>

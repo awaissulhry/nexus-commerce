@@ -61,18 +61,18 @@ function ProbeRow({ probe }: { probe: ProbeResult }) {
   return (
     <>
       <tr
-        className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer"
+        className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer"
         onClick={() => setOpen((v) => !v)}
       >
         <td className="px-3 py-2 w-6">
           {open
-            ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-            : <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
+            ? <ChevronDown className="h-3.5 w-3.5 text-tertiary" />
+            : <ChevronRight className="h-3.5 w-3.5 text-tertiary" />}
         </td>
         <td className="px-3 py-2 font-mono text-xs text-slate-500">{probe.id}</td>
         <td className="px-3 py-2 text-xs text-slate-700 dark:text-slate-300">{probe.description}</td>
         <td className="px-3 py-2 text-xs">
-          <span className="font-mono text-slate-400">{probe.method}</span>{' '}
+          <span className="font-mono text-tertiary">{probe.method}</span>{' '}
           <span className="font-mono text-slate-600 dark:text-slate-400">{probe.path}</span>
         </td>
         <td className={`px-3 py-2 text-xs font-bold tabular-nums ${statusColor}`}>
@@ -80,20 +80,20 @@ function ProbeRow({ probe }: { probe: ProbeResult }) {
             ? <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> {probe.status}</span>
             : <span className="inline-flex items-center gap-1"><XCircle className="h-3 w-3" /> {probe.status || 'ERR'}</span>}
         </td>
-        <td className="px-3 py-2 text-xs tabular-nums text-slate-400">{probe.durationMs}ms</td>
+        <td className="px-3 py-2 text-xs tabular-nums text-tertiary">{probe.durationMs}ms</td>
       </tr>
       {open && (
         <tr className="bg-slate-50/80 dark:bg-slate-800/20">
-          <td colSpan={6} className="px-6 py-3 border-b border-slate-100 dark:border-slate-800">
+          <td colSpan={6} className="px-6 py-3 border-b border-subtle dark:border-slate-800">
             <div className="space-y-2 text-xs">
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Request Headers</div>
+                <div className="text-[10px] uppercase tracking-wider text-tertiary mb-1">Request Headers</div>
                 <pre className="bg-slate-100 dark:bg-slate-900 rounded p-2 font-mono text-[11px] overflow-x-auto text-slate-600 dark:text-slate-300 max-h-32">
                   {Object.entries(probe.requestHeaders).map(([k, v]) => `${k}: ${v}`).join('\n')}
                 </pre>
               </div>
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Response Headers (key only)</div>
+                <div className="text-[10px] uppercase tracking-wider text-tertiary mb-1">Response Headers (key only)</div>
                 <pre className="bg-slate-100 dark:bg-slate-900 rounded p-2 font-mono text-[11px] overflow-x-auto text-slate-600 dark:text-slate-300 max-h-32">
                   {Object.entries(probe.responseHeaders)
                     .filter(([k]) => k.toLowerCase().startsWith('x-amzn') || k.toLowerCase() === 'content-type' || k.toLowerCase() === 'location')
@@ -101,7 +101,7 @@ function ProbeRow({ probe }: { probe: ProbeResult }) {
                 </pre>
               </div>
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Response Body (first 400 chars)</div>
+                <div className="text-[10px] uppercase tracking-wider text-tertiary mb-1">Response Body (first 400 chars)</div>
                 <pre className="bg-slate-100 dark:bg-slate-900 rounded p-2 font-mono text-[11px] overflow-x-auto text-slate-600 dark:text-slate-300 max-h-48 whitespace-pre-wrap break-all">
                   {probe.responseSnippet || '(empty)'}
                 </pre>
@@ -280,7 +280,7 @@ export function ProbeRunnerClient({
   return (
     <div className="space-y-4">
       {/* Picker + run button */}
-      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
+      <div className="rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[280px] flex-1">
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
@@ -363,10 +363,10 @@ export function ProbeRunnerClient({
                 </span>
               </div>
 
-              <div className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-x-auto">
+              <div className="rounded-lg border border-default dark:border-slate-700 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                    <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-default dark:border-slate-700">
                       <th className="w-6 px-3 py-2" />
                       <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">ID</th>
                       <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">Description</th>

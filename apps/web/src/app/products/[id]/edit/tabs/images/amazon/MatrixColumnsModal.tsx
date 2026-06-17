@@ -41,12 +41,12 @@ export function MatrixColumnsModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-700 p-4"
+        className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-default dark:border-slate-700 p-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-1">
           <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Customize columns</span>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+          <button type="button" onClick={onClose} className="text-tertiary hover:text-slate-600 dark:hover:text-slate-300">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -68,10 +68,10 @@ export function MatrixColumnsModal({
                 <span className="font-mono text-xs text-slate-500 dark:text-slate-400 mr-1.5">{p.slot}</span>
                 {SLOT_LABELS[p.slot] ?? p.slot}
               </span>
-              <button type="button" onClick={() => move(idx, -1)} disabled={idx === 0} title="Move up" className="text-slate-400 hover:text-slate-600 disabled:opacity-30">
+              <button type="button" onClick={() => move(idx, -1)} disabled={idx === 0} title="Move up" className="text-tertiary hover:text-slate-600 disabled:opacity-30">
                 <ChevronUp className="w-4 h-4" />
               </button>
-              <button type="button" onClick={() => move(idx, 1)} disabled={idx === draft.length - 1} title="Move down" className="text-slate-400 hover:text-slate-600 disabled:opacity-30">
+              <button type="button" onClick={() => move(idx, 1)} disabled={idx === draft.length - 1} title="Move down" className="text-tertiary hover:text-slate-600 disabled:opacity-30">
                 <ChevronDown className="w-4 h-4" />
               </button>
             </div>

@@ -138,7 +138,7 @@ export function MarketingCalendarClient({ initial }: { initial: CalendarData }) 
           <button onClick={() => go(-1)} className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800"><ChevronLeft size={16} /></button>
           <span className="min-w-[150px] text-center font-medium text-slate-700 dark:text-slate-200">{monthLabel}</span>
           <button onClick={() => go(1)} className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800"><ChevronRight size={16} /></button>
-          <button onClick={() => { setYear(today.getUTCFullYear()); setMonth(today.getUTCMonth()) }} className="ml-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">Today</button>
+          <button onClick={() => { setYear(today.getUTCFullYear()); setMonth(today.getUTCMonth()) }} className="ml-1 px-2 py-1 text-xs rounded border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">Today</button>
         </div>
         <button
           onClick={() => setEditing({ kind: 'NOTE', title: '', startsAt: ymd(today), status: 'PLANNED' })}
@@ -146,7 +146,7 @@ export function MarketingCalendarClient({ initial }: { initial: CalendarData }) 
         >
           <Plus size={14} /> Add entry
         </button>
-        {loading && <span className="text-xs text-slate-400">updating…</span>}
+        {loading && <span className="text-xs text-tertiary">updating…</span>}
       </header>
 
       {/* Legend */}
@@ -157,7 +157,7 @@ export function MarketingCalendarClient({ initial }: { initial: CalendarData }) 
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-px bg-slate-200 dark:bg-slate-800 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800">
+      <div className="grid grid-cols-7 gap-px bg-slate-200 dark:bg-slate-800 rounded-lg overflow-hidden border border-default dark:border-slate-800">
         {WEEKDAYS.map((w) => (
           <div key={w} className="bg-slate-50 dark:bg-slate-900 px-2 py-1.5 text-xs font-medium text-slate-500 text-center">{w}</div>
         ))}
@@ -178,7 +178,7 @@ export function MarketingCalendarClient({ initial }: { initial: CalendarData }) 
                 <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-400 to-orange-400" title={bands.map((b) => `${b.name} (×${b.expectedLift})`).join(', ')} />
               )}
               <div className="flex items-center justify-between">
-                <span className={`text-xs font-medium ${isToday ? 'bg-blue-600 text-white rounded-full w-5 h-5 inline-flex items-center justify-center' : inMonth ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400'}`}>{day.getUTCDate()}</span>
+                <span className={`text-xs font-medium ${isToday ? 'bg-blue-600 text-white rounded-full w-5 h-5 inline-flex items-center justify-center' : inMonth ? 'text-slate-700 dark:text-slate-300' : 'text-tertiary'}`}>{day.getUTCDate()}</span>
                 {dayCampaigns.length > 0 && (
                   <span className="flex gap-0.5">
                     {[...new Set(dayCampaigns.map((c) => c.channel))].slice(0, 4).map((ch) => (
@@ -207,7 +207,7 @@ export function MarketingCalendarClient({ initial }: { initial: CalendarData }) 
                     <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${CHANNEL_DOT[c.channel] ?? CHANNEL_DOT.INTERNAL}`} />{c.name}
                   </div>
                 ))}
-                {dayEntries.length > 3 && <div className="text-[10px] text-slate-400">+{dayEntries.length - 3} more</div>}
+                {dayEntries.length > 3 && <div className="text-[10px] text-tertiary">+{dayEntries.length - 3} more</div>}
               </div>
             </div>
           )
@@ -226,24 +226,24 @@ export function MarketingCalendarClient({ initial }: { initial: CalendarData }) 
               <input
                 autoFocus value={editing.title ?? ''} onChange={(e) => setEditing({ ...editing, title: e.target.value })}
                 placeholder="Title (e.g. Black Friday push)"
-                className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950"
+                className="w-full px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950"
               />
               <div className="flex gap-2">
-                <select value={editing.kind ?? 'NOTE'} onChange={(e) => setEditing({ ...editing, kind: e.target.value })} className="flex-1 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
+                <select value={editing.kind ?? 'NOTE'} onChange={(e) => setEditing({ ...editing, kind: e.target.value })} className="flex-1 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">
                   {KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
                 </select>
-                <input type="color" value={editing.color ?? '#3b82f6'} onChange={(e) => setEditing({ ...editing, color: e.target.value })} className="w-10 h-9 rounded border border-slate-200 dark:border-slate-700" title="Band color" />
+                <input type="color" value={editing.color ?? '#3b82f6'} onChange={(e) => setEditing({ ...editing, color: e.target.value })} className="w-10 h-9 rounded border border-default dark:border-slate-700" title="Band color" />
               </div>
               <div className="flex gap-2">
-                <label className="flex-1 text-xs text-slate-500">Starts<input type="date" value={(editing.startsAt ?? '').slice(0, 10)} onChange={(e) => setEditing({ ...editing, startsAt: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
-                <label className="flex-1 text-xs text-slate-500">Ends (optional)<input type="date" value={(editing.endsAt ?? '').slice(0, 10)} onChange={(e) => setEditing({ ...editing, endsAt: e.target.value || null })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+                <label className="flex-1 text-xs text-slate-500">Starts<input type="date" value={(editing.startsAt ?? '').slice(0, 10)} onChange={(e) => setEditing({ ...editing, startsAt: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+                <label className="flex-1 text-xs text-slate-500">Ends (optional)<input type="date" value={(editing.endsAt ?? '').slice(0, 10)} onChange={(e) => setEditing({ ...editing, endsAt: e.target.value || null })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
               </div>
-              <textarea value={editing.notes ?? ''} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} placeholder="Notes" rows={2} className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+              <textarea value={editing.notes ?? ''} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} placeholder="Notes" rows={2} className="w-full px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
             </div>
             <div className="flex items-center justify-between mt-4">
               {editing.id ? <button onClick={() => deleteEntry(editing.id!)} className="text-sm text-rose-600 hover:underline">Delete</button> : <span />}
               <div className="flex gap-2">
-                <button onClick={() => setEditing(null)} className="px-3 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700">Cancel</button>
+                <button onClick={() => setEditing(null)} className="px-3 py-1.5 text-sm rounded border border-default dark:border-slate-700">Cancel</button>
                 <button onClick={saveEntry} disabled={!editing.title || !editing.startsAt} className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">{editing.id ? 'Save' : 'Create'}</button>
               </div>
             </div>

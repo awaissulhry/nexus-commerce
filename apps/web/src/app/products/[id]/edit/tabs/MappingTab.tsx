@@ -246,7 +246,7 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
             <button
               type="button"
               onClick={() => setRuleDrawer({ open: true })}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              className="inline-flex items-center gap-1 rounded-md border border-default px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
             >
               <Plus className="h-3.5 w-3.5" /> Add a rule
             </button>
@@ -324,7 +324,7 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
           type="button"
           onClick={() => setRuleDrawer({ open: true })}
           title="Add a mapping rule for an unmapped field"
-          className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+          className="inline-flex items-center gap-1 rounded-md border border-default px-2 py-1 font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
         >
           <Plus className="h-3 w-3" /> Add rule
         </button>
@@ -332,7 +332,7 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
           type="button"
           onClick={() => setCloneOpen(true)}
           title="Clone this product's mapping to other markets"
-          className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+          className="inline-flex items-center gap-1 rounded-md border border-default px-2 py-1 font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
         >
           <Copy className="h-3 w-3" /> Clone
         </button>
@@ -346,7 +346,7 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
         </button>
       </div>
       {product.isParent && (
-        <div className="text-[11px] text-slate-400">
+        <div className="text-[11px] text-tertiary">
           Product-level mapping. For per-variant values, use the Matrix tab.
         </div>
       )}
@@ -360,12 +360,12 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
         aria-label="Field mapping matrix"
         aria-rowcount={visibleRows.length + 1}
         aria-colcount={coords.length + 2}
-        className="max-h-[70vh] overflow-auto rounded-lg border border-slate-200 dark:border-slate-800"
+        className="max-h-[70vh] overflow-auto rounded-lg border border-default dark:border-slate-800"
       >
         {/* sticky header */}
         <div
           role="row"
-          className="sticky top-0 z-20 grid border-b border-slate-200 bg-slate-50 text-[11px] font-medium text-slate-500 dark:border-slate-800 dark:bg-slate-900"
+          className="sticky top-0 z-20 grid border-b border-default bg-slate-50 text-[11px] font-medium text-slate-500 dark:border-slate-800 dark:bg-slate-900"
           style={{ gridTemplateColumns: gridCols, width: 'max-content', minWidth: '100%' }}
         >
           <div role="columnheader" className="sticky left-0 z-10 bg-slate-50 px-2 py-1.5 dark:bg-slate-900">Field</div>
@@ -387,7 +387,7 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
                 key={row.fieldKey}
                 role="row"
                 aria-rowindex={vi.index + 2}
-                className="group absolute left-0 grid border-b border-slate-100 text-xs hover:bg-slate-50/60 dark:border-slate-800/60 dark:hover:bg-slate-800/30"
+                className="group absolute left-0 grid border-b border-subtle text-xs hover:bg-slate-50/60 dark:border-slate-800/60 dark:hover:bg-slate-800/30"
                 style={{
                   gridTemplateColumns: gridCols,
                   width: '100%',
@@ -450,7 +450,7 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
                           })
                         }
                         title="Edit mapping rule"
-                        className="shrink-0 rounded px-0.5 text-slate-400 opacity-0 hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100 dark:hover:bg-slate-800"
+                        className="shrink-0 rounded px-0.5 text-tertiary opacity-0 hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100 dark:hover:bg-slate-800"
                       >
                         <SlidersHorizontal className="h-3 w-3" />
                       </button>

@@ -142,7 +142,7 @@ export default function VariationMatrixTable({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-slate-200 p-8 text-center">
+      <div className="bg-white rounded-lg border border-default p-8 text-center">
         <div className="inline-flex items-center gap-2 text-slate-600">
           <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
           Loading variations...
@@ -153,15 +153,15 @@ export default function VariationMatrixTable({
 
   if (variations.length === 0) {
     return (
-      <div className="bg-white rounded-lg border border-slate-200 p-8 text-center">
-        <AlertCircle className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+      <div className="bg-white rounded-lg border border-default p-8 text-center">
+        <AlertCircle className="w-12 h-12 text-tertiary mx-auto mb-3" />
         <p className="text-slate-600">No variations found</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+    <div className="bg-white rounded-lg border border-default overflow-hidden">
       {/* Table Header with Selection */}
       {selectedRows.size > 0 && (
         <div className="bg-blue-50 border-b border-blue-200 px-6 py-3 flex items-center justify-between">
@@ -197,7 +197,7 @@ export default function VariationMatrixTable({
       <div className="overflow-x-auto">
         <table className="w-full">
           {/* Table Head */}
-          <thead className="bg-slate-50 border-b border-slate-200">
+          <thead className="bg-slate-50 border-b border-default">
             <tr>
               <th className="px-6 py-3 text-left">
                 <input
@@ -385,7 +385,7 @@ export default function VariationMatrixTable({
 
       {/* Expanded Row Details */}
       {expandedRow && (
-        <div className="bg-slate-50 border-t border-slate-200 p-6">
+        <div className="bg-slate-50 border-t border-default p-6">
           {sortedVariations.find((v) => v.id === expandedRow) && (
             <div className="space-y-4">
               <div>
@@ -399,7 +399,7 @@ export default function VariationMatrixTable({
                   ).map(([channel, details]) => (
                     <div
                       key={channel}
-                      className="p-3 bg-white rounded border border-slate-200"
+                      className="p-3 bg-white rounded border border-default"
                     >
                       <p className="font-medium text-slate-900 capitalize mb-2">
                         {channel}

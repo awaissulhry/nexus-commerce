@@ -100,7 +100,7 @@ export default function PrintVariantMatrix({
       </div>
       <div className="overflow-x-auto">
         <table className="border-collapse text-sm">
-          <thead className="border-b-2 border-slate-200">
+          <thead className="border-b-2 border-default">
             <tr className="text-left">
               <th className="py-1.5 pr-3 font-semibold text-slate-600 align-bottom">
                 {primary}
@@ -122,7 +122,7 @@ export default function PrintVariantMatrix({
               )}
             </tr>
           </thead>
-          <tbody className="[&>tr]:border-b [&>tr]:border-slate-100">
+          <tbody className="[&>tr]:border-b [&>tr]:border-subtle">
             {primaryValues.map((pv) => (
               <tr key={pv}>
                 <th

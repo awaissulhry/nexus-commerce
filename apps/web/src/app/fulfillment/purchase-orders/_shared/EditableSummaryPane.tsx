@@ -335,7 +335,7 @@ export function EditableSummaryPane({ po, onRefresh }: EditableSummaryPaneProps)
   return (
     <div className="space-y-4">
       {/* Header inline-edit (expected date + notes) */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
             Edit draft
@@ -351,7 +351,7 @@ export function EditableSummaryPane({ po, onRefresh }: EditableSummaryPaneProps)
             <div className="relative">
               <Calendar
                 size={12}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500 pointer-events-none"
               />
               <input
                 type="date"
@@ -360,7 +360,7 @@ export function EditableSummaryPane({ po, onRefresh }: EditableSummaryPaneProps)
                   setExpectedDate(e.target.value)
                   scheduleSave()
                 }}
-                className="w-full h-9 pl-7 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                className="w-full h-9 pl-7 pr-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               />
             </div>
           </div>
@@ -384,25 +384,25 @@ export function EditableSummaryPane({ po, onRefresh }: EditableSummaryPaneProps)
             }}
             rows={3}
             placeholder="Operator notes; visible on the factory PDF"
-            className="w-full px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            className="w-full px-2 py-1.5 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-tertiary dark:placeholder:text-slate-500"
           />
         </div>
       </div>
 
       {/* Editable line grid */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-        <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center justify-between">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg overflow-hidden">
+        <div className="px-4 py-2 border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center justify-between">
           <span>Line items</span>
           <button
             type="button"
             onClick={addLine}
-            className="text-sm px-2 py-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex items-center gap-1 normal-case font-normal"
+            className="text-sm px-2 py-1 border border-default dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex items-center gap-1 normal-case font-normal"
           >
             <Plus size={11} /> Add line
           </button>
         </div>
         <table className="w-full text-base">
-          <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+          <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-default dark:border-slate-700">
             <tr>
               <th className="w-6"></th>
               <th className="text-left font-medium px-3 py-1.5 w-12">#</th>
@@ -428,7 +428,7 @@ export function EditableSummaryPane({ po, onRefresh }: EditableSummaryPaneProps)
               />
             ))}
           </tbody>
-          <tfoot className="bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+          <tfoot className="bg-slate-50 dark:bg-slate-800 border-t border-default dark:border-slate-700">
             <tr>
               <td colSpan={5} className="px-4 py-2 text-right text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
                 Total
@@ -551,13 +551,13 @@ function EditableLineRow({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       className={cn(
-        'border-b border-slate-100 dark:border-slate-800 last:border-0 align-top',
+        'border-b border-subtle dark:border-slate-800 last:border-0 align-top',
         dragOver && 'bg-blue-50 dark:bg-blue-950/30',
       )}
     >
       <td className="px-1 py-2 text-center align-top">
         <span
-          className="cursor-grab text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 inline-flex"
+          className="cursor-grab text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 inline-flex"
           title="Drag to reorder"
         >
           <GripVertical className="w-4 h-4" />
@@ -617,7 +617,7 @@ function EditableLineRow({
             'w-full h-8 px-2 text-base text-right tabular-nums border rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100',
             moqViolation
               ? 'border-red-300 dark:border-red-700 bg-red-50/30 dark:bg-red-950/20'
-              : 'border-slate-200 dark:border-slate-700',
+              : 'border-default dark:border-slate-700',
           )}
         />
         {moqViolation && (
@@ -634,7 +634,7 @@ function EditableLineRow({
           onChange={(e) =>
             onUpdate({ unitCostCents: parseCentsField(e.target.value) })
           }
-          className="w-full h-8 px-2 text-base text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+          className="w-full h-8 px-2 text-base text-right tabular-nums border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
         />
       </td>
       <td className="px-3 py-2 text-right tabular-nums font-medium text-slate-900 dark:text-slate-100 align-top pt-3">
@@ -645,7 +645,7 @@ function EditableLineRow({
           type="button"
           onClick={onRemove}
           disabled={!canRemove}
-          className="h-8 w-8 inline-flex items-center justify-center rounded text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-30"
+          className="h-8 w-8 inline-flex items-center justify-center rounded text-tertiary dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-30"
           aria-label="Remove line"
         >
           <Trash2 size={12} />
@@ -685,7 +685,7 @@ function NoteEditor({
       }}
       rows={1}
       placeholder="Line note (lot code, defect spec, …)"
-      className="mt-1 w-full px-2 py-1 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+      className="mt-1 w-full px-2 py-1 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 placeholder:text-tertiary dark:placeholder:text-slate-500"
     />
   )
 }
@@ -761,7 +761,7 @@ function SkuAutocomplete({
         onChange={(e) => onTextChange(e.target.value)}
         onFocus={() => setOpen(true)}
         placeholder={supplierId ? 'Type SKU or product name…' : 'SKU'}
-        className="w-full h-8 px-2 text-base font-mono border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+        className="w-full h-8 px-2 text-base font-mono border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-tertiary dark:placeholder:text-slate-500"
       />
       {row.productId && (
         <div className="text-xs text-green-700 dark:text-green-300 mt-0.5 inline-flex items-center gap-1">
@@ -770,7 +770,7 @@ function SkuAutocomplete({
         </div>
       )}
       {open && supplierId && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded shadow-lg max-h-64 overflow-y-auto">
+        <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded shadow-lg max-h-64 overflow-y-auto">
           {loading && (
             <div className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400 inline-flex items-center gap-2">
               <Loader2 className="w-3 h-3 animate-spin" /> Searching…
@@ -779,7 +779,7 @@ function SkuAutocomplete({
           {!loading && results.length === 0 && (
             <div className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
               No catalog matches.{' '}
-              <span className="text-slate-400 dark:text-slate-500">Free SKU entry is fine.</span>
+              <span className="text-tertiary dark:text-slate-500">Free SKU entry is fine.</span>
             </div>
           )}
           {!loading &&
@@ -793,10 +793,10 @@ function SkuAutocomplete({
                     onPick(r)
                     setOpen(false)
                   }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800 last:border-0"
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-subtle dark:border-slate-800 last:border-0"
                 >
                   <div className="flex items-center gap-2">
-                    <Package className="w-3 h-3 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                    <Package className="w-3 h-3 text-tertiary dark:text-slate-500 flex-shrink-0" />
                     <span className="font-mono text-sm text-slate-900 dark:text-slate-100">
                       {p?.sku ?? r.supplierSku ?? '—'}
                     </span>

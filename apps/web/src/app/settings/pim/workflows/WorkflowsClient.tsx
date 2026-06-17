@@ -159,9 +159,9 @@ export default function WorkflowsClient({ initial, initialError }: Props) {
           </div>
         </div>
       ) : (
-        <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+        <div className="border border-default dark:border-slate-800 rounded-lg overflow-hidden">
           <table className="w-full text-base">
-            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-default dark:border-slate-800">
               <tr className="text-left">
                 <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.workflows.col.code')}</th>
                 <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.workflows.col.label')}</th>
@@ -174,7 +174,7 @@ export default function WorkflowsClient({ initial, initialError }: Props) {
               {workflows.map((w) => (
                 <tr
                   key={w.id}
-                  className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40"
+                  className="border-t border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40"
                 >
                   <td className="px-3 py-2 font-mono text-sm text-slate-700 dark:text-slate-300">
                     {/* W5.45 — was Link to /settings/pim/workflows/[id]
@@ -322,7 +322,7 @@ function CreateWorkflowModal({
               onChange={(e) => setCode(e.target.value.toLowerCase())}
               placeholder="standard_pim"
               autoFocus
-              className={`w-full h-9 px-2 text-base font-mono border rounded ${codeValid ? 'border-slate-200 dark:border-slate-800' : 'border-rose-300 dark:border-rose-700'} dark:bg-slate-900 dark:text-slate-100`}
+              className={`w-full h-9 px-2 text-base font-mono border rounded ${codeValid ? 'border-default dark:border-slate-800' : 'border-rose-300 dark:border-rose-700'} dark:bg-slate-900 dark:text-slate-100`}
             />
           </div>
           <div className="space-y-1">
@@ -334,7 +334,7 @@ function CreateWorkflowModal({
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="Standard PIM"
-              className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+              className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
             />
           </div>
         </div>
@@ -347,7 +347,7 @@ function CreateWorkflowModal({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
-            className="w-full px-2 py-1.5 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+            className="w-full px-2 py-1.5 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           />
         </div>
 
@@ -355,7 +355,7 @@ function CreateWorkflowModal({
           <div className="flex items-center justify-between">
             <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
               Stages <span className="text-rose-500">*</span>{' '}
-              <span className="text-xs text-slate-400 dark:text-slate-500 normal-case font-normal tracking-normal">
+              <span className="text-xs text-tertiary dark:text-slate-500 normal-case font-normal tracking-normal">
                 ({initialCount} initial · {terminalCount} terminal)
               </span>
             </label>
@@ -369,7 +369,7 @@ function CreateWorkflowModal({
             </Button>
           </div>
 
-          <div className="border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
+          <div className="border border-default dark:border-slate-800 rounded overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 dark:bg-slate-900">
                 <tr className="text-left">
@@ -384,7 +384,7 @@ function CreateWorkflowModal({
               </thead>
               <tbody>
                 {stages.map((s, i) => (
-                  <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+                  <tr key={i} className="border-t border-subtle dark:border-slate-800">
                     <td className="px-2 py-1">
                       <input
                         type="text"
@@ -392,7 +392,7 @@ function CreateWorkflowModal({
                         onChange={(e) =>
                           updateStage(i, { code: e.target.value.toLowerCase() })
                         }
-                        className="w-full h-7 px-1.5 text-sm font-mono border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+                        className="w-full h-7 px-1.5 text-sm font-mono border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
                       />
                     </td>
                     <td className="px-2 py-1">
@@ -400,7 +400,7 @@ function CreateWorkflowModal({
                         type="text"
                         value={s.label}
                         onChange={(e) => updateStage(i, { label: e.target.value })}
-                        className="w-full h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+                        className="w-full h-7 px-1.5 text-sm border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
                       />
                     </td>
                     <td className="px-2 py-1">
@@ -413,7 +413,7 @@ function CreateWorkflowModal({
                           updateStage(i, { slaHours: v === '' ? null : Number(v) })
                         }}
                         placeholder="—"
-                        className="w-16 h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
+                        className="w-16 h-7 px-1.5 text-sm border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
                       />
                     </td>
                     <td className="px-2 py-1 text-center">

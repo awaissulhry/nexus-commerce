@@ -44,7 +44,7 @@ export default function SettingsLandingPage() {
 
       {SETTINGS_NAV.map((group) => (
         <section key={group.label} className="space-y-3">
-          <div className="flex items-baseline justify-between border-b border-slate-200 dark:border-slate-800 pb-1.5">
+          <div className="flex items-baseline justify-between border-b border-default dark:border-slate-800 pb-1.5">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
               {group.label}
             </h3>
@@ -61,7 +61,7 @@ export default function SettingsLandingPage() {
                   key={item.href}
                   href={item.href}
                   prefetch={false}
-                  className="group block rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-sm transition-all"
+                  className="group block rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900 p-4 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-sm transition-all"
                 >
                   <div className="flex items-start gap-3">
                     <div className="shrink-0 w-9 h-9 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-700 dark:group-hover:bg-blue-950/40 dark:group-hover:text-blue-300 transition-colors">
@@ -86,7 +86,7 @@ export default function SettingsLandingPage() {
                     </div>
                     <ChevronRight
                       size={14}
-                      className="text-slate-400 dark:text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors shrink-0 mt-1"
+                      className="text-tertiary dark:text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors shrink-0 mt-1"
                     />
                   </div>
                 </Link>

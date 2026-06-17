@@ -134,9 +134,9 @@ export default function HealthPanel({
             >
               <div className="flex items-center gap-1.5">
                 {polishOpen ? (
-                  <ChevronDown className="w-3 h-3 text-slate-400" />
+                  <ChevronDown className="w-3 h-3 text-tertiary" />
                 ) : (
-                  <ChevronRight className="w-3 h-3 text-slate-400" />
+                  <ChevronRight className="w-3 h-3 text-tertiary" />
                 )}
                 <span className={cn('text-[11px] font-bold uppercase tracking-wide', GROUP_META.polish.tone)}>
                   Polish
@@ -256,7 +256,7 @@ function CheckRow({
             {check.label}
           </span>
           {check.value && (
-            <span className="font-mono text-[10px] text-slate-400 flex-shrink-0">{check.value}</span>
+            <span className="font-mono text-[10px] text-tertiary flex-shrink-0">{check.value}</span>
           )}
         </div>
         {!isPass && check.hint && (

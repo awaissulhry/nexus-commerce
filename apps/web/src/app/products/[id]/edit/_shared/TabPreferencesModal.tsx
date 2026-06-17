@@ -278,7 +278,7 @@ function SortableRow({ pref, label, onToggle, onNavigate }: SortableRowProps) {
       ref={setNodeRef}
       style={style}
       className={cn(
-        'group flex items-center gap-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5',
+        'group flex items-center gap-2 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5',
         isDragging && 'opacity-50 shadow-lg z-10',
         !pref.visible && 'opacity-70',
       )}
@@ -290,7 +290,7 @@ function SortableRow({ pref, label, onToggle, onNavigate }: SortableRowProps) {
         {...listeners}
         aria-label={t('products.edit.tabs.customize.dragHandleAria', { label })}
         title={t('products.edit.tabs.customize.dragHandleTooltip')}
-        className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded"
+        className="cursor-grab active:cursor-grabbing p-1 text-tertiary hover:text-slate-600 dark:hover:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded"
       >
         <GripVertical className="w-4 h-4" />
       </button>
@@ -313,7 +313,7 @@ function SortableRow({ pref, label, onToggle, onNavigate }: SortableRowProps) {
       >
         {label}
         {!pref.visible && (
-          <span className="ml-2 text-xs text-slate-400 font-normal">
+          <span className="ml-2 text-xs text-tertiary font-normal">
             {t('products.edit.tabs.customize.hiddenBadge')}
           </span>
         )}

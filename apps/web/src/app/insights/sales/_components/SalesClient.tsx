@@ -375,7 +375,7 @@ export default function SalesClient() {
               rightAxisFormat="number"
             />
           ) : (
-            <div className="h-[260px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[260px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No data for this window'}
             </div>
           )}
@@ -398,7 +398,7 @@ export default function SalesClient() {
               centerValue={String(report.byChannel.length)}
             />
           ) : (
-            <div className="h-[200px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[200px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No data'}
             </div>
           )}
@@ -417,7 +417,7 @@ export default function SalesClient() {
               maxRows={10}
             />
           ) : (
-            <div className="h-[200px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[200px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No data'}
             </div>
           )}
@@ -435,7 +435,7 @@ export default function SalesClient() {
               total={report.totals.revenue}
             />
           ) : (
-            <div className="h-[200px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[200px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No data'}
             </div>
           )}
@@ -456,7 +456,7 @@ export default function SalesClient() {
               total={report.totals.revenue}
             />
           ) : (
-            <div className="text-sm text-slate-400 py-6 text-center">
+            <div className="text-sm text-tertiary py-6 text-center">
               {loading ? 'Loading…' : 'No brand data'}
             </div>
           )}
@@ -474,7 +474,7 @@ export default function SalesClient() {
               total={report.totals.revenue}
             />
           ) : (
-            <div className="text-sm text-slate-400 py-6 text-center">
+            <div className="text-sm text-tertiary py-6 text-center">
               {loading ? 'Loading…' : 'No product type data'}
             </div>
           )}
@@ -497,7 +497,7 @@ export default function SalesClient() {
               ariaLabel="Channel by market revenue heatmap"
             />
           ) : (
-            <div className="h-[140px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[140px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No data'}
             </div>
           )}
@@ -514,7 +514,7 @@ export default function SalesClient() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <tr className="border-b border-default dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   <th className="text-left font-medium px-3 py-2">Channel</th>
                   <th className="text-left font-medium px-3 py-2">Market</th>
                   <th className="text-left font-medium px-3 py-2">Currency</th>
@@ -528,7 +528,7 @@ export default function SalesClient() {
                 {report.byMarketplaceNative.map((row) => (
                   <tr
                     key={`${row.channel}|${row.marketplace}|${row.currency}`}
-                    className="border-b border-slate-100 dark:border-slate-800/60 last:border-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/30"
+                    className="border-b border-subtle dark:border-slate-800/60 last:border-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/30"
                   >
                     <td className="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">
                       {row.channel}
@@ -588,7 +588,7 @@ export default function SalesClient() {
               showLegend={false}
             />
           ) : (
-            <div className="h-[220px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[220px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No data'}
             </div>
           )}
@@ -609,7 +609,7 @@ export default function SalesClient() {
             emptyLabel="No SKU revenue in this window"
           />
         ) : (
-          <div className="text-sm text-slate-400 py-6 text-center">
+          <div className="text-sm text-tertiary py-6 text-center">
             {loading ? 'Loading…' : 'No data'}
           </div>
         )}

@@ -81,7 +81,7 @@ function StatusIcon({ status }: { status: string }) {
     case 'RUNNING':
       return <Loader2 className={cn(cls, 'text-blue-600 dark:text-blue-400 animate-spin')} />
     default:
-      return <Clock className={cn(cls, 'text-slate-400 dark:text-slate-500')} />
+      return <Clock className={cn(cls, 'text-tertiary dark:text-slate-500')} />
   }
 }
 
@@ -129,8 +129,8 @@ export default function CronStatusPanel() {
   }, [fetchData])
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-      <div className="px-4 py-3 flex items-center justify-between border-b border-slate-200 dark:border-slate-700">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg overflow-hidden">
+      <div className="px-4 py-3 flex items-center justify-between border-b border-default dark:border-slate-700">
         <div>
           <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Cron Jobs</h3>
           <p className="text-base text-slate-500 dark:text-slate-400 mt-0.5">
@@ -193,7 +193,7 @@ export default function CronStatusPanel() {
       {data && data.latest.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-base">
-            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-default dark:border-slate-700">
               <tr>
                 <th className="text-left font-medium px-3 py-2">Job</th>
                 <th className="text-left font-medium px-3 py-2 w-32">Status</th>
@@ -204,7 +204,7 @@ export default function CronStatusPanel() {
             </thead>
             <tbody>
               {data.latest.map((r) => (
-                <tr key={r.jobName} className="border-b border-slate-100 dark:border-slate-800 last:border-0 align-top">
+                <tr key={r.jobName} className="border-b border-subtle dark:border-slate-800 last:border-0 align-top">
                   <td className="px-3 py-2">
                     <div className="font-mono text-sm text-slate-900 dark:text-slate-100">{r.jobName}</div>
                     {r.triggeredBy === 'manual' && (
@@ -233,7 +233,7 @@ export default function CronStatusPanel() {
                         {r.outputSummary}
                       </div>
                     ) : (
-                      <span className="text-sm text-slate-400 dark:text-slate-500">—</span>
+                      <span className="text-sm text-tertiary dark:text-slate-500">—</span>
                     )}
                   </td>
                 </tr>

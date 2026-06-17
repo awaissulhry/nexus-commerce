@@ -20,7 +20,7 @@ export default function Step1Identifiers({ updateWizardState }: StepProps) {
 
   return (
     <div className="max-w-2xl mx-auto py-12 px-3 md:px-6 text-center">
-      <Loader2 className="w-5 h-5 animate-spin text-slate-400 dark:text-slate-500 mx-auto mb-2" />
+      <Loader2 className="w-5 h-5 animate-spin text-tertiary dark:text-slate-500 mx-auto mb-2" />
       <p className="text-md text-slate-500 dark:text-slate-400">Continuing…</p>
     </div>
   )

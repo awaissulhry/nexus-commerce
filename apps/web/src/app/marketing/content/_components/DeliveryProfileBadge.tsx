@@ -68,7 +68,7 @@ export default function DeliveryProfileBadge({ apiBase }: Props) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-600"
+        className="inline-flex items-center gap-1.5 rounded-md border border-default bg-white px-2 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-600"
         aria-label={t('marketingContent.delivery.label', {
           profile: active.label,
         })}
@@ -78,11 +78,11 @@ export default function DeliveryProfileBadge({ apiBase }: Props) {
           {t('marketingContent.delivery.cdn')}
         </span>
         <span>{active.label}</span>
-        <ChevronDown className="w-3 h-3 text-slate-400" />
+        <ChevronDown className="w-3 h-3 text-tertiary" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-md border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
-          <p className="border-b border-slate-100 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:text-slate-400">
+        <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-md border border-default bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+          <p className="border-b border-subtle px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:text-slate-400">
             {t('marketingContent.delivery.popoverTitle')}
           </p>
           <ul className="space-y-0.5 pt-1">
@@ -117,7 +117,7 @@ export default function DeliveryProfileBadge({ apiBase }: Props) {
               )
             })}
           </ul>
-          <p className="border-t border-slate-100 px-2 py-1.5 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
+          <p className="border-t border-subtle px-2 py-1.5 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
             {t('marketingContent.delivery.envHint')}
           </p>
         </div>

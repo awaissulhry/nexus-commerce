@@ -179,7 +179,7 @@ export default function ShopifyLocationsClient() {
             type="button"
             onClick={() => toggleActive(row)}
             disabled={togglingId === row.id}
-            className="min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+            className="min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
           >
             {row.isActive ? t('stock.shopifyLocations.disable') : t('stock.shopifyLocations.enable')}
           </button>
@@ -244,7 +244,7 @@ export default function ShopifyLocationsClient() {
       {loading && !locations && (
         <div className="space-y-2">
           {[0, 1, 2].map(i => (
-            <div key={i} className="h-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse" />
+            <div key={i} className="h-16 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg animate-pulse" />
           ))}
         </div>
       )}

@@ -94,7 +94,7 @@ export default function InventoryTable({ data, onEditItem }: InventoryTableProps
         <div className="text-sm text-slate-500 font-medium tracking-tight">
           {data.length} products
           {expandedIds.size > 0 && (
-            <span className="text-slate-400 ml-1">
+            <span className="text-tertiary ml-1">
               · {[...expandedIds].reduce((n, id) => n + (childrenCache.get(id)?.length ?? 0), 0)} variants shown
             </span>
           )}
@@ -106,17 +106,17 @@ export default function InventoryTable({ data, onEditItem }: InventoryTableProps
       <BulkActionBar table={table} />
 
       {/* ── Table ────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-md border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-md border border-default overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full" style={{ fontSize: "13px" }}>
             {/* Header */}
-            <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-20">
+            <thead className="bg-slate-50 border-b border-default sticky top-0 z-20">
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
                     <th
                       key={header.id}
-                      className="px-3 py-2 text-left text-sm font-semibold text-slate-900 uppercase tracking-tight border-r border-slate-200 last:border-r-0"
+                      className="px-3 py-2 text-left text-sm font-semibold text-slate-900 uppercase tracking-tight border-r border-default last:border-r-0"
                       style={{ width: header.getSize() }}
                     >
                       {header.isPlaceholder
@@ -171,7 +171,7 @@ export default function InventoryTable({ data, onEditItem }: InventoryTableProps
                         <td
                           key={cell.id}
                           className={[
-                            "px-3 py-1.5 relative tracking-tight border-r border-slate-100 last:border-r-0",
+                            "px-3 py-1.5 relative tracking-tight border-r border-subtle last:border-r-0",
                             isChild && cellIdx > 1 ? "pl-10" : "",
                           ].join(" ")}
                         >

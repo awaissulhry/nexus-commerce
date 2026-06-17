@@ -247,7 +247,7 @@ export const OPERATIONS: OperationConfig[] = [
             integer
           />
 
-          <div className="border border-slate-200 rounded-md p-2 space-y-1">
+          <div className="border border-default rounded-md p-2 space-y-1">
             <div className="text-sm uppercase tracking-wide text-slate-500 font-semibold mb-1">
               SSOT toggles
             </div>
@@ -271,7 +271,7 @@ export const OPERATIONS: OperationConfig[] = [
             ))}
           </div>
 
-          <div className="border border-slate-200 rounded-md p-2 space-y-1">
+          <div className="border border-default rounded-md p-2 space-y-1">
             <div className="text-sm uppercase tracking-wide text-slate-500 font-semibold mb-1">
               Pricing rule
             </div>
@@ -406,7 +406,7 @@ export const OPERATIONS: OperationConfig[] = [
                   className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                     channels.includes(c)
                       ? 'bg-blue-50 border-blue-300 text-blue-700'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      : 'bg-white border-default text-slate-600 hover:bg-slate-50'
                   }`}
                   aria-pressed={channels.includes(c)}
                 >
@@ -469,7 +469,7 @@ export const OPERATIONS: OperationConfig[] = [
                   className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                     langs.includes(l)
                       ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                      : 'bg-white border-default text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
                   }`}
                   aria-pressed={langs.includes(l)}
                 >
@@ -488,7 +488,7 @@ export const OPERATIONS: OperationConfig[] = [
                   className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                     fields.includes(f)
                       ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                      : 'bg-white border-default text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
                   }`}
                   aria-pressed={fields.includes(f)}
                 >
@@ -535,7 +535,7 @@ export const OPERATIONS: OperationConfig[] = [
                 className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                   locales.includes(l)
                     ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300'
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                    : 'bg-white border-default text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
                 }`}
                 aria-pressed={locales.includes(l)}
               >
@@ -571,7 +571,7 @@ export const OPERATIONS: OperationConfig[] = [
                   className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                     locale === l
                       ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                      : 'bg-white border-default text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
                   }`}
                 >
                   {l.toUpperCase()}
@@ -615,7 +615,7 @@ export const OPERATIONS: OperationConfig[] = [
                   className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                     channel === c
                       ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                      : 'bg-white border-default text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
                   }`}
                 >
                   {c}
@@ -633,7 +633,7 @@ export const OPERATIONS: OperationConfig[] = [
                   className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                     operation === o
                       ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                      : 'bg-white border-default text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
                   }`}
                 >
                   {o}

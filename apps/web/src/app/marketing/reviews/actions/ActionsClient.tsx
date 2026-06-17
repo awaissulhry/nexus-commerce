@@ -91,7 +91,7 @@ export function ActionsClient({ initial }: { initial: ActionItem[] }) {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12 text-slate-400">
+        <div className="flex justify-center py-12 text-tertiary">
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
       ) : items.length === 0 ? (
@@ -128,12 +128,12 @@ function ActionCard({ item, onStatus }: { item: ActionItem; onStatus: (id: strin
   const canCopy = item.type === 'BULLETS' || item.type === 'APLUS'
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-3">
       <div className="flex items-center gap-2 mb-1.5">
         <span className={meta.tone}>{meta.icon}</span>
         <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{item.title}</span>
         {item.marketplace && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">{item.marketplace}</span>}
-        <span className="ml-auto text-[10px] text-slate-400">{new Date(item.createdAt).toLocaleDateString()}</span>
+        <span className="ml-auto text-[10px] text-tertiary">{new Date(item.createdAt).toLocaleDateString()}</span>
       </div>
       {item.detail && <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">{item.detail}</p>}
 

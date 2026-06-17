@@ -14,7 +14,7 @@ export const CHANNEL_TONE: Record<string, string> = {
   SHOPIFY: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   WOOCOMMERCE: 'bg-violet-50 text-violet-700 border-violet-200',
   ETSY: 'bg-rose-50 text-rose-700 border-rose-200',
-  MANUAL: 'bg-slate-50 text-slate-700 border-slate-200',
+  MANUAL: 'bg-slate-50 text-slate-700 border-default',
 }
 
 // Mirrors the canonical OrdersWorkspace mapping. Bumped from the
@@ -24,9 +24,9 @@ export const REVIEW_STATUS_TONE: Record<string, string> = {
   SENT: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   SCHEDULED: 'bg-blue-50 text-blue-700 border-blue-200',
   ELIGIBLE: 'bg-amber-50 text-amber-700 border-amber-200',
-  SUPPRESSED: 'bg-slate-50 text-slate-500 border-slate-200',
+  SUPPRESSED: 'bg-slate-50 text-slate-500 border-default',
   FAILED: 'bg-rose-50 text-rose-700 border-rose-200',
-  SKIPPED: 'bg-slate-50 text-slate-500 border-slate-200',
+  SKIPPED: 'bg-slate-50 text-slate-500 border-default',
 }
 
 // Maps OrderStatus → Badge variant. Used by GridLens OrderCell.
@@ -51,6 +51,6 @@ export const STATUS_VARIANT: Record<
 export function channelTone(channel: string): string {
   return (
     CHANNEL_TONE[channel] ??
-    'bg-slate-50 text-slate-600 border-slate-200'
+    'bg-slate-50 text-slate-600 border-default'
   )
 }

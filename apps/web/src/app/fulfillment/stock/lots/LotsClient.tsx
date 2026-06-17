@@ -165,7 +165,7 @@ export default function LotsClient() {
         return (
           <span className="tabular-nums text-sm">
             <span className="font-semibold text-slate-900 dark:text-slate-100">{row.unitsRemaining}</span>
-            <span className="text-slate-400 dark:text-slate-500">/{row.unitsReceived}</span>
+            <span className="text-tertiary dark:text-slate-500">/{row.unitsReceived}</span>
           </span>
         )
       case 'expires':
@@ -202,7 +202,7 @@ export default function LotsClient() {
       <GridToolbar
         quickFilterSlot={
           <>
-            <div className="inline-flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded-md p-0.5">
+            <div className="inline-flex items-center gap-1 border border-default dark:border-slate-700 rounded-md p-0.5">
               {(['all', 'expiring30', 'expiring90'] as const).map(e => (
                 <button
                   key={e}

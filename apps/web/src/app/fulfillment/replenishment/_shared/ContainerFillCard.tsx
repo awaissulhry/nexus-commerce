@@ -47,7 +47,7 @@ export function ContainerFillCard({
         <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
           Container fill
         </span>
-        <span className="text-xs text-slate-400 dark:text-slate-500">
+        <span className="text-xs text-tertiary dark:text-slate-500">
           {entries.length} supplier{entries.length === 1 ? '' : 's'} with shipping
           profile
         </span>
@@ -67,7 +67,7 @@ export function ContainerFillCard({
           return (
             <div
               key={e.supplierId}
-              className="border border-slate-200 dark:border-slate-800 rounded p-2"
+              className="border border-default dark:border-slate-800 rounded p-2"
             >
               <div className="flex items-center justify-between text-base mb-1.5">
                 <span className="font-semibold text-slate-900 dark:text-slate-100">
@@ -105,7 +105,7 @@ export function ContainerFillCard({
                 </div>
               )}
               {e.topUpSuggestions.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <div className="mt-2 pt-2 border-t border-default dark:border-slate-800">
                   <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
                     Top-up suggestions
                   </div>

@@ -106,7 +106,7 @@ function fmtPct(v: number | null) {
 }
 
 function acosColor(acos: number | null) {
-  if (acos == null) return 'text-slate-400'
+  if (acos == null) return 'text-tertiary'
   if (acos > 35) return 'text-red-600 dark:text-red-400'
   if (acos > 20) return 'text-amber-600 dark:text-amber-400'
   return 'text-emerald-600 dark:text-emerald-400'
@@ -130,10 +130,10 @@ function KpiTile({
   label, value, sub, color = '',
 }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5">
+    <div className="rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5">
       <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium">{label}</p>
       <p className={`text-xl font-bold tabular-nums mt-0.5 ${color || 'text-slate-800 dark:text-slate-100'}`}>{value}</p>
-      {sub && <p className="text-[11px] text-slate-400 mt-0.5">{sub}</p>}
+      {sub && <p className="text-[11px] text-tertiary mt-0.5">{sub}</p>}
     </div>
   )
 }
@@ -175,7 +175,7 @@ export function AdsTab({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-16 gap-2 text-slate-400">
+      <div className="flex items-center justify-center py-16 gap-2 text-tertiary">
         <Loader2 className="h-4 w-4 animate-spin" />
         <span className="text-sm">Loading ad performance…</span>
       </div>
@@ -198,7 +198,7 @@ export function AdsTab({
         <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
           No ad placements found for this product
         </p>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 max-w-xs mx-auto">
+        <p className="text-xs text-tertiary dark:text-slate-500 mt-1 max-w-xs mx-auto">
           Ad data populates once the SD sync runs and links campaigns to this
           SKU / ASIN via AdProductAd. Check back after the next cron tick.
         </p>
@@ -273,10 +273,10 @@ export function AdsTab({
           <Activity className="h-3.5 w-3.5" aria-hidden />
           Campaigns
         </h3>
-        <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+        <div className="overflow-x-auto rounded-lg border border-default dark:border-slate-700">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-default dark:border-slate-700">
                 {['Campaign', 'Market', 'Status', 'Impressions', 'Clicks', 'Orders', 'Spend', 'Ad Sales', 'ACOS', ''].map((h) => (
                   <th key={h} className="px-2 py-1.5 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">
                     {h}
@@ -328,7 +328,7 @@ export function AdsTab({
           </table>
         </div>
         {!campaigns.some((c) => c.hasV1Data) && (
-          <p className="text-xs text-slate-400 mt-1.5">
+          <p className="text-xs text-tertiary mt-1.5">
             No Reports API data yet for this window — run a campaign report cycle from{' '}
             <a href="/marketing/advertising/reports" target="_blank" className="underline hover:text-slate-600">
               Reports
@@ -345,10 +345,10 @@ export function AdsTab({
             <Search className="h-3.5 w-3.5" aria-hidden />
             Top Search Terms ({windowDays}d)
           </h3>
-          <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+          <div className="overflow-x-auto rounded-lg border border-default dark:border-slate-700">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-default dark:border-slate-700">
                   {['Query', 'Match', 'Clicks', 'Orders', 'Spend', 'ACOS'].map((h) => (
                     <th key={h} className="px-2 py-1.5 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">
                       {h}
@@ -368,7 +368,7 @@ export function AdsTab({
                         <TrendingUp className="inline h-3 w-3 text-emerald-500 ml-1" aria-label="Converting" />
                       )}
                     </td>
-                    <td className="px-2 py-1.5 text-xs text-slate-400">{st.matchType ?? '—'}</td>
+                    <td className="px-2 py-1.5 text-xs text-tertiary">{st.matchType ?? '—'}</td>
                     <td className="px-2 py-1.5 text-xs tabular-nums text-slate-600 dark:text-slate-400">{st.clicks}</td>
                     <td className="px-2 py-1.5 text-xs tabular-nums text-slate-600 dark:text-slate-400">{st.orders}</td>
                     <td className="px-2 py-1.5 text-xs tabular-nums text-slate-700 dark:text-slate-300">{fmtEur(st.spendCents)}</td>
@@ -380,7 +380,7 @@ export function AdsTab({
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-tertiary mt-1">
             <a href="/marketing/advertising/search-terms" target="_blank" className="hover:underline text-blue-500">
               View all search terms →
             </a>
@@ -395,14 +395,14 @@ export function AdsTab({
             <Layers className="h-3.5 w-3.5" aria-hidden />
             Ad Creatives ({creatives.length})
             {summary?.multiProductCreatives ? (
-              <span className="ml-1 text-[10px] text-slate-400 normal-case tracking-normal">
+              <span className="ml-1 text-[10px] text-tertiary normal-case tracking-normal">
                 · {summary.multiProductCreatives} multi-product
               </span>
             ) : null}
           </h3>
           <div className="space-y-2">
             {creatives.map((cr) => (
-              <div key={cr.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+              <div key={cr.id} className="rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
                 {/* Header */}
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="min-w-0 flex-1">
@@ -427,7 +427,7 @@ export function AdsTab({
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
                       {cr.adGroupName ?? '(no ad-group name)'}{' '}
                       {cr.marketplace && (
-                        <span className="text-slate-400" title={marketplaceCountryName(cr.marketplace)}>
+                        <span className="text-tertiary" title={marketplaceCountryName(cr.marketplace)}>
                           · {marketplaceCode(cr.marketplace)}
                         </span>
                       )}
@@ -456,7 +456,7 @@ export function AdsTab({
                       ) : (
                         <span className="h-3 w-3 shrink-0" />
                       )}
-                      <span className="text-[10px] uppercase tracking-wider text-slate-400 w-8 shrink-0">
+                      <span className="text-[10px] uppercase tracking-wider text-tertiary w-8 shrink-0">
                         {p.productIdType}
                       </span>
                       <span className="font-mono text-slate-700 dark:text-slate-300 truncate">
@@ -489,7 +489,7 @@ export function AdsTab({
               </div>
             ))}
           </div>
-          <p className="text-xs text-slate-400 mt-1.5">
+          <p className="text-xs text-tertiary mt-1.5">
             Creative data populated by the v1 export pipeline. SB ads typically
             bundle multiple ASINs in one creative; SP ads usually serve one ASIN.
           </p>
@@ -497,7 +497,7 @@ export function AdsTab({
       )}
 
       {/* Links */}
-      <div className="flex items-center gap-4 pt-1 border-t border-slate-100 dark:border-slate-800">
+      <div className="flex items-center gap-4 pt-1 border-t border-subtle dark:border-slate-800">
         {[
           { href: '/marketing/advertising/analytics', label: 'Analytics' },
           { href: '/marketing/advertising/insights',  label: 'Insights' },

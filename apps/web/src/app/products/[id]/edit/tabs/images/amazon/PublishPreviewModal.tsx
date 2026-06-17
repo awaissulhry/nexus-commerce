@@ -140,7 +140,7 @@ export default function PublishPreviewModal({
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[85vh] flex flex-col overflow-hidden">
-        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-start justify-between px-5 py-4 border-b border-default dark:border-slate-700">
           <div>
             <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               Publish preview — Amazon {marketplace}
@@ -156,7 +156,7 @@ export default function PublishPreviewModal({
 
         {/* Headline coverage */}
         {data && (
-          <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-4 text-xs">
+          <div className="px-5 py-3 border-b border-subtle dark:border-slate-800 flex items-center gap-4 text-xs">
             <span className="text-slate-500 dark:text-slate-400">Variants:</span>
             <span className="font-mono text-slate-700 dark:text-slate-200">
               {data.variantsWithAsin}/{data.totalVariants} with ASIN
@@ -172,7 +172,7 @@ export default function PublishPreviewModal({
               </span>
             )}
             {data.activeAxis && (
-              <span className="text-slate-400 ml-auto">axis: {data.activeAxis}</span>
+              <span className="text-tertiary ml-auto">axis: {data.activeAxis}</span>
             )}
           </div>
         )}
@@ -238,7 +238,7 @@ export default function PublishPreviewModal({
         {/* Body */}
         <div className="flex-1 overflow-auto px-5 py-4">
           {loading && (
-            <div className="flex items-center justify-center py-12 text-slate-400 gap-2 text-sm">
+            <div className="flex items-center justify-center py-12 text-tertiary gap-2 text-sm">
               <Loader2 className="w-4 h-4 animate-spin" /> Resolving plan…
             </div>
           )}
@@ -249,20 +249,20 @@ export default function PublishPreviewModal({
             </div>
           )}
           {data && data.rows.length === 0 && (
-            <div className="text-center py-12 text-sm text-slate-400">No variants to preview.</div>
+            <div className="text-center py-12 text-sm text-tertiary">No variants to preview.</div>
           )}
           {data && data.rows.length > 0 && (
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr>
-                  <th className="text-left px-2 py-1 sticky top-0 bg-white dark:bg-slate-900 z-10 border-b border-slate-200 dark:border-slate-700">SKU / ASIN</th>
-                  <th className="text-left px-2 py-1 sticky top-0 bg-white dark:bg-slate-900 z-10 border-b border-slate-200 dark:border-slate-700">Attributes</th>
+                  <th className="text-left px-2 py-1 sticky top-0 bg-white dark:bg-slate-900 z-10 border-b border-default dark:border-slate-700">SKU / ASIN</th>
+                  <th className="text-left px-2 py-1 sticky top-0 bg-white dark:bg-slate-900 z-10 border-b border-default dark:border-slate-700">Attributes</th>
                   {AMAZON_SLOTS.map((s) => (
-                    <th key={s} className="px-1 py-1 sticky top-0 bg-white dark:bg-slate-900 z-10 border-b border-slate-200 dark:border-slate-700 text-center font-mono text-[10px]">
+                    <th key={s} className="px-1 py-1 sticky top-0 bg-white dark:bg-slate-900 z-10 border-b border-default dark:border-slate-700 text-center font-mono text-[10px]">
                       {s}
                     </th>
                   ))}
-                  <th className="px-2 py-1 sticky top-0 bg-white dark:bg-slate-900 z-10 border-b border-slate-200 dark:border-slate-700 text-center">Cover</th>
+                  <th className="px-2 py-1 sticky top-0 bg-white dark:bg-slate-900 z-10 border-b border-default dark:border-slate-700 text-center">Cover</th>
                 </tr>
               </thead>
               <tbody>
@@ -270,19 +270,19 @@ export default function PublishPreviewModal({
                   <tr
                     key={row.variationId}
                     className={cn(
-                      'border-b border-slate-100 dark:border-slate-800',
+                      'border-b border-subtle dark:border-slate-800',
                       !row.hasMain && row.amazonAsin && 'bg-red-50/30 dark:bg-red-950/10',
                       !row.amazonAsin && 'opacity-50',
                     )}
                   >
                     <td className="px-2 py-1.5 align-top">
                       <div className="font-mono text-slate-700 dark:text-slate-200">{row.sku}</div>
-                      <div className="font-mono text-[10px] text-slate-400">{row.amazonAsin ?? 'no ASIN'}</div>
+                      <div className="font-mono text-[10px] text-tertiary">{row.amazonAsin ?? 'no ASIN'}</div>
                     </td>
                     <td className="px-2 py-1.5 align-top text-slate-600 dark:text-slate-300">
                       {Object.entries(row.attributes).map(([k, v]) => (
                         <span key={k} className="inline-block mr-1.5">
-                          <span className="text-slate-400">{k}:</span> <span className="text-slate-700 dark:text-slate-200">{v}</span>
+                          <span className="text-tertiary">{k}:</span> <span className="text-slate-700 dark:text-slate-200">{v}</span>
                         </span>
                       ))}
                     </td>
@@ -299,10 +299,10 @@ export default function PublishPreviewModal({
                               cell
                                 ? cell.scope === 'variation'
                                   ? 'border-blue-300 dark:border-blue-700'
-                                  : 'border-slate-200 dark:border-slate-700 opacity-70'
+                                  : 'border-default dark:border-slate-700 opacity-70'
                                 : isMainEmpty
                                   ? 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-950/20'
-                                  : 'border-dashed border-slate-200 dark:border-slate-700',
+                                  : 'border-dashed border-default dark:border-slate-700',
                             )}
                             title={cell ? sourceLabel(cell) : isMainEmpty ? 'MAIN missing — Amazon will reject' : 'empty'}
                           >
@@ -358,14 +358,14 @@ export default function PublishPreviewModal({
               </div>
               {drillCell.row.slots[drillCell.slot] ? (
                 <div className="space-y-2">
-                  <div className="aspect-square w-full rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden border border-slate-200 dark:border-slate-700">
+                  <div className="aspect-square w-full rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden border border-default dark:border-slate-700">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={drillCell.row.slots[drillCell.slot]!.url} alt="" className="w-full h-full object-contain" />
                   </div>
                   <p className="text-xs text-slate-600 dark:text-slate-300">
                     Source: {sourceLabel(drillCell.row.slots[drillCell.slot]!)}
                   </p>
-                  <p className="text-[11px] font-mono text-slate-400 truncate" title={drillCell.row.slots[drillCell.slot]!.listingImageId}>
+                  <p className="text-[11px] font-mono text-tertiary truncate" title={drillCell.row.slots[drillCell.slot]!.listingImageId}>
                     listingImage: {drillCell.row.slots[drillCell.slot]!.listingImageId}
                   </p>
                 </div>
@@ -378,7 +378,7 @@ export default function PublishPreviewModal({
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-subtle dark:border-slate-800">
           <span className="text-[11px] text-slate-500 dark:text-slate-400">
             The publisher uses the same cascade — this is exactly what will submit.
           </span>

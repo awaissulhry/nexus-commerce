@@ -174,10 +174,10 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
       aria-label="Upload products"
     >
       <div
-        className="bg-white dark:bg-slate-900 rounded-lg shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-3xl max-h-[80vh] flex flex-col"
+        className="bg-white dark:bg-slate-900 rounded-lg shadow-2xl border border-default dark:border-slate-700 w-full max-w-3xl max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <div className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <FileSpreadsheet className="w-4 h-4 text-slate-500 dark:text-slate-400" />
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -193,7 +193,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
             type="button"
             onClick={onClose}
             disabled={stage === 'uploading' || stage === 'applying'}
-            className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40"
+            className="text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -233,24 +233,24 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                     if (f) handleFile(f)
                   }}
                 />
-                <Upload className="w-7 h-7 mx-auto text-slate-400 dark:text-slate-500 mb-3" />
+                <Upload className="w-7 h-7 mx-auto text-tertiary dark:text-slate-500 mb-3" />
                 <div className="text-md font-medium text-slate-700 dark:text-slate-300">
                   Drop CSV, Excel, or ZIP file here
                 </div>
                 <div className="text-base text-slate-500 dark:text-slate-400 mt-0.5">
                   or click to browse
                 </div>
-                <div className="text-sm text-slate-400 dark:text-slate-500 mt-3">
+                <div className="text-sm text-tertiary dark:text-slate-500 mt-3">
                   Supported: .csv, .xlsx, .xls, .zip · Max 50 MB · 50,000 rows
                 </div>
-                <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+                <div className="text-sm text-tertiary dark:text-slate-500 mt-1">
                   ZIP layout: <code className="font-mono">SKU/data.json</code> +{' '}
                   <code className="font-mono">SKU/description.html</code> per
                   product folder
                 </div>
               </div>
 
-              <div className="border border-slate-200 dark:border-slate-700 rounded-md px-4 py-3 bg-slate-50/50">
+              <div className="border border-default dark:border-slate-700 rounded-md px-4 py-3 bg-slate-50/50">
                 <div className="text-base font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                   Need a template?
                 </div>
@@ -299,7 +299,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
 
           {stage === 'uploading' && (
             <div className="flex flex-col items-center justify-center py-10 gap-3 text-slate-600 dark:text-slate-400">
-              <Loader2 className="w-6 h-6 animate-spin text-slate-400 dark:text-slate-500" />
+              <Loader2 className="w-6 h-6 animate-spin text-tertiary dark:text-slate-500" />
               <div className="text-md">Parsing and validating…</div>
             </div>
           )}
@@ -333,7 +333,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                       key={`${e.row}:${e.field ?? ''}:${i}`}
                       className="px-3 py-1.5 flex items-center gap-2 text-base"
                     >
-                      <span className="text-slate-400 dark:text-slate-500 tabular-nums w-12">
+                      <span className="text-tertiary dark:text-slate-500 tabular-nums w-12">
                         Row {e.row}
                       </span>
                       <span className="font-mono text-slate-500 dark:text-slate-400 truncate max-w-[140px]">
@@ -357,7 +357,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                 <PreviewSection
                   title="Sample changes"
                   iconClass="text-slate-500 dark:text-slate-400"
-                  rowClass="bg-slate-50/50 border-slate-200 dark:border-slate-700"
+                  rowClass="bg-slate-50/50 border-default dark:border-slate-700"
                 >
                   {preview.sampleChanges
                     .slice(0, PREVIEW_LIMIT)
@@ -366,17 +366,17 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                         key={`${c.row}:${c.field}:${i}`}
                         className="px-3 py-1.5 flex items-center gap-2 text-base"
                       >
-                        <span className="text-slate-400 dark:text-slate-500 tabular-nums w-12">
+                        <span className="text-tertiary dark:text-slate-500 tabular-nums w-12">
                           Row {c.row}
                         </span>
                         <span className="font-mono text-slate-500 dark:text-slate-400 truncate max-w-[140px]">
                           {c.sku}
                         </span>
                         <span className="text-slate-700 dark:text-slate-300">{c.field}:</span>
-                        <span className="text-slate-400 dark:text-slate-500 line-through tabular-nums">
+                        <span className="text-tertiary dark:text-slate-500 line-through tabular-nums">
                           {formatValue(c.oldValue)}
                         </span>
-                        <span className="text-slate-400 dark:text-slate-500">→</span>
+                        <span className="text-tertiary dark:text-slate-500">→</span>
                         <span className="bg-yellow-100 text-yellow-900 px-1.5 py-0.5 rounded tabular-nums">
                           {formatValue(c.newValue)}
                         </span>
@@ -402,7 +402,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
 
           {stage === 'applying' && (
             <div className="flex flex-col items-center justify-center py-10 gap-3 text-slate-600 dark:text-slate-400">
-              <Loader2 className="w-6 h-6 animate-spin text-slate-400 dark:text-slate-500" />
+              <Loader2 className="w-6 h-6 animate-spin text-tertiary dark:text-slate-500" />
               <div className="text-md">
                 Applying {preview?.totalChanges ?? 0} change
                 {preview?.totalChanges === 1 ? '' : 's'}…
@@ -411,7 +411,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
           )}
         </div>
 
-        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-2">
+        <div className="px-5 py-3 border-t border-default dark:border-slate-700 flex items-center justify-end gap-2">
           {stage === 'preview' && (
             <>
               <Button variant="secondary" size="sm" onClick={onClose}>
@@ -468,7 +468,7 @@ function PreviewSummaryGrid({ preview }: { preview: PreviewSummary }) {
       {cells.map((c) => (
         <div
           key={c.label}
-          className="border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2 bg-white dark:bg-slate-900"
+          className="border border-default dark:border-slate-700 rounded-md px-3 py-2 bg-white dark:bg-slate-900"
         >
           <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             {c.label}

@@ -71,7 +71,7 @@ export function SignalsPanel({ signals }: { signals: unknown }) {
         <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-0.5">
           {notes.slice(0, 5).map((n, i) => (
             <li key={i} className="inline-flex items-center gap-1">
-              <span className="text-slate-400 dark:text-slate-500 capitalize">
+              <span className="text-tertiary dark:text-slate-500 capitalize">
                 {n.source}:
               </span>
               <span>{n.description}</span>
@@ -98,7 +98,7 @@ export function SignalChip({
       ? 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-950/40 dark:border-emerald-900'
       : factor < 0.95
         ? 'text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-300 dark:bg-rose-950/40 dark:border-rose-900'
-        : 'text-slate-600 bg-slate-50 border-slate-200 dark:text-slate-400 dark:bg-slate-900 dark:border-slate-800'
+        : 'text-slate-600 bg-slate-50 border-default dark:text-slate-400 dark:bg-slate-900 dark:border-slate-800'
   return (
     <div className={cn('border rounded px-2 py-1 text-sm', tone)}>
       <div className="uppercase tracking-wider text-xs font-semibold opacity-70">
@@ -141,7 +141,7 @@ export function StockByLocationPanel({
   const isFallback = stockSource === 'PRODUCT_TOTAL_STOCK_FALLBACK'
 
   return (
-    <div className="border border-slate-200 dark:border-slate-800 rounded p-3 bg-slate-50/50 dark:bg-slate-950/40">
+    <div className="border border-default dark:border-slate-800 rounded p-3 bg-slate-50/50 dark:bg-slate-950/40">
       <div className="flex items-center justify-between mb-2">
         <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
           Stock by location
@@ -203,7 +203,7 @@ export function StockByLocationPanel({
         </ul>
       )}
 
-      <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-800 grid grid-cols-3 gap-2 text-base">
+      <div className="mt-2 pt-2 border-t border-default dark:border-slate-800 grid grid-cols-3 gap-2 text-base">
         <div>
           <div className="uppercase tracking-wider text-xs text-slate-500 dark:text-slate-400 font-semibold">
             Available
@@ -265,12 +265,12 @@ export function ChannelCoverPanel({
         {channelCover.map((c, i) => {
           const tone =
             c.daysOfCover == null
-              ? 'bg-slate-50 border-slate-200 text-slate-500 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400'
+              ? 'bg-slate-50 border-default text-slate-500 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400'
               : c.daysOfCover <= leadTimeDays
                 ? 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-300'
                 : c.daysOfCover <= leadTimeDays * 2
                   ? 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/40 dark:border-amber-900 dark:text-amber-300'
-                  : 'bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300'
+                  : 'bg-slate-50 border-default text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300'
           const barWidth =
             c.daysOfCover != null
               ? Math.min(100, Math.round((c.daysOfCover / maxBar) * 100))

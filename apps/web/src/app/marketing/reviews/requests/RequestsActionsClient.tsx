@@ -113,7 +113,7 @@ export function RequestsActionsClient({ mailer }: { mailer?: MailerState }) {
             {mailer.isPaused ? 'Resume mailer' : 'Pause mailer'}
           </button>
         )}
-        <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
+        <span className="text-[11px] text-tertiary dark:text-slate-500 flex items-center gap-1">
           <CalendarClock className="h-3 w-3" />
           Schedules new deliveries + sends due requests
         </span>

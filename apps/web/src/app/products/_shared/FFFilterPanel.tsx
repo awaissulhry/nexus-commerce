@@ -76,7 +76,7 @@ export function FFFilterPanel({
           'inline-flex items-center gap-1.5 h-7 px-2 text-xs border rounded-md transition-colors',
           activeCount > 0
             ? 'border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
-            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700',
+            : 'border-default dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700',
         )}
         title="Row filters"
       >
@@ -92,9 +92,9 @@ export function FFFilterPanel({
       {open && (
         <div
           ref={panelRef}
-          className="absolute right-0 top-full mt-1 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-30"
+          className="absolute right-0 top-full mt-1 w-72 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-lg z-30"
         >
-          <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <div className="px-3 py-2 border-b border-default dark:border-slate-700 flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
               Row filters
             </span>
@@ -108,7 +108,7 @@ export function FFFilterPanel({
                   Reset
                 </button>
               )}
-              <button type="button" onClick={() => onOpenChange(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+              <button type="button" onClick={() => onOpenChange(false)} className="text-tertiary hover:text-slate-600 dark:hover:text-slate-200">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>

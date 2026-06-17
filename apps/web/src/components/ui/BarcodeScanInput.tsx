@@ -148,7 +148,7 @@ export function BarcodeScanInput({
           disabled && 'opacity-60 cursor-not-allowed',
         )}
       >
-        {flashCheck ? <Check size={16} className="text-emerald-600" /> : <ScanLine size={16} className="text-slate-400" />}
+        {flashCheck ? <Check size={16} className="text-emerald-600" /> : <ScanLine size={16} className="text-tertiary" />}
         <span className="sr-only">{label}</span>
         <input
           ref={inputRef}
@@ -165,7 +165,7 @@ export function BarcodeScanInput({
               submit()
             }
           }}
-          className="flex-1 outline-none bg-transparent text-md font-mono tabular-nums placeholder:text-slate-400"
+          className="flex-1 outline-none bg-transparent text-md font-mono tabular-nums placeholder:text-tertiary"
         />
         {enableCamera && (
           <button

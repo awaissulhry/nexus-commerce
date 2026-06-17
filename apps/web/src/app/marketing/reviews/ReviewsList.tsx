@@ -115,7 +115,7 @@ export function ReviewsList({ initial }: { initial: ReviewRow[] }) {
       </div>
 
       {items.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
           {channel === 'AMAZON'
             ? 'Amazon doesn’t share full review text by API — the themes above come from Amazon’s official insights. For full reviews, import your Seller Central export from Advanced → Import reviews.'
             : channel === 'EBAY'
@@ -127,7 +127,7 @@ export function ReviewsList({ initial }: { initial: ReviewRow[] }) {
           {items.map((r) => (
             <li
               key={r.id}
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3"
+              className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-3"
             >
               <div className="flex items-start gap-2 flex-wrap">
                 <SentimentBadge label={r.sentiment?.label ?? 'NEUTRAL'} score={r.sentiment?.score} />

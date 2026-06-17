@@ -107,10 +107,10 @@ export function AdvertisingSidebar() {
   )
 
   return (
-    <aside className={`shrink-0 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 ${collapsed ? 'w-14' : 'w-56'} transition-[width] duration-150 sticky top-0 self-start h-[calc(100vh-3.5rem)] overflow-y-auto`}>
+    <aside className={`shrink-0 border-r border-default dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 ${collapsed ? 'w-14' : 'w-56'} transition-[width] duration-150 sticky top-0 self-start h-[calc(100vh-3.5rem)] overflow-y-auto`}>
       <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-2 py-2 sticky top-0 bg-slate-50/80 dark:bg-slate-900/60 backdrop-blur z-10`}>
-        {!collapsed && <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 px-2">Advertising</span>}
-        <button onClick={toggle} title={collapsed ? 'Expand' : 'Collapse'} className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
+        {!collapsed && <span className="text-[11px] font-semibold uppercase tracking-wider text-tertiary px-2">Advertising</span>}
+        <button onClick={toggle} title={collapsed ? 'Expand' : 'Collapse'} className="p-1.5 rounded-md text-tertiary hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
           {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
         </button>
       </div>
@@ -120,7 +120,7 @@ export function AdvertisingSidebar() {
           if (g.advanced && !collapsed) {
             return (
               <div key={g.label}>
-                <button onClick={toggleAdvanced} className="w-full flex items-center justify-between text-[10px] font-medium uppercase tracking-wider text-slate-400 px-2 mb-1 hover:text-slate-600">
+                <button onClick={toggleAdvanced} className="w-full flex items-center justify-between text-[10px] font-medium uppercase tracking-wider text-tertiary px-2 mb-1 hover:text-slate-600">
                   <span>{g.label}</span>{advancedOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </button>
                 {advancedOpen && renderItems(g.items)}
@@ -129,7 +129,7 @@ export function AdvertisingSidebar() {
           }
           return (
             <div key={g.label}>
-              {!collapsed && <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 px-2 mb-1">{g.label}</div>}
+              {!collapsed && <div className="text-[10px] font-medium uppercase tracking-wider text-tertiary px-2 mb-1">{g.label}</div>}
               {renderItems(g.items)}
             </div>
           )

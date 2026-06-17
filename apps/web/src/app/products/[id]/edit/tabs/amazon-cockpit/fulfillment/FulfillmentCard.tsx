@@ -152,21 +152,21 @@ export default function FulfillmentCard({
         : {
             label: t('products.edit.cockpit.amazon.fulfillment.notSet'),
             icon: <Truck aria-hidden className="w-3.5 h-3.5" />,
-            cls: 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+            cls: 'bg-slate-100 text-slate-500 border-default dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
           }
 
   return (
     <Card noPadding>
       <div
         data-jump-target="fulfillment"
-        className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2"
+        className="px-4 py-2.5 border-b border-subtle dark:border-slate-800 flex items-center gap-2"
       >
         <Truck aria-hidden className="w-4 h-4 text-blue-500" />
         <div className="text-md font-medium text-slate-900 dark:text-slate-100">
           {t('products.edit.cockpit.amazon.cards.fulfillment')}
         </div>
         {loading && (
-          <Loader2 aria-hidden className="w-3.5 h-3.5 text-slate-400 animate-spin ml-auto" />
+          <Loader2 aria-hidden className="w-3.5 h-3.5 text-tertiary animate-spin ml-auto" />
         )}
       </div>
 
@@ -177,7 +177,7 @@ export default function FulfillmentCard({
             <button
               type="button"
               onClick={() => setReloadKey((k) => k + 1)}
-              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
             >
               <RefreshCw aria-hidden className="w-3 h-3" />
               {t('products.edit.cockpit.amazon.fulfillment.retry')}

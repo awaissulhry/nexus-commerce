@@ -53,7 +53,7 @@ export default function HeatmapPanel({
     <Card
       title={
         <span className="inline-flex items-center gap-1.5">
-          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+          <Calendar className="w-3.5 h-3.5 text-tertiary" />
           {t('overview.heatmap.heading')}
         </span>
       }
@@ -75,7 +75,7 @@ export default function HeatmapPanel({
               {Array.from({ length: 24 }).map((_, h) => (
                 <th
                   key={h}
-                  className="text-[10px] font-mono text-slate-400 dark:text-slate-500 text-center font-normal"
+                  className="text-[10px] font-mono text-tertiary dark:text-slate-500 text-center font-normal"
                   style={{ minWidth: 14 }}
                 >
                   {h % HOURS_PER_LABEL === 0 ? String(h).padStart(2, '0') : ''}
@@ -156,7 +156,7 @@ export default function HeatmapPanel({
                   {labels.map((l) => (
                     <th
                       key={l}
-                      className="text-[10px] font-mono text-slate-400 dark:text-slate-500 text-center font-normal"
+                      className="text-[10px] font-mono text-tertiary dark:text-slate-500 text-center font-normal"
                     >
                       {l}
                     </th>

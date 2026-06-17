@@ -278,7 +278,7 @@ export default function InboxClient() {
       {/* Feed */}
       {loading && (
         <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+          <Loader2 className="w-6 h-6 animate-spin text-tertiary" />
         </div>
       )}
 
@@ -288,7 +288,7 @@ export default function InboxClient() {
             <Inbox className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
           </div>
           <p className="text-base font-medium text-slate-700 dark:text-slate-300">All clear</p>
-          <p className="text-sm text-slate-400 mt-1">Nothing needs attention right now.</p>
+          <p className="text-sm text-tertiary mt-1">Nothing needs attention right now.</p>
         </div>
       )}
 
@@ -305,7 +305,7 @@ export default function InboxClient() {
                     ? 'border-red-200 bg-red-50/50 dark:border-red-800/50 dark:bg-red-950/10'
                     : item.severity === 'warn'
                       ? 'border-amber-200 bg-amber-50/30 dark:border-amber-800/50 dark:bg-amber-950/10'
-                      : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900',
+                      : 'border-default bg-white dark:border-slate-700 dark:bg-slate-900',
                 )}
               >
                 {/* Severity icon */}
@@ -322,7 +322,7 @@ export default function InboxClient() {
                         {item.channel}
                       </span>
                     )}
-                    <span className="ml-auto text-[11px] text-slate-400 tabular-nums flex-shrink-0">
+                    <span className="ml-auto text-[11px] text-tertiary tabular-nums flex-shrink-0">
                       {relativeTime(item.createdAt)}
                     </span>
                   </div>
@@ -331,7 +331,7 @@ export default function InboxClient() {
                   )}
                   <div className="flex items-center gap-1 mt-2 flex-wrap">
                     {/* Source tag */}
-                    <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500 mr-1">
+                    <span className="inline-flex items-center gap-1 text-[10px] text-tertiary dark:text-slate-500 mr-1">
                       <SourceIcon source={item.source} />
                       {SOURCE_LABELS[item.source]}
                     </span>

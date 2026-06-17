@@ -77,7 +77,7 @@ function LineChart({ values, labels, color, unit, yLabel }: LineChartProps) {
   const defined = values.filter((v): v is number => v != null)
   if (defined.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-xs text-slate-400">
+      <div className="flex items-center justify-center h-full text-xs text-tertiary">
         No data yet
       </div>
     )
@@ -191,10 +191,10 @@ function KpiTile({
   color?: string
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+    <div className="rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
       <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-medium">{label}</p>
       <p className={`text-2xl font-bold mt-1 tabular-nums ${color}`}>{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+      {sub && <p className="text-xs text-tertiary mt-0.5">{sub}</p>}
     </div>
   )
 }
@@ -213,14 +213,14 @@ function ChartCard({
   children: React.ReactNode
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
+    <div className="rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
       <div className="flex items-start justify-between mb-3">
         <div>
           <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-            <Icon className="h-4 w-4 text-slate-400" aria-hidden />
+            <Icon className="h-4 w-4 text-tertiary" aria-hidden />
             {title}
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>
+          <p className="text-xs text-tertiary mt-0.5">{subtitle}</p>
         </div>
       </div>
       {children}
@@ -233,10 +233,10 @@ function ChartCard({
 function DataTable({ rows }: { rows: TrendsRow[] }) {
   const recent = [...rows].reverse().slice(0, 14)
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+    <div className="overflow-x-auto rounded-lg border border-default dark:border-slate-700">
       <table className="w-full text-sm">
         <thead>
-          <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+          <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-default dark:border-slate-700">
             {['Date','Impressions','Clicks','CTR','Orders','Ad Spend','Ad Sales','ACOS','Total Rev','TACOS'].map((h) => (
               <th key={h} className="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">
                 {h}
@@ -255,7 +255,7 @@ function DataTable({ rows }: { rows: TrendsRow[] }) {
               <td className="px-3 py-1.5 text-xs tabular-nums text-slate-700 dark:text-slate-300">{centsToEur(r.adSpendCents)}</td>
               <td className="px-3 py-1.5 text-xs tabular-nums text-slate-700 dark:text-slate-300">{centsToEur(r.adSalesCents)}</td>
               <td className={`px-3 py-1.5 text-xs tabular-nums font-medium ${
-                r.acos == null ? 'text-slate-400' :
+                r.acos == null ? 'text-tertiary' :
                 r.acos > 30 ? 'text-red-600 dark:text-red-400' :
                 r.acos > 20 ? 'text-amber-600 dark:text-amber-400' :
                 'text-emerald-600 dark:text-emerald-400'
@@ -264,7 +264,7 @@ function DataTable({ rows }: { rows: TrendsRow[] }) {
                 {r.totalRevenueCents > 0 ? centsToEur(r.totalRevenueCents) : '—'}
               </td>
               <td className={`px-3 py-1.5 text-xs tabular-nums font-medium ${
-                r.tacos == null ? 'text-slate-400' :
+                r.tacos == null ? 'text-tertiary' :
                 r.tacos > 20 ? 'text-red-600 dark:text-red-400' :
                 r.tacos > 12 ? 'text-amber-600 dark:text-amber-400' :
                 'text-emerald-600 dark:text-emerald-400'
@@ -359,13 +359,13 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
           label="Avg ACOS"
           value={fmtPct(avgAcos)}
           sub={`${windowDays}-day avg`}
-          color={avgAcos == null ? 'text-slate-400' : avgAcos > 30 ? 'text-red-600 dark:text-red-400' : avgAcos > 20 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}
+          color={avgAcos == null ? 'text-tertiary' : avgAcos > 30 ? 'text-red-600 dark:text-red-400' : avgAcos > 20 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}
         />
         <KpiTile
           label="Avg TACOS"
           value={fmtPct(avgTacos)}
           sub="needs SP-API revenue"
-          color={avgTacos == null ? 'text-slate-400' : avgTacos > 20 ? 'text-red-600 dark:text-red-400' : avgTacos > 12 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}
+          color={avgTacos == null ? 'text-tertiary' : avgTacos > 20 ? 'text-red-600 dark:text-red-400' : avgTacos > 12 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}
         />
         <KpiTile
           label="Ad Spend"
@@ -392,7 +392,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
           icon={TrendingDown}
         >
           {rows.length === 0
-            ? <div className="text-xs text-slate-400 py-8 text-center">No ad performance data yet.</div>
+            ? <div className="text-xs text-tertiary py-8 text-center">No ad performance data yet.</div>
             : <LineChart values={acosVals} labels={dates} color="#f59e0b" unit="%" yLabel="ACOS %" />
           }
         </ChartCard>
@@ -403,7 +403,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
           icon={TrendingUp}
         >
           {rows.length === 0 || acosVals.every((v) => v == null)
-            ? <div className="text-xs text-slate-400 py-8 text-center">No data yet.</div>
+            ? <div className="text-xs text-tertiary py-8 text-center">No data yet.</div>
             : <LineChart values={tacosVals} labels={dates} color="#3b82f6" unit="%" yLabel="TACOS %" />
           }
         </ChartCard>
@@ -414,7 +414,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
           icon={BarChart2}
         >
           {rows.length === 0
-            ? <div className="text-xs text-slate-400 py-8 text-center">No spend data yet.</div>
+            ? <div className="text-xs text-tertiary py-8 text-center">No spend data yet.</div>
             : <LineChart values={spendVals} labels={dates} color="#10b981" unit="€" yLabel="Spend €" />
           }
         </ChartCard>
@@ -425,7 +425,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
           icon={MousePointerClick}
         >
           {rows.length === 0
-            ? <div className="text-xs text-slate-400 py-8 text-center">No data yet.</div>
+            ? <div className="text-xs text-tertiary py-8 text-center">No data yet.</div>
             : <LineChart values={ctrVals} labels={dates} color="#8b5cf6" unit="%" yLabel="CTR %" />
           }
         </ChartCard>
@@ -433,13 +433,13 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
 
       {/* Data table */}
       <div className="mb-2 flex items-center gap-2">
-        <ShoppingCart className="h-4 w-4 text-slate-400" aria-hidden />
+        <ShoppingCart className="h-4 w-4 text-tertiary" aria-hidden />
         <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
           Daily breakdown — last 14 days
         </h2>
       </div>
       {rows.length === 0
-        ? <p className="text-sm text-slate-400">No data in this window.</p>
+        ? <p className="text-sm text-tertiary">No data in this window.</p>
         : <DataTable rows={rows} />
       }
     </div>

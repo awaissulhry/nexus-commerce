@@ -856,7 +856,7 @@ export default function Step4Attributes({
               value={provider}
               onChange={(e) => setProvider(e.target.value)}
               aria-label="AI provider"
-              className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:border-blue-300"
+              className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:border-blue-300"
               title="Choose which AI provider runs the next generation"
             >
               {providers
@@ -877,7 +877,7 @@ export default function Step4Attributes({
                 'inline-flex items-center gap-1 h-7 px-2 text-sm border rounded disabled:opacity-40',
                 showAllOptional
                   ? 'border-blue-300 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
+                  : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
               )}
               title={
                 showAllOptional
@@ -894,7 +894,7 @@ export default function Step4Attributes({
             type="button"
             onClick={() => setReloadKey((k) => k + 1)}
             disabled={loading}
-            className="inline-flex items-center gap-1 h-7 px-2 text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-40"
+            className="inline-flex items-center gap-1 h-7 px-2 text-sm text-slate-600 dark:text-slate-400 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-40"
             title="Re-fetch the required-fields manifest from cache"
           >
             {loading ? (
@@ -923,7 +923,7 @@ export default function Step4Attributes({
       </div>
 
       {loading && !manifest && (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-12 text-center text-md text-slate-500 dark:text-slate-400 flex items-center justify-center gap-2">
+        <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-12 text-center text-md text-slate-500 dark:text-slate-400 flex items-center justify-center gap-2">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading required fields…
         </div>
@@ -1002,7 +1002,7 @@ export default function Step4Attributes({
       })()}
 
       {manifest && manifest.fields.length === 0 && !loading && (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-6 text-center text-base text-slate-500 dark:text-slate-400">
+        <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-6 text-center text-base text-slate-500 dark:text-slate-400">
           No required fields across the selected channels.
         </div>
       )}

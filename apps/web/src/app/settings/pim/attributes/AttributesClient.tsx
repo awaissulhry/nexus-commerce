@@ -226,8 +226,8 @@ export default function AttributesClient({
 
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
         {/* Groups rail */}
-        <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden bg-white dark:bg-slate-900">
-          <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div className="border border-default dark:border-slate-800 rounded-lg overflow-hidden bg-white dark:bg-slate-900">
+          <div className="px-3 py-2 border-b border-default dark:border-slate-800 flex items-center justify-between">
             <div className="text-sm font-semibold text-slate-700 dark:text-slate-300">
               {t('pim.attributes.groupsRail.title', { count: groups.length })}
             </div>
@@ -306,8 +306,8 @@ export default function AttributesClient({
         </div>
 
         {/* Attributes table */}
-        <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden bg-white dark:bg-slate-900">
-          <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div className="border border-default dark:border-slate-800 rounded-lg overflow-hidden bg-white dark:bg-slate-900">
+          <div className="px-3 py-2 border-b border-default dark:border-slate-800 flex items-center justify-between">
             <div className="text-sm font-semibold text-slate-700 dark:text-slate-300">
               {selectedGroupId === null
                 ? t('pim.attributes.attrs.titleAll', { count: attributes.length })
@@ -342,7 +342,7 @@ export default function AttributesClient({
             </div>
           ) : (
             <table className="w-full text-base">
-              <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+              <thead className="bg-slate-50 dark:bg-slate-900 border-b border-default dark:border-slate-800">
                 <tr className="text-left">
                   <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.attributes.attrs.col.code')}</th>
                   <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.attributes.attrs.col.label')}</th>
@@ -359,7 +359,7 @@ export default function AttributesClient({
                 {filteredAttrs.map((a) => (
                   <tr
                     key={a.id}
-                    className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40"
+                    className="border-t border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40"
                   >
                     <td className="px-3 py-2 font-mono text-sm text-slate-700 dark:text-slate-300">
                       {a.code}
@@ -400,7 +400,7 @@ export default function AttributesClient({
                           {a._count?.options ?? 0}
                         </button>
                       ) : (
-                        <span className="text-slate-400 dark:text-slate-500">
+                        <span className="text-tertiary dark:text-slate-500">
                           —
                         </span>
                       )}
@@ -518,7 +518,7 @@ function CreateGroupModal({
             onChange={(e) => setCode(e.target.value.toLowerCase())}
             placeholder="sizing"
             autoFocus
-            className={`w-full h-9 px-2 text-base font-mono border rounded ${codeValid ? 'border-slate-200 dark:border-slate-800' : 'border-rose-300 dark:border-rose-700'} dark:bg-slate-900 dark:text-slate-100`}
+            className={`w-full h-9 px-2 text-base font-mono border rounded ${codeValid ? 'border-default dark:border-slate-800' : 'border-rose-300 dark:border-rose-700'} dark:bg-slate-900 dark:text-slate-100`}
           />
         </div>
         <div className="space-y-1">
@@ -530,7 +530,7 @@ function CreateGroupModal({
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Sizing & Fit"
-            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+            className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           />
         </div>
         {err && (
@@ -635,7 +635,7 @@ function CreateAttributeModal({
               onChange={(e) => setCode(e.target.value.toLowerCase())}
               placeholder="ce_certification"
               autoFocus
-              className={`w-full h-9 px-2 text-base font-mono border rounded ${codeValid ? 'border-slate-200 dark:border-slate-800' : 'border-rose-300 dark:border-rose-700'} dark:bg-slate-900 dark:text-slate-100`}
+              className={`w-full h-9 px-2 text-base font-mono border rounded ${codeValid ? 'border-default dark:border-slate-800' : 'border-rose-300 dark:border-rose-700'} dark:bg-slate-900 dark:text-slate-100`}
             />
           </div>
           <div className="space-y-1">
@@ -645,7 +645,7 @@ function CreateAttributeModal({
             <select
               value={groupId}
               onChange={(e) => setGroupId(e.target.value)}
-              className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+              className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
             >
               {groups.map((g) => (
                 <option key={g.id} value={g.id}>
@@ -664,7 +664,7 @@ function CreateAttributeModal({
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="CE Certification"
-            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+            className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -675,7 +675,7 @@ function CreateAttributeModal({
             <select
               value={type}
               onChange={(e) => setType(e.target.value)}
-              className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+              className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
             >
               {ATTRIBUTE_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>
@@ -691,7 +691,7 @@ function CreateAttributeModal({
             <select
               value={scope}
               onChange={(e) => setScope(e.target.value)}
-              className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+              className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
             >
               <option value="global">Global (one value per product)</option>
               <option value="per_variant">Per variant</option>
@@ -835,7 +835,7 @@ function OptionsModal({
             Loading options…
           </div>
         ) : options && options.length > 0 ? (
-          <ul className="border border-slate-200 dark:border-slate-800 rounded divide-y divide-slate-100 dark:divide-slate-800">
+          <ul className="border border-default dark:border-slate-800 rounded divide-y divide-slate-100 dark:divide-slate-800">
             {options.map((o) => (
               <li
                 key={o.id}
@@ -866,7 +866,7 @@ function OptionsModal({
           </div>
         )}
 
-        <div className="border border-slate-200 dark:border-slate-800 rounded p-3 space-y-2">
+        <div className="border border-default dark:border-slate-800 rounded p-3 space-y-2">
           <div className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
             New option
           </div>
@@ -876,14 +876,14 @@ function OptionsModal({
               value={newCode}
               onChange={(e) => setNewCode(e.target.value.toLowerCase())}
               placeholder="code (e.g. red)"
-              className={`w-full h-8 px-2 text-base font-mono border rounded ${codeValid ? 'border-slate-200 dark:border-slate-800' : 'border-rose-300 dark:border-rose-700'} dark:bg-slate-900 dark:text-slate-100`}
+              className={`w-full h-8 px-2 text-base font-mono border rounded ${codeValid ? 'border-default dark:border-slate-800' : 'border-rose-300 dark:border-rose-700'} dark:bg-slate-900 dark:text-slate-100`}
             />
             <input
               type="text"
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
               placeholder="label (e.g. Red)"
-              className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+              className="w-full h-8 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
             />
           </div>
           <div className="flex justify-end">

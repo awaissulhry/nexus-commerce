@@ -246,7 +246,7 @@ export default function ScheduledExportsPanel() {
       </div>
 
       {showForm && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 space-y-3">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-4 space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <label className="block">
               <span className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-0.5 block">
@@ -256,7 +256,7 @@ export default function ScheduledExportsPanel() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </label>
             <label className="block">
@@ -267,7 +267,7 @@ export default function ScheduledExportsPanel() {
                 type="text"
                 value={cronExpression}
                 onChange={(e) => setCronExpression(e.target.value)}
-                className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </label>
             <label className="block">
@@ -277,7 +277,7 @@ export default function ScheduledExportsPanel() {
               <select
                 value={format}
                 onChange={(e) => setFormat(e.target.value as typeof format)}
-                className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded"
+                className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
               >
                 {FORMATS.map((f) => (
                   <option key={f} value={f}>
@@ -295,7 +295,7 @@ export default function ScheduledExportsPanel() {
                 onChange={(e) =>
                   setTargetEntity(e.target.value as typeof targetEntity)
                 }
-                className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded"
+                className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
               >
                 {TARGET_ENTITIES.map((t) => (
                   <option key={t} value={t}>
@@ -311,7 +311,7 @@ export default function ScheduledExportsPanel() {
               <select
                 value={delivery}
                 onChange={(e) => setDelivery(e.target.value as typeof delivery)}
-                className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded"
+                className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
               >
                 {DELIVERIES.map((d) => (
                   <option key={d} value={d}>
@@ -335,7 +335,7 @@ export default function ScheduledExportsPanel() {
                     ? 'ops@example.com'
                     : 'https://example.com/webhook'
                 }
-                className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </label>
           </div>
@@ -358,7 +358,7 @@ export default function ScheduledExportsPanel() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg overflow-hidden">
         {rows.length === 0 ? (
           <div className="px-3 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
             {loading
@@ -424,7 +424,7 @@ export default function ScheduledExportsPanel() {
                         ) : r.lastStatus === 'FAILED' ? (
                           <XCircle className="w-3 h-3 text-red-600 dark:text-red-400" aria-hidden="true" />
                         ) : (
-                          <Clock className="w-3 h-3 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+                          <Clock className="w-3 h-3 text-tertiary dark:text-slate-500" aria-hidden="true" />
                         )}
                         <Badge
                           variant={

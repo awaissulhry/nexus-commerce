@@ -334,7 +334,7 @@ export default function ImportsClient() {
       {stage === 'idle' && (
         <div className="bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-6">
           <div className="flex items-center gap-3 mb-3">
-            <Upload className="w-5 h-5 text-slate-400" />
+            <Upload className="w-5 h-5 text-tertiary" />
             <div className="flex-1">
               <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
                 Import to /products
@@ -347,7 +347,7 @@ export default function ImportsClient() {
             <select
               value={onError}
               onChange={(e) => setOnErrorMode(e.target.value as 'skip' | 'abort')}
-              className="h-7 px-1.5 text-xs border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded"
+              className="h-7 px-1.5 text-xs border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
               title="What to do when a row fails validation"
             >
               <option value="skip">On error: skip failed</option>
@@ -374,14 +374,14 @@ export default function ImportsClient() {
       )}
 
       {stage === 'uploading' && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-6 inline-flex items-center gap-2 text-sm text-slate-600">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-6 inline-flex items-center gap-2 text-sm text-slate-600">
           <Loader2 className="w-4 h-4 animate-spin" />
           Parsing + auto-mapping…
         </div>
       )}
 
       {(stage === 'review' || stage === 'applying' || stage === 'done') && preview && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 space-y-3">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-base font-semibold text-slate-800 dark:text-slate-100">
@@ -411,7 +411,7 @@ export default function ImportsClient() {
 
           {/* Mapping table */}
           {preview.headers.length > 0 && (
-            <details className="border border-slate-200 dark:border-slate-800 rounded p-2" open={stage === 'review'}>
+            <details className="border border-default dark:border-slate-800 rounded p-2" open={stage === 'review'}>
               <summary className="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
                 <Table2 className="w-3.5 h-3.5" />
                 Column mapping ({Object.keys(mapping).length} mapped /{' '}
@@ -427,14 +427,14 @@ export default function ImportsClient() {
                       {f.label}
                       {f.required && <span className="text-red-600 ml-0.5">*</span>}
                     </span>
-                    <ChevronRight className="w-3 h-3 text-slate-400" />
+                    <ChevronRight className="w-3 h-3 text-tertiary" />
                     <select
                       value={mapping[f.id] ?? ''}
                       onChange={(e) =>
                         setMapping({ ...mapping, [f.id]: e.target.value })
                       }
                       disabled={stage !== 'review'}
-                      className="flex-1 h-6 px-1 text-xs border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded"
+                      className="flex-1 h-6 px-1 text-xs border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
                     >
                       <option value="">(skip)</option>
                       {preview.headers.map((h) => (
@@ -547,7 +547,7 @@ export default function ImportsClient() {
           />
         }
       />
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg overflow-hidden">
         {jobs.length === 0 ? (
           <div className="px-3 py-6 text-center text-sm text-slate-500">
             No imports yet. Choose a file above to get started.
@@ -572,14 +572,14 @@ export default function ImportsClient() {
                   <td className="px-3 py-2 max-w-[260px] truncate font-medium text-slate-800 dark:text-slate-200">
                     {j.jobName}
                     {j.parentJobId && (
-                      <span className="ml-1 text-[10px] text-slate-400 font-normal">
+                      <span className="ml-1 text-[10px] text-tertiary font-normal">
                         (retry)
                       </span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-xs text-slate-500 truncate max-w-[160px]">
                     {j.filename ?? j.source}
-                    <span className="ml-1 text-slate-400">{j.fileKind}</span>
+                    <span className="ml-1 text-tertiary">{j.fileKind}</span>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{j.totalRows}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">
@@ -644,10 +644,10 @@ export default function ImportsClient() {
           onClick={() => setDrillJob(null)}
         >
           <div
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col overflow-hidden"
+            className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <div className="px-4 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between">
               <div>
                 <div className="text-base font-semibold text-slate-800 dark:text-slate-100">
                   {drillJob.jobName}
@@ -667,7 +667,7 @@ export default function ImportsClient() {
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2">
+            <div className="px-3 py-2 border-b border-default dark:border-slate-700 flex items-center gap-2">
               {(['all', 'SUCCESS', 'FAILED', 'SKIPPED'] as const).map((s) => (
                 <button
                   key={s}

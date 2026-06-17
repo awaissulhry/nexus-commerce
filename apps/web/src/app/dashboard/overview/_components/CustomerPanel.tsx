@@ -57,7 +57,7 @@ export default function CustomerPanel({
     <Card
       title={
         <span className="inline-flex items-center gap-1.5">
-          <Users className="w-3.5 h-3.5 text-slate-400" />
+          <Users className="w-3.5 h-3.5 text-tertiary" />
           {t('overview.customers.heading')}
         </span>
       }

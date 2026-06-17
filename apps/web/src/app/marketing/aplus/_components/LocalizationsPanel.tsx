@@ -57,7 +57,7 @@ export default function LocalizationsPanel({ document, apiBase }: Props) {
   // skip the create UI. Operator manages siblings from the master.
   if (document.masterContentId && document.master) {
     return (
-      <div className="rounded-md border border-slate-200 bg-blue-50 px-3 py-2 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-blue-950/30 dark:text-slate-300">
+      <div className="rounded-md border border-default bg-blue-50 px-3 py-2 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-blue-950/30 dark:text-slate-300">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Languages className="w-4 h-4 text-blue-500" />
@@ -83,10 +83,10 @@ export default function LocalizationsPanel({ document, apiBase }: Props) {
   const haveLocalizations = document.localizations.length > 0
 
   return (
-    <div className="rounded-md border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-800">
+    <div className="rounded-md border border-default bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex items-center justify-between border-b border-subtle px-3 py-2 dark:border-slate-800">
         <div className="flex items-center gap-1.5 text-sm font-medium text-slate-900 dark:text-slate-100">
-          <Languages className="w-4 h-4 text-slate-400" />
+          <Languages className="w-4 h-4 text-tertiary" />
           {t('aplus.localizations.title')}
           <span className="text-xs font-normal text-slate-500 dark:text-slate-400">
             ({document.localizations.length + 1})
@@ -227,7 +227,7 @@ function LocalizationRow({
           {status}
         </span>
         {updatedAt && (
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-tertiary">
             {new Date(updatedAt).toLocaleDateString()}
           </span>
         )}

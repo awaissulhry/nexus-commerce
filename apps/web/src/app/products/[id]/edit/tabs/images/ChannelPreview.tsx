@@ -76,7 +76,7 @@ function AmazonDetail({ product, gallery }: { product: WorkspaceProduct; gallery
               onClick={() => setActiveIdx(i)}
               className={cn(
                 'w-9 h-9 rounded border-2 bg-white overflow-hidden flex-shrink-0',
-                i === activeIdx ? 'border-orange-500' : 'border-slate-200 dark:border-slate-700 hover:border-orange-400',
+                i === activeIdx ? 'border-orange-500' : 'border-default dark:border-slate-700 hover:border-orange-400',
               )}
               title={`Image ${i + 1}`}
             >
@@ -86,7 +86,7 @@ function AmazonDetail({ product, gallery }: { product: WorkspaceProduct; gallery
           ))}
         </div>
         {/* Hero */}
-        <div className="flex-1 aspect-square rounded border border-slate-200 dark:border-slate-700 bg-white overflow-hidden">
+        <div className="flex-1 aspect-square rounded border border-default dark:border-slate-700 bg-white overflow-hidden">
           {active ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={active.url} alt={active.alt ?? ''} className="w-full h-full object-contain" decoding="async" fetchPriority="high" />
@@ -99,18 +99,18 @@ function AmazonDetail({ product, gallery }: { product: WorkspaceProduct; gallery
       {/* Right panel */}
       <div className="space-y-3">
         <h1 className="text-base font-medium text-slate-800 dark:text-slate-100 leading-snug">
-          {product.name || <span className="text-slate-400 italic">[Product title from Master tab]</span>}
+          {product.name || <span className="text-tertiary italic">[Product title from Master tab]</span>}
         </h1>
         <div className="text-xs text-slate-500">
           Brand: <span className="text-blue-600 dark:text-blue-400 hover:underline cursor-default">—</span>
           <span className="mx-2 text-amber-500">★★★★★</span>
-          <span className="text-slate-400">(0 ratings)</span>
+          <span className="text-tertiary">(0 ratings)</span>
         </div>
         <div className="text-2xl text-rose-600 font-medium">€—</div>
         <ul className="text-xs text-slate-600 dark:text-slate-300 space-y-1 list-disc pl-4">
-          <li className="text-slate-400 italic">Bullet 1 — pulled from Master tab</li>
-          <li className="text-slate-400 italic">Bullet 2 — pulled from Master tab</li>
-          <li className="text-slate-400 italic">Bullet 3 — pulled from Master tab</li>
+          <li className="text-tertiary italic">Bullet 1 — pulled from Master tab</li>
+          <li className="text-tertiary italic">Bullet 2 — pulled from Master tab</li>
+          <li className="text-tertiary italic">Bullet 3 — pulled from Master tab</li>
         </ul>
         <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-2.5 space-y-1.5">
           <div className="text-xs text-slate-700 dark:text-slate-200">Acquista Ora · 1-Click</div>
@@ -132,7 +132,7 @@ function EbayCard({ product, gallery }: { product: WorkspaceProduct; gallery: { 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-5">
       <div className="space-y-2">
-        <div className="aspect-square rounded border border-slate-200 dark:border-slate-700 bg-white overflow-hidden">
+        <div className="aspect-square rounded border border-default dark:border-slate-700 bg-white overflow-hidden">
           {active ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={active.url} alt={active.alt ?? ''} className="w-full h-full object-contain" decoding="async" fetchPriority="high" />
@@ -148,7 +148,7 @@ function EbayCard({ product, gallery }: { product: WorkspaceProduct; gallery: { 
               onClick={() => setActiveIdx(i)}
               className={cn(
                 'w-10 h-10 rounded border-2 bg-white overflow-hidden flex-shrink-0',
-                i === activeIdx ? 'border-blue-500' : 'border-slate-200 dark:border-slate-700',
+                i === activeIdx ? 'border-blue-500' : 'border-default dark:border-slate-700',
               )}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -160,7 +160,7 @@ function EbayCard({ product, gallery }: { product: WorkspaceProduct; gallery: { 
 
       <div className="space-y-3">
         <h1 className="text-base font-medium text-slate-800 dark:text-slate-100 leading-snug">
-          {product.name || <span className="text-slate-400 italic">[Product title from Master tab]</span>}
+          {product.name || <span className="text-tertiary italic">[Product title from Master tab]</span>}
         </h1>
         <div className="text-xs text-slate-500 flex items-center gap-2">
           <span className="text-emerald-600 dark:text-emerald-400">Brand new</span>
@@ -207,7 +207,7 @@ function ShopifyPDP({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
       <div className="space-y-2">
-        <div className="aspect-[4/5] rounded border border-slate-200 dark:border-slate-700 bg-white overflow-hidden">
+        <div className="aspect-[4/5] rounded border border-default dark:border-slate-700 bg-white overflow-hidden">
           {active ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={active.url} alt={active.alt ?? ''} className="w-full h-full object-contain" decoding="async" fetchPriority="high" />
@@ -223,7 +223,7 @@ function ShopifyPDP({
               onClick={() => setActiveIdx(i)}
               className={cn(
                 'w-12 h-15 rounded border-2 bg-white overflow-hidden flex-shrink-0',
-                i === activeIdx ? 'border-emerald-500' : 'border-slate-200 dark:border-slate-700',
+                i === activeIdx ? 'border-emerald-500' : 'border-default dark:border-slate-700',
               )}
               style={{ aspectRatio: '4/5' }}
             >
@@ -236,7 +236,7 @@ function ShopifyPDP({
 
       <div className="space-y-3">
         <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100 leading-tight">
-          {product.name || <span className="text-slate-400 italic">[Product title from Master tab]</span>}
+          {product.name || <span className="text-tertiary italic">[Product title from Master tab]</span>}
         </h1>
         <div className="text-base text-slate-700 dark:text-slate-200 font-medium">€—</div>
         {colors.length > 0 && (
@@ -252,7 +252,7 @@ function ShopifyPDP({
                     'px-2.5 py-1 text-xs border rounded',
                     i === 0
                       ? 'border-slate-900 dark:border-slate-100 bg-slate-50 dark:bg-slate-800'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-500',
+                      : 'border-default dark:border-slate-700 text-slate-500',
                   )}
                 >
                   {c}
@@ -285,12 +285,12 @@ export default function ChannelPreview({
   const gallery = resolveGallery(platform, masterImages, listingImages, marketplace)
 
   return (
-    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+    <div className="bg-slate-50 dark:bg-slate-950 border border-default dark:border-slate-700 rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           Buyer preview · {platform.toLowerCase()}{marketplace ? ` · ${marketplace}` : ''}
         </span>
-        <span className="text-[10px] text-slate-400 dark:text-slate-500">
+        <span className="text-[10px] text-tertiary dark:text-slate-500">
           {gallery.length} image{gallery.length === 1 ? '' : 's'} resolved
         </span>
       </div>

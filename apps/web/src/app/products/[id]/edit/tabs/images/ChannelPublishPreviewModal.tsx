@@ -210,7 +210,7 @@ export default function ChannelPublishPreviewModal({
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
-        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-start justify-between px-5 py-4 border-b border-default dark:border-slate-700">
           <div>
             <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               Publish preview — {channelLabel}
@@ -227,7 +227,7 @@ export default function ChannelPublishPreviewModal({
         </div>
 
         {/* Coverage strip */}
-        <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-4 text-xs flex-wrap">
+        <div className="px-5 py-3 border-b border-subtle dark:border-slate-800 flex items-center gap-4 text-xs flex-wrap">
           <span className="text-slate-500 dark:text-slate-400">
             {channel === 'EBAY' ? 'Gallery:' : 'Pool:'}
           </span>
@@ -260,7 +260,7 @@ export default function ChannelPublishPreviewModal({
           )}
 
           {activeAxis && (
-            <span className="text-slate-400 ml-auto">axis: {activeAxis}</span>
+            <span className="text-tertiary ml-auto">axis: {activeAxis}</span>
           )}
         </div>
 
@@ -279,12 +279,12 @@ export default function ChannelPublishPreviewModal({
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">
               {channel === 'EBAY' ? 'Gallery' : 'Pool'}
-              <span className="font-normal normal-case text-slate-400 ml-2">
+              <span className="font-normal normal-case text-tertiary ml-2">
                 — position {channel === 'EBAY' ? '1 is the main listing image' : '0 is the featured image'}
               </span>
             </h3>
             {gallery.length === 0 ? (
-              <div className="text-xs text-slate-400 italic py-3">No images will publish.</div>
+              <div className="text-xs text-tertiary italic py-3">No images will publish.</div>
             ) : (
               <div className="flex gap-2 flex-wrap">
                 {gallery.map((g, idx) => (
@@ -306,20 +306,20 @@ export default function ChannelPublishPreviewModal({
             <section>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">
                 Variation pictures
-                <span className="font-normal normal-case text-slate-400 ml-2">
+                <span className="font-normal normal-case text-tertiary ml-2">
                   — per-{activeAxis} sets (12 max per value)
                 </span>
               </h3>
               <div className="space-y-2">
                 {colorSets.map((set) => (
-                  <div key={set.groupValue} className="flex items-start gap-3 py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                  <div key={set.groupValue} className="flex items-start gap-3 py-2 border-b border-subtle dark:border-slate-800 last:border-0">
                     <div className="flex-shrink-0 w-24 pt-1">
                       <div className="text-xs font-medium text-slate-700 dark:text-slate-300">{set.groupValue}</div>
-                      <div className="text-[10px] text-slate-400">{set.variants.length} SKU{set.variants.length === 1 ? '' : 's'}</div>
+                      <div className="text-[10px] text-tertiary">{set.variants.length} SKU{set.variants.length === 1 ? '' : 's'}</div>
                     </div>
                     <div className="flex-1 min-w-0">
                       {set.images.length === 0 ? (
-                        <div className="text-[11px] text-slate-400 italic">
+                        <div className="text-[11px] text-tertiary italic">
                           No pictures — buyers see the gallery on color select.
                         </div>
                       ) : (
@@ -327,7 +327,7 @@ export default function ChannelPublishPreviewModal({
                           {set.images.map((img, idx) => (
                             <ThumbCard key={`s-${idx}`} url={img.url} size="sm" isPending={img.isPending} />
                           ))}
-                          <span className="text-[10px] text-slate-400 self-end pb-1">
+                          <span className="text-[10px] text-tertiary self-end pb-1">
                             {set.images.length} image{set.images.length === 1 ? '' : 's'}
                           </span>
                         </div>
@@ -344,14 +344,14 @@ export default function ChannelPublishPreviewModal({
             <section>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">
                 Variant assignments
-                <span className="font-normal normal-case text-slate-400 ml-2">
+                <span className="font-normal normal-case text-tertiary ml-2">
                   — variant.image_id on next publish
                 </span>
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="text-left text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
+                    <tr className="text-left text-slate-500 dark:text-slate-400 border-b border-subtle dark:border-slate-800">
                       <th className="py-1.5 pr-3 font-medium">SKU</th>
                       <th className="py-1.5 pr-3 font-medium">{activeAxis}</th>
                       <th className="py-1.5 pr-3 font-medium">Image</th>
@@ -383,7 +383,7 @@ export default function ChannelPublishPreviewModal({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-900/50">
+        <div className="px-5 py-3 border-t border-default dark:border-slate-700 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-900/50">
           {validation.blocking.length === 0 && validation.warnings.length === 0 && gallery.length > 0 && (
             <span className="text-xs text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5" />
@@ -454,7 +454,7 @@ function ThumbCard({
         ? 'border-amber-300 dark:border-amber-700 ring-1 ring-amber-400/40'
         : fromMaster
           ? 'border-dashed border-slate-300 dark:border-slate-600'
-          : 'border-slate-200 dark:border-slate-700',
+          : 'border-default dark:border-slate-700',
     )}>
       <img src={url} alt="" className="w-full h-full object-cover" />
       {isHero && position !== undefined && (

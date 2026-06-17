@@ -159,7 +159,7 @@ export function FFSavedViews({ currentState, onApply, storageKey = 'ff-saved-vie
           'inline-flex items-center gap-1.5 h-7 px-2 text-xs border rounded-md transition-colors',
           open
             ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700',
+            : 'border-default dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700',
         )}
         title="Saved views"
       >
@@ -171,10 +171,10 @@ export function FFSavedViews({ currentState, onApply, storageKey = 'ff-saved-vie
       {open && (
         <div
           ref={panelRef}
-          className="absolute left-0 top-full mt-1 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-30 overflow-hidden"
+          className="absolute left-0 top-full mt-1 w-64 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-lg z-30 overflow-hidden"
         >
           <div className="px-2 pt-2 pb-1">
-            <div className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-1 mb-1">
+            <div className="text-[10px] font-semibold text-tertiary dark:text-slate-500 uppercase tracking-wider px-1 mb-1">
               Built-in
             </div>
             {BUILT_IN_VIEWS.map((v) => (
@@ -188,8 +188,8 @@ export function FFSavedViews({ currentState, onApply, storageKey = 'ff-saved-vie
           </div>
 
           {userViews.length > 0 && (
-            <div className="px-2 pb-1 border-t border-slate-100 dark:border-slate-800 pt-2">
-              <div className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-1 mb-1">
+            <div className="px-2 pb-1 border-t border-subtle dark:border-slate-800 pt-2">
+              <div className="text-[10px] font-semibold text-tertiary dark:text-slate-500 uppercase tracking-wider px-1 mb-1">
                 Saved
               </div>
               {userViews.map((v) => (
@@ -205,7 +205,7 @@ export function FFSavedViews({ currentState, onApply, storageKey = 'ff-saved-vie
             </div>
           )}
 
-          <div className="border-t border-slate-100 dark:border-slate-800 p-2">
+          <div className="border-t border-subtle dark:border-slate-800 p-2">
             {saving ? (
               <div className="flex items-center gap-1.5">
                 <input
@@ -218,7 +218,7 @@ export function FFSavedViews({ currentState, onApply, storageKey = 'ff-saved-vie
                     if (e.key === 'Escape') { setSaving(false); setNewName('') }
                   }}
                   placeholder="View name…"
-                  className="flex-1 h-6 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="flex-1 h-6 px-2 text-xs border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
                 <button
                   type="button"
@@ -283,7 +283,7 @@ function ViewRow({
             <button
               type="button"
               onClick={onUpdate}
-              className="h-5 w-5 inline-flex items-center justify-center rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+              className="h-5 w-5 inline-flex items-center justify-center rounded text-tertiary hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30"
               title="Update with current state"
             >
               <Check className="w-3 h-3" />
@@ -293,7 +293,7 @@ function ViewRow({
             <button
               type="button"
               onClick={onDelete}
-              className="h-5 w-5 inline-flex items-center justify-center rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+              className="h-5 w-5 inline-flex items-center justify-center rounded text-tertiary hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
               title="Delete view"
             >
               <Trash2 className="w-3 h-3" />

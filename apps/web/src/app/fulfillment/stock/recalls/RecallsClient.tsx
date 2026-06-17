@@ -139,7 +139,7 @@ export default function RecallsClient() {
 
       <GridToolbar
         quickFilterSlot={
-          <div className="inline-flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded-md p-0.5">
+          <div className="inline-flex items-center gap-1 border border-default dark:border-slate-700 rounded-md p-0.5">
             {(['OPEN', 'CLOSED', 'ALL'] as const).map((s) => (
               <button
                 key={s}
@@ -334,7 +334,7 @@ function OpenRecallModal({
         onClick={(e) => e.stopPropagation()}
         className="relative bg-white dark:bg-slate-900 rounded-lg shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto"
       >
-        <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700">
+        <header className="px-5 py-3 border-b border-default dark:border-slate-700">
           <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             {t('stock.recalls.openModal.title')}
           </div>
@@ -353,7 +353,7 @@ function OpenRecallModal({
               value={productId}
               onChange={(e) => setProductId(e.target.value)}
               placeholder={t('stock.recalls.openModal.productIdPlaceholder')}
-              className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono"
+              className="w-full h-9 px-2 text-md border border-default dark:border-slate-700 rounded font-mono"
             />
           </div>
           <div>
@@ -370,7 +370,7 @@ function OpenRecallModal({
               onChange={(e) => setLotNumber(e.target.value)}
               placeholder={t('stock.recalls.openModal.lotPlaceholder')}
               autoFocus
-              className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono"
+              className="w-full h-9 px-2 text-md border border-default dark:border-slate-700 rounded font-mono"
             />
           </div>
           <div>
@@ -386,13 +386,13 @@ function OpenRecallModal({
               onChange={(e) => setReason(e.target.value)}
               rows={3}
               placeholder={t('stock.recalls.openModal.reasonPlaceholder')}
-              className="w-full px-3 py-2 text-base border border-slate-200 dark:border-slate-700 rounded"
+              className="w-full px-3 py-2 text-base border border-default dark:border-slate-700 rounded"
             />
           </div>
           <div className="text-xs text-slate-500 dark:text-slate-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded p-2">
             {t('stock.recalls.openModal.fefoNote')}
           </div>
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-subtle dark:border-slate-800">
             <button
               onClick={onCancel}
               className="h-11 sm:h-8 px-3 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"

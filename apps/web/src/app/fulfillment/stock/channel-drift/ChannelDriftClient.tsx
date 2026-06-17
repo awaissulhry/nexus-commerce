@@ -83,7 +83,7 @@ const STATUS_CHIPS: Array<{ key: StatusFilter; labelKey: string }> = [
 ]
 
 const STATUS_TONE: Record<string, string> = {
-  PENDING:       'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+  PENDING:       'bg-slate-50 text-slate-600 border-default dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
   REVIEW_NEEDED: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
   AUTO_APPLIED:  'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900',
   APPLIED:       'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
@@ -253,7 +253,7 @@ export default function ChannelDriftClient() {
       case 'drift':
         return (
           <span className={`tabular-nums text-sm font-semibold ${
-            row.drift === 0 ? 'text-slate-400 dark:text-slate-500'
+            row.drift === 0 ? 'text-tertiary dark:text-slate-500'
               : driftLarge ? 'text-rose-700 dark:text-rose-300'
               : 'text-amber-700 dark:text-amber-300'
           }`}>
@@ -292,7 +292,7 @@ export default function ChannelDriftClient() {
             <button
               onClick={() => openIgnore(row.id, row.sku)}
               disabled={busy === row.id}
-              className="h-7 px-2 text-sm bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 inline-flex items-center gap-1"
+              className="h-7 px-2 text-sm bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 inline-flex items-center gap-1"
             >
               {t('channelDrift.action.ignore')}
             </button>
@@ -325,7 +325,7 @@ export default function ChannelDriftClient() {
           <button key={chip.key} onClick={() => setStatusFilter(chip.key)} aria-pressed={statusFilter === chip.key}
             className={`h-7 px-3 text-sm rounded-full font-medium border ${statusFilter === chip.key
               ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900 dark:text-slate-900'
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}`}>
+              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}`}>
             {t(chip.labelKey as any)}
           </button>
         ))}
@@ -337,14 +337,14 @@ export default function ChannelDriftClient() {
             <button onClick={() => setChannelFilter('')} aria-pressed={channelFilter === ''}
               className={`h-7 px-3 text-sm rounded-full font-medium border ${channelFilter === ''
                 ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900 dark:text-slate-900'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700'}`}>
               {t('channelDrift.filter.allChannels')}
             </button>
             {channels.map(c => (
               <button key={c} onClick={() => setChannelFilter(c)} aria-pressed={channelFilter === c}
                 className={`h-7 px-3 text-sm rounded-full font-medium border ${channelFilter === c
                   ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900 dark:text-slate-900'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700'}`}>
                 {c}
               </button>
             ))}
@@ -419,8 +419,8 @@ export default function ChannelDriftClient() {
           aria-modal="true"
           aria-labelledby="ignore-title"
         >
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-slate-200 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-default dark:border-slate-700">
               <h2 id="ignore-title" className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                 {t('channelDrift.ignore.title', { sku: ignoreModal.sku })}
               </h2>
@@ -438,10 +438,10 @@ export default function ChannelDriftClient() {
                 placeholder={t('channelDrift.ignore.placeholder')}
                 rows={3}
                 autoFocus
-                className="w-full px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                className="w-full px-2 py-1.5 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               />
             </div>
-            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700">
+            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-default dark:border-slate-700">
               <Button variant="secondary" size="sm" onClick={() => { setIgnoreModal(null); setIgnoreReason('') }} disabled={busy !== null}>
                 {t('common.cancel')}
               </Button>

@@ -27,7 +27,7 @@ export const URGENCY_TONE: Record<string, string> = {
   HIGH: 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
   MEDIUM:
     'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900',
-  LOW: 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800',
+  LOW: 'bg-slate-50 text-slate-600 border-default dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800',
 }
 
 export interface UpcomingEvent {
@@ -109,12 +109,12 @@ export function UpcomingEventsBanner({ events }: { events: UpcomingEvent[] }) {
                     ? `in ${e.daysUntilStart} day${e.daysUntilStart === 1 ? '' : 's'}`
                     : `started ${Math.abs(e.daysUntilStart)} day${Math.abs(e.daysUntilStart) === 1 ? '' : 's'} ago`}
                 </span>
-                <span className="text-slate-400 dark:text-slate-500">·</span>
+                <span className="text-tertiary dark:text-slate-500">·</span>
                 <span className="text-slate-600 dark:text-slate-300">
                   expected lift {e.expectedLift.toFixed(1)}×
                 </span>
                 {(e.channel || e.marketplace) && (
-                  <span className="text-slate-400 dark:text-slate-500 font-mono text-xs">
+                  <span className="text-tertiary dark:text-slate-500 font-mono text-xs">
                     {[e.channel, e.marketplace].filter(Boolean).join(':')}
                   </span>
                 )}

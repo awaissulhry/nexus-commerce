@@ -315,7 +315,7 @@ export default function SuppressionCard({
             {headerLabel}
           </span>
           {loading && (
-            <Loader2 className="w-3 h-3 animate-spin text-slate-400" />
+            <Loader2 className="w-3 h-3 animate-spin text-tertiary" />
           )}
         </div>
         <div className="flex items-center gap-1.5">
@@ -350,7 +350,7 @@ export default function SuppressionCard({
 
       {/* Quality score line (from AC.4 health report) */}
       {healthReport && (
-        <div className="rounded border border-slate-100 dark:border-slate-800 bg-white/60 dark:bg-slate-900/40 p-2 flex items-center gap-2">
+        <div className="rounded border border-subtle dark:border-slate-800 bg-white/60 dark:bg-slate-900/40 p-2 flex items-center gap-2">
           <CheckCircle2
             className={cn(
               'w-3.5 h-3.5',
@@ -396,7 +396,7 @@ export default function SuppressionCard({
             return (
               <li
                 key={s.id}
-                className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2"
+                className="rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 p-2"
               >
                 <div className="flex items-start gap-2">
                   <span
@@ -488,7 +488,7 @@ export default function SuppressionCard({
 
       {/* Resolved history (collapsed by default) */}
       {data && data.resolved.length > 0 && (
-        <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div className="pt-2 border-t border-subtle dark:border-slate-800">
           <button
             type="button"
             onClick={() => setResolvedOpen((o) => !o)}
@@ -496,14 +496,14 @@ export default function SuppressionCard({
           >
             <div className="flex items-center gap-1.5">
               {resolvedOpen ? (
-                <ChevronDown className="w-3 h-3 text-slate-400" />
+                <ChevronDown className="w-3 h-3 text-tertiary" />
               ) : (
-                <ChevronRight className="w-3 h-3 text-slate-400" />
+                <ChevronRight className="w-3 h-3 text-tertiary" />
               )}
               <span className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 Recently resolved
               </span>
-              <span className="text-[10.5px] text-slate-400">
+              <span className="text-[10.5px] text-tertiary">
                 ({data.resolved.length})
               </span>
             </div>
@@ -528,7 +528,7 @@ export default function SuppressionCard({
         </div>
       )}
 
-      <div className="text-[10.5px] text-slate-400 italic">
+      <div className="text-[10.5px] text-tertiary italic">
         Live data via HB.11 SP-API defect ingest. AC.10.2 will wire
         the in-cockpit AI diagnose flow (POST /listings/:id/diagnose-suppression).
       </div>
@@ -596,7 +596,7 @@ function DiagnosisPanel({ result }: { result: DiagnosisResult }) {
         </ol>
       )}
       {result.provider && (
-        <div className="text-[9.5px] text-slate-400 dark:text-slate-500 font-mono pt-1 border-t border-purple-100 dark:border-purple-900">
+        <div className="text-[9.5px] text-tertiary dark:text-slate-500 font-mono pt-1 border-t border-purple-100 dark:border-purple-900">
           {result.provider.name} · {result.provider.model}
           {result.provider.costUSD != null
             ? ` · $${result.provider.costUSD.toFixed(4)}`

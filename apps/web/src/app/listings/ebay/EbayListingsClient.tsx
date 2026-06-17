@@ -100,7 +100,7 @@ export default function EbayListingsClient({
         label: (
           <span className="inline-flex items-center gap-1.5">
             <span className="font-mono text-xs">{mp}</span>
-            <span className="text-xs text-slate-400">{COUNTRY_NAMES[mp] ?? mp}</span>
+            <span className="text-xs text-tertiary">{COUNTRY_NAMES[mp] ?? mp}</span>
           </span>
         ),
         count: marketCount(mp) || undefined,
@@ -124,11 +124,11 @@ export default function EbayListingsClient({
             href="/listings/ebay/gaps"
             target="_blank"
             rel="noopener noreferrer"
-            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-default bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
             title="Open eBay gap analysis (in a new tab)"
           >
             Gap analysis
-            <ExternalLink size={13} className="text-slate-400" />
+            <ExternalLink size={13} className="text-tertiary" />
           </a>
         </div>
       )}
@@ -247,7 +247,7 @@ function EbayKpiStrip({
       >
         <Card>
           <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 inline-flex items-center gap-1">
-            <Megaphone size={11} className="text-slate-400" /> Promoted campaigns
+            <Megaphone size={11} className="text-tertiary" /> Promoted campaigns
           </div>
           <div
             className={`text-[24px] font-semibold tabular-nums leading-none ${

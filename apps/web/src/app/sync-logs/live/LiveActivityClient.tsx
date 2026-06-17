@@ -139,7 +139,7 @@ export default function LiveActivityClient() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3 flex-wrap p-3 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+      <div className="flex items-center gap-3 flex-wrap p-3 rounded border border-default dark:border-slate-800 bg-white dark:bg-slate-900">
         <span
           className={cn(
             'inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded',
@@ -198,7 +198,7 @@ export default function LiveActivityClient() {
                 'inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded border transition',
                 on
                   ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 border-slate-300 dark:border-slate-700'
-                  : 'bg-white dark:bg-slate-900 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-800 line-through',
+                  : 'bg-white dark:bg-slate-900 text-tertiary dark:text-slate-500 border-default dark:border-slate-800 line-through',
               )}
             >
               <span
@@ -212,7 +212,7 @@ export default function LiveActivityClient() {
       </div>
 
       {visible.length === 0 && (
-        <div className="rounded border border-dashed border-slate-200 dark:border-slate-800 p-8 text-center text-sm text-slate-400">
+        <div className="rounded border border-dashed border-default dark:border-slate-800 p-8 text-center text-sm text-tertiary">
           {paused
             ? 'Paused. Click Resume to start capturing again.'
             : 'Waiting for events...'}
@@ -223,9 +223,9 @@ export default function LiveActivityClient() {
         {visible.map((e) => (
           <li
             key={e.id}
-            className="flex items-start gap-2 px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+            className="flex items-start gap-2 px-3 py-1.5 rounded border border-default dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50"
           >
-            <span className="text-slate-400 tabular-nums shrink-0 w-24">
+            <span className="text-tertiary tabular-nums shrink-0 w-24">
               {formatTime(e.ts)}
             </span>
             <span
@@ -244,7 +244,7 @@ export default function LiveActivityClient() {
             <button
               type="button"
               onClick={() => copyJson(e)}
-              className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 shrink-0"
+              className="text-tertiary hover:text-slate-700 dark:hover:text-slate-200 shrink-0"
               title="Copy event JSON"
               aria-label="Copy event JSON"
             >

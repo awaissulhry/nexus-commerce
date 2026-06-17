@@ -267,7 +267,7 @@ export default function ActivityFeed({
       {t('overview.activity.live')}
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+    <span className="inline-flex items-center gap-1 text-xs text-tertiary dark:text-slate-500">
       <CircleDot className="w-2.5 h-2.5" />
       {paused ? t('overview.activity.paused') : t('overview.activity.connecting')}
     </span>
@@ -279,7 +279,7 @@ export default function ActivityFeed({
       action={liveBadge}
       noPadding
     >
-      <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
+      <div className="px-4 py-2 border-b border-subtle dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 flex-wrap">
           {CATEGORY_ORDER.map((c) => (
             <button
@@ -291,7 +291,7 @@ export default function ActivityFeed({
                 'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
                 filter.has(c)
                   ? 'bg-slate-900 dark:bg-slate-100 border-slate-900 dark:border-slate-100 text-white dark:text-slate-900 font-medium'
-                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+                  : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
               )}
             >
               {t(`overview.activity.cat.${c}`)}
@@ -329,7 +329,7 @@ export default function ActivityFeed({
             const row = (
               <li
                 key={a.id}
-                className="px-4 py-2 border-b border-slate-100 dark:border-slate-800 last:border-b-0 flex items-start justify-between gap-3 hover:bg-slate-50/40 dark:hover:bg-slate-800/40"
+                className="px-4 py-2 border-b border-subtle dark:border-slate-800 last:border-b-0 flex items-start justify-between gap-3 hover:bg-slate-50/40 dark:hover:bg-slate-800/40"
               >
                 <div className="flex items-start gap-2 flex-1 min-w-0">
                   <CategoryDot category={a.category} />

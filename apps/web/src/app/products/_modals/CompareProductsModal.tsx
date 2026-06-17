@@ -119,7 +119,7 @@ export default function CompareProductsModal({
       header={null}
       className="overflow-hidden"
     >
-        <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+        <header className="flex items-center justify-between px-4 py-3 border-b border-default dark:border-slate-700 flex-shrink-0">
           <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             Compare {products.length} products
           </div>
@@ -127,7 +127,7 @@ export default function CompareProductsModal({
             onClick={onClose}
             aria-label="Close"
             size="md"
-            className="text-slate-400 dark:text-slate-500 hover:text-slate-600"
+            className="text-tertiary dark:text-slate-500 hover:text-slate-600"
           >
             <X className="w-4 h-4" />
           </IconButton>
@@ -135,7 +135,7 @@ export default function CompareProductsModal({
 
         <div className="flex-1 overflow-auto">
           <table className="w-full text-base border-collapse">
-            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-default dark:border-slate-700 sticky top-0 z-10">
               <tr>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 w-32">
                   Field
@@ -143,7 +143,7 @@ export default function CompareProductsModal({
                 {products.map((p) => (
                   <th
                     key={p.id}
-                    className="px-3 py-2 text-left align-top border-l border-slate-200 dark:border-slate-700"
+                    className="px-3 py-2 text-left align-top border-l border-default dark:border-slate-700"
                   >
                     <div className="flex items-start gap-2">
                       {p.imageUrl ? (
@@ -189,8 +189,8 @@ export default function CompareProductsModal({
                   key={row.label}
                   className={
                     row.differs
-                      ? 'border-b border-slate-100 dark:border-slate-800 bg-amber-50/40'
-                      : 'border-b border-slate-100 dark:border-slate-800'
+                      ? 'border-b border-subtle dark:border-slate-800 bg-amber-50/40'
+                      : 'border-b border-subtle dark:border-slate-800'
                   }
                   title={row.differs ? 'Values differ across products' : undefined}
                 >
@@ -201,7 +201,7 @@ export default function CompareProductsModal({
                     <td
                       key={i}
                       className={
-                        'px-3 py-1.5 align-top border-l border-slate-200 dark:border-slate-700 ' +
+                        'px-3 py-1.5 align-top border-l border-default dark:border-slate-700 ' +
                         (row.tone === 'numeric'
                           ? 'text-right tabular-nums'
                           : row.tone === 'mono'
@@ -229,8 +229,8 @@ export default function CompareProductsModal({
                   <tr
                     className={
                       differs
-                        ? 'border-b border-slate-100 dark:border-slate-800 bg-amber-50/40'
-                        : 'border-b border-slate-100 dark:border-slate-800'
+                        ? 'border-b border-subtle dark:border-slate-800 bg-amber-50/40'
+                        : 'border-b border-subtle dark:border-slate-800'
                     }
                   >
                     <td className="px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold align-top">
@@ -239,7 +239,7 @@ export default function CompareProductsModal({
                     {products.map((p) => (
                       <td
                         key={p.id}
-                        className="px-3 py-1.5 align-top border-l border-slate-200 dark:border-slate-700"
+                        className="px-3 py-1.5 align-top border-l border-default dark:border-slate-700"
                       >
                         <div className="flex flex-wrap gap-1">
                           {ALL_CHANNELS.map((ch) => {
@@ -248,7 +248,7 @@ export default function CompareProductsModal({
                               return (
                                 <span
                                   key={ch}
-                                  className="inline-flex items-center px-1.5 h-5 text-xs font-mono border border-dashed border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-400 dark:text-slate-500 rounded"
+                                  className="inline-flex items-center px-1.5 h-5 text-xs font-mono border border-dashed border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-tertiary dark:text-slate-500 rounded"
                                   title={`Not on ${ch}`}
                                 >
                                   {ch.slice(0, 3)}
@@ -276,7 +276,7 @@ export default function CompareProductsModal({
           </table>
         </div>
 
-        <footer className="flex items-center justify-between px-4 py-2.5 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex-shrink-0">
+        <footer className="flex items-center justify-between px-4 py-2.5 border-t border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex-shrink-0">
           <span className="text-sm text-slate-500 dark:text-slate-400">
             Amber rows differ across products. Click a header to open in drawer.
           </span>

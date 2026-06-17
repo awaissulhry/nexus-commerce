@@ -139,10 +139,10 @@ export default function ImportFromAmazonModal({ productId, amazonMarkets, open, 
         role="dialog"
         aria-modal="true"
         aria-label="Import from Amazon parent"
-        className="flex max-h-[88vh] w-full max-w-2xl flex-col rounded-lg border border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900"
+        className="flex max-h-[88vh] w-full max-w-2xl flex-col rounded-lg border border-default bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+        <div className="flex items-center justify-between border-b border-subtle px-4 py-3 dark:border-slate-800">
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
               <DownloadCloud className="h-4 w-4 text-blue-500" /> Import attributes to master
@@ -153,12 +153,12 @@ export default function ImportFromAmazonModal({ productId, amazonMarkets, open, 
                 : "Pull the parent listing's attributes up via your mapping rules."}
             </div>
           </div>
-          <button type="button" onClick={onClose} disabled={applying} aria-label="Close" className="rounded p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+          <button type="button" onClick={onClose} disabled={applying} aria-label="Close" className="rounded p-1 text-tertiary hover:text-slate-700 dark:hover:text-slate-200">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2 text-xs dark:border-slate-800">
+        <div className="flex flex-wrap items-center gap-2 border-b border-subtle px-4 py-2 text-xs dark:border-slate-800">
           <div className="inline-flex overflow-hidden rounded border border-slate-300 dark:border-slate-700">
             <button
               type="button"
@@ -218,7 +218,7 @@ export default function ImportFromAmazonModal({ productId, amazonMarkets, open, 
           )}
           {proposals && proposals.length > 0 && (
             <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-white text-left text-[10.5px] uppercase tracking-wide text-slate-400 dark:bg-slate-900">
+              <thead className="sticky top-0 bg-white text-left text-[10.5px] uppercase tracking-wide text-tertiary dark:bg-slate-900">
                 <tr>
                   <th className="w-8 py-1"></th>
                   <th className="py-1">Master field</th>
@@ -227,13 +227,13 @@ export default function ImportFromAmazonModal({ productId, amazonMarkets, open, 
               </thead>
               <tbody>
                 {proposals.map((p) => (
-                  <tr key={p.masterPath} className="border-t border-slate-100 dark:border-slate-800/60">
+                  <tr key={p.masterPath} className="border-t border-subtle dark:border-slate-800/60">
                     <td className="py-1">
                       <input type="checkbox" checked={accepted.has(p.masterPath)} onChange={() => toggle(p.masterPath)} />
                     </td>
                     <td className="py-1 pr-2">
                       <span className="font-mono text-slate-700 dark:text-slate-300">{p.label}</span>
-                      <span className="ml-1 text-[10px] text-slate-400">{p.group}</span>
+                      <span className="ml-1 text-[10px] text-tertiary">{p.group}</span>
                       {p.conflict && (
                         <span className="ml-1 inline-flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400" title="master already has a value — unchecked by default">
                           <AlertTriangle className="h-3 w-3" /> has value
@@ -261,9 +261,9 @@ export default function ImportFromAmazonModal({ productId, amazonMarkets, open, 
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3 dark:border-slate-800">
+        <div className="flex items-center justify-end gap-2 border-t border-subtle px-4 py-3 dark:border-slate-800">
           {proposals && <span className="mr-auto text-xs text-slate-500">{acceptedCount} selected</span>}
-          <button type="button" onClick={onClose} disabled={applying} className="rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+          <button type="button" onClick={onClose} disabled={applying} className="rounded border border-default px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
             Cancel
           </button>
           {proposals && proposals.length > 0 && (

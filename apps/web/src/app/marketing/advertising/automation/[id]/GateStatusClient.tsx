@@ -86,7 +86,7 @@ export function GateStatusClient({ ruleId, backendUrl }: { ruleId: string; backe
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-slate-400 py-4">
+      <div className="flex items-center gap-2 text-sm text-tertiary py-4">
         <Loader2 className="h-4 w-4 animate-spin" />
         Checking gate status…
       </div>
@@ -125,7 +125,7 @@ export function GateStatusClient({ ruleId, backendUrl }: { ruleId: string; backe
   const pct    = Math.round((passed / total) * 100)
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 space-y-4">
+    <div className="rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 p-4 space-y-4">
       {/* Header */}
       <div className="flex items-start gap-3">
         <ShieldAlert
@@ -167,7 +167,7 @@ export function GateStatusClient({ ruleId, backendUrl }: { ruleId: string; backe
               <p className={`text-xs font-medium ${check.passed ? 'text-slate-700 dark:text-slate-200' : 'text-slate-600 dark:text-slate-400'}`}>
                 {check.label}
               </p>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+              <p className="text-[11px] text-tertiary dark:text-slate-500 mt-0.5">
                 {check.detail}
               </p>
             </div>

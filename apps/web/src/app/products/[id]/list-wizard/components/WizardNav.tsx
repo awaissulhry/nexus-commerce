@@ -140,7 +140,7 @@ export default function WizardNav({
         // blocker pill fit on a 375px viewport without buttons
         // wrapping. Desktop gets the original generous spacing.
         'px-3 md:px-6 py-2 md:py-3 border-t flex items-center justify-between flex-shrink-0 gap-2',
-        'border-slate-200 bg-white',
+        'border-default bg-white',
         'dark:border-slate-800 dark:bg-slate-950',
       )}
     >
@@ -234,7 +234,7 @@ export default function WizardNav({
               })}
               {typeof timeOnStepSeconds === 'number' &&
                 timeOnStepSeconds >= 30 && (
-                  <span className="ml-2 text-slate-400 dark:text-slate-500" aria-hidden="true">
+                  <span className="ml-2 text-tertiary dark:text-slate-500" aria-hidden="true">
                     · {formatSeconds(timeOnStepSeconds)}
                   </span>
                 )}
@@ -264,12 +264,12 @@ export default function WizardNav({
             in ListWizardClient. Surfacing them in the nav makes them
             discoverable without changing any behaviour. */}
         <span
-          className="hidden md:inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500"
+          className="hidden md:inline-flex items-center gap-1 text-xs text-tertiary dark:text-slate-500"
           aria-hidden="true"
           title={t('listWizard.nav.kbdHint')}
         >
-          <kbd className="font-mono px-1 py-px bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-500 dark:text-slate-400">⌘←</kbd>
-          <kbd className="font-mono px-1 py-px bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-500 dark:text-slate-400">⌘→</kbd>
+          <kbd className="font-mono px-1 py-px bg-slate-100 dark:bg-slate-800 border border-default dark:border-slate-700 rounded text-slate-500 dark:text-slate-400">⌘←</kbd>
+          <kbd className="font-mono px-1 py-px bg-slate-100 dark:bg-slate-800 border border-default dark:border-slate-700 rounded text-slate-500 dark:text-slate-400">⌘→</kbd>
         </span>
         {/* Bug #2 + #9 — Tooltip primitive replaces native title=
             (works on Safari + touch devices, was broken in both). */}

@@ -177,8 +177,8 @@ export function QuickReceiveModal({
         if (e.target === e.currentTarget && !submitting) onClose()
       }}
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-5 py-3 flex items-center justify-between gap-2">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-default dark:border-slate-700 px-5 py-3 flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
             <PackageCheck className="w-4 h-4" />
             Create receipt — {poNumber}
@@ -196,7 +196,7 @@ export function QuickReceiveModal({
 
         <div className="p-5 space-y-4">
           {rows.length === 0 ? (
-            <div className="text-base text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-4">
+            <div className="text-base text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 rounded p-4">
               All lines on this PO are already fully received. There's nothing left to receive.
             </div>
           ) : (
@@ -207,14 +207,14 @@ export function QuickReceiveModal({
                   <div className="relative">
                     <Calendar
                       size={12}
-                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none"
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500 pointer-events-none"
                     />
                     <input
                       type="date"
                       value={arrivedAt}
                       onChange={(e) => setArrivedAt(e.target.value)}
                       disabled={submitting}
-                      className="w-full h-9 pl-7 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                      className="w-full h-9 pl-7 pr-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                     />
                   </div>
                 </Field>
@@ -225,14 +225,14 @@ export function QuickReceiveModal({
                     onChange={(e) => setReference(e.target.value)}
                     placeholder={`Receipt for ${poNumber}`}
                     disabled={submitting}
-                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                   />
                 </Field>
                 <Field label="Carrier">
                   <div className="relative">
                     <Truck
                       size={12}
-                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none"
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500 pointer-events-none"
                     />
                     <input
                       type="text"
@@ -241,7 +241,7 @@ export function QuickReceiveModal({
                       placeholder="BRT, POSTE, GLS, DHL…"
                       maxLength={20}
                       disabled={submitting}
-                      className="w-full h-9 pl-7 pr-2 text-base font-mono uppercase border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                      className="w-full h-9 pl-7 pr-2 text-base font-mono uppercase border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                     />
                   </div>
                 </Field>
@@ -252,14 +252,14 @@ export function QuickReceiveModal({
                     onChange={(e) => setTrackingNumber(e.target.value)}
                     placeholder="optional"
                     disabled={submitting}
-                    className="w-full h-9 px-2 text-base font-mono border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    className="w-full h-9 px-2 text-base font-mono border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                   />
                 </Field>
               </div>
 
               {/* Lines */}
-              <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
-                <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+              <div className="border border-default dark:border-slate-700 rounded overflow-hidden">
+                <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border-b border-default dark:border-slate-700 flex items-center justify-between text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                   <span>Lines</span>
                   <div className="inline-flex items-center gap-2 normal-case font-normal">
                     <button
@@ -280,7 +280,7 @@ export function QuickReceiveModal({
                   </div>
                 </div>
                 <table className="w-full text-base">
-                  <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                  <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-default dark:border-slate-700">
                     <tr>
                       <th className="text-left font-medium px-3 py-1.5">SKU</th>
                       <th className="text-right font-medium px-3 py-1.5 w-24">Open</th>
@@ -296,7 +296,7 @@ export function QuickReceiveModal({
                       return (
                         <tr
                           key={r.purchaseOrderItemId}
-                          className="border-b border-slate-100 dark:border-slate-800 last:border-0 align-top"
+                          className="border-b border-subtle dark:border-slate-800 last:border-0 align-top"
                         >
                           <td className="px-3 py-2 font-mono text-sm">
                             {r.sku}
@@ -323,7 +323,7 @@ export function QuickReceiveModal({
                                 'w-full h-8 px-2 text-base text-right tabular-nums border rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100',
                                 overReceipt
                                   ? 'border-red-300 dark:border-red-700 bg-red-50/30 dark:bg-red-950/20'
-                                  : 'border-slate-200 dark:border-slate-700',
+                                  : 'border-default dark:border-slate-700',
                               )}
                             />
                             {overReceipt && (
@@ -339,7 +339,7 @@ export function QuickReceiveModal({
                       )
                     })}
                   </tbody>
-                  <tfoot className="bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+                  <tfoot className="bg-slate-50 dark:bg-slate-800 border-t border-default dark:border-slate-700">
                     <tr>
                       <td colSpan={2} className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
                         Total
@@ -363,7 +363,7 @@ export function QuickReceiveModal({
                   rows={2}
                   placeholder="Packaging damage, supplier short-shipped X, lot codes captured, …"
                   disabled={submitting}
-                  className="w-full px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  className="w-full px-2 py-1.5 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                 />
               </Field>
 
@@ -377,7 +377,7 @@ export function QuickReceiveModal({
           )}
         </div>
 
-        <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 px-5 py-3 flex items-center justify-end gap-2">
+        <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-default dark:border-slate-700 px-5 py-3 flex items-center justify-end gap-2">
           <Button variant="secondary" size="sm" onClick={onClose} disabled={submitting}>
             Cancel
           </Button>

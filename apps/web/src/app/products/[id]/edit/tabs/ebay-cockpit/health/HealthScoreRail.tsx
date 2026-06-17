@@ -89,7 +89,7 @@ export default function HealthScoreRail(props: Props) {
   }, [result.checks])
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-3">
+    <div className="rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-3">
       {/* ── Score header ─────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -154,7 +154,7 @@ export default function HealthScoreRail(props: Props) {
       </div>
 
       {result.loading && (
-        <div className="text-[10px] text-slate-400 italic">
+        <div className="text-[10px] text-tertiary italic">
           {t('products.edit.cockpit.ebay.health.loadingSchema')}
         </div>
       )}

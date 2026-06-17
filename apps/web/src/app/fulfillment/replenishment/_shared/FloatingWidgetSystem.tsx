@@ -145,23 +145,23 @@ function FloatingWidget({ label, icon: Icon, pos, z, onClose, onFocus, onMove, c
       role="dialog"
       aria-label={label}
       style={{ position: 'fixed', left: pos.x, top: pos.y, zIndex: z, width: DEFAULT_W }}
-      className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl flex flex-col max-h-[80vh]"
+      className="rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl flex flex-col max-h-[80vh]"
       onPointerDown={onFocus}
     >
       {/* Drag handle / title bar */}
       <div
-        className="flex items-center gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-700 cursor-grab active:cursor-grabbing select-none bg-slate-50 dark:bg-slate-800/60 rounded-t-lg"
+        className="flex items-center gap-2 px-3 py-2 border-b border-default dark:border-slate-700 cursor-grab active:cursor-grabbing select-none bg-slate-50 dark:bg-slate-800/60 rounded-t-lg"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
       >
-        <GripVertical size={14} className="text-slate-400 flex-shrink-0" />
+        <GripVertical size={14} className="text-tertiary flex-shrink-0" />
         <Icon size={14} className="text-slate-500 flex-shrink-0" />
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex-1 truncate">{label}</span>
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onClose() }}
-          className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors flex-shrink-0"
+          className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-tertiary hover:text-slate-700 dark:hover:text-slate-200 transition-colors flex-shrink-0"
           aria-label={`Close ${label}`}
         >
           <X size={12} />
@@ -198,9 +198,9 @@ function WidgetPicker({ store, onToggle, onClose }: WidgetPickerProps) {
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden"
+      className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden"
     >
-      <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
+      <div className="px-3 py-2 border-b border-subtle dark:border-slate-800">
         <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Panels</span>
       </div>
       <div className="max-h-80 overflow-y-auto py-1">
@@ -257,7 +257,7 @@ function WidgetContent({ id, onRefreshPageData, containerFill }: WidgetContentPr
     case 'container-fill':
       return containerFill && containerFill.length > 0
         ? <ContainerFillCard entries={containerFill} />
-        : <div className="p-3 text-sm text-slate-400">No container fill data available.</div>
+        : <div className="p-3 text-sm text-tertiary">No container fill data available.</div>
     default: return null
   }
 }
@@ -374,7 +374,7 @@ export function WidgetLauncher({ store, onToggle }: WidgetLauncherProps) {
           'h-8 px-3 text-sm border rounded-md inline-flex items-center gap-1.5 transition-colors',
           open || openCount > 0
             ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900 text-blue-700 dark:text-blue-400'
-            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300',
+            : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300',
         )}
         aria-label="Toggle panels"
       >

@@ -57,7 +57,7 @@ export default function BrandKitListClient({ kits, brands, error }: Props) {
         </h2>
         {kits.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white py-12 text-center dark:border-slate-700 dark:bg-slate-900">
-            <Palette className="w-8 h-8 text-slate-400" />
+            <Palette className="w-8 h-8 text-tertiary" />
             <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
               {t('brandKit.empty.title')}
             </p>
@@ -71,7 +71,7 @@ export default function BrandKitListClient({ kits, brands, error }: Props) {
               <Link
                 key={kit.id}
                 href={`/marketing/brand-kit/${encodeURIComponent(kit.brand)}`}
-                className="group rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
+                className="group rounded-lg border border-default bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -82,14 +82,14 @@ export default function BrandKitListClient({ kits, brands, error }: Props) {
                       {kit.brand}
                     </p>
                   </div>
-                  <Palette className="w-4 h-4 flex-shrink-0 text-slate-400" />
+                  <Palette className="w-4 h-4 flex-shrink-0 text-tertiary" />
                 </div>
                 {kit.colors.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {kit.colors.slice(0, 8).map((c, idx) => (
                       <span
                         key={`${c.hex}-${idx}`}
-                        className="inline-block h-5 w-5 rounded-full border border-slate-200 dark:border-slate-700"
+                        className="inline-block h-5 w-5 rounded-full border border-default dark:border-slate-700"
                         style={{ backgroundColor: c.hex }}
                         title={`${c.name} · ${c.hex}`}
                       />
@@ -152,7 +152,7 @@ export default function BrandKitListClient({ kits, brands, error }: Props) {
                     {t('brandKit.stat.products')}: {b.productCount}
                   </p>
                 </div>
-                <Plus className="w-4 h-4 flex-shrink-0 text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
+                <Plus className="w-4 h-4 flex-shrink-0 text-tertiary group-hover:text-blue-600 dark:group-hover:text-blue-400" />
               </Link>
             ))}
           </div>
@@ -163,7 +163,7 @@ export default function BrandKitListClient({ kits, brands, error }: Props) {
       )}
 
       {kits.length === 0 && orphanBrands.length === 0 && (
-        <div className="rounded-lg border border-slate-200 bg-white p-6 text-center text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+        <div className="rounded-lg border border-default bg-white p-6 text-center text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
           <p>{t('brandKit.noBrandsHint')}</p>
         </div>
       )}

@@ -290,7 +290,7 @@ export function TransportOptionsPicker({
       </div>
 
       {/* Contact info */}
-      <div className="border border-slate-200 dark:border-slate-700 rounded p-3 bg-slate-50/40 dark:bg-slate-900/30 space-y-2">
+      <div className="border border-default dark:border-slate-700 rounded p-3 bg-slate-50/40 dark:bg-slate-900/30 space-y-2">
         <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
           Contact information (optional — required by some carriers)
         </div>
@@ -385,14 +385,14 @@ function ShipmentCard({
   }, [options])
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded">
+    <div className="border border-default dark:border-slate-700 rounded">
       {/* Shipment header */}
-      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[11px] tabular-nums text-slate-500 dark:text-slate-400">
             Shipment {index + 1} of
           </span>
-          <Package size={12} className="text-slate-400 dark:text-slate-500" />
+          <Package size={12} className="text-tertiary dark:text-slate-500" />
           <span className="font-mono text-xs text-slate-700 dark:text-slate-300 truncate">
             {shipmentId}
           </span>
@@ -461,15 +461,15 @@ function ShipmentCard({
                     isSelected
                       ? 'border-blue-400 bg-blue-50/40 dark:bg-blue-950/30 ring-1 ring-blue-400'
                       : expired
-                        ? 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30 opacity-60 cursor-not-allowed'
-                        : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 bg-white dark:bg-slate-900'
+                        ? 'border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30 opacity-60 cursor-not-allowed'
+                        : 'border-default dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 bg-white dark:bg-slate-900'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1 space-y-0.5">
                       <div className="flex items-center gap-2 flex-wrap">
                         {isSelected && <CheckCircle2 size={11} className="text-blue-600 dark:text-blue-400 shrink-0" />}
-                        <Truck size={11} className="text-slate-400 dark:text-slate-500 shrink-0" />
+                        <Truck size={11} className="text-tertiary dark:text-slate-500 shrink-0" />
                         <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
                           {carrierLine}
                         </span>
@@ -500,7 +500,7 @@ function ShipmentCard({
                           {opt.shippingSolution}
                         </div>
                       )}
-                      <div className="font-mono text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                      <div className="font-mono text-[10px] text-tertiary dark:text-slate-500 truncate">
                         {opt.transportationOptionId}
                       </div>
                       {opt.preconditions && opt.preconditions.length > 0 && (

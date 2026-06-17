@@ -77,7 +77,7 @@ export function CannibalizationCard() {
 
   if (loading && !data) {
     return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 text-xs text-slate-500">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2 text-xs text-slate-500">
         {t('replenishment.cannibalization.loading')}
       </div>
     )
@@ -86,8 +86,8 @@ export function CannibalizationCard() {
   if (!data || data.findings.length === 0) return null
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
-      <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 flex-wrap">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md">
+      <div className="px-3 py-2 border-b border-default dark:border-slate-800 flex items-center gap-2 flex-wrap">
         <Repeat
           className="h-4 w-4 text-slate-500 dark:text-slate-400"
           aria-hidden="true"

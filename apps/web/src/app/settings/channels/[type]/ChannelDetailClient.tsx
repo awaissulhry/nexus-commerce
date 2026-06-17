@@ -459,7 +459,7 @@ function MarketplacesCard({
                 'flex flex-col items-center gap-1 py-2 rounded-md border text-sm transition-colors',
                 on
                   ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300'
-                  : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-400 hover:border-slate-300',
+                  : 'bg-white border-default text-slate-600 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-400 hover:border-slate-300',
               )}
               aria-pressed={on}
             >
@@ -490,7 +490,7 @@ function RecentEventsCard({
         <Pill tone="ok">{stats.success} ok</Pill>
         {stats.failed > 0 && <Pill tone="danger">{stats.failed} failed</Pill>}
         {stats.pending > 0 && <Pill tone="warn">{stats.pending} pending</Pill>}
-        <span className="text-slate-400 dark:text-slate-500">
+        <span className="text-tertiary dark:text-slate-500">
           · {stats.total} total
         </span>
       </div>
@@ -559,11 +559,11 @@ function RecentEventsCard({
 function AdvancedCard({ meta }: { meta: Record<string, unknown> | null }) {
   if (!meta || Object.keys(meta).length === 0) return null
   return (
-    <details className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+    <details className="rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900">
       <summary className="px-5 py-3 cursor-pointer flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 [&::-webkit-details-marker]:hidden">
-        <Activity size={14} className="text-slate-400 dark:text-slate-500" />
+        <Activity size={14} className="text-tertiary dark:text-slate-500" />
         Advanced — raw connection metadata
-        <ChevronDown size={14} className="ml-auto text-slate-400 dark:text-slate-500" />
+        <ChevronDown size={14} className="ml-auto text-tertiary dark:text-slate-500" />
       </summary>
       <pre className="px-5 pb-4 text-xs font-mono text-slate-700 dark:text-slate-300 overflow-x-auto">
         {JSON.stringify(meta, null, 2)}
@@ -586,8 +586,8 @@ function Card({
   children?: React.ReactNode
 }) {
   return (
-    <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5">
-      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+    <section className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-5">
+      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-subtle dark:border-slate-800">
         {icon && (
           <div className="shrink-0 w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400">
             {icon}

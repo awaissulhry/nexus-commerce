@@ -63,7 +63,7 @@ export function FinancialsLens({ orders }: { orders: FinancialsOrder[] }) {
       <Card noPadding>
         <div className="overflow-x-auto">
           <table className="w-full text-md">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50 border-b border-default">
               <tr>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
                   {t('orders.table.header.order')}
@@ -83,7 +83,7 @@ export function FinancialsLens({ orders }: { orders: FinancialsOrder[] }) {
               {orders.map((o) => (
                 <tr
                   key={o.id}
-                  className="border-b border-slate-100 hover:bg-slate-50"
+                  className="border-b border-subtle hover:bg-slate-50"
                 >
                   <td className="px-3 py-2">
                     <Link

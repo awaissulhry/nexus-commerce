@@ -403,7 +403,7 @@ export default function MasterDataTab({
                 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium transition-colors',
                 cascadeAllOpen
                   ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+                  : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
               )}
             >
               <ChevronsDown className="w-3.5 h-3.5" />
@@ -435,7 +435,7 @@ export default function MasterDataTab({
           type="button"
           onClick={openCascade}
           title="Preview + apply this product's master content across every mapped channel & market (translate + transform via the catalog mapping)"
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-default dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           <Share2 className="w-3.5 h-3.5" />
           Cascade to channels
@@ -633,7 +633,7 @@ function CascadeFieldButton({
         <button
           type="button"
           onClick={onCancel}
-          className="inline-flex items-center justify-center w-4 h-4 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+          className="inline-flex items-center justify-center w-4 h-4 rounded text-tertiary hover:text-slate-600 dark:hover:text-slate-300"
         >
           <X className="w-3 h-3" />
         </button>
@@ -685,20 +685,20 @@ function CascadeAllPopover({
   }
 
   return (
-    <div className="absolute left-0 top-full mt-1.5 z-50 w-64 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
-      <div className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+    <div className="absolute left-0 top-full mt-1.5 z-50 w-64 rounded-xl border border-default dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
+      <div className="px-3 py-2.5 border-b border-subtle dark:border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <ChevronsDown className="w-3.5 h-3.5 text-amber-500" />
           <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
             Cascade to {childCount} variant{childCount !== 1 ? 's' : ''}
           </span>
         </div>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+        <button onClick={onClose} className="text-tertiary hover:text-slate-600 dark:hover:text-slate-300">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
       <div className="px-3 py-2 space-y-1">
-        <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-2">
+        <p className="text-[10px] text-tertiary dark:text-slate-500 mb-2">
           Select fields to push to all child variants:
         </p>
         {Array.from(fields).map((f) => {
@@ -726,14 +726,14 @@ function CascadeAllPopover({
                   <span className="ml-1 text-[9px] text-amber-500 font-semibold">unsaved</span>
                 )}
               </span>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate font-mono">
+              <span className="text-[10px] text-tertiary dark:text-slate-500 truncate font-mono">
                 {val || '—'}
               </span>
             </label>
           )
         })}
       </div>
-      <div className="px-3 py-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+      <div className="px-3 py-2 border-t border-subtle dark:border-slate-800 flex items-center justify-between gap-2">
         <button
           type="button"
           onClick={onClose}
@@ -766,7 +766,7 @@ function AiSuggestOverlay({ busy, onClick, tooltip }: { busy: boolean; onClick: 
       aria-label={tooltip}
       disabled={busy}
       className={cn(
-        'absolute right-7 bottom-1.5 inline-flex items-center justify-center w-6 h-6 rounded text-slate-400 dark:text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:text-blue-600 dark:hover:text-blue-400 transition-colors',
+        'absolute right-7 bottom-1.5 inline-flex items-center justify-center w-6 h-6 rounded text-tertiary dark:text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:text-blue-600 dark:hover:text-blue-400 transition-colors',
         busy && 'opacity-50 cursor-wait',
       )}
     >
@@ -841,7 +841,7 @@ function SaveStatusBar({ status, error, t }: {
   return (
     <div className={cn(
       'inline-flex items-center gap-1.5 text-sm px-2 py-1 rounded border',
-      status === 'saving' && 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800',
+      status === 'saving' && 'border-default dark:border-slate-800 text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800',
       status === 'saved'  && 'border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40',
       status === 'error'  && 'border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40',
     )}>
@@ -866,7 +866,7 @@ function SelectField({ label, value, onChange, options }: {
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full h-8 rounded-md border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+        className="w-full h-8 rounded-md border border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
       >
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
@@ -1175,7 +1175,7 @@ function MarketAvailabilityCard({ productId }: { productId: string }) {
       )}
       <Card noPadding>
       {/* Header */}
-      <div className="px-4 py-3 flex items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800">
+      <div className="px-4 py-3 flex items-center justify-between gap-3 border-b border-subtle dark:border-slate-800">
         <div className="flex items-center gap-2 min-w-0">
           {/* OL.A.3 — select-all */}
           <input
@@ -1186,7 +1186,7 @@ function MarketAvailabilityCard({ productId }: { productId: string }) {
             onChange={() => setSelected(allSelected ? new Set() : new Set(rows.map(rowKey)))}
             className="h-3.5 w-3.5 flex-shrink-0 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40 cursor-pointer"
           />
-          <Globe className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          <Globe className="w-4 h-4 text-tertiary flex-shrink-0" />
           <div>
             <div className="text-md font-semibold text-slate-900 dark:text-slate-100">Listing Hub</div>
             <div className="text-sm text-slate-500 dark:text-slate-400">
@@ -1202,7 +1202,7 @@ function MarketAvailabilityCard({ productId }: { productId: string }) {
           {/* OL.D.7 — jump to catalog-wide listing automation rules */}
           <a
             href="/products/automation"
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
             title="Manage cross-market price / inventory / content automation rules"
           >
             <Sparkles className="w-3.5 h-3.5" /> Automation
@@ -1345,13 +1345,13 @@ function MarketAvailabilityCard({ productId }: { productId: string }) {
                   <span className="hidden md:inline text-xs tabular-nums text-slate-600 dark:text-slate-300">{priceLabel}</span>
                 )}
                 {synced && (
-                  <span className="hidden lg:inline text-[11px] text-slate-400 dark:text-slate-500" title={`Last synced ${synced}`}>
+                  <span className="hidden lg:inline text-[11px] text-tertiary dark:text-slate-500" title={`Last synced ${synced}`}>
                     {synced}
                   </span>
                 )}
                 <span className={cn(
                   'text-sm',
-                  row.offerActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500',
+                  row.offerActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-tertiary dark:text-slate-500',
                 )}>
                   {row.offerActive ? 'Active' : 'Paused'}
                 </span>

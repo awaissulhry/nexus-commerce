@@ -28,7 +28,7 @@ export default function RecoverLoading() {
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 flex items-center justify-between gap-3"
+              className="w-full rounded-md border border-default bg-white px-4 py-3 flex items-center justify-between gap-3"
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <Skeleton variant="thumbnail" width={32} height={32} />

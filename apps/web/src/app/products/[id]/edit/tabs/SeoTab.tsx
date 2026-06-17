@@ -95,7 +95,7 @@ const KNOWN_LOCALES = [
 function charCount(value: string | null, max: number) {
   const len = (value ?? '').length
   const pct = len / max
-  if (len === 0) return { len, cls: 'text-slate-400' }
+  if (len === 0) return { len, cls: 'text-tertiary' }
   if (pct > 1) return { len, cls: 'text-red-600 dark:text-red-400 font-semibold' }
   if (pct > 0.9) return { len, cls: 'text-amber-600 dark:text-amber-400' }
   return { len, cls: 'text-emerald-600 dark:text-emerald-400' }
@@ -182,10 +182,10 @@ function SerpPreview({
 
   return (
     <div className={cn(
-      'border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-900',
+      'border border-default dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-900',
       mobile ? 'max-w-sm' : 'max-w-2xl',
     )}>
-      <p className="text-xs text-slate-400 mb-2">
+      <p className="text-xs text-tertiary mb-2">
         {mobile ? <Smartphone className="w-3 h-3 inline mr-1" /> : <Monitor className="w-3 h-3 inline mr-1" />}
         SERP preview ({mobile ? 'mobile' : 'desktop'})
       </p>
@@ -246,7 +246,7 @@ function LocaleEditor({ seo, locale, product, onSave, onDelete, isSaving }: Loca
     setTimeout(() => setSchemaCopied(false), 2000)
   }
 
-  const inputCls = 'w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400'
+  const inputCls = 'w-full rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400'
   const labelCls = 'block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1'
 
   return (
@@ -257,7 +257,7 @@ function LocaleEditor({ seo, locale, product, onSave, onDelete, isSaving }: Loca
           <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
             {t('products.edit.seo.serpPreview')}
           </h3>
-          <div className="flex border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden text-xs">
+          <div className="flex border border-default dark:border-slate-700 rounded-md overflow-hidden text-xs">
             <button
               onClick={() => setSerpView('desktop')}
               className={cn('px-2 py-1 flex items-center gap-1',
@@ -317,13 +317,13 @@ function LocaleEditor({ seo, locale, product, onSave, onDelete, isSaving }: Loca
         <div>
           <label className={labelCls}>{t('products.edit.seo.urlHandle')}</label>
           <div className="flex items-center">
-            <span className="rounded-l-md border border-r-0 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-2 text-xs text-slate-400">/</span>
+            <span className="rounded-l-md border border-r-0 border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-2 text-xs text-tertiary">/</span>
             <input
               value={urlHandle}
               onChange={(e) => setUrlHandle(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
               onBlur={(e) => handleBlur('urlHandle', e.target.value)}
               placeholder={slugify(product.name)}
-              className="flex-1 rounded-r-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 rounded-r-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -349,7 +349,7 @@ function LocaleEditor({ seo, locale, product, onSave, onDelete, isSaving }: Loca
           {t('products.edit.seo.ogSection')}
         </button>
         {showOg && (
-          <div className="mt-3 space-y-3 pl-4 border-l-2 border-slate-100 dark:border-slate-800">
+          <div className="mt-3 space-y-3 pl-4 border-l-2 border-subtle dark:border-slate-800">
             <div>
               <label className={labelCls}>{t('products.edit.seo.ogTitle')}</label>
               <input value={ogTitle} onChange={(e) => setOgTitle(e.target.value)} onBlur={(e) => handleBlur('ogTitle', e.target.value)} placeholder={metaTitle || product.name} className={inputCls} />
@@ -399,7 +399,7 @@ function LocaleEditor({ seo, locale, product, onSave, onDelete, isSaving }: Loca
 
       {/* Delete locale */}
       {locale !== 'default' && (
-        <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div className="pt-2 border-t border-subtle dark:border-slate-800">
           <Button
             size="sm"
             variant="ghost"
@@ -413,7 +413,7 @@ function LocaleEditor({ seo, locale, product, onSave, onDelete, isSaving }: Loca
       )}
 
       {isSaving && (
-        <div className="flex items-center gap-1.5 text-xs text-slate-400">
+        <div className="flex items-center gap-1.5 text-xs text-tertiary">
           <Loader2 className="w-3 h-3 animate-spin" />
           {t('products.edit.seo.saving')}
         </div>
@@ -504,8 +504,8 @@ export default function SeoTab({ product, discardSignal, onDirtyChange }: SeoTab
 
   return (
     <div className="space-y-6">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-subtle dark:border-slate-800 flex items-center gap-2">
           <Globe className="w-4 h-4 text-blue-500" />
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             {t('products.edit.seo.title')}
@@ -540,11 +540,11 @@ export default function SeoTab({ product, discardSignal, onDirtyChange }: SeoTab
 
         {/* Add locale inline */}
         {showAddLocale && (
-          <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 bg-slate-50 dark:bg-slate-800/40">
+          <div className="px-5 py-3 border-b border-subtle dark:border-slate-800 flex items-center gap-2 bg-slate-50 dark:bg-slate-800/40">
             <select
               value={newLocale}
               onChange={(e) => setNewLocale(e.target.value)}
-              className="text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 focus:outline-none"
+              className="text-sm border border-default dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 focus:outline-none"
             >
               <option value="">{t('products.edit.seo.selectLocale')}</option>
               {KNOWN_LOCALES.filter((l) => l.code !== 'default' && !seoRows.find((r) => r.locale === l.code)).map((l) => (
@@ -555,7 +555,7 @@ export default function SeoTab({ product, discardSignal, onDirtyChange }: SeoTab
               value={newLocale}
               onChange={(e) => setNewLocale(e.target.value.toLowerCase())}
               placeholder="or type locale code…"
-              className="flex-1 text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 focus:outline-none"
+              className="flex-1 text-sm border border-default dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 focus:outline-none"
             />
             <Button size="sm" onClick={handleAddLocale} disabled={!newLocale}>Add</Button>
             <IconButton size="sm" aria-label="Close" onClick={() => setShowAddLocale(false)}><span className="text-xs">✕</span></IconButton>
@@ -564,7 +564,7 @@ export default function SeoTab({ product, discardSignal, onDirtyChange }: SeoTab
 
         <div className="px-5 py-5">
           {loading ? (
-            <div className="flex items-center justify-center py-12 text-slate-400">
+            <div className="flex items-center justify-center py-12 text-tertiary">
               <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading SEO data…
             </div>
           ) : (

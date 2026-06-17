@@ -212,7 +212,7 @@ export default function CycleCountListClient() {
                   'px-3 py-1 text-sm font-medium rounded border transition-colors',
                   statusFilter === f.key
                     ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                 )}
               >
                 {t(f.labelKey)}
@@ -269,7 +269,7 @@ export default function CycleCountListClient() {
       {loading && !counts && (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse" />
+            <div key={i} className="h-16 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg animate-pulse" />
           ))}
         </div>
       )}
@@ -294,7 +294,7 @@ export default function CycleCountListClient() {
               <Link
                 key={c.id}
                 href={`/fulfillment/stock/cycle-count/${c.id}`}
-                className="block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm transition-all"
+                className="block bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg p-4 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm transition-all"
               >
                 <div className="flex items-start gap-3">
                   <ClipboardCheck className="w-5 h-5 text-slate-500 dark:text-slate-400 flex-shrink-0 mt-0.5" />
@@ -311,7 +311,7 @@ export default function CycleCountListClient() {
                           : c.status.replace(/_/g, ' ')}
                       </Badge>
                       <span className="font-medium text-slate-900 dark:text-slate-100 inline-flex items-center gap-1">
-                        <WarehouseIcon className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                        <WarehouseIcon className="w-3.5 h-3.5 text-tertiary dark:text-slate-500" />
                         {c.location.name}
                         <span className="text-sm font-mono text-slate-500 dark:text-slate-400 ml-1">
                           ({c.location.code})
@@ -378,16 +378,16 @@ export default function CycleCountListClient() {
           aria-modal="true"
         >
           <div
-            className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-md"
+            className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-default dark:border-slate-700 w-full max-w-md"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <div className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('cycleCount.list.modal.title')}</h2>
               <button
                 type="button"
                 onClick={() => setCreateOpen(false)}
                 disabled={creating}
-                className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:text-slate-300 disabled:opacity-50"
+                className="text-tertiary dark:text-slate-500 hover:text-slate-700 dark:text-slate-300 disabled:opacity-50"
                 aria-label="Close"
               >
                 <X className="w-4 h-4" />
@@ -402,7 +402,7 @@ export default function CycleCountListClient() {
                   id="cycle-count-location"
                   value={newLocationId}
                   onChange={(e) => setNewLocationId(e.target.value)}
-                  className="mt-1 w-full px-3 py-1.5 text-md border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  className="mt-1 w-full px-3 py-1.5 text-md border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-300"
                 >
                   <option value="">{t('cycleCount.list.modal.locationPlaceholder')}</option>
                   {locations.map((l) => (
@@ -427,7 +427,7 @@ export default function CycleCountListClient() {
                   className="mt-1"
                 />
               </div>
-              <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-2 pt-2 border-t border-default dark:border-slate-700">
                 <Button variant="primary" size="sm" onClick={handleCreate} disabled={creating}>
                   {creating ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />

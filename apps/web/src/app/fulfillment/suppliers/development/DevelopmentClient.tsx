@@ -77,7 +77,7 @@ export default function DevelopmentClient() {
     [projects, statusFilter],
   )
 
-  const inputCls = 'h-9 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-base text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500'
+  const inputCls = 'h-9 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-base text-slate-900 dark:text-slate-100 placeholder:text-tertiary focus:outline-none focus:ring-1 focus:ring-blue-500'
 
   return (
     <div className="space-y-5">
@@ -103,14 +103,14 @@ export default function DevelopmentClient() {
       {/* Pipeline funnel */}
       {projects.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <button onClick={() => setStatusFilter(null)} className={`rounded-md border px-2.5 py-1 text-sm font-medium ${statusFilter === null ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+          <button onClick={() => setStatusFilter(null)} className={`rounded-md border px-2.5 py-1 text-sm font-medium ${statusFilter === null ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900' : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
             All {projects.length}
           </button>
           {STATUSES.filter((s) => projects.some((p) => p.status === s)).map((s) => {
             const n = projects.filter((p) => p.status === s).length
             const active = statusFilter === s
             return (
-              <button key={s} onClick={() => setStatusFilter(active ? null : s)} className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm ${active ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+              <button key={s} onClick={() => setStatusFilter(active ? null : s)} className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm ${active ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                 <Badge variant={STATUS_VARIANT[s]} size="sm">{s.replace(/_/g, ' ')}</Badge>
                 <span className="tabular-nums text-slate-500 dark:text-slate-400">{n}</span>
               </button>
@@ -129,7 +129,7 @@ export default function DevelopmentClient() {
           <div className="overflow-x-auto">
             <table className="w-full text-base">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <tr className="border-b border-default dark:border-slate-800 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   <th className="px-4 py-2.5 font-semibold">Project</th>
                   <th className="px-3 py-2.5 font-semibold">Status</th>
                   <th className="px-3 py-2.5 font-semibold">Type</th>
@@ -141,17 +141,17 @@ export default function DevelopmentClient() {
               </thead>
               <tbody>
                 {shown.map((p) => (
-                  <tr key={p.id} onClick={() => router.push(`/fulfillment/suppliers/development/${p.id}`)} className="cursor-pointer border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <tr key={p.id} onClick={() => router.push(`/fulfillment/suppliers/development/${p.id}`)} className="cursor-pointer border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                     <td className="px-4 py-2.5">
                       <div className="font-medium text-slate-900 dark:text-slate-100">{p.name}</div>
-                      <div className="font-mono text-xs text-slate-400 dark:text-slate-500">{p.code}</div>
+                      <div className="font-mono text-xs text-tertiary dark:text-slate-500">{p.code}</div>
                     </td>
                     <td className="px-3 py-2.5"><Badge variant={STATUS_VARIANT[p.status]} size="sm">{p.status.replace(/_/g, ' ')}</Badge></td>
                     <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{p.productType ?? '—'}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{eur(p.targetCostCents)}</td>
                     <td className="px-3 py-2.5 text-center tabular-nums text-slate-600 dark:text-slate-400">{p._count?.candidates ?? 0}</td>
                     <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{p.targetLaunchDate ? new Date(p.targetLaunchDate).toLocaleDateString() : '—'}</td>
-                    <td className="px-3 py-2.5 text-right"><ArrowRight size={15} className="inline text-slate-400" /></td>
+                    <td className="px-3 py-2.5 text-right"><ArrowRight size={15} className="inline text-tertiary" /></td>
                   </tr>
                 ))}
               </tbody>

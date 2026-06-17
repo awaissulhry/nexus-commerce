@@ -42,7 +42,7 @@ export default function FinancialPanel({
     <Card
       title={
         <span className="inline-flex items-center gap-1.5">
-          <Receipt className="w-3.5 h-3.5 text-slate-400" />
+          <Receipt className="w-3.5 h-3.5 text-tertiary" />
           {t('overview.financial.heading')}
         </span>
       }

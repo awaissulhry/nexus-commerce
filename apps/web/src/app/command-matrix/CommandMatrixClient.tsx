@@ -93,14 +93,14 @@ function ToolbarDropdown<T extends string>({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded hover:border-slate-300 hover:bg-slate-50 transition-colors dark:text-slate-300 dark:bg-slate-900 dark:border-slate-700"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white border border-default rounded hover:border-slate-300 hover:bg-slate-50 transition-colors dark:text-slate-300 dark:bg-slate-900 dark:border-slate-700"
       >
-        <span className="text-slate-400 text-[10px] uppercase tracking-wider">{label}:</span>
+        <span className="text-tertiary text-[10px] uppercase tracking-wider">{label}:</span>
         <span>{current?.label ?? value}</span>
-        <ChevronDown className="w-3 h-3 text-slate-400" />
+        <ChevronDown className="w-3 h-3 text-tertiary" />
       </button>
       {open && (
-        <div className="absolute top-full mt-1 left-0 z-50 min-w-[160px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded shadow-md py-1">
+        <div className="absolute top-full mt-1 left-0 z-50 min-w-[160px] bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded shadow-md py-1">
           {items.map((item) => (
             <button
               key={item.id}
@@ -311,9 +311,9 @@ export default function CommandMatrixClient() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+    <div className="flex flex-col h-full bg-white dark:bg-slate-950 rounded-lg border border-default dark:border-slate-800 overflow-hidden">
       {/* ── Toolbar ─────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex-none">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex-none">
         <span className="text-xs font-bold text-slate-700 dark:text-slate-200 tracking-widest uppercase mr-1">
           🎛 COMMAND MATRIX
         </span>
@@ -404,7 +404,7 @@ export default function CommandMatrixClient() {
 
       {/* ── Find/Replace bar ─────────────────────────────────────────── */}
       {findOpen && (
-        <div className="border-b border-slate-200 dark:border-slate-800 flex-none">
+        <div className="border-b border-default dark:border-slate-800 flex-none">
           <FindReplaceBar
             open={findOpen}
             onClose={() => setFindOpen(false)}
@@ -421,7 +421,7 @@ export default function CommandMatrixClient() {
 
       {/* ── Conditional Format bar ───────────────────────────────────── */}
       {cfOpen && (
-        <div className="border-b border-slate-200 dark:border-slate-800 flex-none">
+        <div className="border-b border-default dark:border-slate-800 flex-none">
           <ConditionalFormatBar
             open={cfOpen}
             onClose={() => setCfOpen(false)}
@@ -441,7 +441,7 @@ export default function CommandMatrixClient() {
         <div style={{ minWidth: totalWidth }}>
           {/* Sticky column headers */}
           <div
-            className="sticky top-0 z-20 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700"
+            className="sticky top-0 z-20 bg-slate-50 dark:bg-slate-900 border-b border-default dark:border-slate-700"
             style={{ minWidth: totalWidth }}
           >
             {headerGroups.map((hg) => (
@@ -452,7 +452,7 @@ export default function CommandMatrixClient() {
                     <div
                       key={header.id}
                       className={cn(
-                        'border-r border-slate-200 dark:border-slate-700 last:border-r-0',
+                        'border-r border-default dark:border-slate-700 last:border-r-0',
                         'flex items-center px-2',
                         isGroup
                           ? 'justify-center bg-slate-100 dark:bg-slate-800 font-bold text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400'
@@ -481,7 +481,7 @@ export default function CommandMatrixClient() {
               ? Array.from({ length: 20 }).map((_, i) => (
                   <div
                     key={i}
-                    className="flex border-b border-slate-100 dark:border-slate-800"
+                    className="flex border-b border-subtle dark:border-slate-800"
                     style={{
                       position: 'absolute',
                       top: i * ROW_HEIGHT,
@@ -503,7 +503,7 @@ export default function CommandMatrixClient() {
                       key={row.id}
                       data-row-id={row.id}
                       className={cn(
-                        'flex border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/80 dark:hover:bg-slate-800/50 group',
+                        'flex border-b border-subtle dark:border-slate-800 hover:bg-slate-50/80 dark:hover:bg-slate-800/50 group',
                         isVariant && 'bg-slate-50/40 dark:bg-slate-900/50',
                         highlightCls,
                       )}
@@ -517,7 +517,7 @@ export default function CommandMatrixClient() {
                       {row.getVisibleCells().map((cell) => (
                         <div
                           key={cell.id}
-                          className="flex items-center border-r border-slate-100 dark:border-slate-800 last:border-r-0 overflow-hidden px-1.5"
+                          className="flex items-center border-r border-subtle dark:border-slate-800 last:border-r-0 overflow-hidden px-1.5"
                           style={{ width: cell.column.getSize(), height: ROW_HEIGHT }}
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -531,7 +531,7 @@ export default function CommandMatrixClient() {
       </div>
 
       {/* ── Status bar ───────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-3 py-1.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex-none">
+      <div className="flex items-center gap-3 px-3 py-1.5 border-t border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex-none">
         <span className="text-[11px] text-slate-500">
           {loading
             ? 'Loading…'

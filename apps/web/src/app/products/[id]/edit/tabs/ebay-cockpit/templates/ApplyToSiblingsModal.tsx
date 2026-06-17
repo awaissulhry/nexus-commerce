@@ -179,10 +179,10 @@ export default function ApplyToSiblingsModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="apply-siblings-title"
-        className="w-full max-w-3xl mx-4 max-h-[85vh] flex flex-col rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl"
+        className="w-full max-w-3xl mx-4 max-h-[85vh] flex flex-col rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-subtle dark:border-slate-800 flex items-center justify-between">
           <div>
             <div id="apply-siblings-title" className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <Layers className="w-4 h-4 text-blue-500" />
@@ -192,13 +192,13 @@ export default function ApplyToSiblingsModal({
               Copy this product&apos;s eBay {marketplace} setup to similar products in one shot.
             </div>
           </div>
-          <button type="button" onClick={onClose} disabled={applying} className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded" aria-label="Close">
+          <button type="button" onClick={onClose} disabled={applying} className="p-1 text-tertiary hover:text-slate-700 dark:hover:text-slate-200 rounded" aria-label="Close">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Scope chooser */}
-        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 space-y-2">
+        <div className="px-4 py-3 border-b border-subtle dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 space-y-2">
           <div className="text-[10.5px] uppercase tracking-wide text-slate-500 font-medium">
             Layers to copy ({scopeCount})
           </div>
@@ -294,7 +294,7 @@ export default function ApplyToSiblingsModal({
                   </li>
                 ))}
               </ul>
-              <div className="text-[10.5px] text-slate-400 italic">
+              <div className="text-[10.5px] text-tertiary italic">
                 Each target got a "pre-template-apply" snapshot — undo per
                 target via the History drawer.
               </div>
@@ -302,13 +302,13 @@ export default function ApplyToSiblingsModal({
           )}
         </div>
 
-        <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+        <div className="px-4 py-3 border-t border-subtle dark:border-slate-800 flex items-center justify-end gap-2">
           {!results && (
-            <span className="text-[10.5px] text-slate-400 mr-auto">
+            <span className="text-[10.5px] text-tertiary mr-auto">
               {selected.size === 0 ? 'Pick at least one target' : `Will apply to ${selected.size} target${selected.size === 1 ? '' : 's'}`}
             </span>
           )}
-          <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+          <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-medium rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
             {results ? 'Close' : 'Cancel'}
           </button>
           {!results && (
@@ -341,7 +341,7 @@ function ScopeChip({
           ? warn
             ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300'
             : 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300'
-          : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+          : 'border-default dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
       )}
     >
       {icon}
@@ -363,7 +363,7 @@ function CandidateRow({
       'flex items-start gap-2 px-2.5 py-2 rounded border cursor-pointer transition-colors',
       selected
         ? 'border-blue-300 dark:border-blue-700 bg-blue-50/40 dark:bg-blue-950/20'
-        : 'border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800',
+        : 'border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800',
     )}>
       <input
         type="checkbox"

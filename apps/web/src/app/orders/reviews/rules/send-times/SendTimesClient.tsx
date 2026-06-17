@@ -115,7 +115,7 @@ export default function SendTimesClient() {
   }
 
   const labelCls = 'text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold'
-  const inputCls = 'h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900'
+  const inputCls = 'h-8 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900'
 
   return (
     <div className="space-y-5">
@@ -150,7 +150,7 @@ export default function SendTimesClient() {
             type="button"
             onClick={() => setMarketplace(m.code)}
             aria-pressed={marketplace === m.code}
-            className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${marketplace === m.code ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-blue-300'}`}
+            className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${marketplace === m.code ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-blue-300'}`}
           >
             {m.label}
           </button>
@@ -168,7 +168,7 @@ export default function SendTimesClient() {
           <div className="p-4 space-y-2">{Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-default dark:border-slate-800">
               <tr className="text-left">
                 <th className="px-3 py-2"><span className={labelCls}>Day</span></th>
                 <th className="px-3 py-2"><span className={labelCls}>Send at (local)</span></th>

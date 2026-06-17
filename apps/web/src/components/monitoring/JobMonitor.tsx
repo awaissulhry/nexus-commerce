@@ -148,7 +148,7 @@ export default function JobMonitor({
 
   if (loading && jobs.length === 0) {
     return (
-      <div className="bg-white rounded-lg border border-slate-200 p-6">
+      <div className="bg-white rounded-lg border border-default p-6">
         <div className="flex items-center justify-center h-32">
           <Activity className="w-6 h-6 animate-spin text-blue-500" />
           <span className="ml-2 text-slate-600">Loading job monitor...</span>
@@ -160,7 +160,7 @@ export default function JobMonitor({
   return (
     <div className="space-y-4">
       {/* Header with Stats */}
-      <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-lg border border-slate-200 p-6">
+      <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-lg border border-default p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">
@@ -182,7 +182,7 @@ export default function JobMonitor({
         {/* Queue Stats Grid */}
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div className="bg-white rounded p-3 border border-slate-200">
+            <div className="bg-white rounded p-3 border border-default">
               <p className="text-xs text-slate-600 uppercase tracking-wide font-medium">
                 Waiting
               </p>
@@ -190,7 +190,7 @@ export default function JobMonitor({
                 {stats.waiting}
               </p>
             </div>
-            <div className="bg-white rounded p-3 border border-slate-200">
+            <div className="bg-white rounded p-3 border border-default">
               <p className="text-xs text-slate-600 uppercase tracking-wide font-medium">
                 Active
               </p>
@@ -198,7 +198,7 @@ export default function JobMonitor({
                 {stats.active}
               </p>
             </div>
-            <div className="bg-white rounded p-3 border border-slate-200">
+            <div className="bg-white rounded p-3 border border-default">
               <p className="text-xs text-slate-600 uppercase tracking-wide font-medium">
                 Completed
               </p>
@@ -206,7 +206,7 @@ export default function JobMonitor({
                 {stats.completed}
               </p>
             </div>
-            <div className="bg-white rounded p-3 border border-slate-200">
+            <div className="bg-white rounded p-3 border border-default">
               <p className="text-xs text-slate-600 uppercase tracking-wide font-medium">
                 Failed
               </p>
@@ -214,7 +214,7 @@ export default function JobMonitor({
                 {stats.failed}
               </p>
             </div>
-            <div className="bg-white rounded p-3 border border-slate-200">
+            <div className="bg-white rounded p-3 border border-default">
               <p className="text-xs text-slate-600 uppercase tracking-wide font-medium">
                 Delayed
               </p>
@@ -234,7 +234,7 @@ export default function JobMonitor({
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex gap-2 border-b border-slate-200">
+      <div className="flex gap-2 border-b border-default">
         {(["all", "waiting", "active", "completed", "failed", "delayed"] as const).map(
           (status) => (
             <button
@@ -377,8 +377,8 @@ export default function JobMonitor({
             </div>
           ))
         ) : (
-          <div className="bg-slate-50 rounded-lg border border-slate-200 p-8 text-center">
-            <TrendingUp className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+          <div className="bg-slate-50 rounded-lg border border-default p-8 text-center">
+            <TrendingUp className="w-12 h-12 text-tertiary mx-auto mb-3" />
             <p className="text-slate-600">
               {filter === "all"
                 ? "No jobs in queue"

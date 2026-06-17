@@ -85,7 +85,7 @@ export function StockSubNav({ cycleCountActive = 0, recallsOpen = 0, channelDrif
     <div className="w-full min-w-0 overflow-x-hidden">
       <nav
         aria-label={t('stock.subnav.ariaLabel')}
-        className="border-b border-slate-200 dark:border-slate-700 overflow-x-auto overscroll-x-contain"
+        className="border-b border-default dark:border-slate-700 overflow-x-auto overscroll-x-contain"
       >
         <ul className="flex items-center gap-0.5 w-max">
           {tabs.map((tab) => {

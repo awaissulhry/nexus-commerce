@@ -41,7 +41,7 @@ const BUCKETS: { key: Bucket; label: string; quantityField: keyof StorageAgeRow 
 ]
 
 function cellTone(units: number, bucket: Bucket): string {
-  if (units === 0) return 'bg-slate-50 dark:bg-slate-950/40 text-slate-400 dark:text-slate-600'
+  if (units === 0) return 'bg-slate-50 dark:bg-slate-950/40 text-tertiary dark:text-slate-600'
   if (bucket === '365_plus' || bucket === '271_365') {
     return 'bg-rose-100 dark:bg-rose-950/60 text-rose-900 dark:text-rose-200'
   }
@@ -118,9 +118,9 @@ export function StorageAgeHeatmap({ rows }: { rows: StorageAgeRow[] }) {
         ))}
       </div>
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
+          <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-default dark:border-slate-800">
             <tr>
               <th className="px-3 py-2 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 w-16">
                 Mkt
@@ -147,7 +147,7 @@ export function StorageAgeHeatmap({ rows }: { rows: StorageAgeRow[] }) {
                   if (!cell) {
                     return (
                       <td key={b.key} className="px-1 py-1">
-                        <div className="bg-slate-50 dark:bg-slate-950/40 rounded text-center py-3 text-[10px] text-slate-400">
+                        <div className="bg-slate-50 dark:bg-slate-950/40 rounded text-center py-3 text-[10px] text-tertiary">
                           —
                         </div>
                       </td>

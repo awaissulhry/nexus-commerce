@@ -266,7 +266,7 @@ export default async function ImagesTab({
       </div>
 
       {/* Master gallery row */}
-      <div className="border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900 p-3">
+      <div className="border border-default dark:border-slate-800 rounded bg-white dark:bg-slate-900 p-3">
         <div className="flex items-center justify-between gap-2 mb-2">
           <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
             {t('products.datasheetHub.images.master.title')}
@@ -286,7 +286,7 @@ export default async function ImagesTab({
                   'flex-shrink-0 w-14 h-14 rounded border overflow-hidden bg-slate-50 dark:bg-slate-800 ' +
                   (i === 0
                     ? 'border-blue-300 dark:border-blue-700'
-                    : 'border-slate-200 dark:border-slate-700')
+                    : 'border-default dark:border-slate-700')
                 }
                 title={`${img.type} · ${img.alt ?? ''}`}
               >
@@ -301,7 +301,7 @@ export default async function ImagesTab({
             ))}
           </div>
         ) : (
-          <div className="text-xs text-slate-400 italic flex items-center gap-1.5">
+          <div className="text-xs text-tertiary italic flex items-center gap-1.5">
             <ImageOff className="w-3 h-3" />
             {t('products.datasheetHub.images.master.empty')}
           </div>
@@ -310,7 +310,7 @@ export default async function ImagesTab({
 
       {/* Per-channel cards */}
       {summaries.length === 0 ? (
-        <div className="border border-slate-200 dark:border-slate-800 rounded p-6 text-center text-sm text-slate-500">
+        <div className="border border-default dark:border-slate-800 rounded p-6 text-center text-sm text-slate-500">
           {t('products.datasheetHub.images.noChannels')}
         </div>
       ) : (
@@ -324,7 +324,7 @@ export default async function ImagesTab({
                 ? 'border-red-200 dark:border-red-900'
                 : drifted > 0
                   ? 'border-amber-200 dark:border-amber-900'
-                  : 'border-slate-200 dark:border-slate-800'
+                  : 'border-default dark:border-slate-800'
             return (
               <div
                 key={s.key}
@@ -377,7 +377,7 @@ export default async function ImagesTab({
                       {s.heroes.map((h, i) => (
                         <div
                           key={i}
-                          className="relative flex-shrink-0 w-10 h-10 rounded border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800"
+                          className="relative flex-shrink-0 w-10 h-10 rounded border border-default dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800"
                           title={`${h.amazonSlot ?? ''} · ${h.publishStatus}`}
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -411,7 +411,7 @@ export default async function ImagesTab({
 
                     {/* Last published footer */}
                     {s.lastPublishedAt && (
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-1.5">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 border-t border-subtle dark:border-slate-800 pt-1.5">
                         {t('products.datasheetHub.images.card.lastPublish', {
                           ago: relAge(s.lastPublishedAt) ?? '—',
                         })}

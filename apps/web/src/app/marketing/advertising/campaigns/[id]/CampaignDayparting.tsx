@@ -71,9 +71,9 @@ export function CampaignDayparting({ campaignId, marketplace, refreshKey }: { ca
     } catch (e) { setMsg((e as Error).message) } finally { setCreating(false) }
   }, [cells, campaignId])
 
-  if (cells == null) return <div className="p-6 text-center text-slate-400 text-sm">Loading…</div>
+  if (cells == null) return <div className="p-6 text-center text-tertiary text-sm">Loading…</div>
   if (cells.length === 0) return (
-    <div className="p-6 text-center text-slate-400 text-sm">
+    <div className="p-6 text-center text-tertiary text-sm">
       No hourly data yet. Dayparting populates once an Amazon Marketing Stream subscription is pushing hourly performance (see docs/MARKETING-OS.md).
     </div>
   )
@@ -81,10 +81,10 @@ export function CampaignDayparting({ campaignId, marketplace, refreshKey }: { ca
   return (
     <div className="p-3">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <div className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-200"><CalendarClock size={14} className="text-violet-500" /> Dayparting <span className="text-xs font-normal text-slate-400">· last 30d · Europe/Rome</span></div>
+        <div className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-200"><CalendarClock size={14} className="text-violet-500" /> Dayparting <span className="text-xs font-normal text-tertiary">· last 30d · Europe/Rome</span></div>
         <div className="inline-flex items-center gap-1">
           {(['orders', 'spend', 'acos'] as const).map((m) => (
-            <button key={m} onClick={() => setMetric(m)} className={`px-2 py-0.5 text-xs rounded border ${metric === m ? 'border-blue-500 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40' : 'border-slate-200 dark:border-slate-700 text-slate-500'}`}>{m === 'acos' ? 'ACOS' : m[0].toUpperCase() + m.slice(1)}</button>
+            <button key={m} onClick={() => setMetric(m)} className={`px-2 py-0.5 text-xs rounded border ${metric === m ? 'border-blue-500 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40' : 'border-default dark:border-slate-700 text-slate-500'}`}>{m === 'acos' ? 'ACOS' : m[0].toUpperCase() + m.slice(1)}</button>
           ))}
         </div>
       </div>
@@ -92,7 +92,7 @@ export function CampaignDayparting({ campaignId, marketplace, refreshKey }: { ca
       <div className="overflow-x-auto">
         <table className="border-separate" style={{ borderSpacing: 2 }}>
           <thead>
-            <tr><th className="w-10"></th>{Array.from({ length: 24 }, (_, h) => <th key={h} className="text-[9px] text-slate-400 font-normal w-5">{h % 3 === 0 ? h : ''}</th>)}</tr>
+            <tr><th className="w-10"></th>{Array.from({ length: 24 }, (_, h) => <th key={h} className="text-[9px] text-tertiary font-normal w-5">{h % 3 === 0 ? h : ''}</th>)}</tr>
           </thead>
           <tbody>
             {DAYS.map((d) => (
@@ -115,7 +115,7 @@ export function CampaignDayparting({ campaignId, marketplace, refreshKey }: { ca
           <Sparkles size={13} /> {creating ? 'Creating…' : 'Create peak-hours schedule'}
         </button>
         {msg && <span className={`text-xs ${msg.startsWith('✓') ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600'}`}>{msg}</span>}
-        <span className="text-xs text-slate-400">Schedule is created disabled — review windows and enable in Automation. {marketplace ? `(${marketplace})` : ''}</span>
+        <span className="text-xs text-tertiary">Schedule is created disabled — review windows and enable in Automation. {marketplace ? `(${marketplace})` : ''}</span>
       </div>
     </div>
   )

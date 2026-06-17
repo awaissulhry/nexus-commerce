@@ -51,9 +51,9 @@ export default function ModulePalette({ onAdd, disabled }: Props) {
   return (
     <aside
       aria-label={t('aplus.builder.paletteLabel')}
-      className="flex flex-col rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+      className="flex flex-col rounded-lg border border-default bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
     >
-      <header className="border-b border-slate-200 px-3 py-2 dark:border-slate-800">
+      <header className="border-b border-default px-3 py-2 dark:border-slate-800">
         <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
           {t('aplus.builder.paletteTitle')}
         </p>
@@ -61,7 +61,7 @@ export default function ModulePalette({ onAdd, disabled }: Props) {
           {t('aplus.builder.paletteHint')}
         </p>
       </header>
-      <div className="border-b border-slate-200 p-2 dark:border-slate-800">
+      <div className="border-b border-default p-2 dark:border-slate-800">
         <input
           type="search"
           value={filter}
@@ -81,7 +81,7 @@ export default function ModulePalette({ onAdd, disabled }: Props) {
             <details
               key={group}
               open
-              className="group border-b border-slate-100 last:border-b-0 dark:border-slate-800"
+              className="group border-b border-subtle last:border-b-0 dark:border-slate-800"
             >
               <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
                 {group}
@@ -110,7 +110,7 @@ export default function ModulePalette({ onAdd, disabled }: Props) {
                           {spec.description}
                         </p>
                       </div>
-                      <Plus className="w-3.5 h-3.5 flex-shrink-0 text-slate-400 opacity-0 group-hover/item:opacity-100" />
+                      <Plus className="w-3.5 h-3.5 flex-shrink-0 text-tertiary opacity-0 group-hover/item:opacity-100" />
                     </button>
                   </li>
                 ))}
@@ -133,7 +133,7 @@ function TierIcon({ tier }: { tier: ModuleTier }) {
     )
   return (
     <BadgeCheck
-      className="w-4 h-4 flex-shrink-0 text-slate-400"
+      className="w-4 h-4 flex-shrink-0 text-tertiary"
       aria-label="Standard tier"
     />
   )

@@ -52,7 +52,7 @@ export function RuleCardClient({ rule: initial, triggerLabel }: { rule: Rule; tr
           disabled={busy}
           aria-label={rule.enabled ? 'Disable rule' : 'Enable rule'}
           title={rule.enabled ? 'Disable' : 'Enable'}
-          className={`h-7 w-7 rounded-md border flex items-center justify-center transition disabled:opacity-40 ${rule.enabled ? 'border-emerald-300 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400' : 'border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500'}`}
+          className={`h-7 w-7 rounded-md border flex items-center justify-center transition disabled:opacity-40 ${rule.enabled ? 'border-emerald-300 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400' : 'border-default bg-slate-50 text-tertiary hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500'}`}
         >
           {rule.enabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
         </button>
@@ -63,7 +63,7 @@ export function RuleCardClient({ rule: initial, triggerLabel }: { rule: Rule; tr
             disabled={busy}
             aria-label={rule.dryRun ? 'Turn off dry-run (go live)' : 'Switch to dry-run'}
             title={rule.dryRun ? 'Go live (turn off dry-run)' : 'Switch to dry-run'}
-            className={`h-7 w-7 rounded-md border flex items-center justify-center transition disabled:opacity-40 ${rule.dryRun ? 'border-amber-300 bg-amber-50 text-amber-600 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400' : 'border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500'}`}
+            className={`h-7 w-7 rounded-md border flex items-center justify-center transition disabled:opacity-40 ${rule.dryRun ? 'border-amber-300 bg-amber-50 text-amber-600 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400' : 'border-default bg-slate-50 text-tertiary hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500'}`}
           >
             <FlaskConical className="h-3.5 w-3.5" />
           </button>
@@ -75,11 +75,11 @@ export function RuleCardClient({ rule: initial, triggerLabel }: { rule: Rule; tr
         <div className="flex items-center gap-2 flex-wrap mb-0.5">
           <span className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate max-w-[280px]">{rule.name}</span>
           <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset ${statusChip[status]}`}>{statusLabel[status]}</span>
-          <span className="text-[10px] text-slate-400 px-1.5 py-0.5 rounded bg-slate-50 dark:bg-slate-800 ring-1 ring-inset ring-slate-200 dark:ring-slate-700">{triggerLabel}</span>
+          <span className="text-[10px] text-tertiary px-1.5 py-0.5 rounded bg-slate-50 dark:bg-slate-800 ring-1 ring-inset ring-slate-200 dark:ring-slate-700">{triggerLabel}</span>
           {rule.scopeMarketplace && <span className="text-[10px] font-mono text-blue-600 dark:text-blue-400">{rule.scopeMarketplace}</span>}
         </div>
         {rule.description && <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mb-0.5">{rule.description}</p>}
-        <div className="text-[11px] text-slate-400 flex items-center gap-3 flex-wrap">
+        <div className="text-[11px] text-tertiary flex items-center gap-3 flex-wrap">
           <span>{rule.executionCount} runs</span>
           {rule.maxExecutionsPerDay && <span>max {rule.maxExecutionsPerDay}×/day</span>}
           {rule.lastExecutedAt && (
@@ -92,7 +92,7 @@ export function RuleCardClient({ rule: initial, triggerLabel }: { rule: Rule; tr
       </div>
 
       {/* Navigate to detail */}
-      <Link href={`/marketing/advertising/automation/${rule.id}`} className="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 pt-1" aria-label="View rule details">
+      <Link href={`/marketing/advertising/automation/${rule.id}`} className="shrink-0 text-tertiary hover:text-slate-600 dark:hover:text-slate-200 pt-1" aria-label="View rule details">
         <ChevronRight className="h-4 w-4" />
       </Link>
     </div>

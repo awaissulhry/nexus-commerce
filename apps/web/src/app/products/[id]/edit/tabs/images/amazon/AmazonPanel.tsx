@@ -651,13 +651,13 @@ export default function AmazonPanel({
   }
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-xl">
       {/* PB.4 — removed overflow-hidden so the publish bar can use
           position: sticky bottom-0 against the viewport (not clipped
           to the panel boundary). Rounded-b-xl on AmazonPublishBar
           matches the panel's bottom corners. */}
       {/* Marketplace tabs + axis selector */}
-      <div className="flex items-center border-b border-slate-200 dark:border-slate-700 px-4 overflow-x-auto gap-2">
+      <div className="flex items-center border-b border-default dark:border-slate-700 px-4 overflow-x-auto gap-2">
         <div className="flex items-center flex-1 overflow-x-auto">
           {(['ALL', ...AMAZON_MARKETPLACES] as AmazonMarketplace[]).map((mkt) => {
             const isActive = amazon.activeMarketplace === mkt
@@ -685,21 +685,21 @@ export default function AmazonPanel({
 
         {/* Slot-uploading indicator */}
         {slotUploading && (
-          <span className="flex items-center gap-1 text-xs text-slate-400 ml-2 py-3 flex-shrink-0">
+          <span className="flex items-center gap-1 text-xs text-tertiary ml-2 py-3 flex-shrink-0">
             <Loader2 className="w-3 h-3 animate-spin" /> Uploading…
           </span>
         )}
 
         {/* Axis selector — group rows by Color, Size, etc. Free-type + datalist suggestions */}
         {variants.length > 0 && (
-          <div className="flex items-center gap-1.5 py-2 pl-3 border-l border-slate-100 dark:border-slate-800 flex-shrink-0">
-            <span className="text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap">Group by</span>
+          <div className="flex items-center gap-1.5 py-2 pl-3 border-l border-subtle dark:border-slate-800 flex-shrink-0">
+            <span className="text-xs text-tertiary dark:text-slate-500 whitespace-nowrap">Group by</span>
             <input
               list="amazon-axis-list"
               value={activeAxis}
               onChange={(e) => { if (e.target.value.trim()) onAxisChange(e.target.value.trim()) }}
               placeholder="e.g. Colore"
-              className="text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-orange-400 w-24"
+              className="text-xs border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-orange-400 w-24"
             />
             <datalist id="amazon-axis-list">
               {[...new Set([...availableAxes, 'ASIN', 'SKU', 'Colore', 'Taglia', 'Color', 'Size', 'Colour', 'Material', 'Style', 'Gender'])].map((a) => (
@@ -725,8 +725,8 @@ export default function AmazonPanel({
 
       {/* CM.4 — "All Markets" applies to every Amazon market */}
       {amazon.activeMarketplace === 'ALL' && (
-        <div className="mx-4 mt-4 flex items-start gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
-          <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-slate-400" />
+        <div className="mx-4 mt-4 flex items-start gap-2 rounded-lg border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
+          <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-tertiary" />
           <span>
             Images set on <b>All Markets</b> apply to <b>every Amazon market</b> unless a specific market overrides them.
             Switch to a market tab (IT, DE…) to set market-specific images or to copy one market&apos;s images to others.
@@ -800,7 +800,7 @@ export default function AmazonPanel({
           <div className="mb-3 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex items-center gap-3 animate-in fade-in slide-in-from-top-1 duration-150">
             <span className="text-xs text-slate-700 dark:text-slate-200 flex-1">
               <span className="font-medium">{undoableDrag.label}</span>
-              <span className="text-slate-400 ml-2">— save to commit, discard or undo to revert</span>
+              <span className="text-tertiary ml-2">— save to commit, discard or undo to revert</span>
             </span>
             <Button
               size="sm"
@@ -856,7 +856,7 @@ export default function AmazonPanel({
           <MediaViewsMenu currentPrefs={matrixCols.prefs} onApply={matrixCols.save} />
         </span>
         {bulkMode && (
-          <span className="ml-2 text-[11px] text-slate-400">Tick images, or use the row / column / all boxes, then pick a bulk action.</span>
+          <span className="ml-2 text-[11px] text-tertiary">Tick images, or use the row / column / all boxes, then pick a bulk action.</span>
         )}
       </div>
 
@@ -872,7 +872,7 @@ export default function AmazonPanel({
                   'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]',
                   g.complete
                     ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300'
-                    : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400',
+                    : 'border-default dark:border-slate-700 text-slate-500 dark:text-slate-400',
                   hidden && 'opacity-50',
                 )}
               >
@@ -897,7 +897,7 @@ export default function AmazonPanel({
       {/* Matrix */}
       <div className="p-4">
         {amazon.variantGroups.length === 0 && variants.length === 0 ? (
-          <div className="text-center py-8 text-sm text-slate-400">
+          <div className="text-center py-8 text-sm text-tertiary">
             No variants found. Add variants with {activeAxis} attribute to populate the matrix.
           </div>
         ) : (
@@ -976,17 +976,17 @@ export default function AmazonPanel({
       />
 
       {/* IR.5.3 — Buyer preview */}
-      <div className="border-t border-slate-100 dark:border-slate-800">
+      <div className="border-t border-subtle dark:border-slate-800">
         <button
           type="button"
           onClick={() => setPreviewOpen((p) => !p)}
           className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
           aria-expanded={previewOpen}
         >
-          <Eye className="w-3.5 h-3.5 text-slate-400" />
+          <Eye className="w-3.5 h-3.5 text-tertiary" />
           <span className="font-medium">Buyer preview</span>
-          <span className="text-slate-400 ml-1">— Amazon detail page as a customer would see it</span>
-          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-slate-400 transition-transform', previewOpen && 'rotate-180')} />
+          <span className="text-tertiary ml-1">— Amazon detail page as a customer would see it</span>
+          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-tertiary transition-transform', previewOpen && 'rotate-180')} />
         </button>
         {previewOpen && (
           <div className="px-4 pb-4">
@@ -1003,17 +1003,17 @@ export default function AmazonPanel({
       </div>
 
       {/* IR.9.4 — Publish history */}
-      <div className="border-t border-slate-100 dark:border-slate-800">
+      <div className="border-t border-subtle dark:border-slate-800">
         <button
           type="button"
           onClick={() => setHistoryOpen((p) => !p)}
           className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
           aria-expanded={historyOpen}
         >
-          <Clock className="w-3.5 h-3.5 text-slate-400" />
+          <Clock className="w-3.5 h-3.5 text-tertiary" />
           <span className="font-medium">Publish history</span>
-          <span className="text-slate-400 ml-1">— Amazon feed submissions + retry</span>
-          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-slate-400 transition-transform', historyOpen && 'rotate-180')} />
+          <span className="text-tertiary ml-1">— Amazon feed submissions + retry</span>
+          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-tertiary transition-transform', historyOpen && 'rotate-180')} />
         </button>
         {historyOpen && (
           <div className="px-4 pb-4">

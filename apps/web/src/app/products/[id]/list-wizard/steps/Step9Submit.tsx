@@ -459,7 +459,7 @@ export default function Step9Submit({
   if (!submissions) {
     return (
       <div className="max-w-xl mx-auto py-6 md:py-12 px-3 md:px-6">
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-8 text-center">
+        <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-8 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 mb-4">
             <Rocket className="w-6 h-6" />
           </div>
@@ -589,7 +589,7 @@ export default function Step9Submit({
             ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40'
             : overallStatus === 'FAILED'
             ? 'border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40'
-            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900',
+            : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900',
         )}
       >
         <div className="text-md">
@@ -694,7 +694,7 @@ function HistoryStrip({
   const visible = expanded ? events : events.slice(0, 1)
   const hiddenCount = events.length - visible.length
   return (
-    <div className="mt-6 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
+    <div className="mt-6 border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
       <button
         type="button"
         onClick={onToggle}
@@ -798,8 +798,8 @@ function SubmissionRow({
       : entry.status === 'FAILED'
       ? 'border-rose-200 dark:border-rose-900 bg-rose-50/50'
       : entry.status === 'NOT_IMPLEMENTED'
-      ? 'border-slate-200 dark:border-slate-700 bg-slate-50/50'
-      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'
+      ? 'border-default dark:border-slate-700 bg-slate-50/50'
+      : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900'
 
   return (
     <div className={cn('border rounded-lg px-4 py-3', tone)}>
@@ -813,7 +813,7 @@ function SubmissionRow({
             <div className="text-sm text-slate-500 dark:text-slate-400 truncate">
               {humanStatus(entry.status, retrying)}
               {entry.submissionId && (
-                <span className="ml-1 font-mono text-slate-400 dark:text-slate-500">
+                <span className="ml-1 font-mono text-tertiary dark:text-slate-500">
                   · id: {entry.submissionId}
                 </span>
               )}
@@ -843,7 +843,7 @@ function SubmissionRow({
                   ? 'Retry will stay NOT_IMPLEMENTED until the adapter is wired.'
                   : 'Retry this channel'
               }
-              className="inline-flex items-center gap-1 h-7 px-2 rounded text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1 h-7 px-2 rounded text-sm font-medium border border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {retrying ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -1015,7 +1015,7 @@ function StatusIcon({
     case 'FAILED':
       return <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
     case 'NOT_IMPLEMENTED':
-      return <AlertCircle className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+      return <AlertCircle className="w-4 h-4 text-tertiary dark:text-slate-500" />
     case 'SUBMITTED':
     case 'SUBMITTING':
     case 'PENDING':
@@ -1114,7 +1114,7 @@ function SaveAsTemplateButton({ wizardId }: { wizardId: string }) {
   }
 
   return (
-    <div className="text-left border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800/40 px-3 py-3 space-y-2">
+    <div className="text-left border border-default dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800/40 px-3 py-3 space-y-2">
       <div className="text-md font-medium text-slate-900 dark:text-slate-100">
         Save as template
       </div>
@@ -1123,7 +1123,7 @@ function SaveAsTemplateButton({ wizardId }: { wizardId: string }) {
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Template name (e.g. 'Helmet — Amazon EU + eBay IT')"
-        className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+        className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
         autoFocus
       />
       <textarea
@@ -1131,14 +1131,14 @@ function SaveAsTemplateButton({ wizardId }: { wizardId: string }) {
         onChange={(e) => setDescription(e.target.value)}
         placeholder="Optional description — explain what this template is for"
         rows={2}
-        className="w-full px-2 py-1 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+        className="w-full px-2 py-1 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
       />
       <input
         type="text"
         value={categoryHint}
         onChange={(e) => setCategoryHint(e.target.value)}
         placeholder="Optional category hint (e.g. 'helmet') — surfaces when a matching product opens the wizard"
-        className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+        className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
       />
       {error && (
         <div className="text-sm text-rose-700 dark:text-rose-300 inline-flex items-start gap-1">
@@ -1306,7 +1306,7 @@ function ScheduleForLaterButton({ wizardId }: { wizardId: string }) {
           Schedule for later…
         </button>
       ) : (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800/40 px-3 py-3 space-y-2">
+        <div className="border border-default dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800/40 px-3 py-3 space-y-2">
           <div className="text-md font-medium text-slate-900 dark:text-slate-100">
             Schedule publish
           </div>
@@ -1315,7 +1315,7 @@ function ScheduleForLaterButton({ wizardId }: { wizardId: string }) {
             value={scheduledFor}
             min={datetimeMin}
             onChange={(e) => setScheduledFor(e.target.value)}
-            className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+            className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
             autoFocus
           />
           {error && (
@@ -1366,7 +1366,7 @@ function ScheduleForLaterButton({ wizardId }: { wizardId: string }) {
           {pendingRows.map((row) => (
             <li
               key={row.id}
-              className="text-sm flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-2 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+              className="text-sm flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-2 py-1 border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
             >
               <span className="text-slate-700 dark:text-slate-300 break-words min-w-0">
                 Pending —{' '}
@@ -1386,7 +1386,7 @@ function ScheduleForLaterButton({ wizardId }: { wizardId: string }) {
         </ul>
       )}
       {refreshing && pendingRows.length === 0 && open === false && (
-        <span className="ml-2 text-xs text-slate-400 dark:text-slate-500 inline-flex items-center gap-1">
+        <span className="ml-2 text-xs text-tertiary dark:text-slate-500 inline-flex items-center gap-1">
           <Loader2 className="w-3 h-3 animate-spin" />
           checking…
         </span>
@@ -1423,7 +1423,7 @@ function ScheduleForLaterButton({ wizardId }: { wizardId: string }) {
                 return (
                   <li
                     key={row.id}
-                    className="text-xs flex items-start justify-between gap-3 px-2 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                    className="text-xs flex items-start justify-between gap-3 px-2 py-1 border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                   >
                     <div className="min-w-0 flex-1">
                       <span className={cn('font-medium', tone)}>

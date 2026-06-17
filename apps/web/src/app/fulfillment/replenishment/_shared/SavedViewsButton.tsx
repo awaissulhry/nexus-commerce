@@ -174,7 +174,7 @@ export function SavedViewsButton({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="h-8 px-2.5 text-base border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+        className="h-8 px-2.5 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
       >
         <Bookmark size={12} />
         Views
@@ -195,8 +195,8 @@ export function SavedViewsButton({
               setShowSaveForm(false)
             }}
           />
-          <div className="absolute right-0 mt-1 z-50 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md shadow-lg">
-            <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <div className="absolute right-0 mt-1 z-50 w-72 bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md shadow-lg">
+            <div className="px-3 py-2 border-b border-default dark:border-slate-800 flex items-center justify-between">
               <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                 Saved Views
               </span>
@@ -210,13 +210,13 @@ export function SavedViewsButton({
             </div>
 
             {showSaveForm && (
-              <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 space-y-2">
+              <div className="px-3 py-2 border-b border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-950 space-y-2">
                 <input
                   type="text"
                   value={saveName}
                   onChange={(e) => setSaveName(e.target.value)}
                   placeholder='e.g. "CRITICAL on Amazon IT"'
-                  className="w-full h-7 px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded"
+                  className="w-full h-7 px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded"
                   autoFocus
                 />
                 <label className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
@@ -248,7 +248,7 @@ export function SavedViewsButton({
                       setSaveName('')
                       setSaveDefault(false)
                     }}
-                    className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-white dark:hover:bg-slate-800"
+                    className="h-7 px-2 text-sm border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-white dark:hover:bg-slate-800"
                   >
                     Cancel
                   </button>
@@ -272,7 +272,7 @@ export function SavedViewsButton({
                   {views.map((v) => (
                     <li
                       key={v.id}
-                      className="border-b border-slate-100 dark:border-slate-800 last:border-0 group"
+                      className="border-b border-subtle dark:border-slate-800 last:border-0 group"
                     >
                       <div className="flex items-center gap-1 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                         <button
@@ -304,7 +304,7 @@ export function SavedViewsButton({
                             type="button"
                             onClick={() => void handleSetDefault(v)}
                             title={v.isDefault ? 'Clear default' : 'Set as default'}
-                            className="h-6 w-6 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 rounded"
+                            className="h-6 w-6 flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 rounded"
                           >
                             <Star
                               size={11}
@@ -317,7 +317,7 @@ export function SavedViewsButton({
                             type="button"
                             onClick={() => void handleDelete(v)}
                             title="Delete"
-                            className="h-6 w-6 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 rounded"
+                            className="h-6 w-6 flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 rounded"
                           >
                             <Trash2 size={11} />
                           </button>

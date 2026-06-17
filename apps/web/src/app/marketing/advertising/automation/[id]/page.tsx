@@ -139,41 +139,41 @@ export default async function AutomationRuleDetailPage({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <section>
           <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Trigger → Conditions</h2>
-          <div className="rounded-md border border-slate-200 dark:border-slate-800 overflow-hidden">
-            <div className="px-3 py-2 bg-slate-50 dark:bg-slate-900/50 text-xs font-medium text-slate-600 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800">
+          <div className="rounded-md border border-default dark:border-slate-800 overflow-hidden">
+            <div className="px-3 py-2 bg-slate-50 dark:bg-slate-900/50 text-xs font-medium text-slate-600 dark:text-slate-300 border-b border-subtle dark:border-slate-800">
               WHEN <span className="text-blue-600 dark:text-blue-400">{triggerLabel(rule.trigger)}</span>
             </div>
             {Array.isArray(rule.conditions) && (rule.conditions as Array<{field:string;op:string;value:unknown}>).length > 0 ? (
               <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                 {(rule.conditions as Array<{field:string;op:string;value:unknown}>).map((c, i) => (
                   <li key={i} className="px-3 py-2 text-xs text-slate-700 dark:text-slate-300">
-                    <span className="text-slate-400">IF </span>
+                    <span className="text-tertiary">IF </span>
                     <span className="font-medium">{fieldLabel(c.field)}</span>
-                    <span className="text-slate-400"> {opLabel(c.op)} </span>
+                    <span className="text-tertiary"> {opLabel(c.op)} </span>
                     <span className="font-mono text-blue-600 dark:text-blue-400">{String(c.value)}</span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <div className="px-3 py-2 text-xs text-slate-400">No conditions — fires on every tick</div>
+              <div className="px-3 py-2 text-xs text-tertiary">No conditions — fires on every tick</div>
             )}
           </div>
         </section>
         <section>
           <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Actions</h2>
-          <div className="rounded-md border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="rounded-md border border-default dark:border-slate-800 overflow-hidden">
             {Array.isArray(rule.actions) ? (
               <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                 {(rule.actions as Array<{type:string}&Record<string,unknown>>).map((a, i) => (
                   <li key={i} className="px-3 py-2">
                     <div className="text-xs font-medium text-slate-800 dark:text-slate-100">{actionLabel(a.type)}</div>
                     {Object.entries(a).filter(([k]) => k !== 'type').map(([k, v]) => (
-                      <div key={k} className="text-[11px] text-slate-500"><span className="text-slate-400">{k}:</span> {String(v)}</div>
+                      <div key={k} className="text-[11px] text-slate-500"><span className="text-tertiary">{k}:</span> {String(v)}</div>
                     ))}
                   </li>
                 ))}
               </ul>
-            ) : <div className="px-3 py-2 text-xs text-slate-400">No actions</div>}
+            ) : <div className="px-3 py-2 text-xs text-tertiary">No actions</div>}
           </div>
         </section>
       </div>
@@ -218,7 +218,7 @@ export default async function AutomationRuleDetailPage({
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Recent executions ({executions.length})
         </h2>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md">
           {executions.length === 0 ? (
             <div className="px-3 py-4 text-sm text-slate-500">
               No executions yet. Run the evaluator from the automation page.
@@ -278,7 +278,7 @@ export default async function AutomationRuleDetailPage({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
         {label}
       </div>

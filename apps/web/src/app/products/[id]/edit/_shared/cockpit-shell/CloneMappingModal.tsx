@@ -108,14 +108,14 @@ export default function CloneMappingModal({ coordinates, productType, open, onCl
         role="dialog"
         aria-modal="true"
         aria-label="Clone mapping to other markets"
-        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg border border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900"
+        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg border border-default bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+        <div className="flex items-center justify-between border-b border-subtle px-4 py-3 dark:border-slate-800">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
             <Copy className="h-4 w-4 text-blue-500" /> Clone mapping to other markets
           </div>
-          <button type="button" onClick={onClose} disabled={busy} aria-label="Close" className="rounded p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+          <button type="button" onClick={onClose} disabled={busy} aria-label="Close" className="rounded p-1 text-tertiary hover:text-slate-700 dark:hover:text-slate-200">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -145,8 +145,8 @@ export default function CloneMappingModal({ coordinates, productType, open, onCl
 
           <div>
             <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">To ({targets.size} selected)</div>
-            <div className="space-y-1 rounded border border-slate-200 p-2 dark:border-slate-700">
-              {targetOptions.length === 0 && <div className="text-xs text-slate-400">No other coordinates on this product.</div>}
+            <div className="space-y-1 rounded border border-default p-2 dark:border-slate-700">
+              {targetOptions.length === 0 && <div className="text-xs text-tertiary">No other coordinates on this product.</div>}
               {targetOptions.map((c) => (
                 <label key={ckey(c)} className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={targets.has(ckey(c))} onChange={() => toggle(ckey(c))} />
@@ -184,8 +184,8 @@ export default function CloneMappingModal({ coordinates, productType, open, onCl
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3 dark:border-slate-800">
-          <button type="button" onClick={onClose} disabled={busy} className="rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+        <div className="flex items-center justify-end gap-2 border-t border-subtle px-4 py-3 dark:border-slate-800">
+          <button type="button" onClick={onClose} disabled={busy} className="rounded border border-default px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
             {results ? 'Close' : 'Cancel'}
           </button>
           {!results && (

@@ -34,12 +34,12 @@ interface StatProps {
 
 function Stat({ label, value, hint, icon: Icon, warning }: StatProps) {
   return (
-    <div className="bg-white border border-slate-200 rounded-lg px-4 py-3">
+    <div className="bg-white border border-default rounded-lg px-4 py-3">
       <div className="flex items-start justify-between gap-2">
         <div className="text-sm font-medium text-slate-500 uppercase tracking-wide">
           {label}
         </div>
-        <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${warning ? 'text-amber-500' : 'text-slate-400'}`} />
+        <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${warning ? 'text-amber-500' : 'text-tertiary'}`} />
       </div>
       <div className={`text-[20px] font-semibold tabular-nums mt-1 ${warning ? 'text-amber-700' : 'text-slate-900'}`}>
         {value}

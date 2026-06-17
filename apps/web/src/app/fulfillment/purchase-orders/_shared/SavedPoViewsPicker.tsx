@@ -163,7 +163,7 @@ export function SavedPoViewsPicker({
           'h-7 px-2 inline-flex items-center gap-1 text-sm rounded border transition-colors',
           count > 0 || hasDefault
             ? 'border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-            : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+            : 'border-default dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
         )}
         title="Saved views"
       >
@@ -174,15 +174,15 @@ export function SavedPoViewsPicker({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-40 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded shadow-lg">
-          <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <div className="absolute left-0 top-full mt-1 z-40 w-72 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded shadow-lg">
+          <div className="px-3 py-2 border-b border-default dark:border-slate-700 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
               Saved views
             </span>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"
+              className="text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"
               aria-label="Close"
             >
               <X size={12} />
@@ -204,7 +204,7 @@ export function SavedPoViewsPicker({
                 {views.map((v) => (
                   <li
                     key={v.id}
-                    className="border-b border-slate-100 dark:border-slate-800 last:border-0 group"
+                    className="border-b border-subtle dark:border-slate-800 last:border-0 group"
                   >
                     <div className="px-3 py-1.5 flex items-center gap-2">
                       <button
@@ -242,7 +242,7 @@ export function SavedPoViewsPicker({
             )}
           </div>
 
-          <div className="border-t border-slate-200 dark:border-slate-700">
+          <div className="border-t border-default dark:border-slate-700">
             {showSavePrompt ? (
               <div className="p-3 space-y-2">
                 <input
@@ -257,7 +257,7 @@ export function SavedPoViewsPicker({
                   }}
                   placeholder='e.g. "My Acme drafts"'
                   autoFocus
-                  className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                 />
                 <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400">
                   <input
@@ -291,7 +291,7 @@ export function SavedPoViewsPicker({
                       setError(null)
                     }}
                     disabled={busy}
-                    className="h-7 px-3 text-sm rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    className="h-7 px-3 text-sm rounded border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
                   >
                     Cancel
                   </button>

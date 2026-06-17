@@ -43,7 +43,7 @@ function euros(cents: number): string {
 function LTVBar({ label, value, max }: { label: string; value: number; max: number }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[10px] text-slate-400 w-6 shrink-0">{label}</span>
+      <span className="text-[10px] text-tertiary w-6 shrink-0">{label}</span>
       <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
         <div
           className="h-full bg-violet-500 rounded-full"
@@ -105,20 +105,20 @@ export function CustomerAnalyticsClient({ overview }: { overview: Overview }) {
             return (
               <div
                 key={key}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2"
+                className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2"
               >
                 <div className="flex items-center gap-1.5 mb-1">
                   <div className={`w-2 h-2 rounded-full ${color}`} />
                   <span className="text-xs text-slate-600 dark:text-slate-400">{label}</span>
                 </div>
                 <div className="text-lg font-semibold tabular-nums text-slate-900 dark:text-slate-100">{count}</div>
-                <div className="text-[10px] text-slate-400">{pct}% of total</div>
+                <div className="text-[10px] text-tertiary">{pct}% of total</div>
               </div>
             )
           })}
         </div>
         {Object.keys(overview.rfmDistribution).length === 0 && (
-          <p className="text-xs text-slate-400 mt-2">
+          <p className="text-xs text-tertiary mt-2">
             No RFM scores yet — click "Recompute RFM" to score all customers.
           </p>
         )}
@@ -130,13 +130,13 @@ export function CustomerAnalyticsClient({ overview }: { overview: Overview }) {
           <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
             LTV Distribution (Lifetime Value)
           </h2>
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3 space-y-2">
+          <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-3 space-y-2">
             <LTVBar label="P10" value={overview.ltvPercentiles.p10} max={overview.ltvPercentiles.p90} />
             <LTVBar label="P25" value={overview.ltvPercentiles.p25} max={overview.ltvPercentiles.p90} />
             <LTVBar label="P50" value={overview.ltvPercentiles.p50} max={overview.ltvPercentiles.p90} />
             <LTVBar label="P75" value={overview.ltvPercentiles.p75} max={overview.ltvPercentiles.p90} />
             <LTVBar label="P90" value={overview.ltvPercentiles.p90} max={overview.ltvPercentiles.p90} />
-            <p className="text-[10px] text-slate-400 pt-1">
+            <p className="text-[10px] text-tertiary pt-1">
               Median LTV: {euros(overview.ltvPercentiles.p50)} · P90: {euros(overview.ltvPercentiles.p90)}
             </p>
           </div>
@@ -149,7 +149,7 @@ export function CustomerAnalyticsClient({ overview }: { overview: Overview }) {
               <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                 Channel Concentration
               </h2>
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3 space-y-2">
+              <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-3 space-y-2">
                 {overview.topChannels.map((ch) => {
                   const pct = total > 0 ? Math.round(ch.customerCount / total * 100) : 0
                   return (
@@ -173,7 +173,7 @@ export function CustomerAnalyticsClient({ overview }: { overview: Overview }) {
             <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               Customer Type
             </h2>
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3">
+            <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-3">
               <div className="flex items-center gap-2 mb-2">
                 {[
                   { label: 'B2B', count: overview.b2bCount, color: 'bg-violet-500' },

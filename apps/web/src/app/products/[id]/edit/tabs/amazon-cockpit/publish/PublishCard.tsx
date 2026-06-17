@@ -441,7 +441,7 @@ export default function PublishCard({
                 'rounded border p-2 flex items-start gap-1.5 cursor-pointer transition-colors',
                 checked
                   ? 'border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-950/30'
-                  : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900',
+                  : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900',
               )}
             >
               <input
@@ -465,7 +465,7 @@ export default function PublishCard({
                 </div>
                 <div className="mt-0.5 flex items-center gap-1 flex-wrap">
                   {!m.hasListing ? (
-                    <span className="text-[10px] text-slate-400 italic">
+                    <span className="text-[10px] text-tertiary italic">
                       No listing yet
                     </span>
                   ) : isActive && health ? (
@@ -599,13 +599,13 @@ function FeedStatusLine({ state }: { state: PerMarketState }) {
 // ── Per-feed detail row ────────────────────────────────────────────────
 function FeedDetailRow({ state }: { state: PerMarketState }) {
   return (
-    <div className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2">
+    <div className="rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 p-2">
       <div className="flex items-center justify-between gap-2 text-[11px]">
         <div className="inline-flex items-center gap-1.5">
           <span className="text-[10.5px]">{marketFlag(state.marketplace)}</span>
           <span className="font-mono">{state.marketplace}</span>
           {state.feedId && (
-            <span className="text-[10px] font-mono text-slate-400">
+            <span className="text-[10px] font-mono text-tertiary">
               · {state.feedId.slice(0, 18)}
               {state.feedId.length > 18 ? '…' : ''}
             </span>
@@ -642,7 +642,7 @@ function FeedDetailRow({ state }: { state: PerMarketState }) {
             </li>
           ))}
           {state.rows.length > 6 && (
-            <li className="text-[10px] text-slate-400">
+            <li className="text-[10px] text-tertiary">
               + {state.rows.length - 6} more rows
             </li>
           )}

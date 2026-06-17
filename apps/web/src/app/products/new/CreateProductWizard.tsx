@@ -186,7 +186,7 @@ export default function CreateProductWizard() {
 
         <form
           onSubmit={onSubmit}
-          className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 p-5 space-y-4"
+          className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 p-5 space-y-4"
         >
           {error && (
             <div className="flex items-start gap-2 px-3 py-2 border border-rose-200 dark:border-rose-800 rounded bg-rose-50 dark:bg-rose-900/20 text-sm text-rose-800 dark:text-rose-200">

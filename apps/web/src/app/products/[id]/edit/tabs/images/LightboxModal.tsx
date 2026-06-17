@@ -299,9 +299,9 @@ export default function LightboxModal({
       </div>
 
       {/* Detail drawer */}
-      <aside className="relative w-80 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 overflow-y-auto flex flex-col">
+      <aside className="relative w-80 bg-white dark:bg-slate-900 border-l border-default dark:border-slate-700 overflow-y-auto flex flex-col">
         {/* Drawer header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-default dark:border-slate-700">
           <div className="flex items-center gap-2 min-w-0">
             <span className={cn(
               'text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded',
@@ -326,7 +326,7 @@ export default function LightboxModal({
             type="button"
             onClick={onClose}
             aria-label={t('products.edit.images.lightbox.close')}
-            className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+            className="p-1 text-tertiary hover:text-slate-700 dark:hover:text-slate-200"
           >
             <X className="w-4 h-4" />
           </button>
@@ -372,7 +372,7 @@ export default function LightboxModal({
                 <dt className="text-slate-500 dark:text-slate-400">{t('products.edit.images.lightbox.type')}</dt>
                 <dd>{image.type ?? '—'}</dd>
                 <dt className="text-slate-500 dark:text-slate-400">{t('products.edit.images.lightbox.alt')}</dt>
-                <dd className="break-words">{image.alt || <span className="text-slate-400 italic">{t('products.edit.images.lightbox.notSet')}</span>}</dd>
+                <dd className="break-words">{image.alt || <span className="text-tertiary italic">{t('products.edit.images.lightbox.notSet')}</span>}</dd>
               </dl>
             </div>
           )}
@@ -386,7 +386,7 @@ export default function LightboxModal({
                   value={editType}
                   onChange={(e) => setEditType(e.target.value as MasterType)}
                   disabled={savingEdit}
-                  className="mt-1 w-full text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  className="mt-1 w-full text-xs border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
                 >
                   {MASTER_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
@@ -399,7 +399,7 @@ export default function LightboxModal({
                   disabled={savingEdit}
                   rows={3}
                   placeholder="Describe the image for screen readers + SEO…"
-                  className="mt-1 w-full text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-400 resize-none"
+                  className="mt-1 w-full text-xs border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-400 resize-none"
                   onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit() }}
                 />
               </label>
@@ -447,7 +447,7 @@ export default function LightboxModal({
                 )}
 
                 {!analyzed && !analyzing && !analyzeError && (
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
+                  <p className="text-[11px] text-tertiary dark:text-slate-500 italic">
                     {t('products.edit.images.lightbox.aiPrompt')}
                   </p>
                 )}
@@ -514,7 +514,7 @@ export default function LightboxModal({
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('products.edit.images.lightbox.autoEnhance')}</h4>
-                <span className="text-[10px] text-slate-400">{t('products.edit.images.lightbox.autoEnhanceHint')}</span>
+                <span className="text-[10px] text-tertiary">{t('products.edit.images.lightbox.autoEnhanceHint')}</span>
               </div>
               {enhanceError && (
                 <p className="text-[11px] text-red-600 dark:text-red-400">{enhanceError}</p>
@@ -554,7 +554,7 @@ export default function LightboxModal({
                   {t('products.edit.images.lightbox.autoEnhanceShopify')}
                 </button>
               </div>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500">
+              <p className="text-[10px] text-tertiary dark:text-slate-500">
                 {t('products.edit.images.lightbox.autoEnhanceDesc')}
               </p>
             </div>
@@ -589,7 +589,7 @@ export default function LightboxModal({
                     type="button"
                     onClick={pushToDam}
                     disabled={pushingDam}
-                    className="flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                    className="flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                   >
                     {pushingDam
                       ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -597,7 +597,7 @@ export default function LightboxModal({
                     {t('products.edit.images.lightbox.damPush')}
                   </button>
                 )}
-                <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                <p className="text-[10px] text-tertiary dark:text-slate-500">
                   {t('products.edit.images.lightbox.damHint')}
                 </p>
               </div>
@@ -653,7 +653,7 @@ export default function LightboxModal({
                     {derivationParent.type}
                   </button>
                   {derivationParent.width && derivationParent.height && (
-                    <span className="text-slate-400 ml-1">({derivationParent.width}×{derivationParent.height})</span>
+                    <span className="text-tertiary ml-1">({derivationParent.width}×{derivationParent.height})</span>
                   )}
                 </div>
               )}
@@ -665,7 +665,7 @@ export default function LightboxModal({
                   <ul className="space-y-1 text-xs">
                     {derivationChildren.map((child) => (
                       <li key={child.id} className="flex items-center gap-2">
-                        <span className="text-slate-400">↓</span>
+                        <span className="text-tertiary">↓</span>
                         <button
                           type="button"
                           onClick={() => onSwitchToMaster?.(child)}
@@ -675,7 +675,7 @@ export default function LightboxModal({
                           {child.type}
                         </button>
                         {child.width && child.height && (
-                          <span className="text-slate-400 text-[11px]">{child.width}×{child.height}</span>
+                          <span className="text-tertiary text-[11px]">{child.width}×{child.height}</span>
                         )}
                       </li>
                     ))}
@@ -696,8 +696,8 @@ export default function LightboxModal({
                   <li key={l.id} className="flex items-center justify-between gap-2 py-0.5">
                     <span className="truncate">
                       {platformLabel(l.platform, l.marketplace)}
-                      {l.amazonSlot && <span className="text-slate-400 ml-1">· {l.amazonSlot}</span>}
-                      {l.variantGroupValue && <span className="text-slate-400 ml-1">· {l.variantGroupValue}</span>}
+                      {l.amazonSlot && <span className="text-tertiary ml-1">· {l.amazonSlot}</span>}
+                      {l.variantGroupValue && <span className="text-tertiary ml-1">· {l.variantGroupValue}</span>}
                     </span>
                     {l.publishStatus === 'PUBLISHED' && (
                       <span className="text-[10px] text-emerald-500 flex-shrink-0">live</span>
@@ -721,7 +721,7 @@ export default function LightboxModal({
         </div>
 
         {/* Footer keyboard hint */}
-        <div className="mt-auto px-5 py-3 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 dark:text-slate-500 font-mono">
+        <div className="mt-auto px-5 py-3 border-t border-subtle dark:border-slate-800 text-[10px] text-tertiary dark:text-slate-500 font-mono">
           {hasSiblings
             ? t('products.edit.images.lightbox.escNavHint')
             : t('products.edit.images.lightbox.escHint')}

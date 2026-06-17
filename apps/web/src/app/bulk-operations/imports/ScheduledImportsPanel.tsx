@@ -238,7 +238,7 @@ export default function ScheduledImportsPanel() {
       </div>
 
       {showForm && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 space-y-3">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-4 space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <label className="block">
               <span className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-0.5 block">
@@ -248,7 +248,7 @@ export default function ScheduledImportsPanel() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </label>
             <label className="block">
@@ -259,7 +259,7 @@ export default function ScheduledImportsPanel() {
                 type="text"
                 value={cronExpression}
                 onChange={(e) => setCronExpression(e.target.value)}
-                className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </label>
             <label className="block md:col-span-2">
@@ -271,7 +271,7 @@ export default function ScheduledImportsPanel() {
                 value={sourceUrl}
                 onChange={(e) => setSourceUrl(e.target.value)}
                 placeholder="https://supplier.example/feed.csv"
-                className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </label>
             <label className="block">
@@ -283,7 +283,7 @@ export default function ScheduledImportsPanel() {
                 onChange={(e) =>
                   setTargetEntity(e.target.value as typeof targetEntity)
                 }
-                className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded"
+                className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
               >
                 {TARGET_ENTITIES.map((t) => (
                   <option key={t} value={t}>
@@ -301,7 +301,7 @@ export default function ScheduledImportsPanel() {
                 value={columnMapping}
                 onChange={(e) => setColumnMapping(e.target.value)}
                 placeholder='{"sku":"SKU","price":"Price"}'
-                className="w-full h-8 px-2 text-sm font-mono border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full h-8 px-2 text-sm font-mono border border-default dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </label>
           </div>
@@ -319,7 +319,7 @@ export default function ScheduledImportsPanel() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg overflow-hidden">
         {rows.length === 0 ? (
           <div className="px-3 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
             {loading
@@ -374,7 +374,7 @@ export default function ScheduledImportsPanel() {
                         ) : r.lastStatus === 'FAILED' ? (
                           <XCircle className="w-3 h-3 text-red-600 dark:text-red-400" aria-hidden="true" />
                         ) : (
-                          <Clock className="w-3 h-3 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+                          <Clock className="w-3 h-3 text-tertiary dark:text-slate-500" aria-hidden="true" />
                         )}
                         <Badge
                           variant={

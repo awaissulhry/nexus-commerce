@@ -51,7 +51,7 @@ export default function ContentToolbar({
   const { toast } = useToast()
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-2 rounded-lg border border-default bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center">
       <SearchInput value={search} onChange={onSearchChange} />
 
       <div className="flex items-center gap-2 flex-wrap">

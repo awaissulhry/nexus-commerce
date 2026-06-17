@@ -127,7 +127,7 @@ function AddSortButton({
         type="button"
         onClick={() => setOpen((s) => !s)}
         title="Add a sort dimension"
-        className="h-8 px-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded-md text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+        className="h-8 px-2.5 text-sm border border-default dark:border-slate-800 rounded-md text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
       >
         + Sort
       </button>
@@ -135,7 +135,7 @@ function AddSortButton({
         <AnchoredPopover
           anchorRef={btnRef}
           onClose={() => setOpen(false)}
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md shadow-lg py-1 min-w-[200px] text-sm"
+          className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md shadow-lg py-1 min-w-[200px] text-sm"
           ariaLabel="Add sort"
         >
             <div className="px-3 py-1 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">

@@ -89,7 +89,7 @@ export function RecommendationHistoryCard({
       >
         History {open ? '▾' : '▸'}
         {data?.history && (
-          <span className="text-slate-400 dark:text-slate-500 normal-case font-normal">
+          <span className="text-tertiary dark:text-slate-500 normal-case font-normal">
             ({data.history.length})
           </span>
         )}
@@ -97,7 +97,7 @@ export function RecommendationHistoryCard({
       {open && (
         <div className="mt-2">
           {loading && (
-            <div className="text-base text-slate-400 dark:text-slate-500">
+            <div className="text-base text-tertiary dark:text-slate-500">
               Loading…
             </div>
           )}
@@ -127,7 +127,7 @@ export function RecommendationHistoryCard({
                           'px-2 py-0.5 text-xs font-medium rounded border transition-colors',
                           statusFilter === f.key
                             ? 'bg-slate-900 dark:bg-slate-700 text-white border-slate-900 dark:border-slate-700'
-                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
+                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                         )}
                       >
                         {f.label}
@@ -145,12 +145,12 @@ export function RecommendationHistoryCard({
                       : h.status === 'ACTED'
                         ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-900 dark:text-emerald-300'
                         : h.status === 'DISMISSED'
-                          ? 'bg-slate-100 border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
-                          : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400'
+                          ? 'bg-slate-100 border-default text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
+                          : 'bg-slate-50 border-default text-slate-600 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400'
                   return (
                     <li
                       key={h.id}
-                      className="flex items-start gap-2 border border-slate-100 dark:border-slate-800 rounded px-2 py-1"
+                      className="flex items-start gap-2 border border-subtle dark:border-slate-800 rounded px-2 py-1"
                     >
                       <span className="text-slate-500 dark:text-slate-400 tabular-nums w-28 flex-shrink-0">
                         {new Date(h.generatedAt)

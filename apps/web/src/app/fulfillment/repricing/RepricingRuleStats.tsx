@@ -72,15 +72,15 @@ export function RepricingRuleStats() {
   }, [fetchStats, windowDays])
 
   return (
-    <div className="mb-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+    <div className="mb-6 bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-default dark:border-slate-800">
         <div className="flex items-center gap-2">
           <BarChart3 className="h-4 w-4 text-violet-600 dark:text-violet-400" />
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             By rule
           </h2>
           {!loading && (
-            <span className="text-xs text-slate-400 dark:text-slate-500">
+            <span className="text-xs text-tertiary dark:text-slate-500">
               {rules.length} active over last {windowDays}d
             </span>
           )}
@@ -104,15 +104,15 @@ export function RepricingRuleStats() {
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-slate-500 px-4 py-6">
+        <div className="flex items-center gap-2 text-sm text-tertiary dark:text-slate-500 px-4 py-6">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading rule stats…
         </div>
       ) : error ? (
-        <div className="text-sm text-slate-400 dark:text-slate-500 px-4 py-6">
+        <div className="text-sm text-tertiary dark:text-slate-500 px-4 py-6">
           Couldn’t load rule stats ({error}).
         </div>
       ) : rules.length === 0 ? (
-        <div className="text-sm text-slate-400 dark:text-slate-500 px-4 py-6">
+        <div className="text-sm text-tertiary dark:text-slate-500 px-4 py-6">
           No rules have produced decisions in the last {windowDays} days.
           Create repricing rules on a product to populate this view.
         </div>
@@ -120,7 +120,7 @@ export function RepricingRuleStats() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
+              <tr className="text-left text-[10px] uppercase tracking-wider text-tertiary dark:text-slate-500 border-b border-subtle dark:border-slate-800">
                 <th className="font-medium px-4 py-2">Product</th>
                 <th className="font-medium px-2 py-2">Strategy</th>
                 <th className="font-medium px-2 py-2 text-right">Evals</th>
@@ -141,11 +141,11 @@ export function RepricingRuleStats() {
                     <div className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[220px]">
                       {r.product.name}
                     </div>
-                    <div className="text-[11px] text-slate-400 dark:text-slate-500">
+                    <div className="text-[11px] text-tertiary dark:text-slate-500">
                       {r.channel}
                       {r.marketplace ? ` · ${r.marketplace}` : ''}
                       {!r.enabled && (
-                        <span className="ml-1 text-slate-400">· paused</span>
+                        <span className="ml-1 text-tertiary">· paused</span>
                       )}
                     </div>
                   </td>
@@ -161,7 +161,7 @@ export function RepricingRuleStats() {
                       className={`ml-1 text-[11px] ${
                         r.movedPct >= 50
                           ? 'text-violet-600 dark:text-violet-400'
-                          : 'text-slate-400 dark:text-slate-500'
+                          : 'text-tertiary dark:text-slate-500'
                       }`}
                     >
                       ({r.movedPct}%)
@@ -188,7 +188,7 @@ export function RepricingRuleStats() {
                       <span className="text-slate-300 dark:text-slate-600">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-2 text-right text-[11px] text-slate-400 dark:text-slate-500 whitespace-nowrap">
+                  <td className="px-4 py-2 text-right text-[11px] text-tertiary dark:text-slate-500 whitespace-nowrap">
                     {new Date(r.lastDecisionAt).toLocaleDateString()}
                   </td>
                 </tr>

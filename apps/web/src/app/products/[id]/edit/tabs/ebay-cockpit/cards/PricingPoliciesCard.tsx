@@ -223,7 +223,7 @@ export default function PricingPoliciesCard(props: Props) {
 
   return (
     <Card noPadding>
-      <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+      <div className="px-4 py-2.5 border-b border-subtle dark:border-slate-800 flex items-center gap-2">
         <DollarSign className="w-4 h-4 text-blue-500" />
         <div className="text-md font-medium text-slate-900 dark:text-slate-100">
           {t('products.edit.cockpit.ebay.pricingPolicies.cardTitle')}
@@ -270,7 +270,7 @@ export default function PricingPoliciesCard(props: Props) {
                     onChange={(e) => onChange(e.target.value)}
                     placeholder="0.00"
                     disabled={rule === 'PERCENT_OF_MASTER'}
-                    className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 disabled:opacity-50"
+                    className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 disabled:opacity-50"
                   />
                 )
               }}
@@ -281,7 +281,7 @@ export default function PricingPoliciesCard(props: Props) {
               <select
                 value={rule}
                 onChange={(e) => setRule(e.target.value as PricingRule)}
-                className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               >
                 <option value="FIXED">{t('products.edit.cockpit.ebay.pricingPolicies.ruleFixed')}</option>
                 <option value="MATCH_AMAZON">{t('products.edit.cockpit.ebay.pricingPolicies.ruleMatchAmazon')}</option>
@@ -296,9 +296,9 @@ export default function PricingPoliciesCard(props: Props) {
                     value={adj}
                     onChange={(e) => setAdj(e.target.value)}
                     placeholder="0"
-                    className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 mt-1"
+                    className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 mt-1"
                   />
-                  <p className="text-[10.5px] text-slate-400 mt-0.5">{t('products.edit.cockpit.ebay.pricingPolicies.adjustmentHint')}</p>
+                  <p className="text-[10.5px] text-tertiary mt-0.5">{t('products.edit.cockpit.ebay.pricingPolicies.adjustmentHint')}</p>
                 </div>
               )}
             </div>
@@ -306,7 +306,7 @@ export default function PricingPoliciesCard(props: Props) {
         </section>
 
         {/* ── Section 2: Best Offer ────────────────────────────────── */}
-        <section className="space-y-3 border-t border-slate-100 dark:border-slate-800 pt-4">
+        <section className="space-y-3 border-t border-subtle dark:border-slate-800 pt-4">
           <SectionHeader icon={<Sparkles className="w-3.5 h-3.5" />} title={t('products.edit.cockpit.ebay.pricingPolicies.bestOfferSection')} />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
             <label className="inline-flex items-center gap-2 text-xs">
@@ -330,7 +330,7 @@ export default function PricingPoliciesCard(props: Props) {
                 onChange={(e) => setBoAccept(e.target.value)}
                 disabled={!boEnabled}
                 placeholder="—"
-                className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 disabled:opacity-50"
+                className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 disabled:opacity-50"
               />
             </div>
             <div className={cn('space-y-1', !boEnabled && 'opacity-50')}>
@@ -345,17 +345,17 @@ export default function PricingPoliciesCard(props: Props) {
                 onChange={(e) => setBoMin(e.target.value)}
                 disabled={!boEnabled}
                 placeholder="—"
-                className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 disabled:opacity-50"
+                className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 disabled:opacity-50"
               />
             </div>
           </div>
-          <p className="text-[10.5px] text-slate-400">
+          <p className="text-[10.5px] text-tertiary">
             {t('products.edit.cockpit.ebay.pricingPolicies.bestOfferHint')}
           </p>
         </section>
 
         {/* ── Section 3: Policies ──────────────────────────────────── */}
-        <section className="space-y-3 border-t border-slate-100 dark:border-slate-800 pt-4">
+        <section className="space-y-3 border-t border-subtle dark:border-slate-800 pt-4">
           <SectionHeader icon={<ShieldCheck className="w-3.5 h-3.5" />} title={t('products.edit.cockpit.ebay.pricingPolicies.policiesSection')} />
           {policyLoading && (
             <div className="text-xs text-slate-500 flex items-center gap-2">
@@ -410,7 +410,7 @@ export default function PricingPoliciesCard(props: Props) {
         </section>
       </div>
 
-      <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+      <div className="px-4 py-2.5 border-t border-subtle dark:border-slate-800 flex items-center gap-2">
         <span className="text-xs text-slate-500 dark:text-slate-400">
           {isDirty ? t('products.edit.cockpit.ebay.pricingPolicies.unsavedChanges') : t('products.edit.cockpit.ebay.pricingPolicies.allSaved')}
         </span>
@@ -457,12 +457,12 @@ function PolicySelect({
     <div className="space-y-1">
       <label className="text-[11px] font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
         {label}
-        <span className="text-[10px] text-slate-400 font-normal">{hint}</span>
+        <span className="text-[10px] text-tertiary font-normal">{hint}</span>
       </label>
       <select
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value || null)}
-        className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+        className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
       >
         <option value="">{t('products.edit.cockpit.ebay.pricingPolicies.pickPolicy')}</option>
         {options.map((o) => (

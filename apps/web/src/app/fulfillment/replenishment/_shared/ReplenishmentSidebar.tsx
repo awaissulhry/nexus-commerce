@@ -130,7 +130,7 @@ function PanelBody({
       return containerFill && containerFill.length > 0 ? (
         <ContainerFillCard entries={containerFill} />
       ) : (
-        <div className="p-3 text-sm text-slate-400">No container fill data available.</div>
+        <div className="p-3 text-sm text-tertiary">No container fill data available.</div>
       )
     default:
       return null
@@ -184,14 +184,14 @@ export function ReplenishmentSidebar({
     <aside
       className={cn(
         'shrink-0 self-start sticky top-2 max-h-[calc(100vh-1rem)] overflow-y-auto',
-        'rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900',
+        'rounded-md border border-default bg-white dark:border-slate-800 dark:bg-slate-900',
         'transition-[width] duration-200',
         collapsed ? 'w-12' : 'w-[22rem]',
       )}
       aria-label="Replenishment insights"
     >
       {/* Header / collapse toggle */}
-      <div className="flex items-center justify-between border-b border-slate-200 px-2 py-2 dark:border-slate-800">
+      <div className="flex items-center justify-between border-b border-default px-2 py-2 dark:border-slate-800">
         {!collapsed && (
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
             Insights
@@ -234,7 +234,7 @@ export function ReplenishmentSidebar({
       ) : (
         <>
           {/* Expanded: grouped picker */}
-          <div className="space-y-2 border-b border-slate-200 p-2 dark:border-slate-800">
+          <div className="space-y-2 border-b border-default p-2 dark:border-slate-800">
             {GROUPS.map((g) => (
               <PickerGroup
                 key={g.label}
@@ -256,7 +256,7 @@ export function ReplenishmentSidebar({
           {/* Open panels, stacked */}
           <div className="space-y-2 p-2">
             {openDefs.length === 0 ? (
-              <p className="px-1 py-4 text-center text-xs text-slate-400">
+              <p className="px-1 py-4 text-center text-xs text-tertiary">
                 Pick a panel above to pin it here.
               </p>
             ) : (
@@ -265,16 +265,16 @@ export function ReplenishmentSidebar({
                 return (
                   <section
                     key={p.id}
-                    className="rounded-md border border-slate-200 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-950/40"
+                    className="rounded-md border border-default bg-slate-50/60 dark:border-slate-800 dark:bg-slate-950/40"
                   >
-                    <header className="flex items-center justify-between border-b border-slate-200 px-2 py-1.5 dark:border-slate-800">
+                    <header className="flex items-center justify-between border-b border-default px-2 py-1.5 dark:border-slate-800">
                       <span className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-200">
                         <Icon size={13} /> {p.label}
                       </span>
                       <button
                         onClick={() => close(p.id)}
                         title="Close panel"
-                        className="rounded p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-slate-800"
+                        className="rounded p-0.5 text-tertiary hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-slate-800"
                       >
                         <X size={13} />
                       </button>
@@ -311,7 +311,7 @@ function PickerGroup({
     <div>
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-1 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+        className="flex w-full items-center gap-1 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-tertiary hover:text-slate-600 dark:hover:text-slate-300"
       >
         {expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
         {group.label}

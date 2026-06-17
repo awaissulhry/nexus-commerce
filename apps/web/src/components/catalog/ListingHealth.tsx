@@ -100,7 +100,7 @@ export default function ListingHealth({
       case "critical":
         return "bg-red-50 border-red-200";
       default:
-        return "bg-slate-50 border-slate-200";
+        return "bg-slate-50 border-default";
     }
   };
 
@@ -113,7 +113,7 @@ export default function ListingHealth({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-slate-200 p-6">
+      <div className="bg-white rounded-lg border border-default p-6">
         <div className="flex items-center justify-center h-32">
           <Zap className="w-6 h-6 animate-spin text-blue-500" />
           <span className="ml-2 text-slate-600">
@@ -301,8 +301,8 @@ export default function ListingHealth({
 
       {/* Empty State */}
       {channels.length === 0 && (
-        <div className="bg-slate-50 rounded-lg border border-slate-200 p-8 text-center">
-          <TrendingUp className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+        <div className="bg-slate-50 rounded-lg border border-default p-8 text-center">
+          <TrendingUp className="w-12 h-12 text-tertiary mx-auto mb-3" />
           <p className="text-slate-600">
             No channel data available. Connect marketplaces to see readiness
             scores.

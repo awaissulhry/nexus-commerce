@@ -47,7 +47,7 @@ export function WhatChangedWidget({
   if (loading && items.length === 0) {
     return (
       <Card title="What changed">
-        <div className="h-[140px] flex items-center justify-center text-slate-400 text-sm">
+        <div className="h-[140px] flex items-center justify-center text-tertiary text-sm">
           Loading…
         </div>
       </Card>
@@ -57,7 +57,7 @@ export function WhatChangedWidget({
   if (items.length === 0) {
     return (
       <Card title="What changed">
-        <div className="flex flex-col items-center justify-center gap-1.5 py-8 text-slate-400">
+        <div className="flex flex-col items-center justify-center gap-1.5 py-8 text-tertiary">
           <Sparkles className="w-6 h-6 opacity-40" />
           <p className="text-sm">Steady week — no major shifts vs comparison.</p>
         </div>

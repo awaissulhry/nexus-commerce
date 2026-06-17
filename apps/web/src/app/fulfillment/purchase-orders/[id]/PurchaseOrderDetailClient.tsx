@@ -536,7 +536,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
               />
               <Link
                 href="/fulfillment/purchase-orders"
-                className="h-8 px-3 inline-flex items-center gap-1.5 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+                className="h-8 px-3 inline-flex items-center gap-1.5 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 Back
@@ -544,7 +544,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="h-8 px-3 inline-flex items-center gap-1.5 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+                className="h-8 px-3 inline-flex items-center gap-1.5 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
                 title="Print or save as PDF"
               >
                 <Printer className="w-3.5 h-3.5" />
@@ -554,7 +554,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
                 href={`${getBackendUrl()}/api/fulfillment/purchase-orders/${po.id}/factory.pdf`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="h-8 px-3 inline-flex items-center gap-1.5 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+                className="h-8 px-3 inline-flex items-center gap-1.5 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 <FileText className="w-3.5 h-3.5" />
                 Factory PDF
@@ -565,7 +565,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
       </div>
 
       {/* Identity strip + status banner */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg p-4 space-y-3">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3 flex-wrap">
             <StatusIcon status={po.status} className="w-5 h-5" />
@@ -598,7 +598,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
               <button
                 type="button"
                 onClick={() => setQuickReceiveOpen(true)}
-                className="h-8 px-3 inline-flex items-center gap-1.5 text-base font-medium rounded border bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                className="h-8 px-3 inline-flex items-center gap-1.5 text-base font-medium rounded border bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 <PackageCheck className="w-3.5 h-3.5" />
                 Create receipt
@@ -608,7 +608,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
             <button
               type="button"
               onClick={() => setSavingAsTemplate(true)}
-              className="h-8 px-3 inline-flex items-center gap-1.5 text-base font-medium rounded border bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="h-8 px-3 inline-flex items-center gap-1.5 text-base font-medium rounded border bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
               title="Save as a reusable template"
             >
               <Repeat className="w-3.5 h-3.5" />
@@ -631,7 +631,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
                     tr.variant === 'primary' &&
                       'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100 hover:bg-slate-800 dark:hover:bg-slate-200',
                     tr.variant === 'secondary' &&
-                      'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
+                      'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
                     tr.variant === 'danger' &&
                       'bg-white dark:bg-slate-900 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900 hover:bg-red-50 dark:hover:bg-red-950/40',
                   )}
@@ -676,7 +676,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
                   setShowCancelConfirm(false)
                   setCancelReason('')
                 }}
-                className="px-3 py-1 text-base font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+                className="px-3 py-1 text-base font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 Keep
               </button>
@@ -728,7 +728,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
                   setTemplateName('')
                   setSaveTemplateError(null)
                 }}
-                className="h-8 px-3 text-base font-medium rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                className="h-8 px-3 text-base font-medium rounded border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 Cancel
               </button>
@@ -790,7 +790,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
               <button
                 type="button"
                 onClick={() => setSendResult(null)}
-                className="h-8 px-3 text-sm rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                className="h-8 px-3 text-sm rounded border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 Dismiss
               </button>
@@ -802,7 +802,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
         )}
 
         {/* Identity grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-subtle dark:border-slate-800">
           <DetailField label="Supplier">
             {po.supplier ? (
               <div className="inline-flex items-center gap-2 flex-wrap">
@@ -951,7 +951,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
             zeroes the IVA and shows a banner; otherwise the standard
             22% breakdown. */}
         {po.fiscal && (
-          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div className="mt-3 pt-3 border-t border-subtle dark:border-slate-800">
             <div className="flex items-baseline justify-between gap-3 flex-wrap">
               <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                 Italian fiscal · P.IVA {po.fiscal.piva}
@@ -991,7 +991,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
       </div>
 
       {/* Tab nav — hidden in print, all panes render in print */}
-      <div className="po-detail-no-print flex items-center gap-1 border-b border-slate-200 dark:border-slate-700 overflow-x-auto">
+      <div className="po-detail-no-print flex items-center gap-1 border-b border-default dark:border-slate-700 overflow-x-auto">
         {TAB_ORDER.map((x) => {
           const Icon = x.icon
           const active = tab === x.key
@@ -1105,7 +1105,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
             if (e.target === e.currentTarget) setShowShortcuts(false)
           }}
         >
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl w-full max-w-md p-5">
+          <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-xl w-full max-w-md p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                 Keyboard shortcuts
@@ -1144,9 +1144,9 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
 
 function ShortcutRow({ keys, label }: { keys: string; label: string }) {
   return (
-    <tr className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+    <tr className="border-b border-subtle dark:border-slate-800 last:border-0">
       <td className="py-1.5 w-20">
-        <kbd className="px-2 py-0.5 text-sm font-mono bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded">
+        <kbd className="px-2 py-0.5 text-sm font-mono bg-slate-100 dark:bg-slate-800 border border-default dark:border-slate-700 rounded">
           {keys}
         </kbd>
       </td>
@@ -1195,15 +1195,15 @@ function FiscalCell({
 function SummaryPane({ po }: { po: PODetail }) {
   return (
     <div className="space-y-4">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-        <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center justify-between">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg overflow-hidden">
+        <div className="px-4 py-2 border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center justify-between">
           <span>Line items</span>
           <span className="text-sm font-normal text-slate-500 dark:text-slate-400">
             {po.items.length} {po.items.length === 1 ? 'line' : 'lines'}
           </span>
         </div>
         <table className="w-full text-base">
-          <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+          <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-default dark:border-slate-700">
             <tr>
               <th className="text-left font-medium px-4 py-1.5 w-10">#</th>
               <th className="text-left font-medium px-4 py-1.5">SKU</th>
@@ -1228,7 +1228,7 @@ function SummaryPane({ po }: { po: PODetail }) {
             {po.items.map((it, idx) => (
               <tr
                 key={it.id}
-                className="border-b border-slate-100 dark:border-slate-800 last:border-0"
+                className="border-b border-subtle dark:border-slate-800 last:border-0"
               >
                 <td className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400 tabular-nums">
                   {idx + 1}
@@ -1258,7 +1258,7 @@ function SummaryPane({ po }: { po: PODetail }) {
                   <span
                     className={cn(
                       it.quantityReceived === 0
-                        ? 'text-slate-400 dark:text-slate-500'
+                        ? 'text-tertiary dark:text-slate-500'
                         : it.quantityReceived < it.quantityOrdered
                           ? 'text-amber-700 dark:text-amber-300'
                           : 'text-green-700 dark:text-green-300',
@@ -1276,7 +1276,7 @@ function SummaryPane({ po }: { po: PODetail }) {
               </tr>
             ))}
           </tbody>
-          <tfoot className="bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+          <tfoot className="bg-slate-50 dark:bg-slate-800 border-t border-default dark:border-slate-700">
             <tr>
               <td colSpan={6} className="px-4 py-2 text-right text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
                 Total
@@ -1290,7 +1290,7 @@ function SummaryPane({ po }: { po: PODetail }) {
       </div>
 
       {po.notes && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg p-4">
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-2">
             Notes
           </div>
@@ -1323,7 +1323,7 @@ function ActivityPane({ audit }: { audit: AuditEntry[] | null }) {
   }
   if (audit.length === 0) {
     return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-6">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg p-6">
         <div className="text-base text-slate-500 dark:text-slate-400">
           No activity yet.
         </div>
@@ -1331,7 +1331,7 @@ function ActivityPane({ audit }: { audit: AuditEntry[] | null }) {
     )
   }
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-2">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg p-4 space-y-2">
       {audit.map((e, idx) => (
         <div
           key={`${e.status}-${e.at}-${idx}`}
@@ -1367,9 +1367,9 @@ function ShipmentsPane({ shipments }: { shipments: POInboundShipment[] }) {
     )
   }
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg overflow-hidden">
       <table className="w-full text-base">
-        <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+        <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-default dark:border-slate-700">
           <tr>
             <th className="text-left font-medium px-4 py-1.5">Shipment</th>
             <th className="text-left font-medium px-4 py-1.5">Status</th>
@@ -1380,7 +1380,7 @@ function ShipmentsPane({ shipments }: { shipments: POInboundShipment[] }) {
         </thead>
         <tbody>
           {shipments.map((s) => (
-            <tr key={s.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+            <tr key={s.id} className="border-b border-subtle dark:border-slate-800 last:border-0">
               <td className="px-4 py-2">
                 <Link
                   href={`/fulfillment/inbound?shipmentId=${s.id}`}
@@ -1543,7 +1543,7 @@ function AttachmentsPane({
             : 'border-slate-300 dark:border-slate-700 bg-slate-50/40 dark:bg-slate-800/40',
         )}
       >
-        <Paperclip className="w-5 h-5 text-slate-400 dark:text-slate-500 mx-auto mb-2" />
+        <Paperclip className="w-5 h-5 text-tertiary dark:text-slate-500 mx-auto mb-2" />
         <div className="text-base text-slate-700 dark:text-slate-300 mb-1">
           Drag files here, or{' '}
           <button
@@ -1588,9 +1588,9 @@ function AttachmentsPane({
           No attachments yet.
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg overflow-hidden">
           <table className="w-full text-base">
-            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-default dark:border-slate-700">
               <tr>
                 <th className="text-left font-medium px-4 py-1.5 w-12">Preview</th>
                 <th className="text-left font-medium px-4 py-1.5">File</th>
@@ -1658,22 +1658,22 @@ function AttachmentRow({
   }
 
   return (
-    <tr className="border-b border-slate-100 dark:border-slate-800 last:border-0 align-middle">
+    <tr className="border-b border-subtle dark:border-slate-800 last:border-0 align-middle">
       <td className="px-4 py-2">
         {isImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={attachment.url}
             alt={attachment.filename ?? 'attachment'}
-            className="w-10 h-10 object-cover rounded border border-slate-200 dark:border-slate-700"
+            className="w-10 h-10 object-cover rounded border border-default dark:border-slate-700"
           />
         ) : isPdf ? (
-          <div className="w-10 h-10 rounded border border-slate-200 dark:border-slate-700 bg-red-50 dark:bg-red-950/40 inline-flex items-center justify-center text-xs font-mono text-red-700 dark:text-red-300">
+          <div className="w-10 h-10 rounded border border-default dark:border-slate-700 bg-red-50 dark:bg-red-950/40 inline-flex items-center justify-center text-xs font-mono text-red-700 dark:text-red-300">
             PDF
           </div>
         ) : (
-          <div className="w-10 h-10 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 inline-flex items-center justify-center">
-            <Paperclip className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+          <div className="w-10 h-10 rounded border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 inline-flex items-center justify-center">
+            <Paperclip className="w-4 h-4 text-tertiary dark:text-slate-500" />
           </div>
         )}
       </td>
@@ -1697,7 +1697,7 @@ function AttachmentRow({
           value={attachment.kind}
           onChange={(e) => updateKind(e.target.value)}
           disabled={saving}
-          className="h-7 px-1 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+          className="h-7 px-1 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
         >
           {ATTACHMENT_KIND_CHOICES.map((c) => (
             <option key={c.key} value={c.key}>
@@ -1737,7 +1737,7 @@ function AttachmentRow({
           <button
             type="button"
             onClick={() => setConfirmDelete(true)}
-            className="h-7 w-7 inline-flex items-center justify-center rounded text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+            className="h-7 w-7 inline-flex items-center justify-center rounded text-tertiary dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
             aria-label="Delete attachment"
           >
             <Trash2 size={12} />
@@ -1805,7 +1805,7 @@ function RevisionsPane({
     <div className="space-y-4">
       {/* Open-revision affordance / explanation */}
       {canOpen && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg p-3">
           {showReasonInput ? (
             <div className="space-y-2">
               <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -1817,7 +1817,7 @@ function RevisionsPane({
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="Supplier quoted +12% on FX; price-match request; qty short-shipped…"
                 autoFocus
-                className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               />
               <div className="flex items-center gap-2">
                 <button
@@ -1835,7 +1835,7 @@ function RevisionsPane({
                     setShowReasonInput(false)
                     setReason('')
                   }}
-                  className="h-8 px-3 inline-flex items-center text-base font-medium rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="h-8 px-3 inline-flex items-center text-base font-medium rounded border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   Cancel
                 </button>
@@ -1855,7 +1855,7 @@ function RevisionsPane({
               <button
                 type="button"
                 onClick={() => setShowReasonInput(true)}
-                className="h-8 px-3 inline-flex items-center gap-1.5 text-base font-medium rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 flex-shrink-0"
+                className="h-8 px-3 inline-flex items-center gap-1.5 text-base font-medium rounded border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 flex-shrink-0"
               >
                 <GitBranch className="w-3.5 h-3.5" />
                 Open revision
@@ -1885,9 +1885,9 @@ function RevisionsPane({
           />
         )
       ) : (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg overflow-hidden">
           <table className="w-full text-base">
-            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-default dark:border-slate-700">
               <tr>
                 <th className="text-left font-medium px-4 py-1.5 w-16">v</th>
                 <th className="text-left font-medium px-4 py-1.5">Reason</th>
@@ -1908,7 +1908,7 @@ function RevisionsPane({
                       ? 'text-green-700 dark:text-green-300'
                       : 'text-slate-500 dark:text-slate-400'
                 return (
-                  <tr key={r.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                  <tr key={r.id} className="border-b border-subtle dark:border-slate-800 last:border-0">
                     <td className="px-4 py-2 font-mono tabular-nums">v{r.version}</td>
                     <td className="px-4 py-2">
                       {r.reason ?? <span className="text-slate-500 dark:text-slate-400">—</span>}
@@ -2155,7 +2155,7 @@ function RevisionEditor({
             scheduleSave()
           }}
           placeholder="Why is this revision needed?"
-          className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+          className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
         />
       </div>
 
@@ -2164,18 +2164,18 @@ function RevisionEditor({
 
       {/* Editable proposed lines */}
       <div className="bg-white dark:bg-slate-900">
-        <div className="px-4 py-2 border-y border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center justify-between">
+        <div className="px-4 py-2 border-y border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center justify-between">
           <span>Proposed line items</span>
           <button
             type="button"
             onClick={addItem}
-            className="text-sm px-2 py-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex items-center gap-1 normal-case font-normal"
+            className="text-sm px-2 py-1 border border-default dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex items-center gap-1 normal-case font-normal"
           >
             <Plus size={11} /> Add line
           </button>
         </div>
         <table className="w-full text-base">
-          <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+          <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-default dark:border-slate-700">
             <tr>
               <th className="text-left font-medium px-3 py-1.5 w-12">#</th>
               <th className="text-left font-medium px-3 py-1.5">SKU</th>
@@ -2190,7 +2190,7 @@ function RevisionEditor({
             {items.map((it, idx) => {
               const change = diffFor(before, it)
               return (
-                <tr key={idx} className="border-b border-slate-100 dark:border-slate-800 last:border-0 align-top">
+                <tr key={idx} className="border-b border-subtle dark:border-slate-800 last:border-0 align-top">
                   <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400 tabular-nums">
                     {idx + 1}
                   </td>
@@ -2199,7 +2199,7 @@ function RevisionEditor({
                       type="text"
                       value={it.sku}
                       onChange={(e) => updateItem(idx, { sku: e.target.value, productId: null, supplierSku: null })}
-                      className="w-full h-8 px-2 text-base font-mono border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                      className="w-full h-8 px-2 text-base font-mono border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                     />
                   </td>
                   <td className="px-3 py-2 text-right">
@@ -2213,7 +2213,7 @@ function RevisionEditor({
                           quantityOrdered: parseInt(e.target.value, 10) || 0,
                         })
                       }
-                      className="w-full h-8 px-2 text-base text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                      className="w-full h-8 px-2 text-base text-right tabular-nums border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                     />
                   </td>
                   <td className="px-3 py-2 text-right">
@@ -2228,7 +2228,7 @@ function RevisionEditor({
                           unitCostCents: Number.isFinite(n) ? Math.round(n * 100) : 0,
                         })
                       }}
-                      className="w-full h-8 px-2 text-base text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                      className="w-full h-8 px-2 text-base text-right tabular-nums border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                     />
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums font-medium text-slate-900 dark:text-slate-100">
@@ -2242,7 +2242,7 @@ function RevisionEditor({
                       type="button"
                       onClick={() => removeItem(idx)}
                       disabled={items.length === 1}
-                      className="h-8 w-8 inline-flex items-center justify-center rounded text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-30"
+                      className="h-8 w-8 inline-flex items-center justify-center rounded text-tertiary dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-30"
                       aria-label="Remove line"
                     >
                       <Trash2 size={12} />
@@ -2253,7 +2253,7 @@ function RevisionEditor({
             })}
             {/* Removed-line rows (present in before, not in items) */}
             {diff.removed.map((it, k) => (
-              <tr key={`removed-${k}`} className="border-b border-slate-100 dark:border-slate-800 last:border-0 bg-red-50/30 dark:bg-red-950/20">
+              <tr key={`removed-${k}`} className="border-b border-subtle dark:border-slate-800 last:border-0 bg-red-50/30 dark:bg-red-950/20">
                 <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">—</td>
                 <td className="px-3 py-2 font-mono text-sm text-slate-500 dark:text-slate-400 line-through">
                   {it.sku}
@@ -2276,7 +2276,7 @@ function RevisionEditor({
               </tr>
             ))}
           </tbody>
-          <tfoot className="bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+          <tfoot className="bg-slate-50 dark:bg-slate-800 border-t border-default dark:border-slate-700">
             <tr>
               <td colSpan={4} className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
                 After total
@@ -2376,7 +2376,7 @@ function DiffSummary({
     diff.removed.length === 0 &&
     diff.modified.length === 0
   return (
-    <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+    <div className="px-4 py-3 border-b border-default dark:border-slate-700 bg-white dark:bg-slate-900">
       <div className="flex items-center gap-3 text-base flex-wrap">
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
           Changes
@@ -2521,7 +2521,7 @@ function CommentsPane({
   return (
     <div className="space-y-3">
       {/* Composer */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg p-3">
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -2534,7 +2534,7 @@ function CommentsPane({
           placeholder="Add a comment… (@-mention to ping a teammate)"
           rows={2}
           disabled={submitting}
-          className="w-full px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+          className="w-full px-2 py-1.5 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-tertiary dark:placeholder:text-slate-500"
         />
         <div className="flex items-center justify-between mt-2">
           <span className="text-sm text-slate-500 dark:text-slate-400">
@@ -2569,7 +2569,7 @@ function CommentsPane({
           description="The first comment lands here."
         />
       ) : (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg p-4 space-y-3">
           {comments.map((c) => (
             <CommentRow key={c.id} comment={c} onDelete={() => remove(c.id)} />
           ))}
@@ -2610,7 +2610,7 @@ function CommentRow({
     return parts
   }
   return (
-    <div className="border-b border-slate-100 dark:border-slate-800 last:border-0 pb-2 last:pb-0 group">
+    <div className="border-b border-subtle dark:border-slate-800 last:border-0 pb-2 last:pb-0 group">
       <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
         <span className="font-medium text-slate-700 dark:text-slate-300">
           {comment.userId ?? 'operator'}
@@ -2619,7 +2619,7 @@ function CommentRow({
           {relativeTime(comment.createdAt)}
         </span>
         {comment.mentions.length > 0 && (
-          <span className="text-slate-400 dark:text-slate-500">
+          <span className="text-tertiary dark:text-slate-500">
             · pinged {comment.mentions.length}
           </span>
         )}
@@ -2645,7 +2645,7 @@ function CommentRow({
           <button
             type="button"
             onClick={() => setConfirmDelete(true)}
-            className="opacity-0 group-hover:opacity-100 text-sm text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 transition-opacity"
+            className="opacity-0 group-hover:opacity-100 text-sm text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 transition-opacity"
           >
             Delete
           </button>

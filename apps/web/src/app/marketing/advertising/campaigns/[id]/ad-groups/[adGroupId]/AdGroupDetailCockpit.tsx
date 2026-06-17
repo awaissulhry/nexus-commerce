@@ -37,7 +37,7 @@ const num = (n: number) => new Intl.NumberFormat('en-US').format(Math.round(n))
 const pct = (v: number | null | undefined) => (v == null ? '—' : `${(v * 100).toFixed(1)}%`)
 const x2 = (v: number | null | undefined) => (v == null ? '—' : `${v.toFixed(2)}×`)
 const acosTone = (v: number | null | undefined) => (v == null ? 'bg-slate-300' : v < 0.2 ? 'bg-emerald-500' : v < 0.35 ? 'bg-amber-500' : 'bg-rose-500')
-const acosText = (v: number | null | undefined) => (v == null ? 'text-slate-400' : v < 0.2 ? 'text-emerald-600 dark:text-emerald-400' : v < 0.35 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400')
+const acosText = (v: number | null | undefined) => (v == null ? 'text-tertiary' : v < 0.2 ? 'text-emerald-600 dark:text-emerald-400' : v < 0.35 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400')
 
 type Tab = 'ads' | 'targeting' | 'negatives' | 'searchterms' | 'settings' | 'history'
 const NAV: Array<[Tab, string]> = [
@@ -226,7 +226,7 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
             <button onClick={() => { setDefBidDraft(''); setEditDefBid(true) }} className="font-medium text-slate-700 dark:text-slate-200 hover:text-blue-600 hover:underline tabular-nums disabled:opacity-40" disabled={busy === 'defbid'} title="Edit default bid">{eur(data.defaultBidCents)}</button>
           )}
         </span>
-        {data.dataThrough && <><span>·</span><span className="text-slate-400">data through {data.dataThrough}</span></>}
+        {data.dataThrough && <><span>·</span><span className="text-tertiary">data through {data.dataThrough}</span></>}
         {err && <><span>·</span><span className="text-rose-600 dark:text-rose-400">{err}</span></>}
       </div>
 
@@ -247,18 +247,18 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
           <CampaignTrendChart rows={trendRows} windowDays={windowDays} onWindowChange={setWindowDays} loading={false} hideWindow />
 
           {/* AF.4 — contain wide tables to this box (page no longer scrolls). */}
-          <div className="rounded-lg border border-slate-200 dark:border-slate-800 mt-3 overflow-x-auto">
+          <div className="rounded-lg border border-default dark:border-slate-800 mt-3 overflow-x-auto">
             {tab === 'ads' && (<>
-              <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40">
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-default dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40">
                 <div className="relative">
-                  <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input value={adSearch} onChange={(e) => setAdSearch(e.target.value)} placeholder="Find a product" aria-label="Find a product" className="pl-7 pr-2 py-1 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 w-52" />
+                  <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-tertiary" />
+                  <input value={adSearch} onChange={(e) => setAdSearch(e.target.value)} placeholder="Find a product" aria-label="Find a product" className="pl-7 pr-2 py-1 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 w-52" />
                 </div>
-                <select value={adStatus} onChange={(e) => setAdStatus(e.target.value)} aria-label="Filter by status" className="py-1 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                <select value={adStatus} onChange={(e) => setAdStatus(e.target.value)} aria-label="Filter by status" className="py-1 px-2 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900">
                   <option value="">All statuses</option>{adStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
-                <span className="ml-auto text-xs text-slate-400 tabular-nums">{visibleAds.length} of {data.ads.length}</span>
-                <button onClick={exportAdsCsv} className="inline-flex items-center gap-1 px-2.5 py-1 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"><Download size={13} /> Export</button>
+                <span className="ml-auto text-xs text-tertiary tabular-nums">{visibleAds.length} of {data.ads.length}</span>
+                <button onClick={exportAdsCsv} className="inline-flex items-center gap-1 px-2.5 py-1 text-sm rounded-md border border-default dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"><Download size={13} /> Export</button>
               </div>
               <table className="min-w-full text-sm" style={{ tableLayout: 'fixed', width: 'max-content' }}>
                 <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr>
@@ -266,7 +266,7 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
                   <th {...adCols.thProps('cost')} className="text-right px-3 py-2" aria-sort={ariaSort('spendCents')}><button onClick={() => toggleSort('spendCents')} aria-label="Sort by total cost" className="hover:text-slate-700">Total cost{sortIcon('spendCents')}</button><adCols.ResizeHandle col="cost" /></th><th {...adCols.thProps('orders')} className="text-right px-3 py-2" aria-sort={ariaSort('orders')}><button onClick={() => toggleSort('orders')} aria-label="Sort by purchases" className="hover:text-slate-700">Purchases{sortIcon('orders')}</button><adCols.ResizeHandle col="orders" /></th><th {...adCols.thProps('sales')} className="text-right px-3 py-2" aria-sort={ariaSort('salesCents')}><button onClick={() => toggleSort('salesCents')} aria-label="Sort by sales" className="hover:text-slate-700">Sales{sortIcon('salesCents')}</button><adCols.ResizeHandle col="sales" /></th><th {...adCols.thProps('acos')} className="text-right px-3 py-2" aria-sort={ariaSort('acos')}><button onClick={() => toggleSort('acos')} aria-label="Sort by ACOS" className="hover:text-slate-700">ACOS{sortIcon('acos')}</button><adCols.ResizeHandle col="acos" /></th><th {...adCols.thProps('roas')} className="text-right px-3 py-2" aria-sort={ariaSort('roas')}><button onClick={() => toggleSort('roas')} aria-label="Sort by ROAS" className="hover:text-slate-700">ROAS{sortIcon('roas')}</button><adCols.ResizeHandle col="roas" /></th>
                 </tr></thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {visibleAds.length === 0 ? <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400 text-xs">{data.ads.length === 0 ? 'No ads in this ad group.' : 'No ads match your filters.'}</td></tr> : visibleAds.map((a) => (
+                  {visibleAds.length === 0 ? <tr><td colSpan={8} className="px-3 py-8 text-center text-tertiary text-xs">{data.ads.length === 0 ? 'No ads in this ad group.' : 'No ads match your filters.'}</td></tr> : visibleAds.map((a) => (
                     <tr key={a.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
                       <td className="px-3 py-1.5">
                         <div className="flex items-center gap-2 min-w-0">
@@ -277,7 +277,7 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
                         </div>
                       </td>
                       <td className="px-3 py-1.5"><span className="inline-flex items-center gap-1.5"><StatusToggle status={a.status} onToggle={() => toggleAdStatus(a)} busy={busy === a.id} /><StatusChip status={a.status} dot /></span></td>
-                      <td className="px-3 py-1.5 text-xs text-slate-500">{a.sku ?? '—'}{a.asin ? <span className="block text-slate-400">{a.asin}</span> : null}</td>
+                      <td className="px-3 py-1.5 text-xs text-slate-500">{a.sku ?? '—'}{a.asin ? <span className="block text-tertiary">{a.asin}</span> : null}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums">{eur(a.spendCents)}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums">{num(a.orders)}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums">{eur(a.salesCents)}</td>
@@ -292,7 +292,7 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
               <table className="min-w-full text-sm" style={{ tableLayout: 'fixed', width: 'max-content' }}>
                 <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th {...tgtCols.thProps('target')} className="text-left px-3 py-2">Target<tgtCols.ResizeHandle col="target" /></th><th {...tgtCols.thProps('match')} className="text-left px-3 py-2">Match<tgtCols.ResizeHandle col="match" /></th><th {...tgtCols.thProps('bid')} className="text-right px-3 py-2">Bid<tgtCols.ResizeHandle col="bid" /></th><th {...tgtCols.thProps('status')} className="text-left px-3 py-2">Status<tgtCols.ResizeHandle col="status" /></th></tr></thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {data.targets.filter((t) => !t.isNegative).length === 0 ? <tr><td colSpan={4} className="px-3 py-8 text-center text-slate-400 text-xs">No keyword/product targets. Auto-targeting ad groups discover terms automatically.</td></tr> : data.targets.filter((t) => !t.isNegative).map((t) => (
+                  {data.targets.filter((t) => !t.isNegative).length === 0 ? <tr><td colSpan={4} className="px-3 py-8 text-center text-tertiary text-xs">No keyword/product targets. Auto-targeting ad groups discover terms automatically.</td></tr> : data.targets.filter((t) => !t.isNegative).map((t) => (
                     <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
                       <td className="px-3 py-1.5">{t.expressionValue}</td>
                       <td className="px-3 py-1.5 text-xs text-slate-500">{t.expressionType}</td>
@@ -315,11 +315,11 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
               </table>
             )}
             {tab === 'searchterms' && (
-              searchTerms == null ? <div className="p-8 text-center text-slate-400 text-sm">Loading…</div> :
+              searchTerms == null ? <div className="p-8 text-center text-tertiary text-sm">Loading…</div> :
               <table className="min-w-full text-sm" style={{ tableLayout: 'fixed', width: 'max-content' }}>
                 <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th {...stCols.thProps('query')} className="text-left px-3 py-2">Search term<stCols.ResizeHandle col="query" /></th><th {...stCols.thProps('match')} className="text-left px-3 py-2">Match<stCols.ResizeHandle col="match" /></th><th {...stCols.thProps('impr')} className="text-right px-3 py-2">Impr<stCols.ResizeHandle col="impr" /></th><th {...stCols.thProps('clicks')} className="text-right px-3 py-2">Clicks<stCols.ResizeHandle col="clicks" /></th><th {...stCols.thProps('spend')} className="text-right px-3 py-2">Spend<stCols.ResizeHandle col="spend" /></th><th {...stCols.thProps('orders')} className="text-right px-3 py-2">Orders<stCols.ResizeHandle col="orders" /></th><th {...stCols.thProps('sales')} className="text-right px-3 py-2">Sales<stCols.ResizeHandle col="sales" /></th></tr></thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {searchTerms.length === 0 ? <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-400 text-xs">No search-term data yet (campaign-level report).</td></tr> : searchTerms.slice(0, 200).map((s, i) => (
+                  {searchTerms.length === 0 ? <tr><td colSpan={7} className="px-3 py-8 text-center text-tertiary text-xs">No search-term data yet (campaign-level report).</td></tr> : searchTerms.slice(0, 200).map((s, i) => (
                     <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{String(s.query ?? '')}</td><td className="px-3 py-1.5 text-xs text-slate-500">{String(s.matchType ?? '')}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.impressions ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.clicks ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(s.costMicros ?? 0) / 10000)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.orders7d ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(s.sales7dCents ?? 0))}</td></tr>
                   ))}
                 </tbody>
@@ -339,21 +339,21 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
             )}
             {tab === 'settings' && (
               <dl className="p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm max-w-xl">
-                <div><dt className="text-xs text-slate-400">Name</dt><dd className="text-slate-700 dark:text-slate-200">{adGroup.name}</dd></div>
-                <div><dt className="text-xs text-slate-400">Status</dt><dd><StatusChip status={adGroup.status} dot /></dd></div>
-                <div><dt className="text-xs text-slate-400">Default bid</dt><dd className="text-slate-700 dark:text-slate-200 tabular-nums">{eur(adGroup.defaultBidCents)}</dd></div>
-                <div><dt className="text-xs text-slate-400">Campaign</dt><dd><Link href={`/marketing/advertising/campaigns/${adGroup.campaign.id}`} className="text-blue-600 dark:text-blue-400 hover:underline">{adGroup.campaign.name}</Link></dd></div>
-                <div><dt className="text-xs text-slate-400">Marketplace</dt><dd className="text-slate-700 dark:text-slate-200">{marketplaceCountryName(adGroup.campaign.marketplace)}</dd></div>
-                <div><dt className="text-xs text-slate-400">Type</dt><dd className="text-slate-700 dark:text-slate-200">{adGroup.campaign.type}</dd></div>
+                <div><dt className="text-xs text-tertiary">Name</dt><dd className="text-slate-700 dark:text-slate-200">{adGroup.name}</dd></div>
+                <div><dt className="text-xs text-tertiary">Status</dt><dd><StatusChip status={adGroup.status} dot /></dd></div>
+                <div><dt className="text-xs text-tertiary">Default bid</dt><dd className="text-slate-700 dark:text-slate-200 tabular-nums">{eur(adGroup.defaultBidCents)}</dd></div>
+                <div><dt className="text-xs text-tertiary">Campaign</dt><dd><Link href={`/marketing/advertising/campaigns/${adGroup.campaign.id}`} className="text-blue-600 dark:text-blue-400 hover:underline">{adGroup.campaign.name}</Link></dd></div>
+                <div><dt className="text-xs text-tertiary">Marketplace</dt><dd className="text-slate-700 dark:text-slate-200">{marketplaceCountryName(adGroup.campaign.marketplace)}</dd></div>
+                <div><dt className="text-xs text-tertiary">Type</dt><dd className="text-slate-700 dark:text-slate-200">{adGroup.campaign.type}</dd></div>
               </dl>
             )}
             {tab === 'history' && (
-              history == null ? <div className="p-8 text-center text-slate-400 text-sm">Loading…</div> :
+              history == null ? <div className="p-8 text-center text-tertiary text-sm">Loading…</div> :
               <table className="min-w-full text-sm" style={{ tableLayout: 'fixed', width: 'max-content' }}>
                 <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th {...histCols.thProps('field')} className="text-left px-3 py-2">Field<histCols.ResizeHandle col="field" /></th><th {...histCols.thProps('change')} className="text-left px-3 py-2">Change<histCols.ResizeHandle col="change" /></th><th {...histCols.thProps('by')} className="text-left px-3 py-2">By<histCols.ResizeHandle col="by" /></th><th {...histCols.thProps('when')} className="text-right px-3 py-2">When<histCols.ResizeHandle col="when" /></th></tr></thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {history.length === 0 ? <tr><td colSpan={4} className="px-3 py-8 text-center text-slate-400 text-xs">No changes yet.</td></tr> : history.map((h, i) => (
-                    <tr key={i}><td className="px-3 py-1.5">{String(h.field ?? '')}</td><td className="px-3 py-1.5 text-xs">{String(h.oldValue ?? '—')} → <span className="font-medium">{String(h.newValue ?? '—')}</span></td><td className="px-3 py-1.5 text-xs text-slate-500">{String(h.changedBy ?? '')}</td><td className="px-3 py-1.5 text-right text-xs text-slate-400">{h.changedAt ? new Date(String(h.changedAt)).toLocaleString() : ''}</td></tr>
+                  {history.length === 0 ? <tr><td colSpan={4} className="px-3 py-8 text-center text-tertiary text-xs">No changes yet.</td></tr> : history.map((h, i) => (
+                    <tr key={i}><td className="px-3 py-1.5">{String(h.field ?? '')}</td><td className="px-3 py-1.5 text-xs">{String(h.oldValue ?? '—')} → <span className="font-medium">{String(h.newValue ?? '—')}</span></td><td className="px-3 py-1.5 text-xs text-slate-500">{String(h.changedBy ?? '')}</td><td className="px-3 py-1.5 text-right text-xs text-tertiary">{h.changedAt ? new Date(String(h.changedAt)).toLocaleString() : ''}</td></tr>
                   ))}
                 </tbody>
               </table>

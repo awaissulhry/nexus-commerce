@@ -17,7 +17,7 @@ export function TopSKUsWidget({
   if (loading && rows.length === 0) {
     return (
       <Card title="Top SKUs">
-        <div className="h-[180px] flex items-center justify-center text-slate-400 text-sm">
+        <div className="h-[180px] flex items-center justify-center text-tertiary text-sm">
           Loading…
         </div>
       </Card>

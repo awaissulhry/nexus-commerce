@@ -87,8 +87,8 @@ export function SupplierScorecardDrawer({
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-xl overflow-y-auto">
-        <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-5 py-3 flex items-center justify-between gap-2">
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 border-l border-default dark:border-slate-700 shadow-xl overflow-y-auto">
+        <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-default dark:border-slate-700 px-5 py-3 flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             Supplier scorecard
           </h2>
@@ -194,13 +194,13 @@ export function SupplierScorecardDrawer({
               <div className="flex items-center gap-2">
                 <Link
                   href={`/fulfillment/purchase-orders?supplierId=${data.supplier.id}`}
-                  className="h-8 px-3 inline-flex items-center gap-1.5 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="h-8 px-3 inline-flex items-center gap-1.5 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   POs from this supplier
                 </Link>
                 <Link
                   href={`/products?supplierId=${data.supplier.id}`}
-                  className="h-8 px-3 inline-flex items-center gap-1.5 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="h-8 px-3 inline-flex items-center gap-1.5 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   Catalog products
@@ -232,7 +232,7 @@ function Tile({
     slate: 'text-slate-900 dark:text-slate-100',
   } as any
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded p-3">
+    <div className="border border-default dark:border-slate-700 rounded p-3">
       <div className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">
         {label}
       </div>

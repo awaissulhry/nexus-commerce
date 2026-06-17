@@ -80,7 +80,7 @@ export function AllocationsClient({
   }
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md">
       {allocations.length === 0 ? (
         <div className="px-3 py-4 text-sm text-slate-500">
           No allocations. Add at least 2 campaigns for the rebalancer to be meaningful.
@@ -133,7 +133,7 @@ export function AllocationsClient({
           })}
         </ul>
       )}
-      <div className="px-3 py-2 border-t border-slate-200 dark:border-slate-800">
+      <div className="px-3 py-2 border-t border-default dark:border-slate-800">
         {adding ? (
           <div className="flex items-center gap-2 flex-wrap">
             <input

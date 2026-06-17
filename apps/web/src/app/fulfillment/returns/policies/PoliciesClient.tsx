@@ -214,7 +214,7 @@ export default function PoliciesClient() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-700 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <tr className="border-b border-default dark:border-slate-700 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 <th className="px-3 py-2 font-semibold">Scope</th>
                 <th className="px-3 py-2 font-semibold text-right">Window</th>
                 <th className="px-3 py-2 font-semibold text-right">Refund SLA</th>
@@ -234,29 +234,29 @@ export default function PoliciesClient() {
                   No policies yet. The EU 14-day baseline applies until you add one.
                 </td></tr>
               ) : items.map((p) => (
-                <tr key={p.id} className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${!p.isActive ? 'opacity-50' : ''}`}>
+                <tr key={p.id} className={`border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${!p.isActive ? 'opacity-50' : ''}`}>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[p.channel] ?? ''}`}>{p.channel}</span>
                       <span className="text-slate-600 dark:text-slate-300">{p.marketplace ?? 'All markets'}</span>
-                      <span className="text-slate-400 dark:text-slate-500">·</span>
+                      <span className="text-tertiary dark:text-slate-500">·</span>
                       <span className="text-slate-600 dark:text-slate-300">{p.productType ?? 'All products'}</span>
                       {p.id.startsWith('seed_') && <Badge variant="info" size="sm">baseline</Badge>}
                     </div>
-                    {p.notes && <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 truncate max-w-md">{p.notes}</div>}
+                    {p.notes && <div className="text-xs text-tertiary dark:text-slate-500 mt-0.5 truncate max-w-md">{p.notes}</div>}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{p.windowDays}d</td>
                   <td className="px-3 py-2 text-right tabular-nums">{p.refundDeadlineDays}d</td>
                   <td className="px-3 py-2 text-center">{p.buyerPaysReturn ? 'Buyer' : 'Seller'}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{pct(p.restockingFeePct)}</td>
                   <td className="px-3 py-2 text-center">
-                    {p.autoApprove ? <Badge variant="warning" size="sm">Auto</Badge> : <span className="text-slate-400">Manual</span>}
+                    {p.autoApprove ? <Badge variant="warning" size="sm">Auto</Badge> : <span className="text-tertiary">Manual</span>}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{eur(p.highValueThresholdCents)}</td>
                   <td className="px-3 py-2 text-center">
                     <button
                       onClick={() => toggleActive(p)}
-                      className={`text-xs px-2 py-0.5 rounded border ${p.isActive ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'}`}
+                      className={`text-xs px-2 py-0.5 rounded border ${p.isActive ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-default dark:border-slate-700'}`}
                       title="Toggle active"
                     >
                       {p.isActive ? 'Active' : 'Off'}
@@ -282,8 +282,8 @@ export default function PoliciesClient() {
       {modalOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center p-4" onClick={() => setModalOpen(false)}>
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" />
-          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-lg shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
-            <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900">
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-lg shadow-2xl border border-default dark:border-slate-700 max-h-[90vh] overflow-y-auto">
+            <header className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900">
               <h2 className="font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
                 <FileText size={15} /> {editing ? 'Edit policy' : 'New policy'}
               </h2>
@@ -298,7 +298,7 @@ export default function PoliciesClient() {
                     value={form.channel}
                     onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value }))}
                     disabled={!!editing}
-                    className="mt-1 w-full h-9 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 disabled:opacity-60"
+                    className="mt-1 w-full h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 disabled:opacity-60"
                   >
                     {CHANNELS.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -309,7 +309,7 @@ export default function PoliciesClient() {
                     value={form.marketplace}
                     onChange={(e) => setForm((f) => ({ ...f, marketplace: e.target.value }))}
                     disabled={!!editing}
-                    className="mt-1 w-full h-9 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 disabled:opacity-60"
+                    className="mt-1 w-full h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 disabled:opacity-60"
                   >
                     <option value="">All</option>
                     {MARKETPLACES.map((m) => <option key={m} value={m}>{m}</option>)}
@@ -322,7 +322,7 @@ export default function PoliciesClient() {
                     onChange={(e) => setForm((f) => ({ ...f, productType: e.target.value }))}
                     disabled={!!editing}
                     placeholder="All"
-                    className="mt-1 w-full h-9 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 disabled:opacity-60"
+                    className="mt-1 w-full h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 disabled:opacity-60"
                   />
                 </label>
               </div>
@@ -330,19 +330,19 @@ export default function PoliciesClient() {
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Return window (days)</span>
-                  <input type="number" min={0} value={form.windowDays} onChange={(e) => setForm((f) => ({ ...f, windowDays: e.target.value }))} className="mt-1 w-full h-9 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
+                  <input type="number" min={0} value={form.windowDays} onChange={(e) => setForm((f) => ({ ...f, windowDays: e.target.value }))} className="mt-1 w-full h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
                 </label>
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Refund deadline (days)</span>
-                  <input type="number" min={0} value={form.refundDeadlineDays} onChange={(e) => setForm((f) => ({ ...f, refundDeadlineDays: e.target.value }))} className="mt-1 w-full h-9 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
+                  <input type="number" min={0} value={form.refundDeadlineDays} onChange={(e) => setForm((f) => ({ ...f, refundDeadlineDays: e.target.value }))} className="mt-1 w-full h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
                 </label>
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Restocking fee (%)</span>
-                  <input type="number" min={0} max={100} step="0.5" value={form.restockingFeePct} onChange={(e) => setForm((f) => ({ ...f, restockingFeePct: e.target.value }))} placeholder="none" className="mt-1 w-full h-9 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
+                  <input type="number" min={0} max={100} step="0.5" value={form.restockingFeePct} onChange={(e) => setForm((f) => ({ ...f, restockingFeePct: e.target.value }))} placeholder="none" className="mt-1 w-full h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
                 </label>
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">High-value threshold (€)</span>
-                  <input type="number" min={0} value={form.highValueThresholdEuros} onChange={(e) => setForm((f) => ({ ...f, highValueThresholdEuros: e.target.value }))} placeholder="none" className="mt-1 w-full h-9 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
+                  <input type="number" min={0} value={form.highValueThresholdEuros} onChange={(e) => setForm((f) => ({ ...f, highValueThresholdEuros: e.target.value }))} placeholder="none" className="mt-1 w-full h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
                 </label>
               </div>
 
@@ -365,11 +365,11 @@ export default function PoliciesClient() {
 
               <label className="block">
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Notes</span>
-                <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
+                <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="mt-1 w-full px-2 py-1.5 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
               </label>
             </div>
-            <footer className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2 sticky bottom-0 bg-white dark:bg-slate-900">
-              <button onClick={() => setModalOpen(false)} className="h-9 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+            <footer className="px-5 py-3 border-t border-default dark:border-slate-700 flex justify-end gap-2 sticky bottom-0 bg-white dark:bg-slate-900">
+              <button onClick={() => setModalOpen(false)} className="h-9 px-3 text-sm border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
               <button onClick={save} disabled={saving} className="h-9 px-4 text-sm font-medium bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded hover:bg-slate-700 disabled:opacity-50">
                 {saving ? 'Saving…' : editing ? 'Save changes' : 'Create policy'}
               </button>
@@ -411,24 +411,24 @@ function ResolverTester() {
       <div className="flex flex-wrap items-end gap-3">
         <label className="block">
           <span className="text-xs text-slate-500 dark:text-slate-400">Channel</span>
-          <select value={channel} onChange={(e) => setChannel(e.target.value)} className="mt-1 block h-9 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900">
+          <select value={channel} onChange={(e) => setChannel(e.target.value)} className="mt-1 block h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900">
             {CHANNELS.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
         <label className="block">
           <span className="text-xs text-slate-500 dark:text-slate-400">Marketplace</span>
-          <select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} className="mt-1 block h-9 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900">
+          <select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} className="mt-1 block h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900">
             <option value="">All</option>
             {MARKETPLACES.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
         </label>
         <label className="block">
           <span className="text-xs text-slate-500 dark:text-slate-400">Product type</span>
-          <input value={productType} onChange={(e) => setProductType(e.target.value)} placeholder="any" className="mt-1 block h-9 w-28 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
+          <input value={productType} onChange={(e) => setProductType(e.target.value)} placeholder="any" className="mt-1 block h-9 w-28 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
         </label>
         <label className="block">
           <span className="text-xs text-slate-500 dark:text-slate-400">Delivered at</span>
-          <input type="date" value={deliveredAt} onChange={(e) => setDeliveredAt(e.target.value)} className="mt-1 block h-9 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
+          <input type="date" value={deliveredAt} onChange={(e) => setDeliveredAt(e.target.value)} className="mt-1 block h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
         </label>
         <button onClick={run} disabled={busy} className="h-9 px-3 text-sm font-medium border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">
           {busy ? 'Resolving…' : 'Resolve'}
@@ -462,7 +462,7 @@ function ResolverTester() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded border border-slate-200 dark:border-slate-700 px-3 py-2">
+    <div className="rounded border border-default dark:border-slate-700 px-3 py-2">
       <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</div>
       <div className="text-slate-900 dark:text-slate-100 font-semibold mt-0.5">{value}</div>
     </div>

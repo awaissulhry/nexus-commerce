@@ -230,8 +230,8 @@ function TwoFactorSection({ initial }: { initial: TwoFactorStatus }) {
 
   // ── Render variants ───────────────────────────────────────────
   return (
-    <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5">
-      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+    <section className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-5">
+      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-subtle dark:border-slate-800">
         <div
           className={cn(
             'shrink-0 w-8 h-8 rounded-md flex items-center justify-center',
@@ -272,7 +272,7 @@ function TwoFactorSection({ initial }: { initial: TwoFactorStatus }) {
             <img
               src={enroll.qrDataUrl}
               alt="2FA QR code"
-              className="w-40 h-40 bg-white rounded border border-slate-200 dark:border-slate-700 shrink-0"
+              className="w-40 h-40 bg-white rounded border border-default dark:border-slate-700 shrink-0"
             />
             <div className="flex-1 min-w-0 space-y-2">
               <p className="text-sm text-slate-700 dark:text-slate-300">
@@ -401,7 +401,7 @@ function TwoFactorSection({ initial }: { initial: TwoFactorStatus }) {
                   <button
                     type="button"
                     onClick={() => setShowPw((s) => !s)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-tertiary hover:text-slate-700 dark:hover:text-slate-200"
                     aria-label={showPw ? 'Hide password' : 'Show password'}
                   >
                     {showPw ? <EyeOff size={13} /> : <Eye size={13} />}
@@ -584,8 +584,8 @@ function SessionsSection({ initial }: { initial: SessionRow[] }) {
   const active = rows.filter((r) => !r.revokedAt)
 
   return (
-    <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5">
-      <div className="flex items-start justify-between gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+    <section className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-5">
+      <div className="flex items-start justify-between gap-3 mb-4 pb-3 border-b border-subtle dark:border-slate-800">
         <div>
           <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             Active sessions
@@ -627,8 +627,8 @@ function SessionsSection({ initial }: { initial: SessionRow[] }) {
               className={cn(
                 'flex items-start justify-between gap-3 p-3 rounded border',
                 s.revokedAt
-                  ? 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 opacity-70'
-                  : 'border-slate-200 dark:border-slate-800',
+                  ? 'border-default dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 opacity-70'
+                  : 'border-default dark:border-slate-800',
               )}
             >
               <div className="min-w-0 flex-1">
@@ -643,7 +643,7 @@ function SessionsSection({ initial }: { initial: SessionRow[] }) {
                 </div>
               </div>
               {s.revokedAt ? (
-                <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0">
+                <span className="text-xs text-tertiary dark:text-slate-500 shrink-0">
                   revoked {new Date(s.revokedAt).toLocaleDateString()}
                 </span>
               ) : (
@@ -677,13 +677,13 @@ const OUTCOME_STYLE: Record<string, string> = {
   recovery_code_used:
     'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
   locked:
-    'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+    'bg-slate-100 text-slate-700 border-default dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
 }
 
 function LoginHistorySection({ initial }: { initial: LoginEventRow[] }) {
   return (
-    <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5">
-      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+    <section className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-5">
+      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-subtle dark:border-slate-800">
         <div className="shrink-0 w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400">
           <History size={14} />
         </div>

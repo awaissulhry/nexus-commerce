@@ -127,21 +127,21 @@ export default function NotebookClient() {
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="h-8 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+            className="h-8 px-2 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
           />
           <input
             type="text"
             placeholder="Title (e.g. 'Launched Black Friday promo')"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="h-8 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+            className="h-8 px-2 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
           />
           <input
             type="text"
             placeholder="Tags (comma-separated)"
             value={tags}
             onChange={(e) => setTags(e.target.value)}
-            className="h-8 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+            className="h-8 px-2 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
           />
         </div>
         <textarea
@@ -149,7 +149,7 @@ export default function NotebookClient() {
           placeholder="Details (optional)"
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 resize-y"
+          className="w-full px-2 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 resize-y"
         />
         <div className="flex items-center justify-end mt-2">
           <button
@@ -176,7 +176,7 @@ export default function NotebookClient() {
               'h-6 px-2 text-xs rounded-md border',
               filterTag === null
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                : 'border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
             )}
           >
             All
@@ -190,7 +190,7 @@ export default function NotebookClient() {
                 'inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border',
                 filterTag === t
                   ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                  : 'border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
               )}
             >
               <Tag className="w-3 h-3" />
@@ -218,7 +218,7 @@ export default function NotebookClient() {
             {sorted.map((a) => (
               <li
                 key={a.id}
-                className="rounded-md border border-slate-200 dark:border-slate-700 p-3 flex items-start gap-3"
+                className="rounded-md border border-default dark:border-slate-700 p-3 flex items-start gap-3"
               >
                 <div className="shrink-0 w-20 tabular-nums text-xs text-slate-500 dark:text-slate-400">
                   {a.date}
@@ -249,7 +249,7 @@ export default function NotebookClient() {
                 <button
                   type="button"
                   onClick={() => deleteAnnotation(a.id)}
-                  className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                  className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md text-tertiary hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                   aria-label="Delete entry"
                 >
                   <Trash2 className="w-3.5 h-3.5" />

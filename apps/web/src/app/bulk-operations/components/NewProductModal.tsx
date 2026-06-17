@@ -146,17 +146,17 @@ export default function NewProductModal({
       onClick={() => !submitting && onClose()}
     >
       <div
-        className="bg-white rounded-lg shadow-xl border border-slate-200 w-[480px] max-w-[92vw] flex flex-col"
+        className="bg-white rounded-lg shadow-xl border border-default w-[480px] max-w-[92vw] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-default">
           <h2 className="text-lg font-semibold text-slate-900">
             New product
           </h2>
           <button
             type="button"
             onClick={() => !submitting && onClose()}
-            className="text-slate-400 hover:text-slate-700"
+            className="text-tertiary hover:text-slate-700"
             disabled={submitting}
             aria-label="Close"
           >
@@ -166,7 +166,7 @@ export default function NewProductModal({
 
         <div className="px-5 py-4 space-y-4">
           {/* Mode toggle */}
-          <div className="flex items-center gap-1 border border-slate-200 rounded-md p-0.5 bg-slate-50">
+          <div className="flex items-center gap-1 border border-default rounded-md p-0.5 bg-slate-50">
             <button
               type="button"
               onClick={() => setMode('parent')}
@@ -321,7 +321,7 @@ export default function NewProductModal({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200">
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-default">
           <Button
             variant="secondary"
             size="sm"
@@ -370,4 +370,4 @@ function Field({
 }
 
 const inputCls =
-  'w-full h-8 px-2 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+  'w-full h-8 px-2 text-base border border-default rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500'

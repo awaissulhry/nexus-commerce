@@ -111,7 +111,7 @@ export default async function PortfolioPage({
 
 function Stat({ label, value, warn }: { label: string; value: number; warn?: boolean }) {
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</div>
       <div className={`text-xl font-semibold tabular-nums ${warn ? 'text-rose-700 dark:text-rose-400' : 'text-slate-900 dark:text-slate-100'}`}>
         {value}

@@ -93,7 +93,7 @@ export default function AssetCard({
           ? 'border-blue-500 ring-2 ring-blue-500/30 dark:border-blue-400'
           : bulkChecked
             ? 'border-blue-400 ring-1 ring-blue-400/30 dark:border-blue-500'
-            : 'border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700'
+            : 'border-default hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700'
       }`}
     >
       {onBulkToggle && (
@@ -140,7 +140,7 @@ export default function AssetCard({
                     unoptimized
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-slate-400 dark:text-slate-500">
+                  <div className="flex h-full w-full items-center justify-center text-tertiary dark:text-slate-500">
                     <Film className="w-8 h-8" aria-hidden="true" />
                   </div>
                 )}
@@ -162,7 +162,7 @@ export default function AssetCard({
             )
           }
           return (
-            <div className="flex h-full w-full items-center justify-center text-slate-400 dark:text-slate-500">
+            <div className="flex h-full w-full items-center justify-center text-tertiary dark:text-slate-500">
               <ImageOff className="w-8 h-8" aria-hidden="true" />
             </div>
           )

@@ -529,14 +529,14 @@ export default function ReturnsWorkspace() {
         <GridToolbar
           searchSlot={
             <div className="relative">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500 pointer-events-none" />
               <input
                 ref={searchInputRef}
                 type="search"
                 value={searchInput}
                 onChange={(e) => onSearchChange(e.target.value)}
                 placeholder="RMA, order, customer, tracking…   /"
-                className="h-8 w-72 pl-8 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded focus:outline-none focus:ring-1 focus:ring-slate-400"
+                className="h-8 w-72 pl-8 pr-2 text-base border border-default dark:border-slate-700 rounded focus:outline-none focus:ring-1 focus:ring-slate-400"
               />
             </div>
           }
@@ -573,12 +573,12 @@ export default function ReturnsWorkspace() {
             <div className="relative">
             <button
               onClick={() => setViewsOpen((v) => !v)}
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <Bookmark size={12} /> Views{savedViews.length > 0 ? ` (${savedViews.length})` : ''}
             </button>
             {viewsOpen && (
-              <div className="absolute z-20 mt-1 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg p-2">
+              <div className="absolute z-20 mt-1 w-72 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-md shadow-lg p-2">
                 {savedViews.length === 0 ? (
                   <div className="text-sm text-slate-500 dark:text-slate-400 px-2 py-1.5">No saved views yet.</div>
                 ) : (
@@ -595,7 +595,7 @@ export default function ReturnsWorkspace() {
                         </button>
                         <button
                           onClick={() => deleteView(v)}
-                          className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-600"
+                          className="h-6 w-6 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-rose-600"
                           title="Delete view"
                         >
                           <Trash2 size={12} />
@@ -604,7 +604,7 @@ export default function ReturnsWorkspace() {
                     ))}
                   </div>
                 )}
-                <div className="border-t border-slate-100 dark:border-slate-800 mt-1 pt-1">
+                <div className="border-t border-subtle dark:border-slate-800 mt-1 pt-1">
                   <button
                     onClick={() => { setViewsOpen(false); void saveView() }}
                     className="w-full text-left text-sm text-blue-700 dark:text-blue-300 px-2 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded inline-flex items-center gap-1.5"
@@ -620,7 +620,7 @@ export default function ReturnsWorkspace() {
             <button
               type="button"
               onClick={() => setShortcutsOpen(true)}
-              className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+              className="h-7 w-7 inline-flex items-center justify-center border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
               title="Keyboard shortcuts (?)"
               aria-label="Keyboard shortcuts"
             >
@@ -631,13 +631,13 @@ export default function ReturnsWorkspace() {
             <>
               <a
                 href="/fulfillment/returns/analytics"
-                className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+                className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
               >
                 <Activity size={12} /> Analytics
               </a>
               <button
                 onClick={exportCsv}
-                className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+                className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
                 title="Export current filtered set as CSV"
               >
                 <Download size={12} /> Export
@@ -657,7 +657,7 @@ export default function ReturnsWorkspace() {
               <button
                 key={s}
                 onClick={() => setFilters({ status: s, queue: null, page: '1' })}
-                className={`h-7 px-2 text-sm border rounded ${statusFilter === s && !queueFilter ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                className={`h-7 px-2 text-sm border rounded ${statusFilter === s && !queueFilter ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
               >
                 {s.replace(/_/g, ' ')}
               </button>
@@ -732,7 +732,7 @@ export default function ReturnsWorkspace() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+              <thead className="border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <tr>
                   <th className="px-3 py-2 w-8">
                     <input
@@ -762,7 +762,7 @@ export default function ReturnsWorkspace() {
                     ref={(el) => {
                       if (el && idx === activeIdx) el.scrollIntoView({ block: 'nearest' })
                     }}
-                    className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer ${
+                    className={`border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer ${
                       selected.has(r.id) ? 'bg-blue-50/40' : ''
                     } ${idx === activeIdx ? 'ring-1 ring-inset ring-slate-900' : ''}`}
                   >
@@ -777,7 +777,7 @@ export default function ReturnsWorkspace() {
                     </td>
                     <td className="px-3 py-2 font-mono text-base text-slate-700 dark:text-slate-300">{r.rmaNumber ?? '—'}</td>
                     <td className="px-3 py-2">
-                      <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[r.channel] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>{r.channel}</span>
+                      <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[r.channel] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700'}`}>{r.channel}</span>
                       {r.isFbaReturn && <span className="ml-1.5 text-xs font-mono text-orange-700">FBA</span>}
                     </td>
                     <td className="px-3 py-2">
@@ -802,7 +802,7 @@ export default function ReturnsWorkspace() {
                     <td className="px-3 py-2 text-base text-slate-500 dark:text-slate-400 tabular-nums whitespace-nowrap">
                       {new Date(r.createdAt).toLocaleDateString('it-IT', { year: '2-digit', month: 'short', day: 'numeric' })}
                     </td>
-                    <td className="px-3 py-2 text-right"><ChevronRight size={14} className="text-slate-400 dark:text-slate-500 inline" /></td>
+                    <td className="px-3 py-2 text-right"><ChevronRight size={14} className="text-tertiary dark:text-slate-500 inline" /></td>
                   </tr>
                 ))}
               </tbody>
@@ -810,7 +810,7 @@ export default function ReturnsWorkspace() {
           </div>
 
           {/* R1.1 — pagination footer */}
-          <div className="flex items-center justify-between px-3 py-2 border-t border-slate-200 dark:border-slate-700 bg-slate-50/40 text-base">
+          <div className="flex items-center justify-between px-3 py-2 border-t border-default dark:border-slate-700 bg-slate-50/40 text-base">
             <div className="text-sm text-slate-600 dark:text-slate-400 tabular-nums">
               {total === 0 ? 'No results' : (
                 <>
@@ -824,7 +824,7 @@ export default function ReturnsWorkspace() {
               <select
                 value={pageSize}
                 onChange={(e) => setFilters({ pageSize: e.target.value, page: '1' })}
-                className="h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                className="h-7 px-1.5 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                 title="Rows per page"
               >
                 {[25, 50, 100, 200].map((n) => (
@@ -834,7 +834,7 @@ export default function ReturnsWorkspace() {
               <button
                 onClick={() => setFilters({ page: '1' })}
                 disabled={page === 1}
-                className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-7 w-7 inline-flex items-center justify-center border border-default dark:border-slate-700 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
                 title="First page"
               >
                 <ChevronsLeft size={13} />
@@ -842,7 +842,7 @@ export default function ReturnsWorkspace() {
               <button
                 onClick={() => setFilters({ page: String(Math.max(1, page - 1)) })}
                 disabled={page === 1}
-                className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-7 w-7 inline-flex items-center justify-center border border-default dark:border-slate-700 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Previous page"
               >
                 <ChevronLeft size={13} />
@@ -851,7 +851,7 @@ export default function ReturnsWorkspace() {
               <button
                 onClick={() => setFilters({ page: String(Math.min(totalPages, page + 1)) })}
                 disabled={page >= totalPages}
-                className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-7 w-7 inline-flex items-center justify-center border border-default dark:border-slate-700 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Next page"
               >
                 <ChevronRight size={13} />
@@ -859,7 +859,7 @@ export default function ReturnsWorkspace() {
               <button
                 onClick={() => setFilters({ page: String(totalPages) })}
                 disabled={page >= totalPages}
-                className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-7 w-7 inline-flex items-center justify-center border border-default dark:border-slate-700 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Last page"
               >
                 <ChevronsRight size={13} />
@@ -1082,7 +1082,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
     <div className="fixed inset-0 z-30 flex justify-end" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" />
       <aside onClick={(e) => e.stopPropagation()} className="relative h-full w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto">
-        <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
+        <header className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
           <div className="text-md font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
             <Undo2 size={14} /> Return {ret?.rmaNumber}
           </div>
@@ -1113,7 +1113,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
 
               {/* R2.1 — RMA barcode for warehouse identification */}
               {ret.rmaNumber && (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-3 flex justify-center">
+                <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded p-3 flex justify-center">
                   <Barcode128 value={ret.rmaNumber} moduleWidthPx={1.4} height={48} />
                 </div>
               )}
@@ -1129,7 +1129,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                     href={`${getBackendUrl()}/api/fulfillment/returns/${ret.id}/modulo-recesso.pdf`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex items-center gap-1.5"
+                    className="h-7 px-2 text-sm border border-default dark:border-slate-700 bg-white dark:bg-slate-900 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex items-center gap-1.5"
                     title="Italian statutory 14-day withdrawal form (bilingual IT/EN), pre-filled from this return"
                   >
                     <Download size={12} /> Modulo di recesso (PDF)
@@ -1139,7 +1139,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
 
               {/* R2.1 — customer + order + shipment context */}
               {ret.order && (
-                <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-3 space-y-2 text-base">
+                <div className="bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 rounded p-3 space-y-2 text-base">
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-0.5 min-w-0">
                       <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Customer</div>
@@ -1161,21 +1161,21 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                     <div className="flex flex-col gap-1 shrink-0">
                       <a
                         href={`/fulfillment/outbound?drawer=${ret.order.id}`}
-                        className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex items-center gap-1"
+                        className="h-7 px-2 text-sm border border-default dark:border-slate-700 bg-white dark:bg-slate-900 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex items-center gap-1"
                       >
                         <Package size={11} /> Open order
                       </a>
                       {ret.order.shipments[0] && (
                         <a
                           href={`/fulfillment/outbound/pack/${ret.order.shipments[0].id}`}
-                          className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex items-center gap-1"
+                          className="h-7 px-2 text-sm border border-default dark:border-slate-700 bg-white dark:bg-slate-900 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex items-center gap-1"
                         >
                           <Truck size={11} /> Shipment
                         </a>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 pt-1.5 border-t border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 pt-1.5 border-t border-default dark:border-slate-700">
                     {ret.order.channelOrderId && (
                       <span className="inline-flex items-center gap-1">
                         <span className="uppercase text-xs tracking-wider font-semibold">Order</span>
@@ -1229,7 +1229,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
               )}
 
               {!ret.isFbaReturn && (
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="pt-3 border-t border-subtle dark:border-slate-800 space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     {ret.status === 'REQUESTED' || ret.status === 'AUTHORIZED' || ret.status === 'IN_TRANSIT' ? (
                       <button onClick={() => action('receive')} className="h-8 px-3 text-base bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 rounded hover:bg-blue-100 dark:hover:bg-blue-900/60 inline-flex items-center gap-1.5">
@@ -1282,7 +1282,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                   )}
 
                   {ret.refundStatus !== 'REFUNDED' && (
-                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                    <div className="pt-2 border-t border-subtle dark:border-slate-800 space-y-2">
                       {/* RX.3 — refund composer: kind (cash / store-credit
                           / exchange), per-line allocation, and policy-
                           driven fee deduction. Refunds stay a human click;
@@ -1305,7 +1305,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                               : refundResult.outcome === 'OK_MANUAL_REQUIRED'
                                 ? 'bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800'
                                 : refundResult.outcome === 'NOT_IMPLEMENTED'
-                                  ? 'bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                                  ? 'bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300'
                                   : 'bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800'
                           }`}
                         >
@@ -1431,7 +1431,7 @@ function CreateReturnModal({
     <div className="fixed inset-0 z-30 flex items-center justify-center p-6" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-900/40" />
       <div onClick={(e) => e.stopPropagation()} className="relative bg-white dark:bg-slate-900 rounded-lg shadow-2xl w-full max-w-xl">
-        <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <header className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between">
           <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">New return</div>
           <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700"><X size={16} /></button>
         </header>
@@ -1439,7 +1439,7 @@ function CreateReturnModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">Channel</div>
-              <select value={channel} onChange={(e) => setChannel(e.target.value)} className="h-8 w-full px-2 text-md border border-slate-200 dark:border-slate-700 rounded">
+              <select value={channel} onChange={(e) => setChannel(e.target.value)} className="h-8 w-full px-2 text-md border border-default dark:border-slate-700 rounded">
                 <option value="AMAZON">Amazon</option>
                 <option value="EBAY">eBay</option>
                 <option value="SHOPIFY">Shopify</option>
@@ -1449,7 +1449,7 @@ function CreateReturnModal({
             </div>
             <div>
               <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">Order ID (optional)</div>
-              <input type="text" value={orderId} onChange={(e) => setOrderId(e.target.value)} className="h-8 w-full px-2 text-md font-mono border border-slate-200 dark:border-slate-700 rounded" />
+              <input type="text" value={orderId} onChange={(e) => setOrderId(e.target.value)} className="h-8 w-full px-2 text-md font-mono border border-default dark:border-slate-700 rounded" />
               {orderHint && (
                 <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{orderLoading ? 'Loading order…' : orderHint}</div>
               )}
@@ -1457,12 +1457,12 @@ function CreateReturnModal({
           </div>
           <div>
             <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">Reason</div>
-            <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Wrong size, defective, …" className="h-8 w-full px-2 text-md border border-slate-200 dark:border-slate-700 rounded" />
+            <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Wrong size, defective, …" className="h-8 w-full px-2 text-md border border-default dark:border-slate-700 rounded" />
           </div>
           {/* RX.6b — return type. WARRANTY/DEFECT open a diagnosis track. */}
           <div>
             <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">Type</div>
-            <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="inline-flex rounded-md border border-default dark:border-slate-700 overflow-hidden">
               {(['STANDARD', 'WARRANTY', 'DEFECT'] as const).map((t) => (
                 <button
                   key={t}
@@ -1479,17 +1479,17 @@ function CreateReturnModal({
             <div className="space-y-1.5">
               {items.map((row, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <input type="text" value={row.sku} onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, sku: e.target.value } : s))} placeholder="SKU" className="flex-1 h-7 px-2 text-base font-mono border border-slate-200 dark:border-slate-700 rounded" />
-                  <input type="number" min="1" value={row.quantity} onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, quantity: Number(e.target.value) || 1 } : s))} className="h-7 w-20 px-2 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded" />
-                  <button onClick={() => setItems(items.filter((_, j) => j !== i))} className="h-7 w-7 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-600"><X size={14} /></button>
+                  <input type="text" value={row.sku} onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, sku: e.target.value } : s))} placeholder="SKU" className="flex-1 h-7 px-2 text-base font-mono border border-default dark:border-slate-700 rounded" />
+                  <input type="number" min="1" value={row.quantity} onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, quantity: Number(e.target.value) || 1 } : s))} className="h-7 w-20 px-2 text-right tabular-nums border border-default dark:border-slate-700 rounded" />
+                  <button onClick={() => setItems(items.filter((_, j) => j !== i))} className="h-7 w-7 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-rose-600"><X size={14} /></button>
                 </div>
               ))}
             </div>
             <button onClick={() => setItems([...items, { sku: '', quantity: 1 }])} className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">+ Add SKU</button>
           </div>
         </div>
-        <footer className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 justify-end">
-          <button onClick={onClose} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+        <footer className="px-5 py-3 border-t border-default dark:border-slate-700 flex items-center gap-2 justify-end">
+          <button onClick={onClose} className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
           <button onClick={submit} disabled={busy} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50">Create return</button>
         </footer>
       </div>
@@ -1537,7 +1537,7 @@ function ActivityTimeline({ entries }: { entries: AuditEntry[] }) {
     info: 'bg-blue-500', success: 'bg-emerald-500', warning: 'bg-amber-500', danger: 'bg-rose-500',
   }
   return (
-    <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+    <div className="pt-3 border-t border-subtle dark:border-slate-800">
       <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">Activity</div>
       <ol className="space-y-2.5 text-base">
         {entries.map((e) => {
@@ -1585,19 +1585,19 @@ function ActivityTimeline({ entries }: { entries: AuditEntry[] }) {
 function RefundHistory({ refunds, onAfterCreditNote }: { refunds: RefundRow[]; onAfterCreditNote?: () => void }) {
   const STATUS_TONE: Record<string, string> = {
     POSTED: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
-    PENDING: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+    PENDING: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700',
     FAILED: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
     MANUAL_REQUIRED: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
-    NOT_IMPLEMENTED: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+    NOT_IMPLEMENTED: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700',
   }
   return (
-    <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+    <div className="pt-3 border-t border-subtle dark:border-slate-800">
       <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
         Refund history ({refunds.length})
       </div>
       <div className="space-y-1.5 text-base">
         {refunds.map((r) => (
-          <div key={r.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-2.5 space-y-1">
+          <div key={r.id} className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded p-2.5 space-y-1">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="inline-flex items-center gap-2">
                 <span className="font-medium tabular-nums text-slate-900 dark:text-slate-100">€{(r.amountCents / 100).toFixed(2)}</span>
@@ -1607,7 +1607,7 @@ function RefundHistory({ refunds, onAfterCreditNote }: { refunds: RefundRow[]; o
                     {r.kind.replace(/_/g, ' ')}
                   </span>
                 )}
-                <span className={`text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 border rounded ${STATUS_TONE[r.channelStatus] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
+                <span className={`text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 border rounded ${STATUS_TONE[r.channelStatus] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700'}`}>
                   {r.channelStatus.replace(/_/g, ' ')}
                 </span>
               </div>
@@ -1653,7 +1653,7 @@ function CreditNotePanel({ refund, onAfter }: { refund: RefundRow; onAfter?: () 
 
   if (refund.channelStatus !== 'POSTED') {
     return (
-      <div className="text-xs text-slate-400 dark:text-slate-500 italic pt-1 border-t border-slate-100 dark:border-slate-800">
+      <div className="text-xs text-tertiary dark:text-slate-500 italic pt-1 border-t border-subtle dark:border-slate-800">
         Nota di credito issued after refund posts
       </div>
     )
@@ -1701,7 +1701,7 @@ function CreditNotePanel({ refund, onAfter }: { refund: RefundRow; onAfter?: () 
   }
 
   return (
-    <div className="pt-1.5 mt-1 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
+    <div className="pt-1.5 mt-1 border-t border-subtle dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
       <div className="inline-flex items-center gap-2 flex-wrap">
         <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Nota di credito</span>
         {cn ? (
@@ -1710,7 +1710,7 @@ function CreditNotePanel({ refund, onAfter }: { refund: RefundRow; onAfter?: () 
               {cn.creditNoteNumber}
             </span>
             {cn.sdiStatus && (
-              <span className="text-xs uppercase tracking-wider px-1 py-0.5 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded">
+              <span className="text-xs uppercase tracking-wider px-1 py-0.5 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-default dark:border-slate-700 rounded">
                 SDI: {cn.sdiStatus}
               </span>
             )}
@@ -1719,7 +1719,7 @@ function CreditNotePanel({ refund, onAfter }: { refund: RefundRow; onAfter?: () 
             )}
           </>
         ) : (
-          <span className="text-xs text-slate-400 dark:text-slate-500 italic">Not yet assigned</span>
+          <span className="text-xs text-tertiary dark:text-slate-500 italic">Not yet assigned</span>
         )}
       </div>
       <div className="inline-flex items-center gap-1.5">
@@ -1795,7 +1795,7 @@ function ReturnNotesEditor({
         onBlur={save}
         rows={2}
         placeholder="Context for the next operator — anything not captured by the per-item state."
-        className="w-full px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded resize-y focus:outline-none focus:ring-1 focus:ring-slate-400"
+        className="w-full px-2 py-1.5 text-base border border-default dark:border-slate-700 rounded resize-y focus:outline-none focus:ring-1 focus:ring-slate-400"
       />
       {dirty && (
         <button
@@ -1917,7 +1917,7 @@ function ReturnItemCard({
   }
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded p-3 space-y-2.5 text-base">
+    <div className="border border-default dark:border-slate-700 rounded p-3 space-y-2.5 text-base">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="font-mono text-slate-900 dark:text-slate-100">{item.sku}</div>
@@ -1926,7 +1926,7 @@ function ReturnItemCard({
         <div className="flex items-center gap-1.5">
           {item.disposition && (
             <span
-              className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${DISPOSITION_TONE[item.disposition] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}
+              className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${DISPOSITION_TONE[item.disposition] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700'}`}
               title={item.scrapReason ? `Scrap reason: ${item.scrapReason}` : undefined}
             >
               {item.disposition.replace(/_/g, ' ')}
@@ -1936,7 +1936,7 @@ function ReturnItemCard({
             <select
               value={stagedGrade ?? item.conditionGrade ?? ''}
               onChange={(e) => onStageGrade(e.target.value)}
-              className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded"
+              className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded"
               aria-label={`Condition grade for ${item.sku}`}
             >
               <option value="">Grade…</option>
@@ -2003,7 +2003,7 @@ function ReturnItemCard({
                 className={`h-6 px-2 text-sm rounded border ${
                   checklist.signsOfUse === s
                     ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
-                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
               >
                 {s}
@@ -2021,7 +2021,7 @@ function ReturnItemCard({
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             placeholder="Per-item observations, defect location, etc."
-            className="w-full px-2 py-1 text-base border border-slate-200 dark:border-slate-700 rounded resize-y focus:outline-none focus:ring-1 focus:ring-slate-400"
+            className="w-full px-2 py-1 text-base border border-default dark:border-slate-700 rounded resize-y focus:outline-none focus:ring-1 focus:ring-slate-400"
           />
         </div>
       )}
@@ -2037,7 +2037,7 @@ function ReturnItemCard({
                 <div key={u} className="relative group">
                   <a href={u} target="_blank" rel="noopener noreferrer">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={u} alt="Item condition" className="w-full h-16 object-cover rounded border border-slate-200 dark:border-slate-700" />
+                    <img src={u} alt="Item condition" className="w-full h-16 object-cover rounded border border-default dark:border-slate-700" />
                   </a>
                   <button
                     onClick={() => removePhoto(u)}
@@ -2065,7 +2065,7 @@ function ReturnItemCard({
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={busy || item.photoUrls.length >= 10}
-            className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
+            className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
           >
             <Camera size={11} /> Add photo
           </button>
@@ -2073,7 +2073,7 @@ function ReturnItemCard({
       )}
 
       {dirty && !isFba && (
-        <div className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-2 pt-1 border-t border-subtle dark:border-slate-800">
           <button
             onClick={saveItem}
             disabled={busy}
@@ -2226,7 +2226,7 @@ function WarrantyTrack({ ret, onUpdated }: { ret: ReturnRow; onUpdated: () => vo
               key={r}
               onClick={() => patch({ warrantyResolution: r, warrantyStatus: r === 'REJECTED' ? 'REJECTED' : r }, r)}
               disabled={!!busy}
-              className={`h-7 px-2.5 text-xs border rounded disabled:opacity-50 ${ret.warrantyResolution === r ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-950/40'}`}
+              className={`h-7 px-2.5 text-xs border rounded disabled:opacity-50 ${ret.warrantyResolution === r ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-950/40'}`}
             >
               {busy === r ? '…' : r === 'REJECTED' ? 'Reject' : r.charAt(0) + r.slice(1).toLowerCase()}
             </button>
@@ -2244,19 +2244,19 @@ function WarrantyTrack({ ret, onUpdated }: { ret: ReturnRow; onUpdated: () => vo
             value={mfrRef}
             onChange={(e) => setMfrRef(e.target.value)}
             placeholder="claim #"
-            className="mt-0.5 w-full h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+            className="mt-0.5 w-full h-7 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
           />
         </label>
         <button
           onClick={() => patch({ manufacturerRef: mfrRef.trim() || null }, 'mfr')}
           disabled={busy === 'mfr'}
-          className="h-7 px-2.5 text-xs border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+          className="h-7 px-2.5 text-xs border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
         >
           {busy === 'mfr' ? '…' : 'Save'}
         </button>
       </div>
       {ret.defectReportedAt && (
-        <div className="text-xs text-slate-400">Reported {new Date(ret.defectReportedAt).toLocaleDateString()}</div>
+        <div className="text-xs text-tertiary">Reported {new Date(ret.defectReportedAt).toLocaleDateString()}</div>
       )}
     </div>
   )
@@ -2278,7 +2278,7 @@ function CommsBtn({
       disabled={disabled}
       className={`h-7 px-2 text-xs border rounded disabled:opacity-50 inline-flex items-center gap-1 ${
         muted
-          ? 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+          ? 'border-default dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
           : 'border-blue-200 dark:border-blue-900 text-blue-700 dark:text-blue-300 bg-blue-50/60 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/50'
       }`}
     >
@@ -2364,7 +2364,7 @@ function RefundComposer({
     <div className="space-y-2.5">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm text-slate-500 dark:text-slate-400 mr-1">Type:</span>
-        <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="inline-flex rounded-md border border-default dark:border-slate-700 overflow-hidden">
           {REFUND_KINDS.map((rk) => (
             <button
               key={rk.k}
@@ -2381,7 +2381,7 @@ function RefundComposer({
         {!perLineOpen ? (
           <>
             <span className="text-sm text-slate-500 dark:text-slate-400">Amount:</span>
-            <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="h-8 w-24 px-2 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-base" />
+            <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="h-8 w-24 px-2 text-right tabular-nums border border-default dark:border-slate-700 rounded text-base" />
             <span className="text-sm text-slate-500 dark:text-slate-400">€</span>
           </>
         ) : (
@@ -2399,8 +2399,8 @@ function RefundComposer({
           {items.map((it) => (
             <div key={it.id} className="flex items-center gap-2">
               <span className="font-mono text-xs text-slate-600 dark:text-slate-300 flex-1 truncate">{it.sku} ×{it.quantity}</span>
-              <input type="number" step="0.01" min="0" value={lines[it.id] ?? ''} onChange={(e) => setLines((l) => ({ ...l, [it.id]: e.target.value }))} placeholder="0.00" className="h-7 w-20 px-2 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-sm" />
-              <span className="text-xs text-slate-400">€</span>
+              <input type="number" step="0.01" min="0" value={lines[it.id] ?? ''} onChange={(e) => setLines((l) => ({ ...l, [it.id]: e.target.value }))} placeholder="0.00" className="h-7 w-20 px-2 text-right tabular-nums border border-default dark:border-slate-700 rounded text-sm" />
+              <span className="text-xs text-tertiary">€</span>
             </div>
           ))}
         </div>
@@ -2409,8 +2409,8 @@ function RefundComposer({
       <div className="flex items-center gap-2 flex-wrap text-sm">
         <span className="text-slate-500 dark:text-slate-400">Deduct:</span>
         <span className="inline-flex items-center gap-1">
-          <input type="number" step="0.01" min="0" value={restockEuros} onChange={(e) => setRestockEuros(e.target.value)} placeholder="0" className="h-7 w-16 px-1.5 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-sm" />
-          <span className="text-xs text-slate-400">€ restock</span>
+          <input type="number" step="0.01" min="0" value={restockEuros} onChange={(e) => setRestockEuros(e.target.value)} placeholder="0" className="h-7 w-16 px-1.5 text-right tabular-nums border border-default dark:border-slate-700 rounded text-sm" />
+          <span className="text-xs text-tertiary">€ restock</span>
         </span>
         {policy?.restockingFeePct ? (
           <button onClick={suggestRestock} className="text-xs text-blue-700 dark:text-blue-300 hover:underline" title={`Policy restocking fee: ${policy.restockingFeePct}%`}>
@@ -2418,8 +2418,8 @@ function RefundComposer({
           </button>
         ) : null}
         <span className="inline-flex items-center gap-1">
-          <input type="number" step="0.01" min="0" value={shipEuros} onChange={(e) => setShipEuros(e.target.value)} placeholder="0" className="h-7 w-16 px-1.5 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-sm" />
-          <span className="text-xs text-slate-400">€ return ship</span>
+          <input type="number" step="0.01" min="0" value={shipEuros} onChange={(e) => setShipEuros(e.target.value)} placeholder="0" className="h-7 w-16 px-1.5 text-right tabular-nums border border-default dark:border-slate-700 rounded text-sm" />
+          <span className="text-xs text-tertiary">€ return ship</span>
         </span>
         {policy?.buyerPaysReturn && <span className="text-xs text-amber-700 dark:text-amber-300">policy: buyer pays return</span>}
       </div>
@@ -2427,7 +2427,7 @@ function RefundComposer({
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm text-slate-600 dark:text-slate-300">Net: <span className="font-bold tabular-nums">{fmt(netCents)}</span></span>
         {(restockCents > 0 || shipCents > 0) && grossCents > 0 && (
-          <span className="text-xs text-slate-400">({fmt(grossCents)} − {fmt(restockCents + shipCents)} fees)</span>
+          <span className="text-xs text-tertiary">({fmt(grossCents)} − {fmt(restockCents + shipCents)} fees)</span>
         )}
       </div>
 
@@ -2437,7 +2437,7 @@ function RefundComposer({
             <button onClick={() => submit(false)} disabled={busy || netCents <= 0} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5" title={`Issue refund on ${channel} and mark refunded`}>
               {busy ? '…' : `Refund on ${channel}`}
             </button>
-            <button onClick={() => submit(true)} disabled={busy || netCents <= 0} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50" title="Already refunded in channel back office — just mark Nexus">
+            <button onClick={() => submit(true)} disabled={busy || netCents <= 0} className="h-8 px-3 text-base border border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50" title="Already refunded in channel back office — just mark Nexus">
               Mark only
             </button>
           </>
@@ -2446,7 +2446,7 @@ function RefundComposer({
             <button onClick={() => submit(true)} disabled={busy || netCents <= 0} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded hover:bg-slate-800 disabled:opacity-50" title={`Record ${kind === 'STORE_CREDIT' ? 'store credit' : 'exchange'} against this return`}>
               {busy ? '…' : `Record ${kind === 'STORE_CREDIT' ? 'store credit' : 'exchange'}`}
             </button>
-            <span className="text-xs text-slate-400">Issue the {kind === 'STORE_CREDIT' ? 'store credit' : 'exchange'} in {channel}, then record it here.</span>
+            <span className="text-xs text-tertiary">Issue the {kind === 'STORE_CREDIT' ? 'store credit' : 'exchange'} in {channel}, then record it here.</span>
           </>
         )}
       </div>
@@ -2637,7 +2637,7 @@ function ReturnLabelPanel({
   }
 
   return (
-    <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+    <div className="pt-3 border-t border-subtle dark:border-slate-800">
       <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2 inline-flex items-center gap-1.5">
         <Tag size={11} /> Return label
         {hasLabel && !isEmailed && (
@@ -2649,7 +2649,7 @@ function ReturnLabelPanel({
       </div>
 
       {!hasLabel && !editing && (
-        <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-3">
+        <div className="bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 rounded p-3">
           <p className="text-base text-slate-600 dark:text-slate-400 mb-2">
             No label attached. Generate a Sendcloud return label in one click, or attach one you've already created in another portal.
           </p>
@@ -2664,7 +2664,7 @@ function ReturnLabelPanel({
             </button>
             <button
               onClick={() => setEditing(true)}
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1.5"
             >
               <Plus size={12} /> Attach existing
             </button>
@@ -2673,7 +2673,7 @@ function ReturnLabelPanel({
       )}
 
       {editing && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-3 space-y-2">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded p-3 space-y-2">
           <div>
             <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               Label URL <span className="text-red-600">*</span>
@@ -2683,7 +2683,7 @@ function ReturnLabelPanel({
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://app.sendcloud.com/labels/..."
-              className="mt-1 w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded font-mono"
+              className="mt-1 w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded font-mono"
             />
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -2694,7 +2694,7 @@ function ReturnLabelPanel({
               <select
                 value={carrier}
                 onChange={(e) => setCarrier(e.target.value)}
-                className="mt-1 w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                className="mt-1 w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
               >
                 {CARRIER_OPTIONS.map((c) => (
                   <option key={c.value} value={c.value}>
@@ -2712,7 +2712,7 @@ function ReturnLabelPanel({
                 value={tracking}
                 onChange={(e) => setTracking(e.target.value)}
                 placeholder="Optional"
-                className="mt-1 w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded font-mono"
+                className="mt-1 w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded font-mono"
               />
             </div>
           </div>
@@ -2731,7 +2731,7 @@ function ReturnLabelPanel({
                 setCarrier(returnRow.returnLabelCarrier ?? 'SENDCLOUD')
                 setTracking(returnRow.returnTrackingNumber ?? '')
               }}
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
             >
               Cancel
             </button>
@@ -2740,7 +2740,7 @@ function ReturnLabelPanel({
       )}
 
       {hasLabel && !editing && (
-        <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-3 space-y-2">
+        <div className="bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 rounded p-3 space-y-2">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-base">
             <div className="md:col-span-2">
               <div className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">URL</div>
@@ -2773,17 +2773,17 @@ function ReturnLabelPanel({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-200 dark:border-slate-700">
+          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-default dark:border-slate-700">
             <button
               onClick={() => handleCopy(returnRow.returnLabelUrl!, 'URL')}
-              className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1"
+              className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1"
             >
               <Copy size={11} /> Copy URL
             </button>
             {returnRow.returnTrackingNumber && (
               <button
                 onClick={() => handleCopy(returnRow.returnTrackingNumber!, 'Tracking number')}
-                className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1"
+                className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1"
               >
                 <Copy size={11} /> Copy tracking
               </button>
@@ -2800,7 +2800,7 @@ function ReturnLabelPanel({
             )}
             <button
               onClick={() => setEditing(true)}
-              className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-white"
+              className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded hover:bg-white"
             >
               Edit
             </button>

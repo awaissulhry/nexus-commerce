@@ -25,7 +25,7 @@ const CHANNEL_TONE: Record<string, string> = {
   SHOPIFY: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
   WOOCOMMERCE: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-900',
   ETSY: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
-  MANUAL: 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+  MANUAL: 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700',
 }
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'default' | 'info'> = {
   PENDING: 'warning', SHIPPED: 'info', DELIVERED: 'success', CANCELLED: 'default',
@@ -196,7 +196,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
                   target="_blank"
                   rel="noopener noreferrer"
                   title={link.label}
-                  className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+                  className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
                 >
                   <ExternalLink size={12} /> {link.label}
                 </a>
@@ -226,7 +226,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
             <a
               href={`/sync-logs/api-calls?orderId=${encodeURIComponent(order.id)}`}
               title="View every channel API call recorded for this order"
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <ExternalLink size={12} /> Sync activity
             </a>
@@ -236,7 +236,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
             {order.marketplace === 'IT' && (
               <FiscalActions order={order} />
             )}
-            <button onClick={refresh} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5">
+            <button onClick={refresh} className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5">
               <RefreshCw size={12} /> Refresh
             </button>
             {order.deletedAt ? (
@@ -275,7 +275,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
       {/* OX.6 — sticky Amazon-style primary action bar. Stays visible
           on scroll so operators can act on the order from any tab
           without scrolling back up. */}
-      <div className="sticky top-0 z-20 -mx-5 px-5 py-2 bg-white/95 dark:bg-slate-950/95 backdrop-blur border-b border-slate-200 dark:border-slate-800">
+      <div className="sticky top-0 z-20 -mx-5 px-5 py-2 bg-white/95 dark:bg-slate-950/95 backdrop-blur border-b border-default dark:border-slate-800">
         <div className="flex items-center gap-2 flex-wrap">
           <a
             href={`${getBackendUrl()}/api/orders/${order.id}/invoice.html`}
@@ -430,9 +430,9 @@ export default function OrderDetailClient({ id }: { id: string }) {
           {tabParam === 'activity' && (
           <Card title="Timeline" description="Lifecycle events for this order">
             {timeline.length === 0 ? (
-              <div className="text-base text-slate-400 dark:text-slate-500 text-center py-4">No events yet</div>
+              <div className="text-base text-tertiary dark:text-slate-500 text-center py-4">No events yet</div>
             ) : (
-              <ol className="relative border-l border-slate-200 dark:border-slate-700 ml-2 space-y-3">
+              <ol className="relative border-l border-default dark:border-slate-700 ml-2 space-y-3">
                 {timeline.map((ev, i) => {
                   const Icon = TIMELINE_ICON[ev.kind] ?? Clock
                   return (
@@ -484,7 +484,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
             <Card title="Returns" description={`${order.returns.length} return${order.returns.length === 1 ? '' : 's'}`}>
               <div className="space-y-2">
                 {order.returns.map((r: any) => (
-                  <Link key={r.id} href={`/fulfillment/returns?id=${r.id}`} className="block border border-slate-200 dark:border-slate-700 rounded p-3 hover:bg-slate-50 dark:hover:bg-slate-800">
+                  <Link key={r.id} href={`/fulfillment/returns?id=${r.id}`} className="block border border-default dark:border-slate-700 rounded p-3 hover:bg-slate-50 dark:hover:bg-slate-800">
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="text-base font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5">
@@ -516,7 +516,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
               <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold mb-1.5">Transactions</div>
               <div className="space-y-1">
                 {financials.transactions.map((tx: any) => (
-                  <div key={tx.id} className="flex items-center justify-between text-sm border-b border-slate-100 dark:border-slate-800 py-1">
+                  <div key={tx.id} className="flex items-center justify-between text-sm border-b border-subtle dark:border-slate-800 py-1">
                     <div>
                       <span className="font-mono text-slate-700 dark:text-slate-300">{tx.transactionType}</span>
                       <span className="text-slate-500 dark:text-slate-400 ml-2">{new Date(tx.transactionDate).toLocaleDateString('en-GB')}</span>
@@ -708,7 +708,7 @@ function OrderNotesCard({ orderId }: { orderId: string }) {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Add a note for this order (pack hints, fraud holds, buyer messages)…"
-            className="flex-1 h-16 px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded"
+            className="flex-1 h-16 px-2 py-1.5 text-base border border-default dark:border-slate-700 rounded"
           />
           <button
             onClick={add}
@@ -728,7 +728,7 @@ function OrderNotesCard({ orderId }: { orderId: string }) {
               <li
                 key={n.id}
                 className={`text-sm border rounded p-2 ${
-                  n.pinned ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40' : 'border-slate-200 dark:border-slate-700'
+                  n.pinned ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40' : 'border-default dark:border-slate-700'
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -918,7 +918,7 @@ function BuyShippingCard({ orderId }: { orderId: string }) {
               {rates.map((r) => (
                 <li
                   key={r.serviceId}
-                  className="flex items-center justify-between gap-2 border border-slate-200 dark:border-slate-700 rounded p-2"
+                  className="flex items-center justify-between gap-2 border border-default dark:border-slate-700 rounded p-2"
                 >
                   <div className="min-w-0">
                     <div className="text-md text-slate-900 dark:text-slate-100">
@@ -1062,7 +1062,7 @@ function FiscalActions({ order }: { order: any }) {
           <a
             href={`${getBackendUrl()}/api/orders/${order.id}/fattura-pa.xml`}
             title="Download FatturaPA XML for manual SDI upload"
-            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             download
           >
             <ExternalLink size={12} /> XML SDI
@@ -1157,7 +1157,7 @@ function AmazonShipByImpactCard({ order }: { order: any }) {
         </span>
       </div>
       <div className="text-base text-slate-700 dark:text-slate-300">{reason}</div>
-      <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 grid grid-cols-2 gap-x-4 gap-y-1">
+      <div className="mt-2 pt-2 border-t border-subtle dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 grid grid-cols-2 gap-x-4 gap-y-1">
         <div>
           ship-by:{' '}
           {shipBy ? shipBy.toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
@@ -1232,7 +1232,7 @@ function EbayMessagingCard({
           + grant the messaging OAuth scope on your eBay connection).
         </div>
       )}
-      <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+      <div className="mt-2 pt-2 border-t border-subtle dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
         Order {channelOrderId} ·{' '}
         {meta?.lastModifiedDate
           ? `updated ${new Date(meta.lastModifiedDate).toLocaleString()}`
@@ -1393,7 +1393,7 @@ function ItalianFiscalBlock({ order }: { order: any }) {
         </div>
       )}
 
-      <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-sm">
+      <div className="mt-3 pt-3 border-t border-default dark:border-slate-700 text-sm">
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-slate-500 dark:text-slate-400">e-Invoice (FatturaPA / Ricevuta):</span>
           {fi ? (
@@ -1472,11 +1472,11 @@ function RoutingDecisionCard({ decisions }: { decisions: any[] }) {
         </div>
       </dl>
       {latest.scoreSummary && Object.keys(latest.scoreSummary).length > 0 && (
-        <details className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+        <details className="mt-3 pt-3 border-t border-default dark:border-slate-700">
           <summary className="cursor-pointer text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
             Score breakdown
           </summary>
-          <pre className="mt-2 text-xs font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-2 overflow-x-auto whitespace-pre-wrap">
+          <pre className="mt-2 text-xs font-mono bg-slate-50 dark:bg-slate-900 border border-default dark:border-slate-700 rounded p-2 overflow-x-auto whitespace-pre-wrap">
             {JSON.stringify(latest.scoreSummary, null, 2)}
           </pre>
         </details>
@@ -1533,11 +1533,11 @@ function BuyerProfileDrawer({ email, excludeOrderId, onClose }: { email: string;
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <aside
-        className="w-full max-w-md h-full bg-white dark:bg-slate-950 border-l border-slate-200 dark:border-slate-700 shadow-2xl overflow-y-auto"
+        className="w-full max-w-md h-full bg-white dark:bg-slate-950 border-l border-default dark:border-slate-700 shadow-2xl overflow-y-auto"
         role="dialog"
         aria-label="Buyer profile"
       >
-        <div className="sticky top-0 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-700 px-4 py-3 flex items-start justify-between gap-2">
+        <div className="sticky top-0 bg-white dark:bg-slate-950 border-b border-default dark:border-slate-700 px-4 py-3 flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
               {data?.customerName ?? 'Buyer profile'}
@@ -1607,7 +1607,7 @@ function BuyerProfileDrawer({ email, excludeOrderId, onClose }: { email: string;
                     {Object.entries(data.channels as Record<string, number>).map(([ch, count]) => (
                       <span
                         key={ch}
-                        className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 border rounded ${CHANNEL_TONE[ch] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}
+                        className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 border rounded ${CHANNEL_TONE[ch] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700'}`}
                       >
                         {ch}
                         <span className="font-bold tabular-nums">{count}</span>
@@ -1624,7 +1624,7 @@ function BuyerProfileDrawer({ email, excludeOrderId, onClose }: { email: string;
                 {data.orders.length === 0 ? (
                   <div className="text-sm text-slate-500 dark:text-slate-400 italic">No other orders from this buyer.</div>
                 ) : (
-                  <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-700 rounded">
+                  <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-default dark:border-slate-700 rounded">
                     {data.orders.map((o: any) => {
                       const d = formatOrderTotal({
                         totalPrice: o.totalPrice,
@@ -1640,7 +1640,7 @@ function BuyerProfileDrawer({ email, excludeOrderId, onClose }: { email: string;
                           >
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5">
-                                <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1 py-0 border rounded ${CHANNEL_TONE[o.channel] ?? 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                                <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1 py-0 border rounded ${CHANNEL_TONE[o.channel] ?? 'bg-slate-50 text-slate-500 border-default'}`}>
                                   {o.channel}
                                 </span>
                                 <span className="text-sm font-mono text-slate-700 dark:text-slate-300 truncate">{o.channelOrderId}</span>
@@ -1792,7 +1792,7 @@ function SalesProceedsCard({ order, financials }: { order: any; financials: any 
           <span className="text-slate-700 dark:text-slate-200">{paymentMethod}</span>
         </div>
 
-        <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1.5">
+        <div className="pt-2 border-t border-default dark:border-slate-700 space-y-1.5">
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-slate-700 dark:text-slate-200">Items total:</span>
             <span className="tabular-nums font-medium text-slate-900 dark:text-slate-100">{fmt(itemsTotalIncl)}</span>
@@ -1805,7 +1805,7 @@ function SalesProceedsCard({ order, financials }: { order: any; financials: any 
           )}
         </div>
 
-        <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1.5">
+        <div className="pt-2 border-t border-default dark:border-slate-700 space-y-1.5">
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-base font-semibold text-slate-900 dark:text-slate-100">Grand total:</span>
             <span className="text-base tabular-nums font-bold text-slate-900 dark:text-slate-100">{fmt(grandTotalIncl)}</span>
@@ -1819,7 +1819,7 @@ function SalesProceedsCard({ order, financials }: { order: any; financials: any 
         </div>
 
         {hasFees && (
-          <details className="pt-2 border-t border-slate-200 dark:border-slate-700">
+          <details className="pt-2 border-t border-default dark:border-slate-700">
             <summary className="cursor-pointer text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold hover:text-slate-900 dark:hover:text-slate-100">
               Fee breakdown
             </summary>
@@ -1861,7 +1861,7 @@ function SalesProceedsCard({ order, financials }: { order: any; financials: any 
                 </div>
               )}
               {financials?.rollup?.net != null && (
-                <div className="flex justify-between text-xs pt-1 mt-1 border-t border-slate-200 dark:border-slate-700">
+                <div className="flex justify-between text-xs pt-1 mt-1 border-t border-default dark:border-slate-700">
                   <span className="text-slate-700 dark:text-slate-200 font-medium">Net proceeds:</span>
                   <span className="tabular-nums font-semibold text-emerald-700 dark:text-emerald-300">{fmt(Number(financials.rollup.net))}</span>
                 </div>
@@ -1899,13 +1899,13 @@ function PackageSection({ idx, shipment, order }: { idx: number; shipment: any; 
   return (
     <Card title={`Package ${idx + 1}`} description={`${shipment.items?.length ?? 0} SKU${shipment.items?.length === 1 ? '' : 's'} · ${totalUnits} unit${totalUnits === 1 ? '' : 's'}`}>
       {/* Per-parcel action bar — Amazon's "Action on parcel N" row */}
-      <div className="flex items-center gap-2 pb-3 mb-3 border-b border-slate-200 dark:border-slate-700 flex-wrap">
+      <div className="flex items-center gap-2 pb-3 mb-3 border-b border-default dark:border-slate-700 flex-wrap">
         <span className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">
           Action on parcel {idx + 1}:
         </span>
         <Link
           href={`/fulfillment/outbound?id=${shipment.id}`}
-          className="h-7 px-2.5 text-xs text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+          className="h-7 px-2.5 text-xs text-slate-700 dark:text-slate-200 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
         >
           Edit consignment
         </Link>
@@ -1913,7 +1913,7 @@ function PackageSection({ idx, shipment, order }: { idx: number; shipment: any; 
           href={`${getBackendUrl()}/api/fulfillment/shipments/${shipment.id}/pack-slip.html`}
           target="_blank"
           rel="noopener noreferrer"
-          className="h-7 px-2.5 text-xs text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+          className="h-7 px-2.5 text-xs text-slate-700 dark:text-slate-200 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
         >
           Print packing slip
         </a>
@@ -1962,9 +1962,9 @@ function PackageSection({ idx, shipment, order }: { idx: number; shipment: any; 
 
       {/* Per-package item table */}
       {shipment.items && shipment.items.length > 0 && (
-        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-x-auto">
+        <div className="border border-default dark:border-slate-700 rounded overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-default dark:border-slate-700">
               <tr className="text-left text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400 font-semibold">
                 <th className="px-3 py-2">Product name</th>
                 <th className="px-3 py-2 font-mono normal-case">SKU</th>
@@ -2035,7 +2035,7 @@ function OrderContentsTable({ order, onItemChanged }: { order: any; onItemChange
     <Card title="Order contents" description={`${items.length} line${items.length === 1 ? '' : 's'}`} noPadding>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+          <thead className="bg-slate-50 dark:bg-slate-900 border-b border-default dark:border-slate-700">
             <tr className="text-left text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400 font-semibold">
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Image</th>
@@ -2077,7 +2077,7 @@ function OrderContentsTable({ order, onItemChanged }: { order: any; onItemChange
                         className="w-12 h-12 rounded object-cover bg-slate-100 dark:bg-slate-800"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
+                      <div className="w-12 h-12 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-tertiary dark:text-slate-500">
                         <Package size={14} />
                       </div>
                     )}
@@ -2096,19 +2096,19 @@ function OrderContentsTable({ order, onItemChanged }: { order: any; onItemChange
                     <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 space-y-0.5 font-mono">
                       {it.product?.amazonAsin && (
                         <div>
-                          <span className="not-italic text-slate-400">ASIN:</span> {it.product.amazonAsin}
+                          <span className="not-italic text-tertiary">ASIN:</span> {it.product.amazonAsin}
                         </div>
                       )}
                       <div>
-                        <span className="not-italic text-slate-400">SKU:</span> {it.sku}
+                        <span className="not-italic text-tertiary">SKU:</span> {it.sku}
                       </div>
                       {it.externalLineItemId && (
                         <div>
-                          <span className="not-italic text-slate-400">Order Item ID:</span> {it.externalLineItemId}
+                          <span className="not-italic text-tertiary">Order Item ID:</span> {it.externalLineItemId}
                         </div>
                       )}
                       <div>
-                        <span className="not-italic text-slate-400">Condition:</span> New
+                        <span className="not-italic text-tertiary">Condition:</span> New
                       </div>
                     </div>
                   </td>
@@ -2145,7 +2145,7 @@ function OrderContentsTable({ order, onItemChanged }: { order: any; onItemChange
                           }
                         }}
                         title="Italian VAT rate for this line"
-                        className="h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded tabular-nums bg-white dark:bg-slate-900"
+                        className="h-7 px-1.5 text-sm border border-default dark:border-slate-700 rounded tabular-nums bg-white dark:bg-slate-900"
                       >
                         <option value="">22% (default)</option>
                         <option value="22">22%</option>
@@ -2175,7 +2175,7 @@ function OrderContentsTable({ order, onItemChanged }: { order: any; onItemChange
               )
             })}
           </tbody>
-          <tfoot className="bg-slate-50 dark:bg-slate-900 border-t-2 border-slate-200 dark:border-slate-700">
+          <tfoot className="bg-slate-50 dark:bg-slate-900 border-t-2 border-default dark:border-slate-700">
             <tr>
               <td colSpan={isIT ? 4 : 3} className="px-3 py-2.5 text-right text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                 Item subtotal
@@ -2324,7 +2324,7 @@ function OrderSummaryTriptych({ order }: { order: any }) {
           )}
           {country && <div className="text-slate-700 dark:text-slate-300">{country}</div>}
         </div>
-        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 space-y-1.5 text-sm">
+        <div className="mt-3 pt-3 border-t border-default dark:border-slate-700 space-y-1.5 text-sm">
           {contactBuyerUrl ? (
             <a
               href={contactBuyerUrl}

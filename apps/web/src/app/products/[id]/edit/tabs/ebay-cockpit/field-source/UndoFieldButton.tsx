@@ -34,8 +34,8 @@ export default function UndoFieldButton({ canUndo, lastEntry, onUndo }: Props) {
       className={cn(
         'inline-flex items-center justify-center w-6 h-6 rounded border transition-colors',
         canUndo
-          ? 'border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
-          : 'border-slate-100 dark:border-slate-800 text-slate-300 dark:text-slate-700 cursor-not-allowed',
+          ? 'border-default dark:border-slate-700 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+          : 'border-subtle dark:border-slate-800 text-slate-300 dark:text-slate-700 cursor-not-allowed',
       )}
       title={title}
       aria-label={title}

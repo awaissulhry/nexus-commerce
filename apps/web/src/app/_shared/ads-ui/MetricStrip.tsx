@@ -26,7 +26,7 @@ export function MetricStrip({ m }: { m: RecMetrics }) {
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
       {shown.map(([k, v]) => (
-        <span key={k}><span className="text-slate-400">{k}</span> <span className="tabular-nums text-slate-600 dark:text-slate-300">{v}</span></span>
+        <span key={k}><span className="text-tertiary">{k}</span> <span className="tabular-nums text-slate-600 dark:text-slate-300">{v}</span></span>
       ))}
     </div>
   )

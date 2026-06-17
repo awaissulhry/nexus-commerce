@@ -129,7 +129,7 @@ export default function AplusListClient({ items, error, apiBase }: Props) {
       )}
 
       {/* Filter bar */}
-      <div className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-2 rounded-lg border border-default bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center">
         <input
           type="search"
           value={search}
@@ -166,7 +166,7 @@ export default function AplusListClient({ items, error, apiBase }: Props) {
       {/* List */}
       {visible.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-300 bg-white py-16 text-center dark:border-slate-700 dark:bg-slate-900">
-          <BadgeCheck className="w-8 h-8 text-slate-400" />
+          <BadgeCheck className="w-8 h-8 text-tertiary" />
           <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
             {items.length === 0
               ? t('aplus.empty.title')
@@ -197,9 +197,9 @@ export default function AplusListClient({ items, error, apiBase }: Props) {
           )}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="overflow-hidden rounded-lg border border-default bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <table className="w-full text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-400">
+            <thead className="border-b border-default bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-400">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold">
                   {t('aplus.col.name')}
@@ -245,7 +245,7 @@ export default function AplusListClient({ items, error, apiBase }: Props) {
                   </td>
                   <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
                     {row.marketplace}
-                    <span className="ml-1 text-xs text-slate-400">
+                    <span className="ml-1 text-xs text-tertiary">
                       · {row.locale}
                     </span>
                   </td>
@@ -258,28 +258,28 @@ export default function AplusListClient({ items, error, apiBase }: Props) {
                   </td>
                   <td className="px-3 py-2 text-right">
                     <span className="inline-flex items-center gap-1 text-slate-700 dark:text-slate-300">
-                      <Layers className="w-3.5 h-3.5 text-slate-400" />
+                      <Layers className="w-3.5 h-3.5 text-tertiary" />
                       {row._count.modules}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right">
                     <span className="inline-flex items-center gap-1 text-slate-700 dark:text-slate-300">
-                      <ImageIcon className="w-3.5 h-3.5 text-slate-400" />
+                      <ImageIcon className="w-3.5 h-3.5 text-tertiary" />
                       {row._count.asinAttachments}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right">
                     {row._count.localizations > 0 ? (
                       <span className="inline-flex items-center gap-1 text-slate-700 dark:text-slate-300">
-                        <Languages className="w-3.5 h-3.5 text-slate-400" />
+                        <Languages className="w-3.5 h-3.5 text-tertiary" />
                         {row._count.localizations}
                       </span>
                     ) : row.masterContentId ? (
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-tertiary">
                         {t('aplus.translation')}
                       </span>
                     ) : (
-                      <span className="text-slate-400">—</span>
+                      <span className="text-tertiary">—</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-right text-xs text-slate-500 dark:text-slate-400">

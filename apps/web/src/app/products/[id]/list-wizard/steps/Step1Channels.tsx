@@ -553,7 +553,7 @@ export default function Step1Channels({
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto py-6 md:py-12 px-3 md:px-6 text-center">
-        <Loader2 className="w-5 h-5 animate-spin mx-auto text-slate-400 dark:text-slate-500" />
+        <Loader2 className="w-5 h-5 animate-spin mx-auto text-tertiary dark:text-slate-500" />
         <p className="mt-2 text-base text-slate-500 dark:text-slate-400">
           Loading channel connections…
         </p>
@@ -717,7 +717,7 @@ export default function Step1Channels({
           when at least one AMAZON marketplace is selected. Operators
           who don't sell on Amazon never see it. */}
       {hasAmazonSelected && (
-        <div className="mt-4 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3">
+        <div className="mt-4 border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="min-w-0">
               <div className="text-md font-semibold text-slate-900 dark:text-slate-100">
@@ -732,7 +732,7 @@ export default function Step1Channels({
             <div
               role="radiogroup"
               aria-label="Amazon fulfillment method"
-              className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden flex-shrink-0"
+              className="inline-flex rounded-md border border-default dark:border-slate-700 overflow-hidden flex-shrink-0"
             >
               {(['FBM', 'FBA'] as const).map((option) => {
                 const isSelected = fulfillmentMethod === option
@@ -744,7 +744,7 @@ export default function Step1Channels({
                     aria-checked={isSelected}
                     onClick={() => setFulfillmentMethod(option)}
                     className={cn(
-                      'h-8 px-3 text-base font-medium border-l border-slate-200 dark:border-slate-700 first:border-l-0 transition-colors',
+                      'h-8 px-3 text-base font-medium border-l border-default dark:border-slate-700 first:border-l-0 transition-colors',
                       isSelected
                         ? 'bg-blue-600 text-white dark:bg-blue-500'
                         : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
@@ -769,7 +769,7 @@ export default function Step1Channels({
           almost everyone wants and matches Amazon's catalog clustering
           assumptions. Power users open this for per-marketplace SKU
           divergence (e.g., XAV-RJK-AETHER-PARENT-IT vs -DE). */}
-      <div className="mt-6 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
+      <div className="mt-6 border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
         <button
           type="button"
           onClick={() => setStrategyExpanded((v) => !v)}
@@ -788,7 +788,7 @@ export default function Step1Channels({
           </span>
         </button>
         {strategyExpanded && (
-          <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 space-y-4">
+          <div className="px-4 py-3 border-t border-subtle dark:border-slate-800 space-y-4">
             <SkuStrategyRow
               label="Parent SKU"
               hint="The master SKU on every marketplace listing's parent. Amazon assigns a different parent ASIN per marketplace regardless of this choice."
@@ -869,7 +869,7 @@ export default function Step1Channels({
         <div className="flex items-center justify-between gap-3">
           <span className="text-base text-slate-600 dark:text-slate-400">
             {channelTuples.length === 0 ? (
-              <span className="text-slate-400 dark:text-slate-500">
+              <span className="text-tertiary dark:text-slate-500">
                 Pick at least one (platform, marketplace) to continue
               </span>
             ) : (
@@ -931,10 +931,10 @@ function PlatformCard({
     <div
       className={cn(
         'border rounded-lg bg-white dark:bg-slate-900',
-        isComingSoon ? 'border-slate-200 dark:border-slate-700 opacity-75' : 'border-slate-200 dark:border-slate-700',
+        isComingSoon ? 'border-default dark:border-slate-700 opacity-75' : 'border-default dark:border-slate-700',
       )}
     >
-      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-subtle dark:border-slate-800">
         <div className="flex items-center gap-2.5 min-w-0">
           <Icon className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
           <div className="min-w-0">
@@ -995,16 +995,16 @@ function PlatformCard({
               className={cn(
                 'inline-flex items-center gap-1.5 h-7 px-2 text-base rounded-md border transition-colors',
                 isComingSoon
-                  ? 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                  ? 'bg-slate-50 dark:bg-slate-800 border-default dark:border-slate-700 text-tertiary dark:text-slate-500 cursor-not-allowed'
                   : isSelected
                   ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 text-blue-800'
-                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600',
+                  : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600',
               )}
             >
               <span className="font-mono text-sm font-medium">
                 {m.code}
               </span>
-              <span className={cn('text-sm', isComingSoon ? 'text-slate-400 dark:text-slate-500' : 'text-slate-500 dark:text-slate-400')}>
+              <span className={cn('text-sm', isComingSoon ? 'text-tertiary dark:text-slate-500' : 'text-slate-500 dark:text-slate-400')}>
                 {m.label}
               </span>
               {isSelected && !isComingSoon && (
@@ -1049,7 +1049,7 @@ function SkuStrategyRow({
                 'inline-flex items-center gap-1.5 h-7 px-2.5 text-sm rounded-md border transition-colors',
                 active
                   ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 text-blue-800'
-                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600',
+                  : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600',
               )}
             >
               {o.label}
@@ -1080,7 +1080,7 @@ function ConnectionBadge({ connected }: { connected: boolean }) {
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded">
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 px-1.5 py-0.5 rounded">
       <XCircle className="w-3 h-3" /> Not connected
     </span>
   )
@@ -1157,7 +1157,7 @@ function TemplatePickerPanel({
               return (
                 <li
                   key={tmpl.id}
-                  className="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 px-3 py-2"
+                  className="border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 px-3 py-2"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
@@ -1166,7 +1166,7 @@ function TemplatePickerPanel({
                           {tmpl.name}
                         </span>
                         {tmpl.builtIn && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border bg-slate-50 dark:bg-slate-800 border-default dark:border-slate-700 text-slate-600 dark:text-slate-400">
                             built-in
                           </span>
                         )}
@@ -1185,7 +1185,7 @@ function TemplatePickerPanel({
                         {tmpl.channels.map((c, i) => (
                           <span
                             key={`${c.platform}:${c.marketplace}:${i}`}
-                            className="inline-flex items-center h-5 px-1.5 rounded text-xs font-mono font-medium border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                            className="inline-flex items-center h-5 px-1.5 rounded text-xs font-mono font-medium border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
                           >
                             {c.platform}
                             {c.marketplace !== 'GLOBAL' && (
@@ -1326,7 +1326,7 @@ function AiSuggestionsPanel({
               return (
                 <li
                   key={key}
-                  className="flex items-start justify-between gap-3 py-1.5 px-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                  className="flex items-start justify-between gap-3 py-1.5 px-2 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">

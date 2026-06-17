@@ -36,7 +36,7 @@ export function SettingsShellHeader() {
   const { open: openPalette } = useSettingsPalette()
 
   return (
-    <header className="sticky top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800">
+    <header className="sticky top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-default dark:border-slate-800">
       <div className="px-4 sm:px-6 py-3 flex items-center gap-3">
         <SettingsRailMobileTrigger />
 
@@ -88,7 +88,7 @@ export function SettingsShellHeader() {
         <button
           type="button"
           onClick={openPalette}
-          className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-slate-200 bg-white text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+          className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-default bg-white text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
           aria-label="Open settings command palette"
         >
           <Search size={14} />

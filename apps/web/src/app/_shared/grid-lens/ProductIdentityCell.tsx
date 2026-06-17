@@ -117,7 +117,7 @@ export function ProductIdentityCell(props: ProductIdentityCellProps) {
             <span className="text-slate-300 dark:text-slate-600">|</span>
           )}
           {sku && (
-            <span className="font-mono text-slate-400 dark:text-slate-500">
+            <span className="font-mono text-tertiary dark:text-slate-500">
               <Highlight text={sku} query={searchQuery} />
             </span>
           )}
@@ -136,7 +136,7 @@ export function ProductIdentityCell(props: ProductIdentityCellProps) {
             <span className="text-slate-300 dark:text-slate-600">·</span>
           )}
           {isParentRow && count > 0 && (
-            <span className="text-slate-400 dark:text-slate-500">
+            <span className="text-tertiary dark:text-slate-500">
               {count} variation{count !== 1 ? 's' : ''}
             </span>
           )}
@@ -153,7 +153,7 @@ export function ProductIdentityCell(props: ProductIdentityCellProps) {
           )}
           {fulfillmentMethod && (
             <span
-              className={`ml-1 inline-block font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded text-[10px] leading-none ${FULFILLMENT_CHIP_CLASS[fulfillmentMethod] ?? 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'}`}
+              className={`ml-1 inline-block font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded text-[10px] leading-none ${FULFILLMENT_CHIP_CLASS[fulfillmentMethod] ?? 'bg-slate-50 text-slate-600 border-default dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'}`}
               title={
                 fulfillmentMethod === 'BOTH'
                   ? 'Has FBA and FBM offers'

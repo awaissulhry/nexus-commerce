@@ -156,8 +156,8 @@ export function CsvImportModal({
         if (e.target === e.currentTarget && !busy) onClose()
       }}
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white dark:bg-slate-900 z-10 border-b border-slate-200 dark:border-slate-700 px-5 py-3 flex items-center justify-between gap-2">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white dark:bg-slate-900 z-10 border-b border-default dark:border-slate-700 px-5 py-3 flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
             <Upload className="w-4 h-4" />
             Import POs from CSV
@@ -201,7 +201,7 @@ export function CsvImportModal({
                   placeholder="groupKey,supplierName,warehouseCode,…"
                   rows={6}
                   spellCheck={false}
-                  className="w-full px-2 py-1.5 text-sm font-mono border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  className="w-full px-2 py-1.5 text-sm font-mono border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-tertiary dark:placeholder:text-slate-500"
                 />
                 <div className="flex items-center justify-between mt-2">
                   <div>
@@ -219,7 +219,7 @@ export function CsvImportModal({
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="h-8 px-3 text-sm rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+                      className="h-8 px-3 text-sm rounded border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
                     >
                       <FileText className="w-3.5 h-3.5" />
                       Choose .csv…
@@ -262,7 +262,7 @@ export function CsvImportModal({
         </div>
 
         {!commitResult && (
-          <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 px-5 py-3 flex items-center justify-end gap-2">
+          <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-default dark:border-slate-700 px-5 py-3 flex items-center justify-end gap-2">
             <Button variant="secondary" size="sm" onClick={onClose} disabled={!!busy}>
               Cancel
             </Button>
@@ -288,8 +288,8 @@ export function CsvImportModal({
 
 function PreviewTable({ preview }: { preview: PreviewResult }) {
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
-      <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+    <div className="border border-default dark:border-slate-700 rounded overflow-hidden">
+      <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border-b border-default dark:border-slate-700 flex items-center justify-between">
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
           Preview
         </span>
@@ -302,7 +302,7 @@ function PreviewTable({ preview }: { preview: PreviewResult }) {
         {preview.groups.map((g) => {
           const validLines = g.lines.filter((l) => !l.error)
           return (
-            <div key={g.groupKey} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+            <div key={g.groupKey} className="border-b border-subtle dark:border-slate-800 last:border-0">
               <div className="px-3 py-2 bg-slate-50/40 dark:bg-slate-800/40 text-base">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-mono font-semibold text-slate-900 dark:text-slate-100">
@@ -453,7 +453,7 @@ export function ExportCsvButton({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
+      className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded-md inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
       title="Export the current filter view as CSV"
     >
       <Download className="w-3 h-3" />

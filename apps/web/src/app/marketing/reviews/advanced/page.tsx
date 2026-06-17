@@ -37,7 +37,7 @@ export default function AdvancedPage() {
             <Link
               key={f.href}
               href={f.href}
-              className="group block rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
+              className="group block rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900 p-4 hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
             >
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="inline-flex items-center justify-center h-8 w-8 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 group-hover:bg-blue-50 group-hover:text-blue-600 dark:group-hover:bg-blue-950">

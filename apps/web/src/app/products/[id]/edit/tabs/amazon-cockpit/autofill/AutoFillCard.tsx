@@ -564,8 +564,8 @@ function DiffModal({
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
     >
-      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
+      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-default dark:border-slate-700 w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+        <div className="px-4 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between gap-2">
           <div>
             <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               {title}
@@ -577,7 +577,7 @@ function DiffModal({
           <button
             type="button"
             onClick={onCancel}
-            className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+            className="text-tertiary hover:text-slate-700 dark:hover:text-slate-200"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -592,7 +592,7 @@ function DiffModal({
                 'rounded border p-2',
                 d.selected
                   ? 'border-blue-200 dark:border-blue-700 bg-blue-50/30 dark:bg-blue-950/20'
-                  : 'border-slate-200 dark:border-slate-700 bg-slate-50/40 dark:bg-slate-900/40 opacity-60',
+                  : 'border-default dark:border-slate-700 bg-slate-50/40 dark:bg-slate-900/40 opacity-60',
               )}
             >
               <label className="flex items-center gap-2 cursor-pointer">
@@ -613,7 +613,7 @@ function DiffModal({
                   </div>
                   <div className="rounded bg-rose-50/60 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900 p-1.5 text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
                     {d.current || (
-                      <em className="text-slate-400">empty</em>
+                      <em className="text-tertiary">empty</em>
                     )}
                   </div>
                 </div>
@@ -623,7 +623,7 @@ function DiffModal({
                   </div>
                   <div className="rounded bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900 p-1.5 text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
                     {d.proposed || (
-                      <em className="text-slate-400">empty</em>
+                      <em className="text-tertiary">empty</em>
                     )}
                   </div>
                 </div>
@@ -632,7 +632,7 @@ function DiffModal({
           ))}
         </div>
 
-        <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
+        <div className="px-4 py-3 border-t border-default dark:border-slate-700 flex items-center justify-between gap-2">
           <span className="text-[11px] text-slate-500 dark:text-slate-400">
             {acceptedCount}/{diffs.length} field{diffs.length === 1 ? '' : 's'} selected
           </span>

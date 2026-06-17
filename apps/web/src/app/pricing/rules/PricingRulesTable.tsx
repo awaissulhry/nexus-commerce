@@ -46,7 +46,7 @@ function ruleTypeBadgeClasses(type: string): string {
     case 'DYNAMIC_MARGIN':
       return 'bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-900';
     default:
-      return 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800';
+      return 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-default dark:border-slate-800';
   }
 }
 
@@ -138,7 +138,7 @@ export default function PricingRulesTable({
               {Number(value).toFixed(1)}%
             </span>
           ) : (
-            <span className="text-sm text-slate-400 dark:text-slate-500">—</span>
+            <span className="text-sm text-tertiary dark:text-slate-500">—</span>
           );
         },
       },
@@ -152,7 +152,7 @@ export default function PricingRulesTable({
               {Number(value).toFixed(1)}%
             </span>
           ) : (
-            <span className="text-sm text-slate-400 dark:text-slate-500">—</span>
+            <span className="text-sm text-tertiary dark:text-slate-500">—</span>
           );
         },
       },
@@ -251,7 +251,7 @@ export default function PricingRulesTable({
         <div className="overflow-x-auto">
           <table className="w-full text-md">
             <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
+              <tr className="border-b border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
                 {table.getHeaderGroups().map((headerGroup) =>
                   headerGroup.headers.map((header) => (
                     <th
@@ -273,7 +273,7 @@ export default function PricingRulesTable({
                             ? (header.column.columnDef.header as () => string)()
                             : (header.column.columnDef.header as string)}
                           {header.column.getCanSort() && (
-                            <span className="text-xs text-slate-400 dark:text-slate-500">
+                            <span className="text-xs text-tertiary dark:text-slate-500">
                               {header.column.getIsSorted() === 'desc'
                                 ? '↓'
                                 : header.column.getIsSorted() === 'asc'
@@ -292,7 +292,7 @@ export default function PricingRulesTable({
               {table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="px-3 py-2 align-top">
@@ -308,7 +308,7 @@ export default function PricingRulesTable({
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between px-3 py-2 border-t border-slate-200 dark:border-slate-800 text-base text-slate-600 dark:text-slate-400">
+        <div className="flex items-center justify-between px-3 py-2 border-t border-default dark:border-slate-800 text-base text-slate-600 dark:text-slate-400">
           <span className="tabular-nums">
             {t('pricing.rules.pagination.summary', {
               from: fromIdx,

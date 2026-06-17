@@ -67,7 +67,7 @@ export default function WizardStepper({
           touch-target minimums. */}
       <nav
         aria-label={t('listWizard.stepper.aria.steps')}
-        className="md:hidden border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
+        className="md:hidden border-b border-default bg-white dark:border-slate-800 dark:bg-slate-950"
       >
         <div className="px-4 py-2 flex items-center gap-3">
           <span
@@ -119,7 +119,7 @@ export default function WizardStepper({
           md so the mobile strip above takes over. */}
       <nav
         aria-label={t('listWizard.stepper.aria.steps')}
-        className="hidden md:flex items-center justify-center px-6 py-3 border-b border-slate-200 bg-white overflow-x-auto dark:border-slate-800 dark:bg-slate-950"
+        className="hidden md:flex items-center justify-center px-6 py-3 border-b border-default bg-white overflow-x-auto dark:border-slate-800 dark:bg-slate-950"
       >
         <ol
           role="tablist"
@@ -197,7 +197,7 @@ export default function WizardStepper({
                         'bg-blue-600 text-white ring-4 ring-blue-100 dark:bg-blue-500 dark:ring-blue-900',
                       isSkipped &&
                         !isCurrent &&
-                        'bg-slate-200 text-slate-400 line-through cursor-default dark:bg-slate-800 dark:text-slate-600',
+                        'bg-slate-200 text-tertiary line-through cursor-default dark:bg-slate-800 dark:text-slate-600',
                       isCompleted &&
                         !isCurrent &&
                         !isSkipped &&
@@ -205,7 +205,7 @@ export default function WizardStepper({
                       !isCompleted &&
                         !isCurrent &&
                         !isSkipped &&
-                        'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500',
+                        'bg-slate-100 text-tertiary dark:bg-slate-800 dark:text-slate-500',
                       isClickable && !isCurrent && !isSkipped && 'cursor-pointer',
                       !isClickable && !isSkipped && 'cursor-default',
                     )}

@@ -91,7 +91,7 @@ export function StockoutImpactCard() {
         </div>
         <button
           onClick={() => setRefreshTick((n) => n + 1)}
-          className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+          className="h-7 px-2 text-sm border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
           title="Refresh"
         >
           <RefreshCw size={11} /> Refresh

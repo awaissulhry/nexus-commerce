@@ -402,7 +402,7 @@ export default function AiPromptsClient({ initialRows }: Props) {
           type="button"
           onClick={() => void refresh()}
           disabled={refreshing}
-          className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50"
+          className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50"
         >
           {refreshing ? (
             <Loader2 className="w-3 h-3 animate-spin" />
@@ -421,7 +421,7 @@ export default function AiPromptsClient({ initialRows }: Props) {
       </div>
 
       {rows.length === 0 ? (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 px-4 py-6 text-center text-base text-slate-500 dark:text-slate-400 italic">
+        <div className="border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 px-4 py-6 text-center text-base text-slate-500 dark:text-slate-400 italic">
           No prompts yet. Restart the API server to trigger the seed,
           or check that the DB migration for PromptTemplate has run.
         </div>
@@ -452,9 +452,9 @@ export default function AiPromptsClient({ initialRows }: Props) {
             return (
             <div
               key={feature}
-              className="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 overflow-hidden"
+              className="border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 overflow-hidden"
             >
-              <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+              <div className="px-3 py-2 border-b border-subtle dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                 <div className="font-mono text-sm text-slate-900 dark:text-slate-100 break-all min-w-0">
                   {feature}
                 </div>
@@ -508,9 +508,9 @@ export default function AiPromptsClient({ initialRows }: Props) {
                           className="flex-1 min-w-0 text-left flex items-start gap-2"
                         >
                           {isExpanded ? (
-                            <ChevronDown className="w-4 h-4 mt-0.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                            <ChevronDown className="w-4 h-4 mt-0.5 text-tertiary dark:text-slate-500 flex-shrink-0" />
                           ) : (
-                            <ChevronRight className="w-4 h-4 mt-0.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                            <ChevronRight className="w-4 h-4 mt-0.5 text-tertiary dark:text-slate-500 flex-shrink-0" />
                           )}
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -667,7 +667,7 @@ export default function AiPromptsClient({ initialRows }: Props) {
                                     [row.id]: e.target.value,
                                   }))
                                 }
-                                className="w-full font-mono text-xs px-2 py-1.5 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 min-h-[200px]"
+                                className="w-full font-mono text-xs px-2 py-1.5 border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 min-h-[200px]"
                                 placeholder="Prompt body (use {marketplace}, {language}, {contextBlock}, {terminologyBlock} placeholders)"
                               />
                               <div className="flex items-center gap-2">
@@ -697,7 +697,7 @@ export default function AiPromptsClient({ initialRows }: Props) {
                                     Discard changes
                                   </button>
                                 )}
-                                <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">
+                                <span className="text-xs text-tertiary dark:text-slate-500 ml-auto">
                                   Save first, then promote — Promote uses the
                                   saved body.
                                 </span>
@@ -707,7 +707,7 @@ export default function AiPromptsClient({ initialRows }: Props) {
                             <pre
                               className={cn(
                                 'whitespace-pre-wrap font-mono text-xs px-2 py-1.5 border rounded',
-                                'border-slate-200 dark:border-slate-700',
+                                'border-default dark:border-slate-700',
                                 row.status === 'ACTIVE'
                                   ? 'bg-emerald-50/40 dark:bg-emerald-950/20'
                                   : 'bg-slate-50 dark:bg-slate-900',
@@ -737,7 +737,7 @@ function StatusPill({ status }: { status: string }) {
       ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900'
       : status === 'DRAFT'
         ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900'
-        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700'
   const Icon = status === 'ACTIVE' ? CheckCircle2 : AlertCircle
   return (
     <span

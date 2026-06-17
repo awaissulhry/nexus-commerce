@@ -186,7 +186,7 @@ export default function NotificationsBell() {
         onClick={() => setOpen((v) => !v)}
         title="Notifications"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
-        className="relative inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-slate-200 hover:bg-slate-50 shadow-sm"
+        className="relative inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-default hover:bg-slate-50 shadow-sm"
       >
         {unreadCount > 0 ? (
           <BellRing className="w-4 h-4 text-slate-700" />
@@ -204,8 +204,8 @@ export default function NotificationsBell() {
       </button>
 
       {open && (
-        <div className="absolute top-10 right-0 w-[380px] max-h-[70vh] bg-white rounded-lg border border-slate-200 shadow-xl flex flex-col">
-          <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between gap-2 flex-shrink-0">
+        <div className="absolute top-10 right-0 w-[380px] max-h-[70vh] bg-white rounded-lg border border-default shadow-xl flex flex-col">
+          <div className="px-3 py-2 border-b border-subtle flex items-center justify-between gap-2 flex-shrink-0">
             <div className="text-md font-semibold text-slate-900">
               Notifications
               {unreadCount > 0 && (
@@ -229,7 +229,7 @@ export default function NotificationsBell() {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded"
+                className="h-6 w-6 inline-flex items-center justify-center text-tertiary hover:text-slate-700 hover:bg-slate-100 rounded"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -243,11 +243,11 @@ export default function NotificationsBell() {
               </div>
             )}
             {loading && rows.length === 0 ? (
-              <div className="px-3 py-8 text-center text-base text-slate-400 italic">
+              <div className="px-3 py-8 text-center text-base text-tertiary italic">
                 Loading…
               </div>
             ) : rows.length === 0 ? (
-              <div className="px-3 py-8 text-center text-base text-slate-400">
+              <div className="px-3 py-8 text-center text-base text-tertiary">
                 <Bell className="w-5 h-5 mx-auto mb-1 text-slate-300" />
                 No notifications yet
               </div>
@@ -261,7 +261,7 @@ export default function NotificationsBell() {
                     key={r.id}
                     role={r.href ? 'button' : undefined}
                     onClick={r.href ? () => onRowClick(r) : undefined}
-                    className={`px-3 py-2 border-b border-slate-100 last:border-b-0 flex items-start gap-2 ${
+                    className={`px-3 py-2 border-b border-subtle last:border-b-0 flex items-start gap-2 ${
                       r.href ? 'cursor-pointer hover:bg-slate-50' : ''
                     } ${unread ? '' : 'opacity-70'}`}
                   >
@@ -287,7 +287,7 @@ export default function NotificationsBell() {
                           {r.body}
                         </div>
                       )}
-                      <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
+                      <div className="flex items-center gap-2 mt-1 text-xs text-tertiary">
                         <span>{fmtRelative(r.createdAt)}</span>
                         {r.href && (
                           <span className="inline-flex items-center gap-0.5">
@@ -314,7 +314,7 @@ export default function NotificationsBell() {
             )}
           </div>
 
-          <div className="px-3 py-2 border-t border-slate-100 flex-shrink-0 text-sm text-slate-500 flex items-center justify-between">
+          <div className="px-3 py-2 border-t border-subtle flex-shrink-0 text-sm text-slate-500 flex items-center justify-between">
             <a href="/inbox" className="text-blue-600 hover:text-blue-700 font-medium">
               View all in inbox →
             </a>

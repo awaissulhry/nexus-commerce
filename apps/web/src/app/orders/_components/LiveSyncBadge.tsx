@@ -91,7 +91,7 @@ export function LiveSyncBadge() {
     // is brand new and waiting for the first transition
     dot = '◌'
     label = 'Push waiting'
-    tone = 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+    tone = 'bg-slate-50 text-slate-700 border-default dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
     title = 'Push notifications are subscribed but no ORDER_CHANGE event has landed yet. The first message will arrive when an order changes state.'
   } else if (pushAgo.seconds < 60) {
     dot = '●'
@@ -111,7 +111,7 @@ export function LiveSyncBadge() {
   } else {
     dot = '◌'
     label = `Idle · ${pushAgo.label}`
-    tone = 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+    tone = 'bg-slate-50 text-slate-700 border-default dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
     title = `Last Amazon push was ${pushAgo.label}. The 15-min cron is still running as a backstop.`
   }
 

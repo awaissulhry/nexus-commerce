@@ -540,7 +540,7 @@ export default function UploadModal({
                 : 'border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50'
             }`}
           >
-            <UploadCloud className="w-8 h-8 text-slate-400" />
+            <UploadCloud className="w-8 h-8 text-tertiary" />
             <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
               {t('marketingContent.upload.dropPrompt')}
             </p>
@@ -571,7 +571,7 @@ export default function UploadModal({
 
           {/* URL paste */}
           <div className="flex items-center gap-2">
-            <LinkIcon className="w-4 h-4 text-slate-400 flex-shrink-0" />
+            <LinkIcon className="w-4 h-4 text-tertiary flex-shrink-0" />
             <input
               type="url"
               value={urlInput}
@@ -597,7 +597,7 @@ export default function UploadModal({
 
           {/* Queue */}
           {queue.length > 0 && (
-            <div className="overflow-hidden rounded-md border border-slate-200 dark:border-slate-700">
+            <div className="overflow-hidden rounded-md border border-default dark:border-slate-700">
               <ul className="max-h-72 divide-y divide-slate-200 overflow-y-auto dark:divide-slate-800">
                 {queue.map((item) => (
                   <li
@@ -614,7 +614,7 @@ export default function UploadModal({
                       ) : item.status === 'uploading' ? (
                         <Loader2 className="w-4 h-4 animate-spin text-blue-500 flex-shrink-0" />
                       ) : (
-                        <FileImage className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                        <FileImage className="w-4 h-4 text-tertiary flex-shrink-0" />
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="truncate text-sm text-slate-900 dark:text-slate-100">
@@ -654,7 +654,7 @@ export default function UploadModal({
                           aria-label={t(
                             'marketingContent.upload.removeQueueItem',
                           )}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                          className="rounded p-1 text-tertiary hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>

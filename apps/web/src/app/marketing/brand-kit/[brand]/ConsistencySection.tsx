@@ -52,7 +52,7 @@ const SEVERITY_TONE = {
     'border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200',
   warning:
     'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200',
-  info: 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300',
+  info: 'border-default bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300',
 }
 
 const SEVERITY_ICON = {
@@ -99,10 +99,10 @@ export default function ConsistencySection({ brand, apiBase }: Props) {
   const allClear = result && totalIssues === 0
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <section className="rounded-lg border border-default bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <header className="mb-3 flex items-center justify-between">
         <h2 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
-          <ShieldCheck className="w-4 h-4 text-slate-400" />
+          <ShieldCheck className="w-4 h-4 text-tertiary" />
           {t('brandKit.consistency.title')}
           {result && (
             <span className="ml-1 text-xs font-normal text-slate-500 dark:text-slate-400">

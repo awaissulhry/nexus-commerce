@@ -1424,7 +1424,7 @@ export default function StockWorkspace() {
             <button
               type="button"
               onClick={() => setPreferencesOpen(true)}
-              className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
+              className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
               title={t('grid.preferences.trigger')}
               aria-haspopup="dialog"
             >
@@ -1495,7 +1495,7 @@ export default function StockWorkspace() {
         shortcuts={
           <button
             onClick={() => setShortcutsOpen(true)}
-            className="h-8 w-8 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            className="h-8 w-8 inline-flex items-center justify-center border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
             title="Keyboard shortcuts (?)"
             aria-label="Keyboard shortcuts"
           >
@@ -1530,7 +1530,7 @@ export default function StockWorkspace() {
               className={`h-11 sm:h-7 px-3 text-sm rounded-full font-medium border ${
                 !locationCode
                   ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300'
               }`}
             >{t('stock.filters.locationAll')}</button>
             {locations.map((loc) => (
@@ -1541,11 +1541,11 @@ export default function StockWorkspace() {
                   'h-11 sm:h-7 px-3 text-sm rounded-full font-medium border inline-flex items-center gap-1.5',
                   locationCode === loc.code
                     ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300'
                 )}
               >
                 {loc.code}
-                <span className={`text-xs tabular-nums ${locationCode === loc.code ? 'text-slate-300' : 'text-slate-400'}`}>
+                <span className={`text-xs tabular-nums ${locationCode === loc.code ? 'text-slate-300' : 'text-tertiary'}`}>
                   {loc.totalQuantity}
                 </span>
               </button>
@@ -1553,9 +1553,9 @@ export default function StockWorkspace() {
           </div>
 
           {/* Search + status chips */}
-          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-subtle dark:border-slate-800">
             <div className="flex-1 min-w-[240px] max-w-md relative">
-              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary" />
               <Input
                 placeholder={t('stock.filters.searchPlaceholder')}
                 value={searchInput}
@@ -1577,7 +1577,7 @@ export default function StockWorkspace() {
                   key={s.value}
                   onClick={() => updateUrl({ status: active ? undefined : s.value, page: undefined })}
                   className={`h-11 sm:h-7 px-3 text-sm border rounded-full font-medium ${
-                    active ? toneActive[s.tone] : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                    active ? toneActive[s.tone] : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-default dark:border-slate-700 hover:border-slate-300'
                   }`}
                 >{t(s.labelKey)}</button>
               )
@@ -1808,7 +1808,7 @@ export default function StockWorkspace() {
                 onKeyDown={(e) => { if (e.key === 'Enter' && saveViewName.trim()) saveCurrentAsView() }}
                 placeholder={t('stock.savedViews.namePlaceholder')}
                 autoFocus
-                className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded"
+                className="w-full h-9 px-2 text-md border border-default dark:border-slate-700 rounded"
               />
             </div>
             <div className="text-sm text-slate-500 dark:text-slate-400">
@@ -1818,7 +1818,7 @@ export default function StockWorkspace() {
               {search && `, "${search.slice(0, 24)}"`}
               {`, ${density}, ${visibleColumns.length} ${t('stock.savedViews.columns')}`}
             </div>
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-subtle dark:border-slate-800">
               <button
                 onClick={() => { setSaveViewModalOpen(false); setSaveViewName('') }}
                 className="h-11 sm:h-8 px-3 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100"
@@ -1843,7 +1843,7 @@ export default function StockWorkspace() {
           z-index above this nav. */}
       {selected.size === 0 && !drawerProductId && (
         <nav
-          className="sm:hidden fixed inset-x-0 bottom-0 z-20 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 shadow-lg flex items-stretch text-sm font-medium"
+          className="sm:hidden fixed inset-x-0 bottom-0 z-20 bg-white dark:bg-slate-900 border-t border-default dark:border-slate-700 shadow-lg flex items-stretch text-sm font-medium"
           aria-label="Stock navigation"
         >
           <span
@@ -1887,7 +1887,7 @@ function KpiStrip({ kpis, t, onFilterStatus }: {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         {[0, 1, 2, 3].map((i) => (
           <Card key={i}>
-            <div className="h-[68px] flex items-center justify-center text-base text-slate-400">…</div>
+            <div className="h-[68px] flex items-center justify-center text-base text-tertiary">…</div>
           </Card>
         ))}
       </div>
@@ -2057,7 +2057,7 @@ function InsightsPanel({
       </div>
 
       {!collapsed && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-3 pt-3 border-t border-subtle dark:border-slate-800">
           {/* Stockout risk */}
           <InsightCategory
             icon={AlertCircle}
@@ -2076,7 +2076,7 @@ function InsightsPanel({
                 {p.thumbnailUrl ? (
                   <img src={p.thumbnailUrl} alt="" className="w-7 h-7 rounded object-cover bg-slate-100 flex-shrink-0" />
                 ) : (
-                  <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+                  <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-tertiary flex-shrink-0">
                     <Package size={12} />
                   </div>
                 )}
@@ -2092,7 +2092,7 @@ function InsightsPanel({
               </button>
             ))}
             {insights.stockoutRisk.length > 5 && (
-              <div className="text-sm text-slate-400 italic pt-1">
+              <div className="text-sm text-tertiary italic pt-1">
                 +{insights.stockoutRisk.length - 5} more
               </div>
             )}
@@ -2115,7 +2115,7 @@ function InsightsPanel({
                 {g.thumbnailUrl ? (
                   <img src={g.thumbnailUrl} alt="" className="w-7 h-7 rounded object-cover bg-slate-100 flex-shrink-0" />
                 ) : (
-                  <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+                  <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-tertiary flex-shrink-0">
                     <Package size={12} />
                   </div>
                 )}
@@ -2124,19 +2124,19 @@ function InsightsPanel({
                   <div className="text-xs text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
                     <span className="font-mono">{g.surplusLocation.code}</span>
                     <span className="tabular-nums">{g.surplusLocation.quantity}</span>
-                    <ArrowRightLeft size={9} className="text-slate-400" />
+                    <ArrowRightLeft size={9} className="text-tertiary" />
                     <span className="font-mono">{g.deficitLocation.code}</span>
                     <span className="tabular-nums">{g.deficitLocation.quantity}</span>
                   </div>
                 </div>
                 <div className="text-sm font-semibold text-violet-700 inline-flex items-center gap-0.5 flex-shrink-0">
                   +{g.suggestedTransfer}
-                  <ChevronRight size={12} className="text-slate-400" />
+                  <ChevronRight size={12} className="text-tertiary" />
                 </div>
               </button>
             ))}
             {insights.allocationGaps.length > 5 && (
-              <div className="text-sm text-slate-400 italic pt-1">
+              <div className="text-sm text-tertiary italic pt-1">
                 +{insights.allocationGaps.length - 5} more
               </div>
             )}
@@ -2173,7 +2173,7 @@ function InsightsPanel({
               </button>
             ))}
             {insights.syncConflicts.length > 5 && (
-              <div className="text-sm text-slate-400 italic pt-1">
+              <div className="text-sm text-tertiary italic pt-1">
                 +{insights.syncConflicts.length - 5} more
               </div>
             )}
@@ -2209,7 +2209,7 @@ function InsightCategory({
       <div className="text-xs text-slate-500 dark:text-slate-400 leading-snug">{description}</div>
       <div className="space-y-0.5 pt-1">
         {isEmpty ? (
-          <div className="text-sm text-slate-400 py-1.5">{empty}</div>
+          <div className="text-sm text-tertiary py-1.5">{empty}</div>
         ) : children}
       </div>
       {cta && !isEmpty && (
@@ -2469,7 +2469,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
         onClick={(e) => e.stopPropagation()}
         className="relative h-full w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto"
       >
-        <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
+        <header className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
           <div className="text-md font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
             <Boxes size={14} /> Stock detail
           </div>
@@ -2499,7 +2499,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                 {bundle.product.thumbnailUrl ? (
                   <img src={bundle.product.thumbnailUrl} alt="" className="w-14 h-14 rounded object-cover bg-slate-100 flex-shrink-0" />
                 ) : (
-                  <div className="w-14 h-14 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+                  <div className="w-14 h-14 rounded bg-slate-100 flex items-center justify-center text-tertiary flex-shrink-0">
                     <Package size={20} />
                   </div>
                 )}
@@ -2511,11 +2511,11 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                   </div>
                   <div className="mt-1 flex items-center gap-3 text-base text-slate-600">
                     <span className="inline-flex items-center gap-1">
-                      <Boxes size={11} className="text-slate-400" />
+                      <Boxes size={11} className="text-tertiary" />
                       <span className="font-semibold tabular-nums">{bundle.product.totalStock}</span> total
                     </span>
                     <span className="inline-flex items-center gap-1">
-                      <LockIcon size={11} className="text-slate-400" />
+                      <LockIcon size={11} className="text-tertiary" />
                       <span className="tabular-nums">{bundle.salesVelocity.totalAvailable}</span> available
                     </span>
                   </div>
@@ -2527,16 +2527,16 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                 <button
                   onClick={() => setAction({ kind: 'transfer' })}
                   disabled={bundle.stockLevels.length < 1}
-                  className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-40"
+                  className="h-11 sm:h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-40"
                 ><ArrowRightLeft size={12} /> Transfer</button>
                 <button
                   onClick={() => setAction({ kind: 'reserve' })}
                   disabled={bundle.stockLevels.length < 1}
-                  className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-40"
+                  className="h-11 sm:h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-40"
                 ><LockIcon size={12} /> Reserve</button>
                 <Link
                   href={`/products/${productId}/edit`}
-                  className="h-11 sm:h-8 px-3 text-base bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+                  className="h-11 sm:h-8 px-3 text-base bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
                 ><ExternalLink size={12} /> Open in editor</Link>
               </div>
 
@@ -2572,13 +2572,13 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                   <div className="overflow-x-auto -mx-1">
                     <table className="w-full text-sm min-w-[400px]">
                       <thead>
-                        <tr className="border-b border-slate-200 dark:border-slate-700">
+                        <tr className="border-b border-default dark:border-slate-700">
                           <th className="pb-1.5 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold pr-3">Variant</th>
                           {bundle.family.locations
                             .filter(loc => bundle.family!.children.some(c => c.stockLevels.some(sl => sl.locationId === loc.id)))
                             .map(loc => (
                               <th key={loc.id} className="pb-1.5 text-right text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold px-2">
-                                <span className={`inline-block px-1.5 py-0.5 border rounded ${LOCATION_TONE[loc.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-slate-200 dark:border-slate-700'}`}>
+                                <span className={`inline-block px-1.5 py-0.5 border rounded ${LOCATION_TONE[loc.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-default dark:border-slate-700'}`}>
                                   {loc.code}
                                 </span>
                               </th>
@@ -2598,7 +2598,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                                 <div className="flex items-center gap-2 min-w-0">
                                   {child.thumbnailUrl
                                     ? <img src={child.thumbnailUrl} alt="" className="w-6 h-6 rounded object-cover bg-slate-100 flex-shrink-0" />
-                                    : <div className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0"><Package size={11} /></div>
+                                    : <div className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-tertiary flex-shrink-0"><Package size={11} /></div>
                                   }
                                   <div className="min-w-0">
                                     <div className="font-mono text-xs text-slate-700 dark:text-slate-300 truncate max-w-[160px]" title={child.sku}>{child.sku}</div>
@@ -2649,14 +2649,14 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
               {/* Multi-location breakdown — only shown for leaf products; parent rows use the Variants section above */}
               {!bundle.family && <Section title="Stock by location" icon={Warehouse}>
                 {bundle.stockLevels.length === 0 ? (
-                  <div className="text-base text-slate-400 text-center py-3">No StockLevel rows yet.</div>
+                  <div className="text-base text-tertiary text-center py-3">No StockLevel rows yet.</div>
                 ) : (
                   <ul className="space-y-1.5">
                     {bundle.stockLevels.map((sl) => (
-                      <li key={sl.id} className="flex items-center justify-between gap-3 py-2 px-3 border border-slate-200 dark:border-slate-700 rounded">
+                      <li key={sl.id} className="flex items-center justify-between gap-3 py-2 px-3 border border-default dark:border-slate-700 rounded">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[sl.location.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-slate-200 dark:border-slate-700'}`}>
+                            <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[sl.location.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-default dark:border-slate-700'}`}>
                               {sl.location.code}
                             </span>
                             <span className="text-base text-slate-700 dark:text-slate-300">{sl.location.name}</span>
@@ -2670,12 +2670,12 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                             <span><span className="font-semibold tabular-nums text-slate-700 dark:text-slate-300">{sl.quantity}</span> on hand</span>
                             <span><span className="tabular-nums">{sl.reserved}</span> reserved</span>
                             <span><span className="tabular-nums">{sl.available}</span> available</span>
-                            <span className="text-slate-400">· {formatRelative(sl.lastUpdatedAt, t)}</span>
+                            <span className="text-tertiary">· {formatRelative(sl.lastUpdatedAt, t)}</span>
                           </div>
                         </div>
                         <button
                           onClick={() => setAction({ kind: 'adjust', stockLevelId: sl.id, locationCode: sl.location.code })}
-                          className="h-11 sm:h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+                          className="h-11 sm:h-7 px-2 text-sm border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1"
                         >
                           <Plus size={11} className="-mr-0.5" /><Minus size={11} /> Adjust
                         </button>
@@ -2703,7 +2703,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                       // S.26 — find this listing's per-channel ATP row.
                       const atp = bundle.atpPerChannel?.find((r) => r.channelListingId === cl.id)
                       return (
-                        <li key={cl.id} className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                        <li key={cl.id} className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 border-b border-subtle dark:border-slate-800 last:border-0">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{cl.channel} · {cl.marketplace}</span>
@@ -2711,7 +2711,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                                 {cl.listingStatus}
                               </span>
                             </div>
-                            <div className="text-xs text-slate-400 mt-0.5">
+                            <div className="text-xs text-tertiary mt-0.5">
                               {cl.lastSyncedAt ? `Synced ${formatRelative(cl.lastSyncedAt, t)}` : 'Never synced'}
                               {cl.lastSyncError && <span className="text-rose-600"> · {cl.lastSyncError.slice(0, 60)}</span>}
                             </div>
@@ -2731,8 +2731,8 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                             )}
                           </div>
                           <div className="text-right flex-shrink-0 text-sm text-slate-500 dark:text-slate-400 tabular-nums">
-                            {cl.quantity == null ? <span className="text-slate-400">follows master</span> : <><span className="font-semibold text-slate-700 dark:text-slate-300">{cl.quantity}</span> shown</>}
-                            {cl.stockBuffer > 0 && <span className="text-slate-400"> · −{cl.stockBuffer} buffer</span>}
+                            {cl.quantity == null ? <span className="text-tertiary">follows master</span> : <><span className="font-semibold text-slate-700 dark:text-slate-300">{cl.quantity}</span> shown</>}
+                            {cl.stockBuffer > 0 && <span className="text-tertiary"> · −{cl.stockBuffer} buffer</span>}
                           </div>
                         </li>
                       )
@@ -2754,7 +2754,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                 }
               >
                 {bundle.salesVelocity.last30Units === 0 ? (
-                  <div className="text-base text-slate-400 py-2">No sales in the last 30 days.</div>
+                  <div className="text-base text-tertiary py-2">No sales in the last 30 days.</div>
                 ) : (
                   <div className="space-y-2">
                     <div className="flex items-center gap-4 text-base text-slate-700 dark:text-slate-300">
@@ -2785,7 +2785,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                     <div>
                       Lead time:{' '}
                       <span className="font-semibold tabular-nums">{bundle.atp.leadTimeDays} days</span>
-                      <span className="text-slate-400 text-sm"> · {bundle.atp.leadTimeSource.toLowerCase().replace(/_/g, ' ')}</span>
+                      <span className="text-tertiary text-sm"> · {bundle.atp.leadTimeSource.toLowerCase().replace(/_/g, ' ')}</span>
                     </div>
                     {bundle.atp.totalOpenInbound > 0 && (
                       <div>
@@ -2793,7 +2793,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                         <span className="font-semibold tabular-nums">{bundle.atp.totalOpenInbound}</span>
                         <span className="text-slate-500 dark:text-slate-400 text-sm"> units</span>
                         {bundle.atp.inboundWithinLeadTime !== bundle.atp.totalOpenInbound && (
-                          <span className="text-slate-400 text-sm"> ({bundle.atp.inboundWithinLeadTime} within lead time)</span>
+                          <span className="text-tertiary text-sm"> ({bundle.atp.inboundWithinLeadTime} within lead time)</span>
                         )}
                       </div>
                     )}
@@ -2806,7 +2806,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                             <span>{s.type} {s.status.toLowerCase()}</span>
                             <span>·</span>
                             <span className="tabular-nums">{s.remainingUnits} units</span>
-                            {s.expectedAt && <span className="text-slate-400">· ETA {new Date(s.expectedAt).toLocaleDateString()}</span>}
+                            {s.expectedAt && <span className="text-tertiary">· ETA {new Date(s.expectedAt).toLocaleDateString()}</span>}
                           </li>
                         ))}
                       </ul>
@@ -2820,14 +2820,14 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                 <Section title="Active reservations" icon={LockIcon}>
                   <ul className="space-y-1">
                     {bundle.reservations.map((r) => (
-                      <li key={r.id} className="flex items-center justify-between gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                      <li key={r.id} className="flex items-center justify-between gap-2 py-1.5 px-2 -mx-2 border-b border-subtle dark:border-slate-800 last:border-0">
                         <div className="min-w-0">
                           <div className="text-base text-slate-700 dark:text-slate-300">
                             <span className="font-semibold tabular-nums">{r.quantity}</span> at{' '}
                             <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{r.location.code}</span>
-                            <span className="text-slate-400 text-sm"> · {r.reason}</span>
+                            <span className="text-tertiary text-sm"> · {r.reason}</span>
                           </div>
-                          <div className="text-xs text-slate-400">
+                          <div className="text-xs text-tertiary">
                             {r.orderId && <span>order {r.orderId.slice(0, 8)} · </span>}
                             expires {formatRelative(r.expiresAt, t)}
                           </div>
@@ -2841,7 +2841,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                               handleActionDone()
                             } catch (e: any) { toast.error(e.message) }
                           }}
-                          className="h-6 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded"
+                          className="h-6 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 border border-default dark:border-slate-700 rounded"
                         >Release</button>
                       </li>
                     ))}
@@ -2871,7 +2871,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                     )}
                   </div>
                   {bundle.costing.layers.length === 0 ? (
-                    <div className="text-base text-slate-400 italic py-2">
+                    <div className="text-base text-tertiary italic py-2">
                       {t('stock.costLayers.empty')}
                     </div>
                   ) : (
@@ -2879,7 +2879,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                       {bundle.costing.layers.slice(0, 10).map((l) => (
                         <li
                           key={l.id}
-                          className="flex items-center justify-between gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0"
+                          className="flex items-center justify-between gap-2 py-1.5 px-2 -mx-2 border-b border-subtle dark:border-slate-800 last:border-0"
                         >
                           <div className="min-w-0 flex-1">
                             <div className="text-sm">
@@ -2888,7 +2888,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                               </span>
                               <span className="text-slate-500 dark:text-slate-400"> · {l.unitsReceived}u</span>
                               {l.unitsRemaining < l.unitsReceived && (
-                                <span className="text-slate-400 text-xs">
+                                <span className="text-tertiary text-xs">
                                   {' '}({l.unitsRemaining}/{l.unitsReceived} left)
                                 </span>
                               )}
@@ -2898,13 +2898,13 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                                 </span>
                               )}
                             </div>
-                            <div className="text-xs text-slate-400">
+                            <div className="text-xs text-tertiary">
                               {new Date(l.receivedAt).toLocaleString()}
                               {l.notes && <span> · {l.notes}</span>}
                             </div>
                           </div>
                           {l.unitsRemaining === 0 && (
-                            <span className="text-xs uppercase tracking-wider font-semibold text-slate-400 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                            <span className="text-xs uppercase tracking-wider font-semibold text-tertiary bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded">
                               depleted
                             </span>
                           )}
@@ -2931,7 +2931,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                       return (
                         <li
                           key={lot.id}
-                          className="flex items-start justify-between gap-3 py-1.5 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0"
+                          className="flex items-start justify-between gap-3 py-1.5 px-2 -mx-2 border-b border-subtle dark:border-slate-800 last:border-0"
                         >
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -2951,7 +2951,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                                 </span>
                               )}
                               {lot.supplierLotRef && (
-                                <span className="text-xs text-slate-400 dark:text-slate-500">
+                                <span className="text-xs text-tertiary dark:text-slate-500">
                                   {t('stock.lots.supplierRef', { ref: lot.supplierLotRef })}
                                 </span>
                               )}
@@ -2988,11 +2988,11 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                     {bundle.serials.map((s) => (
                       <li
                         key={s.id}
-                        className="flex items-center justify-between gap-3 py-1 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0"
+                        className="flex items-center justify-between gap-3 py-1 px-2 -mx-2 border-b border-subtle dark:border-slate-800 last:border-0"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="font-mono text-sm text-slate-700 dark:text-slate-300 truncate">{s.serialNumber}</div>
-                          <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 inline-flex items-center gap-2">
+                          <div className="text-xs text-tertiary dark:text-slate-500 mt-0.5 inline-flex items-center gap-2">
                             {s.lot && <span className="font-mono">lot {s.lot.lotNumber}</span>}
                             {s.currentOrderId && <span>· {t('stock.serials.onOrder', { id: s.currentOrderId.slice(0, 8) })}</span>}
                             {s.manufacturerRef && <span>· {s.manufacturerRef}</span>}
@@ -3017,22 +3017,22 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
               {/* Movement history */}
               <Section title={`Movement history (${bundle.movements.length})`} icon={History}>
                 {bundle.movements.length === 0 ? (
-                  <div className="text-base text-slate-400 text-center py-2">No movements yet.</div>
+                  <div className="text-base text-tertiary text-center py-2">No movements yet.</div>
                 ) : (
                   <ul className="space-y-1">
                     {bundle.movements.map((m) => (
-                      <li key={m.id} className="flex items-start justify-between gap-3 py-1.5 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                      <li key={m.id} className="flex items-start justify-between gap-3 py-1.5 px-2 -mx-2 border-b border-subtle dark:border-slate-800 last:border-0">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className={`text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded ${REASON_TONE[m.reason] ?? 'bg-slate-100 text-slate-600'}`}>
                               {m.reason.replace(/_/g, ' ')}
                             </span>
                             {m.referenceType && (
-                              <span className="text-xs text-slate-400 font-mono">{m.referenceType}</span>
+                              <span className="text-xs text-tertiary font-mono">{m.referenceType}</span>
                             )}
                           </div>
                           {m.notes && <div className="text-sm text-slate-600 mt-0.5">{m.notes}</div>}
-                          <div className="text-xs text-slate-400 mt-0.5">
+                          <div className="text-xs text-tertiary mt-0.5">
                             {new Date(m.createdAt).toLocaleString()} {m.actor && `· ${m.actor}`}
                           </div>
                         </div>
@@ -3040,7 +3040,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                           <div className={`text-lg font-semibold tabular-nums ${m.change > 0 ? 'text-emerald-600' : m.change < 0 ? 'text-rose-600' : 'text-slate-500 dark:text-slate-400'}`}>
                             {m.change > 0 ? '+' : ''}{m.change}
                           </div>
-                          <div className="text-xs text-slate-400 tabular-nums">→ {m.balanceAfter}</div>
+                          <div className="text-xs text-tertiary tabular-nums">→ {m.balanceAfter}</div>
                         </div>
                       </li>
                     ))}
@@ -3060,7 +3060,7 @@ function Section({ title, icon: Icon, right, children }: { title: string; icon: 
     <div>
       <div className="flex items-center justify-between mb-2">
         <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
-          <Icon size={11} className="text-slate-400" />
+          <Icon size={11} className="text-tertiary" />
           {title}
         </div>
         {right}
@@ -3126,13 +3126,13 @@ function AdjustPanel({ stockLevelId, locationCode, onCancel, onDone }: { stockLe
           type="number" value={change} onChange={(e) => setChange(e.target.value)}
           placeholder="±n" autoFocus
           aria-label={t('stock.bulkAdjust.changeLabel')}
-          className="h-11 sm:h-8 w-24 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono tabular-nums"
+          className="h-11 sm:h-8 w-24 px-2 text-md border border-default dark:border-slate-700 rounded font-mono tabular-nums"
         />
         <select
           value={subReason}
           onChange={(e) => setSubReason(e.target.value as AdjustSubReason)}
           aria-label={t('stock.adjust.reasonAriaLabel')}
-          className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 min-w-[140px]"
+          className="h-11 sm:h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 min-w-[140px]"
         >
           {SUB_REASON_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
@@ -3142,7 +3142,7 @@ function AdjustPanel({ stockLevelId, locationCode, onCancel, onDone }: { stockLe
           type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
           placeholder={t('stock.adjust.notesPlaceholder')}
           aria-label={t('stock.bulkAdjust.notesLabel')}
-          className="flex-1 min-w-[120px] h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
+          className="flex-1 min-w-[120px] h-11 sm:h-8 px-2 text-base border border-default dark:border-slate-700 rounded"
         />
         <button onClick={submit} disabled={submitting} className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">{t('stock.drawer.adjustApply')}</button>
         <button onClick={onCancel} className="h-11 sm:h-8 px-2 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">{t('stock.list.cancel')}</button>
@@ -3185,13 +3185,13 @@ function TransferPanel({
         <ArrowRightLeft size={11} aria-hidden="true" /> {t('stock.transfer.heading')}
       </div>
       <div className="flex items-center gap-2">
-        <select value={fromId} onChange={(e) => setFromId(e.target.value)} aria-label={t('stock.transfer.fromLabel')} className="h-11 sm:h-8 flex-1 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
+        <select value={fromId} onChange={(e) => setFromId(e.target.value)} aria-label={t('stock.transfer.fromLabel')} className="h-11 sm:h-8 flex-1 px-2 text-base border border-default dark:border-slate-700 rounded">
           {stockLevels.map((sl) => (
             <option key={sl.id} value={sl.location.id}>{t('stock.transfer.fromOption', { code: sl.location.code, avail: sl.available })}</option>
           ))}
         </select>
-        <ArrowRightLeft size={12} className="text-slate-400" aria-hidden="true" />
-        <select value={toId} onChange={(e) => setToId(e.target.value)} aria-label={t('stock.transfer.toLabel')} className="h-11 sm:h-8 flex-1 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
+        <ArrowRightLeft size={12} className="text-tertiary" aria-hidden="true" />
+        <select value={toId} onChange={(e) => setToId(e.target.value)} aria-label={t('stock.transfer.toLabel')} className="h-11 sm:h-8 flex-1 px-2 text-base border border-default dark:border-slate-700 rounded">
           {stockLevels.map((sl) => (
             <option key={sl.id} value={sl.location.id}>{t('stock.transfer.toOption', { code: sl.location.code })}</option>
           ))}
@@ -3200,7 +3200,7 @@ function TransferPanel({
           type="number" value={qty} onChange={(e) => setQty(e.target.value)}
           placeholder={t('stock.transfer.qtyPlaceholder')}
           aria-label={t('stock.transfer.qtyPlaceholder')}
-          className="h-11 sm:h-8 w-20 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono tabular-nums"
+          className="h-11 sm:h-8 w-20 px-2 text-md border border-default dark:border-slate-700 rounded font-mono tabular-nums"
         />
       </div>
       <div className="flex items-center justify-end gap-2">
@@ -3248,12 +3248,12 @@ function ReservePanel({
         <LockIcon size={11} aria-hidden="true" /> {t('stock.reserve.heading')}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <select value={locId} onChange={(e) => setLocId(e.target.value)} aria-label={t('stock.reserve.locationLabel')} className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
+        <select value={locId} onChange={(e) => setLocId(e.target.value)} aria-label={t('stock.reserve.locationLabel')} className="h-11 sm:h-8 px-2 text-base border border-default dark:border-slate-700 rounded">
           {stockLevels.map((sl) => (
             <option key={sl.id} value={sl.location.id}>{t('stock.reserve.locationOption', { code: sl.location.code, avail: sl.available })}</option>
           ))}
         </select>
-        <select value={reason} onChange={(e) => setReason(e.target.value as any)} aria-label={t('stock.reserve.reasonLabel')} className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
+        <select value={reason} onChange={(e) => setReason(e.target.value as any)} aria-label={t('stock.reserve.reasonLabel')} className="h-11 sm:h-8 px-2 text-base border border-default dark:border-slate-700 rounded">
           <option value="MANUAL_HOLD">{t('stock.reserve.reasonOption.manualHold')}</option>
           <option value="PENDING_ORDER">{t('stock.reserve.reasonOption.pendingOrder')}</option>
           <option value="PROMOTION">{t('stock.reserve.reasonOption.promotion')}</option>
@@ -3262,13 +3262,13 @@ function ReservePanel({
           type="number" value={qty} onChange={(e) => setQty(e.target.value)}
           placeholder={t('stock.reserve.qtyPlaceholder')}
           aria-label={t('stock.reserve.qtyPlaceholder')}
-          className="h-11 sm:h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono tabular-nums"
+          className="h-11 sm:h-8 px-2 text-md border border-default dark:border-slate-700 rounded font-mono tabular-nums"
         />
         <input
           type="text" value={orderId} onChange={(e) => setOrderId(e.target.value)}
           placeholder={t('stock.reserve.orderIdPlaceholder')}
           aria-label={t('stock.reserve.orderIdPlaceholder')}
-          className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
+          className="h-11 sm:h-8 px-2 text-base border border-default dark:border-slate-700 rounded"
         />
       </div>
       <div className="flex items-center justify-end gap-2">
@@ -3307,20 +3307,20 @@ function SavedViewsButton({
     <div className="relative">
       <button
         onClick={onToggle}
-        className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
+        className="h-11 sm:h-8 px-3 text-base border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
         title={t('stock.savedViews.title')}
       >
         <Bookmark size={12} />
         {t('stock.savedViews.title')}
         {savedViews.length > 0 && (
-          <span className="text-xs text-slate-400 tabular-nums">· {savedViews.length}</span>
+          <span className="text-xs text-tertiary tabular-nums">· {savedViews.length}</span>
         )}
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={onToggle} />
           <div
-            className="absolute right-0 top-full mt-1 w-72 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg p-1 text-base"
+            className="absolute right-0 top-full mt-1 w-72 z-20 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-md shadow-lg p-1 text-base"
             onClick={(e) => e.stopPropagation()}
           >
             {savedViews.length === 0 ? (
@@ -3369,7 +3369,7 @@ function SavedViewsButton({
                     </button>
                     <button
                       onClick={() => onDelete(v.id)}
-                      className="min-h-[44px] sm:min-h-0 px-2 py-2 text-slate-400 hover:text-rose-600"
+                      className="min-h-[44px] sm:min-h-0 px-2 py-2 text-tertiary hover:text-rose-600"
                       aria-label={t('stock.savedViews.delete')}
                       title={t('stock.savedViews.delete')}
                     >
@@ -3381,7 +3381,7 @@ function SavedViewsButton({
             )}
             <button
               onClick={onOpenSaveModal}
-              className="w-full mt-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded inline-flex items-center gap-2 border-t border-slate-100 dark:border-slate-800"
+              className="w-full mt-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded inline-flex items-center gap-2 border-t border-subtle dark:border-slate-800"
             >
               <BookmarkPlus size={12} />
               {t('stock.savedViews.saveCurrent')}
@@ -3453,7 +3453,7 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
     failed ? 'bg-rose-50 text-rose-700 border-rose-200' :
     silentRisk ? 'bg-amber-50 text-amber-700 border-amber-200' :
     stale ? 'bg-amber-50 text-amber-700 border-amber-200' :
-    fbaConfiguredButDisabled ? 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700' :
+    fbaConfiguredButDisabled ? 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-default dark:border-slate-700' :
     'bg-emerald-50 text-emerald-700 border-emerald-200'
 
   const label =
@@ -3492,7 +3492,7 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
       </button>
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 w-80 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg p-3 text-base space-y-2"
+          className="absolute right-0 top-full mt-1 w-80 z-20 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-md shadow-lg p-3 text-base space-y-2"
           onClick={(e) => e.stopPropagation()}
         >
           <div>
@@ -3518,7 +3518,7 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
               {status.recentReconciliationCount} reconciliation{status.recentReconciliationCount === 1 ? '' : 's'} in last 24h
             </div>
           </div>
-          <div className="border-t border-slate-100 dark:border-slate-800 pt-2">
+          <div className="border-t border-subtle dark:border-slate-800 pt-2">
             <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Outbound queue</div>
             <div className="grid grid-cols-3 gap-2 mt-1 text-center">
               <div>
@@ -3544,7 +3544,7 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
               </div>
             )}
           </div>
-          <div className="border-t border-slate-100 dark:border-slate-800 pt-2">
+          <div className="border-t border-subtle dark:border-slate-800 pt-2">
             <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Reservation sweep</div>
             <div className="text-slate-700 dark:text-slate-300 mt-0.5">
               {status.reservationSweep.scheduled
@@ -3561,7 +3561,7 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
             )}
           </div>
           {status.ebay && (
-            <div className="border-t border-slate-100 dark:border-slate-800 pt-2">
+            <div className="border-t border-subtle dark:border-slate-800 pt-2">
               <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">eBay sync</div>
               <div className="text-slate-700 dark:text-slate-300 mt-0.5">
                 {!status.ebay.credentialsConfigured
@@ -3573,7 +3573,7 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
             </div>
           )}
           {status.panEu && (
-            <div className="border-t border-slate-100 dark:border-slate-800 pt-2">
+            <div className="border-t border-subtle dark:border-slate-800 pt-2">
               <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Pan-EU FBA</div>
               <div className="text-slate-700 dark:text-slate-300 mt-0.5">
                 {status.panEu.adapterWired
@@ -3641,7 +3641,7 @@ const COLUMN_META: Record<ColumnKey, {
       it.thumbnailUrl ? (
         <img src={it.thumbnailUrl} alt="" className={`${density === 'compact' ? 'w-6 h-6' : 'w-8 h-8'} rounded object-cover bg-slate-100`} />
       ) : (
-        <div className={`${density === 'compact' ? 'w-6 h-6' : 'w-8 h-8'} rounded bg-slate-100 flex items-center justify-center text-slate-400`}>
+        <div className={`${density === 'compact' ? 'w-6 h-6' : 'w-8 h-8'} rounded bg-slate-100 flex items-center justify-center text-tertiary`}>
           <Package size={density === 'compact' ? 12 : 14} />
         </div>
       ),
@@ -3674,7 +3674,7 @@ const COLUMN_META: Record<ColumnKey, {
       if (locs.length === 1) {
         const loc = locs[0].location
         return (
-          <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[loc.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-slate-200 dark:border-slate-700'}`} title={loc.name}>
+          <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[loc.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-default dark:border-slate-700'}`} title={loc.name}>
             {loc.code}
           </span>
         )
@@ -3682,7 +3682,7 @@ const COLUMN_META: Record<ColumnKey, {
       return (
         <div className="flex items-center gap-1 flex-wrap">
           {locs.map((sl) => (
-            <span key={sl.id} className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[sl.location.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-slate-200 dark:border-slate-700'}`} title={sl.location.name}>
+            <span key={sl.id} className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[sl.location.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-default dark:border-slate-700'}`} title={sl.location.name}>
               {sl.location.code}
             </span>
           ))}
@@ -3749,7 +3749,7 @@ const COLUMN_META: Record<ColumnKey, {
     head: 'Cost',
     cell: ({ it }) => (
       <span className="tabular-nums text-slate-600">
-        {it.costPrice != null ? `€${it.costPrice.toFixed(2)}` : <span className="text-slate-400">—</span>}
+        {it.costPrice != null ? `€${it.costPrice.toFixed(2)}` : <span className="text-tertiary">—</span>}
       </span>
     ),
   },
@@ -3757,7 +3757,7 @@ const COLUMN_META: Record<ColumnKey, {
     align: 'right',
     head: 'Updated',
     cell: ({ it, t }) => (
-      <span className="tabular-nums text-slate-400 text-sm">
+      <span className="tabular-nums text-tertiary text-sm">
         {it.lastUpdatedAt ? formatRelative(it.lastUpdatedAt, t) : '—'}
       </span>
     ),
@@ -3798,7 +3798,7 @@ function MatrixView({
     <Card noPadding>
       <div className="overflow-x-auto">
         <table className="w-full text-md">
-          <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 sticky top-0">
+          <thead className="border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 sticky top-0">
             <tr>
               <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 sticky left-0 bg-slate-50 dark:bg-slate-800 z-10 min-w-[280px]">
                 Product
@@ -3822,14 +3822,14 @@ function MatrixView({
                 <tr
                   key={p.id}
                   onClick={() => onOpenProduct(p.id)}
-                  className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                  className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 cursor-pointer transition-colors"
                 >
                   <td className="px-3 py-2 sticky left-0 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 z-10 min-w-[280px]">
                     <div className="flex items-center gap-2">
                       {p.thumbnailUrl ? (
                         <img src={p.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100 flex-shrink-0" />
                       ) : (
-                        <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+                        <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-tertiary flex-shrink-0">
                           <Package size={14} />
                         </div>
                       )}
@@ -3909,7 +3909,7 @@ function CardsView({
               {p.thumbnailUrl ? (
                 <img src={p.thumbnailUrl} alt="" className="w-full aspect-square rounded object-cover bg-slate-100 mb-3" />
               ) : (
-                <div className="w-full aspect-square rounded bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
+                <div className="w-full aspect-square rounded bg-slate-100 flex items-center justify-center text-tertiary mb-3">
                   <Package size={28} />
                 </div>
               )}
@@ -3926,7 +3926,7 @@ function CardsView({
                     return (
                       <span
                         key={loc.id}
-                        className="text-xs font-mono uppercase px-1.5 py-0.5 border border-slate-200 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-800 text-slate-300"
+                        className="text-xs font-mono uppercase px-1.5 py-0.5 border border-default dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-800 text-slate-300"
                         title={`No stock at ${loc.code}`}
                       >
                         {loc.code} —
@@ -3964,7 +3964,7 @@ function CardsView({
 function BulkProgressToast({ progress }: { progress: { total: number; done: number; failed: number } }) {
   const pct = progress.total === 0 ? 0 : Math.round(((progress.done + progress.failed) / progress.total) * 100)
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl px-4 py-3 text-base text-slate-700 dark:text-slate-300 min-w-[280px]">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-2xl px-4 py-3 text-base text-slate-700 dark:text-slate-300 min-w-[280px]">
       <div className="flex items-center gap-2 mb-1.5">
         <RefreshCw size={12} className="animate-spin text-blue-600" />
         <span className="font-semibold">Processing…</span>
@@ -4055,7 +4055,7 @@ function BulkAdjustModal({
             autoFocus
             aria-describedby="bulk-adjust-change-help bulk-adjust-warning"
             aria-invalid={wouldGoNegative}
-            className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono tabular-nums"
+            className="w-full h-9 px-2 text-md border border-default dark:border-slate-700 rounded font-mono tabular-nums"
           />
           <div id="bulk-adjust-change-help" className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {t('stock.bulkAdjust.changeHelp')}
@@ -4073,7 +4073,7 @@ function BulkAdjustModal({
             id="bulk-adjust-reason"
             value={subReason}
             onChange={(e) => setSubReason(e.target.value as AdjustSubReason)}
-            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+            className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
           >
             {SUB_REASON_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
@@ -4090,11 +4090,11 @@ function BulkAdjustModal({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder={t('stock.bulkAdjust.notesPlaceholder')}
-            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
+            className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded"
           />
         </div>
 
-        <div className="border border-slate-200 dark:border-slate-700 rounded p-2 bg-slate-50 dark:bg-slate-800/50">
+        <div className="border border-default dark:border-slate-700 rounded p-2 bg-slate-50 dark:bg-slate-800/50">
           <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
             {t('stock.bulkAdjust.affectedRows', { n: selectedItems.length })}
           </div>
@@ -4107,14 +4107,14 @@ function BulkAdjustModal({
                   <span className="truncate">
                     <span className="font-mono text-slate-600">{it.sku}</span>
                     {it.stockLevels.length > 0 && (
-                      <span className="text-slate-400"> · {it.stockLevels.map(sl => sl.location.code).join(', ')}</span>
+                      <span className="text-tertiary"> · {it.stockLevels.map(sl => sl.location.code).join(', ')}</span>
                     )}
                   </span>
                   <span className="tabular-nums flex-shrink-0">
                     <span className="text-slate-500 dark:text-slate-400">{it.totalStock}</span>
                     {valid && (
                       <>
-                        <span className="text-slate-400 mx-1">→</span>
+                        <span className="text-tertiary mx-1">→</span>
                         <span className={negativeBound ? 'text-rose-600 font-semibold' : 'text-slate-700 dark:text-slate-300 font-semibold'}>
                           {after}
                         </span>
@@ -4125,7 +4125,7 @@ function BulkAdjustModal({
               )
             })}
             {selectedItems.length > 50 && (
-              <li className="text-sm text-slate-400 italic">{t('stock.bulkAdjust.moreRows', { n: selectedItems.length - 50 })}</li>
+              <li className="text-sm text-tertiary italic">{t('stock.bulkAdjust.moreRows', { n: selectedItems.length - 50 })}</li>
             )}
           </ul>
         </div>
@@ -4141,7 +4141,7 @@ function BulkAdjustModal({
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-subtle dark:border-slate-800">
           <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">{t('stock.bulkAdjust.cancel')}</button>
           <button
             onClick={() => valid && onConfirm(n, subReason, notes || null)}
@@ -4185,7 +4185,7 @@ function BulkTransferModal({
             value={toLocationId}
             onChange={(e) => setToLocationId(e.target.value)}
             aria-describedby="bulk-transfer-help"
-            className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+            className="w-full h-9 px-2 text-md border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
           >
             <option value="">{t('cycleCount.list.modal.locationPlaceholder')}</option>
             {locations.map((l) => (
@@ -4208,10 +4208,10 @@ function BulkTransferModal({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder={t('stock.bulk.transferNotesPlaceholder')}
-            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
+            className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded"
           />
         </div>
-        <div className="border border-slate-200 dark:border-slate-700 rounded p-2 bg-slate-50 dark:bg-slate-800/50">
+        <div className="border border-default dark:border-slate-700 rounded p-2 bg-slate-50 dark:bg-slate-800/50">
           <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
             {t('stock.bulk.affectedRows', { n: selectedItems.length })}
           </div>
@@ -4221,7 +4221,7 @@ function BulkTransferModal({
                 <span className="truncate">
                   <span className="font-mono text-slate-600">{it.sku}</span>
                   {it.stockLevels.length > 0 && (
-                    <span className="text-slate-400"> · {it.stockLevels.map(sl => sl.location.code).join(', ')}</span>
+                    <span className="text-tertiary"> · {it.stockLevels.map(sl => sl.location.code).join(', ')}</span>
                   )}
                 </span>
                 <span className="tabular-nums flex-shrink-0 text-slate-500 dark:text-slate-400">
@@ -4230,11 +4230,11 @@ function BulkTransferModal({
               </li>
             ))}
             {selectedItems.length > 50 && (
-              <li className="text-sm text-slate-400 italic">{t('stock.bulkAdjust.moreRows', { n: selectedItems.length - 50 })}</li>
+              <li className="text-sm text-tertiary italic">{t('stock.bulkAdjust.moreRows', { n: selectedItems.length - 50 })}</li>
             )}
           </ul>
         </div>
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-subtle dark:border-slate-800">
           <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">
             {t('stock.list.cancel')}
           </button>
@@ -4279,7 +4279,7 @@ function BulkThresholdModal({
             autoFocus
             aria-label={t('stock.bulkThreshold.valueAria')}
             aria-describedby="bulk-threshold-help"
-            className="flex-1 h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono tabular-nums disabled:bg-slate-100 disabled:text-slate-400"
+            className="flex-1 h-9 px-2 text-md border border-default dark:border-slate-700 rounded font-mono tabular-nums disabled:bg-slate-100 disabled:text-tertiary"
           />
           <label className="text-base text-slate-600 inline-flex items-center gap-1.5">
             <input type="checkbox" checked={clearMode} onChange={(e) => setClearMode(e.target.checked)} />
@@ -4289,10 +4289,10 @@ function BulkThresholdModal({
         <div id="bulk-threshold-help" className="text-sm text-slate-500 dark:text-slate-400">
           {t('stock.bulkThreshold.help')}
         </div>
-        <div className="text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded p-2 bg-slate-50 dark:bg-slate-800/50">
+        <div className="text-base text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded p-2 bg-slate-50 dark:bg-slate-800/50">
           {t('stock.bulkThreshold.willUpdate', { n: selectedItems.length })}
         </div>
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-subtle dark:border-slate-800">
           <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">
             {t('stock.bulkAdjust.cancel')}
           </button>
@@ -4315,7 +4315,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
     <div className="fixed inset-0 z-40 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" />
       <div onClick={(e) => e.stopPropagation()} className="relative bg-white dark:bg-slate-900 rounded-lg shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-        <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <header className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between">
           <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</div>
           <button onClick={onClose} aria-label={t('common.close')} className="h-11 w-11 sm:h-7 sm:w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
             <X size={16} aria-hidden="true" />

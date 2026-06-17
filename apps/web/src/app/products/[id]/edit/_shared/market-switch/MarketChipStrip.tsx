@@ -40,9 +40,9 @@ const STATUS_DOT: Record<
   { glyph: string; tone: string; title: string }
 > = {
   published:  { glyph: '●', tone: 'text-emerald-500',  title: 'Published'  },
-  draft:      { glyph: '○', tone: 'text-slate-400',    title: 'Not listed' },
+  draft:      { glyph: '○', tone: 'text-tertiary',    title: 'Not listed' },
   suppressed: { glyph: '⚠', tone: 'text-rose-500',     title: 'Suppressed' },
-  unknown:    { glyph: '○', tone: 'text-slate-400',    title: 'Unknown'    },
+  unknown:    { glyph: '○', tone: 'text-tertiary',    title: 'Unknown'    },
 }
 
 export default function MarketChipStrip({
@@ -109,7 +109,7 @@ export default function MarketChipStrip({
               'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
               isActive
                 ? 'border-blue-500 bg-blue-50 text-blue-800 dark:border-blue-400 dark:bg-blue-950/40 dark:text-blue-200'
-                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600',
+                : 'border-default dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600',
             )}
           >
             <span aria-hidden className={cn('leading-none', dot.tone)}>

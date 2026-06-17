@@ -290,7 +290,7 @@ export default function InsightsLanding() {
                   rightAxisFormat="number"
                 />
               ) : (
-                <div className="h-[260px] flex items-center justify-center text-slate-400 text-sm">
+                <div className="h-[260px] flex items-center justify-center text-tertiary text-sm">
                   {loading ? 'Loading…' : 'No data for this window'}
                 </div>
               )}
@@ -329,13 +329,13 @@ export default function InsightsLanding() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="group rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-sm transition flex flex-col gap-1.5"
+                className="group rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-sm transition flex flex-col gap-1.5"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                     <Icon className="w-4 h-4" />
                   </div>
-                  <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 dark:text-slate-500">
+                  <span className="text-[10px] uppercase tracking-wider font-semibold text-tertiary dark:text-slate-500">
                     {link.phase}
                   </span>
                 </div>

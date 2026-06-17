@@ -659,8 +659,8 @@ export default function SyncLogsHubClient({
 
           {/* ── Two-column body: channels + crons ────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <section className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
-              <header className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <section className="border border-default dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
+              <header className="px-3 py-2 border-b border-subtle dark:border-slate-800 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5">
                   <Activity className="w-3 h-3" /> {t('syncLogs.hub.section.channels')}
                 </h2>
@@ -672,7 +672,7 @@ export default function SyncLogsHubClient({
                 </Link>
               </header>
               {!health || health.channels.length === 0 ? (
-                <div className="p-4 text-base text-slate-400 dark:text-slate-500 italic text-center">
+                <div className="p-4 text-base text-tertiary dark:text-slate-500 italic text-center">
                   {t('syncLogs.hub.empty.channels')}
                 </div>
               ) : (
@@ -747,8 +747,8 @@ export default function SyncLogsHubClient({
               )}
             </section>
 
-            <section className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
-              <header className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <section className="border border-default dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
+              <header className="px-3 py-2 border-b border-subtle dark:border-slate-800 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5">
                   <Timer className="w-3 h-3" /> {t('syncLogs.hub.section.crons')}
                 </h2>
@@ -762,7 +762,7 @@ export default function SyncLogsHubClient({
                 </span>
               </header>
               {cronJobs.length === 0 ? (
-                <div className="p-4 text-base text-slate-400 dark:text-slate-500 italic text-center">
+                <div className="p-4 text-base text-tertiary dark:text-slate-500 italic text-center">
                   {t('syncLogs.hub.empty.crons')}
                 </div>
               ) : (
@@ -835,7 +835,7 @@ export default function SyncLogsHubClient({
                               ? t('syncLogs.hub.cron.alreadyRunning')
                               : t('syncLogs.hub.cron.triggerNow')
                           }
-                          className="flex-shrink-0 h-6 px-2 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          className="flex-shrink-0 h-6 px-2 text-xs font-medium rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                         >
                           {triggeringJob === j.jobName ? (
                             <Loader2 className="w-3 h-3 animate-spin" />
@@ -854,8 +854,8 @@ export default function SyncLogsHubClient({
 
           {/* ── API calls ─────────────────────────────────────────── */}
           {apiCalls && apiCalls.stats.total > 0 && (
-            <section className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
-              <header className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
+            <section className="border border-default dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
+              <header className="px-3 py-2 border-b border-subtle dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
                 <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5">
                   <Activity className="w-3 h-3" /> {t('syncLogs.hub.section.apiCalls')}
                 </h2>
@@ -876,14 +876,14 @@ export default function SyncLogsHubClient({
                 </div>
               </header>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-0 divide-x divide-slate-100 dark:divide-slate-800 border-b border-slate-100 dark:border-slate-800">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-0 divide-x divide-slate-100 dark:divide-slate-800 border-b border-subtle dark:border-slate-800">
                 {/* By channel */}
                 <div className="px-3 py-2">
                   <div className="text-xs text-slate-500 dark:text-slate-500 uppercase tracking-wider mb-1.5">
                     {t('syncLogs.hub.section.byChannel')}
                   </div>
                   {apiCalls.byChannel.length === 0 ? (
-                    <div className="text-sm text-slate-400 dark:text-slate-500 italic">{t('syncLogs.hub.section.none')}</div>
+                    <div className="text-sm text-tertiary dark:text-slate-500 italic">{t('syncLogs.hub.section.none')}</div>
                   ) : (
                     <ul className="space-y-1">
                       {apiCalls.byChannel.map((c) => (
@@ -911,7 +911,7 @@ export default function SyncLogsHubClient({
                     {t('syncLogs.hub.section.topOperations')}
                   </div>
                   {apiCalls.byOperation.length === 0 ? (
-                    <div className="text-sm text-slate-400 dark:text-slate-500 italic">{t('syncLogs.hub.section.none')}</div>
+                    <div className="text-sm text-tertiary dark:text-slate-500 italic">{t('syncLogs.hub.section.none')}</div>
                   ) : (
                     <ul className="space-y-1">
                       {apiCalls.byOperation.slice(0, 5).map((o) => (
@@ -939,7 +939,7 @@ export default function SyncLogsHubClient({
                     {t('syncLogs.hub.section.errorsByType')}
                   </div>
                   {apiCalls.errorsByType.length === 0 ? (
-                    <div className="text-sm text-slate-400 dark:text-slate-500 italic">
+                    <div className="text-sm text-tertiary dark:text-slate-500 italic">
                       <CheckCircle2 className="inline w-3 h-3 text-emerald-500 mr-1" />
                       {t('syncLogs.hub.section.noFailures')}
                     </div>
@@ -1019,8 +1019,8 @@ export default function SyncLogsHubClient({
           )}
 
           {/* ── Recent activity ──────────────────────────────────── */}
-          <section className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
-            <header className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <section className="border border-default dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
+            <header className="px-3 py-2 border-b border-subtle dark:border-slate-800 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5">
                 <History className="w-3 h-3" /> {t('syncLogs.hub.section.recentActivity')}
               </h2>
@@ -1177,7 +1177,7 @@ function CircuitBreakerRow({
       'rounded-md border px-4 py-3',
       anyOpen
         ? 'border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20'
-        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900',
+        : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900',
     )}>
       <div className="flex items-center gap-2 mb-2.5">
         {anyOpen
@@ -1201,7 +1201,7 @@ function CircuitBreakerRow({
                 'rounded-lg border px-3 py-2 flex items-start justify-between gap-2',
                 isOpen && 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30',
                 isHalf && 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20',
-                isClosed && 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900',
+                isClosed && 'border-default dark:border-slate-700 bg-white dark:bg-slate-900',
               )}
             >
               <div className="min-w-0">
@@ -1223,7 +1223,7 @@ function CircuitBreakerRow({
                   </span>
                 </div>
                 {isClosed ? (
-                  <div className="text-[10px] text-slate-400 dark:text-slate-500">
+                  <div className="text-[10px] text-tertiary dark:text-slate-500">
                     {s.failureCount === 0 ? 'No failures' : `${s.failureCount} failure${s.failureCount !== 1 ? 's' : ''} (window)`}
                   </div>
                 ) : (

@@ -61,7 +61,7 @@ export default function SearchInput({ value, onChange }: Props) {
   return (
     <div ref={containerRef} className="relative flex-1 min-w-0">
       <Search
-        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500"
+        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-tertiary dark:text-slate-500"
         aria-hidden="true"
       />
       <input
@@ -88,7 +88,7 @@ export default function SearchInput({ value, onChange }: Props) {
             inputRef.current?.focus()
           }}
           aria-label={t('marketingContent.toolbar.searchClear')}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-tertiary hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
         >
           <X className="w-3.5 h-3.5" />
         </button>
@@ -98,7 +98,7 @@ export default function SearchInput({ value, onChange }: Props) {
         <div
           role="listbox"
           aria-label={t('marketingContent.toolbar.recentSearches')}
-          className="absolute left-0 right-0 top-full z-20 mt-1 rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
+          className="absolute left-0 right-0 top-full z-20 mt-1 rounded-md border border-default bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
         >
           <div className="flex items-center justify-between px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             <span className="flex items-center gap-1.5">

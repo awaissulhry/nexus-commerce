@@ -173,10 +173,10 @@ export default function PublishDrawer(props: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="publish-drawer-title"
-        className="w-full max-w-md bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col"
+        className="w-full max-w-md bg-white dark:bg-slate-900 border-l border-default dark:border-slate-800 shadow-2xl flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-subtle dark:border-slate-800 flex items-center justify-between">
           <div>
             <div id="publish-drawer-title" className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <Send className="w-4 h-4 text-blue-500" /> Publish to eBay {props.marketName}
@@ -191,7 +191,7 @@ export default function PublishDrawer(props: Props) {
             <button
               type="button"
               onClick={props.onClose}
-              className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded"
+              className="p-1 text-tertiary hover:text-slate-700 dark:hover:text-slate-200 rounded"
               aria-label="Close"
             >
               <X className="w-4 h-4" />
@@ -255,7 +255,7 @@ function PreflightView({ hardFails, onClose }: { hardFails: HardFail[]; onClose:
         <button
           type="button"
           onClick={onClose}
-          className="px-3 py-1.5 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+          className="px-3 py-1.5 text-xs font-medium rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           Close
         </button>
@@ -281,15 +281,15 @@ function ConfirmView({
       <div className="text-xs text-slate-600 dark:text-slate-400">
         About to publish to <span className="font-medium text-slate-800 dark:text-slate-200">eBay {marketName}</span>:
       </div>
-      <div className="rounded border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
-        <SummaryRow label="Title" value={summary.title || <em className="not-italic text-slate-400">empty</em>} mono />
-        <SummaryRow label="Category" value={summary.categoryName ?? <em className="not-italic text-slate-400">missing</em>} />
+      <div className="rounded border border-default dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+        <SummaryRow label="Title" value={summary.title || <em className="not-italic text-tertiary">empty</em>} mono />
+        <SummaryRow label="Category" value={summary.categoryName ?? <em className="not-italic text-tertiary">missing</em>} />
         <SummaryRow label="Price" value={formatPrice} />
         <SummaryRow label="Quantity" value={summary.quantity ?? '—'} />
         <SummaryRow label="Images" value={`${summary.imageCount} attached`} />
         <SummaryRow label="Aspects" value={`${summary.aspectCount} filled`} />
       </div>
-      <div className="text-[10.5px] text-slate-400 italic">
+      <div className="text-[10.5px] text-tertiary italic">
         A pre-publish snapshot will be captured automatically so you
         can roll back in one click if anything looks off post-publish.
       </div>
@@ -297,7 +297,7 @@ function ConfirmView({
         <button
           type="button"
           onClick={onCancel}
-          className="px-3 py-1.5 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+          className="px-3 py-1.5 text-xs font-medium rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           Cancel
         </button>
@@ -316,7 +316,7 @@ function ConfirmView({
 function SummaryRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
     <div className="px-3 py-2 flex items-baseline justify-between gap-3">
-      <span className="text-[10.5px] uppercase tracking-wide text-slate-400 font-medium">{label}</span>
+      <span className="text-[10.5px] uppercase tracking-wide text-tertiary font-medium">{label}</span>
       <span className={cn('text-xs text-slate-800 dark:text-slate-200 text-right truncate', mono && 'font-mono')}>{value}</span>
     </div>
   )
@@ -354,11 +354,11 @@ function StepRow({ step, status }: { step: Step; status: StepStatus }) {
       <Icon className={cn('w-4 h-4 flex-shrink-0', tone, status === 'running' && 'animate-spin')} />
       <span className={cn(
         'flex-1',
-        status === 'pending' || status === 'skipped' ? 'text-slate-400' : 'text-slate-800 dark:text-slate-200',
+        status === 'pending' || status === 'skipped' ? 'text-tertiary' : 'text-slate-800 dark:text-slate-200',
       )}>
         {STEP_LABEL[step]}
       </span>
-      <span className="text-[10.5px] text-slate-400 uppercase tracking-wide">
+      <span className="text-[10.5px] text-tertiary uppercase tracking-wide">
         {status}
       </span>
     </li>
@@ -381,7 +381,7 @@ function SuccessView({
           search visibility — eBay&apos;s indexer is eventually consistent.
         </div>
       </div>
-      <div className="rounded border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+      <div className="rounded border border-default dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
         {result.listingId && <SummaryRow label="Item ID" value={result.listingId} mono />}
         {result.offerId && <SummaryRow label="Offer ID" value={result.offerId} mono />}
         {result.sku && <SummaryRow label="SKU" value={result.sku} mono />}
@@ -392,7 +392,7 @@ function SuccessView({
             href={result.listingUrl}
             target="_blank"
             rel="noreferrer"
-            className="px-3 py-1.5 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+            className="px-3 py-1.5 text-xs font-medium rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
           >
             Open on eBay <ExternalLink className="w-3 h-3" />
           </a>
@@ -458,7 +458,7 @@ function FailureView({
         <button
           type="button"
           onClick={onClose}
-          className="px-3 py-1.5 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+          className="px-3 py-1.5 text-xs font-medium rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           Close
         </button>

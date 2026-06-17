@@ -102,10 +102,10 @@ export default function RecentChannelJobsStrip({ productId, channel, refreshKey 
   if (jobs.length === 0 && !loading && !error) return null
 
   return (
-    <div className="px-5 py-2 border-t border-slate-100 dark:border-slate-800 space-y-1">
+    <div className="px-5 py-2 border-t border-subtle dark:border-slate-800 space-y-1">
       <div className="flex items-center gap-1.5 text-[10px] uppercase font-semibold tracking-wide text-slate-500 dark:text-slate-400">
         <span>Recent jobs</span>
-        {loading && <Loader2 className="w-3 h-3 animate-spin text-slate-400" />}
+        {loading && <Loader2 className="w-3 h-3 animate-spin text-tertiary" />}
       </div>
       {error && (
         <div className="text-[11px] text-rose-600 dark:text-rose-400">{error}</div>
@@ -116,7 +116,7 @@ export default function RecentChannelJobsStrip({ productId, channel, refreshKey 
           <span className="font-mono text-slate-700 dark:text-slate-300">
             {channel === 'EBAY' ? 'eBay' : 'Shopify'}
           </span>
-          <span className="text-slate-400">—</span>
+          <span className="text-tertiary">—</span>
           <span className={cn(
             'font-medium',
             job.status === 'DONE' && 'text-emerald-700 dark:text-emerald-300',
@@ -130,7 +130,7 @@ export default function RecentChannelJobsStrip({ productId, channel, refreshKey 
               · {job.errorMessage}
             </span>
           )}
-          <span className="ml-auto flex items-center gap-1 text-slate-400 dark:text-slate-500 flex-shrink-0">
+          <span className="ml-auto flex items-center gap-1 text-tertiary dark:text-slate-500 flex-shrink-0">
             <Clock className="w-3 h-3" />
             {elapsed(job.submittedAt)}
           </span>

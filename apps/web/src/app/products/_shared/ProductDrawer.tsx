@@ -351,11 +351,11 @@ export default function ProductDrawer({
     >
       <div
         ref={containerRef}
-        className="w-full max-w-[640px] bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col h-full"
+        className="w-full max-w-[640px] bg-white dark:bg-slate-900 shadow-2xl border-l border-default dark:border-slate-800 flex flex-col h-full"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start gap-3 px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-start gap-3 px-5 py-4 border-b border-default dark:border-slate-800">
           <div className="flex-shrink-0 w-12 h-12 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
             {data?.images?.[0]?.url ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -365,7 +365,7 @@ export default function ProductDrawer({
                 className="w-full h-full object-cover"
               />
             ) : (
-              <Package className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+              <Package className="w-5 h-5 text-tertiary dark:text-slate-500" />
             )}
           </div>
           <div className="flex-1 min-w-0">
@@ -424,7 +424,7 @@ export default function ProductDrawer({
             onClick={onClose}
             aria-label={t('products.drawer.close')}
             size="md"
-            className="-mr-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+            className="-mr-1 text-tertiary dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
           >
             <X className="w-4 h-4" />
           </IconButton>
@@ -468,7 +468,7 @@ export default function ProductDrawer({
                 tabs[next]?.focus()
               }
             }}
-            className="flex items-center border-b border-slate-200 dark:border-slate-800 px-5 overflow-x-auto scroll-smooth [scrollbar-width:thin]"
+            className="flex items-center border-b border-default dark:border-slate-800 px-5 overflow-x-auto scroll-smooth [scrollbar-width:thin]"
           >
           <DrawerTab tabKey="details" active={tab === 'details'} onClick={() => setTab('details')}>
             <Edit3 className="w-3 h-3" /> {t('products.drawer.tabs.details')}
@@ -574,7 +574,7 @@ export default function ProductDrawer({
         {/* Body */}
         <div className="flex-1 overflow-y-auto">
           {loading && !data && (
-            <div className="flex items-center justify-center py-12 text-slate-400 dark:text-slate-500 text-base">
+            <div className="flex items-center justify-center py-12 text-tertiary dark:text-slate-500 text-base">
               <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading…
             </div>
           )}
@@ -687,7 +687,7 @@ export default function ProductDrawer({
 
         {/* Footer */}
         {data && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 gap-3">
+          <div className="flex items-center justify-between px-5 py-3 border-t border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-800 gap-3">
             <span className="text-sm text-slate-500 dark:text-slate-400 truncate">
               Updated {new Date(data.updatedAt).toLocaleString()}
             </span>
@@ -800,7 +800,7 @@ function HealthCard({
   // the workspace — operators learn one colour scale.
   const scoreTone =
     score == null
-      ? 'text-slate-400'
+      ? 'text-tertiary'
       : score >= 80
       ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
       : score >= 50
@@ -808,7 +808,7 @@ function HealthCard({
       : 'text-rose-700 bg-rose-50 border-rose-200'
 
   return (
-    <div className="border border-slate-200 rounded-md p-3 space-y-2">
+    <div className="border border-default rounded-md p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
         <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
           {t('products.drawer.health.title')}
@@ -1066,7 +1066,7 @@ function ForecastCard({ productId }: { productId: string }) {
 
   if (loading) {
     return (
-      <div className="border border-slate-200 rounded-md p-3 text-sm text-slate-500 dark:text-slate-400 italic">
+      <div className="border border-default rounded-md p-3 text-sm text-slate-500 dark:text-slate-400 italic">
         <Loader2 className="w-3 h-3 animate-spin inline mr-1.5" /> {t('products.drawer.forecast.loading')}
       </div>
     )
@@ -1079,7 +1079,7 @@ function ForecastCard({ productId }: { productId: string }) {
       : projection.urgency === 'warn'
         ? { ring: 'border-amber-200 bg-amber-50/40', text: 'text-amber-700' }
         : projection.urgency === 'unknown'
-          ? { ring: 'border-slate-200 bg-slate-50/40', text: 'text-slate-600' }
+          ? { ring: 'border-default bg-slate-50/40', text: 'text-slate-600' }
           : { ring: 'border-emerald-200 bg-emerald-50/40', text: 'text-emerald-700' }
 
   return (
@@ -1126,7 +1126,7 @@ function ForecastCard({ productId }: { productId: string }) {
           </div>
         </div>
       </div>
-      <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-200/50">
+      <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-default/50">
         {projection.basis === 'forecast'
           ? t('products.drawer.forecast.basis.forecast', { days: projection.forecastDays })
           : projection.basis === 'threshold'
@@ -1209,21 +1209,21 @@ function DetailGrid({ product }: { product: ProductDetail }) {
   }
 
   const fields: Array<{ label: string; value: React.ReactNode }> = [
-    { label: t('products.drawer.detail.field.brand'), value: product.brand ?? <em className="text-slate-400">—</em> },
-    { label: t('products.drawer.detail.field.type'), value: product.productType ?? <em className="text-slate-400">—</em> },
-    { label: t('products.drawer.detail.field.fulfillment'), value: product.fulfillmentMethod ?? <em className="text-slate-400">—</em> },
+    { label: t('products.drawer.detail.field.brand'), value: product.brand ?? <em className="text-tertiary">—</em> },
+    { label: t('products.drawer.detail.field.type'), value: product.productType ?? <em className="text-tertiary">—</em> },
+    { label: t('products.drawer.detail.field.fulfillment'), value: product.fulfillmentMethod ?? <em className="text-tertiary">—</em> },
     {
       label: t('products.drawer.detail.field.weight'),
       value:
         product.weightValue != null
           ? `${product.weightValue} ${product.weightUnit ?? ''}`.trim()
-          : (<em className="text-slate-400">—</em>),
+          : (<em className="text-tertiary">—</em>),
     },
     {
       label: t('products.drawer.detail.field.images'),
       value: (
         <span className="inline-flex items-center gap-1">
-          <ImageIcon className="w-3 h-3 text-slate-400" />
+          <ImageIcon className="w-3 h-3 text-tertiary" />
           {product._count?.images ?? 0}
         </span>
       ),
@@ -1232,7 +1232,7 @@ function DetailGrid({ product }: { product: ProductDetail }) {
       label: t('products.drawer.detail.field.listings'),
       value: (
         <span className="inline-flex items-center gap-1">
-          <Boxes className="w-3 h-3 text-slate-400" />
+          <Boxes className="w-3 h-3 text-tertiary" />
           {product._count?.channelListings ?? 0}
         </span>
       ),
@@ -1369,7 +1369,7 @@ function QuickField({
   const [focused, setFocused] = useState(false)
   return (
     <div>
-      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+      <div className="text-xs font-semibold text-tertiary uppercase tracking-wider mb-1">
         {label}
       </div>
       <div className="relative">
@@ -1397,7 +1397,7 @@ function QuickField({
             prefix ? 'pl-6 pr-2' : 'px-2',
             focused
               ? 'border-blue-300 ring-1 ring-blue-200'
-              : 'border-slate-200',
+              : 'border-default',
             saving && 'opacity-60',
           )}
           disabled={saving}
@@ -1536,12 +1536,12 @@ function ListingsTab({
       </div>
       {grouped.map(([channel, rows]) => (
         <section key={channel}>
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+          <div className="text-xs font-semibold text-tertiary uppercase tracking-wider mb-2">
             {channel}
           </div>
-          <div className="border border-slate-200 rounded-lg overflow-hidden">
+          <div className="border border-default rounded-lg overflow-hidden">
             <table className="w-full text-base">
-              <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <thead className="bg-slate-50 border-b border-default text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-3 py-1.5 text-left">{t('products.drawer.listings.col.market')}</th>
                   <th className="px-3 py-1.5 text-left">{t('products.drawer.listings.col.status')}</th>
@@ -1586,7 +1586,7 @@ function ListingsTab({
                   const cellSnapErr =
                     snapError?.listingId === l.id ? snapError : null
                   return (
-                  <tr key={l.id} className="border-b border-slate-100 last:border-0">
+                  <tr key={l.id} className="border-b border-subtle last:border-0">
                     <td className="px-3 py-2 font-mono text-sm text-slate-700 align-top">
                       {l.marketplace}
                     </td>
@@ -1978,7 +1978,7 @@ function WorkflowTab({ productId }: { productId: string }) {
   return (
     <div className="p-4 space-y-5">
       {/* Current stage card */}
-      <div className="border border-slate-200 dark:border-slate-800 rounded-md p-3 bg-slate-50/50 dark:bg-slate-900/40">
+      <div className="border border-default dark:border-slate-800 rounded-md p-3 bg-slate-50/50 dark:bg-slate-900/40">
         <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
           {t('products.drawer.workflow.currentStage')} · {stage.workflow.label}
         </div>
@@ -2024,7 +2024,7 @@ function WorkflowTab({ productId }: { productId: string }) {
             <select
               value={moveTo}
               onChange={(e) => setMoveTo(e.target.value)}
-              className="flex-1 h-8 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+              className="flex-1 h-8 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
             >
               <option value="">{t('products.drawer.workflow.movePicker')}</option>
               {otherStages
@@ -2054,7 +2054,7 @@ function WorkflowTab({ productId }: { productId: string }) {
             value={moveComment}
             onChange={(e) => setMoveComment(e.target.value)}
             placeholder={t('products.drawer.workflow.movePlaceholder')}
-            className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+            className="w-full h-8 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           />
         </div>
       )}
@@ -2071,7 +2071,7 @@ function WorkflowTab({ productId }: { productId: string }) {
             .map((c) => (
               <div
                 key={c.id}
-                className="border border-slate-200 dark:border-slate-800 rounded px-2 py-1.5 text-base text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900"
+                className="border border-default dark:border-slate-800 rounded px-2 py-1.5 text-base text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900"
               >
                 <div className="text-xs text-slate-500 dark:text-slate-400 mb-0.5 tabular-nums">
                   {new Date(c.createdAt).toLocaleString()}
@@ -2091,7 +2091,7 @@ function WorkflowTab({ productId }: { productId: string }) {
             onChange={(e) => setCommentBody(e.target.value)}
             rows={2}
             placeholder={t('products.drawer.workflow.commentPlaceholder')}
-            className="flex-1 px-2 py-1.5 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+            className="flex-1 px-2 py-1.5 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           />
           <Button
             variant="secondary"
@@ -2128,7 +2128,7 @@ function WorkflowTab({ productId }: { productId: string }) {
                   {tr.fromStage ? (
                     <>
                       <span className="text-slate-500 dark:text-slate-400">{tr.fromStage.label}</span>
-                      <span className="mx-1 text-slate-400 dark:text-slate-500">→</span>
+                      <span className="mx-1 text-tertiary dark:text-slate-500">→</span>
                     </>
                   ) : (
                     <span className="text-slate-500 dark:text-slate-400 italic mr-1">{t('products.drawer.workflow.entry')}</span>
@@ -2244,14 +2244,14 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
       : null
 
   return (
-    <li className="border border-slate-200 rounded-md bg-white px-3 py-2">
+    <li className="border border-default rounded-md bg-white px-3 py-2">
       <div className="flex items-baseline justify-between gap-2 text-sm text-slate-500">
         <span>
           <span className="font-semibold text-slate-700 capitalize">{entry.action}</span>
           {' · '}
           <span className="font-mono">{actor}</span>
           {(source || reason) ? (
-            <span className="text-slate-400 ml-1">
+            <span className="text-tertiary ml-1">
               ({String(source ?? reason)})
             </span>
           ) : null}
@@ -2268,7 +2268,7 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
                 {d.field}
               </span>
               <span className="text-rose-700 line-through">{formatValue(d.before)}</span>
-              <span className="text-slate-400">→</span>
+              <span className="text-tertiary">→</span>
               <span className="text-emerald-700">{formatValue(d.after)}</span>
             </li>
           ))}
@@ -2497,8 +2497,8 @@ function ScheduleTab({ productId }: { productId: string }) {
     if (s === 'FAILED')
       return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
     if (s === 'CANCELLED')
-      return 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-800'
-    return 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-800'
+      return 'bg-slate-50 text-slate-600 border-default dark:bg-slate-800 dark:text-slate-400 dark:border-slate-800'
+    return 'bg-slate-50 text-slate-600 border-default dark:bg-slate-800 dark:text-slate-400 dark:border-slate-800'
   }
   const statusIcon = (s: string) => {
     if (s === 'PENDING') return <Clock size={11} />
@@ -2522,7 +2522,7 @@ function ScheduleTab({ productId }: { productId: string }) {
         {rows.map((r) => (
           <li
             key={r.id}
-            className="border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 text-base bg-white dark:bg-slate-900"
+            className="border border-default dark:border-slate-800 rounded-md px-3 py-2 text-base bg-white dark:bg-slate-900"
           >
             <div className="flex items-center gap-2 flex-wrap">
               <span
@@ -2561,7 +2561,7 @@ function ScheduleTab({ productId }: { productId: string }) {
               </span>
               {r.appliedAt && (
                 <>
-                  <span className="text-slate-400 dark:text-slate-500">·</span>
+                  <span className="text-tertiary dark:text-slate-500">·</span>
                   <span>
                     {t(
                       r.status === 'APPLIED'
@@ -2636,7 +2636,7 @@ function ImagesTab({
         </div>
         <Link
           href={`/products/${productId}/images`}
-          className="h-7 px-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5"
+          className="h-7 px-2.5 text-sm border border-default dark:border-slate-800 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5"
         >
           <ExternalLink size={11} /> {t('products.drawer.images.manage')}
         </Link>
@@ -2646,7 +2646,7 @@ function ImagesTab({
           // eslint-disable-next-line @next/next/no-img-element
           <div
             key={`${img.url}-${i}`}
-            className="relative aspect-square rounded border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-100 dark:bg-slate-800"
+            className="relative aspect-square rounded border border-default dark:border-slate-800 overflow-hidden bg-slate-100 dark:bg-slate-800"
           >
             <img
               src={img.url}
@@ -2661,7 +2661,7 @@ function ImagesTab({
           </div>
         ))}
       </div>
-      <div className="text-sm text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
+      <div className="text-sm text-slate-500 dark:text-slate-400 pt-1 border-t border-subtle dark:border-slate-800">
         {t('products.drawer.images.footer')}
       </div>
     </div>
@@ -2708,7 +2708,7 @@ function PricingTab({
         <div className="ml-auto">
           <Link
             href={`/pricing?search=${encodeURIComponent(sku)}`}
-            className="h-8 px-3 text-sm border border-slate-200 dark:border-slate-800 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-sm border border-default dark:border-slate-800 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5"
             title={t('products.drawer.pricing.openMatrixTitle')}
           >
             <ExternalLink size={11} /> {t('products.drawer.pricing.openMatrix')}
@@ -2716,13 +2716,13 @@ function PricingTab({
         </div>
       </div>
       {sorted.length === 0 ? (
-        <div className="border border-slate-200 dark:border-slate-800 rounded-md py-8 text-center text-base text-slate-500 dark:text-slate-400 italic">
+        <div className="border border-default dark:border-slate-800 rounded-md py-8 text-center text-base text-slate-500 dark:text-slate-400 italic">
           {t('products.drawer.pricing.empty')}
         </div>
       ) : (
-        <div className="border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+        <div className="border border-default dark:border-slate-800 rounded-md overflow-hidden">
           <table className="w-full text-base">
-            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-default dark:border-slate-800">
               <tr>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                   {t('products.drawer.pricing.col.channel')}
@@ -2748,7 +2748,7 @@ function PricingTab({
                   baseNum == null || price == null ? null : price - baseNum
                 const tone =
                   delta == null
-                    ? 'text-slate-400 dark:text-slate-500'
+                    ? 'text-tertiary dark:text-slate-500'
                     : Math.abs(delta) < 0.01
                       ? 'text-slate-500 dark:text-slate-400'
                       : delta > 0
@@ -2757,7 +2757,7 @@ function PricingTab({
                 return (
                   <tr
                     key={l.id}
-                    className="border-b border-slate-100 dark:border-slate-800 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                    className="border-b border-subtle dark:border-slate-800 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-800/50"
                   >
                     <td className="px-3 py-2 text-slate-900 dark:text-slate-100 font-medium">
                       {l.channel}
@@ -2781,7 +2781,7 @@ function PricingTab({
                           l.listingStatus === 'ACTIVE' && l.isPublished
                             ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
                             : l.listingStatus === 'DRAFT'
-                              ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
+                              ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-default dark:border-slate-800'
                               : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
                         }`}
                       >
@@ -2795,7 +2795,7 @@ function PricingTab({
           </table>
         </div>
       )}
-      <div className="text-sm text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
+      <div className="text-sm text-slate-500 dark:text-slate-400 pt-1 border-t border-subtle dark:border-slate-800">
         {t('products.drawer.pricing.footer')}
       </div>
       {/* W4.13 — Tier / customer-group pricing for this product.
@@ -2931,7 +2931,7 @@ function TierPricingSection({
   }
 
   return (
-    <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-2">
+    <div className="border-t border-subtle dark:border-slate-800 pt-4 space-y-2">
       <div className="flex items-center justify-between">
         <div className="text-sm uppercase tracking-wider font-semibold text-slate-700 dark:text-slate-300">
           {t('products.drawer.tier.title')}
@@ -2955,11 +2955,11 @@ function TierPricingSection({
           {t('products.drawer.tier.loading')}
         </div>
       ) : tiers.length === 0 ? (
-        <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center">
+        <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-default dark:border-slate-800 rounded p-4 text-center">
           {t('products.drawer.tier.empty', { base: basePrice?.toFixed(2) ?? '—' })}
         </div>
       ) : (
-        <table className="w-full text-sm border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
+        <table className="w-full text-sm border border-default dark:border-slate-800 rounded overflow-hidden">
           <thead className="bg-slate-50 dark:bg-slate-900">
             <tr className="text-left">
               <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">{t('products.drawer.tier.col.minQty')}</th>
@@ -2982,7 +2982,7 @@ function TierPricingSection({
                 return (
                   <tr
                     key={tier.id}
-                    className="border-t border-slate-100 dark:border-slate-800"
+                    className="border-t border-subtle dark:border-slate-800"
                   >
                     <td className="px-2 py-1.5 tabular-nums text-slate-900 dark:text-slate-100">
                       ≥ {tier.minQty}
@@ -2999,7 +2999,7 @@ function TierPricingSection({
                     </td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-xs">
                       {delta == null ? (
-                        <span className="text-slate-400 dark:text-slate-500">—</span>
+                        <span className="text-tertiary dark:text-slate-500">—</span>
                       ) : delta < 0 ? (
                         <span className="text-emerald-700 dark:text-emerald-300">
                           {delta}%
@@ -3033,7 +3033,7 @@ function TierPricingSection({
 
       {/* Compute-price preview. Useful for "what would a wholesale
           buyer pay for 50?" ad-hoc checks. */}
-      <div className="border border-slate-200 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/40">
+      <div className="border border-default dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/40">
         <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5">
           {t('products.drawer.tier.preview.title')}
         </div>
@@ -3044,12 +3044,12 @@ function TierPricingSection({
             value={previewQty}
             onChange={(e) => setPreviewQty(e.target.value)}
             placeholder={t('products.drawer.tier.preview.qtyPlaceholder')}
-            className="w-20 h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
+            className="w-20 h-7 px-1.5 text-sm border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
           />
           <select
             value={previewGroupId}
             onChange={(e) => setPreviewGroupId(e.target.value)}
-            className="h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+            className="h-7 px-1.5 text-sm border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           >
             <option value="">{t('products.drawer.tier.preview.noGroup')}</option>
             {groups.map((g) => (
@@ -3172,7 +3172,7 @@ function AddTierForm({
               min={1}
               value={minQty}
               onChange={(e) => setMinQty(e.target.value)}
-              className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
+              className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
             />
           </div>
           <div className="space-y-1">
@@ -3185,7 +3185,7 @@ function AddTierForm({
               step={0.01}
               value={price}
               onChange={(e) => setPrice(e.target.value)}
-              className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
+              className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
             />
           </div>
         </div>
@@ -3196,7 +3196,7 @@ function AddTierForm({
           <select
             value={groupId}
             onChange={(e) => setGroupId(e.target.value)}
-            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+            className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           >
             <option value="">{t('products.drawer.tier.form.everyoneOption')}</option>
             {groups.map((g) => (
@@ -3361,7 +3361,7 @@ function RepricingRulesSection({
   }
 
   return (
-    <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-2">
+    <div className="border-t border-subtle dark:border-slate-800 pt-4 space-y-2">
       <div className="flex items-center justify-between">
         <div className="text-sm uppercase tracking-wider font-semibold text-slate-700 dark:text-slate-300">
           {t('products.drawer.repricing.title')}
@@ -3385,11 +3385,11 @@ function RepricingRulesSection({
           {t('products.drawer.repricing.loading')}
         </div>
       ) : rules.length === 0 ? (
-        <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center">
+        <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-default dark:border-slate-800 rounded p-4 text-center">
           {t('products.drawer.repricing.empty')}
         </div>
       ) : (
-        <table className="w-full text-sm border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
+        <table className="w-full text-sm border border-default dark:border-slate-800 rounded overflow-hidden">
           <thead className="bg-slate-50 dark:bg-slate-900">
             <tr className="text-left">
               <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">{t('products.drawer.repricing.col.channelMp')}</th>
@@ -3404,7 +3404,7 @@ function RepricingRulesSection({
             {rules.map((r) => (
               <tr
                 key={r.id}
-                className="border-t border-slate-100 dark:border-slate-800"
+                className="border-t border-subtle dark:border-slate-800"
               >
                 <td className="px-2 py-1.5 font-mono text-xs">
                   <span className="text-slate-900 dark:text-slate-100">{r.channel}</span>
@@ -3593,7 +3593,7 @@ function AddRepricingRuleForm({
           <select
             value={channelKey}
             onChange={(e) => setChannelKey(e.target.value)}
-            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+            className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           >
             {channelOpts.map((o) => (
               <option key={o.key} value={o.key}>
@@ -3611,7 +3611,7 @@ function AddRepricingRuleForm({
           <select
             value={strategy}
             onChange={(e) => setStrategy(e.target.value)}
-            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+            className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           >
             {STRATEGY_CODES.map((code) => (
               <option key={code} value={code}>
@@ -3632,7 +3632,7 @@ function AddRepricingRuleForm({
               step={0.01}
               value={minPrice}
               onChange={(e) => setMinPrice(e.target.value)}
-              className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
+              className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
             />
           </div>
           <div className="space-y-1">
@@ -3645,7 +3645,7 @@ function AddRepricingRuleForm({
               step={0.01}
               value={maxPrice}
               onChange={(e) => setMaxPrice(e.target.value)}
-              className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
+              className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
             />
           </div>
         </div>
@@ -3662,7 +3662,7 @@ function AddRepricingRuleForm({
               value={beatPct}
               onChange={(e) => setBeatPct(e.target.value)}
               placeholder="e.g. 2.5"
-              className="w-32 h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
+              className="w-32 h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
             />
           </div>
         )}
@@ -3678,7 +3678,7 @@ function AddRepricingRuleForm({
               value={beatAmount}
               onChange={(e) => setBeatAmount(e.target.value)}
               placeholder="e.g. 2.00"
-              className="w-32 h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
+              className="w-32 h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
             />
           </div>
         )}
@@ -3769,7 +3769,7 @@ function DecisionsModal({
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-default dark:border-slate-800">
               <tr className="text-left">
                 <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">{t('products.drawer.repricing.decisions.col.when')}</th>
                 <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">{t('products.drawer.repricing.decisions.col.oldNew')}</th>
@@ -3781,7 +3781,7 @@ function DecisionsModal({
               {decisions.map((d) => (
                 <tr
                   key={d.id}
-                  className="border-t border-slate-100 dark:border-slate-800"
+                  className="border-t border-subtle dark:border-slate-800"
                 >
                   <td className="px-2 py-1.5 text-xs tabular-nums text-slate-600 dark:text-slate-400 whitespace-nowrap">
                     {new Date(d.createdAt).toLocaleString()}
@@ -3803,7 +3803,7 @@ function DecisionsModal({
                         ✓
                       </span>
                     ) : (
-                      <span className="text-slate-400 dark:text-slate-500">
+                      <span className="text-tertiary dark:text-slate-500">
                         —
                       </span>
                     )}
@@ -4012,7 +4012,7 @@ function VariationsTab({
       <div className="overflow-x-auto -mx-5 px-5">
         <table className="w-full text-base">
           <thead>
-            <tr className="text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200">
+            <tr className="text-xs uppercase tracking-wider text-slate-500 border-b border-default">
               <th className="text-left py-1.5 px-2 font-semibold">{t('products.drawer.variations.col.sku')}</th>
               {axisKeys.map((k) => (
                 <th key={k} className="text-left py-1.5 px-2 font-semibold">
@@ -4035,7 +4035,7 @@ function VariationsTab({
               return (
                 <tr
                   key={c.id}
-                  className="border-b border-slate-100 hover:bg-slate-50/50"
+                  className="border-b border-subtle hover:bg-slate-50/50"
                 >
                   <td className="py-1.5 px-2 align-top">
                     <button
@@ -4373,7 +4373,7 @@ function TranslationsTab({
           </span>
         </div>
         <div className="text-base text-slate-700 truncate">
-          {masterName || <span className="text-slate-400">—</span>}
+          {masterName || <span className="text-tertiary">—</span>}
         </div>
         {masterDescription && (
           <div className="text-sm text-slate-500 mt-0.5 line-clamp-2">
@@ -4423,7 +4423,7 @@ function TranslationsTab({
             <select
               value={newLang}
               onChange={(e) => setNewLang(e.target.value)}
-              className="h-8 px-2 text-base border border-slate-200 rounded bg-white"
+              className="h-8 px-2 text-base border border-default rounded bg-white"
             >
               {KNOWN_LANGUAGES.filter(
                 (l) =>
@@ -4440,7 +4440,7 @@ function TranslationsTab({
               value={newLangCustom}
               onChange={(e) => setNewLangCustom(e.target.value)}
               placeholder={t('products.drawer.translations.codePlaceholder')}
-              className="h-8 px-2 text-base border border-slate-200 rounded bg-white font-mono uppercase"
+              className="h-8 px-2 text-base border border-default rounded bg-white font-mono uppercase"
             />
           </div>
           <div className="flex items-center justify-end gap-1.5">
@@ -4473,7 +4473,7 @@ function TranslationsTab({
         </Button>
       )}
 
-      <div className="text-xs text-slate-500 pt-2 border-t border-slate-100">
+      <div className="text-xs text-slate-500 pt-2 border-t border-subtle">
         {t('products.drawer.translations.aiNote', { primary: primaryLanguage.toUpperCase() })}
       </div>
     </div>
@@ -4549,7 +4549,7 @@ function TranslationRowCard({
   return (
     <div
       className={`border rounded-md ${
-        needsReview ? 'border-amber-200' : 'border-slate-200'
+        needsReview ? 'border-amber-200' : 'border-default'
       } bg-white`}
     >
       <button
@@ -4578,13 +4578,13 @@ function TranslationRowCard({
             </span>
           )}
           <ChevronRight
-            className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? 'rotate-90' : ''}`}
+            className={`w-3.5 h-3.5 text-tertiary transition-transform ${expanded ? 'rotate-90' : ''}`}
           />
         </div>
       </button>
 
       {expanded && (
-        <div className="border-t border-slate-100 p-3 space-y-2">
+        <div className="border-t border-subtle p-3 space-y-2">
           <div>
             <label className="text-xs uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
               {t('products.drawer.translations.row.name')}
@@ -4594,7 +4594,7 @@ function TranslationRowCard({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={masterFallback.name}
-              className="w-full h-8 px-2 text-base border border-slate-200 rounded bg-white"
+              className="w-full h-8 px-2 text-base border border-default rounded bg-white"
             />
           </div>
           <div>
@@ -4606,7 +4606,7 @@ function TranslationRowCard({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={masterFallback.description ?? ''}
-              className="w-full px-2 py-1.5 text-base border border-slate-200 rounded bg-white"
+              className="w-full px-2 py-1.5 text-base border border-default rounded bg-white"
             />
           </div>
           <div>
@@ -4617,7 +4617,7 @@ function TranslationRowCard({
               rows={5}
               value={bullets}
               onChange={(e) => setBullets(e.target.value)}
-              className="w-full px-2 py-1.5 text-base border border-slate-200 rounded bg-white"
+              className="w-full px-2 py-1.5 text-base border border-default rounded bg-white"
             />
           </div>
           <div>
@@ -4628,12 +4628,12 @@ function TranslationRowCard({
               type="text"
               value={keywords}
               onChange={(e) => setKeywords(e.target.value)}
-              className="w-full h-8 px-2 text-base border border-slate-200 rounded bg-white"
+              className="w-full h-8 px-2 text-base border border-default rounded bg-white"
             />
           </div>
 
           {row.source && (
-            <div className="text-xs text-slate-500 pt-1 border-t border-slate-100">
+            <div className="text-xs text-slate-500 pt-1 border-t border-subtle">
               {t('products.drawer.translations.row.source')}<span className="font-mono">{row.source}</span>
               {row.sourceModel && <> · {row.sourceModel}</>}
               {row.reviewedAt && (
@@ -4941,7 +4941,7 @@ function RelatedTab({
               return (
                 <div
                   key={r.id}
-                  className="flex items-center gap-2 px-2 py-1.5 border border-slate-200 rounded bg-white"
+                  className="flex items-center gap-2 px-2 py-1.5 border border-default rounded bg-white"
                 >
                   {p.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -4979,7 +4979,7 @@ function RelatedTab({
                     }
                     title={t('products.drawer.related.openTitle')}
                     aria-label={t('products.drawer.related.openAria')}
-                    className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
+                    className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-tertiary hover:text-slate-700 rounded"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </button>
@@ -5020,7 +5020,7 @@ function RelatedTab({
             <select
               value={pickedType}
               onChange={(e) => setPickedType(e.target.value)}
-              className="w-full h-8 px-2 text-base border border-slate-200 rounded bg-white"
+              className="w-full h-8 px-2 text-base border border-default rounded bg-white"
             >
               {RELATION_TYPES.map((rt) => (
                 <option key={rt.code} value={rt.code}>
@@ -5034,14 +5034,14 @@ function RelatedTab({
               {t('products.drawer.related.searchProduct')}
             </label>
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-tertiary" />
               <input
                 type="text"
                 autoFocus
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('products.drawer.related.searchPlaceholder')}
-                className="w-full h-8 pl-7 pr-2 text-base border border-slate-200 rounded bg-white"
+                className="w-full h-8 pl-7 pr-2 text-base border border-default rounded bg-white"
               />
             </div>
             {searching && (
@@ -5050,7 +5050,7 @@ function RelatedTab({
               </div>
             )}
             {results.length > 0 && !selectedTo && (
-              <div className="mt-1 border border-slate-200 rounded bg-white max-h-48 overflow-y-auto">
+              <div className="mt-1 border border-default rounded bg-white max-h-48 overflow-y-auto">
                 {results.map((r) => (
                   <button
                     key={r.id}
@@ -5166,7 +5166,7 @@ function RelatedTab({
       {/* Incoming awareness — read-only list of products that link
           to this one. Useful when editing/removing this product. */}
       {incoming.length > 0 && (
-        <section className="pt-3 border-t border-slate-100 space-y-1.5">
+        <section className="pt-3 border-t border-subtle space-y-1.5">
           <div className="text-sm font-semibold text-slate-700">
             {t(
               incoming.length === 1
@@ -5191,7 +5191,7 @@ function RelatedTab({
                     }),
                   )
                 }
-                className="flex items-center gap-2 px-2 py-1.5 border border-slate-100 rounded bg-slate-50/40 cursor-pointer hover:bg-slate-50"
+                className="flex items-center gap-2 px-2 py-1.5 border border-subtle rounded bg-slate-50/40 cursor-pointer hover:bg-slate-50"
               >
                 {p.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element

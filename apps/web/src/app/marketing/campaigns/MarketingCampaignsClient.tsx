@@ -272,10 +272,10 @@ export function MarketingCampaignsClient({
             </span>
           )}
           <div className="ml-auto flex items-center gap-2">
-            <Link href="/marketing/advertising" className="inline-flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" title="Amazon Trading Desk — search terms, reports, aged stock, true profit, feeds">
+            <Link href="/marketing/advertising" className="inline-flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" title="Amazon Trading Desk — search terms, reports, aged stock, true profit, feeds">
               <Target size={14} /> Trading Desk
             </Link>
-            <Link href="/pricing/promotions" className="inline-flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" title="Promotion scheduler (deals, markdowns, discounts)">
+            <Link href="/pricing/promotions" className="inline-flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" title="Promotion scheduler (deals, markdowns, discounts)">
               <Megaphone size={14} /> Promotion scheduler
             </Link>
             <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700">
@@ -293,18 +293,18 @@ export function MarketingCampaignsClient({
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <SharedLensTabs tabs={LENS_TABS} current={lens} onChange={setLens} />
         <div className="relative">
-          <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-tertiary" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search campaigns…"
-            className="pl-7 pr-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 w-56"
+            className="pl-7 pr-2 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 w-56"
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+          className="py-1.5 px-2 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900"
         >
           <option value="">All statuses</option>
           {['ACTIVE', 'PAUSED', 'DRAFT', 'SCHEDULED', 'ENDED', 'SUSPENDED', 'FAILED'].map((s) => (
@@ -313,14 +313,14 @@ export function MarketingCampaignsClient({
         </select>
         <button
           onClick={() => void refetch()}
-          className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+          className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
-        <span className="text-xs text-slate-400 ml-auto">{rows.length} shown{capped ? ' (capped at 500)' : ''}</span>
+        <span className="text-xs text-tertiary ml-auto">{rows.length} shown{capped ? ' (capped at 500)' : ''}</span>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+      <div className="overflow-x-auto rounded-lg border border-default dark:border-slate-800">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide">
             <tr>
@@ -340,7 +340,7 @@ export function MarketingCampaignsClient({
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {rows.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-3 py-10 text-center text-slate-400">
+                <td colSpan={11} className="px-3 py-10 text-center text-tertiary">
                   No campaigns yet. Amazon campaigns appear once the shadow backfill has run; other channels populate as their adapters ship.
                 </td>
               </tr>
@@ -349,7 +349,7 @@ export function MarketingCampaignsClient({
               <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
                 <td className="px-3 py-2">
                   <Link href={`/marketing/campaigns/${c.id}`} className="font-medium text-slate-800 dark:text-slate-100 truncate max-w-[280px] block hover:text-blue-600 hover:underline">{c.name}</Link>
-                  <div className="text-xs text-slate-400">{c.surface}{c.adProduct ? ` · ${c.adProduct}` : ''}{c.targetCount ? ` · ${c.targetCount} targets` : ''}</div>
+                  <div className="text-xs text-tertiary">{c.surface}{c.adProduct ? ` · ${c.adProduct}` : ''}{c.targetCount ? ` · ${c.targetCount} targets` : ''}</div>
                 </td>
                 <td className="px-3 py-2">
                   <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${CHANNEL_CHIP[c.channel] ?? CHANNEL_CHIP.INTERNAL}`}>{c.channel}</span>
@@ -426,35 +426,35 @@ export function MarketingCampaignsClient({
               <button onClick={() => setShowCreate(false)}><X size={16} /></button>
             </div>
             <div className="space-y-3">
-              <input autoFocus placeholder="Campaign name" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+              <input autoFocus placeholder="Campaign name" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
               <div className="flex gap-2">
                 <label className="flex-1 text-xs text-slate-500">Channel
-                  <select value={createForm.channel} onChange={(e) => setCreateForm({ ...createForm, channel: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
+                  <select value={createForm.channel} onChange={(e) => setCreateForm({ ...createForm, channel: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">
                     {['INTERNAL', 'AMAZON', 'EBAY', 'SHOPIFY', 'GOOGLE', 'META', 'TIKTOK'].map((c) => <option key={c}>{c}</option>)}
                   </select>
                 </label>
                 <label className="flex-1 text-xs text-slate-500">Surface
-                  <select value={createForm.surface} onChange={(e) => setCreateForm({ ...createForm, surface: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
+                  <select value={createForm.surface} onChange={(e) => setCreateForm({ ...createForm, surface: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">
                     {['CONTENT_PUSH', 'EMAIL_OUTREACH', 'REVIEW_OUTREACH', 'SP', 'SB', 'SD', 'PROMOTED_LISTINGS', 'DISCOUNT', 'MARKDOWN', 'DEAL', 'SHOPPING_FEED'].map((s) => <option key={s}>{s}</option>)}
                   </select>
                 </label>
               </div>
-              <input placeholder="Markets (comma-sep, e.g. IT,DE)" value={createForm.marketplaces} onChange={(e) => setCreateForm({ ...createForm, marketplaces: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+              <input placeholder="Markets (comma-sep, e.g. IT,DE)" value={createForm.marketplaces} onChange={(e) => setCreateForm({ ...createForm, marketplaces: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
               {createForm.surface === 'CONTENT_PUSH' && (
                 <div className="flex gap-2">
-                  <select value={createForm.contentType} onChange={(e) => setCreateForm({ ...createForm, contentType: e.target.value })} className="px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">{['LISTING_COPY', 'APLUS', 'BRAND_STORY'].map((t) => <option key={t}>{t}</option>)}</select>
-                  <input placeholder="Target ASINs/SKUs (comma-sep)" value={createForm.targetRefs} onChange={(e) => setCreateForm({ ...createForm, targetRefs: e.target.value })} className="flex-1 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+                  <select value={createForm.contentType} onChange={(e) => setCreateForm({ ...createForm, contentType: e.target.value })} className="px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">{['LISTING_COPY', 'APLUS', 'BRAND_STORY'].map((t) => <option key={t}>{t}</option>)}</select>
+                  <input placeholder="Target ASINs/SKUs (comma-sep)" value={createForm.targetRefs} onChange={(e) => setCreateForm({ ...createForm, targetRefs: e.target.value })} className="flex-1 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
                 </div>
               )}
               {(createForm.surface === 'EMAIL_OUTREACH' || createForm.surface === 'REVIEW_OUTREACH') && (
-                <input placeholder="CustomerSegment id (optional)" value={createForm.segmentId} onChange={(e) => setCreateForm({ ...createForm, segmentId: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+                <input placeholder="CustomerSegment id (optional)" value={createForm.segmentId} onChange={(e) => setCreateForm({ ...createForm, segmentId: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
               )}
               {['SP', 'SB', 'SD', 'PROMOTED_LISTINGS', 'SHOPPING_FEED'].includes(createForm.surface) && (
-                <input placeholder="Daily budget € (optional)" value={createForm.budgetEur} onChange={(e) => setCreateForm({ ...createForm, budgetEur: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+                <input placeholder="Daily budget € (optional)" value={createForm.budgetEur} onChange={(e) => setCreateForm({ ...createForm, budgetEur: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
               )}
             </div>
             <div className="flex justify-end gap-2 mt-4">
-              <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700">Cancel</button>
+              <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-sm rounded border border-default dark:border-slate-700">Cancel</button>
               <button onClick={createCampaign} disabled={!createForm.name} className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">Create draft</button>
             </div>
           </div>

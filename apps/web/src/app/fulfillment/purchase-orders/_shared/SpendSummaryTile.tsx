@@ -107,7 +107,7 @@ export function SpendSummaryTile({ onPickSupplier }: { onPickSupplier?: (id: str
 
   if (collapsed) {
     return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 flex items-center justify-between text-sm">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg px-3 py-1.5 flex items-center justify-between text-sm">
         <span className="text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
           <TrendingUp className="w-3.5 h-3.5" />
           {data
@@ -127,7 +127,7 @@ export function SpendSummaryTile({ onPickSupplier }: { onPickSupplier?: (id: str
 
   if (loading && !data) {
     return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 text-base text-slate-500 dark:text-slate-400 inline-flex items-center gap-2">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg p-4 text-base text-slate-500 dark:text-slate-400 inline-flex items-center gap-2">
         <Loader2 className="w-4 h-4 animate-spin" /> Loading spend summary…
       </div>
     )
@@ -144,8 +144,8 @@ export function SpendSummaryTile({ onPickSupplier }: { onPickSupplier?: (id: str
   const ccy = data.currencyCode
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-      <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center justify-between">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg overflow-hidden">
+      <div className="px-4 py-2 border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center justify-between">
         <span className="inline-flex items-center gap-1.5">
           <TrendingUp className="w-3.5 h-3.5" /> Spend summary
         </span>
@@ -159,7 +159,7 @@ export function SpendSummaryTile({ onPickSupplier }: { onPickSupplier?: (id: str
       </div>
 
       {/* Headline tiles */}
-      <div className="grid grid-cols-2 md:grid-cols-4 border-b border-slate-200 dark:border-slate-700">
+      <div className="grid grid-cols-2 md:grid-cols-4 border-b border-default dark:border-slate-700">
         <SpendTile
           label="Open"
           primary={formatCurrency(data.openValueCents, ccy)}
@@ -271,7 +271,7 @@ function SpendTile({
     slate: 'text-slate-900 dark:text-slate-100',
   } as any
   const inner = (
-    <div className="px-4 py-3 border-r last:border-r-0 border-slate-200 dark:border-slate-700 h-full">
+    <div className="px-4 py-3 border-r last:border-r-0 border-default dark:border-slate-700 h-full">
       <div className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 inline-flex items-center gap-1.5">
         {icon}
         {label}
@@ -316,7 +316,7 @@ function AgingRow({
         <span className="font-medium text-slate-900 dark:text-slate-100">
           {formatCurrency(bucket.valueCents, ccy)}
         </span>
-        <ArrowRight className="w-3 h-3 text-slate-400 dark:text-slate-500" />
+        <ArrowRight className="w-3 h-3 text-tertiary dark:text-slate-500" />
       </span>
     </div>
   )

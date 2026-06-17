@@ -133,7 +133,7 @@ export default function MobileReceiveClient({ id }: { id: string }) {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-800 flex flex-col">
       {/* Sticky header */}
-      <header className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-4 py-3">
+      <header className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-default dark:border-slate-700 px-4 py-3">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push('/fulfillment/inbound')}
@@ -257,9 +257,9 @@ function ItemList({
   return (
     <div className="space-y-3">
       {/* Search + scan */}
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+      <div className="bg-white dark:bg-slate-900 rounded-lg border border-default dark:border-slate-700 p-3 space-y-2">
         <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500" />
           <input
             ref={inputRef}
             type="text"
@@ -274,7 +274,7 @@ function ItemList({
           {search && (
             <button
               onClick={() => onSearchChange('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
               aria-label="Clear search"
             >
               <X size={16} />
@@ -328,7 +328,7 @@ function ItemCard({ item, onClick }: { item: Item; onClick: () => void }) {
       className={`w-full text-left bg-white dark:bg-slate-900 rounded-lg border-2 p-3 transition-colors ${
         fullyReceived ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/30' :
         onHold        ? 'border-amber-300 bg-amber-50/30' :
-        'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+        'border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
       }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -352,7 +352,7 @@ function ItemCard({ item, onClick }: { item: Item; onClick: () => void }) {
             )}
           </div>
         </div>
-        <div className="flex-shrink-0 inline-flex items-center gap-1 text-slate-400 dark:text-slate-500">
+        <div className="flex-shrink-0 inline-flex items-center gap-1 text-tertiary dark:text-slate-500">
           {fullyReceived ? <Check size={18} className="text-emerald-600 dark:text-emerald-400" /> : <ChevronRight size={18} />}
         </div>
       </div>
@@ -496,7 +496,7 @@ function ItemReceiveDetail({
         <div className="text-2xl font-mono font-bold text-slate-900 dark:text-slate-100 break-all">{item.sku}</div>
         <div className="text-base text-slate-500 dark:text-slate-400 mt-1">
           <span className="font-semibold tabular-nums">{item.quantityReceived}</span>
-          <span className="text-slate-400 dark:text-slate-500">/{item.quantityExpected}</span>
+          <span className="text-tertiary dark:text-slate-500">/{item.quantityExpected}</span>
           <span> received</span>
           {remaining > 0 && <span className="ml-2 text-amber-700 dark:text-amber-300">{remaining} remaining</span>}
         </div>
@@ -558,7 +558,7 @@ function ItemReceiveDetail({
               key={opt.v}
               onClick={() => setQc(qc === opt.v ? '' : opt.v)}
               className={`h-12 rounded-lg border-2 font-semibold text-md transition-colors ${
-                qc === opt.v ? opt.cls : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
+                qc === opt.v ? opt.cls : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-500 dark:text-slate-400'
               }`}
             >
               {opt.label}
@@ -580,7 +580,7 @@ function ItemReceiveDetail({
             <Package size={11} aria-hidden="true" />
             Lot info {lotNumber.trim() && lotOpen && <span className="text-slate-700 dark:text-slate-300 normal-case font-mono">· {lotNumber}</span>}
           </span>
-          <span className="text-xs text-slate-400 dark:text-slate-500">{lotOpen ? '▾' : '▸'}</span>
+          <span className="text-xs text-tertiary dark:text-slate-500">{lotOpen ? '▾' : '▸'}</span>
         </button>
         {lotOpen && (
           <div id="lot-capture-panel" className="mt-3 space-y-2">
@@ -594,7 +594,7 @@ function ItemReceiveDetail({
                 value={lotNumber}
                 onChange={(e) => setLotNumber(e.target.value)}
                 placeholder="e.g. AGV-BATCH-2025-04-A"
-                className="w-full h-12 px-3 text-md border-2 border-slate-200 dark:border-slate-700 rounded font-mono"
+                className="w-full h-12 px-3 text-md border-2 border-default dark:border-slate-700 rounded font-mono"
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -607,7 +607,7 @@ function ItemReceiveDetail({
                   type="date"
                   value={lotExpiresAt}
                   onChange={(e) => setLotExpiresAt(e.target.value)}
-                  className="w-full h-12 px-3 text-md border-2 border-slate-200 dark:border-slate-700 rounded"
+                  className="w-full h-12 px-3 text-md border-2 border-default dark:border-slate-700 rounded"
                 />
               </div>
               <div>
@@ -620,7 +620,7 @@ function ItemReceiveDetail({
                   value={lotSupplierRef}
                   onChange={(e) => setLotSupplierRef(e.target.value)}
                   placeholder="optional"
-                  className="w-full h-12 px-3 text-md border-2 border-slate-200 dark:border-slate-700 rounded font-mono"
+                  className="w-full h-12 px-3 text-md border-2 border-default dark:border-slate-700 rounded font-mono"
                 />
               </div>
             </div>
@@ -647,7 +647,7 @@ function ItemReceiveDetail({
             <Package size={11} aria-hidden="true" />
             Bin put-away {binCode.trim() && binOpen && <span className="text-slate-700 dark:text-slate-300 normal-case font-mono">· {binCode}</span>}
           </span>
-          <span className="text-xs text-slate-400 dark:text-slate-500">{binOpen ? '▾' : '▸'}</span>
+          <span className="text-xs text-tertiary dark:text-slate-500">{binOpen ? '▾' : '▸'}</span>
         </button>
         {binOpen && (
           <div id={`bin-capture-panel-${item.id}`} className="mt-3 space-y-2">
@@ -662,10 +662,10 @@ function ItemReceiveDetail({
                 onChange={(e) => setBinCode(e.target.value)}
                 placeholder="e.g. A-12-03"
                 autoCapitalize="characters"
-                className="w-full h-12 px-3 text-md border-2 border-slate-200 dark:border-slate-700 rounded font-mono"
+                className="w-full h-12 px-3 text-md border-2 border-default dark:border-slate-700 rounded font-mono"
               />
             </div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-2">
+            <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 rounded p-2">
               Bin must exist at this location. Receive stands even if put-away fails — fix the bin and retry from /fulfillment/stock/bins.
             </div>
           </div>

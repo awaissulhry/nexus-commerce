@@ -189,7 +189,7 @@ export default function AnalyticsClient() {
         actions={
           <Link
             href="/fulfillment/returns"
-            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
           >
             <ArrowLeft size={12} /> Back to workspace
           </Link>
@@ -216,7 +216,7 @@ export default function AnalyticsClient() {
           <div className="space-y-0.5">
             <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">FBA / Warehouse</div>
             <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
-              {data.fbaCount} <span className="text-base text-slate-400 dark:text-slate-500">/</span> {data.warehouseCount}
+              {data.fbaCount} <span className="text-base text-tertiary dark:text-slate-500">/</span> {data.warehouseCount}
             </div>
             <div className="text-xs text-slate-500 dark:text-slate-400">FBA Amazon-managed · Warehouse operator-managed</div>
           </div>
@@ -225,7 +225,7 @@ export default function AnalyticsClient() {
           <div className="space-y-0.5">
             <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Avg processing time</div>
             <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums inline-flex items-center gap-1.5">
-              <Clock size={16} className="text-slate-400 dark:text-slate-500" />
+              <Clock size={16} className="text-tertiary dark:text-slate-500" />
               {data.avgProcessingDays != null
                 ? `${data.avgProcessingDays.toFixed(1)}d`
                 : '—'}
@@ -244,7 +244,7 @@ export default function AnalyticsClient() {
                 </div>
               </>
             ) : (
-              <div className="text-sm text-slate-400 dark:text-slate-500">—</div>
+              <div className="text-sm text-tertiary dark:text-slate-500">—</div>
             )}
           </div>
         </Card>
@@ -282,7 +282,7 @@ export default function AnalyticsClient() {
               <div className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">No channel data yet.</div>
             ) : (
               <table className="w-full text-base">
-                <thead className="border-b border-slate-200 dark:border-slate-700">
+                <thead className="border-b border-default dark:border-slate-700">
                   <tr>
                     <th className="px-2 py-1.5 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Channel</th>
                     <th className="px-2 py-1.5 text-right text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Returns</th>
@@ -292,9 +292,9 @@ export default function AnalyticsClient() {
                 </thead>
                 <tbody>
                   {data.returnRateByChannel.map((row) => (
-                    <tr key={row.channel} className="border-b border-slate-100 dark:border-slate-800">
+                    <tr key={row.channel} className="border-b border-subtle dark:border-slate-800">
                       <td className="px-2 py-1.5">
-                        <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[row.channel] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>{row.channel}</span>
+                        <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[row.channel] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700'}`}>{row.channel}</span>
                       </td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{row.returns}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-slate-500 dark:text-slate-400">{row.orders}</td>
@@ -304,7 +304,7 @@ export default function AnalyticsClient() {
                             {row.ratePct.toFixed(1)}%
                           </span>
                         ) : (
-                          <span className="text-slate-400 dark:text-slate-500">—</span>
+                          <span className="text-tertiary dark:text-slate-500">—</span>
                         )}
                       </td>
                     </tr>
@@ -324,7 +324,7 @@ export default function AnalyticsClient() {
               <div className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">No SKU data yet.</div>
             ) : (
               <table className="w-full text-base">
-                <thead className="border-b border-slate-200 dark:border-slate-700">
+                <thead className="border-b border-default dark:border-slate-700">
                   <tr>
                     <th className="px-2 py-1.5 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">SKU</th>
                     <th className="px-2 py-1.5 text-right text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Returns</th>
@@ -333,7 +333,7 @@ export default function AnalyticsClient() {
                 </thead>
                 <tbody>
                   {data.topReturnSkus.map((row) => (
-                    <tr key={row.sku} className="border-b border-slate-100 dark:border-slate-800">
+                    <tr key={row.sku} className="border-b border-subtle dark:border-slate-800">
                       <td className="px-2 py-1.5 font-mono text-slate-700 dark:text-slate-300 truncate max-w-[200px]">{row.sku}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{row.returnCount}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-slate-500 dark:text-slate-400">{row.unitsReturned}</td>
@@ -365,7 +365,7 @@ export default function AnalyticsClient() {
             </div>
           ) : (
             <table className="w-full text-base">
-              <thead className="border-b border-slate-200 dark:border-slate-700">
+              <thead className="border-b border-default dark:border-slate-700">
                 <tr>
                   <th className="px-2 py-1.5 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">SKU</th>
                   <th className="px-2 py-1.5 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Type</th>
@@ -376,7 +376,7 @@ export default function AnalyticsClient() {
               </thead>
               <tbody>
                 {risk.flagged.map((row) => (
-                  <tr key={row.sku} className="border-b border-slate-100 dark:border-slate-800">
+                  <tr key={row.sku} className="border-b border-subtle dark:border-slate-800">
                     <td className="px-2 py-1.5">
                       <div className="font-mono text-slate-900 dark:text-slate-100 truncate max-w-[160px]">{row.sku}</div>
                       {row.productName && (
@@ -416,7 +416,7 @@ export default function AnalyticsClient() {
             <ol className="space-y-1.5 text-base">
               {data.topReasons.map((r, idx) => (
                 <li key={r.reason} className="flex items-center gap-3">
-                  <span className="text-xs text-slate-400 dark:text-slate-500 tabular-nums w-5">{idx + 1}.</span>
+                  <span className="text-xs text-tertiary dark:text-slate-500 tabular-nums w-5">{idx + 1}.</span>
                   <span className="flex-1 text-slate-800 dark:text-slate-200 truncate" title={r.reason}>{r.reason}</span>
                   <span className="tabular-nums text-slate-600 dark:text-slate-400">{r.count}</span>
                 </li>
@@ -434,7 +434,7 @@ export default function AnalyticsClient() {
             <Card>
               <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 inline-flex items-center gap-2 mb-3">
                 <TrendingDown size={14} className="text-violet-500" /> Refund mix & retention
-                <span className="text-xs text-slate-400 font-normal">(last {intel.windowDays}d)</span>
+                <span className="text-xs text-tertiary font-normal">(last {intel.windowDays}d)</span>
               </div>
               <div className="grid grid-cols-3 gap-2 text-center mb-3">
                 <IntelStat label="Cash" n={intel.retention.cash} cents={intel.retention.cashCents} tone="rose" />
@@ -446,7 +446,7 @@ export default function AnalyticsClient() {
                 <span className="font-bold tabular-nums">
                   {intel.retention.retentionPct != null ? `${intel.retention.retentionPct.toFixed(0)}%` : '—'}
                 </span>
-                <span className="text-xs text-slate-400 ml-1">(vs cash out the door)</span>
+                <span className="text-xs text-tertiary ml-1">(vs cash out the door)</span>
               </div>
             </Card>
 
@@ -454,12 +454,12 @@ export default function AnalyticsClient() {
             <Card>
               <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 inline-flex items-center gap-2 mb-3">
                 <Clock size={14} className="text-amber-500" /> Cost of returns
-                <span className="text-xs text-slate-400 font-normal">(last {intel.windowDays}d, est.)</span>
+                <span className="text-xs text-tertiary font-normal">(last {intel.windowDays}d, est.)</span>
               </div>
               <div className="space-y-1.5 text-sm">
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Cash refunds</span><span className="tabular-nums">€{(intel.costOfReturns.cashRefundCents / 100).toLocaleString()}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Handling ({intel.costOfReturns.returnCount} × €{(intel.costOfReturns.perReturnHandlingCents / 100).toFixed(2)})</span><span className="tabular-nums">€{(intel.costOfReturns.handlingCents / 100).toLocaleString()}</span></div>
-                <div className="flex justify-between border-t border-slate-200 dark:border-slate-700 pt-1.5 font-semibold"><span>Total</span><span className="tabular-nums">€{(intel.costOfReturns.totalCents / 100).toLocaleString()}</span></div>
+                <div className="flex justify-between border-t border-default dark:border-slate-700 pt-1.5 font-semibold"><span>Total</span><span className="tabular-nums">€{(intel.costOfReturns.totalCents / 100).toLocaleString()}</span></div>
               </div>
             </Card>
           </div>
@@ -468,7 +468,7 @@ export default function AnalyticsClient() {
           <Card>
             <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 inline-flex items-center gap-2 mb-2">
               <AlertTriangle size={14} className="text-rose-600 dark:text-rose-400" /> Serial returners
-              <span className="text-xs text-slate-400 font-normal">
+              <span className="text-xs text-tertiary font-normal">
                 ({intel.serialReturners.filter((s) => s.flagged).length} flagged · last {intel.windowDays}d)
               </span>
             </div>
@@ -478,7 +478,7 @@ export default function AnalyticsClient() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-200 dark:border-slate-700 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <tr className="border-b border-default dark:border-slate-700 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
                       <th className="px-2 py-1.5 font-semibold">Customer</th>
                       <th className="px-2 py-1.5 font-semibold text-right">Returns</th>
                       <th className="px-2 py-1.5 font-semibold text-right">Orders</th>
@@ -489,10 +489,10 @@ export default function AnalyticsClient() {
                   </thead>
                   <tbody>
                     {intel.serialReturners.map((s) => (
-                      <tr key={s.email} className={`border-b border-slate-100 dark:border-slate-800 ${s.flagged ? 'bg-rose-50/40 dark:bg-rose-950/20' : ''}`}>
+                      <tr key={s.email} className={`border-b border-subtle dark:border-slate-800 ${s.flagged ? 'bg-rose-50/40 dark:bg-rose-950/20' : ''}`}>
                         <td className="px-2 py-1.5">
                           <div className="text-slate-900 dark:text-slate-100 truncate max-w-[200px]">{s.customerName ?? s.email}</div>
-                          {s.customerName && <div className="text-xs text-slate-400 truncate max-w-[200px]">{s.email}</div>}
+                          {s.customerName && <div className="text-xs text-tertiary truncate max-w-[200px]">{s.email}</div>}
                         </td>
                         <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{s.returnCount}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums text-slate-500 dark:text-slate-400">{s.orderCount}</td>
@@ -501,7 +501,7 @@ export default function AnalyticsClient() {
                         <td className="px-2 py-1.5">
                           {s.flagged
                             ? <span className="text-xs font-semibold text-rose-700 dark:text-rose-300">{s.reason}</span>
-                            : <span className="text-xs text-slate-400">{s.reason}</span>}
+                            : <span className="text-xs text-tertiary">{s.reason}</span>}
                         </td>
                       </tr>
                     ))}
@@ -520,7 +520,7 @@ export default function AnalyticsClient() {
         <Card>
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 inline-flex items-center gap-2 mb-2">
             <AlertTriangle size={14} className="text-rose-600 dark:text-rose-400" /> Defect → recall candidates
-            <span className="text-xs text-slate-400 font-normal">(≥{recall.minDefectCount} defect returns · last {recall.windowDays}d)</span>
+            <span className="text-xs text-tertiary font-normal">(≥{recall.minDefectCount} defect returns · last {recall.windowDays}d)</span>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
             Products returning damaged/unusable. Review the active lots and open a recall on the implicated batch.
@@ -528,7 +528,7 @@ export default function AnalyticsClient() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-700 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <tr className="border-b border-default dark:border-slate-700 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   <th className="px-2 py-1.5 font-semibold">Product</th>
                   <th className="px-2 py-1.5 font-semibold text-right">Defect / total</th>
                   <th className="px-2 py-1.5 font-semibold text-right">Defect rate</th>
@@ -538,28 +538,28 @@ export default function AnalyticsClient() {
               </thead>
               <tbody>
                 {recall.candidates.filter((c) => c.flagged).map((c) => (
-                  <tr key={c.productId} className="border-b border-slate-100 dark:border-slate-800">
+                  <tr key={c.productId} className="border-b border-subtle dark:border-slate-800">
                     <td className="px-2 py-1.5">
                       <div className="text-slate-900 dark:text-slate-100 truncate max-w-[220px]">{c.name ?? c.sku ?? c.productId.slice(-6)}</div>
-                      {c.sku && <div className="font-mono text-xs text-slate-400 truncate max-w-[220px]">{c.sku}</div>}
+                      {c.sku && <div className="font-mono text-xs text-tertiary truncate max-w-[220px]">{c.sku}</div>}
                     </td>
                     <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-rose-700 dark:text-rose-300">
-                      {c.defectReturnCount}<span className="text-slate-400 font-normal"> / {c.totalReturnCount}</span>
+                      {c.defectReturnCount}<span className="text-tertiary font-normal"> / {c.totalReturnCount}</span>
                     </td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{c.defectRatePct != null ? `${c.defectRatePct.toFixed(0)}%` : '—'}</td>
                     <td className="px-2 py-1.5">
-                      {c.lots.length === 0 ? <span className="text-xs text-slate-400">no active lots</span> : (
+                      {c.lots.length === 0 ? <span className="text-xs text-tertiary">no active lots</span> : (
                         <div className="flex flex-wrap gap-1">
                           {c.lots.slice(0, 4).map((l) => (
                             <span
                               key={l.id}
                               title={l.hasOpenRecall ? 'Recall already open' : `${l.unitsRemaining} units remaining`}
-                              className={`text-[10px] font-mono px-1 py-0.5 border rounded ${l.hasOpenRecall ? 'border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/30' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'}`}
+                              className={`text-[10px] font-mono px-1 py-0.5 border rounded ${l.hasOpenRecall ? 'border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/30' : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-300'}`}
                             >
                               {l.lotNumber}{l.hasOpenRecall ? ' ⚠' : ` ·${l.unitsRemaining}`}
                             </span>
                           ))}
-                          {c.lots.length > 4 && <span className="text-[10px] text-slate-400">+{c.lots.length - 4}</span>}
+                          {c.lots.length > 4 && <span className="text-[10px] text-tertiary">+{c.lots.length - 4}</span>}
                         </div>
                       )}
                     </td>
@@ -582,7 +582,7 @@ function IntelStat({ label, n, cents, tone }: { label: string; n: number; cents:
     <div className={`rounded border px-2 py-1.5 ${tone === 'rose' ? 'border-rose-200 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20' : 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20'}`}>
       <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
       <div className="text-lg font-bold tabular-nums text-slate-900 dark:text-slate-100">{n}</div>
-      <div className="text-xs text-slate-400 tabular-nums">€{(cents / 100).toLocaleString()}</div>
+      <div className="text-xs text-tertiary tabular-nums">€{(cents / 100).toLocaleString()}</div>
     </div>
   )
 }

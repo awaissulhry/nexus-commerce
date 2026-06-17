@@ -303,7 +303,7 @@ export default function CategoryCard({
   return (
     <div
       data-jump-target="category"
-      className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-2.5"
+      className="rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-2.5"
     >
       {/* Header */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -339,7 +339,7 @@ export default function CategoryCard({
       </div>
 
       {/* Current state */}
-      <div className="rounded border border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-2 space-y-1.5">
+      <div className="rounded border border-subtle dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-2 space-y-1.5">
         <RowMono
           label="Product type"
           value={productType ?? null}
@@ -370,7 +370,7 @@ export default function CategoryCard({
           emptyHint="Set after Detect or AI suggest"
         />
         {detected && (detected.categoryPath || (detected.browseNodes ?? []).length > 0) && (
-          <div className="flex items-center gap-2 pt-1 mt-1 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2 pt-1 mt-1 border-t border-subtle dark:border-slate-800">
             <CheckCircle2 className="w-3 h-3 text-emerald-500" />
             <span className="text-[10.5px] text-emerald-700 dark:text-emerald-400 flex-1">
               Detection ready — click Save to write to the listing.
@@ -404,7 +404,7 @@ export default function CategoryCard({
 
       {/* Keyword search panel */}
       {searchOpen && (
-        <div className="rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 p-2 space-y-2">
+        <div className="rounded border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 p-2 space-y-2">
           <form onSubmit={handleSearch} className="flex items-center gap-1.5">
             <Input
               placeholder="e.g. leather jacket, helmet, gloves…"
@@ -437,13 +437,13 @@ export default function CategoryCard({
                   <button
                     type="button"
                     onClick={() => applySuggestion(s)}
-                    className="w-full text-left rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/60 dark:hover:bg-blue-950/30 transition-colors p-2"
+                    className="w-full text-left rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/60 dark:hover:bg-blue-950/30 transition-colors p-2"
                   >
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
                         {s.displayName}
                       </span>
-                      <span className="text-[10.5px] font-mono text-slate-400">
+                      <span className="text-[10.5px] font-mono text-tertiary">
                         {s.productType}
                       </span>
                     </div>
@@ -483,7 +483,7 @@ export default function CategoryCard({
         </div>
       )}
 
-      <div className="text-[10.5px] text-slate-400 italic">
+      <div className="text-[10.5px] text-tertiary italic">
         Apply writes productType to Master (PATCH /products/bulk) and
         browseNodeId to the active listing (PATCH /listings/:id with
         platformAttributes merge). No listing yet → product-side only.
@@ -518,7 +518,7 @@ function RowMono({
             ? mono
               ? 'font-mono text-slate-900 dark:text-slate-100'
               : 'text-slate-900 dark:text-slate-100'
-            : 'text-slate-400 italic',
+            : 'text-tertiary italic',
         )}
         title={value ?? undefined}
       >

@@ -96,7 +96,7 @@ export default function ChannelGroupsManager({
   )
 
   return (
-    <div className="border border-slate-200 rounded-lg bg-white">
+    <div className="border border-default rounded-lg bg-white">
       <button
         type="button"
         onClick={() => setExpanded((s) => !s)}
@@ -114,13 +114,13 @@ export default function ChannelGroupsManager({
             {groups.length}
           </span>
         </span>
-        <span className="text-xs text-slate-400 italic">
+        <span className="text-xs text-tertiary italic">
           Bulk-edit shortcuts for content + pricing
         </span>
       </button>
 
       {expanded && (
-        <div className="border-t border-slate-100 px-3 py-2 space-y-2">
+        <div className="border-t border-subtle px-3 py-2 space-y-2">
           {groups.length === 0 ? (
             <p className="text-sm text-slate-500 py-1">
               No groups yet. Use a group to apply the same content or
@@ -132,7 +132,7 @@ export default function ChannelGroupsManager({
               return (
                 <div
                   key={g.id}
-                  className="border border-slate-200 rounded bg-slate-50/40 px-2 py-2"
+                  className="border border-default rounded bg-slate-50/40 px-2 py-2"
                 >
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     {isEditing ? (
@@ -154,7 +154,7 @@ export default function ChannelGroupsManager({
                             setEditingId(null)
                           }
                         }}
-                        className="flex-1 h-6 px-1.5 text-base font-medium border border-slate-200 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        className="flex-1 h-6 px-1.5 text-base font-medium border border-default rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                       />
                     ) : (
                       <button
@@ -166,7 +166,7 @@ export default function ChannelGroupsManager({
                         className="flex-1 text-left text-base font-medium text-slate-900 hover:underline inline-flex items-center gap-1"
                       >
                         {g.name}
-                        <Pencil className="w-2.5 h-2.5 text-slate-400" />
+                        <Pencil className="w-2.5 h-2.5 text-tertiary" />
                       </button>
                     )}
                     <Tooltip content="Delete group" placement="top">
@@ -174,7 +174,7 @@ export default function ChannelGroupsManager({
                         type="button"
                         onClick={() => deleteGroup(g.id)}
                         aria-label="Delete group"
-                        className="text-slate-400 hover:text-rose-700 flex-shrink-0"
+                        className="text-tertiary hover:text-rose-700 flex-shrink-0"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
@@ -195,7 +195,7 @@ export default function ChannelGroupsManager({
                             'inline-flex items-center gap-1 h-6 px-1.5 text-xs font-mono font-medium rounded border transition-colors',
                             inGroup
                               ? 'bg-blue-50 border-blue-300 text-blue-800'
-                              : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300',
+                              : 'bg-white border-default text-slate-500 hover:border-slate-300',
                           )}
                         >
                           {channelKey}

@@ -60,7 +60,7 @@ export default function SyncHealthDashboard() {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-slate-200 p-6">
+      <div className="bg-white rounded-lg border border-default p-6">
         <div className="flex items-center justify-center h-32">
           <Activity className="w-6 h-6 animate-spin text-blue-500" />
           <span className="ml-2 text-slate-600">Loading health status...</span>
@@ -102,7 +102,7 @@ export default function SyncHealthDashboard() {
       case "critical":
         return "bg-red-50 border-red-200";
       default:
-        return "bg-slate-50 border-slate-200";
+        return "bg-slate-50 border-default";
     }
   };
 
@@ -184,7 +184,7 @@ export default function SyncHealthDashboard() {
       {/* Metrics Cards */}
       {metrics && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg border border-slate-200 p-4">
+          <div className="bg-white rounded-lg border border-default p-4">
             <p className="text-sm text-slate-600 uppercase tracking-wide">
               Total Syncs
             </p>
@@ -193,7 +193,7 @@ export default function SyncHealthDashboard() {
             </p>
           </div>
 
-          <div className="bg-white rounded-lg border border-slate-200 p-4">
+          <div className="bg-white rounded-lg border border-default p-4">
             <p className="text-sm text-slate-600 uppercase tracking-wide">
               Successful
             </p>
@@ -210,7 +210,7 @@ export default function SyncHealthDashboard() {
             </p>
           </div>
 
-          <div className="bg-white rounded-lg border border-slate-200 p-4">
+          <div className="bg-white rounded-lg border border-default p-4">
             <p className="text-sm text-slate-600 uppercase tracking-wide">
               Failed
             </p>
@@ -225,7 +225,7 @@ export default function SyncHealthDashboard() {
             </p>
           </div>
 
-          <div className="bg-white rounded-lg border border-slate-200 p-4">
+          <div className="bg-white rounded-lg border border-default p-4">
             <p className="text-sm text-slate-600 uppercase tracking-wide">
               Avg Success Rate
             </p>
@@ -234,7 +234,7 @@ export default function SyncHealthDashboard() {
             </p>
           </div>
 
-          <div className="bg-white rounded-lg border border-slate-200 p-4">
+          <div className="bg-white rounded-lg border border-default p-4">
             <p className="text-sm text-slate-600 uppercase tracking-wide">
               Products Processed
             </p>
@@ -243,7 +243,7 @@ export default function SyncHealthDashboard() {
             </p>
           </div>
 
-          <div className="bg-white rounded-lg border border-slate-200 p-4">
+          <div className="bg-white rounded-lg border border-default p-4">
             <p className="text-sm text-slate-600 uppercase tracking-wide">
               Products Failed
             </p>
@@ -262,7 +262,7 @@ export default function SyncHealthDashboard() {
             </p>
           </div>
 
-          <div className="bg-white rounded-lg border border-slate-200 p-4">
+          <div className="bg-white rounded-lg border border-default p-4">
             <p className="text-sm text-slate-600 uppercase tracking-wide">
               Avg Duration
             </p>
@@ -271,7 +271,7 @@ export default function SyncHealthDashboard() {
             </p>
           </div>
 
-          <div className="bg-white rounded-lg border border-slate-200 p-4">
+          <div className="bg-white rounded-lg border border-default p-4">
             <p className="text-sm text-slate-600 uppercase tracking-wide">
               Success Rate
             </p>

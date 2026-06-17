@@ -121,10 +121,10 @@ export default function WatermarksSection({ brand, apiBase }: Props) {
   }
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <section className="rounded-lg border border-default bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <header className="mb-3 flex items-center justify-between">
         <h2 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
-          <Stamp className="w-4 h-4 text-slate-400" />
+          <Stamp className="w-4 h-4 text-tertiary" />
           {t('brandKit.watermarks.title', {
             n: watermarks.length.toString(),
           })}
@@ -143,7 +143,7 @@ export default function WatermarksSection({ brand, apiBase }: Props) {
         {/* Test preview URL */}
         <label className="block">
           <span className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300">
-            <Eye className="w-3.5 h-3.5 text-slate-400" />
+            <Eye className="w-3.5 h-3.5 text-tertiary" />
             {t('brandKit.watermarks.previewLabel')}
           </span>
           <input
@@ -181,8 +181,8 @@ export default function WatermarksSection({ brand, apiBase }: Props) {
                   key={wm.id}
                   className={`rounded-md border p-2 ${
                     wm.enabled
-                      ? 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'
-                      : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50'
+                      ? 'border-default bg-white dark:border-slate-700 dark:bg-slate-900'
+                      : 'border-default bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50'
                   }`}
                 >
                   <div className="flex items-center gap-2">
@@ -221,13 +221,13 @@ export default function WatermarksSection({ brand, apiBase }: Props) {
                       type="button"
                       onClick={() => remove(wm)}
                       aria-label={t('common.delete')}
-                      className="rounded p-1 text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+                      className="rounded p-1 text-tertiary hover:text-red-600 dark:hover:text-red-400"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                   {previewedUrl && (
-                    <div className="mt-2 relative aspect-video w-full overflow-hidden rounded border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
+                    <div className="mt-2 relative aspect-video w-full overflow-hidden rounded border border-default bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
                       <Image
                         src={previewedUrl}
                         alt={`Preview of ${wm.name}`}

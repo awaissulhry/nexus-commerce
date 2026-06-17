@@ -147,7 +147,7 @@ function EditCell({
     >
       {active ? (
         <div className="flex items-center gap-0.5">
-          {prefix && <span className="text-xs text-slate-400">{prefix}</span>}
+          {prefix && <span className="text-xs text-tertiary">{prefix}</span>}
           <input
             ref={inputRef}
             type="number"
@@ -176,7 +176,7 @@ function EditCell({
           onClick={onActivate}
           className="w-full text-right text-sm tabular-nums hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
         >
-          {state === 'saving' && <Loader2 className="w-3 h-3 inline animate-spin text-slate-400 mr-1" />}
+          {state === 'saving' && <Loader2 className="w-3 h-3 inline animate-spin text-tertiary mr-1" />}
           {state === 'flash'  && <Check className="w-3 h-3 inline text-green-600 mr-1" />}
           {state === 'error'  && <AlertCircle className="w-3 h-3 inline text-red-500 mr-1" />}
           {prefix}{value.toFixed(prefix === '€' ? 2 : 0)}
@@ -207,7 +207,7 @@ function FulfillmentCell({ fulfil, saving, onSet }: {
   return (
     <td className="px-2 py-1.5 text-center">
       <div className="inline-flex items-center gap-1">
-        <div className="inline-flex rounded border border-slate-200 dark:border-slate-700 overflow-hidden" role="group" aria-label="Fulfillment method">
+        <div className="inline-flex rounded border border-default dark:border-slate-700 overflow-hidden" role="group" aria-label="Fulfillment method">
           {(['FBA', 'FBM'] as const).map((m) => {
             const active = method === m
             return (
@@ -220,7 +220,7 @@ function FulfillmentCell({ fulfil, saving, onSet }: {
                     ? m === 'FBA'
                       ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
                       : 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300'
-                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300',
+                    : 'text-tertiary hover:text-slate-600 dark:hover:text-slate-300',
                   active && source === 'derived' && 'italic',
                 )}
                 title={
@@ -234,7 +234,7 @@ function FulfillmentCell({ fulfil, saving, onSet }: {
             )
           })}
         </div>
-        {saving === 'saving' && <Loader2 className="w-3 h-3 animate-spin text-slate-400" />}
+        {saving === 'saving' && <Loader2 className="w-3 h-3 animate-spin text-tertiary" />}
         {saving === 'flash' && <Check className="w-3 h-3 text-green-600" />}
         {saving === 'error' && <AlertCircle className="w-3 h-3 text-red-500" />}
       </div>
@@ -846,7 +846,7 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
                 onDragStart={() => setDragRowId(child.id)}
                 onDragEnd={() => setDragRowId(null)}
                 title="Drag to reorder"
-                className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 dark:text-slate-600 dark:hover:text-slate-400 opacity-0 group-hover/row:opacity-100 transition-opacity"
+                className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 dark:text-slate-600 dark:hover:text-tertiary opacity-0 group-hover/row:opacity-100 transition-opacity"
               >
                 <GripVertical className="w-3.5 h-3.5" />
               </span>
@@ -943,11 +943,11 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
         <td className="px-2 py-1.5">
           <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
             <button type="button" onClick={() => setEditTarget(child)}
-              className="p-1 text-slate-400 hover:text-slate-600 rounded">
+              className="p-1 text-tertiary hover:text-slate-600 rounded">
               <ChevronDown className="w-3.5 h-3.5" />
             </button>
             <button type="button" onClick={() => openDelete(child)}
-              className="p-1 text-slate-400 hover:text-red-500 rounded">
+              className="p-1 text-tertiary hover:text-red-500 rounded">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -1073,7 +1073,7 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
   }
 
   if (loading) return (
-    <div className="flex items-center gap-2 text-sm text-slate-400 py-8 px-4">
+    <div className="flex items-center gap-2 text-sm text-tertiary py-8 px-4">
       <Loader2 className="w-4 h-4 animate-spin" /> Loading matrix…
     </div>
   )
@@ -1093,16 +1093,16 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
       )}
 
       {/* MX.1 — Action bar: undo/redo + discard + publish */}
-      <div className="flex items-center gap-1 pb-2 border-b border-slate-100 dark:border-slate-800">
+      <div className="flex items-center gap-1 pb-2 border-b border-subtle dark:border-slate-800">
         <button
           type="button" title="Undo (⌘Z)" aria-label="Undo"
           disabled={historyLen === 0} onClick={handleUndo}
-          className="p-1.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-default transition-colors"
+          className="p-1.5 rounded text-tertiary hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-default transition-colors"
         ><Undo2 className="w-3.5 h-3.5" /></button>
         <button
           type="button" title="Redo (⌘⇧Z)" aria-label="Redo"
           disabled={redoLen === 0} onClick={handleRedo}
-          className="p-1.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-default transition-colors"
+          className="p-1.5 rounded text-tertiary hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-default transition-colors"
         ><Redo2 className="w-3.5 h-3.5" /></button>
         <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-0.5" />
         <Button
@@ -1136,7 +1136,7 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
           <span className="text-slate-300 dark:text-slate-600">·</span>
           <span className="text-blue-600 dark:text-blue-400">
             {selectedVariants.size} selected
-            <button type="button" onClick={() => setSelectedVariants(new Set())} className="ml-1.5 text-xs text-slate-400 hover:text-slate-600 underline-offset-2 hover:underline">clear</button>
+            <button type="button" onClick={() => setSelectedVariants(new Set())} className="ml-1.5 text-xs text-tertiary hover:text-slate-600 underline-offset-2 hover:underline">clear</button>
           </span>
         </>)}
         <span className="text-slate-300 dark:text-slate-600">·</span>
@@ -1158,7 +1158,7 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
               className={cn('px-2.5 py-1 text-xs font-medium rounded border transition-colors',
                 selectedMarket === mp
                   ? MARKET_COLORS[mp] + ' border-transparent'
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400')}>
+                  : 'bg-white dark:bg-slate-800 border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400')}>
               {mp}
             </button>
           ))}
@@ -1173,7 +1173,7 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
           <button key={mode} type="button" onClick={() => setBulkMode(bulkMode === mode ? 'none' : mode)}
             className={cn('px-2 py-1 text-xs rounded border transition-colors',
               bulkMode === mode ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-400 text-blue-700 dark:text-blue-300'
-                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-400')}>
+                : 'bg-white dark:bg-slate-800 border-default dark:border-slate-700 text-slate-500 hover:border-slate-400')}>
             {mode === 'price' && `€ Set ${selectedMarket} price`}
             {mode === 'qty'   && `# Set ${selectedMarket} qty`}
             {mode === 'pct'   && <><Percent className="w-3 h-3 inline mr-0.5" />Adjust %</>}
@@ -1192,7 +1192,7 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
             className={cn('inline-flex items-center gap-1 px-2 py-1 text-xs rounded border transition-colors',
               sortConfig.length > 0
                 ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-400 text-blue-700 dark:text-blue-300'
-                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-400')}
+                : 'bg-white dark:bg-slate-800 border-default dark:border-slate-700 text-slate-500 hover:border-slate-400')}
           >
             <ArrowUpDown className="w-3.5 h-3.5" />
             Sort{sortConfig.length > 0 ? ` (${sortConfig.length})` : ''}
@@ -1209,14 +1209,14 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
         </div>
         {manualOrder && (
           <button type="button" onClick={() => setManualOrder(null)}
-            className="text-xs text-slate-400 hover:text-slate-600 underline-offset-2 hover:underline"
+            className="text-xs text-tertiary hover:text-slate-600 underline-offset-2 hover:underline"
             title="Clear the manual drag order">
             custom order · reset
           </button>
         )}
 
         <div className="ml-auto flex items-center gap-2">
-          <button type="button" onClick={() => void refetch()} className="p-1.5 text-slate-400 hover:text-slate-600 rounded border border-slate-200 dark:border-slate-700">
+          <button type="button" onClick={() => void refetch()} className="p-1.5 text-tertiary hover:text-slate-600 rounded border border-default dark:border-slate-700">
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
           <Button size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setAddOpen(true)}>
@@ -1237,7 +1237,7 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
             <button key={mode} type="button" onClick={() => setBulkMode(bulkMode === mode ? 'none' : mode)}
               className={cn('px-2 py-1 text-xs rounded border transition-colors',
                 bulkMode === mode ? 'bg-blue-100 dark:bg-blue-900/40 border-blue-400 text-blue-700 dark:text-blue-300'
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-400')}>
+                  : 'bg-white dark:bg-slate-800 border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-400')}>
               {mode === 'price' && `€ Set ${selectedMarket} price`}
               {mode === 'qty'   && `# Set ${selectedMarket} qty`}
               {mode === 'pct'   && <><Percent className="w-3 h-3 inline mr-0.5" />Adjust %</>}
@@ -1247,9 +1247,9 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
           <div className="h-4 w-px bg-blue-200 dark:bg-blue-800" />
           <span className="text-xs text-slate-500 dark:text-slate-400">{selectedMarket} fulfilment:</span>
           <button type="button" disabled={bulkApplying} onClick={() => void bulkSetFulfilment('FBA')}
-            className="px-2 py-1 text-xs rounded border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-400 disabled:opacity-50">FBA</button>
+            className="px-2 py-1 text-xs rounded border bg-white dark:bg-slate-800 border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-400 disabled:opacity-50">FBA</button>
           <button type="button" disabled={bulkApplying} onClick={() => void bulkSetFulfilment('FBM')}
-            className="px-2 py-1 text-xs rounded border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-400 disabled:opacity-50">FBM</button>
+            className="px-2 py-1 text-xs rounded border bg-white dark:bg-slate-800 border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-400 disabled:opacity-50">FBM</button>
         </div>
       )}
 
@@ -1263,7 +1263,7 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
                 : `Set listed qty for ${someSelected ? `${selectedVariants.size} selected` : 'all'} variants on ${selectedMarket}`}
             </span>
             <div className="flex items-center gap-1">
-              {bulkMode === 'price' && <span className="text-xs text-slate-400">€</span>}
+              {bulkMode === 'price' && <span className="text-xs text-tertiary">€</span>}
               <input type="number" value={bulkValue} onChange={(e) => setBulkValue(e.target.value)}
                 placeholder={bulkMode === 'price' ? '89.99' : '50'}
                 className="w-24 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800" />
@@ -1274,7 +1274,7 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
             <div className="flex items-center gap-1">
               <input type="number" value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} placeholder="±5"
                 className="w-16 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800" />
-              <span className="text-xs text-slate-400">%</span>
+              <span className="text-xs text-tertiary">%</span>
             </div>
           </>)}
           {bulkMode === 'copy' && (<>
@@ -1282,26 +1282,26 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
             <select value={bulkSrc} onChange={(e) => setBulkSrc(e.target.value)} className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800">
               {ALL_MARKETS.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
-            <span className="text-xs text-slate-400">→</span>
+            <span className="text-xs text-tertiary">→</span>
             <select value={bulkDst} onChange={(e) => setBulkDst(e.target.value)} className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800">
               {ALL_MARKETS.filter((m) => m !== bulkSrc).map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
           </>)}
           <Button size="sm" loading={bulkApplying} onClick={applyBulk}>Apply</Button>
-          <button type="button" onClick={() => { setBulkMode('none'); setBulkValue('') }} className="text-xs text-slate-400 hover:text-slate-600">Cancel</button>
+          <button type="button" onClick={() => { setBulkMode('none'); setBulkValue('') }} className="text-xs text-tertiary hover:text-slate-600">Cancel</button>
         </div>
       )}
 
       {/* Grid */}
       <div
         ref={matrixScrollRef}
-        className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-auto"
+        className="border border-default dark:border-slate-700 rounded-lg overflow-auto"
         // F.1 — bound the height only when windowing so the inner scroll
         // drives the virtualizer; small families keep page-scroll.
         style={virtualize ? { maxHeight: '70vh' } : undefined}
       >
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 sticky top-0">
+          <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-default dark:border-slate-700 sticky top-0">
             <tr>
               {/* H.2 — select-all */}
               <th className="px-2 py-2 w-9">
@@ -1323,16 +1323,16 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
                 </span> price
               </SortTh>
               <SortTh col={`lq:${selectedMarket}`} className="text-right">Listed qty</SortTh>
-              <th className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-400 whitespace-nowrap" title="Fulfillment method on this market — sets ChannelListing.fulfillmentMethod. FBM is backed by your warehouse, FBA by Amazon SELLABLE stock.">Fulfilment</th>
-              <th className="px-2 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-400" title="Available to publish for the selected method's pool, less the listing buffer.">Avail.</th>
-              <th className="px-2 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Physical</th>
-              <th className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Status</th>
+              <th className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-tertiary whitespace-nowrap" title="Fulfillment method on this market — sets ChannelListing.fulfillmentMethod. FBM is backed by your warehouse, FBA by Amazon SELLABLE stock.">Fulfilment</th>
+              <th className="px-2 py-2 text-right text-xs font-semibold uppercase tracking-wide text-tertiary" title="Available to publish for the selected method's pool, less the listing buffer.">Avail.</th>
+              <th className="px-2 py-2 text-right text-xs font-semibold uppercase tracking-wide text-tertiary">Physical</th>
+              <th className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-tertiary">Status</th>
               <th className="px-2 py-2 w-8" />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {displayRows.length === 0 && (
-              <tr><td colSpan={totalCols} className="py-10 text-center text-sm text-slate-400">
+              <tr><td colSpan={totalCols} className="py-10 text-center text-sm text-tertiary">
                 No variants yet. Click "Add variant" to create the first one.
               </td></tr>
             )}
@@ -1364,7 +1364,7 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
         </table>
       </div>
 
-      <p className="text-xs text-slate-400 dark:text-slate-500">
+      <p className="text-xs text-tertiary dark:text-slate-500">
         Click any price or quantity cell to edit. Drag the blue handle to fill down a column.
         Base price cascades to all channel listings. Channel price + listed qty update per-market only.
       </p>
@@ -1547,12 +1547,12 @@ function VariantFormModal({
                   />
                   <div>
                     <span className="text-sm text-slate-700 dark:text-slate-300">{label}</span>
-                    <span className="text-xs text-slate-400 ml-1.5">{desc}</span>
+                    <span className="text-xs text-tertiary ml-1.5">{desc}</span>
                   </div>
                 </label>
               ))}
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-tertiary">
               SKU, ASIN, barcodes and variation axes always excluded.
             </p>
           </div>

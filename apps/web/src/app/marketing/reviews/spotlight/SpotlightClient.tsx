@@ -106,7 +106,7 @@ export function SpotlightClient({ initial }: { initial: Spotlight | null }) {
           {spotlight ? 'Regenerate brief' : 'Generate brief'}
         </button>
         {spotlight && (
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-tertiary">
             {spotlight.usedAi ? 'AI' : 'heuristic'} · {spotlight.reviewCount} reviews ·{' '}
             {new Date(spotlight.generatedAt).toLocaleString()}
           </span>
@@ -120,7 +120,7 @@ export function SpotlightClient({ initial }: { initial: Spotlight | null }) {
       </div>
 
       {!spotlight ? (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-10 text-center">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-10 text-center">
           <Sparkles className="h-6 w-6 mx-auto text-violet-400 mb-2" />
           <div className="text-sm text-slate-600 dark:text-slate-300">
             No brief yet. Generate one to see the Voice of the Customer.
@@ -129,7 +129,7 @@ export function SpotlightClient({ initial }: { initial: Spotlight | null }) {
       ) : (
         <>
           {/* Headline + sentiment mix */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3">
+          <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-3">
             <div className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-2">
               {spotlight.headline}
             </div>
@@ -157,10 +157,10 @@ export function SpotlightClient({ initial }: { initial: Spotlight | null }) {
                 <Empty>No dominant complaints 🎉</Empty>
               ) : (
                 c!.complaints.map((x, i) => (
-                  <div key={i} className="py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                  <div key={i} className="py-2 border-b border-subtle dark:border-slate-800 last:border-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{x.theme}</span>
-                      <span className="text-xs text-slate-400">{x.count}</span>
+                      <span className="text-xs text-tertiary">{x.count}</span>
                       <span className={`ml-auto text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset ${SEVERITY_TONE[x.severity]}`}>
                         {x.severity}
                       </span>
@@ -183,10 +183,10 @@ export function SpotlightClient({ initial }: { initial: Spotlight | null }) {
                 <Empty>No clear praise themes yet.</Empty>
               ) : (
                 c!.praises.map((x, i) => (
-                  <div key={i} className="py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                  <div key={i} className="py-2 border-b border-subtle dark:border-slate-800 last:border-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{x.theme}</span>
-                      <span className="text-xs text-slate-400">{x.count}</span>
+                      <span className="text-xs text-tertiary">{x.count}</span>
                     </div>
                     {x.quotes.length > 0 && (
                       <ul className="mt-1 space-y-0.5">
@@ -204,7 +204,7 @@ export function SpotlightClient({ initial }: { initial: Spotlight | null }) {
             {c!.emerging.length > 0 && (
               <Section icon={<TrendingUp className="h-4 w-4 text-amber-500" />} title="Emerging issues">
                 {c!.emerging.map((x, i) => (
-                  <div key={i} className="py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                  <div key={i} className="py-2 border-b border-subtle dark:border-slate-800 last:border-0">
                     <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{x.theme}</div>
                     <div className="text-xs text-slate-500 dark:text-slate-400">{x.note}</div>
                   </div>
@@ -218,7 +218,7 @@ export function SpotlightClient({ initial }: { initial: Spotlight | null }) {
                 <Empty>No actions needed right now.</Empty>
               ) : (
                 c!.recommendations.map((x, i) => (
-                  <div key={i} className="py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                  <div key={i} className="py-2 border-b border-subtle dark:border-slate-800 last:border-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{x.title}</span>
                       <span className={`ml-auto text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset ${AREA_TONE[x.area] ?? AREA_TONE.product}`}>
@@ -232,7 +232,7 @@ export function SpotlightClient({ initial }: { initial: Spotlight | null }) {
             </Section>
           </div>
 
-          <div className="text-[11px] text-slate-400">
+          <div className="text-[11px] text-tertiary">
             <Link href="/marketing/reviews/desk" className="text-blue-600 dark:text-blue-400 hover:underline">
               Open the Response Desk
             </Link>{' '}
@@ -246,8 +246,8 @@ export function SpotlightClient({ initial }: { initial: Spotlight | null }) {
 
 function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
-      <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md">
+      <div className="px-3 py-2 border-b border-default dark:border-slate-800 flex items-center gap-2">
         {icon}
         <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{title}</div>
       </div>

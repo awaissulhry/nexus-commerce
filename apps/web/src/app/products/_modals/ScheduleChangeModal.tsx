@@ -183,7 +183,7 @@ export default function ScheduleChangeModal({
     >
         <div className="p-5 space-y-4 overflow-y-auto">
           {/* Kind tabs */}
-          <div className="inline-flex border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+          <div className="inline-flex border border-default dark:border-slate-700 rounded overflow-hidden">
             {(['STATUS', 'PRICE'] as const).map((k) => (
               <button
                 key={k}
@@ -206,7 +206,7 @@ export default function ScheduleChangeModal({
               <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block">
                 Set status to
               </label>
-              <div className="inline-flex border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+              <div className="inline-flex border border-default dark:border-slate-700 rounded overflow-hidden">
                 {(['ACTIVE', 'DRAFT', 'INACTIVE'] as const).map((s) => (
                   <button
                     key={s}
@@ -230,7 +230,7 @@ export default function ScheduleChangeModal({
               <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block">
                 New price
               </label>
-              <div className="inline-flex border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+              <div className="inline-flex border border-default dark:border-slate-700 rounded overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setPriceMode('percent')}
@@ -261,7 +261,7 @@ export default function ScheduleChangeModal({
                     step="0.1"
                     value={pricePercent}
                     onChange={(e) => setPricePercent(e.target.value)}
-                    className="w-28 h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded tabular-nums"
+                    className="w-28 h-8 px-2 text-base border border-default dark:border-slate-700 rounded tabular-nums"
                   />
                   <span className="text-base text-slate-700 dark:text-slate-300">%</span>
                   <span className="text-sm text-slate-500 dark:text-slate-400">
@@ -278,7 +278,7 @@ export default function ScheduleChangeModal({
                     value={priceAbsolute}
                     onChange={(e) => setPriceAbsolute(e.target.value)}
                     placeholder="29.99"
-                    className="w-32 h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded tabular-nums"
+                    className="w-32 h-8 px-2 text-base border border-default dark:border-slate-700 rounded tabular-nums"
                   />
                   <span className="text-sm text-slate-500 dark:text-slate-400">
                     overwrites basePrice for every selected product
@@ -301,7 +301,7 @@ export default function ScheduleChangeModal({
               type="datetime-local"
               value={scheduledFor}
               onChange={(e) => setScheduledFor(e.target.value)}
-              className="h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
+              className="h-8 px-2 text-base border border-default dark:border-slate-700 rounded"
             />
             <div className="text-sm text-slate-500 dark:text-slate-400">
               Local time. Applied within ~60s of the chosen moment by

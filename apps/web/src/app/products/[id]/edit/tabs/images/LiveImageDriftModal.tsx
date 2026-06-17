@@ -39,7 +39,7 @@ export default function LiveImageDriftModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden">
-        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-start justify-between px-5 py-4 border-b border-default dark:border-slate-700">
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
             <div>
@@ -73,12 +73,12 @@ export default function LiveImageDriftModal({
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
               Nexus intent
             </p>
-            <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden border border-slate-200 dark:border-slate-700">
+            <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden border border-default dark:border-slate-700">
               {nexusUrl ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img src={nexusUrl} alt="" className="w-full h-full object-contain" />
               ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-1 text-xs">
+                <div className="w-full h-full flex flex-col items-center justify-center text-tertiary gap-1 text-xs">
                   <Link2 className="w-5 h-5" />
                   <span>No matching ListingImage</span>
                 </div>
@@ -92,7 +92,7 @@ export default function LiveImageDriftModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-subtle dark:border-slate-800">
           <Button size="sm" variant="ghost" onClick={onClose} className="text-xs">
             Close
           </Button>

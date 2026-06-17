@@ -99,7 +99,7 @@ function PriceCell({
   if (editing) {
     return (
       <div className="flex items-center gap-1">
-        <span className="text-xs text-slate-400">€</span>
+        <span className="text-xs text-tertiary">€</span>
         <input
           ref={inputRef}
           type="number"
@@ -111,7 +111,7 @@ function PriceCell({
           className="w-20 px-1 py-0.5 text-xs border border-blue-400 rounded focus:outline-none"
           autoFocus
         />
-        {saving && <Loader2 className="w-3 h-3 animate-spin text-slate-400" />}
+        {saving && <Loader2 className="w-3 h-3 animate-spin text-tertiary" />}
       </div>
     )
   }
@@ -124,7 +124,7 @@ function PriceCell({
       className={cn(
         'text-sm tabular-nums text-left w-full px-1 py-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors',
         disabled && 'cursor-default',
-        value == null && 'text-slate-400 italic',
+        value == null && 'text-tertiary italic',
       )}
     >
       {value != null ? `€${value.toFixed(2)}` : '—'}
@@ -271,7 +271,7 @@ export default function ChannelPricingSection({ productId, isParent, channel = '
   )
 
   if (loading) return (
-    <div className="flex items-center gap-2 text-sm text-slate-400 py-4">
+    <div className="flex items-center gap-2 text-sm text-tertiary py-4">
       <Loader2 className="w-4 h-4 animate-spin" /> Loading channel pricing…
     </div>
   )
@@ -302,14 +302,14 @@ export default function ChannelPricingSection({ productId, isParent, channel = '
                 onClick={() => setBulkMode(bulkMode === mode ? 'none' : mode)}
                 className={cn('px-2 py-1 text-xs rounded border transition-colors',
                   bulkMode === mode ? 'bg-blue-50 border-blue-400 text-blue-700 dark:bg-blue-900/30 dark:border-blue-600 dark:text-blue-300'
-                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400')}>
+                    : 'bg-white dark:bg-slate-800 border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400')}>
                 {mode === 'price' && '€ Set price'}
                 {mode === 'pct' && <><Percent className="w-3 h-3 inline mr-0.5" />Adjust %</>}
                 {mode === 'copy' && <><Copy className="w-3 h-3 inline mr-0.5" />Copy market</>}
               </button>
             ))}
           </div>
-          <button type="button" onClick={fetch_} className="p-1 text-slate-400 hover:text-slate-600 rounded">
+          <button type="button" onClick={fetch_} className="p-1 text-tertiary hover:text-slate-600 rounded">
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -327,12 +327,12 @@ export default function ChannelPricingSection({ productId, isParent, channel = '
               {allMarkets.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
             <div className="flex items-center gap-1">
-              {bulkMode === 'price' && <span className="text-xs text-slate-400">€</span>}
+              {bulkMode === 'price' && <span className="text-xs text-tertiary">€</span>}
               <input type="number" step={bulkMode === 'price' ? '0.01' : '1'} value={bulkValue}
                 onChange={(e) => setBulkValue(e.target.value)}
                 placeholder={bulkMode === 'price' ? '89.99' : '±5'}
                 className="w-20 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800" />
-              {bulkMode === 'pct' && <span className="text-xs text-slate-400">%</span>}
+              {bulkMode === 'pct' && <span className="text-xs text-tertiary">%</span>}
             </div>
           </>)}
           {bulkMode === 'copy' && (<>
@@ -341,7 +341,7 @@ export default function ChannelPricingSection({ productId, isParent, channel = '
               className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800">
               {allMarkets.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
-            <span className="text-xs text-slate-400">→</span>
+            <span className="text-xs text-tertiary">→</span>
             <select value={bulkDstMarket} onChange={(e) => setBulkDstMarket(e.target.value)}
               className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800">
               {allMarkets.filter((m) => m !== bulkSrcMarket).map((m) => <option key={m} value={m}>{m}</option>)}
@@ -349,23 +349,23 @@ export default function ChannelPricingSection({ productId, isParent, channel = '
           </>)}
           <Button size="sm" loading={bulkApplying} onClick={applyBulk}>Apply</Button>
           <button type="button" onClick={() => { setBulkMode('none'); setBulkValue('') }}
-            className="text-xs text-slate-400 hover:text-slate-600">Cancel</button>
+            className="text-xs text-tertiary hover:text-slate-600">Cancel</button>
         </div>
       )}
 
       {/* Table */}
       {isParent ? (
         /* Variant-grouped view */
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+        <div className="border border-default dark:border-slate-700 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+            <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-default dark:border-slate-700">
               <tr>
                 <th className="px-3 py-2 text-left w-8" />
                 <th className="px-3 py-2 text-left"><SortBtn col="variant">Variant</SortBtn></th>
                 <th className="px-3 py-2 text-left"><SortBtn col="market">Market</SortBtn></th>
                 <th className="px-3 py-2 text-left"><SortBtn col="price">Price</SortBtn></th>
                 <th className="px-3 py-2 text-left"><SortBtn col="salePrice">Sale</SortBtn></th>
-                <th className="px-3 py-2 text-left text-xs text-slate-400 font-medium">Status</th>
+                <th className="px-3 py-2 text-left text-xs text-tertiary font-medium">Status</th>
                 <th className="px-3 py-2 text-left"><SortBtn col="lastSynced">Synced</SortBtn></th>
               </tr>
             </thead>
@@ -386,11 +386,11 @@ export default function ChannelPricingSection({ productId, isParent, channel = '
                       className="bg-slate-50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800/50 cursor-pointer"
                       onClick={() => setCollapsed((prev) => { const n = new Set(prev); if (n.has(variant.variantId)) n.delete(variant.variantId); else n.add(variant.variantId); return n })}>
                       <td className="px-3 py-2">
-                        {isCollapsed ? <ChevronRight className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+                        {isCollapsed ? <ChevronRight className="w-3.5 h-3.5 text-tertiary" /> : <ChevronDown className="w-3.5 h-3.5 text-tertiary" />}
                       </td>
                       <td className="px-3 py-2 font-medium text-slate-700 dark:text-slate-300 text-xs" colSpan={6}>
                         {attrLabel(variant.attributes)}
-                        <span className="ml-2 font-normal text-slate-400 font-mono">{variant.sku}</span>
+                        <span className="ml-2 font-normal text-tertiary font-mono">{variant.sku}</span>
                       </td>
                     </tr>
                     {/* Market rows */}
@@ -417,11 +417,11 @@ export default function ChannelPricingSection({ productId, isParent, channel = '
                           />
                         </td>
                         <td className="px-3 py-2">
-                          <span className={cn('text-xs', STATUS_COLORS[m.listingStatus] ?? 'text-slate-400')}>
+                          <span className={cn('text-xs', STATUS_COLORS[m.listingStatus] ?? 'text-tertiary')}>
                             {m.listingStatus}
                           </span>
                         </td>
-                        <td className="px-3 py-2 text-xs text-slate-400">{fmtTime(m.lastSyncedAt)}</td>
+                        <td className="px-3 py-2 text-xs text-tertiary">{fmtTime(m.lastSyncedAt)}</td>
                       </tr>
                     ))}
                   </>
@@ -432,14 +432,14 @@ export default function ChannelPricingSection({ productId, isParent, channel = '
         </div>
       ) : (
         /* Flat product view (no variants) */
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+        <div className="border border-default dark:border-slate-700 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+            <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-default dark:border-slate-700">
               <tr>
                 <th className="px-3 py-2 text-left"><SortBtn col="market">Market</SortBtn></th>
                 <th className="px-3 py-2 text-left"><SortBtn col="price">Price</SortBtn></th>
                 <th className="px-3 py-2 text-left"><SortBtn col="salePrice">Sale</SortBtn></th>
-                <th className="px-3 py-2 text-left text-xs text-slate-400 font-medium">Status</th>
+                <th className="px-3 py-2 text-left text-xs text-tertiary font-medium">Status</th>
                 <th className="px-3 py-2 text-left"><SortBtn col="lastSynced">Synced</SortBtn></th>
               </tr>
             </thead>
@@ -463,15 +463,15 @@ export default function ChannelPricingSection({ productId, isParent, channel = '
                     <PriceCell value={m.salePrice} onSave={(v) => savePrice(null, m.marketplace, v, 'salePrice')} />
                   </td>
                   <td className="px-3 py-2">
-                    <span className={cn('text-xs', STATUS_COLORS[m.listingStatus] ?? 'text-slate-400')}>{m.listingStatus}</span>
+                    <span className={cn('text-xs', STATUS_COLORS[m.listingStatus] ?? 'text-tertiary')}>{m.listingStatus}</span>
                   </td>
-                  <td className="px-3 py-2 text-xs text-slate-400">{fmtTime(m.lastSyncedAt)}</td>
+                  <td className="px-3 py-2 text-xs text-tertiary">{fmtTime(m.lastSyncedAt)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           {data.product.markets.length === 0 && (
-            <div className="py-8 text-center text-sm text-slate-400">
+            <div className="py-8 text-center text-sm text-tertiary">
               No channel listings yet — save the flat file for this product first.
             </div>
           )}

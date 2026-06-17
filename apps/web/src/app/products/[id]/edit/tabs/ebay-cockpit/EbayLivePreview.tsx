@@ -48,9 +48,9 @@ export default function EbayLivePreview({ composed, className }: Props) {
   const priceStr = formatPrice(composed.price.value, composed.currency)
 
   return (
-    <div className={cn('rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900', className)}>
+    <div className={cn('rounded-xl border border-default dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900', className)}>
       {/* Header strip ─ skin toggle, market chip, eBay nub */}
-      <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between gap-2">
+      <div className="px-3 py-2 border-b border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="font-mono text-xs font-semibold tracking-tight text-slate-700 dark:text-slate-300">
             <span className="text-rose-600">e</span>
@@ -92,7 +92,7 @@ export default function EbayLivePreview({ composed, className }: Props) {
       )}
 
       {/* Footer health hints */}
-      <div className="px-3 py-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+      <div className="px-3 py-2 border-t border-default dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
         <div className="flex items-center gap-3 flex-wrap">
           <span>Title {composed.healthHints.titleLength}/80</span>
           <span>Desc {composed.healthHints.descriptionLength} chars</span>
@@ -127,7 +127,7 @@ function MobileSkin(props: SkinProps) {
         {gallery.length > 1 && <GalleryNav idx={galleryIdx} setIdx={setGalleryIdx} total={gallery.length} />}
         <button
           type="button"
-          className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-rose-500"
+          className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 border border-default flex items-center justify-center text-slate-500 hover:text-rose-500"
           title="Add to watchlist"
         >
           <Heart className="w-4 h-4" />
@@ -137,7 +137,7 @@ function MobileSkin(props: SkinProps) {
       {/* Body */}
       <div className="px-4 py-3 space-y-2">
         <div className="text-[15px] leading-snug font-medium text-slate-900 dark:text-slate-100 line-clamp-3">
-          {composed.title.value || <em className="text-slate-400">No title set</em>}
+          {composed.title.value || <em className="text-tertiary">No title set</em>}
         </div>
         <div className="flex items-baseline gap-2 flex-wrap">
           <span className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{priceStr}</span>
@@ -186,7 +186,7 @@ function DesktopSkin(props: SkinProps) {
                 onClick={() => setGalleryIdx(i)}
                 className={cn(
                   'aspect-square rounded border overflow-hidden bg-white dark:bg-slate-800',
-                  i === galleryIdx ? 'border-blue-500 ring-1 ring-blue-300' : 'border-slate-200 dark:border-slate-700',
+                  i === galleryIdx ? 'border-blue-500 ring-1 ring-blue-300' : 'border-default dark:border-slate-700',
                 )}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -200,10 +200,10 @@ function DesktopSkin(props: SkinProps) {
       {/* Right: title, price, actions */}
       <div className="space-y-2 min-w-0">
         <div className="text-lg leading-snug font-semibold text-slate-900 dark:text-slate-100">
-          {composed.title.value || <em className="text-slate-400">No title set</em>}
+          {composed.title.value || <em className="text-tertiary">No title set</em>}
         </div>
         <ConditionRow composed={composed} />
-        <div className="pt-1 pb-2 border-t border-b border-slate-200 dark:border-slate-800">
+        <div className="pt-1 pb-2 border-t border-b border-default dark:border-slate-800">
           <div className="text-[28px] font-semibold leading-tight text-slate-900 dark:text-slate-100">
             {priceStr}
           </div>
@@ -242,7 +242,7 @@ function GalleryNav({ idx, setIdx, total }: { idx: number; setIdx: (n: number) =
       <button
         type="button"
         onClick={() => setIdx((idx - 1 + total) % total)}
-        className="absolute top-1/2 -translate-y-1/2 left-1 w-7 h-7 rounded-full bg-white/90 border border-slate-200 flex items-center justify-center text-slate-600"
+        className="absolute top-1/2 -translate-y-1/2 left-1 w-7 h-7 rounded-full bg-white/90 border border-default flex items-center justify-center text-slate-600"
         aria-label="Previous image"
       >
         <ChevronLeft className="w-4 h-4" />
@@ -250,7 +250,7 @@ function GalleryNav({ idx, setIdx, total }: { idx: number; setIdx: (n: number) =
       <button
         type="button"
         onClick={() => setIdx((idx + 1) % total)}
-        className="absolute top-1/2 -translate-y-1/2 right-1 w-7 h-7 rounded-full bg-white/90 border border-slate-200 flex items-center justify-center text-slate-600"
+        className="absolute top-1/2 -translate-y-1/2 right-1 w-7 h-7 rounded-full bg-white/90 border border-default flex items-center justify-center text-slate-600"
         aria-label="Next image"
       >
         <ChevronRight className="w-4 h-4" />
@@ -282,10 +282,10 @@ function ConditionRow({ composed }: { composed: ComposedListing }) {
 function ShippingRow() {
   return (
     <div className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-2 flex-wrap pt-1">
-      <Truck className="w-3.5 h-3.5 text-slate-400" />
+      <Truck className="w-3.5 h-3.5 text-tertiary" />
       <span>Standard shipping</span>
       <span className="text-slate-300">·</span>
-      <Shield className="w-3.5 h-3.5 text-slate-400" />
+      <Shield className="w-3.5 h-3.5 text-tertiary" />
       <span>30-day returns</span>
     </div>
   )
@@ -295,13 +295,13 @@ function DescriptionRow({ composed }: { composed: ComposedListing }) {
   const desc = composed.description.value
   if (!desc) {
     return (
-      <div className="text-xs text-slate-400 italic pt-2 border-t border-slate-100 dark:border-slate-800">
+      <div className="text-xs text-tertiary italic pt-2 border-t border-subtle dark:border-slate-800">
         No description set — operators will see a sparse listing on eBay.
       </div>
     )
   }
   return (
-    <div className="text-xs text-slate-700 dark:text-slate-300 pt-2 border-t border-slate-100 dark:border-slate-800 line-clamp-4 whitespace-pre-wrap">
+    <div className="text-xs text-slate-700 dark:text-slate-300 pt-2 border-t border-subtle dark:border-slate-800 line-clamp-4 whitespace-pre-wrap">
       {desc}
     </div>
   )

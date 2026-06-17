@@ -171,7 +171,7 @@ export default function PoTemplatesClient() {
         actions={
           <Link
             href="/fulfillment/purchase-orders"
-            className="h-8 px-3 inline-flex items-center gap-1.5 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="h-8 px-3 inline-flex items-center gap-1.5 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             ← Back to POs
           </Link>
@@ -231,7 +231,7 @@ export default function PoTemplatesClient() {
                     'w-full text-left px-4 py-3 rounded border transition-colors',
                     active
                       ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900'
-                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
+                      : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
                   )}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -251,7 +251,7 @@ export default function PoTemplatesClient() {
                       {formatCurrency(totalCents, tpl.currencyCode)}
                     </div>
                     {tpl.description && (
-                      <div className="text-slate-400 dark:text-slate-500 italic truncate">
+                      <div className="text-tertiary dark:text-slate-500 italic truncate">
                         {tpl.description}
                       </div>
                     )}
@@ -272,8 +272,8 @@ export default function PoTemplatesClient() {
                 onRefresh={load}
               />
             ) : (
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-8 text-center text-base text-slate-500 dark:text-slate-400">
-                <ChevronRight className="w-5 h-5 mx-auto mb-2 text-slate-400 dark:text-slate-500" />
+              <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg p-8 text-center text-base text-slate-500 dark:text-slate-400">
+                <ChevronRight className="w-5 h-5 mx-auto mb-2 text-tertiary dark:text-slate-500" />
                 Pick a template from the left to view items, manage
                 schedules, or instantiate as a fresh DRAFT.
               </div>
@@ -306,7 +306,7 @@ function TemplateDetail({
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg p-4">
         <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
           <div>
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -354,12 +354,12 @@ function TemplateDetail({
       <SchedulesPanel template={template} onRefresh={onRefresh} />
 
       {/* Items */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-        <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg overflow-hidden">
+        <div className="px-4 py-2 border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
           Items ({template.items.length})
         </div>
         <table className="w-full text-base">
-          <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+          <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-default dark:border-slate-700">
             <tr>
               <th className="text-left font-medium px-4 py-1.5">SKU</th>
               <th className="text-right font-medium px-4 py-1.5">Qty</th>
@@ -369,7 +369,7 @@ function TemplateDetail({
           </thead>
           <tbody>
             {template.items.map((it) => (
-              <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+              <tr key={it.id} className="border-b border-subtle dark:border-slate-800 last:border-0">
                 <td className="px-4 py-2 font-mono text-sm">
                   {it.sku}
                   {it.note && (
@@ -472,8 +472,8 @@ function SchedulesPanel({
   }
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-      <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg overflow-hidden">
+      <div className="px-4 py-2 border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide inline-flex items-center gap-1.5">
           <Repeat className="w-3.5 h-3.5" />
           Schedules
@@ -482,7 +482,7 @@ function SchedulesPanel({
           <button
             type="button"
             onClick={() => setAddingOpen(true)}
-            className="text-sm px-2 py-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-white dark:hover:bg-slate-900 inline-flex items-center gap-1 normal-case font-normal"
+            className="text-sm px-2 py-1 border border-default dark:border-slate-700 rounded hover:bg-white dark:hover:bg-slate-900 inline-flex items-center gap-1 normal-case font-normal"
           >
             <Plus size={11} /> Add schedule
           </button>
@@ -500,7 +500,7 @@ function SchedulesPanel({
                   value={cadenceInterval}
                   onChange={(e) => setCadenceInterval(parseInt(e.target.value, 10) || 1)}
                   disabled={busy}
-                  className="w-full h-8 px-2 text-base text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  className="w-full h-8 px-2 text-base text-right tabular-nums border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                 />
               </SchedField>
               <SchedField label="Cadence">
@@ -508,7 +508,7 @@ function SchedulesPanel({
                   value={cadence}
                   onChange={(e) => setCadence(e.target.value as Schedule['cadence'])}
                   disabled={busy}
-                  className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                 >
                   <option value="DAILY">day(s)</option>
                   <option value="WEEKLY">week(s)</option>
@@ -522,7 +522,7 @@ function SchedulesPanel({
                   value={startsAt}
                   onChange={(e) => setStartsAt(e.target.value)}
                   disabled={busy}
-                  className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                 />
               </SchedField>
               <SchedField label="Lead days">
@@ -535,7 +535,7 @@ function SchedulesPanel({
                   }
                   disabled={busy}
                   placeholder="optional"
-                  className="w-full h-8 px-2 text-base text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  className="w-full h-8 px-2 text-base text-right tabular-nums border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                 />
               </SchedField>
             </div>
@@ -573,8 +573,8 @@ function SchedulesPanel({
             className={cn(
               'border rounded p-3 flex items-center gap-3 flex-wrap',
               s.isActive
-                ? 'border-slate-200 dark:border-slate-700'
-                : 'border-slate-200 dark:border-slate-700 bg-slate-50/40 dark:bg-slate-800/40',
+                ? 'border-default dark:border-slate-700'
+                : 'border-default dark:border-slate-700 bg-slate-50/40 dark:bg-slate-800/40',
             )}
           >
             <div className="flex-1 min-w-0">
@@ -601,7 +601,7 @@ function SchedulesPanel({
               <button
                 type="button"
                 onClick={() => toggleActive(s)}
-                className="h-7 px-2 text-sm rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+                className="h-7 px-2 text-sm rounded border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
                 title={s.isActive ? 'Pause this schedule' : 'Resume this schedule'}
               >
                 {s.isActive ? <Pause size={12} /> : <Play size={12} />}
@@ -610,7 +610,7 @@ function SchedulesPanel({
               <button
                 type="button"
                 onClick={() => removeSchedule(s)}
-                className="h-7 w-7 inline-flex items-center justify-center rounded text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                className="h-7 w-7 inline-flex items-center justify-center rounded text-tertiary dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                 aria-label="Delete schedule"
               >
                 <Trash2 size={12} />

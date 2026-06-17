@@ -57,7 +57,7 @@ function EditableNumberCell({
         title={readOnlyHint}
       >
         {display}
-        {readOnlyHint && <span aria-hidden className="text-[10px] text-slate-400">🔒</span>}
+        {readOnlyHint && <span aria-hidden className="text-[10px] text-tertiary">🔒</span>}
       </span>
     )
   }
@@ -227,9 +227,9 @@ export default function VariantCube({
         {tab('axis', t('products.edit.cockpit.amazon.cube.viewAxis'))}
         {tab('variant', t('products.edit.cockpit.amazon.cube.viewVariant'))}
         {tab('market', t('products.edit.cockpit.amazon.cube.viewMarket'))}
-        <span className="ml-2 text-xs text-slate-400">· {activeMarket}</span>
+        <span className="ml-2 text-xs text-tertiary">· {activeMarket}</span>
       </div>
-      <div className="mb-2 text-[11px] text-slate-400">
+      <div className="mb-2 text-[11px] text-tertiary">
         {view === 'axis' && t('products.edit.cockpit.amazon.cube.hintAxis')}
         {view === 'variant' && t('products.edit.cockpit.amazon.cube.hintVariant', { market: activeMarket })}
         {view === 'market' && t('products.edit.cockpit.amazon.cube.hintMarket')}
@@ -337,11 +337,11 @@ function ByMarketView({
     }
   }
 
-  if (loading) return <div className="py-8 text-center text-sm text-slate-400">{t('products.edit.cockpit.amazon.cube.loading')}</div>
+  if (loading) return <div className="py-8 text-center text-sm text-tertiary">{t('products.edit.cockpit.amazon.cube.loading')}</div>
   if (error) return <div className="py-8 text-center text-sm text-rose-500">{error}</div>
-  if (variants.length === 0) return <div className="py-8 text-center text-sm text-slate-400">{t('products.edit.cockpit.amazon.cube.noVariants')}</div>
+  if (variants.length === 0) return <div className="py-8 text-center text-sm text-tertiary">{t('products.edit.cockpit.amazon.cube.noVariants')}</div>
   if (marketCodes.length === 0)
-    return <div className="py-8 text-center text-sm text-slate-400">{t('products.edit.cockpit.amazon.cube.noMarketData')}</div>
+    return <div className="py-8 text-center text-sm text-tertiary">{t('products.edit.cockpit.amazon.cube.noMarketData')}</div>
 
   const fieldBtn = (f: MarketField, label: string) => (
     <button
@@ -361,14 +361,14 @@ function ByMarketView({
   return (
     <div>
       <div className="mb-1.5 flex items-center gap-1">
-        <span className="text-xs text-slate-400">{t('products.edit.cockpit.amazon.cube.fieldLabel')}</span>
+        <span className="text-xs text-tertiary">{t('products.edit.cockpit.amazon.cube.fieldLabel')}</span>
         {fieldBtn('price', t('products.edit.cockpit.amazon.cube.price'))}
         {fieldBtn('listedQty', t('products.edit.cockpit.amazon.cube.listedQty'))}
-        <span className="ml-2 text-[10.5px] text-slate-400">
+        <span className="ml-2 text-[10.5px] text-tertiary">
           {t('products.edit.cockpit.amazon.cube.marketCellHint')}
         </span>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+      <div className="overflow-x-auto rounded-lg border border-default dark:border-slate-800">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs text-slate-500 dark:bg-slate-900/40 dark:text-slate-400">
             <tr>
@@ -394,7 +394,7 @@ function ByMarketView({
                         'ml-1.5 inline-flex items-center rounded p-0.5 align-middle',
                         fieldLinks.scopeFor('our_price', v.id) === 'linked'
                           ? 'text-blue-600 dark:text-blue-400'
-                          : 'text-slate-300 hover:text-slate-500 dark:text-slate-600 dark:hover:text-slate-400',
+                          : 'text-slate-300 hover:text-slate-500 dark:text-slate-600 dark:hover:text-tertiary',
                       )}
                     >
                       <Link2 aria-hidden className="h-3 w-3" />
@@ -418,7 +418,7 @@ function ByMarketView({
                     type="button"
                     onClick={() => void fillRow(v)}
                     title={t('products.edit.cockpit.amazon.cube.fillRowTitle')}
-                    className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+                    className="rounded px-1.5 py-0.5 text-xs text-tertiary hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
                   >
                     ⇥ {t('products.edit.cockpit.amazon.cube.fill')}
                   </button>
@@ -473,13 +473,13 @@ function ByVariantView({
 }) {
   const { t } = useTranslations()
   if (loading) {
-    return <div className="py-8 text-center text-sm text-slate-400">{t('products.edit.cockpit.amazon.cube.loading')}</div>
+    return <div className="py-8 text-center text-sm text-tertiary">{t('products.edit.cockpit.amazon.cube.loading')}</div>
   }
   if (error) {
     return <div className="py-8 text-center text-sm text-rose-500">{error}</div>
   }
   if (variants.length === 0) {
-    return <div className="py-8 text-center text-sm text-slate-400">{t('products.edit.cockpit.amazon.cube.noVariants')}</div>
+    return <div className="py-8 text-center text-sm text-tertiary">{t('products.edit.cockpit.amazon.cube.noVariants')}</div>
   }
 
   return (
@@ -689,7 +689,7 @@ function ByVariantTable({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t('products.edit.cockpit.amazon.cube.searchPlaceholder')}
-          className="h-7 w-48 rounded border border-slate-200 px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+          className="h-7 w-48 rounded border border-default px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
         />
         <button
           type="button"
@@ -698,12 +698,12 @@ function ByVariantTable({
             'h-7 rounded border px-2 text-xs',
             lowOnly
               ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
-              : 'border-slate-200 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800',
+              : 'border-default text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800',
           )}
         >
           {t('products.edit.cockpit.amazon.cube.lowStockOnly')}
         </button>
-        <span className="text-xs text-slate-400">
+        <span className="text-xs text-tertiary">
           {rows.length} / {variants.length}
         </span>
         {lastBulk && (
@@ -712,7 +712,7 @@ function ByVariantTable({
             onClick={() => void undoBulk()}
             disabled={bulkBusy}
             title={t('products.edit.cockpit.amazon.cube.undoBulkTitle')}
-            className="ml-auto inline-flex items-center gap-1 h-7 rounded border border-slate-200 px-2 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            className="ml-auto inline-flex items-center gap-1 h-7 rounded border border-default px-2 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             ↩ {t('products.edit.cockpit.amazon.cube.undoBulk')}
           </button>
@@ -732,7 +732,7 @@ function ByVariantTable({
               setBulkField(f)
               if (f !== 'basePrice') setBulkMode('set') // %-adjust is price-only
             }}
-            className="h-7 rounded border border-slate-200 px-1 text-xs dark:border-slate-700 dark:bg-slate-900"
+            className="h-7 rounded border border-default px-1 text-xs dark:border-slate-700 dark:bg-slate-900"
           >
             <option value="basePrice">{t('products.edit.cockpit.amazon.cube.basePrice')}</option>
             <option value="totalStock">{t('products.edit.cockpit.amazon.cube.stock')}</option>
@@ -741,7 +741,7 @@ function ByVariantTable({
             <select
               value={bulkMode}
               onChange={(e) => setBulkMode(e.target.value as 'set' | 'pct')}
-              className="h-7 rounded border border-slate-200 px-1 text-xs dark:border-slate-700 dark:bg-slate-900"
+              className="h-7 rounded border border-default px-1 text-xs dark:border-slate-700 dark:bg-slate-900"
               title={t('products.edit.cockpit.amazon.cube.bulkModeTitle')}
             >
               <option value="set">{t('products.edit.cockpit.amazon.cube.modeSet')}</option>
@@ -756,7 +756,7 @@ function ByVariantTable({
               if (e.key === 'Enter') void applyBulk()
             }}
             placeholder={bulkMode === 'pct' ? '± %' : t('products.edit.cockpit.amazon.cube.valuePlaceholder')}
-            className="h-7 w-24 rounded border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+            className="h-7 w-24 rounded border border-default px-2 text-xs dark:border-slate-700 dark:bg-slate-900"
           />
           <button
             type="button"
@@ -782,7 +782,7 @@ function ByVariantTable({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+      <div className="overflow-x-auto rounded-lg border border-default dark:border-slate-800">
       <table className="w-full min-w-[560px] text-sm">
         <thead className="bg-slate-50 text-left text-xs text-slate-500 dark:bg-slate-900/40 dark:text-slate-400">
           <tr>
@@ -828,7 +828,7 @@ function ByVariantTable({
                 </td>
                 <td className="px-3 py-1.5">
                   <span className="font-medium">{variantLabel(v.axes, v.sku)}</span>
-                  <span className="ml-1.5 font-mono text-[10px] text-slate-400">{v.sku}</span>
+                  <span className="ml-1.5 font-mono text-[10px] text-tertiary">{v.sku}</span>
                 </td>
                 <td className="px-3 py-1">
                   <EditableNumberCell

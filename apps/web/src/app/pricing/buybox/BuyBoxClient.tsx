@@ -140,7 +140,7 @@ export default function BuyBoxClient() {
                   'h-8 px-3 text-base border rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
                   days === w.days
                     ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800',
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800',
                 )}
               >
                 {w.label}
@@ -233,7 +233,7 @@ export default function BuyBoxClient() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
+              <thead className="border-b border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
                 <tr>
                   <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     {t('pricing.buybox.table.channel')}
@@ -256,7 +256,7 @@ export default function BuyBoxClient() {
                 {data.byMarketplace.map((m) => (
                   <tr
                     key={`${m.channel}|${m.marketplace}`}
-                    className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                   >
                     <td className="px-3 py-2 text-slate-700 dark:text-slate-300 font-medium">
                       {m.channel}
@@ -293,7 +293,7 @@ export default function BuyBoxClient() {
           <Card noPadding>
             <div className="overflow-x-auto">
               <table className="w-full text-md">
-                <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
+                <thead className="border-b border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
                   <tr>
                     <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                       {t('pricing.buybox.table.sellerId')}
@@ -310,14 +310,14 @@ export default function BuyBoxClient() {
                   {data.topCompetitors.map((c, i) => (
                     <tr
                       key={`${c.winnerSellerId}|${c.fulfillmentMethod}|${i}`}
-                      className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                     >
                       <td className="px-3 py-2 font-mono text-sm text-slate-700 dark:text-slate-300">
                         {c.winnerSellerId ?? t('pricing.buybox.unknownSeller')}
                       </td>
                       <td className="px-3 py-2 text-base text-slate-700 dark:text-slate-300">
                         {c.fulfillmentMethod ?? (
-                          <span className="text-slate-400 dark:text-slate-500">—</span>
+                          <span className="text-tertiary dark:text-slate-500">—</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-800 dark:text-slate-200">
@@ -337,7 +337,7 @@ export default function BuyBoxClient() {
 
 function WinRateBar({ pct }: { pct: number | null }) {
   if (pct == null) {
-    return <span className="text-sm text-slate-400 dark:text-slate-500">—</span>
+    return <span className="text-sm text-tertiary dark:text-slate-500">—</span>
   }
   const tone =
     pct < 50 ? 'rose' : pct < 80 ? 'amber' : 'emerald'

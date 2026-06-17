@@ -65,7 +65,7 @@ function DeltaCell({
   delta: number | null
   unit: 'units' | 'currency'
 }) {
-  if (delta == null) return <span className="text-slate-400 dark:text-slate-500">—</span>
+  if (delta == null) return <span className="text-tertiary dark:text-slate-500">—</span>
   const sign = delta > 0 ? '+' : ''
   const direction = delta > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-red-700 dark:text-red-300'
   const Icon = delta > 0 ? TrendingUp : TrendingDown
@@ -170,8 +170,8 @@ export default function StockDriftPanel() {
       : data?.priceDrift.totalCount ?? 0
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-      <div className="px-4 py-3 flex items-center justify-between border-b border-slate-200 dark:border-slate-700">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg overflow-hidden">
+      <div className="px-4 py-3 flex items-center justify-between border-b border-default dark:border-slate-700">
         <div>
           <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             Stock & Price Drift
@@ -205,7 +205,7 @@ export default function StockDriftPanel() {
 
       {/* Headline KPIs */}
       {data && (
-        <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center gap-4 flex-wrap">
+        <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-default dark:border-slate-700 flex items-center gap-4 flex-wrap">
           <button
             type="button"
             onClick={() => setTab('quantity')}
@@ -272,7 +272,7 @@ export default function StockDriftPanel() {
       {data && !allClean && activeRows.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-base">
-            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-default dark:border-slate-700">
               <tr>
                 <th className="text-left font-medium px-3 py-2">Listing</th>
                 <th className="text-left font-medium px-3 py-2 w-32">Channel</th>
@@ -287,10 +287,10 @@ export default function StockDriftPanel() {
               {activeRows.map((row) => {
                 const isQty = tab === 'quantity'
                 return (
-                  <tr key={row.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0 align-top">
+                  <tr key={row.id} className="border-b border-subtle dark:border-slate-800 last:border-0 align-top">
                     <td className="px-3 py-2">
                       <div className="font-mono text-sm text-slate-900 dark:text-slate-100">
-                        {row.sku ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
+                        {row.sku ?? <span className="text-tertiary dark:text-slate-500">—</span>}
                       </div>
                       {row.productName && (
                         <div className="text-sm text-slate-500 dark:text-slate-400 truncate max-w-md">
@@ -302,7 +302,7 @@ export default function StockDriftPanel() {
                       <div className="text-sm text-slate-700 dark:text-slate-300">
                         {row.channel}
                         {row.marketplace && (
-                          <span className="text-slate-400 dark:text-slate-500"> · {row.marketplace}</span>
+                          <span className="text-tertiary dark:text-slate-500"> · {row.marketplace}</span>
                         )}
                       </div>
                       {row.pricingRule && !isQty && (
@@ -335,7 +335,7 @@ export default function StockDriftPanel() {
                     <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
                       {relativeTime(row.lastSyncedAt)}
                       {row.lastSyncStatus && (
-                        <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                        <div className="text-xs text-tertiary dark:text-slate-500 mt-0.5">
                           {row.lastSyncStatus}
                         </div>
                       )}

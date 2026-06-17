@@ -70,7 +70,7 @@ function StatusDot({ status, ok }: { status: string; ok: boolean }) {
     return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
   if (status === 'failed' || !ok)
     return <XCircle className="w-3.5 h-3.5 text-rose-500" />
-  return <Clock className="w-3.5 h-3.5 text-slate-400" />
+  return <Clock className="w-3.5 h-3.5 text-tertiary" />
 }
 
 export default function AiAgentsClient() {
@@ -156,7 +156,7 @@ export default function AiAgentsClient() {
         <button
           type="button"
           onClick={() => void load()}
-          className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+          className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
         >
           <RefreshCw className="w-3 h-3" /> Refresh
         </button>
@@ -185,7 +185,7 @@ export default function AiAgentsClient() {
           {agents.map((a) => (
             <div
               key={a.key}
-              className="border border-slate-200 dark:border-slate-700 rounded-md p-3 bg-white dark:bg-slate-900"
+              className="border border-default dark:border-slate-700 rounded-md p-3 bg-white dark:bg-slate-900"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -193,7 +193,7 @@ export default function AiAgentsClient() {
                     {a.name}
                   </div>
                   {a.schedule && (
-                    <div className="text-sm text-slate-400 dark:text-slate-500 inline-flex items-center gap-1">
+                    <div className="text-sm text-tertiary dark:text-slate-500 inline-flex items-center gap-1">
                       <Clock className="w-3 h-3" /> {a.schedule}
                     </div>
                   )}
@@ -231,7 +231,7 @@ export default function AiAgentsClient() {
                     {ago(a.lastRun.at)}
                   </span>
                 ) : (
-                  <span className="text-slate-400">no runs yet</span>
+                  <span className="text-tertiary">no runs yet</span>
                 )}
               </div>
 
@@ -244,7 +244,7 @@ export default function AiAgentsClient() {
                     {a.pendingCount} awaiting approval
                   </a>
                 ) : (
-                  <span className="text-sm text-slate-400">
+                  <span className="text-sm text-tertiary">
                     no pending proposals
                   </span>
                 )}
@@ -252,7 +252,7 @@ export default function AiAgentsClient() {
                   type="button"
                   disabled={busy === a.key}
                   onClick={() => void runNow(a.key)}
-                  className="h-8 px-3 text-base rounded border border-slate-200 dark:border-slate-700 inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                  className="h-8 px-3 text-base rounded border border-default dark:border-slate-700 inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                 >
                   {busy === a.key ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -272,9 +272,9 @@ export default function AiAgentsClient() {
         <Activity className="w-3.5 h-3.5" /> Recent activity
       </h3>
       {runs.length === 0 ? (
-        <div className="text-sm text-slate-400">No agent runs yet.</div>
+        <div className="text-sm text-tertiary">No agent runs yet.</div>
       ) : (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+        <div className="border border-default dark:border-slate-700 rounded-md overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400">
               <tr>
@@ -289,7 +289,7 @@ export default function AiAgentsClient() {
               {runs.map((r) => (
                 <tr
                   key={r.id}
-                  className="border-t border-slate-100 dark:border-slate-800"
+                  className="border-t border-subtle dark:border-slate-800"
                 >
                   <td className="px-3 py-1.5 font-mono text-slate-700 dark:text-slate-300">
                     {r.agentKey}
@@ -304,7 +304,7 @@ export default function AiAgentsClient() {
                   <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">
                     ${Number(r.costUSD ?? 0).toFixed(4)}
                   </td>
-                  <td className="px-3 py-1.5 text-right text-slate-400">
+                  <td className="px-3 py-1.5 text-right text-tertiary">
                     {ago(r.createdAt)}
                   </td>
                 </tr>

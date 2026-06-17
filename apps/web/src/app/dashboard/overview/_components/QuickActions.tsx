@@ -113,7 +113,7 @@ export default function QuickActions({
                     {NUM_FMT.format(a.badge!)}
                   </span>
                 )}
-                <ArrowRight className="w-3 h-3 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-400 transition-colors flex-shrink-0" />
+                <ArrowRight className="w-3 h-3 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-tertiary transition-colors flex-shrink-0" />
               </Link>
             </li>
           )

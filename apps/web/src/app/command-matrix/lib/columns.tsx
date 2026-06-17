@@ -22,7 +22,7 @@ function LocaleCell({
   isVariant: boolean
 }) {
   if (isVariant || pct === null) {
-    return <span className="text-slate-400 text-xs">—</span>
+    return <span className="text-tertiary text-xs">—</span>
   }
   const tone = localeTone(pct)
   return (
@@ -67,7 +67,7 @@ export function buildColumns() {
             return (
               <button
                 onClick={row.getToggleExpandedHandler()}
-                className="flex items-center justify-center w-full h-full text-slate-400 hover:text-slate-700"
+                className="flex items-center justify-center w-full h-full text-tertiary hover:text-slate-700"
                 aria-label={row.getIsExpanded() ? 'Collapse' : 'Expand'}
               >
                 {row.getIsExpanded() ? (

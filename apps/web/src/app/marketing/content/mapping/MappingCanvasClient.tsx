@@ -98,7 +98,7 @@ function ChannelBadge({ channel }: { channel: string }) {
 
 function ConditionSummary({ condition }: { condition: TransformRule['condition'] }) {
   if (!condition) {
-    return <span className="text-slate-400 dark:text-slate-500 italic text-xs">always</span>
+    return <span className="text-tertiary dark:text-slate-500 italic text-xs">always</span>
   }
   return (
     <span className="text-xs font-mono text-slate-600 dark:text-slate-400">
@@ -282,7 +282,7 @@ export function MappingCanvasClient({
           <button
             type="button"
             onClick={() => startTransition(() => router.refresh())}
-            className="p-1.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+            className="p-1.5 rounded text-tertiary hover:text-slate-700 dark:hover:text-slate-200"
           >
             <RefreshCw className="h-3.5 w-3.5" />
           </button>
@@ -302,18 +302,18 @@ export function MappingCanvasClient({
       )}
 
       {/* Rules table */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md overflow-hidden">
         {displayed.length === 0 ? (
           <div className="px-6 py-12 text-center">
             <Layers className="h-8 w-8 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
             <p className="text-sm text-slate-500 dark:text-slate-400">No transform rules yet.</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+            <p className="text-xs text-tertiary dark:text-slate-500 mt-1">
               Click <strong>Add rule</strong> to define your first IF/THEN field mapping.
             </p>
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-default dark:border-slate-800">
               <tr>
                 <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-slate-500 font-medium w-6">#</th>
                 <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-slate-500 font-medium">Rule</th>
@@ -331,7 +331,7 @@ export function MappingCanvasClient({
                   key={rule.id}
                   className={`group ${!rule.enabled ? 'opacity-50' : ''}`}
                 >
-                  <td className="px-3 py-2 text-xs text-slate-400 tabular-nums">{rule.priority}</td>
+                  <td className="px-3 py-2 text-xs text-tertiary tabular-nums">{rule.priority}</td>
                   <td className="px-3 py-2">
                     <div className="font-medium text-slate-900 dark:text-slate-100 text-sm leading-tight">
                       {rule.name}
@@ -387,7 +387,7 @@ export function MappingCanvasClient({
                       <button
                         type="button"
                         onClick={() => openEdit(rule)}
-                        className="p-1 rounded text-slate-400 hover:text-violet-600 dark:hover:text-violet-400"
+                        className="p-1 rounded text-tertiary hover:text-violet-600 dark:hover:text-violet-400"
                         title="Edit rule"
                       >
                         <Pencil className="h-3.5 w-3.5" />
@@ -396,7 +396,7 @@ export function MappingCanvasClient({
                         type="button"
                         onClick={() => deleteRule(rule.id)}
                         disabled={deletingId === rule.id}
-                        className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-40"
+                        className="p-1 rounded text-tertiary hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-40"
                         title="Delete rule"
                       >
                         {deletingId === rule.id ? (
@@ -419,7 +419,7 @@ export function MappingCanvasClient({
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Preview — evaluate rules against a product
         </h2>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-4 space-y-3">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-4 space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
             <input
               type="text"
@@ -450,13 +450,13 @@ export function MappingCanvasClient({
           </div>
 
           {browseNode && (
-            <div className="flex items-center gap-2 p-2 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center gap-2 p-2 rounded-md bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700">
               <span className="text-xs text-slate-500 shrink-0">Browse node</span>
               <span className="font-mono text-xs text-slate-700 dark:text-slate-300">
                 {browseNode.nodeId}
               </span>
               {browseNode.nodePath && (
-                <span className="text-xs text-slate-400 truncate">{browseNode.nodePath}</span>
+                <span className="text-xs text-tertiary truncate">{browseNode.nodePath}</span>
               )}
               <span
                 className={`ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
@@ -499,7 +499,7 @@ export function MappingCanvasClient({
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-800">
+                      <tr className="border-b border-default dark:border-slate-800">
                         <th className="text-left pb-1.5 font-medium text-slate-500 pr-4">Field</th>
                         <th className="text-left pb-1.5 font-medium text-slate-500 pr-4">Rule applied</th>
                         <th className="text-left pb-1.5 font-medium text-slate-500 pr-4">Action</th>
@@ -521,7 +521,7 @@ export function MappingCanvasClient({
                             </span>
                           </td>
                           <td className="py-1.5 text-slate-700 dark:text-slate-300 max-w-xs truncate">
-                            {f.value || <span className="text-slate-400 italic">(empty)</span>}
+                            {f.value || <span className="text-tertiary italic">(empty)</span>}
                           </td>
                         </tr>
                       ))}
@@ -539,7 +539,7 @@ export function MappingCanvasClient({
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           How rules are evaluated
         </h2>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3 text-sm text-slate-600 dark:text-slate-400 space-y-2">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-3 text-sm text-slate-600 dark:text-slate-400 space-y-2">
           <div className="flex items-start gap-2">
             <span className="font-mono text-violet-600 dark:text-violet-400 text-xs mt-0.5">1</span>
             <span>

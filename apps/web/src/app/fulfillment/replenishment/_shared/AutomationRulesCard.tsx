@@ -314,7 +314,7 @@ export function AutomationRulesCard() {
 
   if (loading && !rules) {
     return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 text-xs text-slate-500">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2 text-xs text-slate-500">
         {t('replenishment.automation.loading')}
       </div>
     )
@@ -323,7 +323,7 @@ export function AutomationRulesCard() {
   // Empty state — pre-seed call to action
   if (!rules || rules.length === 0) {
     return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2.5 flex items-center gap-3 flex-wrap">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2.5 flex items-center gap-3 flex-wrap">
         <Sparkles
           className="h-4 w-4 text-slate-500 dark:text-slate-400"
           aria-hidden="true"
@@ -361,8 +361,8 @@ export function AutomationRulesCard() {
   const dryRunCount = rules.filter((r) => r.enabled && r.dryRun).length
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
-      <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md">
+      <div className="px-3 py-2 border-b border-default dark:border-slate-800 flex items-center gap-2">
         <Sparkles
           className="h-4 w-4 text-slate-500 dark:text-slate-400"
           aria-hidden="true"
@@ -528,7 +528,7 @@ export function AutomationRulesCard() {
                         {rule.description}
                       </div>
                     )}
-                    <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                    <div className="text-[10px] text-tertiary dark:text-slate-500 mt-1">
                       {t('replenishment.automation.counters', {
                         evals: rule.evaluationCount,
                         matches: rule.matchCount,
@@ -565,7 +565,7 @@ export function AutomationRulesCard() {
                 <button
                   type="button"
                   onClick={() => setEditingRule(rule)}
-                  className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded"
+                  className="h-7 w-7 inline-flex items-center justify-center text-tertiary hover:text-blue-700 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded"
                   title={t('replenishment.automation.editTooltip')}
                   aria-label={t('replenishment.automation.editAriaLabel', { name: rule.name })}
                 >
@@ -576,7 +576,7 @@ export function AutomationRulesCard() {
                   type="button"
                   onClick={() => void deleteRule(rule)}
                   disabled={busy}
-                  className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded disabled:opacity-50"
+                  className="h-7 w-7 inline-flex items-center justify-center text-tertiary hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded disabled:opacity-50"
                   title={t('replenishment.automation.deleteTooltip')}
                   aria-label={t('replenishment.automation.deleteAriaLabel', { name: rule.name })}
                 >
@@ -650,7 +650,7 @@ function RecentExecutions({ ruleId }: { ruleId: string }) {
             return (
               <li
                 key={exec.id}
-                className="rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50"
+                className="rounded border border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50"
               >
                 <button
                   type="button"
@@ -867,7 +867,7 @@ function RuleEditModal({
       size="lg"
     >
       <div
-        className="flex items-center gap-1 mb-3 border-b border-slate-200 dark:border-slate-800"
+        className="flex items-center gap-1 mb-3 border-b border-default dark:border-slate-800"
         role="tablist"
       >
         {(['basics', 'conditions', 'actions'] as const).map((k) => (

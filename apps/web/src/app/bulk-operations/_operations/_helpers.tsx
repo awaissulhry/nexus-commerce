@@ -10,7 +10,7 @@
 import * as React from 'react'
 
 export const inputCls =
-  'w-full h-7 px-2 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+  'w-full h-7 px-2 text-base border border-default rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
 
 export function Field({
   label,
@@ -54,7 +54,7 @@ export function OverrideNumber({
   const raw = payload[field]
   const display = raw === null || raw === undefined ? '' : String(raw)
   return (
-    <div className="border border-slate-200 rounded-md p-2">
+    <div className="border border-default rounded-md p-2">
       <label className="flex items-center gap-2 text-base text-slate-700 mb-1">
         <input type="checkbox" checked={enabled} onChange={onToggle} />
         <span className="font-medium">{label}</span>
@@ -115,7 +115,7 @@ export function BoolField({
             className={`h-5 px-2 text-xs uppercase tracking-wide font-medium rounded border ${
               value
                 ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
-                : 'bg-white border-slate-200 text-slate-500'
+                : 'bg-white border-default text-slate-500'
             }`}
           >
             On
@@ -126,7 +126,7 @@ export function BoolField({
             className={`h-5 px-2 text-xs uppercase tracking-wide font-medium rounded border ${
               !value
                 ? 'bg-rose-50 border-rose-300 text-rose-700'
-                : 'bg-white border-slate-200 text-slate-500'
+                : 'bg-white border-default text-slate-500'
             }`}
           >
             Off

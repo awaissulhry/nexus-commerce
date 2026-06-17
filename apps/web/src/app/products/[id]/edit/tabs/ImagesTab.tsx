@@ -277,7 +277,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
   // ── Loading / error states ───────────────────────────────────────────
   if (workspace.loading) {
     return (
-      <div className="flex items-center justify-center py-20 text-slate-400">
+      <div className="flex items-center justify-center py-20 text-tertiary">
         <Loader2 className="w-5 h-5 animate-spin mr-2" />
         Loading images…
       </div>
@@ -514,8 +514,8 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
       <PublishHealthCards productId={product.id} refreshKey={healthRefreshKey} />
 
       {/* ── Channel tab strip + axis selector ───────────────────────── */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-        <div className="flex items-center border-b border-slate-200 dark:border-slate-700 px-4 gap-1 flex-wrap">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-xl overflow-hidden">
+        <div className="flex items-center border-b border-default dark:border-slate-700 px-4 gap-1 flex-wrap">
           {/* Channel tabs */}
           <div className="flex items-center gap-1 flex-1 -mb-px overflow-x-auto">
             {CHANNEL_TABS.map(({ key, label }) => {
@@ -594,14 +594,14 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
 
           {/* Axis selector — show whenever variants exist */}
           {variants.length > 0 && (
-            <div className="flex items-center gap-2 py-2 pl-4 border-l border-slate-100 dark:border-slate-800 flex-shrink-0">
+            <div className="flex items-center gap-2 py-2 pl-4 border-l border-subtle dark:border-slate-800 flex-shrink-0">
               <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Group by</span>
               <input
                 list="images-axis-list"
                 value={activeAxis}
                 onChange={(e) => { if (e.target.value.trim()) setAxisPreference(e.target.value.trim()) }}
                 placeholder="e.g. Colore"
-                className="text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-400 w-28"
+                className="text-xs border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-400 w-28"
               />
               <datalist id="images-axis-list">
                 {[...new Set([...availableAxes, 'ASIN', 'SKU', 'Colore', 'Taglia', 'Color', 'Size', 'Colour', 'Material', 'Style', 'Gender'])].map((a) => (
@@ -791,7 +791,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
       </div>
 
       {/* PB.16 — Image-publish audit log */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-xl overflow-hidden">
         <PublishAuditLog productId={product.id} refreshKey={healthRefreshKey} />
       </div>
 

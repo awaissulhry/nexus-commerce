@@ -56,7 +56,7 @@ export default function SourceSwitcher({ current, available, locked, onSwitch, p
         onClick={() => setOpen((o) => !o)}
         className={cn(
           'inline-flex items-center gap-1 h-6 px-1.5 rounded text-[10.5px] border transition-colors',
-          'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400',
+          'border-default dark:border-slate-700 text-slate-600 dark:text-slate-400',
           'hover:bg-slate-50 dark:hover:bg-slate-800',
           locked && 'opacity-60 cursor-not-allowed',
         )}
@@ -68,7 +68,7 @@ export default function SourceSwitcher({ current, available, locked, onSwitch, p
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-7 z-30 min-w-[280px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg py-1"
+          className="absolute right-0 top-7 z-30 min-w-[280px] rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg py-1"
         >
           {available.map((src) => {
             const isCurrent = src === current
@@ -109,7 +109,7 @@ export default function SourceSwitcher({ current, available, locked, onSwitch, p
             )
           })}
           {locked && (
-            <div className="px-2.5 py-1.5 border-t border-slate-100 dark:border-slate-800 text-[10.5px] text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+            <div className="px-2.5 py-1.5 border-t border-subtle dark:border-slate-800 text-[10.5px] text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
               <Lock className="w-3 h-3" /> Unlock the field to change source
             </div>
           )}

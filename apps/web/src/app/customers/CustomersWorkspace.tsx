@@ -55,7 +55,7 @@ const CHANNEL_TONE: Record<string, string> = {
   SHOPIFY: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
   WOOCOMMERCE: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-900',
   ETSY: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
-  MANUAL: 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+  MANUAL: 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700',
 }
 
 const RISK_TONE: Record<string, 'success' | 'warning' | 'danger'> = {
@@ -181,7 +181,7 @@ export default function CustomersWorkspace() {
   return (
     <div className="space-y-5">
       {/* Sub-navigation */}
-      <nav className="border-b border-slate-200 dark:border-slate-800">
+      <nav className="border-b border-default dark:border-slate-800">
         <ul className="flex items-center gap-1 -mb-px">
           {customerTabs.map((tab) => {
             const active = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href)
@@ -216,7 +216,7 @@ export default function CustomersWorkspace() {
         actions={
           <a
             href={`${getBackendUrl()}/api/customers/export.csv?${searchParams.toString()}`}
-            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             download
           >
             <Download size={12} /> {t('customers.action.exportCsv')}
@@ -229,7 +229,7 @@ export default function CustomersWorkspace() {
           <div className="flex-1 max-w-md relative">
             <Search
               size={12}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500"
             />
             <Input
               id="customers-search"
@@ -266,7 +266,7 @@ export default function CustomersWorkspace() {
                   className={`h-7 px-2 text-sm border rounded inline-flex items-center gap-1.5 ${
                     active
                       ? `bg-${tone}-50 text-${tone}-700 border-${tone}-300`
-                      : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                      : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
                   {flag}
@@ -285,7 +285,7 @@ export default function CustomersWorkspace() {
               className={`h-7 px-3 text-sm border rounded-full font-medium ${
                 needsReview
                   ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300'
-                  : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                  : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
               }`}
             >
               {t('customers.filter.needsReview')}
@@ -325,7 +325,7 @@ export default function CustomersWorkspace() {
           <button
             type="button"
             onClick={() => setShortcutsOpen(true)}
-            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            className="h-7 w-7 inline-flex items-center justify-center border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
             title="Keyboard shortcuts (?)"
             aria-label="Keyboard shortcuts"
           >
@@ -354,7 +354,7 @@ export default function CustomersWorkspace() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md" role="grid" aria-label={t('customers.title')}>
-              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 sticky top-0 z-10">
+              <thead className="border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 sticky top-0 z-10">
                 <tr role="row">
                   <th
                     role="columnheader"
@@ -365,7 +365,7 @@ export default function CustomersWorkspace() {
                   >
                     {t('customers.table.header.customer')}
                     {sortBy === 'name' && (
-                      <span className="text-slate-400 dark:text-slate-500 ml-1" aria-hidden="true">
+                      <span className="text-tertiary dark:text-slate-500 ml-1" aria-hidden="true">
                         {sortDir === 'asc' ? '↑' : '↓'}
                       </span>
                     )}
@@ -379,7 +379,7 @@ export default function CustomersWorkspace() {
                   >
                     {t('customers.table.header.orders')}
                     {sortBy === 'orders' && (
-                      <span className="text-slate-400 dark:text-slate-500 ml-1" aria-hidden="true">
+                      <span className="text-tertiary dark:text-slate-500 ml-1" aria-hidden="true">
                         {sortDir === 'asc' ? '↑' : '↓'}
                       </span>
                     )}
@@ -393,7 +393,7 @@ export default function CustomersWorkspace() {
                   >
                     {t('customers.table.header.ltv')}
                     {sortBy === 'ltv' && (
-                      <span className="text-slate-400 dark:text-slate-500 ml-1" aria-hidden="true">
+                      <span className="text-tertiary dark:text-slate-500 ml-1" aria-hidden="true">
                         {sortDir === 'asc' ? '↑' : '↓'}
                       </span>
                     )}
@@ -407,7 +407,7 @@ export default function CustomersWorkspace() {
                   >
                     {t('customers.table.header.lastOrder')}
                     {sortBy === 'lastOrder' && (
-                      <span className="text-slate-400 dark:text-slate-500 ml-1" aria-hidden="true">
+                      <span className="text-tertiary dark:text-slate-500 ml-1" aria-hidden="true">
                         {sortDir === 'asc' ? '↑' : '↓'}
                       </span>
                     )}
@@ -433,7 +433,7 @@ export default function CustomersWorkspace() {
                   <tr
                     key={c.id}
                     role="row"
-                    className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                   >
                     <td className="px-3 py-2">
                       <Link
@@ -468,7 +468,7 @@ export default function CustomersWorkspace() {
                         {Object.entries(c.channelOrderCounts ?? {}).map(([ch, n]) => (
                           <span
                             key={ch}
-                            className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[ch] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}
+                            className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[ch] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700'}`}
                             title={`${n} order${n === 1 ? '' : 's'} on ${ch}`}
                           >
                             {ch} {n}
@@ -515,14 +515,14 @@ export default function CustomersWorkspace() {
             <button
               onClick={() => updateUrl({ page: page <= 2 ? undefined : String(page - 1) })}
               disabled={page === 1}
-              className="h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-7 px-3 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {t('common.previous')}
             </button>
             <button
               onClick={() => updateUrl({ page: String(Math.min(totalPages, page + 1)) })}
               disabled={page >= totalPages}
-              className="h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-7 px-3 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {t('common.next')}
             </button>

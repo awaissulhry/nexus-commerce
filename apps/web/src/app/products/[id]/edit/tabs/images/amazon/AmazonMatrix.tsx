@@ -262,7 +262,7 @@ function SlotCell({
           cell.fromMaster
             ? 'border-2 border-dashed border-slate-300 dark:border-slate-600 opacity-75'
             : cell.origin === 'inherited'
-              ? 'border opacity-60 border-slate-200 dark:border-slate-700'
+              ? 'border opacity-60 border-default dark:border-slate-700'
               : 'border border-slate-300 dark:border-slate-600',
           cell.isPending && 'ring-2 ring-amber-400 ring-offset-1',
           // IR.2.6 / IR.5.2 — red outline when image is below the
@@ -358,7 +358,7 @@ function SlotCell({
           type="button"
           tabIndex={-1}
           aria-hidden="true"
-          className="w-full h-full border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-center text-slate-300 dark:text-slate-600 hover:border-blue-400 dark:hover:border-blue-500 hover:text-blue-400 transition-all"
+          className="w-full h-full border-2 border-dashed border-default dark:border-slate-700 rounded-lg flex items-center justify-center text-slate-300 dark:text-slate-600 hover:border-blue-400 dark:hover:border-blue-500 hover:text-blue-400 transition-all"
           onClick={onClick}
         >
           <Plus className="w-4 h-4" />
@@ -405,7 +405,7 @@ function ColumnHeader({
       }}
     >
       <div className="text-[11px] font-mono leading-none">{slot}</div>
-      {slot === 'SWCH' && <div className="text-[9px] text-slate-400 mt-0.5">Swatch</div>}
+      {slot === 'SWCH' && <div className="text-[9px] text-tertiary mt-0.5">Swatch</div>}
     </div>
   )
 }
@@ -434,14 +434,14 @@ function RowMenu({
       <button
         type="button"
         onClick={() => setOpen((p) => !p)}
-        className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        className="p-1 rounded text-tertiary hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
       >
         <MoreHorizontal className="w-4 h-4" />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-7 z-30 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1 min-w-[180px] text-sm">
+          <div className="absolute right-0 top-7 z-30 bg-white dark:bg-slate-800 border border-default dark:border-slate-700 rounded-xl shadow-xl py-1 min-w-[180px] text-sm">
             {displayAsin && (
               <button className="w-full text-left px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700" onClick={() => { setOpen(false); onPublish() }}>
                 Publish by ASIN ({displayAsin.slice(0, 8)}…)
@@ -630,7 +630,7 @@ export default function AmazonMatrix({
             {bulk.imageCount > 0 ? `${bulk.imageCount} image${bulk.imageCount === 1 ? '' : 's'} selected` : 'Select images'}
           </span>
           {bulk.lockedIds.length > 0 && <span className="text-xs text-amber-600 dark:text-amber-400">· {bulk.lockedIds.length} locked</span>}
-          {bulk.empty.length > 0 && <span className="text-xs text-slate-400">· {bulk.empty.length} empty</span>}
+          {bulk.empty.length > 0 && <span className="text-xs text-tertiary">· {bulk.empty.length} empty</span>}
           {/* quick selects */}
           <span className="text-slate-300 dark:text-slate-600">|</span>
           <button type="button" onClick={() => toggleCells(allGridCells.filter((c) => !resolveCell(c.group, c.slot as AmazonSlot)?.url), true)} className="text-xs text-slate-500 dark:text-slate-400 underline-offset-2 hover:underline">empties</button>
@@ -722,7 +722,7 @@ export default function AmazonMatrix({
       )}
 
       {/* Scrollable matrix */}
-      <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+      <div className="overflow-x-auto rounded-xl border border-default dark:border-slate-700">
         <div
           role="grid"
           aria-label={`Amazon image matrix grouped by ${activeAxis}${activeMarketplace !== 'ALL' ? `, ${activeMarketplace} marketplace` : ''}`}
@@ -734,7 +734,7 @@ export default function AmazonMatrix({
           <div
             role="row"
             aria-rowindex={1}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800/95 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800/95 border-b border-default dark:border-slate-700 sticky top-0 z-10"
           >
             {/* Row label column header — sticky-left so it stays visible while scrolling slots */}
             <div
@@ -785,7 +785,7 @@ export default function AmazonMatrix({
                 role="row"
                 aria-rowindex={rowIdx + 2}
                 className={cn(
-                  'flex items-center gap-2 px-4 py-2 border-b border-slate-100 dark:border-slate-800 last:border-0',
+                  'flex items-center gap-2 px-4 py-2 border-b border-subtle dark:border-slate-800 last:border-0',
                   isAllColors ? 'bg-slate-50/50 dark:bg-slate-800/20' : 'bg-white dark:bg-slate-900',
                 )}
               >
@@ -816,7 +816,7 @@ export default function AmazonMatrix({
                       <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{label}</span>
                     )}
                   </div>
-                  <div className="text-[11px] font-mono text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                  <div className="text-[11px] font-mono text-tertiary dark:text-slate-500 truncate mt-0.5">
                     {isAllColors ? 'Shared slots' : sublabel}
                   </div>
                   {/* MAIN validation */}
@@ -912,13 +912,13 @@ export default function AmazonMatrix({
       </div>
 
       {/* Legend */}
-      <div className="mt-2 flex items-center gap-4 text-[11px] text-slate-400 dark:text-slate-500 px-1">
+      <div className="mt-2 flex items-center gap-4 text-[11px] text-tertiary dark:text-slate-500 px-1">
         <div className="flex items-center gap-1">
           <div className="w-3 h-3 border border-slate-300 rounded" />
           Own image
         </div>
         <div className="flex items-center gap-1">
-          <div className="w-3 h-3 border border-slate-200 rounded opacity-60" />
+          <div className="w-3 h-3 border border-default rounded opacity-60" />
           Inherited (∀)
         </div>
         <div className="flex items-center gap-1">

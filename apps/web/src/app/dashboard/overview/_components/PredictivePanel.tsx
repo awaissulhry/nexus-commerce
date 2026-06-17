@@ -113,7 +113,7 @@ export default function PredictivePanel({
         </Link>
       </div>
       {generatedLabel && (
-        <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400 dark:text-slate-500">
+        <div className="mt-3 pt-2 border-t border-subtle dark:border-slate-800 text-xs text-tertiary dark:text-slate-500">
           {generatedLabel}
         </div>
       )}

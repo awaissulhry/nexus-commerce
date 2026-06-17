@@ -104,7 +104,7 @@ export default function ChannelPreviewPane({ assetId, apiBase }: Props) {
   return (
     <section
       aria-label={t('marketingContent.preview.label')}
-      className="space-y-2 border-t border-slate-200 pt-3 dark:border-slate-800"
+      className="space-y-2 border-t border-default pt-3 dark:border-slate-800"
     >
       <header className="flex items-center justify-between">
         <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -115,7 +115,7 @@ export default function ChannelPreviewPane({ assetId, apiBase }: Props) {
           value={locale}
           onChange={(e) => setLocale(e.target.value)}
           aria-label={t('marketingContent.preview.localeLabel')}
-          className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-mono dark:border-slate-700 dark:bg-slate-900"
+          className="rounded border border-default bg-white px-1.5 py-0.5 text-[11px] font-mono dark:border-slate-700 dark:bg-slate-900"
         >
           {PREVIEW_LOCALES.map((l) => (
             <option key={l} value={l}>
@@ -135,7 +135,7 @@ export default function ChannelPreviewPane({ assetId, apiBase }: Props) {
       )}
 
       {loading ? (
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-tertiary">
           {t('marketingContent.preview.loading')}
         </p>
       ) : (
@@ -169,16 +169,16 @@ function ChannelFrame({
 }) {
   if (!variant.url) {
     return (
-      <div className="rounded border border-dashed border-slate-300 p-3 text-xs text-slate-400 dark:border-slate-700">
+      <div className="rounded border border-dashed border-slate-300 p-3 text-xs text-tertiary dark:border-slate-700">
         {channel}: no preview
       </div>
     )
   }
   return (
-    <figure className="overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-      <header className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] font-medium text-slate-600 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300">
+    <figure className="overflow-hidden rounded-md border border-default bg-white dark:border-slate-700 dark:bg-slate-900">
+      <header className="flex items-center justify-between border-b border-default bg-slate-50 px-2 py-1.5 text-[11px] font-medium text-slate-600 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300">
         <span>{channel}</span>
-        <span className="font-mono text-slate-400">
+        <span className="font-mono text-tertiary">
           {variant.width}×{variant.height}
         </span>
       </header>

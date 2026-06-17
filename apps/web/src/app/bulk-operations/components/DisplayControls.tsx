@@ -33,7 +33,7 @@ export function DisplayModeToggle({
     },
   ]
   return (
-    <div className="flex items-center gap-0.5 border border-slate-200 rounded-md p-0.5 bg-white">
+    <div className="flex items-center gap-0.5 border border-default rounded-md p-0.5 bg-white">
       {opts.map((o) => (
         <button
           key={o.id}
@@ -115,7 +115,7 @@ export function ExpandCollapseControls({
       >
         Collapse all
       </button>
-      <span className="text-slate-400 tabular-nums">
+      <span className="text-tertiary tabular-nums">
         {expandedParents.size}/{parentIds.size} expanded
       </span>
     </div>

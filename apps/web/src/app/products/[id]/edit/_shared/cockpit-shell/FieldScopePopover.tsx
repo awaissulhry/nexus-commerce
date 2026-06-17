@@ -124,7 +124,7 @@ export default function FieldScopePopover({
         role="dialog"
         aria-modal="true"
         aria-label={`${fieldLabel} · ${marketLabel} field scope`}
-        className="relative w-full max-w-sm rounded-lg border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+        className="relative w-full max-w-sm rounded-lg border border-default bg-white p-4 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
       >
         <div className="mb-3 flex items-start justify-between">
           <div>
@@ -137,7 +137,7 @@ export default function FieldScopePopover({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+            className="rounded p-1 text-tertiary hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
           >
             <X className="h-4 w-4" />
           </button>
@@ -154,7 +154,7 @@ export default function FieldScopePopover({
                 'flex w-full items-start gap-2 rounded-md border px-3 py-2 text-left',
                 draftScope === value
                   ? 'border-blue-300 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40'
-                  : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800',
+                  : 'border-default hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800',
               )}
             >
               <Icon aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400" />
@@ -169,13 +169,13 @@ export default function FieldScopePopover({
         </div>
 
         {draftScope === 'linked' && (
-          <div className="mt-3 rounded-md border border-slate-200 p-2 dark:border-slate-700">
+          <div className="mt-3 rounded-md border border-default p-2 dark:border-slate-700">
             <div className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-400">
               Members
             </div>
             <div className="max-h-40 space-y-1 overflow-y-auto">
               {members.length === 0 && (
-                <div className="text-xs text-slate-400">No other markets available to link.</div>
+                <div className="text-xs text-tertiary">No other markets available to link.</div>
               )}
               {members.map((m) => (
                 <label key={m.key} className="flex items-center gap-2 text-sm">
@@ -190,7 +190,7 @@ export default function FieldScopePopover({
               ))}
             </div>
             {canTranslate && (
-              <label className="mt-2 flex items-center gap-2 border-t border-slate-100 pt-2 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400">
+              <label className="mt-2 flex items-center gap-2 border-t border-subtle pt-2 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400">
                 <input
                   type="checkbox"
                   checked={translate}

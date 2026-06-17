@@ -321,7 +321,7 @@ export default function ActivityTab({
                   'h-7 px-2.5 rounded text-xs font-medium border transition-colors',
                   timeWindow === w
                     ? 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600',
+                    : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600',
                 )}
               >
                 {t(`products.edit.activity.window.${w}`)}
@@ -341,7 +341,7 @@ export default function ActivityTab({
                   'h-7 px-2.5 rounded text-xs font-medium border transition-colors',
                   actionFilter === a
                     ? 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600',
+                    : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600',
                 )}
               >
                 {t(`products.edit.activity.action.${a}`)}
@@ -370,11 +370,11 @@ export default function ActivityTab({
             {t('products.edit.activity.loading')}
           </div>
         ) : rows.length === 0 ? (
-          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-6 text-center">
+          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-default dark:border-slate-800 rounded p-6 text-center">
             {t('products.edit.activity.empty')}
           </div>
         ) : (
-          <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-default dark:border-slate-800 rounded-lg overflow-hidden">
             {rows.map((row) => (
               <ActivityRowItem
                 key={row.id}
@@ -437,7 +437,7 @@ function ActivityRowItem({
         onClick={onToggle}
         className="w-full text-left px-3 py-2.5 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
       >
-        <span className="mt-1 text-slate-400 dark:text-slate-600 flex-shrink-0">
+        <span className="mt-1 text-tertiary dark:text-slate-600 flex-shrink-0">
           {expanded ? (
             <ChevronDown className="w-3.5 h-3.5" />
           ) : (
@@ -465,7 +465,7 @@ function ActivityRowItem({
             )}
           </span>
         </span>
-        <span className="text-xs text-slate-400 dark:text-slate-600 tabular-nums flex-shrink-0">
+        <span className="text-xs text-tertiary dark:text-slate-600 tabular-nums flex-shrink-0">
           {formatAbsolute(row.createdAt)}
         </span>
       </button>
@@ -477,7 +477,7 @@ function ActivityRowItem({
               <summary className="cursor-pointer text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
                 {t('products.edit.activity.metadataLabel')}
               </summary>
-              <pre className="mt-1 p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded font-mono whitespace-pre-wrap break-all text-slate-700 dark:text-slate-300">
+              <pre className="mt-1 p-2 bg-slate-50 dark:bg-slate-900 border border-default dark:border-slate-800 rounded font-mono whitespace-pre-wrap break-all text-slate-700 dark:text-slate-300">
                 {JSON.stringify(row.metadata, null, 2)}
               </pre>
             </details>

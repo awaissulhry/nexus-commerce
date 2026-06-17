@@ -301,8 +301,8 @@ export default function AlertsClient() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* RULES COLUMN */}
-        <section className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
-          <header className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <section className="border border-default dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
+          <header className="px-3 py-2 border-b border-subtle dark:border-slate-800 flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
               <Bell className="w-3 h-3" /> {t('syncLogs.alerts.rules.heading')}
             </h2>
@@ -315,19 +315,19 @@ export default function AlertsClient() {
           </header>
 
           {/* Create form */}
-          <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 space-y-2 bg-slate-50/50 dark:bg-slate-800/30">
+          <div className="px-3 py-2 border-b border-subtle dark:border-slate-800 space-y-2 bg-slate-50/50 dark:bg-slate-800/30">
             <input
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder={t('syncLogs.alerts.rules.namePlaceholder')}
-              className="w-full px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-slate-400 dark:focus:border-slate-500"
+              className="w-full px-2 py-1 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-slate-400 dark:focus:border-slate-500"
             />
             <div className="flex items-center gap-1.5 flex-wrap">
               <select
                 value={newMetric}
                 onChange={(e) => setNewMetric(e.target.value)}
-                className="text-sm px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                className="text-sm px-2 py-1 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               >
                 {METRICS.map((m) => (
                   <option key={m.value} value={m.value}>
@@ -338,7 +338,7 @@ export default function AlertsClient() {
               <select
                 value={newOperator}
                 onChange={(e) => setNewOperator(e.target.value)}
-                className="text-sm px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                className="text-sm px-2 py-1 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               >
                 {OPERATORS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -351,7 +351,7 @@ export default function AlertsClient() {
                 value={newThreshold}
                 onChange={(e) => setNewThreshold(e.target.value)}
                 placeholder={t('syncLogs.alerts.rules.thresholdPlaceholder')}
-                className="w-24 px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                className="w-24 px-2 py-1 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               />
               <span className="text-xs text-slate-500 dark:text-slate-500">
                 {METRICS.find((m) => m.value === newMetric)?.unit}
@@ -363,7 +363,7 @@ export default function AlertsClient() {
                 type="text"
                 value={newWindow}
                 onChange={(e) => setNewWindow(e.target.value)}
-                className="w-14 px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                className="w-14 px-2 py-1 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               />
               <span className="text-xs text-slate-500 dark:text-slate-500">
                 {t('syncLogs.alerts.rules.minLabel')}
@@ -375,14 +375,14 @@ export default function AlertsClient() {
                 value={newChannel}
                 onChange={(e) => setNewChannel(e.target.value)}
                 placeholder={t('syncLogs.alerts.rules.channelPlaceholder')}
-                className="flex-1 px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                className="flex-1 px-2 py-1 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               />
               <input
                 type="text"
                 value={newNotify}
                 onChange={(e) => setNewNotify(e.target.value)}
                 placeholder={t('syncLogs.alerts.rules.notifyPlaceholder')}
-                className="flex-1 px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                className="flex-1 px-2 py-1 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               />
             </div>
             <div className="flex justify-end">
@@ -479,7 +479,7 @@ export default function AlertsClient() {
                       type="button"
                       onClick={() => void deleteRule(r)}
                       disabled={busyId === r.id}
-                      className="flex-shrink-0 p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
+                      className="flex-shrink-0 p-1 text-tertiary hover:text-rose-600 dark:hover:text-rose-400"
                       title={t('syncLogs.alerts.rules.deleteTooltip')}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -492,8 +492,8 @@ export default function AlertsClient() {
         </section>
 
         {/* EVENTS COLUMN */}
-        <section className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
-          <header className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
+        <section className="border border-default dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
+          <header className="px-3 py-2 border-b border-subtle dark:border-slate-800 flex items-center gap-2 flex-wrap">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
               <AlertCircle className="w-3 h-3" /> {t('syncLogs.alerts.events.heading')}
             </h2>
@@ -507,7 +507,7 @@ export default function AlertsClient() {
                     'px-2 py-0.5 text-xs font-medium rounded border transition-colors',
                     statusFilter === s
                       ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
-                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
                   )}
                 >
                   {t(`syncLogs.alertStatus.${s}`)}

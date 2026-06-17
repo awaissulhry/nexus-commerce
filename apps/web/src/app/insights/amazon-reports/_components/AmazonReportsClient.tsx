@@ -70,7 +70,7 @@ function StatusBadge({ status }: { status: string }) {
         ? 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900'
         : status === 'FATAL' || status === 'CANCELLED'
           ? 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900'
-          : 'text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+          : 'text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border-default dark:border-slate-700'
   const Icon =
     status === 'DONE'
       ? CheckCircle2
@@ -187,7 +187,7 @@ export default function AmazonReportsClient() {
           type="button"
           onClick={() => void refresh()}
           disabled={refreshing}
-          className="h-9 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50 flex-shrink-0"
+          className="h-9 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50 flex-shrink-0"
         >
           {refreshing ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -216,7 +216,7 @@ export default function AmazonReportsClient() {
           <div className="text-sm text-slate-500 dark:text-slate-400">
             {fresh} of {feeds.length} feeds with a recorded pull.
           </div>
-          <div className="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+          <div className="border border-default dark:border-slate-700 rounded-md overflow-hidden">
             <table className="w-full text-base">
               <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-sm">
                 <tr>
@@ -260,13 +260,13 @@ function FeedRows({
   return (
     <>
       <tr
-        className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer"
+        className="border-t border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer"
         onClick={onToggle}
       >
         <td className="px-3 py-2">
           <div className="inline-flex items-center gap-1.5">
             <ChevronRight
-              className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? 'rotate-90' : ''}`}
+              className={`w-3.5 h-3.5 text-tertiary transition-transform ${expanded ? 'rotate-90' : ''}`}
             />
             <span className="text-slate-900 dark:text-slate-100">
               {feed.label}
@@ -292,11 +292,11 @@ function FeedRows({
               {feed.reportType}
             </div>
             {!runs ? (
-              <div className="text-sm text-slate-400 inline-flex items-center gap-1.5">
+              <div className="text-sm text-tertiary inline-flex items-center gap-1.5">
                 <Loader2 className="w-3 h-3 animate-spin" /> loading runs…
               </div>
             ) : runs.length === 0 ? (
-              <div className="text-sm text-slate-400">
+              <div className="text-sm text-tertiary">
                 No recorded pulls yet — will populate on the next sync.
               </div>
             ) : (

@@ -102,7 +102,7 @@ export function StatusBar({
               </span>
             </span>
             {selectionMetrics?.isLarge && (
-              <span className="text-slate-400 italic">
+              <span className="text-tertiary italic">
                 large selection — metrics off
               </span>
             )}
@@ -133,7 +133,7 @@ export function StatusBar({
                   </span>
                   {selectionMetrics.numericCount <
                     selectionMetrics.count && (
-                    <span className="text-slate-400 italic">
+                    <span className="text-tertiary italic">
                       ({selectionMetrics.numericCount} numeric)
                     </span>
                   )}

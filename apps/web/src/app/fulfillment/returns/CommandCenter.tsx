@@ -59,7 +59,7 @@ const ADAPTER_TONE: Record<ChannelAdapter['mode'], { label: string; cls: string 
   real:            { label: 'Live',    cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900' },
   dryRun:          { label: 'Dry-run', cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900' },
   manual_required: { label: 'Manual',  cls: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900' },
-  not_implemented: { label: 'N/A',     cls: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700' },
+  not_implemented: { label: 'N/A',     cls: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-default dark:border-slate-700' },
 }
 
 type TileSpec = {
@@ -71,7 +71,7 @@ type TileSpec = {
 }
 
 const TILE_TONE: Record<TileSpec['tone'], { active: string; idle: string; ring: string; num: string }> = {
-  slate:  { active: 'bg-slate-900 text-white border-slate-900', idle: 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-400', ring: 'ring-slate-400', num: 'text-slate-900 dark:text-slate-100' },
+  slate:  { active: 'bg-slate-900 text-white border-slate-900', idle: 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 hover:border-slate-400', ring: 'ring-slate-400', num: 'text-slate-900 dark:text-slate-100' },
   amber:  { active: 'bg-amber-600 text-white border-amber-600', idle: 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900 hover:border-amber-400', ring: 'ring-amber-400', num: 'text-amber-700 dark:text-amber-300' },
   rose:   { active: 'bg-rose-600 text-white border-rose-600', idle: 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900 hover:border-rose-400', ring: 'ring-rose-400', num: 'text-rose-700 dark:text-rose-300' },
   blue:   { active: 'bg-blue-600 text-white border-blue-600', idle: 'bg-blue-50/60 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900 hover:border-blue-400', ring: 'ring-blue-400', num: 'text-blue-700 dark:text-blue-300' },
@@ -115,7 +115,7 @@ export default function CommandCenter({
 
   if (loading && !data) {
     return (
-      <div className="h-24 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 animate-pulse" aria-hidden="true" />
+      <div className="h-24 rounded-lg border border-default dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 animate-pulse" aria-hidden="true" />
     )
   }
   if (!data) return null
@@ -137,9 +137,9 @@ export default function CommandCenter({
   return (
     <section
       aria-label="Returns command center"
-      className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+      className="rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900"
     >
-      <header className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 dark:border-slate-700">
+      <header className="flex items-center justify-between px-4 py-2.5 border-b border-default dark:border-slate-700">
         <button
           onClick={() => setCollapsed((c) => !c)}
           className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200"
@@ -159,7 +159,7 @@ export default function CommandCenter({
               <ShieldCheck size={12} /> All clear
             </span>
           )}
-          <span className="text-slate-400 dark:text-slate-500">{q.total} open</span>
+          <span className="text-tertiary dark:text-slate-500">{q.total} open</span>
         </div>
       </header>
 
@@ -197,15 +197,15 @@ export default function CommandCenter({
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Refund SLA panel (Italian 14-day refund deadline). */}
-            <div className="lg:col-span-2 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+            <div className="lg:col-span-2 rounded-lg border border-default dark:border-slate-700 p-3">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
                   <Clock size={12} /> Refund deadline (IT 14-day)
                 </h3>
                 <div className="flex items-center gap-2 text-xs">
-                  <span className={`font-semibold ${data.deadlineSummary.overdue > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-400'}`}>{data.deadlineSummary.overdue} overdue</span>
+                  <span className={`font-semibold ${data.deadlineSummary.overdue > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-tertiary'}`}>{data.deadlineSummary.overdue} overdue</span>
                   <span className="text-slate-300 dark:text-slate-600">·</span>
-                  <span className={`font-semibold ${data.deadlineSummary.approaching > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-slate-400'}`}>{data.deadlineSummary.approaching} approaching</span>
+                  <span className={`font-semibold ${data.deadlineSummary.approaching > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-tertiary'}`}>{data.deadlineSummary.approaching} approaching</span>
                 </div>
               </div>
               {data.deadlineSummary.overdue === 0 && data.deadlineSummary.approaching === 0 ? (
@@ -242,7 +242,7 @@ export default function CommandCenter({
                   ))}
                   {(data.deadlineSummary.overdue > data.deadlineSummary.overduePreview.length ||
                     data.deadlineSummary.approaching > data.deadlineSummary.approachingPreview.length) && (
-                    <li className="px-2 pt-1 text-xs text-slate-400">
+                    <li className="px-2 pt-1 text-xs text-tertiary">
                       +{(data.deadlineSummary.overdue - data.deadlineSummary.overduePreview.length) +
                         (data.deadlineSummary.approaching - data.deadlineSummary.approachingPreview.length)} more —
                       use the inspection queues above
@@ -254,7 +254,7 @@ export default function CommandCenter({
 
             {/* Aging + channel health. */}
             <div className="space-y-3">
-              <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+              <div className="rounded-lg border border-default dark:border-slate-700 p-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Open-return aging</h3>
                 <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="img" aria-label={`Aging: ${data.aging.fresh} under 2 days, ${data.aging.day2} 2-5 days, ${data.aging.day5} 5-10 days, ${data.aging.stale} over 10 days`}>
                   <div className="bg-emerald-400" style={{ width: `${(data.aging.fresh / agingTotal) * 100}%` }} />
@@ -273,7 +273,7 @@ export default function CommandCenter({
                 )}
               </div>
 
-              <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+              <div className="rounded-lg border border-default dark:border-slate-700 p-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Refund channel health</h3>
                 <div className="flex flex-wrap gap-1.5">
                   {channels.map((c) => (

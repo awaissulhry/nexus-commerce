@@ -51,7 +51,7 @@ function FieldRow({
   mono?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between py-2 border-b border-slate-100 last:border-b-0">
+    <div className="flex items-center justify-between py-2 border-b border-subtle last:border-b-0">
       <span className="text-sm font-medium text-slate-500 uppercase tracking-tight">
         {label}
       </span>
@@ -78,14 +78,14 @@ function ChannelSyncCard({
 }) {
   if (!listed) {
     return (
-      <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+      <div className="rounded-md border border-default bg-slate-50 p-4">
         <div className="flex items-center gap-2 mb-3">
           <div className="w-2 h-2 rounded-full bg-slate-300" />
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-tight">
             {channelName}
           </span>
         </div>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-tertiary">
           Not listed on {channelName}. Create a listing to start selling.
         </p>
         <button className="mt-3 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors">
@@ -104,7 +104,7 @@ function ChannelSyncCard({
     : "—";
 
   return (
-    <div className="rounded-md border border-slate-200 bg-white p-4">
+    <div className="rounded-md border border-default bg-white p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <SyncStatusIcon status={data?.syncStatus} />
@@ -114,13 +114,13 @@ function ChannelSyncCard({
         </div>
         <div className="flex items-center gap-1">
           <button
-            className="p-1 rounded hover:bg-slate-100 transition-colors text-slate-400 hover:text-blue-600"
+            className="p-1 rounded hover:bg-slate-100 transition-colors text-tertiary hover:text-blue-600"
             title="Sync Now"
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
           <button
-            className="p-1 rounded hover:bg-slate-100 transition-colors text-slate-400 hover:text-blue-600"
+            className="p-1 rounded hover:bg-slate-100 transition-colors text-tertiary hover:text-blue-600"
             title="View on Marketplace"
           >
             <ExternalLink className="w-3.5 h-3.5" />
@@ -167,7 +167,7 @@ function MasterDataTab({ item }: { item: InventoryItem }) {
   return (
     <div className="space-y-4">
       {/* Product Info */}
-      <div className="rounded-md border border-slate-200 bg-white p-4">
+      <div className="rounded-md border border-default bg-white p-4">
         <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
           Product Information
         </h4>
@@ -179,7 +179,7 @@ function MasterDataTab({ item }: { item: InventoryItem }) {
       </div>
 
       {/* Pricing & Inventory */}
-      <div className="rounded-md border border-slate-200 bg-white p-4">
+      <div className="rounded-md border border-default bg-white p-4">
         <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
           Pricing & Inventory
         </h4>
@@ -189,7 +189,7 @@ function MasterDataTab({ item }: { item: InventoryItem }) {
       </div>
 
       {/* Identifiers */}
-      <div className="rounded-md border border-slate-200 bg-white p-4">
+      <div className="rounded-md border border-default bg-white p-4">
         <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
           Marketplace Identifiers
         </h4>
@@ -199,7 +199,7 @@ function MasterDataTab({ item }: { item: InventoryItem }) {
 
       {/* Variations Summary */}
       {item.subRows && item.subRows.length > 0 && (
-        <div className="rounded-md border border-slate-200 bg-white p-4">
+        <div className="rounded-md border border-default bg-white p-4">
           <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
             Variations ({item.subRows.length})
           </h4>
@@ -207,7 +207,7 @@ function MasterDataTab({ item }: { item: InventoryItem }) {
             {item.subRows.map((v) => (
               <div
                 key={v.id}
-                className="flex items-center justify-between py-1.5 border-b border-slate-100 last:border-b-0"
+                className="flex items-center justify-between py-1.5 border-b border-subtle last:border-b-0"
               >
                 <div className="min-w-0">
                   <p className="text-base text-slate-900 font-medium truncate">
@@ -215,7 +215,7 @@ function MasterDataTab({ item }: { item: InventoryItem }) {
                       ? `${v.variationName}: ${v.variationValue}`
                       : v.sku}
                   </p>
-                  <p className="text-xs text-slate-400 font-mono">
+                  <p className="text-xs text-tertiary font-mono">
                     {v.sku}
                   </p>
                 </div>
@@ -266,20 +266,20 @@ function AmazonSyncTab({ item }: { item: InventoryItem }) {
       />
 
       {amazonListed && (
-        <div className="rounded-md border border-slate-200 bg-white p-4">
+        <div className="rounded-md border border-default bg-white p-4">
           <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
             Amazon Actions
           </h4>
           <div className="space-y-2">
-            <button className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors">
+            <button className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-default rounded-md hover:bg-slate-50 transition-colors">
               <RefreshCw className="w-3.5 h-3.5" />
               Sync Price to Amazon
             </button>
-            <button className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors">
+            <button className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-default rounded-md hover:bg-slate-50 transition-colors">
               <RefreshCw className="w-3.5 h-3.5" />
               Sync Stock to Amazon
             </button>
-            <button className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors">
+            <button className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-default rounded-md hover:bg-slate-50 transition-colors">
               <RefreshCw className="w-3.5 h-3.5" />
               Full Listing Sync
             </button>
@@ -289,7 +289,7 @@ function AmazonSyncTab({ item }: { item: InventoryItem }) {
 
       {/* Variation-level channel data */}
       {item.subRows && item.subRows.length > 0 && (
-        <div className="rounded-md border border-slate-200 bg-white p-4">
+        <div className="rounded-md border border-default bg-white p-4">
           <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
             Variation Channel Status
           </h4>
@@ -301,7 +301,7 @@ function AmazonSyncTab({ item }: { item: InventoryItem }) {
               return (
                 <div
                   key={v.id}
-                  className="flex items-center justify-between py-1.5 border-b border-slate-100 last:border-b-0"
+                  className="flex items-center justify-between py-1.5 border-b border-subtle last:border-b-0"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <SyncStatusIcon status={vAmazon?.syncStatus} />
@@ -311,7 +311,7 @@ function AmazonSyncTab({ item }: { item: InventoryItem }) {
                         : v.sku}
                     </span>
                   </div>
-                  <span className="text-xs text-slate-400 font-mono shrink-0">
+                  <span className="text-xs text-tertiary font-mono shrink-0">
                     {vAmazon?.listingId || "—"}
                   </span>
                 </div>
@@ -342,20 +342,20 @@ function EbaySyncTab({ item }: { item: InventoryItem }) {
       />
 
       {ebayListed && (
-        <div className="rounded-md border border-slate-200 bg-white p-4">
+        <div className="rounded-md border border-default bg-white p-4">
           <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
             eBay Actions
           </h4>
           <div className="space-y-2">
-            <button className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors">
+            <button className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-default rounded-md hover:bg-slate-50 transition-colors">
               <RefreshCw className="w-3.5 h-3.5" />
               Sync Price to eBay
             </button>
-            <button className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors">
+            <button className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-default rounded-md hover:bg-slate-50 transition-colors">
               <RefreshCw className="w-3.5 h-3.5" />
               Sync Stock to eBay
             </button>
-            <button className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors">
+            <button className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-default rounded-md hover:bg-slate-50 transition-colors">
               <RefreshCw className="w-3.5 h-3.5" />
               Revise Listing
             </button>
@@ -365,7 +365,7 @@ function EbaySyncTab({ item }: { item: InventoryItem }) {
 
       {/* Variation-level channel data */}
       {item.subRows && item.subRows.length > 0 && (
-        <div className="rounded-md border border-slate-200 bg-white p-4">
+        <div className="rounded-md border border-default bg-white p-4">
           <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
             Variation Channel Status
           </h4>
@@ -375,7 +375,7 @@ function EbaySyncTab({ item }: { item: InventoryItem }) {
               return (
                 <div
                   key={v.id}
-                  className="flex items-center justify-between py-1.5 border-b border-slate-100 last:border-b-0"
+                  className="flex items-center justify-between py-1.5 border-b border-subtle last:border-b-0"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <SyncStatusIcon status={vEbay?.syncStatus} />
@@ -385,7 +385,7 @@ function EbaySyncTab({ item }: { item: InventoryItem }) {
                         : v.sku}
                     </span>
                   </div>
-                  <span className="text-xs text-slate-400 font-mono shrink-0">
+                  <span className="text-xs text-tertiary font-mono shrink-0">
                     {vEbay?.listingId || "—"}
                   </span>
                 </div>
@@ -404,7 +404,7 @@ function EbaySyncTab({ item }: { item: InventoryItem }) {
 function ImagesTab({ item }: { item: InventoryItem }) {
   return (
     <div className="space-y-4">
-      <div className="rounded-md border border-slate-200 bg-white p-4">
+      <div className="rounded-md border border-default bg-white p-4">
         <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
           Product Images
         </h4>
@@ -415,13 +415,13 @@ function ImagesTab({ item }: { item: InventoryItem }) {
             <img
               src={item.imageUrl}
               alt={item.name}
-              className="w-full aspect-square object-cover rounded-md border border-slate-200"
+              className="w-full aspect-square object-cover rounded-md border border-default"
             />
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-3">
-              <ImageIcon className="w-6 h-6 text-slate-400" />
+              <ImageIcon className="w-6 h-6 text-tertiary" />
             </div>
             <p className="text-xs text-slate-500 mb-3">
               No images uploaded yet
@@ -433,7 +433,7 @@ function ImagesTab({ item }: { item: InventoryItem }) {
         )}
       </div>
 
-      <div className="rounded-md border border-slate-200 bg-white p-4">
+      <div className="rounded-md border border-default bg-white p-4">
         <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
           Image Guidelines
         </h4>
@@ -520,7 +520,7 @@ export default function InventoryDrawer({ item, onClose }: InventoryDrawerProps)
         {item && (
           <div className="flex flex-col h-full">
             {/* ── Header ──────────────────────────────────────────── */}
-            <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-200">
+            <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-default">
               <div className="min-w-0 flex-1">
                 <p className="text-md font-bold text-slate-900 truncate tracking-tight">
                   {item.sku}
@@ -531,7 +531,7 @@ export default function InventoryDrawer({ item, onClose }: InventoryDrawerProps)
               </div>
               <button
                 onClick={onClose}
-                className="p-1.5 rounded-md hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-700 ml-3"
+                className="p-1.5 rounded-md hover:bg-slate-100 transition-colors text-tertiary hover:text-slate-700 ml-3"
                 title="Close (Esc)"
               >
                 <X className="w-5 h-5" />
@@ -539,7 +539,7 @@ export default function InventoryDrawer({ item, onClose }: InventoryDrawerProps)
             </div>
 
             {/* ── Tab Navigation ──────────────────────────────────── */}
-            <div className="flex items-center gap-0 px-5 bg-white border-b border-slate-200">
+            <div className="flex items-center gap-0 px-5 bg-white border-b border-default">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
@@ -568,15 +568,15 @@ export default function InventoryDrawer({ item, onClose }: InventoryDrawerProps)
             </div>
 
             {/* ── Footer Actions ──────────────────────────────────── */}
-            <div className="px-5 py-3 bg-white border-t border-slate-200 flex items-center justify-between">
+            <div className="px-5 py-3 bg-white border-t border-default flex items-center justify-between">
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors tracking-tight"
+                className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-default rounded-md hover:bg-slate-50 transition-colors tracking-tight"
               >
                 Close
               </button>
               <div className="flex items-center gap-2">
-                <button className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors tracking-tight">
+                <button className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-default rounded-md hover:bg-slate-50 transition-colors tracking-tight">
                   <RefreshCw className="w-3.5 h-3.5 inline mr-1.5" />
                   Sync All Channels
                 </button>

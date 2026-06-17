@@ -289,7 +289,7 @@ export default function AiBrandVoicesClient({
           <button
             type="button"
             onClick={() => setCreating((v) => !v)}
-            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
           >
             <Plus className="w-3 h-3" />
             New brand voice
@@ -298,7 +298,7 @@ export default function AiBrandVoicesClient({
             type="button"
             onClick={() => void refresh()}
             disabled={refreshing}
-            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50"
+            className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50"
           >
             {refreshing ? (
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -330,12 +330,12 @@ export default function AiBrandVoicesClient({
       )}
 
       {rows.length === 0 ? (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 px-4 py-6 text-center text-base text-slate-500 dark:text-slate-400 italic">
+        <div className="border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 px-4 py-6 text-center text-base text-slate-500 dark:text-slate-400 italic">
           No brand voices yet. Add one to inject style guidance into AI
           prompts.
         </div>
       ) : (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 overflow-hidden">
+        <div className="border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 overflow-hidden">
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {rows.map((row) => {
               const isExpanded = expanded.has(row.id)
@@ -360,9 +360,9 @@ export default function AiBrandVoicesClient({
                         className="flex-1 min-w-0 text-left flex items-start gap-2"
                       >
                         {isExpanded ? (
-                          <ChevronDown className="w-4 h-4 mt-0.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                          <ChevronDown className="w-4 h-4 mt-0.5 text-tertiary dark:text-slate-500 flex-shrink-0" />
                         ) : (
-                          <ChevronRight className="w-4 h-4 mt-0.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                          <ChevronRight className="w-4 h-4 mt-0.5 text-tertiary dark:text-slate-500 flex-shrink-0" />
                         )}
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -415,7 +415,7 @@ export default function AiBrandVoicesClient({
                           type="button"
                           onClick={() => void onDelete(row)}
                           disabled={isBusy}
-                          className="p-1 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-50"
+                          className="p-1 text-tertiary dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-50"
                           title="Delete"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -474,28 +474,28 @@ function DraftForm({
   busy: boolean
 }) {
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800/40 px-3 py-3 space-y-2">
+    <div className="border border-default dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800/40 px-3 py-3 space-y-2">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <input
           type="text"
           placeholder="brand (optional)"
           value={draft.brand}
           onChange={(e) => onChange({ ...draft, brand: e.target.value })}
-          className="h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+          className="h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
         />
         <input
           type="text"
           placeholder="marketplace (e.g. IT)"
           value={draft.marketplace}
           onChange={(e) => onChange({ ...draft, marketplace: e.target.value })}
-          className="h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+          className="h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
         />
         <input
           type="text"
           placeholder="language (e.g. it)"
           value={draft.language}
           onChange={(e) => onChange({ ...draft, language: e.target.value })}
-          className="h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+          className="h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
         />
       </div>
       <textarea
@@ -503,7 +503,7 @@ function DraftForm({
         value={draft.body}
         onChange={(e) => onChange({ ...draft, body: e.target.value })}
         rows={4}
-        className="w-full px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 font-mono"
+        className="w-full px-2 py-1.5 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 font-mono"
       />
       <textarea
         placeholder="Notes — operator-only memo (never sent to AI)"
@@ -512,7 +512,7 @@ function DraftForm({
         rows={2}
         className={cn(
           'w-full px-2 py-1.5 text-base border rounded',
-          'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900',
+          'border-default dark:border-slate-700 bg-white dark:bg-slate-900',
         )}
       />
       {/* BV.6 — preview the rendered prompt block exactly the way
@@ -523,7 +523,7 @@ function DraftForm({
           <summary className="cursor-pointer text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1">
             Preview rendered prompt block
           </summary>
-          <pre className="mt-1 whitespace-pre-wrap font-mono text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-1.5 rounded text-sm">
+          <pre className="mt-1 whitespace-pre-wrap font-mono text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 px-2 py-1.5 rounded text-sm">
 {`Brand voice:\n${draft.body.trim()}`}
           </pre>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">

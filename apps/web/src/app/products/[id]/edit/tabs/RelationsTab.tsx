@@ -449,7 +449,7 @@ export default function RelationsTab({
             <select
               value={addType}
               onChange={(e) => setAddType(e.target.value as RelationType)}
-              className="w-full h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3"
+              className="w-full h-8 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3"
             >
               {RELATION_TYPES.map((typ) => (
                 <option key={typ} value={typ}>
@@ -463,7 +463,7 @@ export default function RelationsTab({
               {t('products.edit.relations.searchLabel')}
             </label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500 pointer-events-none" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tertiary dark:text-slate-500 pointer-events-none" />
               <input
                 type="text"
                 value={addSearch}
@@ -472,14 +472,14 @@ export default function RelationsTab({
                   setAddSearch(e.target.value)
                 }}
                 placeholder={t('products.edit.relations.searchPlaceholder')}
-                className="w-full h-8 pl-8 pr-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="w-full h-8 pl-8 pr-2 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               />
               {searching && (
-                <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500 animate-spin" />
+                <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tertiary dark:text-slate-500 animate-spin" />
               )}
             </div>
             {addResults.length > 0 && !pickedProduct && (
-              <ul className="absolute z-10 left-0 right-0 mt-0.5 max-h-64 overflow-y-auto rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg divide-y divide-slate-100 dark:divide-slate-800">
+              <ul className="absolute z-10 left-0 right-0 mt-0.5 max-h-64 overflow-y-auto rounded-md border border-default dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg divide-y divide-slate-100 dark:divide-slate-800">
                 {addResults.map((r) => (
                   <li key={r.id}>
                     <button
@@ -515,7 +515,7 @@ export default function RelationsTab({
             onChange={(e) => setAddNotes(e.target.value)}
           />
           <div className="flex items-end gap-2">
-            <label className="inline-flex items-center gap-1.5 text-md text-slate-700 dark:text-slate-300 select-none cursor-pointer h-8 px-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+            <label className="inline-flex items-center gap-1.5 text-md text-slate-700 dark:text-slate-300 select-none cursor-pointer h-8 px-2 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900">
               <input
                 type="checkbox"
                 checked={addReciprocal}
@@ -556,11 +556,11 @@ export default function RelationsTab({
           }
         >
           {suggestions.length === 0 ? (
-            <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center">
+            <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-default dark:border-slate-800 rounded p-4 text-center">
               {t('products.edit.relations.suggestEmpty')}
             </div>
           ) : (
-            <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-default dark:border-slate-800 rounded-lg overflow-hidden">
               {suggestions.map((s) => (
                 <li
                   key={s.product.id}
@@ -575,7 +575,7 @@ export default function RelationsTab({
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <span className="text-xs text-slate-400 dark:text-slate-500">
+                      <span className="text-xs text-tertiary dark:text-slate-500">
                         —
                       </span>
                     )}
@@ -643,7 +643,7 @@ export default function RelationsTab({
         </Card>
       ) : outgoing.length === 0 ? (
         <Card title={t('products.edit.relations.outgoingTitle')}>
-          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-6 text-center">
+          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-default dark:border-slate-800 rounded p-6 text-center">
             {t('products.edit.relations.outgoingEmpty')}
           </div>
         </Card>
@@ -656,7 +656,7 @@ export default function RelationsTab({
               title={typeLabel(typ, t)}
               description={t(`products.edit.relations.typeDesc.${typ}`)}
             >
-              <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-default dark:border-slate-800 rounded-lg overflow-hidden">
                 {rows.map((rel) => (
                   <RelationRow
                     key={rel.id}
@@ -691,7 +691,7 @@ export default function RelationsTab({
           }
         >
           {showIncoming && (
-            <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-default dark:border-slate-800 rounded-lg overflow-hidden">
               {incoming.map((rel) => (
                 <li
                   key={rel.id}
@@ -715,7 +715,7 @@ export default function RelationsTab({
                   {rel.fromProduct && (
                     <Link
                       href={`/products/${rel.fromProductId}/edit`}
-                      className="text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400"
+                      className="text-tertiary dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400"
                       aria-label={t('products.edit.relations.openLinkAria')}
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -749,7 +749,7 @@ function RelationRow({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />
         ) : (
-          <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+          <span className="text-xs text-tertiary dark:text-slate-500">—</span>
         )}
       </div>
       <div className="flex-1 min-w-0">
@@ -785,7 +785,7 @@ function RelationRow({
       {p && (
         <Link
           href={`/products/${relation.toProductId}/edit`}
-          className="text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 flex-shrink-0"
+          className="text-tertiary dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 flex-shrink-0"
           aria-label={t('products.edit.relations.openLinkAria')}
         >
           <ExternalLink className="w-3.5 h-3.5" />
@@ -797,7 +797,7 @@ function RelationRow({
         aria-label={t('products.edit.relations.deleteAria', {
           sku: p?.sku ?? relation.toProductId,
         })}
-        className="p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 flex-shrink-0"
+        className="p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-tertiary dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 flex-shrink-0"
       >
         <Trash2 className="w-3.5 h-3.5" />
       </button>

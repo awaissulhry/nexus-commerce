@@ -16,7 +16,7 @@ interface Cell {
 type Mode = 'volume' | 'rate'
 
 function volumeTone(units: number, max: number): string {
-  if (units === 0) return 'bg-slate-50 dark:bg-slate-950/40 text-slate-400 dark:text-slate-600'
+  if (units === 0) return 'bg-slate-50 dark:bg-slate-950/40 text-tertiary dark:text-slate-600'
   // Quintile bucketing on log scale so small values still show signal.
   const intensity = Math.log(units + 1) / Math.log(Math.max(2, max + 1))
   if (intensity > 0.8) return 'bg-blue-700 text-white dark:bg-blue-500'
@@ -27,7 +27,7 @@ function volumeTone(units: number, max: number): string {
 }
 
 function rateTone(negative: number, total: number): string {
-  if (total === 0) return 'bg-slate-50 dark:bg-slate-950/40 text-slate-400 dark:text-slate-600'
+  if (total === 0) return 'bg-slate-50 dark:bg-slate-950/40 text-tertiary dark:text-slate-600'
   const rate = negative / total
   if (rate >= 0.5) return 'bg-rose-700 text-white dark:bg-rose-500'
   if (rate >= 0.3) return 'bg-rose-500 text-white dark:bg-rose-600'
@@ -56,7 +56,7 @@ export function HeatmapGrid({
   const maxVolume = useMemo(() => cells.reduce((a, c) => Math.max(a, c.total), 0), [cells])
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-3">
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Color:

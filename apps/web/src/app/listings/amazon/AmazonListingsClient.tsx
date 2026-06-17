@@ -112,7 +112,7 @@ export default function AmazonListingsClient({ lockMarketplace, breadcrumbs }: P
         label: (
           <span className="inline-flex items-center gap-1.5">
             <span className="font-mono text-xs">{mp}</span>
-            <span className="text-xs text-slate-400 dark:text-slate-500">{COUNTRY_NAMES[mp] ?? mp}</span>
+            <span className="text-xs text-tertiary dark:text-slate-500">{COUNTRY_NAMES[mp] ?? mp}</span>
           </span>
         ),
         count: marketCount(mp) || undefined,
@@ -315,7 +315,7 @@ function SuppressionResolver({
                 </span>
                 <span className="text-sm text-slate-500 dark:text-slate-400 font-mono">{s.listing.product.sku}</span>
                 {s.listing.externalListingId && (
-                  <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">
+                  <span className="text-xs text-tertiary dark:text-slate-500 font-mono">
                     ASIN {s.listing.externalListingId}
                   </span>
                 )}
@@ -331,7 +331,7 @@ function SuppressionResolver({
             <div className="flex flex-col gap-1.5 flex-shrink-0">
               <Link
                 href={`/products/${s.listing.product.id}/edit?channel=AMAZON&marketplace=${s.listing.marketplace}`}
-                className="h-7 px-2.5 text-sm bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 whitespace-nowrap"
+                className="h-7 px-2.5 text-sm bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 whitespace-nowrap"
               >
                 Open in editor
               </Link>
@@ -430,7 +430,7 @@ export function SuppressionLogModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Reason code <span className="text-slate-400 dark:text-slate-500 font-normal">(SP-API)</span>
+                Reason code <span className="text-tertiary dark:text-slate-500 font-normal">(SP-API)</span>
               </label>
               <Input
                 value={reasonCode}
@@ -443,7 +443,7 @@ export function SuppressionLogModal({
               <select
                 value={severity}
                 onChange={(e) => setSeverity(e.target.value as any)}
-                className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300"
+                className="h-9 w-full px-2 text-base border border-default dark:border-slate-700 rounded text-slate-700 dark:text-slate-300"
               >
                 <option value="ERROR">ERROR</option>
                 <option value="WARNING">WARNING</option>
@@ -451,7 +451,7 @@ export function SuppressionLogModal({
               </select>
             </div>
           </div>
-          <div className="text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-2.5">
+          <div className="text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 rounded-md p-2.5">
             Logging a suppression sets the listing's status to <code>SUPPRESSED</code> and
             opens an audit episode. SP-API auto-detection comes in S.5b — until then, this
             is the manual entry point.
@@ -462,7 +462,7 @@ export function SuppressionLogModal({
         <button
           onClick={onClose}
           disabled={submitting}
-          className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+          className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           Cancel
         </button>

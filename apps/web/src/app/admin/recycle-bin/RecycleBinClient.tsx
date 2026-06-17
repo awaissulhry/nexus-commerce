@@ -30,7 +30,7 @@ function ageDays(iso: string | null): number | null {
 }
 
 function ageTone(days: number | null): string {
-  if (days == null) return 'text-slate-400'
+  if (days == null) return 'text-tertiary'
   if (days >= 90) return 'text-rose-700 dark:text-rose-300'
   if (days >= 30) return 'text-amber-700 dark:text-amber-300'
   return 'text-slate-700 dark:text-slate-300'
@@ -98,7 +98,7 @@ export default function RecycleBinClient() {
           type="button"
           onClick={fetchSummary}
           disabled={loading}
-          className="h-8 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+          className="h-8 px-3 text-sm border border-default dark:border-slate-700 rounded inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
         >
           <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
@@ -122,7 +122,7 @@ export default function RecycleBinClient() {
         <div className="overflow-x-auto -mx-3">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-default dark:border-slate-700">
                 <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Entity</th>
                 <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">In bin</th>
                 <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Oldest</th>
@@ -135,7 +135,7 @@ export default function RecycleBinClient() {
                 const days = ageDays(e.oldestDeletedAt)
                 const cutoffDefault = purgeDays[e.key] ?? 30
                 return (
-                  <tr key={e.key} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                  <tr key={e.key} className="border-b border-subtle dark:border-slate-800 last:border-0">
                     <td className="px-3 py-3 font-medium text-slate-900 dark:text-slate-100">{e.label}</td>
                     <td className="px-3 py-3 text-right tabular-nums">
                       {e.count.toLocaleString()}
@@ -147,7 +147,7 @@ export default function RecycleBinClient() {
                           {days} day{days === 1 ? '' : 's'}
                         </>
                       ) : (
-                        <span className="text-slate-400 dark:text-slate-500">—</span>
+                        <span className="text-tertiary dark:text-slate-500">—</span>
                       )}
                     </td>
                     <td className="px-3 py-3">
@@ -169,7 +169,7 @@ export default function RecycleBinClient() {
                             const v = parseInt(ev.target.value, 10)
                             setPurgeDays((s) => ({ ...s, [e.key]: Number.isFinite(v) ? v : 0 }))
                           }}
-                          className="h-7 w-16 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                          className="h-7 w-16 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                           aria-label={`Cutoff days for ${e.label}`}
                         />
                         <span className="text-xs text-slate-500 dark:text-slate-400">days</span>

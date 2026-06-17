@@ -28,20 +28,20 @@ function ActionsButton({ item }: { item: InventoryItem }) {
         <ChevronDown className="w-3.5 h-3.5" />
       </button>
       {isOpen && (
-        <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded shadow-lg z-10">
+        <div className="absolute right-0 mt-1 w-48 bg-white border border-default rounded shadow-lg z-10">
           <Link
             href={`/catalog/${item.id}/edit`}
-            className="block px-4 py-2 text-md text-slate-700 hover:bg-slate-50 border-b border-slate-100"
+            className="block px-4 py-2 text-md text-slate-700 hover:bg-slate-50 border-b border-subtle"
           >
             Edit Listing
           </Link>
           <Link
             href={`/products/${item.id}/edit`}
-            className="block px-4 py-2 text-md text-slate-700 hover:bg-slate-50 border-b border-slate-100"
+            className="block px-4 py-2 text-md text-slate-700 hover:bg-slate-50 border-b border-subtle"
           >
             Edit (Multi-channel)
           </Link>
-          <button className="w-full text-left px-4 py-2 text-md text-slate-700 hover:bg-slate-50 border-b border-slate-100">
+          <button className="w-full text-left px-4 py-2 text-md text-slate-700 hover:bg-slate-50 border-b border-subtle">
             View on Amazon
           </button>
           <button className="w-full text-left px-4 py-2 text-md text-slate-700 hover:bg-slate-50">
@@ -91,7 +91,7 @@ export const inventoryColumns = [
                 e.stopPropagation();
                 meta?.onExpandRow?.(item.id);
               }}
-              className="p-0.5 rounded hover:bg-slate-200 transition-colors text-slate-400 hover:text-slate-700"
+              className="p-0.5 rounded hover:bg-slate-200 transition-colors text-tertiary hover:text-slate-700"
               title={isExpanded ? "Collapse variants" : "Expand variants"}
             >
               {isLoading ? (
@@ -167,7 +167,7 @@ export const inventoryColumns = [
           {isChild &&
             (!item.variations || Object.keys(item.variations).length === 0) &&
             item.variationName && (
-              <p className="text-sm text-slate-400 mt-0.5">{item.variationName}</p>
+              <p className="text-sm text-tertiary mt-0.5">{item.variationName}</p>
             )}
 
           {/* Standalone (non-parent, non-child): variation details link */}

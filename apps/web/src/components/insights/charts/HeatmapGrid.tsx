@@ -20,7 +20,7 @@ interface HeatmapGridProps {
 }
 
 function toneFor(ratio: number): string {
-  if (ratio === 0) return 'bg-slate-50 dark:bg-slate-900 text-slate-400'
+  if (ratio === 0) return 'bg-slate-50 dark:bg-slate-900 text-tertiary'
   if (ratio < 0.15) return 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200'
   if (ratio < 0.35) return 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-900 dark:text-emerald-100'
   if (ratio < 0.6) return 'bg-emerald-300 dark:bg-emerald-800/70 text-emerald-950 dark:text-emerald-50'

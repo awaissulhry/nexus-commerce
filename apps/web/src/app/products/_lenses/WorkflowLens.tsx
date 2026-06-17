@@ -142,7 +142,7 @@ export function WorkflowLens() {
           <select
             value={selectedId}
             onChange={(e) => setSelectedId(e.target.value)}
-            className="h-8 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+            className="h-8 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           >
             {workflows.map((w) => (
               <option key={w.id} value={w.id}>
@@ -253,7 +253,7 @@ function StageColumn({ stage }: { stage: PipelineStage }) {
                   <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
                     {p.sku}
                     {p.brand && (
-                      <span className="ml-1 text-slate-400 dark:text-slate-500">
+                      <span className="ml-1 text-tertiary dark:text-slate-500">
                         · {p.brand}
                       </span>
                     )}

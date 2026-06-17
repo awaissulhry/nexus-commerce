@@ -128,7 +128,7 @@ export default function RollbackModal({
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={applying ? undefined : onClose} />
 
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
-        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-start justify-between px-5 py-4 border-b border-default dark:border-slate-700">
           <div>
             <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               Revert to last published — {channelLabel}{marketplace ? ` ${marketplace}` : ''}
@@ -203,7 +203,7 @@ export default function RollbackModal({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-900/50">
+        <div className="px-5 py-3 border-t border-default dark:border-slate-700 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-900/50">
           {snapshot && (
             <Button
               size="sm"
@@ -250,7 +250,7 @@ function DiffRow({ entry }: { entry: DiffEntry }) {
     ? 'border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-950/20'
     : entry.kind === 'recreate'
       ? 'border-amber-200 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/20'
-      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'
+      : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900'
 
   return (
     <div className={cn('flex items-center gap-3 px-3 py-2 rounded-lg border', tone)}>
@@ -260,7 +260,7 @@ function DiffRow({ entry }: { entry: DiffEntry }) {
       {entry.kind === 'restore' && entry.currentRow && entry.snapshotRow && (
         <>
           <Thumb url={entry.currentRow.url} label="current" />
-          <ArrowRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+          <ArrowRight className="w-3.5 h-3.5 text-tertiary flex-shrink-0" />
           <Thumb url={entry.snapshotRow.url} label="snapshot" />
         </>
       )}
@@ -286,10 +286,10 @@ function DiffRow({ entry }: { entry: DiffEntry }) {
 function Thumb({ url, label }: { url: string; label: string }) {
   return (
     <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
-      <div className="w-10 h-10 rounded border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800">
+      <div className="w-10 h-10 rounded border border-default dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800">
         <img src={url} alt="" className="w-full h-full object-cover" />
       </div>
-      <span className="text-[9px] text-slate-400 uppercase tracking-wide">{label}</span>
+      <span className="text-[9px] text-tertiary uppercase tracking-wide">{label}</span>
     </div>
   )
 }

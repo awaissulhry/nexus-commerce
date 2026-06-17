@@ -195,7 +195,7 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
         {channels.map((ch) => {
           const rate = successRate(jobs.filter((j) => j.channel === ch))
           return (
-            <div key={ch} className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+            <div key={ch} className="px-3 py-2 rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900">
               <div className="flex items-center justify-between">
                 <span className={cn('text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded', CHANNEL_COLOR[ch])}>
                   {CHANNEL_LABEL[ch]}
@@ -203,7 +203,7 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
                 <span className={cn(
                   'text-sm font-medium tabular-nums',
                   rate.total === 0
-                    ? 'text-slate-400'
+                    ? 'text-tertiary'
                     : rate.pct >= 90
                       ? 'text-emerald-600 dark:text-emerald-400'
                       : rate.pct >= 70
@@ -245,7 +245,7 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
 
       {/* Jobs list */}
       {filtered.length === 0 && !loading ? (
-        <p className="text-xs text-slate-400 dark:text-slate-500 italic py-3">
+        <p className="text-xs text-tertiary dark:text-slate-500 italic py-3">
           {channel
             ? t('products.edit.images.history.noJobsChannel', { channel: CHANNEL_LABEL[channel] })
             : t('products.edit.images.history.noJobsAll')}
@@ -267,7 +267,7 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
             return (
               <li
                 key={j.id}
-                className={cn('rounded border border-slate-100 dark:border-slate-800 text-xs', tone.bg)}
+                className={cn('rounded border border-subtle dark:border-slate-800 text-xs', tone.bg)}
               >
                 <div className="flex items-center gap-2 px-3 py-1.5">
                   {hasReceipt ? (
@@ -275,7 +275,7 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
                       type="button"
                       onClick={() => toggleExpand(j.id)}
                       aria-label={isExpanded ? 'Collapse receipt' : 'Expand receipt'}
-                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 flex-shrink-0"
+                      className="text-tertiary hover:text-slate-600 dark:hover:text-slate-300 flex-shrink-0"
                     >
                       {(() => {
                         // Next 16 / Turbopack TS plugin sometimes misses
@@ -305,7 +305,7 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
                     — {j.errorMessage}
                   </span>
                 )}
-                <span className="text-slate-400 ml-auto flex-shrink-0 tabular-nums">{elapsedTime(j.submittedAt)}</span>
+                <span className="text-tertiary ml-auto flex-shrink-0 tabular-nums">{elapsedTime(j.submittedAt)}</span>
                 {/* IR.15 — manual "Refresh from Amazon" for in-progress
                     feed jobs. Replaces 30 s passive polling with
                     operator-driven status pull. */}
@@ -345,7 +345,7 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
                     Amazon's per-row outcome with the verbatim error
                     code + message so the operator can debug. */}
                 {hasReceipt && isExpanded && (
-                  <div className="px-3 pb-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                  <div className="px-3 pb-2 pt-1 border-t border-subtle dark:border-slate-800">
                     {/* IA.6 — Retry-rejected-only. Targets the same
                         publisher path with variantIds filter so
                         accepted ASINs don't get re-hammered. Shown
@@ -380,7 +380,7 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
                       </thead>
                       <tbody>
                         {j.perSku!.map((row) => (
-                          <tr key={row.sku} className="border-t border-slate-100 dark:border-slate-800">
+                          <tr key={row.sku} className="border-t border-subtle dark:border-slate-800">
                             <td className="px-1.5 py-1 font-mono text-slate-700 dark:text-slate-200">{row.sku}</td>
                             <td className="px-1.5 py-1 font-mono text-slate-500 dark:text-slate-400">{row.asin ?? '—'}</td>
                             <td className="px-1.5 py-1 text-center">
@@ -396,7 +396,7 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
                             </td>
                             <td className="px-1.5 py-1 text-slate-600 dark:text-slate-300">
                               {row.errors.length === 0 ? (
-                                <span className="text-slate-400">—</span>
+                                <span className="text-tertiary">—</span>
                               ) : (
                                 <ul className="space-y-0.5">
                                   {row.errors.map((e, i) => (

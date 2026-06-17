@@ -754,7 +754,7 @@ export default function LocalesTab({
         </Card>
       ) : translations.length === 0 ? (
         <Card>
-          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-6 text-center space-y-3">
+          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-default dark:border-slate-800 rounded p-6 text-center space-y-3">
             <Globe className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600" />
             <div>{t('products.edit.locales.empty')}</div>
             {addable.length > 0 && (
@@ -796,7 +796,7 @@ export default function LocalesTab({
                   onClick={() => toggle(row.language)}
                   className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
                 >
-                  <span className="text-slate-400 dark:text-slate-600 flex-shrink-0">
+                  <span className="text-tertiary dark:text-slate-600 flex-shrink-0">
                     {isOpen ? (
                       <ChevronDown className="w-4 h-4" />
                     ) : (
@@ -841,7 +841,7 @@ export default function LocalesTab({
                 </button>
 
                 {isOpen && (
-                  <div className="border-t border-slate-100 dark:border-slate-800 px-4 py-4 space-y-4">
+                  <div className="border-t border-subtle dark:border-slate-800 px-4 py-4 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FieldPair
                         label={t('products.edit.locales.fieldName')}
@@ -889,7 +889,7 @@ export default function LocalesTab({
                         rows={5}
                       />
                     </div>
-                    <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-subtle dark:border-slate-800">
                       <div className="text-xs text-slate-500 dark:text-slate-400">
                         {row.updatedAt &&
                           t('products.edit.locales.updatedAt', {
@@ -980,8 +980,8 @@ function FieldPair({
             className={cn(
               'rounded-md border px-3 py-2 text-md whitespace-pre-wrap break-words bg-slate-50 dark:bg-slate-900/40',
               masterIsEmpty
-                ? 'border-dashed border-slate-200 dark:border-slate-800 italic text-slate-500 dark:text-slate-500'
-                : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300',
+                ? 'border-dashed border-default dark:border-slate-800 italic text-slate-500 dark:text-slate-500'
+                : 'border-default dark:border-slate-800 text-slate-700 dark:text-slate-300',
             )}
             style={{ minHeight: as === 'textarea' ? '8rem' : '2.25rem' }}
           >
@@ -999,7 +999,7 @@ function FieldPair({
               rows={rows ?? 5}
               value={value}
               onChange={(e) => onChange(e.target.value)}
-              className="w-full rounded-md border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors font-sans"
+              className="w-full rounded-md border border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors font-sans"
             />
           )}
         </div>

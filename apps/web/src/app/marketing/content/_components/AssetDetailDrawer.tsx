@@ -125,9 +125,9 @@ export default function AssetDetailDrawer({ selected, apiBase, onClose }: Props)
         role="dialog"
         aria-modal="true"
         aria-labelledby="asset-detail-title"
-        className="fixed right-0 top-0 z-40 flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900 sm:max-w-lg"
+        className="fixed right-0 top-0 z-40 flex h-full w-full max-w-md flex-col border-l border-default bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900 sm:max-w-lg"
       >
-        <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+        <header className="flex items-center justify-between border-b border-default px-4 py-3 dark:border-slate-800">
           <h2
             id="asset-detail-title"
             className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100"
@@ -138,7 +138,7 @@ export default function AssetDetailDrawer({ selected, apiBase, onClose }: Props)
             type="button"
             onClick={onClose}
             aria-label={t('common.close')}
-            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            className="rounded p-1 text-tertiary hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
           >
             <X className="w-4 h-4" />
           </button>
@@ -166,7 +166,7 @@ export default function AssetDetailDrawer({ selected, apiBase, onClose }: Props)
           {detail && (
             <div className="flex flex-col gap-4 p-4">
               {/* Preview */}
-              <div className="relative w-full overflow-hidden rounded-md border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
+              <div className="relative w-full overflow-hidden rounded-md border border-default bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
                 {detail.type === 'image' ? (
                   <div className="relative aspect-square w-full">
                     <Image
@@ -200,7 +200,7 @@ export default function AssetDetailDrawer({ selected, apiBase, onClose }: Props)
                     </video>
                   </div>
                 ) : (
-                  <div className="flex aspect-square items-center justify-center text-slate-400">
+                  <div className="flex aspect-square items-center justify-center text-tertiary">
                     <ImageIcon className="w-12 h-12" />
                   </div>
                 )}
@@ -394,7 +394,7 @@ export default function AssetDetailDrawer({ selected, apiBase, onClose }: Props)
               >
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   {t('marketingContent.detail.usages')}{' '}
-                  <span className="font-normal text-slate-400">
+                  <span className="font-normal text-tertiary">
                     ({detail.usages.length})
                   </span>
                 </h3>
@@ -407,7 +407,7 @@ export default function AssetDetailDrawer({ selected, apiBase, onClose }: Props)
                     {detail.usages.map((u) => (
                       <li
                         key={u.id}
-                        className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                        className="flex items-center justify-between gap-2 rounded-md border border-default bg-white px-2.5 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
                       >
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-slate-900 dark:text-slate-100">
@@ -425,7 +425,7 @@ export default function AssetDetailDrawer({ selected, apiBase, onClose }: Props)
                         {u.productId && (
                           <a
                             href={`/products/${encodeURIComponent(u.productId)}/edit`}
-                            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                            className="rounded p-1 text-tertiary hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                             aria-label={t('marketingContent.detail.openProduct')}
                           >
                             <Link2 className="w-4 h-4" />
@@ -457,7 +457,7 @@ export default function AssetDetailDrawer({ selected, apiBase, onClose }: Props)
               {/* Storage */}
               <section
                 aria-label={t('marketingContent.detail.storageLabel')}
-                className="space-y-2 border-t border-slate-200 pt-3 dark:border-slate-800"
+                className="space-y-2 border-t border-default pt-3 dark:border-slate-800"
               >
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   {t('marketingContent.detail.storage')}

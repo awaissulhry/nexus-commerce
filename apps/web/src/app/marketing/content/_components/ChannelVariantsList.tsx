@@ -72,7 +72,7 @@ export default function ChannelVariantsList({ variants }: Props) {
                   [channel]: (e.target as HTMLDetailsElement).open,
                 }))
               }
-              className="rounded-md border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+              className="rounded-md border border-default bg-white dark:border-slate-700 dark:bg-slate-900"
             >
               <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-100">
                 <span>
@@ -82,16 +82,16 @@ export default function ChannelVariantsList({ variants }: Props) {
                   </span>
                 </span>
                 <ChevronDown
-                  className={`w-3.5 h-3.5 text-slate-400 transition-transform ${
+                  className={`w-3.5 h-3.5 text-tertiary transition-transform ${
                     isOpen ? 'rotate-180' : ''
                   }`}
                 />
               </summary>
-              <ul className="border-t border-slate-200 dark:border-slate-800">
+              <ul className="border-t border-default dark:border-slate-800">
                 {list.map((variant) => (
                   <li
                     key={variant.id}
-                    className="flex items-center gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0 dark:border-slate-800"
+                    className="flex items-center gap-2 border-b border-subtle px-3 py-2 last:border-b-0 dark:border-slate-800"
                   >
                     <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
                       {variant.url ? (
@@ -133,7 +133,7 @@ export default function ChannelVariantsList({ variants }: Props) {
                           aria-label={t('marketingContent.variants.copyUrl', {
                             label: variant.label,
                           })}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                          className="rounded p-1 text-tertiary hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                         >
                           <Copy className="w-3.5 h-3.5" />
                         </button>
@@ -144,7 +144,7 @@ export default function ChannelVariantsList({ variants }: Props) {
                           aria-label={t('marketingContent.variants.openUrl', {
                             label: variant.label,
                           })}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                          className="rounded p-1 text-tertiary hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
                         </a>

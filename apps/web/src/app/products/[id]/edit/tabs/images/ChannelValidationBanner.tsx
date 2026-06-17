@@ -132,13 +132,13 @@ export default function ChannelValidationBanner(props: Props) {
   // No issues + has content → green "ready to publish" line.
   if (!hasBlocking && !hasWarnings && result.resolvedCount > 0) {
     return (
-      <div className="px-5 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20">
+      <div className="px-5 py-2 border-b border-subtle dark:border-slate-800 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20">
         <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
         <span>
           {result.resolvedCount} image{result.resolvedCount === 1 ? '' : 's'} ready to publish
           {result.source === 'master' && ' (resolved from master gallery)'}
         </span>
-        <span className="ml-auto text-slate-400 dark:text-slate-500 font-mono">
+        <span className="ml-auto text-tertiary dark:text-slate-500 font-mono">
           {props.channel === 'EBAY' ? 'max 24' : 'max 250'} · min {rules.minDimensionPx}px
         </span>
       </div>
@@ -179,7 +179,7 @@ export default function ChannelValidationBanner(props: Props) {
             </div>
           )}
         </div>
-        <span className="text-slate-400 dark:text-slate-500 ml-2 flex-shrink-0">
+        <span className="text-tertiary dark:text-slate-500 ml-2 flex-shrink-0">
           {expanded
             ? <ChevronUp className="w-3.5 h-3.5" />
             : <ChevronDown className="w-3.5 h-3.5" />}

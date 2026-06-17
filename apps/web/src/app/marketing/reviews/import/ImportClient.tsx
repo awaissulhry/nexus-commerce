@@ -211,7 +211,7 @@ export function ImportClient() {
   return (
     <div className="space-y-4">
       {/* Input panel */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3 space-y-3">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-3 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <label className="block">
             <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -229,7 +229,7 @@ export function ImportClient() {
           </label>
           <label className="block">
             <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Default marketplace <span className="normal-case text-slate-400">(optional)</span>
+              Default marketplace <span className="normal-case text-tertiary">(optional)</span>
             </span>
             <input
               value={marketplace}
@@ -360,7 +360,7 @@ export function ImportClient() {
 
       {/* Preview */}
       {preview && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3 space-y-3">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-3 space-y-3">
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
             <PreviewStat label="Rows" value={preview.totalRows} />
@@ -416,7 +416,7 @@ export function ImportClient() {
             <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
               Sample (first {preview.sample.length})
             </div>
-            <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded">
+            <div className="overflow-x-auto border border-default dark:border-slate-800 rounded">
               <table className="w-full text-xs">
                 <thead className="bg-slate-50 dark:bg-slate-950/50 text-slate-500 dark:text-slate-400">
                   <tr>
@@ -484,7 +484,7 @@ function PreviewStat({
             ? 'text-blue-700 dark:text-blue-300'
             : 'text-slate-900 dark:text-slate-100'
   return (
-    <div className="rounded-md border border-slate-200 dark:border-slate-800 px-2.5 py-1.5">
+    <div className="rounded-md border border-default dark:border-slate-800 px-2.5 py-1.5">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
         {label}
       </div>

@@ -101,7 +101,7 @@ const MARKETPLACE_LABEL: Record<string, string> = {
 }
 
 function ageTone(days: number | null): string {
-  if (days == null) return 'text-slate-400 dark:text-slate-500'
+  if (days == null) return 'text-tertiary dark:text-slate-500'
   if (days < 90) return 'text-emerald-700'
   if (days < 180) return 'text-blue-700'
   if (days < 365) return 'text-amber-700'
@@ -166,7 +166,7 @@ export default function FbaPanEuClient() {
             </Link>
             <Link
               href="/fulfillment/inbound?status=IN_TRANSIT&channel=AMAZON"
-              className="inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 text-base border border-default dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
               title={t('stock.fbaPanEu.inboundLink')}
             >
               <ExternalLink size={12} /> {t('stock.fbaPanEu.inboundLink')}
@@ -204,7 +204,7 @@ export default function FbaPanEuClient() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {[0, 1, 2, 3].map((i) => (
             <Card key={i}>
-              <div className="h-24 flex items-center justify-center text-base text-slate-400 dark:text-slate-500">…</div>
+              <div className="h-24 flex items-center justify-center text-base text-tertiary dark:text-slate-500">…</div>
             </Card>
           ))}
         </div>
@@ -230,7 +230,7 @@ export default function FbaPanEuClient() {
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <div className="text-sm uppercase tracking-wider font-semibold text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
-                        <Globe size={12} className="text-slate-400 dark:text-slate-500" />
+                        <Globe size={12} className="text-tertiary dark:text-slate-500" />
                         {country} · {fc.fulfillmentCenterId}
                       </div>
                       <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -285,11 +285,11 @@ export default function FbaPanEuClient() {
                 {data.aged.slice(0, 25).map((r) => {
                   const country = MARKETPLACE_LABEL[r.marketplaceId] ?? r.marketplaceId.slice(-4)
                   return (
-                    <li key={r.id} className="flex items-center gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                    <li key={r.id} className="flex items-center gap-2 py-1.5 px-2 -mx-2 border-b border-subtle dark:border-slate-800 last:border-0">
                       {r.thumbnailUrl ? (
                         <img src={r.thumbnailUrl} alt="" className="w-7 h-7 rounded object-cover bg-slate-100 dark:bg-slate-800 flex-shrink-0" />
                       ) : (
-                        <div className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 flex-shrink-0">
+                        <div className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-tertiary dark:text-slate-500 flex-shrink-0">
                           <Package size={12} />
                         </div>
                       )}
@@ -331,11 +331,11 @@ export default function FbaPanEuClient() {
                 {data.unfulfillable.slice(0, 25).map((r) => {
                   const country = MARKETPLACE_LABEL[r.marketplaceId] ?? r.marketplaceId.slice(-4)
                   return (
-                    <li key={r.id} className="flex items-center gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                    <li key={r.id} className="flex items-center gap-2 py-1.5 px-2 -mx-2 border-b border-subtle dark:border-slate-800 last:border-0">
                       {r.thumbnailUrl ? (
                         <img src={r.thumbnailUrl} alt="" className="w-7 h-7 rounded object-cover bg-slate-100 dark:bg-slate-800 flex-shrink-0" />
                       ) : (
-                        <div className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 flex-shrink-0">
+                        <div className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-tertiary dark:text-slate-500 flex-shrink-0">
                           <Package size={12} />
                         </div>
                       )}
@@ -353,7 +353,7 @@ export default function FbaPanEuClient() {
                   )
                 })}
               </ul>
-              <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+              <div className="mt-3 pt-3 border-t border-subtle dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
                 {t('stock.fbaPanEu.unfulfillable.footer')}
               </div>
             </Card>

@@ -106,7 +106,7 @@ export function ConditionalFormatBar(props: ConditionalFormatBarProps) {
           onClose()
         }
       }}
-      className="absolute right-3 top-3 z-20 w-[640px] bg-white border border-slate-200 rounded-lg shadow-lg p-3 space-y-2"
+      className="absolute right-3 top-3 z-20 w-[640px] bg-white border border-default rounded-lg shadow-lg p-3 space-y-2"
     >
       <div className="flex items-center justify-between">
         <div className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700">
@@ -138,8 +138,8 @@ export function ConditionalFormatBar(props: ConditionalFormatBarProps) {
               className={cn(
                 'flex items-center gap-1.5 p-1.5 rounded border',
                 rule.enabled
-                  ? 'border-slate-200 bg-white'
-                  : 'border-slate-100 bg-slate-50/50 opacity-70',
+                  ? 'border-default bg-white'
+                  : 'border-subtle bg-slate-50/50 opacity-70',
               )}
             >
               <input
@@ -152,7 +152,7 @@ export function ConditionalFormatBar(props: ConditionalFormatBarProps) {
               <select
                 value={rule.columnId}
                 onChange={(e) => update(rule.id, { columnId: e.target.value })}
-                className="h-7 px-1.5 text-xs border border-slate-200 rounded bg-white max-w-[140px]"
+                className="h-7 px-1.5 text-xs border border-default rounded bg-white max-w-[140px]"
               >
                 {visibleColumns.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -166,7 +166,7 @@ export function ConditionalFormatBar(props: ConditionalFormatBarProps) {
                 onChange={(e) =>
                   update(rule.id, { op: e.target.value as RuleOp })
                 }
-                className="h-7 px-1.5 text-xs border border-slate-200 rounded bg-white"
+                className="h-7 px-1.5 text-xs border border-default rounded bg-white"
               >
                 {ALL_OPS.map((op) => (
                   <option key={op} value={op}>
@@ -185,7 +185,7 @@ export function ConditionalFormatBar(props: ConditionalFormatBarProps) {
                   }
                   onChange={(e) => update(rule.id, { value: e.target.value })}
                   placeholder="value"
-                  className="flex-1 h-7 px-2 text-xs border border-slate-200 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="flex-1 h-7 px-2 text-xs border border-default rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
               )}
               {!showValueInput && <div className="flex-1" />}
@@ -200,7 +200,7 @@ export function ConditionalFormatBar(props: ConditionalFormatBarProps) {
                       'h-5 w-5 rounded border-2 transition-transform',
                       rule.tone === tone
                         ? 'border-slate-700 scale-110'
-                        : 'border-slate-200 hover:border-slate-400',
+                        : 'border-default hover:border-slate-400',
                       TONE_CLASSES[tone],
                     )}
                     aria-label={`Tone ${TONE_LABELS[tone]}`}
@@ -226,7 +226,7 @@ export function ConditionalFormatBar(props: ConditionalFormatBarProps) {
         <button
           type="button"
           onClick={add}
-          className="inline-flex items-center gap-1 px-2 h-7 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50"
+          className="inline-flex items-center gap-1 px-2 h-7 text-xs font-medium text-slate-700 bg-white border border-default rounded hover:bg-slate-50"
         >
           <Plus className="w-3 h-3" />
           Add rule

@@ -462,10 +462,10 @@ function AttributeGroupCard({
   return (
     <details
       open
-      className="border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900 group/grp"
+      className="border border-default dark:border-slate-800 rounded bg-white dark:bg-slate-900 group/grp"
     >
       <summary className="flex items-center gap-3 px-3 py-2 cursor-pointer select-none hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded">
-        <ChevronDown className="w-3.5 h-3.5 text-slate-400 transition-transform group-open/grp:rotate-0 -rotate-90" />
+        <ChevronDown className="w-3.5 h-3.5 text-tertiary transition-transform group-open/grp:rotate-0 -rotate-90" />
         <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
           {group.label}
         </span>
@@ -476,7 +476,7 @@ function AttributeGroupCard({
           })}
         </span>
       </summary>
-      <div className="border-t border-slate-200 dark:border-slate-800">
+      <div className="border-t border-default dark:border-slate-800">
         {group.attrs.map((attr) => (
           <AttributeRow
             key={attr.key}
@@ -505,13 +505,13 @@ function AttributeRow({
   const filled = isFilled(attr.preview)
   const tone: CompletenessTone = filled ? 'filled' : 'empty'
   return (
-    <details className="border-b border-slate-100 dark:border-slate-800 last:border-b-0 group/row">
+    <details className="border-b border-subtle dark:border-slate-800 last:border-b-0 group/row">
       <summary
         className={
           'grid grid-cols-[1rem_12rem_1fr_5rem_1.5rem] items-start gap-2 px-3 py-2 cursor-pointer select-none hover:bg-slate-50 dark:hover:bg-slate-800/50 text-sm'
         }
       >
-        <ChevronDown className="w-3.5 h-3.5 text-slate-400 transition-transform group-open/row:rotate-0 -rotate-90 mt-0.5" />
+        <ChevronDown className="w-3.5 h-3.5 text-tertiary transition-transform group-open/row:rotate-0 -rotate-90 mt-0.5" />
         <div className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
           <span>{attr.label}</span>
           {attr.required && (
@@ -528,7 +528,7 @@ function AttributeRow({
           {filled ? (
             <span className="block break-words">{attr.preview}</span>
           ) : (
-            <span className="text-slate-400 italic">
+            <span className="text-tertiary italic">
               {t('products.datasheetHub.attributes.empty')}
             </span>
           )}
@@ -543,7 +543,7 @@ function AttributeRow({
               propagation would require a client component. */}
           <Link
             href={`/products/${productId}/edit`}
-            className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800"
+            className="inline-flex items-center justify-center w-6 h-6 rounded text-tertiary hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800"
             title={t('products.datasheetHub.attributes.editAria', {
               field: attr.label,
             })}
@@ -555,7 +555,7 @@ function AttributeRow({
           </Link>
         </div>
       </summary>
-      <div className="bg-slate-50/60 dark:bg-slate-950/30 border-t border-slate-100 dark:border-slate-800">
+      <div className="bg-slate-50/60 dark:bg-slate-950/30 border-t border-subtle dark:border-slate-800">
         <ChannelExpansion
           attrKey={attr.key}
           listings={attr.listings}
@@ -584,7 +584,7 @@ function CompletenessChip({
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+    <span className="inline-flex items-center gap-1 text-xs text-tertiary">
       <Circle className="w-3.5 h-3.5" />
       <span>{t('products.datasheetHub.attributes.emptyChip')}</span>
     </span>

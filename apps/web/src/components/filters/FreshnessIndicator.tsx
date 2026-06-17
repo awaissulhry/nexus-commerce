@@ -56,7 +56,7 @@ export default function FreshnessIndicator({
     ? 'border-rose-200 bg-rose-50 text-rose-700'
     : isStale
     ? 'border-amber-200 bg-amber-50 text-amber-800'
-    : 'border-slate-200 bg-white text-slate-600'
+    : 'border-default bg-white text-slate-600'
 
   const Icon = error ? AlertCircle : Clock
   const label = (() => {

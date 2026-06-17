@@ -85,7 +85,7 @@ export default function ReviewInsertsPage() {
           in the box when you pack an order — it catches buyers who ignore the email request.
         </p>
 
-        <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+        <div className="rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
           {/* marketplace */}
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
             Marketplace
@@ -103,7 +103,7 @@ export default function ReviewInsertsPage() {
                 className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
                   marketplace === m.code
                     ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-blue-300'
+                    : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-blue-300'
                 }`}
               >
                 {m.label}
@@ -114,7 +114,7 @@ export default function ReviewInsertsPage() {
           {/* count + action */}
           <div className="flex items-center justify-between gap-3 rounded-md bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5 mb-3">
             <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-              <FileText className="h-4 w-4 text-slate-400" aria-hidden="true" />
+              <FileText className="h-4 w-4 text-tertiary" aria-hidden="true" />
               {count === null ? (
                 'Counting products…'
               ) : (
@@ -150,7 +150,7 @@ export default function ReviewInsertsPage() {
           </div>
         </div>
 
-        <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
+        <p className="mt-3 text-xs text-tertiary dark:text-slate-500">
           Tip: inserts are easiest with FBM orders you pack yourself. For FBA, include them when you send
           inventory in. Typical lift is +0.5–1.5 percentage points on top of your email/solicitation asks.
         </p>

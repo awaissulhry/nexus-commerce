@@ -118,7 +118,7 @@ function NegKwTable({ items }: { items: NegKwItem[] }) {
   return (
     <table className="w-full text-xs mt-2">
       <thead>
-        <tr className="border-b border-slate-200 dark:border-slate-700">
+        <tr className="border-b border-default dark:border-slate-700">
           {['Query', 'Match', 'Ad Product', 'Market', 'Clicks', 'Spend'].map((h) => (
             <th key={h} className="pb-1 text-left font-medium text-slate-500 pr-3">{h}</th>
           ))}
@@ -144,7 +144,7 @@ function CampTable({ items, showAcos }: { items: CampItem[]; showAcos: boolean }
   return (
     <table className="w-full text-xs mt-2">
       <thead>
-        <tr className="border-b border-slate-200 dark:border-slate-700">
+        <tr className="border-b border-default dark:border-slate-700">
           {['Campaign', 'Ad Product', 'Market', 'ACOS', 'Spend'].map((h) => (
             <th key={h} className="pb-1 text-left font-medium text-slate-500 pr-3">{h}</th>
           ))}
@@ -173,7 +173,7 @@ function StaleTable({ items }: { items: StaleItem[] }) {
   return (
     <table className="w-full text-xs mt-2">
       <thead>
-        <tr className="border-b border-slate-200 dark:border-slate-700">
+        <tr className="border-b border-default dark:border-slate-700">
           {['Campaign', 'Ad Product', 'Market'].map((h) => (
             <th key={h} className="pb-1 text-left font-medium text-slate-500 pr-3">{h}</th>
           ))}
@@ -215,7 +215,7 @@ function InsightCard({ insight }: { insight: Insight }) {
                 <SevIcon className="inline h-3 w-3 mr-0.5 -mt-px" aria-hidden />
                 {insight.severity}
               </span>
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider">{insight.type.replace('_', ' ')}</span>
+              <span className="text-[10px] text-tertiary uppercase tracking-wider">{insight.type.replace('_', ' ')}</span>
             </div>
             <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mt-1">{insight.title}</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">{insight.description}</p>
@@ -223,7 +223,7 @@ function InsightCard({ insight }: { insight: Insight }) {
         </div>
         {insight.totalSpendCents > 0 && (
           <div className="shrink-0 text-right">
-            <p className="text-xs text-slate-400">Impact</p>
+            <p className="text-xs text-tertiary">Impact</p>
             <p className="text-sm font-bold text-slate-700 dark:text-slate-200 tabular-nums">
               {fmtEur(insight.totalSpendCents)}
             </p>
@@ -246,7 +246,7 @@ function InsightCard({ insight }: { insight: Insight }) {
           <StaleTable items={insight.items as StaleItem[]} />
         )}
         {insight.count > 5 && (
-          <p className="text-xs text-slate-400 mt-1.5">
+          <p className="text-xs text-tertiary mt-1.5">
             + {insight.count - 5} more
           </p>
         )}
@@ -346,7 +346,7 @@ export default async function InsightsPage({ searchParams }: PageProps) {
 
       {/* Summary bar */}
       {data.count > 0 && (
-        <div className="flex items-center gap-3 mb-4 py-2.5 px-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-sm">
+        <div className="flex items-center gap-3 mb-4 py-2.5 px-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-default dark:border-slate-700 text-sm">
           {criticalCount > 0 && (
             <span className="flex items-center gap-1 text-red-600 dark:text-red-400 font-medium">
               <AlertCircle className="h-4 w-4" />
@@ -370,7 +370,7 @@ export default async function InsightsPage({ searchParams }: PageProps) {
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <CheckCircle2 className="h-10 w-10 text-emerald-400 mb-3" />
           <p className="text-slate-600 dark:text-slate-300 font-medium">No insights right now</p>
-          <p className="text-sm text-slate-400 mt-1">
+          <p className="text-sm text-tertiary mt-1">
             {data.insights.length === 0
               ? 'No ad performance data in this window yet — run a report cycle first.'
               : 'All campaigns look healthy within the configured thresholds.'}
@@ -385,7 +385,7 @@ export default async function InsightsPage({ searchParams }: PageProps) {
       )}
 
       {/* Config note */}
-      <div className="mt-6 text-xs text-slate-400 space-y-0.5">
+      <div className="mt-6 text-xs text-tertiary space-y-0.5">
         <p>Thresholds: ACOS &gt; {acosTarget}% = HIGH · ACOS &lt; {lowAcosTarget}% with ≥ €5 spend = LOW · min spend filter: €{minSpendEur}</p>
         <p>
           Override via URL: <span className="font-mono">?acosTarget=40&lowAcosTarget=10&windowDays=7</span>

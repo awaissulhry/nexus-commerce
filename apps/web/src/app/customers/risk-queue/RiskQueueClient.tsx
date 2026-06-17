@@ -168,7 +168,7 @@ export default function RiskQueueClient() {
               className={`h-8 px-3 text-sm rounded border ${
                 filter === 'PENDING'
                   ? 'bg-slate-900 text-white border-slate-900'
-                  : 'border-slate-200 hover:bg-slate-50'
+                  : 'border-default hover:bg-slate-50'
               }`}
             >
               Pending only
@@ -178,7 +178,7 @@ export default function RiskQueueClient() {
               className={`h-8 px-3 text-sm rounded border ${
                 filter === 'ALL'
                   ? 'bg-slate-900 text-white border-slate-900'
-                  : 'border-slate-200 hover:bg-slate-50'
+                  : 'border-default hover:bg-slate-50'
               }`}
             >
               All flagged
@@ -212,7 +212,7 @@ export default function RiskQueueClient() {
           />
         ) : (
           <table className="w-full text-sm">
-            <thead className="text-md text-slate-500 border-b border-slate-200">
+            <thead className="text-md text-slate-500 border-b border-default">
               <tr>
                 <th className="text-left py-2 px-2">Customer</th>
                 <th className="text-left py-2 px-2">Risk</th>
@@ -227,7 +227,7 @@ export default function RiskQueueClient() {
               {filtered.map((r) => (
                 <tr
                   key={r.id}
-                  className="border-b border-slate-100 hover:bg-slate-50"
+                  className="border-b border-subtle hover:bg-slate-50"
                 >
                   <td className="py-2 px-2">
                     <Link
@@ -246,7 +246,7 @@ export default function RiskQueueClient() {
                         {r.riskFlag}
                       </Badge>
                     ) : (
-                      <span className="text-slate-400">—</span>
+                      <span className="text-tertiary">—</span>
                     )}
                   </td>
                   <td className="py-2 px-2">
@@ -263,7 +263,7 @@ export default function RiskQueueClient() {
                         {r.manualReviewState}
                       </Badge>
                     ) : (
-                      <span className="text-slate-400">—</span>
+                      <span className="text-tertiary">—</span>
                     )}
                   </td>
                   <td className="py-2 px-2 text-right">{r.totalOrders}</td>
@@ -297,7 +297,7 @@ export default function RiskQueueClient() {
                         disabled={busyId === r.id}
                         onClick={() => recompute(r.id)}
                         title="Re-score from current orders"
-                        className="h-7 px-2 inline-flex items-center gap-1 text-xs border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+                        className="h-7 px-2 inline-flex items-center gap-1 text-xs border border-default rounded hover:bg-slate-50 disabled:opacity-50"
                       >
                         <RefreshCw className="w-3 h-3" /> Re-score
                       </button>

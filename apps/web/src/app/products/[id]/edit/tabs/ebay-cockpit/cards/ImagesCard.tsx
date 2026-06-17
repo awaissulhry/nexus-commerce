@@ -149,7 +149,7 @@ export default function ImagesCard({ productId, marketplace, productUpdatedAt }:
 
   return (
     <Card noPadding>
-      <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
+      <div className="px-4 py-2.5 border-b border-subtle dark:border-slate-800 flex items-center gap-2 flex-wrap">
         <ImageIcon className="w-4 h-4 text-blue-500" />
         <div className="text-md font-medium text-slate-900 dark:text-slate-100">{t('products.edit.cockpit.ebay.images.title')}</div>
         <Badge variant="info">EC.7</Badge>
@@ -160,7 +160,7 @@ export default function ImagesCard({ productId, marketplace, productUpdatedAt }:
         )}
         <Link
           href={imagesTabHref}
-          className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+          className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
           title={t('products.edit.cockpit.ebay.images.manageTitle')}
         >
           {t('products.edit.cockpit.ebay.images.manageInImagesTab')} <ExternalLink className="w-3 h-3" />
@@ -192,12 +192,12 @@ export default function ImagesCard({ productId, marketplace, productUpdatedAt }:
 
             {/* ── Hero + master gallery ─────────────────────────── */}
             <div className="flex gap-3 items-start">
-              <div className="w-24 h-24 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 overflow-hidden flex-shrink-0">
+              <div className="w-24 h-24 rounded border border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-800 overflow-hidden flex-shrink-0">
                 {hero ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={hero.url} alt={hero.alt ?? ''} className="w-full h-full object-contain" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[10.5px] text-slate-400">{t('products.edit.cockpit.ebay.images.noHero')}</div>
+                  <div className="w-full h-full flex items-center justify-center text-[10.5px] text-tertiary">{t('products.edit.cockpit.ebay.images.noHero')}</div>
                 )}
               </div>
               <div className="flex-1 min-w-0">
@@ -211,7 +211,7 @@ export default function ImagesCard({ productId, marketplace, productUpdatedAt }:
                       <Link
                         key={m.id}
                         href={imagesTabHref}
-                        className="w-10 h-10 rounded border border-slate-200 dark:border-slate-700 overflow-hidden hover:ring-2 hover:ring-blue-300"
+                        className="w-10 h-10 rounded border border-default dark:border-slate-700 overflow-hidden hover:ring-2 hover:ring-blue-300"
                         title={m.alt ?? m.type ?? ''}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -219,7 +219,7 @@ export default function ImagesCard({ productId, marketplace, productUpdatedAt }:
                       </Link>
                     ))}
                     {masterSorted.length > 16 && (
-                      <span className="inline-flex items-center px-1.5 text-[10.5px] text-slate-400 self-center">
+                      <span className="inline-flex items-center px-1.5 text-[10.5px] text-tertiary self-center">
                         + {masterSorted.length - 16}
                       </span>
                     )}
@@ -238,7 +238,7 @@ export default function ImagesCard({ productId, marketplace, productUpdatedAt }:
                   {colorSets.map((set) => (
                     <div
                       key={`${set.axis}:${set.value}`}
-                      className="flex items-center gap-2 px-2 py-1.5 rounded border border-slate-100 dark:border-slate-800"
+                      className="flex items-center gap-2 px-2 py-1.5 rounded border border-subtle dark:border-slate-800"
                     >
                       <span className="font-mono text-[10.5px] px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300">
                         {set.axis} · {set.value}
@@ -254,7 +254,7 @@ export default function ImagesCard({ productId, marketplace, productUpdatedAt }:
                                 ? 'border-emerald-200 dark:border-emerald-800'
                                 : img.publishStatus === 'FAILED'
                                 ? 'border-rose-200 dark:border-rose-800'
-                                : 'border-slate-200 dark:border-slate-700',
+                                : 'border-default dark:border-slate-700',
                             )}
                             title={`pos ${img.position} · ${img.publishStatus}`}
                           >
@@ -263,7 +263,7 @@ export default function ImagesCard({ productId, marketplace, productUpdatedAt }:
                           </Link>
                         ))}
                       </div>
-                      <span className="text-[10.5px] text-slate-400 ml-auto whitespace-nowrap">
+                      <span className="text-[10.5px] text-tertiary ml-auto whitespace-nowrap">
                         {set.images.length} / 24
                       </span>
                     </div>

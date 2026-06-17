@@ -208,25 +208,25 @@ export default function DamPickerModal({
       />
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[80vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0 gap-3">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-default dark:border-slate-700 flex-shrink-0 gap-3">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             {t('products.edit.images.dam.title')}
           </h2>
           <div className="flex-1 max-w-md relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tertiary pointer-events-none" />
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('products.edit.images.dam.search')}
-              className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded pl-7 pr-2 py-1.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              className="w-full text-sm border border-default dark:border-slate-700 rounded pl-7 pr-2 py-1.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
             />
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+            className="p-1 text-tertiary hover:text-slate-700 dark:hover:text-slate-200"
           >
             <X className="w-4 h-4" />
           </button>
@@ -236,8 +236,8 @@ export default function DamPickerModal({
             picker surfaces brand/productType matches first; the
             operator can click a chip to widen to the full DAM. */}
         {(productBrand || productProductType) && (
-          <div className="flex items-center gap-2 px-5 py-2 border-b border-slate-100 dark:border-slate-800 flex-shrink-0 text-xs">
-            <span className="text-[11px] uppercase tracking-wide text-slate-400 font-medium">Scope</span>
+          <div className="flex items-center gap-2 px-5 py-2 border-b border-subtle dark:border-slate-800 flex-shrink-0 text-xs">
+            <span className="text-[11px] uppercase tracking-wide text-tertiary font-medium">Scope</span>
             {productBrand && (
               <button
                 type="button"
@@ -246,7 +246,7 @@ export default function DamPickerModal({
                   'inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-colors',
                   scopeBrand
                     ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-400 text-blue-700 dark:text-blue-300'
-                    : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+                    : 'border-default dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
                 )}
                 title="Show only assets already used by other products in this brand"
               >
@@ -261,7 +261,7 @@ export default function DamPickerModal({
                   'inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-colors',
                   scopeProductType
                     ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-400 text-blue-700 dark:text-blue-300'
-                    : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+                    : 'border-default dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
                 )}
                 title="Show only assets already used by other products of the same type"
               >
@@ -272,14 +272,14 @@ export default function DamPickerModal({
         )}
 
         {/* Filter strip — folder, tags, missing-alt + clear */}
-        <div className="flex items-center gap-2 px-5 py-2.5 border-b border-slate-100 dark:border-slate-800 flex-shrink-0 flex-wrap text-xs">
+        <div className="flex items-center gap-2 px-5 py-2.5 border-b border-subtle dark:border-slate-800 flex-shrink-0 flex-wrap text-xs">
           {/* Folder */}
           <div className="flex items-center gap-1.5">
-            <Folder className="w-3.5 h-3.5 text-slate-400" />
+            <Folder className="w-3.5 h-3.5 text-tertiary" />
             <select
               value={folderId}
               onChange={(e) => setFolderId(e.target.value)}
-              className="text-xs border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 max-w-[180px]"
+              className="text-xs border border-default dark:border-slate-700 rounded px-1.5 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 max-w-[180px]"
             >
               <option value="">{t('products.edit.images.dam.anyFolder')}</option>
               <option value="unfiled">{t('products.edit.images.dam.unfiled')}</option>
@@ -294,7 +294,7 @@ export default function DamPickerModal({
           {/* Tags */}
           {tags.length > 0 && (
             <div className="flex items-center gap-1 flex-wrap">
-              <TagIcon className="w-3.5 h-3.5 text-slate-400" />
+              <TagIcon className="w-3.5 h-3.5 text-tertiary" />
               {tags.slice(0, 10).map((t) => (
                 <button
                   key={t.id}
@@ -304,7 +304,7 @@ export default function DamPickerModal({
                     'text-[11px] px-2 py-0.5 rounded-full border transition-colors',
                     selectedTagIds.has(t.id)
                       ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-400 text-blue-700 dark:text-blue-300'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                      : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
                   )}
                 >
                   {t.name}
@@ -345,11 +345,11 @@ export default function DamPickerModal({
           )}
 
           {loading && items.length === 0 ? (
-            <div className="flex items-center justify-center py-16 text-slate-400">
+            <div className="flex items-center justify-center py-16 text-tertiary">
               <Loader2 className="w-5 h-5 animate-spin" />
             </div>
           ) : items.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+            <div className="flex flex-col items-center justify-center py-16 text-tertiary">
               <ImageIcon className="w-10 h-10 mb-2 text-slate-300" />
               <p className="text-sm">{t('products.edit.images.dam.noMatch')}</p>
               <p className="text-xs mt-1">{t('products.edit.images.dam.uploadFirst')}</p>
@@ -363,7 +363,7 @@ export default function DamPickerModal({
                   onClick={() => importAsset(item)}
                   disabled={importingId !== null}
                   className={cn(
-                    'group aspect-square relative rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 overflow-hidden bg-slate-50 dark:bg-slate-800 transition-all focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50',
+                    'group aspect-square relative rounded-xl border-2 border-default dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 overflow-hidden bg-slate-50 dark:bg-slate-800 transition-all focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50',
                     importingId === item.id && 'ring-2 ring-blue-400',
                   )}
                   title={item.label}
@@ -391,7 +391,7 @@ export default function DamPickerModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-default dark:border-slate-700 flex-shrink-0">
           <span className="text-xs text-slate-500 dark:text-slate-400">
             {t('products.edit.images.dam.clickToImport')}
           </span>

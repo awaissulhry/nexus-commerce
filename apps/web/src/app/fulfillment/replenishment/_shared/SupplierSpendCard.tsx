@@ -77,7 +77,7 @@ export function SupplierSpendCard() {
 
   if (loading && !data) {
     return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 text-xs text-slate-500">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2 text-xs text-slate-500">
         {t('replenishment.supplierSpend.loading')}
       </div>
     )
@@ -87,8 +87,8 @@ export function SupplierSpendCard() {
   if (!data || data.suppliers.length === 0) return null
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
-      <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 flex-wrap">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md">
+      <div className="px-3 py-2 border-b border-default dark:border-slate-800 flex items-center gap-2 flex-wrap">
         <Building2
           className="h-4 w-4 text-slate-500 dark:text-slate-400"
           aria-hidden="true"
@@ -107,7 +107,7 @@ export function SupplierSpendCard() {
 
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
-          <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <thead className="border-b border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
             <tr>
               <th className="text-left px-3 py-1.5 font-semibold">
                 {t('replenishment.supplierSpend.col.supplier')}
@@ -148,7 +148,7 @@ export function SupplierSpendCard() {
                       {s.country && <span>{s.country}</span>}
                       {s.leadTimeDays != null && (
                         <>
-                          <span className="text-slate-400">·</span>
+                          <span className="text-tertiary">·</span>
                           <Clock className="h-2.5 w-2.5" aria-hidden="true" />
                           <span>
                             {t('replenishment.supplierSpend.cell.leadTime', {
@@ -159,7 +159,7 @@ export function SupplierSpendCard() {
                       )}
                       {multiCurrency && (
                         <>
-                          <span className="text-slate-400">·</span>
+                          <span className="text-tertiary">·</span>
                           <span
                             className="text-amber-700 dark:text-amber-400 font-medium"
                             title={t('replenishment.supplierSpend.cell.currencyMixTooltip', {
@@ -187,7 +187,7 @@ export function SupplierSpendCard() {
                       'px-3 py-1.5 text-right tabular-nums font-medium',
                       s.openCommitmentCents > 0
                         ? 'text-slate-900 dark:text-slate-100'
-                        : 'text-slate-400 dark:text-slate-600',
+                        : 'text-tertiary dark:text-slate-600',
                     )}
                   >
                     {formatEur(s.openCommitmentCents)}

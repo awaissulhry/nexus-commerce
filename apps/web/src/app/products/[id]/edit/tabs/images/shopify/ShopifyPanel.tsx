@@ -328,9 +328,9 @@ export default function ShopifyPanel({
   })
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-xl">
       {/* Header */}
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-200 dark:border-slate-700">
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-default dark:border-slate-700">
         <Store className="w-4 h-4 text-slate-500" />
         <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Shopify Images</span>
         <div className="ml-auto flex items-center gap-3">
@@ -395,11 +395,11 @@ export default function ShopifyPanel({
       {/* ── Image pool ─────────────────────────────────────────────── */}
       <section
         aria-labelledby="shopify-pool-heading"
-        className="px-5 py-4 border-b border-slate-100 dark:border-slate-800"
+        className="px-5 py-4 border-b border-subtle dark:border-slate-800"
       >
         <div className="flex items-center gap-2 mb-3">
           <h3 id="shopify-pool-heading" className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Image Pool</h3>
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-tertiary">
             <Star className="w-3 h-3 inline mr-0.5 text-blue-500" />
             Position 1 = featured product image
           </span>
@@ -410,7 +410,7 @@ export default function ShopifyPanel({
             role="button"
             tabIndex={0}
             aria-label="Add images to the Shopify pool"
-            className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl py-10 flex flex-col items-center gap-2 text-slate-400 cursor-pointer hover:border-emerald-300 transition-colors"
+            className="border-2 border-dashed border-default dark:border-slate-700 rounded-xl py-10 flex flex-col items-center gap-2 text-tertiary cursor-pointer hover:border-emerald-300 transition-colors"
             onClick={() => setPickerTarget('pool')}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPickerTarget('pool') } }}
           >
@@ -446,7 +446,7 @@ export default function ShopifyPanel({
                     ? 'border-emerald-400 ring-2 ring-emerald-300'
                     : item.fromMaster
                       ? 'border-dashed border-slate-300 dark:border-slate-600 opacity-75'
-                      : 'border-slate-200 dark:border-slate-700',
+                      : 'border-default dark:border-slate-700',
                   item.isPending && 'ring-1 ring-amber-400',
                   onOpenLightboxForCell && 'cursor-zoom-in',
                 )}
@@ -500,7 +500,7 @@ export default function ShopifyPanel({
                 type="button"
                 aria-label="Add image to Shopify pool"
                 onClick={() => setPickerTarget('pool')}
-                className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1 text-slate-400 hover:border-emerald-300 transition-colors flex-shrink-0"
+                className="w-20 h-20 rounded-xl border-2 border-dashed border-default dark:border-slate-700 flex flex-col items-center justify-center gap-1 text-tertiary hover:border-emerald-300 transition-colors flex-shrink-0"
               >
                 <Plus className="w-5 h-5" />
                 <span className="text-[10px]">Add</span>
@@ -514,11 +514,11 @@ export default function ShopifyPanel({
       {variantGroups.length > 0 && (
         <section
           aria-labelledby="shopify-variant-heading"
-          className="px-5 py-4 border-b border-slate-100 dark:border-slate-800"
+          className="px-5 py-4 border-b border-subtle dark:border-slate-800"
         >
           <div className="flex items-center gap-2 mb-3">
             <h3 id="shopify-variant-heading" className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Variant Image Assignment</h3>
-            <span className="text-xs text-slate-400">shown when buyer selects that {activeAxis.toLowerCase()}</span>
+            <span className="text-xs text-tertiary">shown when buyer selects that {activeAxis.toLowerCase()}</span>
           </div>
 
           <ul role="list" className="space-y-2">
@@ -542,7 +542,7 @@ export default function ShopifyPanel({
                     )}
                     className={cn(
                       'relative w-12 h-12 rounded-lg border overflow-hidden bg-white dark:bg-slate-900 flex-shrink-0',
-                      assignedImage.isPending ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-200 dark:border-slate-700',
+                      assignedImage.isPending ? 'border-amber-400 ring-1 ring-amber-400' : 'border-default dark:border-slate-700',
                       onOpenLightboxForCell && 'cursor-zoom-in',
                     )}
                   >
@@ -554,7 +554,7 @@ export default function ShopifyPanel({
                   </div>
                 ) : (
                   <div
-                    className="w-12 h-12 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-300 flex-shrink-0"
+                    className="w-12 h-12 rounded-lg border-2 border-dashed border-default dark:border-slate-700 flex items-center justify-center text-slate-300 flex-shrink-0"
                     aria-hidden="true"
                   >
                     <Plus className="w-4 h-4" />
@@ -577,7 +577,7 @@ export default function ShopifyPanel({
                       size="sm"
                       variant="ghost"
                       aria-label={`Clear image for ${groupValue}`}
-                      className="text-xs h-7 px-2.5 text-slate-400 hover:text-red-500"
+                      className="text-xs h-7 px-2.5 text-tertiary hover:text-red-500"
                       onClick={() => handleClearAssignment(groupValue)}
                     >
                       Clear
@@ -609,17 +609,17 @@ export default function ShopifyPanel({
       />
 
       {/* IR.5.4 — Buyer preview */}
-      <div className="border-t border-slate-100 dark:border-slate-800">
+      <div className="border-t border-subtle dark:border-slate-800">
         <button
           type="button"
           onClick={() => setPreviewOpen((p) => !p)}
           className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
           aria-expanded={previewOpen}
         >
-          <Eye className="w-3.5 h-3.5 text-slate-400" />
+          <Eye className="w-3.5 h-3.5 text-tertiary" />
           <span className="font-medium">Buyer preview</span>
-          <span className="text-slate-400 ml-1">— Shopify product page as a buyer would see it</span>
-          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-slate-400 transition-transform', previewOpen && 'rotate-180')} />
+          <span className="text-tertiary ml-1">— Shopify product page as a buyer would see it</span>
+          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-tertiary transition-transform', previewOpen && 'rotate-180')} />
         </button>
         {previewOpen && (
           <div className="px-4 pb-4">
@@ -635,17 +635,17 @@ export default function ShopifyPanel({
       </div>
 
       {/* IR.9.4 — Publish history */}
-      <div className="border-t border-slate-100 dark:border-slate-800">
+      <div className="border-t border-subtle dark:border-slate-800">
         <button
           type="button"
           onClick={() => setHistoryOpen((p) => !p)}
           className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
           aria-expanded={historyOpen}
         >
-          <Clock className="w-3.5 h-3.5 text-slate-400" />
+          <Clock className="w-3.5 h-3.5 text-tertiary" />
           <span className="font-medium">Publish history</span>
-          <span className="text-slate-400 ml-1">— Shopify product + variant updates + retry</span>
-          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-slate-400 transition-transform', historyOpen && 'rotate-180')} />
+          <span className="text-tertiary ml-1">— Shopify product + variant updates + retry</span>
+          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-tertiary transition-transform', historyOpen && 'rotate-180')} />
         </button>
         {historyOpen && (
           <div className="px-4 pb-4">
@@ -662,10 +662,10 @@ export default function ShopifyPanel({
           fold. */}
       <div
         data-publish-anchor
-        className="sticky bottom-0 z-10 bg-white dark:bg-slate-900 rounded-b-xl px-5 py-3 border-t border-slate-100 dark:border-slate-800 shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.08)] dark:shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.5)] flex flex-col gap-1.5"
+        className="sticky bottom-0 z-10 bg-white dark:bg-slate-900 rounded-b-xl px-5 py-3 border-t border-subtle dark:border-slate-800 shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.08)] dark:shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.5)] flex flex-col gap-1.5"
       >
         <div className="flex items-center justify-between">
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-tertiary">
             PUT /products/{'{id}'} · variant image_id assignment via REST
             {publishedCount > 0 && (
               <span className="ml-2 text-emerald-600 dark:text-emerald-400">· {publishedCount} published</span>
@@ -674,7 +674,7 @@ export default function ShopifyPanel({
           <Button
             size="sm"
             variant="ghost"
-            className="gap-1.5 border border-slate-200 dark:border-slate-700"
+            className="gap-1.5 border border-default dark:border-slate-700"
             onClick={() => setPublishPreviewOpen(true)}
             disabled={publishing}
             title="Open pre-publish preview"
@@ -686,7 +686,7 @@ export default function ShopifyPanel({
             <Button
               size="sm"
               variant="ghost"
-              className="gap-1.5 border border-slate-200 dark:border-slate-700"
+              className="gap-1.5 border border-default dark:border-slate-700"
               onClick={onOpenRollback}
               disabled={publishing}
               title="Revert to the last successful Shopify publish (per-browser snapshot)"
@@ -698,7 +698,7 @@ export default function ShopifyPanel({
           <Button
             size="sm"
             variant="ghost"
-            className="gap-1.5 border border-slate-200 dark:border-slate-700"
+            className="gap-1.5 border border-default dark:border-slate-700"
             disabled={publishing || validation.blocking.length > 0}
             title={validation.blocking.length > 0
               ? `${validation.blocking.length} blocking issue${validation.blocking.length === 1 ? '' : 's'} — see banner above`

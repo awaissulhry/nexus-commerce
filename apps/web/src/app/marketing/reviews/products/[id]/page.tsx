@@ -147,7 +147,7 @@ export default async function ProductReviewDrillDown({
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Timeline (daily volume {data.sinceDays}d)
         </h2>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3 overflow-x-auto">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-3 overflow-x-auto">
           {data.timeline.length === 0 ? (
             <div className="text-sm text-slate-500 py-4 text-center">
               No daily data for this product in {data.sinceDays}d.
@@ -204,7 +204,7 @@ export default async function ProductReviewDrillDown({
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Categories (last 30d)
         </h2>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md">
           {data.categories.length === 0 ? (
             <div className="px-3 py-4 text-sm text-slate-500 text-center">
               No categorization available.
@@ -249,7 +249,7 @@ export default async function ProductReviewDrillDown({
           {data.recent.map((r) => (
             <li
               key={r.id}
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3"
+              className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-3"
             >
               <div className="flex items-center gap-2 flex-wrap mb-1">
                 {r.sentiment && (
@@ -339,7 +339,7 @@ function Stat({
           ? 'text-rose-700 dark:text-rose-300'
           : 'text-slate-900 dark:text-slate-100'
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
         {label}
       </div>

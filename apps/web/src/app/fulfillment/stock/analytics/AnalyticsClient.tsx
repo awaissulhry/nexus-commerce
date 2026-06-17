@@ -192,7 +192,7 @@ function formatCents(cents: number): string {
 }
 
 function dohTone(doh: number | null): string {
-  if (doh == null) return 'text-slate-400'
+  if (doh == null) return 'text-tertiary'
   if (doh < 30)  return 'text-emerald-700'
   if (doh < 90)  return 'text-blue-700'
   if (doh < 180) return 'text-amber-700'
@@ -332,7 +332,7 @@ export default function AnalyticsClient() {
       case 'thumb':
         return row.thumbnailUrl
           ? <img src={row.thumbnailUrl} alt="" className={`${density === 'compact' ? 'w-6 h-6' : 'w-8 h-8'} rounded object-cover bg-slate-100`} />
-          : <div className={`${density === 'compact' ? 'w-6 h-6' : 'w-8 h-8'} rounded bg-slate-100 flex items-center justify-center text-slate-400`}><Package size={density === 'compact' ? 12 : 14} /></div>
+          : <div className={`${density === 'compact' ? 'w-6 h-6' : 'w-8 h-8'} rounded bg-slate-100 flex items-center justify-center text-tertiary`}><Package size={density === 'compact' ? 12 : 14} /></div>
       case 'product':
         return (
           <div className="min-w-0 overflow-hidden">
@@ -372,7 +372,7 @@ export default function AnalyticsClient() {
           <div className="flex items-center gap-2 min-w-0">
             {row.thumbnailUrl
               ? <img src={row.thumbnailUrl} alt="" className="w-7 h-7 rounded object-cover bg-slate-100 flex-shrink-0" />
-              : <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0"><Package size={12} /></div>}
+              : <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-tertiary flex-shrink-0"><Package size={12} /></div>}
             <div className="min-w-0">
               <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{row.name}</div>
               <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">{row.sku}</div>
@@ -381,7 +381,7 @@ export default function AnalyticsClient() {
         )
       case 'location':
         return (
-          <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700" title={row.location.name}>
+          <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700" title={row.location.name}>
             {row.location.code}
           </span>
         )
@@ -391,14 +391,14 @@ export default function AnalyticsClient() {
             <div className="tabular-nums text-slate-700 dark:text-slate-300">
               {row.inputs.unitsSoldInWindow > 0 ? row.inputs.unitsSoldInWindow : <span className="text-slate-300">0</span>}
             </div>
-            <div className="text-xs text-slate-400">{row.inputs.dailyDemand.toFixed(2)}/day</div>
+            <div className="text-xs text-tertiary">{row.inputs.dailyDemand.toFixed(2)}/day</div>
           </div>
         )
       case 'currentRop':
         return <span className="tabular-nums text-slate-500 dark:text-slate-400">{row.currentReorderThreshold ?? <span className="text-slate-300">—</span>}</span>
       case 'recRop':
         return (
-          <span className={`tabular-nums font-semibold ${ropChanged ? 'text-blue-700' : 'text-slate-400'}`}>
+          <span className={`tabular-nums font-semibold ${ropChanged ? 'text-blue-700' : 'text-tertiary'}`}>
             {row.recommendation.rop ?? <span className="text-slate-300 font-normal">—</span>}
           </span>
         )
@@ -460,7 +460,7 @@ export default function AnalyticsClient() {
                   className={cn('min-h-[44px] sm:min-h-0 px-3 py-1 text-sm font-medium rounded border transition-colors',
                     days === d
                       ? 'bg-slate-900 text-white border-slate-900'
-                      : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300')}>
+                      : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300')}>
                   {d}d
                 </button>
               ))}
@@ -479,7 +479,7 @@ export default function AnalyticsClient() {
       {loading && data === null && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           {[0, 1, 2, 3].map((i) => (
-            <Card key={i}><div className="h-[68px] flex items-center justify-center text-base text-slate-400">…</div></Card>
+            <Card key={i}><div className="h-[68px] flex items-center justify-center text-base text-tertiary">…</div></Card>
           ))}
         </div>
       )}
@@ -562,7 +562,7 @@ export default function AnalyticsClient() {
           {/* EOQ recommendations — VirtualizedGrid */}
           {eoqRows.length > 0 && (
             <Card noPadding>
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-default dark:border-slate-700">
                 <div className="text-md font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
                   <Calculator size={14} className="text-blue-500" />
                   {t('stock.eoq.title')}
@@ -598,7 +598,7 @@ export default function AnalyticsClient() {
               <div className="px-4 pb-1">
                 <GridFooter count={eoqRows.length} label="recommendations" />
               </div>
-              <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              <div className="px-4 py-2.5 border-t border-subtle dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                 <span className="font-semibold text-slate-700 dark:text-slate-300">{t('stock.eoq.formula.title')}: </span>
                 {t('stock.eoq.formula.body')}
               </div>
@@ -628,7 +628,7 @@ export default function AnalyticsClient() {
                       const tone =
                         cls === 'A' ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' :
                         cls === 'B' ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800' :
-                        cls === 'C' ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700' :
+                        cls === 'C' ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-default dark:border-slate-700' :
                         'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
                       const count = abc.counts[cls] ?? 0
                       const sharePct = abc.productsClassified > 0 ? (count / abc.productsClassified) * 100 : 0
@@ -652,7 +652,7 @@ export default function AnalyticsClient() {
                       const list = abc.samples[cls]?.slice(0, 3) ?? []
                       if (list.length === 0) return null
                       return (
-                        <div key={cls} className="border border-slate-200 dark:border-slate-700 rounded-md p-2.5 bg-slate-50/40 dark:bg-slate-800/40">
+                        <div key={cls} className="border border-default dark:border-slate-700 rounded-md p-2.5 bg-slate-50/40 dark:bg-slate-800/40">
                           <div className="flex items-center gap-1.5 mb-1.5">
                             <AbcBadge cls={cls} size="sm" />
                             <span className="text-xs uppercase tracking-wider font-semibold text-slate-700 dark:text-slate-300">{t('stock.abc.topSamples')}</span>
@@ -669,7 +669,7 @@ export default function AnalyticsClient() {
                       )
                     })}
                   </div>
-                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+                  <div className="mt-3 pt-3 border-t border-subtle dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
                     {t('stock.abc.totalClassified', { n: abc.productsClassified })}
                   </div>
                 </>
@@ -690,7 +690,7 @@ export default function AnalyticsClient() {
                   {[30, 60, 90, 180].map((d) => (
                     <button key={d} type="button" onClick={() => setDeadDays(d)}
                       className={cn('min-h-[44px] sm:min-h-0 px-2.5 py-1 text-sm font-medium rounded border transition-colors',
-                        deadDays === d ? 'bg-slate-900 text-white border-slate-900' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300')}>
+                        deadDays === d ? 'bg-slate-900 text-white border-slate-900' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300')}>
                       {d}d
                     </button>
                   ))}
@@ -704,14 +704,14 @@ export default function AnalyticsClient() {
                     <span className="text-slate-500 dark:text-slate-400 font-normal">· {deadStock.dead.length}</span>
                   </div>
                   {deadStock.dead.length === 0 ? (
-                    <div className="text-sm text-slate-400 italic py-2">{t('stock.deadStock.dead.empty')}</div>
+                    <div className="text-sm text-tertiary italic py-2">{t('stock.deadStock.dead.empty')}</div>
                   ) : (
                     <ul className="space-y-1 max-h-[420px] overflow-y-auto pr-1">
                       {deadStock.dead.slice(0, 50).map((p) => (
-                        <li key={p.productId} className="flex items-center gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                        <li key={p.productId} className="flex items-center gap-2 py-1.5 px-2 -mx-2 border-b border-subtle dark:border-slate-800 last:border-0">
                           {p.thumbnailUrl
                             ? <img src={p.thumbnailUrl} alt="" className="w-7 h-7 rounded object-cover bg-slate-100 flex-shrink-0" />
-                            : <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0"><Package size={12} /></div>}
+                            : <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-tertiary flex-shrink-0"><Package size={12} /></div>}
                           <div className="min-w-0 flex-1">
                             <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{p.name}</div>
                             <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
@@ -723,12 +723,12 @@ export default function AnalyticsClient() {
                           </div>
                           <div className="text-right text-sm tabular-nums flex-shrink-0">
                             <div className="font-semibold text-rose-700">{formatCents(p.valueAtRiskCents)}</div>
-                            <div className="text-xs text-slate-400">{t('stock.deadStock.atRisk')}</div>
+                            <div className="text-xs text-tertiary">{t('stock.deadStock.atRisk')}</div>
                           </div>
                         </li>
                       ))}
                       {deadStock.dead.length > 50 && (
-                        <li className="text-xs text-slate-400 italic pt-1">+{deadStock.dead.length - 50} {t('stock.analytics.byChannel.units')}</li>
+                        <li className="text-xs text-tertiary italic pt-1">+{deadStock.dead.length - 50} {t('stock.analytics.byChannel.units')}</li>
                       )}
                     </ul>
                   )}
@@ -740,14 +740,14 @@ export default function AnalyticsClient() {
                     <span className="text-slate-500 dark:text-slate-400 font-normal">· {deadStock.slow.length}</span>
                   </div>
                   {deadStock.slow.length === 0 ? (
-                    <div className="text-sm text-slate-400 italic py-2">{t('stock.deadStock.slow.empty')}</div>
+                    <div className="text-sm text-tertiary italic py-2">{t('stock.deadStock.slow.empty')}</div>
                   ) : (
                     <ul className="space-y-1 max-h-[420px] overflow-y-auto pr-1">
                       {deadStock.slow.slice(0, 50).map((p) => (
-                        <li key={p.productId} className="flex items-center gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                        <li key={p.productId} className="flex items-center gap-2 py-1.5 px-2 -mx-2 border-b border-subtle dark:border-slate-800 last:border-0">
                           {p.thumbnailUrl
                             ? <img src={p.thumbnailUrl} alt="" className="w-7 h-7 rounded object-cover bg-slate-100 flex-shrink-0" />
-                            : <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0"><Package size={12} /></div>}
+                            : <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-tertiary flex-shrink-0"><Package size={12} /></div>}
                           <div className="min-w-0 flex-1">
                             <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{p.name}</div>
                             <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
@@ -756,7 +756,7 @@ export default function AnalyticsClient() {
                           </div>
                           <div className="text-right text-sm tabular-nums flex-shrink-0">
                             <div className="font-semibold text-amber-700">{formatCents(p.valueAtRiskCents)}</div>
-                            <div className="text-xs text-slate-400">{t('stock.deadStock.atRisk')}</div>
+                            <div className="text-xs text-tertiary">{t('stock.deadStock.atRisk')}</div>
                           </div>
                         </li>
                       ))}
@@ -764,7 +764,7 @@ export default function AnalyticsClient() {
                   )}
                 </div>
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              <div className="mt-4 pt-3 border-t border-subtle dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                 <span className="font-semibold text-slate-700 dark:text-slate-300">{t('stock.deadStock.recommended.title')}: </span>
                 {t('stock.deadStock.recommended.body')}
               </div>
@@ -886,7 +886,7 @@ function YearEndValuationCard({ t }: { t: (k: string, v?: Record<string, string 
         </div>
         <div className="flex items-center gap-2">
           <select value={year} onChange={(e) => setYear(Number(e.target.value))}
-            className="h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+            className="h-8 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
             aria-label={t('stock.analytics.yearEnd.yearSelect')}>
             {[currentYear, currentYear - 1, currentYear - 2].map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -911,13 +911,13 @@ function YearEndValuationCard({ t }: { t: (k: string, v?: Record<string, string 
           }>
             {data.source === 'snapshot' ? t('stock.analytics.yearEnd.sourceSnapshot') : t('stock.analytics.yearEnd.sourceLive')}
           </span>
-          {data.notes && <span className="text-slate-400">{data.notes}</span>}
+          {data.notes && <span className="text-tertiary">{data.notes}</span>}
         </div>
       )}
       {err && <div className="text-sm text-rose-600 mb-2">{err}</div>}
       {data && (
         <div className="space-y-3">
-          <div className="flex items-baseline gap-3 border-b border-slate-100 dark:border-slate-800 pb-2">
+          <div className="flex items-baseline gap-3 border-b border-subtle dark:border-slate-800 pb-2">
             <div className="text-3xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">{formatCents(data.total.valueEurCents)}</div>
             <div className="text-sm text-slate-500 dark:text-slate-400">{t('stock.analytics.yearEnd.totalUnits', { units: data.total.units.toLocaleString(), layers: data.layerCount })}</div>
           </div>
@@ -931,7 +931,7 @@ function YearEndValuationCard({ t }: { t: (k: string, v?: Record<string, string 
                     <span className="tabular-nums text-slate-900 dark:text-slate-100 font-medium">{formatCents(l.valueEurCents)}</span>
                   </li>
                 ))}
-                {data.byLocation.length === 0 && <li className="text-sm text-slate-400">—</li>}
+                {data.byLocation.length === 0 && <li className="text-sm text-tertiary">—</li>}
               </ul>
             </div>
             <div>
@@ -941,7 +941,7 @@ function YearEndValuationCard({ t }: { t: (k: string, v?: Record<string, string 
                   <li key={m} className="flex justify-between gap-2 text-sm">
                     <span className="text-slate-700 dark:text-slate-300">{m}</span>
                     <span className="tabular-nums text-slate-900 dark:text-slate-100 font-medium">
-                      {data.byMethod[m].units > 0 ? formatCents(data.byMethod[m].valueEurCents) : <span className="text-slate-400">—</span>}
+                      {data.byMethod[m].units > 0 ? formatCents(data.byMethod[m].valueEurCents) : <span className="text-tertiary">—</span>}
                     </span>
                   </li>
                 ))}
@@ -970,20 +970,20 @@ function YearEndValuationCard({ t }: { t: (k: string, v?: Record<string, string 
             </div>
           </div>
           {data.byCurrency.length > 1 && (
-            <div className="border-t border-slate-100 dark:border-slate-800 pt-2">
+            <div className="border-t border-subtle dark:border-slate-800 pt-2">
               <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">{t('stock.analytics.yearEnd.byCurrency')}</div>
               <ul className="flex flex-wrap gap-3 text-sm">
                 {data.byCurrency.map((c) => (
                   <li key={c.currency}>
                     <span className="font-mono text-slate-700 dark:text-slate-300">{c.currency}</span>{' '}
                     <span className="tabular-nums text-slate-500 dark:text-slate-400">{c.units.toLocaleString()}u</span>
-                    {c.currency !== 'EUR' && <span className="text-slate-400"> · {formatCents(c.valueEurCents)} EUR</span>}
+                    {c.currency !== 'EUR' && <span className="text-tertiary"> · {formatCents(c.valueEurCents)} EUR</span>}
                   </li>
                 ))}
               </ul>
             </div>
           )}
-          <div className="text-xs text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
+          <div className="text-xs text-tertiary pt-1 border-t border-subtle dark:border-slate-800">
             {t('stock.analytics.yearEnd.asOfDisclosure', { date: new Date(data.asOf).toLocaleDateString() })}
           </div>
         </div>

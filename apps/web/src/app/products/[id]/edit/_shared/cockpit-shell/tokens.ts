@@ -54,7 +54,7 @@ export const STATUS_PILL: Record<StatusTone, string> = {
   amber:
     'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
   slate:
-    'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+    'bg-slate-100 text-slate-600 border-default dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
   rose:
     'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900',
   sky:
@@ -95,7 +95,7 @@ export const PILL_BASE =
  *  ·pinned). Deliberately quiet so the default automated state does not
  *  shout. FL.2 renders the actual badge component on top of this base. */
 export const PROVENANCE_BADGE_BASE =
-  'inline-flex items-center gap-0.5 text-[10px] leading-none text-slate-400 dark:text-slate-500'
+  'inline-flex items-center gap-0.5 text-[10px] leading-none text-tertiary dark:text-slate-500'
 
 /** The full-bleed wrapper every cockpit root uses: never let a wide
  *  card force the page into horizontal scroll (regression fixed during

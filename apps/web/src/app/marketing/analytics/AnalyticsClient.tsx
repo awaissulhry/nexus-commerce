@@ -51,11 +51,11 @@ export function AnalyticsClient({ initial }: { initial: AnalyticsData }) {
   const maxDaily = Math.max(1, ...data.daily.map((d) => Math.max(d.spendEurCents, d.salesCents)))
 
   const Table = ({ title, rows, isChannel }: { title: string; rows: Row[]; isChannel?: boolean }) => (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+    <div className="rounded-lg border border-default dark:border-slate-800 overflow-hidden">
       <div className="px-3 py-2 bg-slate-50 dark:bg-slate-900/60 text-xs font-medium uppercase text-slate-500">{title}</div>
       <table className="w-full text-sm">
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-          {rows.length === 0 && <tr><td className="px-3 py-4 text-slate-400 text-xs">No data in window.</td></tr>}
+          {rows.length === 0 && <tr><td className="px-3 py-4 text-tertiary text-xs">No data in window.</td></tr>}
           {rows.map((r) => (
             <tr key={r.key} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
               <td className="px-3 py-1.5">{isChannel && <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${CHANNEL_DOT[r.key] ?? CHANNEL_DOT.INTERNAL}`} />}<span className="text-slate-700 dark:text-slate-200">{r.key || '—'}</span></td>
@@ -67,7 +67,7 @@ export function AnalyticsClient({ initial }: { initial: AnalyticsData }) {
           ))}
         </tbody>
         {rows.length > 0 && (
-          <thead className="text-[10px] uppercase text-slate-400"><tr><th /><th className="text-right px-3 font-normal">spend</th><th className="text-right px-3 font-normal">sales</th><th className="text-right px-3 font-normal">roas</th><th className="text-right px-3 font-normal">acos</th></tr></thead>
+          <thead className="text-[10px] uppercase text-tertiary"><tr><th /><th className="text-right px-3 font-normal">spend</th><th className="text-right px-3 font-normal">sales</th><th className="text-right px-3 font-normal">roas</th><th className="text-right px-3 font-normal">acos</th></tr></thead>
         )}
       </table>
     </div>
@@ -84,7 +84,7 @@ export function AnalyticsClient({ initial }: { initial: AnalyticsData }) {
 
       {/* Daily trend */}
       {data.daily.length > 0 && (
-        <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 mb-4">
+        <div className="rounded-lg border border-default dark:border-slate-800 p-3 mb-4">
           <div className="text-xs font-medium uppercase text-slate-500 mb-2">Daily spend vs sales (EUR)</div>
           <div className="flex items-end gap-0.5 h-28">
             {data.daily.map((d) => (
@@ -94,7 +94,7 @@ export function AnalyticsClient({ initial }: { initial: AnalyticsData }) {
               </div>
             ))}
           </div>
-          <div className="flex gap-3 mt-1 text-[10px] text-slate-400"><span className="inline-flex items-center gap-1"><span className="w-2 h-2 bg-amber-500/80" /> spend</span><span className="inline-flex items-center gap-1"><span className="w-2 h-2 bg-violet-400/70" /> sales</span></div>
+          <div className="flex gap-3 mt-1 text-[10px] text-tertiary"><span className="inline-flex items-center gap-1"><span className="w-2 h-2 bg-amber-500/80" /> spend</span><span className="inline-flex items-center gap-1"><span className="w-2 h-2 bg-violet-400/70" /> sales</span></div>
         </div>
       )}
 

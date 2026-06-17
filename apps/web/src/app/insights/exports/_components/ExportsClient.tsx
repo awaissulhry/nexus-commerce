@@ -215,7 +215,7 @@ export default function ExportsClient() {
                         disabled={isDownloading}
                         className={cn(
                           'inline-flex items-center gap-1.5 h-7 px-2.5 text-xs rounded-md border focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
-                          'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                          'border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
                           'disabled:opacity-60',
                         )}
                       >
@@ -243,7 +243,7 @@ export default function ExportsClient() {
         action={
           <Link
             href="/bulk-operations/exports"
-            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-sm rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             <Settings2 className="w-3.5 h-3.5" />
             Manage in Bulk Operations
@@ -252,14 +252,14 @@ export default function ExportsClient() {
       >
         <ul className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
           <li className="flex items-start gap-2">
-            <Mail className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+            <Mail className="w-3.5 h-3.5 mt-0.5 shrink-0 text-tertiary" />
             <span>
               Configure a daily/weekly/monthly delivery in /bulk-operations/exports
               — recipient email + frequency + format.
             </span>
           </li>
           <li className="flex items-start gap-2">
-            <FileText className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+            <FileText className="w-3.5 h-3.5 mt-0.5 shrink-0 text-tertiary" />
             <span>
               Each report on this page is the same shape ScheduledExport
               consumes; the queue worker will stream and email per the schedule.

@@ -202,7 +202,7 @@ export default function AplusCard({
   return (
     <div
       data-jump-target="aplus"
-      className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-2.5"
+      className="rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-2.5"
     >
       {/* Header */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -212,7 +212,7 @@ export default function AplusCard({
             {t('products.edit.cockpit.amazon.cards.aplus')}
           </span>
           {loading && (
-            <Loader2 className="w-3 h-3 animate-spin text-slate-400" />
+            <Loader2 className="w-3 h-3 animate-spin text-tertiary" />
           )}
         </div>
         <a
@@ -240,12 +240,12 @@ export default function AplusCard({
           Attached to this ASIN
         </div>
         {!asin ? (
-          <div className="text-[11.5px] text-slate-400 italic">
+          <div className="text-[11.5px] text-tertiary italic">
             No ASIN yet — A+ can be attached only after the listing is
             published.
           </div>
         ) : attached === null ? (
-          <div className="text-[11.5px] text-slate-400 italic">Loading…</div>
+          <div className="text-[11.5px] text-tertiary italic">Loading…</div>
         ) : attached.length === 0 ? (
           <div className="rounded border border-dashed border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 p-2 text-[11.5px] text-amber-800 dark:text-amber-300">
             No A+ modules attached.{' '}
@@ -278,9 +278,9 @@ export default function AplusCard({
                   href={`/marketing/aplus/${row.id}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/60 dark:hover:bg-blue-950/30 transition-colors p-2"
+                  className="flex items-center gap-2 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/60 dark:hover:bg-blue-950/30 transition-colors p-2"
                 >
-                  <BookOpen className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                  <BookOpen className="w-3.5 h-3.5 text-tertiary flex-shrink-0" />
                   <div className="min-w-0 flex-1 leading-tight">
                     <div className="text-[12px] font-medium text-slate-900 dark:text-slate-100 truncate">
                       {row.name}
@@ -297,7 +297,7 @@ export default function AplusCard({
                     </div>
                   </div>
                   <StatusPill status={row.status} />
-                  <ExternalLink className="w-3 h-3 text-slate-400" />
+                  <ExternalLink className="w-3 h-3 text-tertiary" />
                 </a>
               </li>
             ))}
@@ -319,12 +319,12 @@ export default function AplusCard({
       </div>
 
       {/* Brand Story */}
-      <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+      <div className="pt-2 border-t border-subtle dark:border-slate-800">
         <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
           Brand Story
         </div>
         {!brand ? (
-          <div className="text-[11.5px] text-slate-400 italic">
+          <div className="text-[11.5px] text-tertiary italic">
             No brand set on the master — Brand Stories are brand-scoped.
           </div>
         ) : brandStory ? (
@@ -332,9 +332,9 @@ export default function AplusCard({
             href={`/marketing/brand-story/${brandStory.id}`}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/60 dark:hover:bg-blue-950/30 transition-colors p-2"
+            className="flex items-center gap-2 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/60 dark:hover:bg-blue-950/30 transition-colors p-2"
           >
-            <BookOpen className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+            <BookOpen className="w-3.5 h-3.5 text-tertiary flex-shrink-0" />
             <div className="min-w-0 flex-1 leading-tight">
               <div className="text-[12px] font-medium text-slate-900 dark:text-slate-100 truncate">
                 {brandStory.name}
@@ -345,10 +345,10 @@ export default function AplusCard({
               </div>
             </div>
             <StatusPill status={brandStory.status} />
-            <ExternalLink className="w-3 h-3 text-slate-400" />
+            <ExternalLink className="w-3 h-3 text-tertiary" />
           </a>
         ) : (
-          <div className="rounded border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40 p-2 text-[11.5px] text-slate-600 dark:text-slate-400 flex items-center justify-between gap-2 flex-wrap">
+          <div className="rounded border border-dashed border-default dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40 p-2 text-[11.5px] text-slate-600 dark:text-slate-400 flex items-center justify-between gap-2 flex-wrap">
             <span>
               No Brand Story for{' '}
               <span className="font-medium text-slate-700 dark:text-slate-300">
@@ -369,7 +369,7 @@ export default function AplusCard({
       </div>
 
       {/* Footer hint */}
-      <div className="pt-1 border-t border-slate-100 dark:border-slate-800 text-[10.5px] text-slate-400 italic flex items-center justify-between gap-2">
+      <div className="pt-1 border-t border-subtle dark:border-slate-800 text-[10.5px] text-tertiary italic flex items-center justify-between gap-2">
         <span>
           AC.8 — read + deep-link. Inline attach + approval submit land
           in AC.8.2.

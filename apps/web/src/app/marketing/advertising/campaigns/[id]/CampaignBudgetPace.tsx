@@ -37,12 +37,12 @@ export function CampaignBudgetPace({ rows, dailyBudget, windowDays }: { rows: Tr
   const fillPct = Math.min(100, Math.round(util * 100))
 
   return (
-    <div className="mb-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3">
+    <div className="mb-4 rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-950 p-3">
       <div className="flex items-center justify-between text-xs mb-1.5">
         <span className="font-medium text-slate-600 dark:text-slate-300">Budget pace</span>
         <span className="text-slate-500">
           avg <span className="tabular-nums font-medium text-slate-700 dark:text-slate-200">{eur0(avgDaily)}</span> / {eur0(budgetCents)} per day
-          <span className="ml-1 text-slate-400">({fillPct}%)</span>
+          <span className="ml-1 text-tertiary">({fillPct}%)</span>
         </span>
       </div>
       <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
@@ -55,7 +55,7 @@ export function CampaignBudgetPace({ rows, dailyBudget, windowDays }: { rows: Tr
           </span>
         )}
         <span>Run-rate ~<span className="tabular-nums font-medium text-slate-700 dark:text-slate-200">{eur0(runRate30)}</span>/30d</span>
-        <span className="text-slate-400">over last {Math.min(windowDays, rows.length)}d</span>
+        <span className="text-tertiary">over last {Math.min(windowDays, rows.length)}d</span>
       </div>
     </div>
   )

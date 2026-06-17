@@ -47,7 +47,7 @@ function CommandRow({ cmd }: { cmd: Command }) {
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 px-2 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800/50 group">
       <div className="flex items-center gap-2 min-w-0">
-        <cmd.icon className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+        <cmd.icon className="w-3.5 h-3.5 text-tertiary flex-shrink-0" />
         <span className="text-xs text-slate-700 dark:text-slate-300 truncate">{cmd.label}</span>
       </div>
       {cmd.chord ? (
@@ -139,20 +139,20 @@ export default function CommandMatrixPanel() {
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setOpen(false)} />
 
       {/* Panel */}
-      <div className="relative z-10 w-full max-w-2xl max-h-[82vh] flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden">
+      <div className="relative z-10 w-full max-w-2xl max-h-[82vh] flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-default dark:border-slate-700 shadow-2xl overflow-hidden">
 
         {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
-          <Keyboard className="w-4 h-4 text-slate-400 flex-shrink-0" />
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-default dark:border-slate-700 flex-shrink-0">
+          <Keyboard className="w-4 h-4 text-tertiary flex-shrink-0" />
           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Keyboard shortcuts</span>
           <div className="flex-1" />
-          <div className="text-xs text-slate-400 hidden sm:block">
+          <div className="text-xs text-tertiary hidden sm:block">
             <ShortcutBadge text="Shift" /> <span className="mx-1">+</span> <ShortcutBadge text="?" /> to toggle
           </div>
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 ml-2"
+            className="text-tertiary hover:text-slate-600 dark:hover:text-slate-200 ml-2"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -160,22 +160,22 @@ export default function CommandMatrixPanel() {
         </div>
 
         {/* Search */}
-        <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
+        <div className="px-4 py-2 border-b border-subtle dark:border-slate-800 flex-shrink-0">
           <div className="relative flex items-center">
-            <Search className="absolute left-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <Search className="absolute left-2.5 w-3.5 h-3.5 text-tertiary pointer-events-none" />
             <input
               ref={inputRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search shortcuts…"
-              className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-8 pr-3 py-1.5 text-sm border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder:text-tertiary focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             {query && (
               <button
                 type="button"
                 onClick={() => setQuery('')}
-                className="absolute right-2 text-slate-400 hover:text-slate-600"
+                className="absolute right-2 text-tertiary hover:text-slate-600"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -186,12 +186,12 @@ export default function CommandMatrixPanel() {
         {/* Command grid */}
         <div className="flex-1 overflow-y-auto p-4">
           {grouped.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-8">No shortcuts match "{query}"</p>
+            <p className="text-sm text-tertiary text-center py-8">No shortcuts match "{query}"</p>
           ) : (
             <div className="space-y-5">
               {grouped.map(([group, cmds]) => (
                 <div key={group}>
-                  <h3 className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1.5 px-2">
+                  <h3 className="text-[10px] font-semibold uppercase tracking-widest text-tertiary dark:text-slate-500 mb-1.5 px-2">
                     {group}
                   </h3>
                   <div className={cn(
@@ -207,7 +207,7 @@ export default function CommandMatrixPanel() {
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3 text-xs text-slate-400 flex-shrink-0">
+        <div className="px-4 py-2 border-t border-subtle dark:border-slate-800 flex items-center gap-3 text-xs text-tertiary flex-shrink-0">
           <span>{allCommands.length} shortcuts total</span>
           <span>·</span>
           <span>Open command palette with <ShortcutBadge text="⌘K" /> or <ShortcutBadge text="?" /></span>

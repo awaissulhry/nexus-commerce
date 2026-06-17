@@ -126,7 +126,7 @@ const STATUS_TONE: Record<
   },
   inactive: {
     dot: 'bg-slate-300',
-    bg: 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700',
+    bg: 'bg-slate-50 dark:bg-slate-800 border-default dark:border-slate-700',
     text: 'text-slate-500 dark:text-slate-400',
   },
 }
@@ -163,7 +163,7 @@ export default function SyncHealthClient({
 
   if (!data) {
     return (
-      <div className="px-6 py-12 text-center text-base text-slate-400 dark:text-slate-500 italic">
+      <div className="px-6 py-12 text-center text-base text-tertiary dark:text-slate-500 italic">
         <Loader2 className="w-4 h-4 animate-spin inline mr-1.5" />
         Loading sync health…
       </div>
@@ -201,7 +201,7 @@ export default function SyncHealthClient({
           type="button"
           onClick={() => void refresh()}
           disabled={refreshing}
-          className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50"
+          className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50"
         >
           {refreshing ? (
             <Loader2 className="w-3 h-3 animate-spin" />
@@ -265,7 +265,7 @@ export default function SyncHealthClient({
               ? 'border-rose-200 dark:border-rose-900 bg-rose-50/40'
               : data.queue.failed > 0
                 ? 'border-amber-200 dark:border-amber-900 bg-amber-50/40'
-                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'
+                : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900'
           }`}
         >
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5 mb-2">
@@ -299,7 +299,7 @@ export default function SyncHealthClient({
           </div>
           {data.queue.oldestPending && (
             <div
-              className={`mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-sm flex items-center gap-1.5 ${
+              className={`mt-2 pt-2 border-t border-subtle dark:border-slate-800 text-sm flex items-center gap-1.5 ${
                 queueStuck ? 'text-rose-700 dark:text-rose-300' : 'text-slate-500 dark:text-slate-400'
               }`}
             >
@@ -313,12 +313,12 @@ export default function SyncHealthClient({
         </div>
 
         {/* Channels card */}
-        <div className="lg:col-span-2 border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900">
-          <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+        <div className="lg:col-span-2 border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900">
+          <div className="px-3 py-2 border-b border-subtle dark:border-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
             Channels
           </div>
           {data.channels.length === 0 ? (
-            <div className="p-4 text-base text-slate-400 dark:text-slate-500 italic text-center">
+            <div className="p-4 text-base text-tertiary dark:text-slate-500 italic text-center">
               No channel connections configured.
             </div>
           ) : (
@@ -381,8 +381,8 @@ export default function SyncHealthClient({
       </div>
 
       {/* Recent errors */}
-      <section className="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900">
-        <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <section className="border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900">
+        <div className="px-3 py-2 border-b border-subtle dark:border-slate-800 flex items-center justify-between">
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5">
             <AlertCircle className="w-3 h-3" /> Recent errors
           </div>
@@ -395,7 +395,7 @@ export default function SyncHealthClient({
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-default dark:border-slate-700">
               <tr>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-20">
                   When
@@ -418,7 +418,7 @@ export default function SyncHealthClient({
               {data.recentErrors.map((e) => (
                 <tr
                   key={e.id}
-                  className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">
                     {fmtRelative(e.when)}
@@ -436,7 +436,7 @@ export default function SyncHealthClient({
                     {e.productId && (
                       <a
                         href={`/products?drawer=${e.productId}`}
-                        className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 inline-flex"
+                        className="text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 inline-flex"
                         title="Open product"
                       >
                         <ExternalLink className="w-3 h-3" />

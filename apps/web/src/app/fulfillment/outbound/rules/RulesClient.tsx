@@ -235,7 +235,7 @@ export default function RulesClient() {
                 className={`h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 ${
                   showInactive
                     ? 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600'
-                    : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    : 'border-default dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
               >
                 {showInactive
@@ -243,10 +243,10 @@ export default function RulesClient() {
                   : t('rules.toggleInactive.show', { n: rules.filter((r) => !r.isActive).length })}
               </button>
             )}
-            <button onClick={() => setShowSimulator(true)} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5">
+            <button onClick={() => setShowSimulator(true)} className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5">
               <FlaskConical size={12} /> {t('rules.simulator.openButton')}
             </button>
-            <button onClick={fetchRules} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5">
+            <button onClick={fetchRules} className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5">
               <RefreshCw size={12} /> {t('common.refresh')}
             </button>
             <button onClick={() => setShowNew(true)} className="h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5">
@@ -280,7 +280,7 @@ export default function RulesClient() {
           >
             <SortableContext items={(showInactive ? rules : rules.filter((r) => r.isActive)).map((r) => r.id)} strategy={verticalListSortingStrategy}>
           <table className="w-full text-md">
-            <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+            <thead className="border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
               <tr>
                 <th className="px-3 py-2 w-8"></th>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 w-16">{t('rules.col.priority')}</th>
@@ -436,8 +436,8 @@ function RuleEditModal({
 
   return (
     <div className="fixed inset-0 z-40 bg-slate-900/30 flex justify-end" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="w-full max-w-[640px] bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col h-full" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start gap-3 px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+      <div className="w-full max-w-[640px] bg-white dark:bg-slate-900 shadow-2xl border-l border-default dark:border-slate-700 flex flex-col h-full" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-3 px-5 py-4 border-b border-default dark:border-slate-700">
           <div className="flex-1">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{isNew ? 'New shipping rule' : 'Edit rule'}</h2>
             <div className="text-sm text-slate-500 dark:text-slate-400">WHEN conditions match → THEN actions apply</div>
@@ -517,11 +517,11 @@ function RuleEditModal({
             </div>
           </Section>
         </div>
-        <div className="flex items-center gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+        <div className="flex items-center gap-2 px-5 py-3 border-t border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
           <button onClick={submit} disabled={saving} className="h-9 px-4 text-md bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 inline-flex items-center gap-1.5">
             {isNew ? 'Create rule' : 'Save changes'}
           </button>
-          <button onClick={onClose} className="h-9 px-3 text-md text-slate-700 dark:text-slate-300 hover:bg-white border border-slate-200 dark:border-slate-700 rounded">
+          <button onClick={onClose} className="h-9 px-3 text-md text-slate-700 dark:text-slate-300 hover:bg-white border border-default dark:border-slate-700 rounded">
             Cancel
           </button>
         </div>
@@ -579,7 +579,7 @@ function SortableRuleRow({
     background: isDragging ? '#f1f5f9' : undefined,
   }
   return (
-    <tr ref={setNodeRef} style={style} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
+    <tr ref={setNodeRef} style={style} className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
       <td className="px-2 py-2 w-8 text-center">
         <button
           {...attributes}
@@ -599,11 +599,11 @@ function SortableRuleRow({
       <td className="px-3 py-2 text-sm text-slate-600 dark:text-slate-400">{summarizeActions(r.actions)}</td>
       <td className="px-3 py-2 text-sm text-slate-600 dark:text-slate-400">
         {t('rules.fires', { n: r.triggerCount })}
-        {r.lastFiredAt && <div className="text-xs text-slate-400 dark:text-slate-500">{t('rules.lastFired', { date: new Date(r.lastFiredAt).toLocaleDateString('it-IT') })}</div>}
+        {r.lastFiredAt && <div className="text-xs text-tertiary dark:text-slate-500">{t('rules.lastFired', { date: new Date(r.lastFiredAt).toLocaleDateString('it-IT') })}</div>}
       </td>
       <td className="px-3 py-2 text-right">
         <div className="flex items-center gap-1 justify-end">
-          <button onClick={() => onToggleActive(r)} className="h-6 px-2 text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1" title={r.isActive ? t('rules.action.disable') : t('rules.action.enable')}>
+          <button onClick={() => onToggleActive(r)} className="h-6 px-2 text-sm text-slate-600 dark:text-slate-400 border border-default dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1" title={r.isActive ? t('rules.action.disable') : t('rules.action.enable')}>
             {r.isActive ? <X size={11} /> : <Check size={11} />}
             {r.isActive ? t('rules.action.disable') : t('rules.action.enable')}
           </button>
@@ -675,8 +675,8 @@ function SimulatorModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-40 bg-slate-900/30 flex justify-end" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="w-full max-w-[640px] bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col h-full" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start gap-3 px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+      <div className="w-full max-w-[640px] bg-white dark:bg-slate-900 shadow-2xl border-l border-default dark:border-slate-700 flex flex-col h-full" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-3 px-5 py-4 border-b border-default dark:border-slate-700">
           <div className="flex-1">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
               <FlaskConical size={16} /> {t('rules.simulator.title')}
@@ -735,7 +735,7 @@ function SimulatorModal({ onClose }: { onClose: () => void }) {
                   </pre>
                 </div>
               ) : (
-                <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-3 text-md text-slate-700 dark:text-slate-300">
+                <div className="bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 rounded p-3 text-md text-slate-700 dark:text-slate-300">
                   {t('rules.simulator.noMatch', { n: result.rulesEvaluated })}
                 </div>
               )}

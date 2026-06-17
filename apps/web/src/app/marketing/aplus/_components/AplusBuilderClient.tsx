@@ -405,7 +405,7 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
   return (
     <div className="space-y-3">
       {/* Header strip */}
-      <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-lg border border-default bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <Link
             href="/marketing/aplus"
@@ -499,7 +499,7 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
             ))}
           </select>
           {busy && (
-            <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+            <Loader2 className="w-4 h-4 animate-spin text-tertiary" />
           )}
         </div>
       </div>
@@ -512,8 +512,8 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
           (if any) + datetime input to set/clear. The cron picker
           (MC.8.10-followup once a job runner is wired) walks
           (status='APPROVED', scheduledFor < now) and submits. */}
-      <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <Clock className="w-4 h-4 text-slate-400" />
+      <div className="flex flex-wrap items-center gap-2 rounded-md border border-default bg-white px-3 py-2 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <Clock className="w-4 h-4 text-tertiary" />
         <span className="font-medium text-slate-900 dark:text-slate-100">
           {t('aplus.schedule.label')}
         </span>

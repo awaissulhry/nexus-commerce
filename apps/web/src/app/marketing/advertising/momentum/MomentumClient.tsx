@@ -14,16 +14,16 @@ interface Result { date: string | null; counts: { enabled: number; paused: numbe
 function TopList({ title, rows }: { title: string; rows: Entity[] }) {
   const max = Math.max(1, ...rows.map((r) => r.salesCents))
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+    <div className="rounded-lg border border-default dark:border-slate-800 overflow-hidden">
       <div className="px-3 py-2 bg-slate-50 dark:bg-slate-900/60 text-xs font-medium text-slate-600 dark:text-slate-300">{title}</div>
       <div className="divide-y divide-slate-100 dark:divide-slate-800">
-        {rows.length === 0 ? <div className="px-3 py-6 text-center text-slate-400 text-xs">No data.</div> : rows.map((r, i) => (
+        {rows.length === 0 ? <div className="px-3 py-6 text-center text-tertiary text-xs">No data.</div> : rows.map((r, i) => (
           <div key={r.id} className="px-3 py-1.5 flex items-center gap-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-900/40">
-            <span className="text-xs text-slate-400 w-4 text-right">{i + 1}</span>
+            <span className="text-xs text-tertiary w-4 text-right">{i + 1}</span>
             <span className="flex-1 min-w-0 truncate" title={r.label}>{r.label}</span>
             <span className="relative w-16 h-1.5 rounded bg-slate-100 dark:bg-slate-800 overflow-hidden hidden sm:inline-block"><span className="absolute inset-y-0 left-0 bg-violet-500" style={{ width: `${(r.salesCents / max) * 100}%` }} /></span>
             <span className="tabular-nums text-right w-16">{eur(r.salesCents)}</span>
-            <span className="tabular-nums text-right w-12 text-slate-400 text-xs">{pct(r.acos)}</span>
+            <span className="tabular-nums text-right w-12 text-tertiary text-xs">{pct(r.acos)}</span>
           </div>
         ))}
       </div>
@@ -56,18 +56,18 @@ export function MomentumClient() {
       </div>
 
       {/* Sales by placement */}
-      <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div className="rounded-lg border border-default dark:border-slate-800 overflow-hidden">
         <div className="px-3 py-2 bg-slate-50 dark:bg-slate-900/60 text-xs font-medium text-slate-600 dark:text-slate-300">Sales by placement</div>
         <table className="w-full text-sm">
           <thead className="text-xs text-slate-500"><tr><th className="text-left px-3 py-1.5">Placement</th><th className="text-left px-3 py-1.5 w-1/3">Share</th><th className="text-right px-3 py-1.5">Spend</th><th className="text-right px-3 py-1.5">Sales</th></tr></thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {(data?.placements ?? []).length === 0 ? <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-400 text-xs">No placement data for this day.</td></tr> : (data?.placements ?? []).map((p) => (
-              <tr key={p.placement}><td className="px-3 py-1.5">{p.placement}</td><td className="px-3 py-1.5"><span className="relative block w-full h-2 rounded bg-slate-100 dark:bg-slate-800 overflow-hidden"><span className="absolute inset-y-0 left-0 bg-sky-500" style={{ width: `${p.sharePct * 100}%` }} /></span></td><td className="px-3 py-1.5 text-right tabular-nums">{eur(p.spendCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(p.salesCents)} <span className="text-xs text-slate-400">({(p.sharePct * 100).toFixed(0)}%)</span></td></tr>
+            {(data?.placements ?? []).length === 0 ? <tr><td colSpan={4} className="px-3 py-6 text-center text-tertiary text-xs">No placement data for this day.</td></tr> : (data?.placements ?? []).map((p) => (
+              <tr key={p.placement}><td className="px-3 py-1.5">{p.placement}</td><td className="px-3 py-1.5"><span className="relative block w-full h-2 rounded bg-slate-100 dark:bg-slate-800 overflow-hidden"><span className="absolute inset-y-0 left-0 bg-sky-500" style={{ width: `${p.sharePct * 100}%` }} /></span></td><td className="px-3 py-1.5 text-right tabular-nums">{eur(p.spendCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(p.salesCents)} <span className="text-xs text-tertiary">({(p.sharePct * 100).toFixed(0)}%)</span></td></tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-slate-400 mt-3">Day-grain from your Amazon reports. Hour-of-day momentum + the live sales funnel unlock once Amazon Marketing Stream is delivering hourly data.</p>
+      <p className="text-xs text-tertiary mt-3">Day-grain from your Amazon reports. Hour-of-day momentum + the live sales funnel unlock once Amazon Marketing Stream is delivering hourly data.</p>
     </div>
   )
 }

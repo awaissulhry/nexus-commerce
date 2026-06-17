@@ -62,7 +62,7 @@ export default function AltTextHelper({
     <details
       open={open}
       onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
-      className="rounded border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"
+      className="rounded border border-default bg-slate-50 dark:border-slate-700 dark:bg-slate-800"
     >
       <summary className="flex cursor-pointer list-none items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200">
         <Languages className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
@@ -71,12 +71,12 @@ export default function AltTextHelper({
           language: language.toUpperCase(),
         })}
         <ChevronDown
-          className={`ml-auto w-3 h-3 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`ml-auto w-3 h-3 text-tertiary transition-transform ${open ? 'rotate-180' : ''}`}
         />
       </summary>
-      <div className="border-t border-slate-200 px-2 py-1.5 dark:border-slate-700">
+      <div className="border-t border-default px-2 py-1.5 dark:border-slate-700">
         {!loaded ? (
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-tertiary">
             {t('marketingContent.altHelper.loading')}
           </p>
         ) : rows.length === 0 ? (
@@ -95,7 +95,7 @@ export default function AltTextHelper({
                     {row.preferred}
                   </span>
                   {row.avoid.length > 0 && (
-                    <span className="text-slate-400 line-through">
+                    <span className="text-tertiary line-through">
                       {row.avoid.join(', ')}
                     </span>
                   )}

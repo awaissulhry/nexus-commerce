@@ -260,7 +260,7 @@ export default function SyncQueueTable({ initialItems }: SyncQueueTableProps) {
               className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
                 isFailed && !isRetrying
                   ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                  : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                  : "bg-slate-100 text-tertiary cursor-not-allowed"
               }`}
             >
               {isRetrying ? (
@@ -361,10 +361,10 @@ export default function SyncQueueTable({ initialItems }: SyncQueueTableProps) {
   });
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-lg border border-default shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full" style={{ fontSize: "13px" }}>
-          <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-20">
+          <thead className="bg-slate-50 border-b border-default sticky top-0 z-20">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -379,7 +379,7 @@ export default function SyncQueueTable({ initialItems }: SyncQueueTableProps) {
                         header.getContext()
                       )}
                       {header.column.getIsSorted() && (
-                        <span className="text-slate-400">
+                        <span className="text-tertiary">
                           {header.column.getIsSorted() === "desc" ? "↓" : "↑"}
                         </span>
                       )}
@@ -418,7 +418,7 @@ export default function SyncQueueTable({ initialItems }: SyncQueueTableProps) {
               table.getRowModel().rows.map((row, rowIdx) => (
                 <tr
                   key={row.id}
-                  className={`border-b border-slate-200 hover:bg-slate-50 transition-colors ${
+                  className={`border-b border-default hover:bg-slate-50 transition-colors ${
                     rowIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
                   }`}
                 >
@@ -443,7 +443,7 @@ export default function SyncQueueTable({ initialItems }: SyncQueueTableProps) {
       </div>
 
       {/* Footer with item count */}
-      <div className="bg-slate-50 border-t border-slate-200 px-6 py-3 text-sm text-slate-600">
+      <div className="bg-slate-50 border-t border-default px-6 py-3 text-sm text-slate-600">
         Showing {table.getRowModel().rows.length} of {items.length} items
       </div>
     </div>

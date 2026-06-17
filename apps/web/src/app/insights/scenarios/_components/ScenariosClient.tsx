@@ -326,7 +326,7 @@ export default function ScenariosClient() {
               />
             </dl>
           ) : (
-            <div className="text-sm text-slate-400 py-6 text-center">
+            <div className="text-sm text-tertiary py-6 text-center">
               {loading ? 'Loading…' : 'No anchor data'}
             </div>
           )}
@@ -457,14 +457,14 @@ export default function ScenariosClient() {
             placeholder="Scenario name (e.g. 'Cut Amazon ads 30%, raise jacket 5%')"
             value={scenarioName}
             onChange={(e) => setScenarioName(e.target.value)}
-            className="flex-1 h-8 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+            className="flex-1 h-8 px-2 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
           />
           <input
             type="text"
             placeholder="Notes (optional)"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            className="flex-1 h-8 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+            className="flex-1 h-8 px-2 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
           />
           <button
             type="button"
@@ -484,7 +484,7 @@ export default function ScenariosClient() {
             {saved.map((s) => (
               <li
                 key={s.id}
-                className="flex items-center gap-2 rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2"
+                className="flex items-center gap-2 rounded-md border border-default dark:border-slate-700 px-3 py-2"
               >
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
@@ -502,7 +502,7 @@ export default function ScenariosClient() {
                 <button
                   type="button"
                   onClick={() => loadScenario(s)}
-                  className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   <Plus className="w-3 h-3" />
                   Load
@@ -510,7 +510,7 @@ export default function ScenariosClient() {
                 <button
                   type="button"
                   onClick={() => deleteScenario(s.id)}
-                  className="inline-flex items-center justify-center w-6 h-6 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                  className="inline-flex items-center justify-center w-6 h-6 rounded-md text-tertiary hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                   aria-label="Delete scenario"
                 >
                   <Trash2 className="w-3.5 h-3.5" />

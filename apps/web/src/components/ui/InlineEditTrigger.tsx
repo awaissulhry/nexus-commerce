@@ -71,8 +71,8 @@ export function InlineEditTrigger({
         // collide with the value text.
         align === 'right' ? 'pl-5 pr-1.5 justify-end' : 'pl-1.5 pr-5',
         empty
-          ? 'border-dashed border-slate-300 text-slate-400 hover:border-slate-400 hover:bg-slate-50'
-          : 'hover:bg-slate-50 hover:border-slate-200',
+          ? 'border-dashed border-slate-300 text-tertiary hover:border-slate-400 hover:bg-slate-50'
+          : 'hover:bg-slate-50 hover:border-default',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:border-blue-400',
         'transition-colors',
         disabled &&
@@ -92,7 +92,7 @@ export function InlineEditTrigger({
         <Pencil
           aria-hidden="true"
           className={cn(
-            'absolute top-1/2 -translate-y-1/2 flex-shrink-0 text-slate-400 opacity-0 transition-opacity',
+            'absolute top-1/2 -translate-y-1/2 flex-shrink-0 text-tertiary opacity-0 transition-opacity',
             'group-hover/edit:opacity-100 group-focus-visible/edit:opacity-100',
             // When empty, keep the icon faintly visible at rest so the
             // dashed slot reads as "editable" rather than "decoration".

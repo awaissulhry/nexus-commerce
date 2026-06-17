@@ -206,9 +206,9 @@ export default function ExportsClient() {
       )}
 
       {/* Builder */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 space-y-3">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-4 space-y-3">
         <div className="flex items-center gap-3">
-          <FileSpreadsheet className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+          <FileSpreadsheet className="w-5 h-5 text-tertiary dark:text-slate-500" />
           <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex-1">
             New export
           </h2>
@@ -223,7 +223,7 @@ export default function ExportsClient() {
               type="text"
               value={jobName}
               onChange={(e) => setJobName(e.target.value)}
-              className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </label>
           <label className="block">
@@ -233,7 +233,7 @@ export default function ExportsClient() {
             <select
               value={format}
               onChange={(e) => setFormat(e.target.value as Format)}
-              className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded"
+              className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
             >
               {(Object.keys(FORMAT_LABELS) as Format[]).map((f) => (
                 <option key={f} value={f}>
@@ -250,7 +250,7 @@ export default function ExportsClient() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="flex-1 h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded"
+                className="flex-1 h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
               >
                 <option value="">All</option>
                 <option value="ACTIVE">ACTIVE</option>
@@ -262,13 +262,13 @@ export default function ExportsClient() {
                 value={brandFilter}
                 onChange={(e) => setBrandFilter(e.target.value)}
                 placeholder="brand"
-                className="flex-1 h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="flex-1 h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </div>
           </div>
         </div>
 
-        <div className="border border-slate-200 dark:border-slate-800 rounded p-2">
+        <div className="border border-default dark:border-slate-800 rounded p-2">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">
             Columns ({pickedColumns.length} / {PRODUCT_COLUMNS.length})
           </div>
@@ -282,7 +282,7 @@ export default function ExportsClient() {
                   'h-6 px-2 text-xs font-medium border rounded inline-flex items-center gap-1',
                   pickedColumns.includes(c.id)
                     ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300'
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800',
+                    : 'bg-white border-default text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800',
                 )}
               >
                 {pickedColumns.includes(c.id) && (
@@ -331,7 +331,7 @@ export default function ExportsClient() {
           />
         }
       />
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg overflow-hidden">
         {jobs.length === 0 ? (
           <div className="px-3 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
             No exports yet. Pick columns above and hit Run export.

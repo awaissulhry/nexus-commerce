@@ -100,7 +100,7 @@ export default function ReviewsOverviewPage() {
       </div>
 
       {showAmazon && (
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+        <p className="text-xs text-tertiary dark:text-slate-500 mb-4">
           Amazon shares review <em>themes</em>, not full text. For individual reviews, enable eBay or import from Advanced.
         </p>
       )}
@@ -114,19 +114,19 @@ export default function ReviewsOverviewPage() {
 function TopicCard({ kind, topics, ok }: { kind: 'love' | 'fix'; topics: Topic[]; ok: boolean }) {
   const isLove = kind === 'love'
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
+    <div className="rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
       <div className={`flex items-center gap-1.5 mb-2 text-sm font-medium ${isLove ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'}`}>
         {isLove ? <ThumbsUp className="h-4 w-4" aria-hidden="true" /> : <ThumbsDown className="h-4 w-4" aria-hidden="true" />}
         {isLove ? 'What customers love' : 'What needs fixing'}
       </div>
       {!ok || topics.length === 0 ? (
-        <p className="text-xs text-slate-400">{ok ? 'No themes yet.' : 'Needs Amazon Brand Analytics access.'}</p>
+        <p className="text-xs text-tertiary">{ok ? 'No themes yet.' : 'Needs Amazon Brand Analytics access.'}</p>
       ) : (
         <ul className="space-y-2">
           {topics.map((t) => (
             <li key={t.topic} className="text-sm">
               <span className="font-medium text-slate-800 dark:text-slate-200">{t.topic}</span>
-              {t.mentionCount != null && <span className="text-xs text-slate-400 ml-1">· {t.mentionCount}</span>}
+              {t.mentionCount != null && <span className="text-xs text-tertiary ml-1">· {t.mentionCount}</span>}
               {t.snippets[0] && <span className="block text-xs text-slate-500 dark:text-slate-400 italic truncate">“{t.snippets[0]}”</span>}
             </li>
           ))}

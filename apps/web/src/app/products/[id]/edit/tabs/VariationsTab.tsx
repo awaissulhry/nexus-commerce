@@ -254,7 +254,7 @@ export default function VariationsTab({ parent, childrenList }: Props) {
               onClick={() => void refetch()}
               disabled={refreshing}
               title="Refresh prices & quantities from the database"
-              className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+              className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
             >
               {refreshing ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -283,7 +283,7 @@ export default function VariationsTab({ parent, childrenList }: Props) {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-slate-400 dark:text-slate-500 italic">
+          <p className="text-sm text-tertiary dark:text-slate-500 italic">
             No variation axes set yet — your first variant defines them
             (e.g. add a Color/Size pair and they become this product's
             axes).
@@ -294,7 +294,7 @@ export default function VariationsTab({ parent, childrenList }: Props) {
       <Card noPadding>
         <div className="overflow-x-auto">
           <table className="w-full text-md">
-            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-default dark:border-slate-800">
               <tr>
                 <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                   SKU
@@ -326,7 +326,7 @@ export default function VariationsTab({ parent, childrenList }: Props) {
                 <tr>
                   <td
                     colSpan={5 + variationAxes.length}
-                    className="px-4 py-6 text-center text-base text-slate-400 dark:text-slate-500"
+                    className="px-4 py-6 text-center text-base text-tertiary dark:text-slate-500"
                   >
                     No variations linked to this product. Click{' '}
                     <strong>Add Variation</strong> to create one.
@@ -336,7 +336,7 @@ export default function VariationsTab({ parent, childrenList }: Props) {
               {rows.map((child) => (
                 <tr
                   key={child.id}
-                  className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   <td className="px-4 py-2 font-mono text-base text-slate-900 dark:text-slate-100">
                     {child.sku}
@@ -348,7 +348,7 @@ export default function VariationsTab({ parent, childrenList }: Props) {
                         key={axis}
                         className="px-4 py-2 text-base text-slate-700 dark:text-slate-300"
                       >
-                        {value ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
+                        {value ?? <span className="text-tertiary dark:text-slate-500">—</span>}
                       </td>
                     )
                   })}
@@ -367,7 +367,7 @@ export default function VariationsTab({ parent, childrenList }: Props) {
                     </span>
                   </td>
                   <td className="px-4 py-2 font-mono text-base text-slate-700 dark:text-slate-300">
-                    {child.amazonAsin ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
+                    {child.amazonAsin ?? <span className="text-tertiary dark:text-slate-500">—</span>}
                   </td>
                   <td className="px-4 py-2 text-right">
                     <button
@@ -1213,4 +1213,4 @@ function FormField({
 }
 
 const inputCls =
-  'w-full h-8 px-2.5 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 disabled:bg-slate-50 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:disabled:text-slate-400'
+  'w-full h-8 px-2.5 text-base border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 disabled:bg-slate-50 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:disabled:text-tertiary'

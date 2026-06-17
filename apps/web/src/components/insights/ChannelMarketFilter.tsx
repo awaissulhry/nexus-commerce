@@ -74,7 +74,7 @@ export function ChannelMarketFilter({
           'inline-flex items-center gap-1.5 h-7 px-2.5 text-sm rounded-md border bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
           activeCount > 0
             ? 'border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
-            : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300',
+            : 'border-default dark:border-slate-700 text-slate-700 dark:text-slate-300',
         )}
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -93,7 +93,7 @@ export function ChannelMarketFilter({
         <div
           role="dialog"
           aria-label="Insights filters"
-          className="absolute right-0 top-full mt-1 z-30 w-80 max-h-[70vh] overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg"
+          className="absolute right-0 top-full mt-1 z-30 w-80 max-h-[70vh] overflow-y-auto rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg"
         >
           <Section title="Channels">
             <div className="flex flex-wrap gap-1">
@@ -110,7 +110,7 @@ export function ChannelMarketFilter({
                       'inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border',
                       on
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                        : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                        : 'border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
                     )}
                   >
                     {CHANNEL_LABELS[c]}
@@ -135,7 +135,7 @@ export function ChannelMarketFilter({
                       'inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border',
                       on
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                        : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                        : 'border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
                     )}
                   >
                     {MARKET_LABELS[m] ?? m}
@@ -161,7 +161,7 @@ export function ChannelMarketFilter({
                         'inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border',
                         on
                           ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                          : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                          : 'border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
                       )}
                     >
                       {b}
@@ -173,7 +173,7 @@ export function ChannelMarketFilter({
             </Section>
           )}
           {activeCount > 0 && (
-            <div className="border-t border-slate-200 dark:border-slate-700 px-3 py-2">
+            <div className="border-t border-default dark:border-slate-700 px-3 py-2">
               <button
                 type="button"
                 onClick={() =>
@@ -199,7 +199,7 @@ function Section({
   children: React.ReactNode
 }) {
   return (
-    <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 last:border-b-0">
+    <div className="px-3 py-2 border-b border-subtle dark:border-slate-800 last:border-b-0">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5">
         {title}
       </div>

@@ -233,8 +233,8 @@ function BrowserNotificationsCard() {
         : 'Not requested yet'
 
   return (
-    <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5">
-      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+    <section className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-5">
+      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-subtle dark:border-slate-800">
         <div className="shrink-0 w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400">
           <MonitorSmartphone size={14} />
         </div>
@@ -251,7 +251,7 @@ function BrowserNotificationsCard() {
       </div>
 
       <div className="space-y-4">
-        <div className="flex items-center justify-between gap-4 p-3 rounded border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+        <div className="flex items-center justify-between gap-4 p-3 rounded border border-default dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
           <div>
             <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               Permission status
@@ -298,7 +298,7 @@ function BrowserNotificationsCard() {
           />
         </label>
 
-        <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div className="space-y-2 pt-2 border-t border-subtle dark:border-slate-800">
           <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
             Per-class toggles
           </div>
@@ -331,7 +331,7 @@ function BrowserNotificationsCard() {
           ))}
         </div>
 
-        <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div className="pt-2 border-t border-subtle dark:border-slate-800">
           <label className="block text-sm">
             <span className="text-slate-900 dark:text-slate-100">
               High-value order threshold (EUR)
@@ -379,8 +379,8 @@ function QuietHoursCard({
   const enabled = start.length > 0 || end.length > 0
   const wraps = enabled && start.length > 0 && end.length > 0 && start > end
   return (
-    <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5">
-      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+    <section className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-5">
+      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-subtle dark:border-slate-800">
         <div className="shrink-0 w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400">
           <Moon size={14} />
         </div>
@@ -439,7 +439,7 @@ function QuietHoursCard({
           <button
             type="button"
             onClick={() => onChange('', '')}
-            className="h-9 px-3 rounded-md text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800"
+            className="h-9 px-3 rounded-md text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-default dark:border-slate-800"
           >
             Clear
           </button>
@@ -469,8 +469,8 @@ function PrefsTable({
     )
   }
   return (
-    <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
-      <div className="flex items-start gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+    <section className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg overflow-hidden">
+      <div className="flex items-start gap-3 px-5 py-4 border-b border-subtle dark:border-slate-800">
         <div className="shrink-0 w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400">
           <Bell size={14} />
         </div>
@@ -690,7 +690,7 @@ function ChannelMultiSelect({
             >
               + Add
             </summary>
-            <div className="absolute z-10 mt-1 w-48 max-h-64 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg dark:bg-slate-900 dark:border-slate-700 p-1">
+            <div className="absolute z-10 mt-1 w-48 max-h-64 overflow-y-auto rounded-md border border-default bg-white shadow-lg dark:bg-slate-900 dark:border-slate-700 p-1">
               {CHANNEL_OPTIONS.filter((o) => !value.includes(o.value)).map(
                 (o) => (
                   <button

@@ -73,14 +73,14 @@ export function LensPickerMenu({ anchorRect, visible, onChange, onClose }: Props
     <div
       ref={ref}
       style={{ position: 'fixed', top, right, width: W, zIndex: 9999 }}
-      className="bg-white border border-slate-200 rounded-md shadow-xl p-1.5 dark:bg-slate-900 dark:border-slate-800 animate-fade-in"
+      className="bg-white border border-default rounded-md shadow-xl p-1.5 dark:bg-slate-900 dark:border-slate-800 animate-fade-in"
     >
       <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5">
         Shown
       </div>
 
       {shownOptional.length === 0 && (
-        <div className="px-2 py-1.5 text-xs text-slate-400 dark:text-slate-500 italic">
+        <div className="px-2 py-1.5 text-xs text-tertiary dark:text-slate-500 italic">
           No extra tabs selected
         </div>
       )}
@@ -97,7 +97,7 @@ export function LensPickerMenu({ anchorRect, visible, onChange, onClose }: Props
             className={`flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-base cursor-move dark:hover:bg-slate-800 ${dragKey === meta.key ? 'opacity-40' : ''}`}
           >
             <span className="text-slate-300 dark:text-slate-600 font-mono select-none">⠿</span>
-            <Icon size={12} className="text-slate-400 shrink-0" />
+            <Icon size={12} className="text-tertiary shrink-0" />
             <span className="flex-1 text-slate-700 dark:text-slate-300 text-sm">{meta.label}</span>
             <button
               type="button"
@@ -113,7 +113,7 @@ export function LensPickerMenu({ anchorRect, visible, onChange, onClose }: Props
 
       {hiddenOptional.length > 0 && (
         <>
-          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5 mt-1 border-t border-slate-100 dark:border-slate-800 pt-2">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5 mt-1 border-t border-subtle dark:border-slate-800 pt-2">
             Add tab
           </div>
           {hiddenOptional.map((meta) => {
@@ -126,16 +126,16 @@ export function LensPickerMenu({ anchorRect, visible, onChange, onClose }: Props
                 className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-base cursor-pointer dark:hover:bg-slate-800 text-left"
               >
                 <span className="text-transparent select-none font-mono">⠿</span>
-                <Icon size={12} className="text-slate-400 shrink-0" />
+                <Icon size={12} className="text-tertiary shrink-0" />
                 <span className="flex-1 text-slate-700 dark:text-slate-300 text-sm">{meta.label}</span>
-                <span className="text-slate-400 text-xs font-medium">+</span>
+                <span className="text-tertiary text-xs font-medium">+</span>
               </button>
             )
           })}
         </>
       )}
 
-      <div className="border-t border-slate-100 dark:border-slate-800 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
+      <div className="border-t border-subtle dark:border-slate-800 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
         <button
           type="button"
           onClick={() => onChange([])}

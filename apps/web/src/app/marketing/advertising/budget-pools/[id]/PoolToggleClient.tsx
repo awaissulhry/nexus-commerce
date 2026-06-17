@@ -43,7 +43,7 @@ export function PoolToggleClient({
   }
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-3 mb-3">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-3 mb-3">
       <div className="flex items-center gap-3 flex-wrap">
         <button
           type="button"

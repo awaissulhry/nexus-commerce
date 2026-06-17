@@ -220,7 +220,7 @@ export function GridLens(props: GridLensProps) {
           <select
             value={pageSize}
             onChange={(e) => onPageSize(Number(e.target.value))}
-            className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded"
+            className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded"
           >
             {[25, 50, 100, 200, 500].map((n) => (
               <option key={n} value={n}>
@@ -232,7 +232,7 @@ export function GridLens(props: GridLensProps) {
         <div className="relative">
           <button
             onClick={() => setColumnPickerOpen(!columnPickerOpen)}
-            className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="h-7 px-2 text-base border border-default dark:border-slate-700 rounded inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             <Settings2 size={12} />{' '}
             {t('orders.columns.button', { n: visibleColumns.length })}
@@ -255,7 +255,7 @@ export function GridLens(props: GridLensProps) {
             aria-label={t('orders.title')}
             aria-rowcount={total}
           >
-            <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 sticky top-0 z-10">
+            <thead className="border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 sticky top-0 z-10">
               <tr role="row">
                 {visible.map((col) => {
                   const sortMap: Record<string, string> = {
@@ -317,7 +317,7 @@ export function GridLens(props: GridLensProps) {
                           {col.label}
                           {isSorted && (
                             <span
-                              className="text-slate-400 dark:text-slate-500"
+                              className="text-tertiary dark:text-slate-500"
                               aria-hidden="true"
                             >
                               {sortDir === 'asc' ? '↑' : '↓'}
@@ -348,7 +348,7 @@ export function GridLens(props: GridLensProps) {
                     role="row"
                     aria-selected={isSelected}
                     aria-current={isFocused ? 'true' : undefined}
-                    className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 ${
+                    className={`border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 ${
                       isSelected ? 'bg-blue-50/30' : ''
                     } ${
                       isFocused
@@ -407,14 +407,14 @@ export function GridLens(props: GridLensProps) {
             <button
               onClick={() => onPage(Math.max(1, page - 1))}
               disabled={page === 1}
-              className="h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-7 px-3 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {t('orders.pagination.previous')}
             </button>
             <button
               onClick={() => onPage(Math.min(totalPages, page + 1))}
               disabled={page >= totalPages}
-              className="h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-7 px-3 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {t('orders.pagination.next')}
             </button>
@@ -552,7 +552,7 @@ function OrderCell({
                 onClick={(e) => e.stopPropagation()}
                 aria-label={link.label}
                 title={link.label}
-                className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex-shrink-0"
+                className="text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex-shrink-0"
               >
                 <ExternalLink size={11} aria-hidden="true" />
               </a>
@@ -578,7 +578,7 @@ function OrderCell({
       const fi = o.firstItem
       if (!fi?.thumbnailUrl) {
         return (
-          <div className="w-12 h-12 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
+          <div className="w-12 h-12 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-tertiary dark:text-slate-500">
             <ShoppingCart size={14} aria-hidden="true" />
           </div>
         )
@@ -660,7 +660,7 @@ function OrderCell({
           ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-900'
           : typeBadge === 'Prime'
           ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900'
-          : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+          : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700'
       return (
         <div className="space-y-0.5">
           <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${typeTone}`}>
@@ -702,7 +702,7 @@ function OrderCell({
                 onClick={(e) => e.stopPropagation()}
                 aria-label={link.label}
                 title={link.label}
-                className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                className="text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
               >
                 <ExternalLink size={11} aria-hidden="true" />
               </a>
@@ -823,7 +823,7 @@ function OrderCell({
       return o.fulfillmentMethod ? (
         <FulfillmentPill method={o.fulfillmentMethod} />
       ) : (
-        <span className="text-slate-400 dark:text-slate-500 text-sm">—</span>
+        <span className="text-tertiary dark:text-slate-500 text-sm">—</span>
       )
     case 'returnRefund':
       return (
@@ -845,16 +845,16 @@ function OrderCell({
             </span>
           )}
           {!o.hasActiveReturn && !o.hasRefund && (
-            <span className="text-slate-400 dark:text-slate-500 text-xs">—</span>
+            <span className="text-tertiary dark:text-slate-500 text-xs">—</span>
           )}
         </div>
       )
     case 'review': {
       const rr = o.reviewRequests[0]
-      if (!rr) return <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+      if (!rr) return <span className="text-xs text-tertiary dark:text-slate-500">—</span>
       return (
         <span
-          className={`inline-block text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 border rounded ${REVIEW_STATUS_TONE[rr.status] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}
+          className={`inline-block text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 border rounded ${REVIEW_STATUS_TONE[rr.status] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-default dark:border-slate-700'}`}
         >
           {rr.status.slice(0, 4)}
         </span>
@@ -869,7 +869,7 @@ function OrderCell({
           ×{o.customerOrderCount}
         </span>
       ) : (
-        <span className="text-slate-400 dark:text-slate-500 text-xs">new</span>
+        <span className="text-tertiary dark:text-slate-500 text-xs">new</span>
       )
     case 'tags':
       return (
@@ -983,7 +983,7 @@ function RowActionMenu({ order }: { order: GridOrder }) {
         <Link
           key={a.label}
           href={a.href}
-          className="h-7 px-2 text-xs text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center justify-center whitespace-nowrap"
+          className="h-7 px-2 text-xs text-slate-700 dark:text-slate-200 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center justify-center whitespace-nowrap"
           title={a.label}
         >
           {a.label}
@@ -993,7 +993,7 @@ function RowActionMenu({ order }: { order: GridOrder }) {
         ref={triggerRef}
         type="button"
         onClick={openMenu}
-        className="h-7 px-2 text-xs text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center justify-center gap-1 whitespace-nowrap"
+        className="h-7 px-2 text-xs text-slate-700 dark:text-slate-200 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center justify-center gap-1 whitespace-nowrap"
         aria-label="More information"
         aria-expanded={open}
         title="More information"
@@ -1005,7 +1005,7 @@ function RowActionMenu({ order }: { order: GridOrder }) {
           <div
             ref={menuRef}
             style={{ position: 'fixed', top: coords.top, left: coords.left, width: 200 }}
-            className="z-[1000] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl py-1"
+            className="z-[1000] bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-md shadow-xl py-1"
           >
             {more.map((a) => (
               <Link
@@ -1047,7 +1047,7 @@ function ColumnPickerMenu({
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-20 p-1.5"
+      className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-md shadow-lg z-20 p-1.5"
     >
       <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5">
         Visible columns
@@ -1069,7 +1069,7 @@ function ColumnPickerMenu({
           <span className="text-slate-700 dark:text-slate-300">{c.label}</span>
         </label>
       ))}
-      <div className="border-t border-slate-100 dark:border-slate-800 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
+      <div className="border-t border-subtle dark:border-slate-800 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
         <button
           onClick={() => setVisible(DEFAULT_VISIBLE)}
           className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"

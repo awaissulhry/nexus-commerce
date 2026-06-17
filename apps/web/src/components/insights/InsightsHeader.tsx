@@ -128,7 +128,7 @@ export function InsightsHeader({
         <div
           role="tablist"
           aria-label="Time window"
-          className="inline-flex items-center border border-slate-200 dark:border-slate-700 rounded-md p-0.5 bg-white dark:bg-slate-900"
+          className="inline-flex items-center border border-default dark:border-slate-700 rounded-md p-0.5 bg-white dark:bg-slate-900"
         >
           {WINDOWS.map((w) => (
             <button
@@ -157,16 +157,16 @@ export function InsightsHeader({
               value={filterState.from ?? ''}
               max={filterState.to ?? undefined}
               onChange={(e) => update({ from: e.target.value || null })}
-              className="h-7 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+              className="h-7 px-2 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
             />
-            <span className="text-xs text-slate-400">→</span>
+            <span className="text-xs text-tertiary">→</span>
             <input
               type="date"
               aria-label="To"
               value={filterState.to ?? ''}
               min={filterState.from ?? undefined}
               onChange={(e) => update({ to: e.target.value || null })}
-              className="h-7 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+              className="h-7 px-2 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
             />
           </div>
         )}
@@ -174,7 +174,7 @@ export function InsightsHeader({
           aria-label="Comparison period"
           value={filterState.compare}
           onChange={(e) => update({ compare: e.target.value as CompareKey })}
-          className="h-7 px-2 pr-7 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+          className="h-7 px-2 pr-7 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
         >
           {COMPARES.map((c) => (
             <option key={c.id} value={c.id}>
@@ -197,7 +197,7 @@ export function InsightsHeader({
             type="button"
             onClick={onRefresh}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
           >
             <RefreshCw className={cn('w-3.5 h-3.5', refreshing && 'animate-spin')} />
             Refresh
@@ -207,7 +207,7 @@ export function InsightsHeader({
           <button
             type="button"
             onClick={onExport}
-            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
           >
             <Download className="w-3.5 h-3.5" />
             {exportLabel}

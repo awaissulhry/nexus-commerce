@@ -93,10 +93,10 @@ export default function ChannelStockEventPanel() {
 
   return (
     <section
-      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
+      className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg overflow-hidden"
       aria-labelledby="cs-panel-title"
     >
-      <header className="flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+      <header className="flex items-center justify-between gap-3 px-5 py-3 border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
         <div className="flex items-center gap-2">
           <Cable size={14} className="text-slate-500 dark:text-slate-400" aria-hidden="true" />
           <h2 id="cs-panel-title" className="text-md font-semibold text-slate-900 dark:text-slate-100">
@@ -176,7 +176,7 @@ export default function ChannelStockEventPanel() {
               {topRows.map((e) => {
                 const driftLarge = Math.abs(e.drift) > 5
                 return (
-                  <tr key={e.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                  <tr key={e.id} className="border-b border-subtle dark:border-slate-800 last:border-0">
                     <td className="px-3 py-2 font-mono text-xs text-slate-700 dark:text-slate-300">{e.channel}</td>
                     <td className="px-3 py-2">
                       {e.product ? (
@@ -202,7 +202,7 @@ export default function ChannelStockEventPanel() {
             </tbody>
           </table>
           {totalOpen > topRows.length && (
-            <div className="px-5 py-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 text-center bg-slate-50 dark:bg-slate-800/50">
+            <div className="px-5 py-2 border-t border-subtle dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 text-center bg-slate-50 dark:bg-slate-800/50">
               {t('channelDrift.dashboard.topOfTotal', { shown: topRows.length, total: totalOpen })} ·{' '}
               <Link href="/fulfillment/stock/channel-drift" className="text-blue-600 dark:text-blue-400 hover:underline">
                 {t('channelDrift.dashboard.seeAll')}

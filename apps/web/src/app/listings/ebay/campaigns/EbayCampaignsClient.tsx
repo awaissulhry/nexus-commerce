@@ -84,10 +84,10 @@ interface EbayCampaign {
 type CampaignRow = EbayCampaign & GridLensRow
 
 const STATUS_TONE: Record<string, string> = {
-  DRAFT:   'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+  DRAFT:   'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700',
   RUNNING: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
   PAUSED:  'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
-  ENDED:   'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700',
+  ENDED:   'bg-slate-50 dark:bg-slate-800 text-tertiary dark:text-slate-500 border-default dark:border-slate-700',
 }
 
 // ── Component ─────────────────────────────────────────────────────────
@@ -292,7 +292,7 @@ export default function EbayCampaignsClient() {
       <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setMarketplaceFilter('')}
-          className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplaceFilter === '' ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
+          className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplaceFilter === '' ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-default hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
         >
           All markets
         </button>
@@ -300,7 +300,7 @@ export default function EbayCampaignsClient() {
           <button
             key={mp}
             onClick={() => setMarketplaceFilter(`EBAY_${mp}`)}
-            className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplaceFilter === `EBAY_${mp}` ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
+            className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplaceFilter === `EBAY_${mp}` ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-default hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
           >
             {COUNTRY_NAMES[mp] ?? mp}
           </button>
@@ -328,7 +328,7 @@ export default function EbayCampaignsClient() {
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
-              className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
+              className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
               aria-label="Filter by status"
             >
               <option value="">All statuses</option>
@@ -456,7 +456,7 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
           <div>
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Marketplace</label>
             <select value={marketplace} onChange={e => setMarketplace(e.target.value)}
-              className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded">
+              className="w-full h-9 px-2 text-md border border-default dark:border-slate-700 rounded">
               {EBAY_MARKETPLACES.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
             </select>
           </div>
@@ -488,7 +488,7 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
               <div>
                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Currency</label>
                 <select value={budgetCurrency} onChange={e => setBudgetCurrency(e.target.value)}
-                  className="h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded">
+                  className="h-9 px-2 text-md border border-default dark:border-slate-700 rounded">
                   <option value="EUR">EUR</option>
                   <option value="GBP">GBP</option>
                   <option value="USD">USD</option>
@@ -502,7 +502,7 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
               <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">End date <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span></label>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">End date <span className="text-tertiary dark:text-slate-500 font-normal">(optional)</span></label>
               <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
             </div>
           </div>
@@ -510,7 +510,7 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
       </ModalBody>
       <ModalFooter>
         <button onClick={onClose} disabled={busy}
-          className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">
+          className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">
           Cancel
         </button>
         <button onClick={submit} disabled={busy || !name.trim()}

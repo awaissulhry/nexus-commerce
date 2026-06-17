@@ -48,7 +48,7 @@ export function RuleLibraryClient() {
           <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Rule library</h1>
           <p className="text-xs text-slate-500">{TEMPLATES.length} automations ready to launch — each starts dry-run so you review before going live.</p>
         </div>
-        <Link href="/marketing/advertising/automation/new" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+        <Link href="/marketing/advertising/automation/new" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
           <Zap className="h-3.5 w-3.5" /> Custom rule
         </Link>
       </div>
@@ -56,12 +56,12 @@ export function RuleLibraryClient() {
       {/* Search + filter */}
       <div className="flex flex-col sm:flex-row gap-2 mb-4">
         <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${TEMPLATES.length} templates…`} className="w-full pl-8 pr-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-tertiary pointer-events-none" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${TEMPLATES.length} templates…`} className="w-full pl-8 pr-3 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-950 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
         </div>
         <div className="flex gap-1 flex-wrap">
           {ALL_CATS.map((c) => (
-            <button key={c} onClick={() => setCat(c)} className={`px-2.5 py-1 text-xs rounded-md border transition ${cat === c ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-700' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+            <button key={c} onClick={() => setCat(c)} className={`px-2.5 py-1 text-xs rounded-md border transition ${cat === c ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-700' : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
               {c !== 'All' && <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1 ${CAT_COLORS[c]?.dot ?? 'bg-slate-400'}`} />}{c}
               <span className="opacity-60 ml-1 text-[10px]">{catCounts[c] ?? 0}</span>
             </button>
@@ -70,20 +70,20 @@ export function RuleLibraryClient() {
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-10 text-sm text-slate-400">No templates match &ldquo;{search}&rdquo; in {cat}.</div>
+        <div className="text-center py-10 text-sm text-tertiary">No templates match &ldquo;{search}&rdquo; in {cat}.</div>
       )}
 
       <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
         {filtered.map((t) => {
           const colors = CAT_COLORS[t.category] ?? CAT_COLORS.Other
           return (
-            <div key={t.key} className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 flex flex-col hover:shadow-sm transition-shadow">
+            <div key={t.key} className="rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900 p-3 flex flex-col hover:shadow-sm transition-shadow">
               <div className="flex items-start justify-between mb-1 gap-2">
                 <span className="font-medium text-sm text-slate-800 dark:text-slate-100 leading-snug">{t.name}</span>
                 <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${colors.chip}`}>{t.category}</span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 flex-1 line-clamp-3">{t.description}</p>
-              <div className="text-[11px] text-slate-400 space-y-0.5 mb-3">
+              <div className="text-[11px] text-tertiary space-y-0.5 mb-3">
                 <div><span>Trigger</span> <span className="text-slate-600 dark:text-slate-300">{triggerLabel(t.trigger)}</span></div>
                 {t.conditions.length > 0 && <div><span>If</span> <span className="text-slate-500">{t.conditions.map((c, i) => `${i ? ' and ' : ''}${c.field} ${c.op} ${c.value}`).join('')}</span></div>}
                 <div><span>Then</span> <span className="text-slate-600 dark:text-slate-300">{t.actions.slice(0, 2).map((a, i) => <span key={i}>{i > 0 ? ' + ' : ''}{actionLabel((a as {type:string}).type)}</span>)}{t.actions.length > 2 ? ` +${t.actions.length - 2}` : ''}</span></div>

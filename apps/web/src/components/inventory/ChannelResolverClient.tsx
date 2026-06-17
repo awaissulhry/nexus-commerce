@@ -164,7 +164,7 @@ export default function ChannelResolverClient({
   return (
     <div className="space-y-6">
       {/* Progress Bar */}
-      <div className="bg-white rounded-lg border border-slate-200 p-4">
+      <div className="bg-white rounded-lg border border-default p-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-semibold text-slate-900">Resolution Progress</h3>
           <span className="text-sm font-medium text-slate-600">
@@ -181,10 +181,10 @@ export default function ChannelResolverClient({
       </div>
 
       {/* Listings Table */}
-      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-lg border border-default overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50 border-b border-default">
               <tr>
                 <th className="px-4 py-3 text-left font-semibold text-slate-900">
                   eBay Item ID
@@ -210,7 +210,7 @@ export default function ChannelResolverClient({
               {listings.map((listing) => (
                 <tr
                   key={listing.id}
-                  className="border-b border-slate-200 hover:bg-slate-50 transition-colors"
+                  className="border-b border-default hover:bg-slate-50 transition-colors"
                 >
                   {/* eBay Item ID */}
                   <td className="px-4 py-3">
@@ -269,7 +269,7 @@ export default function ChannelResolverClient({
                                   handleProductSelect(listing.id, product.id)
                                   handleSearchChange(listing.id, product.name)
                                 }}
-                                className="w-full text-left px-3 py-2 hover:bg-blue-50 border-b border-slate-100 last:border-0 transition-colors"
+                                className="w-full text-left px-3 py-2 hover:bg-blue-50 border-b border-subtle last:border-0 transition-colors"
                               >
                                 <div className="font-medium text-slate-900">
                                   {product.name}

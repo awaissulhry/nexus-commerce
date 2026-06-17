@@ -308,13 +308,13 @@ export default function PricingTab({
             {t('products.edit.pricing.tiersLoading')}
           </div>
         ) : tiers.length === 0 && !adding ? (
-          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center">
+          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-default dark:border-slate-800 rounded p-4 text-center">
             {t('products.edit.pricing.tiersEmpty', {
               base: basePrice?.toFixed(2) ?? '—',
             })}
           </div>
         ) : tiers.length > 0 ? (
-          <table className="w-full text-sm border border-slate-200 dark:border-slate-800 rounded overflow-hidden mt-3">
+          <table className="w-full text-sm border border-default dark:border-slate-800 rounded overflow-hidden mt-3">
             <thead className="bg-slate-50 dark:bg-slate-900">
               <tr className="text-left">
                 <th className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -345,7 +345,7 @@ export default function PricingTab({
                   return (
                     <tr
                       key={tier.id}
-                      className="border-t border-slate-200 dark:border-slate-800"
+                      className="border-t border-default dark:border-slate-800"
                     >
                       <td className="px-3 py-2 tabular-nums">
                         {tier.minQty}+
@@ -380,7 +380,7 @@ export default function PricingTab({
                             {delta}%
                           </span>
                         ) : (
-                          <span className="text-slate-400 dark:text-slate-600">
+                          <span className="text-tertiary dark:text-slate-600">
                             —
                           </span>
                         )}
@@ -391,7 +391,7 @@ export default function PricingTab({
                           aria-label={t('products.edit.pricing.deleteTierAria', {
                             qty: tier.minQty,
                           })}
-                          className="p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400"
+                          className="p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-tertiary dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -431,11 +431,11 @@ export default function PricingTab({
             {t('products.edit.pricing.scheduledLoading')}
           </div>
         ) : scheduled.length === 0 ? (
-          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center">
+          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-default dark:border-slate-800 rounded p-4 text-center">
             {t('products.edit.pricing.scheduledEmpty')}
           </div>
         ) : (
-          <table className="w-full text-sm border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
+          <table className="w-full text-sm border border-default dark:border-slate-800 rounded overflow-hidden">
             <thead className="bg-slate-50 dark:bg-slate-900">
               <tr className="text-left">
                 <th className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -457,7 +457,7 @@ export default function PricingTab({
               {scheduled.map((c) => (
                 <tr
                   key={c.id}
-                  className="border-t border-slate-200 dark:border-slate-800"
+                  className="border-t border-default dark:border-slate-800"
                 >
                   <td className="px-3 py-2">
                     <Badge mono variant={c.kind === 'PRICE' ? 'info' : 'default'}>
@@ -486,7 +486,7 @@ export default function PricingTab({
                       <button
                         onClick={() => void onCancelScheduled(c)}
                         aria-label={t('products.edit.pricing.cancelScheduledAria')}
-                        className="p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400"
+                        className="p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-tertiary dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -586,7 +586,7 @@ function AddTierForm({
   }
 
   return (
-    <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-3 mb-3 bg-slate-50/50 dark:bg-slate-900/40 space-y-3">
+    <div className="border border-default dark:border-slate-800 rounded-lg p-3 mb-3 bg-slate-50/50 dark:bg-slate-900/40 space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <Input
           label={t('products.edit.pricing.colMinQty')}
@@ -608,7 +608,7 @@ function AddTierForm({
           <select
             value={groupId}
             onChange={(e) => setGroupId(e.target.value)}
-            className="w-full h-8 rounded-md border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+            className="w-full h-8 rounded-md border border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
           >
             <option value="">
               {t('products.edit.pricing.allCustomers')}
@@ -801,7 +801,7 @@ function PriceHistoryCard({
         title={t('products.edit.pricing.historyTitle')}
         description={t('products.edit.pricing.historyDesc')}
       >
-        <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center">
+        <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-default dark:border-slate-800 rounded p-4 text-center">
           {t('products.edit.pricing.historyEmpty')}
         </div>
       </Card>
@@ -880,7 +880,7 @@ function PriceHistoryCard({
       <Sparkline entries={entries} width={640} height={120} />
 
       {entries.length > 1 && (
-        <div className="mt-3 border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
+        <div className="mt-3 border border-default dark:border-slate-800 rounded overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-900">
               <tr className="text-left">
@@ -909,7 +909,7 @@ function PriceHistoryCard({
                   return (
                     <tr
                       key={e.ts}
-                      className="border-t border-slate-100 dark:border-slate-800"
+                      className="border-t border-subtle dark:border-slate-800"
                     >
                       <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400 tabular-nums">
                         {new Date(e.ts).toLocaleString()}
@@ -933,7 +933,7 @@ function PriceHistoryCard({
                             {delta.toFixed(1)}%
                           </span>
                         ) : (
-                          <span className="text-slate-400 dark:text-slate-600">
+                          <span className="text-tertiary dark:text-slate-600">
                             —
                           </span>
                         )}

@@ -185,7 +185,7 @@ export function ScenariosCard() {
   // Loading state
   if (loading && !scenarios) {
     return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 text-xs text-slate-500">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2 text-xs text-slate-500">
         {t('replenishment.scenarios.loading')}
       </div>
     )
@@ -195,7 +195,7 @@ export function ScenariosCard() {
   if (!scenarios || scenarios.length === 0) {
     return (
       <>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2.5 flex items-center gap-3 flex-wrap">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2.5 flex items-center gap-3 flex-wrap">
           <Beaker
             className="h-4 w-4 text-slate-500 dark:text-slate-400"
             aria-hidden="true"
@@ -231,8 +231,8 @@ export function ScenariosCard() {
 
   // Active state
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
-      <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md">
+      <div className="px-3 py-2 border-b border-default dark:border-slate-800 flex items-center gap-2">
         <Beaker
           className="h-4 w-4 text-slate-500 dark:text-slate-400"
           aria-hidden="true"
@@ -334,7 +334,7 @@ export function ScenariosCard() {
                 <button
                   type="button"
                   onClick={() => void deleteScenario(s)}
-                  className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded"
+                  className="h-7 w-7 inline-flex items-center justify-center text-tertiary hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded"
                   title={t('replenishment.scenarios.deleteTooltip')}
                   aria-label={t('replenishment.scenarios.deleteAriaLabel', { name: s.name })}
                 >
@@ -659,7 +659,7 @@ function ScenarioRunDetail({
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-        <div className="rounded border border-slate-200 dark:border-slate-800 px-2 py-1.5 bg-slate-50 dark:bg-slate-950">
+        <div className="rounded border border-default dark:border-slate-800 px-2 py-1.5 bg-slate-50 dark:bg-slate-950">
           <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
             {t('replenishment.scenarios.detail.kpi.recsAffected')}
           </div>
@@ -667,7 +667,7 @@ function ScenarioRunDetail({
             {output.summary.recsAffected}
           </div>
         </div>
-        <div className="rounded border border-slate-200 dark:border-slate-800 px-2 py-1.5 bg-slate-50 dark:bg-slate-950">
+        <div className="rounded border border-default dark:border-slate-800 px-2 py-1.5 bg-slate-50 dark:bg-slate-950">
           <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
             {t('replenishment.scenarios.detail.kpi.unitsDelta')}
           </div>
@@ -685,7 +685,7 @@ function ScenarioRunDetail({
             {output.summary.totalUnitsDelta.toLocaleString()}
           </div>
         </div>
-        <div className="rounded border border-slate-200 dark:border-slate-800 px-2 py-1.5 bg-slate-50 dark:bg-slate-950">
+        <div className="rounded border border-default dark:border-slate-800 px-2 py-1.5 bg-slate-50 dark:bg-slate-950">
           <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
             {t('replenishment.scenarios.detail.kpi.costDelta')}
           </div>
@@ -702,7 +702,7 @@ function ScenarioRunDetail({
             {formatEur(output.summary.totalCostDeltaCents)}
           </div>
         </div>
-        <div className="rounded border border-slate-200 dark:border-slate-800 px-2 py-1.5 bg-slate-50 dark:bg-slate-950">
+        <div className="rounded border border-default dark:border-slate-800 px-2 py-1.5 bg-slate-50 dark:bg-slate-950">
           <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
             {t('replenishment.scenarios.detail.kpi.stockouts')}
           </div>
@@ -743,9 +743,9 @@ function ScenarioRunDetail({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded border border-slate-200 dark:border-slate-800">
+      <div className="overflow-x-auto rounded border border-default dark:border-slate-800">
         <table className="w-full text-xs">
-          <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <thead className="border-b border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
             <tr>
               <th className="text-left px-2 py-1 font-semibold">
                 {t('replenishment.scenarios.detail.col.sku')}

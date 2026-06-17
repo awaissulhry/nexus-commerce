@@ -209,7 +209,7 @@ function KpiCard({
         <MiniSpark series={series} color={sparkColor} />
       )}
       {prevValue && (
-        <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+        <div className="mt-1 text-xs text-tertiary dark:text-slate-500">
           {t('overview.kpi.prev')}{' '}
           <span className="tabular-nums">{prevValue}</span>
         </div>
@@ -227,7 +227,7 @@ function KpiCard({
         aria-label={ariaLabel}
         className={cn(
           'block rounded-lg border bg-white dark:bg-slate-900 px-4 py-3 transition-colors',
-          'border-slate-200 dark:border-slate-800',
+          'border-default dark:border-slate-800',
           'hover:border-slate-300 dark:hover:border-slate-700',
           'hover:bg-slate-50/40 dark:hover:bg-slate-800/40',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
@@ -356,7 +356,7 @@ function DeltaPill({
       ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900'
       : delta.tone === 'neg'
       ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-900'
-      : 'bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+      : 'bg-slate-50 text-slate-500 border-default dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
   const Icon =
     delta.tone === 'pos'
       ? ArrowUpRight

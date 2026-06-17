@@ -393,7 +393,7 @@ export default function ForecastClient() {
               showLegend
             />
           ) : (
-            <div className="h-[280px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[280px] flex items-center justify-center text-tertiary text-sm">
               {loading
                 ? 'Loading…'
                 : 'No forecast data yet — the replenishment worker needs to run at least once.'}
@@ -438,7 +438,7 @@ export default function ForecastClient() {
             emptyLabel="No forecast rows"
           />
         ) : (
-          <div className="text-sm text-slate-400 py-6 text-center">
+          <div className="text-sm text-tertiary py-6 text-center">
             {loading ? 'Loading…' : ''}
           </div>
         )}
@@ -479,7 +479,7 @@ export default function ForecastClient() {
               />
             </dl>
           ) : (
-            <div className="text-sm text-slate-400 py-6 text-center">
+            <div className="text-sm text-tertiary py-6 text-center">
               {loading ? 'Loading…' : ''}
             </div>
           )}
@@ -497,7 +497,7 @@ export default function ForecastClient() {
           {report && report.accuracyByModel.length > 0 ? (
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800">
+                <tr className="border-b border-default dark:border-slate-800">
                   <th className="text-left text-[11px] uppercase tracking-wider font-medium text-slate-500 px-2 py-1.5">
                     Regime
                   </th>
@@ -516,7 +516,7 @@ export default function ForecastClient() {
                 {report.accuracyByModel.map((row) => (
                   <tr
                     key={row.modelRegime}
-                    className="border-b border-slate-100 dark:border-slate-800/60 last:border-b-0"
+                    className="border-b border-subtle dark:border-slate-800/60 last:border-b-0"
                   >
                     <td className="px-2 py-1.5 font-mono text-[11px]">
                       {row.modelRegime}
@@ -535,7 +535,7 @@ export default function ForecastClient() {
               </tbody>
             </table>
           ) : (
-            <div className="text-sm text-slate-400 py-6 text-center">
+            <div className="text-sm text-tertiary py-6 text-center">
               {loading ? 'Loading…' : 'No accuracy data — needs forecast-accuracy job to have run'}
             </div>
           )}
@@ -555,7 +555,7 @@ function Row({
   bold?: boolean
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-2 border-b border-slate-100 dark:border-slate-800/60 last:border-b-0 py-1">
+    <div className="flex items-baseline justify-between gap-2 border-b border-subtle dark:border-slate-800/60 last:border-b-0 py-1">
       <dt className="text-slate-500 dark:text-slate-400">{label}</dt>
       <dd
         className={cn(

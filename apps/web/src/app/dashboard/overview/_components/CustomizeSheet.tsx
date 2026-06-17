@@ -282,11 +282,11 @@ export default function CustomizeSheet({
         {/* DO.40 — scheduled email digest config tucked under the
             same Customise modal. Operator manages layout + report
             subscriptions in one place. */}
-        <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800">
+        <div className="pt-3 mt-3 border-t border-subtle dark:border-slate-800">
           <ScheduledReportsSection t={t} />
         </div>
       </div>
-      <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
+      <div className="px-4 py-3 border-t border-subtle dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
         {/* DO.39 — save current draft as a named view. Inline
             single-input form rather than a separate modal — the
             roster fits in a header dropdown and the operator
@@ -401,10 +401,10 @@ function SaveAsView({
         aria-label={t('overview.views.saveLabel')}
         className={cn(
           'h-7 px-2 text-sm rounded-md border tabular-nums w-44',
-          'border-slate-200 dark:border-slate-700',
+          'border-default dark:border-slate-700',
           'bg-white dark:bg-slate-900',
           'text-slate-700 dark:text-slate-300',
-          'placeholder:text-slate-400 dark:placeholder:text-slate-500',
+          'placeholder:text-tertiary dark:placeholder:text-slate-500',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
         )}
       />
@@ -444,7 +444,7 @@ function ColumnList({
         {heading}
       </div>
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-        <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-md">
+        <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-default dark:border-slate-800 rounded-md">
           {ids.map((id) => {
             const widgetDef = TOGGLEABLE_WIDGETS.find((w) => w.id === id)
             if (!widgetDef) return null
@@ -506,7 +506,7 @@ function SortableRow({
         aria-label={t('overview.customize.dragHandle')}
         className={cn(
           'inline-flex items-center justify-center w-5 h-5 rounded',
-          'text-slate-400 dark:text-slate-500 cursor-grab',
+          'text-tertiary dark:text-slate-500 cursor-grab',
           'hover:text-slate-700 dark:hover:text-slate-200',
           'hover:bg-slate-100 dark:hover:bg-slate-800',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',

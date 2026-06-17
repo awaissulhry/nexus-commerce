@@ -87,7 +87,7 @@ export default function OrganizeHistoryPanel() {
 
   if (loading && sessions.length === 0) {
     return (
-      <div className="flex items-center justify-center py-6 text-slate-400">
+      <div className="flex items-center justify-center py-6 text-tertiary">
         <Loader2 className="w-4 h-4 animate-spin" />
       </div>
     )
@@ -103,7 +103,7 @@ export default function OrganizeHistoryPanel() {
     return (
       <div className="flex flex-col items-center gap-1.5 py-4 text-center">
         <History className="w-5 h-5 text-slate-300 dark:text-slate-600" />
-        <p className="text-xs text-slate-400 dark:text-slate-500">
+        <p className="text-xs text-tertiary dark:text-slate-500">
           No published sessions yet.
           <br />
           Publish staged changes to see them here.
@@ -168,15 +168,15 @@ function SessionCard({
     <div
       className={`rounded-lg border text-sm transition-colors ${
         session.status === 'UNDONE'
-          ? 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30'
-          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'
+          ? 'border-default dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30'
+          : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900'
       }`}
     >
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="px-3 py-2.5 space-y-1">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 mb-0.5">
+            <div className="flex items-center gap-1.5 text-xs text-tertiary dark:text-slate-500 mb-0.5">
               <span>{timeAgo(session.publishedAt)}</span>
               <span>·</span>
               <span>{session.changes.length} change{session.changes.length === 1 ? '' : 's'}</span>
@@ -206,7 +206,7 @@ function SessionCard({
           <div
             className={`flex items-center gap-1 text-xs ${
               countdown.expired
-                ? 'text-slate-400 dark:text-slate-500'
+                ? 'text-tertiary dark:text-slate-500'
                 : 'text-amber-600 dark:text-amber-400'
             }`}
           >
@@ -249,7 +249,7 @@ function SessionCard({
 
       {/* ── Expanded change list ──────────────────────────────── */}
       {expanded && (
-        <div className="border-t border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+        <div className="border-t border-subtle dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
           {session.changes.map((c) => (
             <ChangeRow
               key={c.id}
@@ -317,12 +317,12 @@ const ChangeRow = function ChangeRow({
           <span className="font-mono text-slate-700 dark:text-slate-300 truncate max-w-[90px]">
             {change.productSku}
           </span>
-          <ChevronRight className="w-3 h-3 text-slate-400 flex-shrink-0" />
+          <ChevronRight className="w-3 h-3 text-tertiary flex-shrink-0" />
           <span className="font-mono text-blue-600 dark:text-blue-400 truncate max-w-[80px]">
             {change.toParentSku}
           </span>
           {change.status === 'UNDONE' && (
-            <Check className="w-3 h-3 text-slate-400 flex-shrink-0" />
+            <Check className="w-3 h-3 text-tertiary flex-shrink-0" />
           )}
         </div>
         {attrPairs.length > 0 && (
@@ -344,7 +344,7 @@ const ChangeRow = function ChangeRow({
           onClick={handleUndoChange}
           disabled={undoing}
           aria-label={`Undo ${change.productSku}`}
-          className="flex-shrink-0 p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 disabled:opacity-40 transition-colors"
+          className="flex-shrink-0 p-1 rounded text-tertiary hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 disabled:opacity-40 transition-colors"
         >
           {undoing ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />

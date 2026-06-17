@@ -176,7 +176,7 @@ export default function AiModelsClient({
           type="button"
           onClick={() => void refreshModels()}
           disabled={refreshing}
-          className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50 flex-shrink-0"
+          className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50 flex-shrink-0"
         >
           {refreshing ? (
             <Loader2 className="w-3 h-3 animate-spin" />
@@ -205,7 +205,7 @@ export default function AiModelsClient({
       )}
 
       {configured.length === 0 ? (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-md p-4 bg-white dark:bg-slate-900 text-base text-slate-500 dark:text-slate-400">
+        <div className="border border-default dark:border-slate-700 rounded-md p-4 bg-white dark:bg-slate-900 text-base text-slate-500 dark:text-slate-400">
           No AI providers are configured. Set{' '}
           <span className="font-mono">GEMINI_API_KEY</span> or{' '}
           <span className="font-mono">ANTHROPIC_API_KEY</span> on the API host,
@@ -214,7 +214,7 @@ export default function AiModelsClient({
       ) : (
         <>
           {/* Global default */}
-          <div className="border border-slate-200 dark:border-slate-700 rounded-md p-3 bg-slate-50/60 dark:bg-slate-900">
+          <div className="border border-default dark:border-slate-700 rounded-md p-3 bg-slate-50/60 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <div className="text-lg font-medium text-slate-900 dark:text-slate-100">
@@ -235,10 +235,10 @@ export default function AiModelsClient({
           </div>
 
           {/* Per-feature table */}
-          <div className="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden bg-white dark:bg-slate-900">
+          <div className="border border-default dark:border-slate-700 rounded-md overflow-hidden bg-white dark:bg-slate-900">
             <table className="w-full text-base">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-700 text-sm text-slate-500 dark:text-slate-400 text-left">
+                <tr className="border-b border-default dark:border-slate-700 text-sm text-slate-500 dark:text-slate-400 text-left">
                   <th className="px-3 py-2 font-medium">Feature</th>
                   <th className="px-3 py-2 font-medium">Model</th>
                   <th className="px-3 py-2 font-medium whitespace-nowrap">
@@ -256,7 +256,7 @@ export default function AiModelsClient({
                   return (
                     <tr
                       key={f.key}
-                      className="border-b border-slate-100 dark:border-slate-800 last:border-0 align-top"
+                      className="border-b border-subtle dark:border-slate-800 last:border-0 align-top"
                     >
                       <td className="px-3 py-2">
                         <div className="font-medium text-slate-900 dark:text-slate-100">
@@ -269,7 +269,7 @@ export default function AiModelsClient({
                       <td className="px-3 py-2">
                         {f.lockedProvider ? (
                           <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap">
-                            <span className="inline-flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5">
+                            <span className="inline-flex items-center gap-1 border border-default dark:border-slate-700 rounded px-1.5 py-0.5">
                               {PROVIDER_LABEL[f.lockedProvider] ?? f.lockedProvider} only
                             </span>
                             {f.effective && (
@@ -293,7 +293,7 @@ export default function AiModelsClient({
                               onChange={(v) => void setPref(f.key, v)}
                             />
                             {!overridden && f.effective && (
-                              <div className="text-sm text-slate-400 dark:text-slate-500 mt-1 font-mono">
+                              <div className="text-sm text-tertiary dark:text-slate-500 mt-1 font-mono">
                                 → {f.effective.model}
                               </div>
                             )}
@@ -306,19 +306,19 @@ export default function AiModelsClient({
                             {fmtPrice(effModel)}
                           </span>
                         ) : (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-tertiary">—</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right">
                         {savingKey === f.key ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400 inline" />
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-tertiary inline" />
                         ) : overridden ? (
                           <button
                             type="button"
                             title="Reset to default"
                             aria-label={`Reset ${f.label} to default`}
                             onClick={() => void setPref(f.key, DEFAULT_VALUE)}
-                            className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                            className="text-tertiary hover:text-slate-700 dark:hover:text-slate-200"
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
                           </button>
@@ -364,7 +364,7 @@ function ModelSelect({
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
       className={cn(
-        'h-8 text-base border border-slate-200 dark:border-slate-700 rounded px-2',
+        'h-8 text-base border border-default dark:border-slate-700 rounded px-2',
         'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100',
         'max-w-xs w-full disabled:opacity-50',
       )}

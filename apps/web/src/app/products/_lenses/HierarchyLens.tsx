@@ -137,7 +137,7 @@ export function HierarchyLens({ search }: { search: string }) {
                   </div>
                   <ChevronDown
                     size={14}
-                    className="text-slate-400 dark:text-slate-500 -rotate-90"
+                    className="text-tertiary dark:text-slate-500 -rotate-90"
                   />
                 </Link>
               </li>

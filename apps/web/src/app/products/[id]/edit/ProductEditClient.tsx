@@ -1040,7 +1040,7 @@ export default function ProductEditClient({
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* ── Header ─────────────────────────────────────────────── */}
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-10">
+      <header className="bg-white dark:bg-slate-900 border-b border-default dark:border-slate-800 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <IconButton
@@ -1238,7 +1238,7 @@ export default function ProductEditClient({
               onClick={() => setTabsModalOpen(true)}
               title={t('products.edit.tabs.customize.openButtonTooltip')}
               aria-label={t('products.edit.tabs.customize.openButton')}
-              className="flex-shrink-0 ml-1 px-2 py-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border-b-2 border-transparent whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded"
+              className="flex-shrink-0 ml-1 px-2 py-2 text-tertiary hover:text-slate-600 dark:hover:text-slate-300 border-b-2 border-transparent whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded"
             >
               <SlidersHorizontal className="w-4 h-4" aria-hidden />
             </button>
@@ -1714,8 +1714,8 @@ function MarketplaceSidebar({
 }) {
   const { t } = useTranslations()
   return (
-    <aside className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden h-fit sticky top-[7.5rem]">
-      <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800">
+    <aside className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg overflow-hidden h-fit sticky top-[7.5rem]">
+      <div className="px-3 py-2 border-b border-default dark:border-slate-800">
         <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
           {t('products.edit.markets')}
         </h3>
@@ -1741,7 +1741,7 @@ function MarketplaceSidebar({
                       'font-mono text-xs tabular-nums px-1.5 py-0.5 rounded border',
                       active
                         ? 'bg-white dark:bg-slate-900 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
-                        : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                        : 'bg-slate-100 dark:bg-slate-800 border-default dark:border-slate-700 text-slate-600 dark:text-slate-400'
                     )}
                   >
                     {m.code}

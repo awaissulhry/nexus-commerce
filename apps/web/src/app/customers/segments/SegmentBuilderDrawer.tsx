@@ -186,11 +186,11 @@ export function SegmentBuilderDrawer({
     <>
       <div className="fixed inset-0 bg-black/30 dark:bg-black/50 z-40" onClick={onClose} />
       <div className="fixed right-0 top-0 bottom-0 w-full max-w-lg bg-white dark:bg-slate-900 shadow-xl z-50 flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-default dark:border-slate-800">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
             {isEdit ? 'Edit segment' : 'New customer segment'}
           </h2>
-          <button type="button" onClick={onClose} className="p-1 rounded text-slate-400 hover:text-slate-700">
+          <button type="button" onClick={onClose} className="p-1 rounded text-tertiary hover:text-slate-700">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -237,7 +237,7 @@ export function SegmentBuilderDrawer({
             </div>
 
             {conditions.length === 0 ? (
-              <p className="text-xs text-slate-400 italic">No conditions — segment will match all customers.</p>
+              <p className="text-xs text-tertiary italic">No conditions — segment will match all customers.</p>
             ) : (
               <div className="space-y-2">
                 {conditions.map((c, i) => {
@@ -288,7 +288,7 @@ export function SegmentBuilderDrawer({
                       <button
                         type="button"
                         onClick={() => removeCondition(i)}
-                        className="p-1.5 rounded text-slate-400 hover:text-rose-600 shrink-0"
+                        className="p-1.5 rounded text-tertiary hover:text-rose-600 shrink-0"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -320,7 +320,7 @@ export function SegmentBuilderDrawer({
           {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
         </div>
 
-        <div className="px-5 py-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2">
+        <div className="px-5 py-4 border-t border-default dark:border-slate-800 flex items-center justify-end gap-2">
           <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400">
             Cancel
           </button>

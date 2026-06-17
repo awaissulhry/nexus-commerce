@@ -57,16 +57,16 @@ export default async function UnsubscribedPage({ searchParams }: PageProps) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-white border border-slate-200 rounded-lg shadow-sm p-8 text-center">
+      <div className="max-w-md w-full bg-white border border-default rounded-lg shadow-sm p-8 text-center">
         <div className="text-5xl mb-3">✓</div>
         <h1 className="text-xl font-semibold text-slate-900 mb-2">{copy.title}</h1>
         <p className="text-sm text-slate-600 mb-4">{copy.body}</p>
-        <div className="text-xs text-slate-500 border-t border-slate-100 pt-3 space-y-1">
+        <div className="text-xs text-slate-500 border-t border-subtle pt-3 space-y-1">
           <div>
-            <span className="text-slate-400">{copy.channelLabel}:</span>{' '}
+            <span className="text-tertiary">{copy.channelLabel}:</span>{' '}
             <code className="bg-slate-100 px-1 rounded">{channelDisplay}</code>
           </div>
-          <div className="text-slate-400">{copy.resub}</div>
+          <div className="text-tertiary">{copy.resub}</div>
         </div>
         <div className="mt-4 text-[10px] tracking-widest text-rose-700 font-bold">XAVIA</div>
       </div>

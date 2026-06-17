@@ -244,7 +244,7 @@ export default function ManageAlertsModal({
     // header has both title + subtitle + Bell icon — richer than what
     // Modal's default `title` prop renders.
     <Modal open onClose={onClose} placement="centered" size="2xl" header={null}>
-        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
+        <div className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between flex-shrink-0">
           <div>
             <div className="text-lg font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5">
               <Bell className="w-4 h-4 text-purple-600" />
@@ -260,7 +260,7 @@ export default function ManageAlertsModal({
             onClick={onClose}
             aria-label="Close"
             size="md"
-            className="text-slate-400 dark:text-slate-500 hover:text-slate-600"
+            className="text-tertiary dark:text-slate-500 hover:text-slate-600"
           >
             <X className="w-4 h-4" />
           </IconButton>
@@ -274,7 +274,7 @@ export default function ManageAlertsModal({
           )}
 
           {loading ? (
-            <div className="text-base text-slate-400 dark:text-slate-500 italic text-center py-6">
+            <div className="text-base text-tertiary dark:text-slate-500 italic text-center py-6">
               Loading…
             </div>
           ) : alerts.length === 0 && !creating ? (
@@ -290,8 +290,8 @@ export default function ManageAlertsModal({
                 key={a.id}
                 className={`border rounded-md p-3 ${
                   a.isActive
-                    ? 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'
-                    : 'border-slate-100 dark:border-slate-800 bg-slate-50/40 opacity-70'
+                    ? 'border-default dark:border-slate-700 bg-white dark:bg-slate-900'
+                    : 'border-subtle dark:border-slate-800 bg-slate-50/40 opacity-70'
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -315,7 +315,7 @@ export default function ManageAlertsModal({
                     className={`h-6 px-2 text-sm rounded ${
                       a.isActive
                         ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-default dark:border-slate-700 hover:bg-slate-200'
                     }`}
                   >
                     {a.isActive ? 'Active' : 'Paused'}
@@ -324,7 +324,7 @@ export default function ManageAlertsModal({
 
                 <div className="grid grid-cols-3 gap-2 text-sm text-slate-600 dark:text-slate-400 mt-2">
                   <div>
-                    <div className="text-slate-400 dark:text-slate-500 uppercase tracking-wider text-xs">
+                    <div className="text-tertiary dark:text-slate-500 uppercase tracking-wider text-xs">
                       Last count
                     </div>
                     <div className="text-slate-900 dark:text-slate-100 font-medium tabular-nums">
@@ -332,7 +332,7 @@ export default function ManageAlertsModal({
                     </div>
                   </div>
                   <div>
-                    <div className="text-slate-400 dark:text-slate-500 uppercase tracking-wider text-xs">
+                    <div className="text-tertiary dark:text-slate-500 uppercase tracking-wider text-xs">
                       Baseline
                     </div>
                     <div className="text-slate-900 dark:text-slate-100 font-medium tabular-nums">
@@ -340,7 +340,7 @@ export default function ManageAlertsModal({
                     </div>
                   </div>
                   <div>
-                    <div className="text-slate-400 dark:text-slate-500 uppercase tracking-wider text-xs">
+                    <div className="text-tertiary dark:text-slate-500 uppercase tracking-wider text-xs">
                       Last fired
                     </div>
                     <div className="text-slate-900 dark:text-slate-100 font-medium">
@@ -351,7 +351,7 @@ export default function ManageAlertsModal({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-subtle dark:border-slate-800">
                   <button
                     type="button"
                     onClick={() => evaluateNow(a.id)}
@@ -398,7 +398,7 @@ export default function ManageAlertsModal({
                   value={draftName}
                   onChange={(e) => setDraftName(e.target.value)}
                   placeholder={view.name}
-                  className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                 />
               </div>
               <div>
@@ -416,7 +416,7 @@ export default function ManageAlertsModal({
                         | 'CHANGE_PCT',
                     )
                   }
-                  className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                 >
                   {Object.entries(COMPARISON_LABELS).map(([k, v]) => (
                     <option key={k} value={k}>
@@ -440,7 +440,7 @@ export default function ManageAlertsModal({
                     }
                     value={draftThreshold}
                     onChange={(e) => setDraftThreshold(e.target.value)}
-                    className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 tabular-nums"
+                    className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 tabular-nums"
                   />
                 </div>
                 <div>
@@ -452,7 +452,7 @@ export default function ManageAlertsModal({
                     min="1"
                     value={draftCooldown}
                     onChange={(e) => setDraftCooldown(e.target.value)}
-                    className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 tabular-nums"
+                    className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 tabular-nums"
                   />
                 </div>
               </div>
@@ -477,7 +477,7 @@ export default function ManageAlertsModal({
           )}
         </div>
 
-        <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
+        <div className="px-5 py-3 border-t border-subtle dark:border-slate-800 flex items-center justify-between flex-shrink-0">
           <div className="text-sm text-slate-500 dark:text-slate-400">
             Cron checks every 5 minutes.
           </div>

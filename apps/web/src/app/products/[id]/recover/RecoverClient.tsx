@@ -254,13 +254,13 @@ export default function RecoverClient({
           </h1>
           <p className="text-md text-slate-600 mt-1">
             {product.name}{' '}
-            <span className="text-slate-400">·</span>{' '}
+            <span className="text-tertiary">·</span>{' '}
             <span className="font-mono">{product.sku}</span>
           </p>
         </header>
 
         {listings.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-lg p-6 text-center">
+          <div className="bg-white border border-default rounded-lg p-6 text-center">
             <p className="text-md text-slate-600">
               {t('recover.empty.noListings')}
             </p>
@@ -283,13 +283,13 @@ export default function RecoverClient({
                       className={`w-full flex items-center justify-between text-left rounded-md border px-4 py-3 transition-colors ${
                         isSelected
                           ? 'border-blue-500 bg-blue-50'
-                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                          : 'border-default bg-white hover:bg-slate-50'
                       }`}
                     >
                       <div>
                         <div className="text-md font-medium text-slate-900">
                           {l.channel}{' '}
-                          <span className="text-slate-400">·</span>{' '}
+                          <span className="text-tertiary">·</span>{' '}
                           {l.marketplace}
                         </div>
                         <div className="text-base text-slate-600 font-mono mt-0.5">
@@ -317,7 +317,7 @@ export default function RecoverClient({
                       className={`text-left rounded-md border px-4 py-3 transition-colors ${
                         isSelected
                           ? 'border-blue-500 bg-blue-50'
-                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                          : 'border-default bg-white hover:bg-slate-50'
                       }`}
                     >
                       <div className="text-md font-medium text-slate-900">
@@ -339,7 +339,7 @@ export default function RecoverClient({
                   value={newSku}
                   onChange={(e) => setNewSku(e.target.value)}
                   placeholder={t('recover.newSku.placeholder')}
-                  className="w-full h-9 px-3 rounded-md border border-slate-200 font-mono text-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full h-9 px-3 rounded-md border border-default font-mono text-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <p className="text-base text-slate-500 mt-1">
                   {t('recover.newSku.help')}
@@ -350,7 +350,7 @@ export default function RecoverClient({
             {selectedListing && selectedAction && (
               <Section title={t('recover.section.consequences')}>
                 {previewLoading ? (
-                  <div className="bg-white border border-slate-200 rounded-md p-4 flex items-center gap-2 text-md text-slate-600">
+                  <div className="bg-white border border-default rounded-md p-4 flex items-center gap-2 text-md text-slate-600">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     {t('common.loading')}
                   </div>
@@ -399,18 +399,18 @@ export default function RecoverClient({
 
         {events.length > 0 && (
           <Section title={t('recover.section.history')}>
-            <div className="bg-white border border-slate-200 rounded-md divide-y divide-slate-100">
+            <div className="bg-white border border-default rounded-md divide-y divide-slate-100">
               {events.map((ev) => (
                 <div
                   key={ev.id}
                   className="flex items-center justify-between px-4 py-2.5 text-base"
                 >
                   <div className="flex items-center gap-2">
-                    <History className="w-3.5 h-3.5 text-slate-400" />
+                    <History className="w-3.5 h-3.5 text-tertiary" />
                     <span className="font-medium text-slate-900">
                       {t(`recover.action.${ev.action}.title`)}
                     </span>
-                    <span className="text-slate-400">·</span>
+                    <span className="text-tertiary">·</span>
                     <span className="text-slate-600">
                       {ev.channel} {ev.marketplace}
                     </span>
@@ -464,7 +464,7 @@ function PreviewPanel({
   const { t } = useTranslations()
   const c = preview.consequences
   return (
-    <div className="bg-white border border-slate-200 rounded-md overflow-hidden">
+    <div className="bg-white border border-default rounded-md overflow-hidden">
       <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-100">
         <Pill
           ok={c.reviewsPreserved}
@@ -478,7 +478,7 @@ function PreviewPanel({
         />
       </div>
 
-      <div className="grid grid-cols-2 divide-x divide-slate-100 border-t border-slate-100">
+      <div className="grid grid-cols-2 divide-x divide-slate-100 border-t border-subtle">
         <IdBlock
           label={t('recover.before')}
           asin={preview.before.asin}
@@ -519,7 +519,7 @@ function PreviewPanel({
         </div>
       )}
 
-      <div className="border-t border-slate-100 px-4 py-2.5 text-base text-slate-600">
+      <div className="border-t border-subtle px-4 py-2.5 text-base text-slate-600">
         {t('recover.eta', {
           seconds: preview.estimatedDurationSeconds,
         })}
@@ -535,7 +535,7 @@ function Pill({ ok, label }: { ok: boolean; label: string }) {
         className={`w-4 h-4 ${ok ? 'text-green-600' : 'text-slate-300'}`}
       />
       <span
-        className={ok ? 'text-slate-900 font-medium' : 'text-slate-400'}
+        className={ok ? 'text-slate-900 font-medium' : 'text-tertiary'}
       >
         {label}
       </span>

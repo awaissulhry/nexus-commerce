@@ -68,7 +68,7 @@ function SyncButton({
       size="sm"
       variant="ghost"
       onClick={onClick}
-      className="gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-700 h-7 px-2.5"
+      className="gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 border border-default dark:border-slate-700 h-7 px-2.5"
     >
       {direction === 'push'
         ? <ArrowRight className="w-3 h-3" />
@@ -81,8 +81,8 @@ function SyncButton({
 export default function CrossChannelSyncBar(props: Props) {
   if (props.channel === 'amazon') {
     return (
-      <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1 text-xs text-slate-400 mr-1">
+      <div className="px-4 py-2.5 border-t border-subtle dark:border-slate-800 flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1 text-xs text-tertiary mr-1">
           <Copy className="w-3 h-3" /> Quick sync
         </div>
         {props.hasMasterImages && (
@@ -103,8 +103,8 @@ export default function CrossChannelSyncBar(props: Props) {
 
   if (props.channel === 'ebay') {
     return (
-      <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1 text-xs text-slate-400 mr-1">
+      <div className="px-4 py-2.5 border-t border-subtle dark:border-slate-800 flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1 text-xs text-tertiary mr-1">
           <Copy className="w-3 h-3" /> Quick sync
         </div>
         {props.hasMasterImages && (
@@ -122,8 +122,8 @@ export default function CrossChannelSyncBar(props: Props) {
 
   // shopify
   return (
-    <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
-      <div className="flex items-center gap-1 text-xs text-slate-400 mr-1">
+    <div className="px-4 py-2.5 border-t border-subtle dark:border-slate-800 flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-1 text-xs text-tertiary mr-1">
         <Copy className="w-3 h-3" /> Quick sync
       </div>
       {props.hasMasterImages && (

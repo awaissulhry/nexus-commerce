@@ -316,7 +316,7 @@ export default function ImagesClient({
       <nav
         role="tablist"
         aria-label="Variant tabs"
-        className="flex items-center gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800"
+        className="flex items-center gap-1 overflow-x-auto border-b border-default dark:border-slate-800"
       >
         <TabButton
           active={activeVariant === null}
@@ -359,7 +359,7 @@ export default function ImagesClient({
       </div>
 
       {/* Master gallery (always visible — context for creating overrides) */}
-      <section className="border border-slate-200 rounded-lg bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <section className="border border-default rounded-lg bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-md font-medium text-slate-900 dark:text-slate-100">
             Master gallery ({master.length} image{master.length === 1 ? '' : 's'})
@@ -380,7 +380,7 @@ export default function ImagesClient({
             {master.map((m) => (
               <li
                 key={m.id}
-                className="border border-slate-200 rounded-md bg-slate-50 overflow-hidden dark:border-slate-700 dark:bg-slate-800"
+                className="border border-default rounded-md bg-slate-50 overflow-hidden dark:border-slate-700 dark:bg-slate-800"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -399,7 +399,7 @@ export default function ImagesClient({
                         onClick={() => void onCreateOverride(m, 'GLOBAL')}
                         disabled={busy}
                         aria-label="Override at GLOBAL scope"
-                        className="inline-flex items-center justify-center h-6 px-1.5 rounded text-xs font-medium border border-slate-200 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-blue-950 dark:hover:border-blue-800"
+                        className="inline-flex items-center justify-center h-6 px-1.5 rounded text-xs font-medium border border-default hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-blue-950 dark:hover:border-blue-800"
                       >
                         <Plus className="w-3 h-3" /> Global
                       </button>
@@ -410,7 +410,7 @@ export default function ImagesClient({
                         onClick={() => void onCreateOverride(m, 'PLATFORM')}
                         disabled={busy}
                         aria-label="Override at PLATFORM scope"
-                        className="inline-flex items-center justify-center h-6 px-1.5 rounded text-xs font-medium border border-slate-200 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-blue-950 dark:hover:border-blue-800"
+                        className="inline-flex items-center justify-center h-6 px-1.5 rounded text-xs font-medium border border-default hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-blue-950 dark:hover:border-blue-800"
                       >
                         <Plus className="w-3 h-3" /> Plat
                       </button>
@@ -421,7 +421,7 @@ export default function ImagesClient({
                         onClick={() => void onCreateOverride(m, 'MARKETPLACE')}
                         disabled={busy}
                         aria-label="Override at MARKETPLACE scope"
-                        className="inline-flex items-center justify-center h-6 px-1.5 rounded text-xs font-medium border border-slate-200 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-blue-950 dark:hover:border-blue-800"
+                        className="inline-flex items-center justify-center h-6 px-1.5 rounded text-xs font-medium border border-default hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-blue-950 dark:hover:border-blue-800"
                       >
                         <Plus className="w-3 h-3" /> Mkt
                       </button>
@@ -543,8 +543,8 @@ function BucketCard({
         : `${bucket.platform ?? '?'} · ${bucket.marketplace ?? '?'}`
 
   return (
-    <div className="border border-slate-200 rounded-lg bg-white dark:border-slate-800 dark:bg-slate-900">
-      <header className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between dark:border-slate-800">
+    <div className="border border-default rounded-lg bg-white dark:border-slate-800 dark:bg-slate-900">
+      <header className="px-4 py-2.5 border-b border-subtle flex items-center justify-between dark:border-slate-800">
         <div className="flex items-center gap-2">
           <span className="text-md font-semibold text-slate-900 dark:text-slate-100">
             {scopeLabel}
@@ -573,7 +573,7 @@ function BucketCard({
               <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5 tabular-nums">
                 position {row.position}
                 {row.sourceProductImageId && (
-                  <span className="ml-2 text-slate-400 dark:text-slate-600">
+                  <span className="ml-2 text-tertiary dark:text-slate-600">
                     · from master
                   </span>
                 )}
@@ -585,7 +585,7 @@ function BucketCard({
                 onPatchRow(row, { role: e.target.value as Role })
               }
               aria-label="Image role"
-              className="h-7 px-1.5 text-sm border border-slate-200 rounded dark:border-slate-700 dark:bg-slate-800"
+              className="h-7 px-1.5 text-sm border border-default rounded dark:border-slate-700 dark:bg-slate-800"
             >
               {ROLES.map((r) => (
                 <option key={r} value={r}>

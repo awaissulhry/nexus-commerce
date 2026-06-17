@@ -14,7 +14,7 @@ export default function DatasheetLoading() {
   return (
     <div className="space-y-4">
       {/* ── Header ─────────────────────────────────────────────────── */}
-      <header className="flex items-start justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-3">
+      <header className="flex items-start justify-between gap-4 border-b border-default dark:border-slate-800 pb-3">
         <div className="min-w-0 flex-1 space-y-2">
           <Skeleton variant="block" width={120} height={12} />
           <Skeleton variant="block" width="60%" height={24} />
@@ -35,7 +35,7 @@ export default function DatasheetLoading() {
 
       {/* ── Tab nav ────────────────────────────────────────────────── */}
       <nav
-        className="flex items-center gap-1 border-b border-slate-200 dark:border-slate-800 overflow-x-auto"
+        className="flex items-center gap-1 border-b border-default dark:border-slate-800 overflow-x-auto"
         aria-hidden
       >
         {Array.from({ length: 9 }).map((_, i) => (

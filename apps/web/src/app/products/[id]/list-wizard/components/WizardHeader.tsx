@@ -43,13 +43,13 @@ export default function WizardHeader({
         // M.3 — tighter padding + smaller gap on mobile so the
         // product name + 1-2 chip cluster + AI button + close fit
         // on a 375px viewport without wrapping.
-        'px-3 md:px-6 py-2 md:py-3 border-b border-slate-200 bg-white flex items-center justify-between gap-2 md:gap-4 flex-shrink-0 dark:border-slate-800 dark:bg-slate-950',
+        'px-3 md:px-6 py-2 md:py-3 border-b border-default bg-white flex items-center justify-between gap-2 md:gap-4 flex-shrink-0 dark:border-slate-800 dark:bg-slate-950',
       )}
     >
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
         <Link
           href={`/products/${productId}/edit`}
-          className="text-slate-400 hover:text-slate-700 flex-shrink-0 dark:text-slate-500 dark:hover:text-slate-300"
+          className="text-tertiary hover:text-slate-700 flex-shrink-0 dark:text-slate-500 dark:hover:text-slate-300"
           aria-label={t('listWizard.header.backToProduct')}
         >
           <ArrowLeft className="w-4 h-4" />
@@ -86,7 +86,7 @@ export default function WizardHeader({
         <button
           type="button"
           onClick={onClose}
-          className="text-slate-400 hover:text-slate-700 rounded p-1 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-800"
+          className="text-tertiary hover:text-slate-700 rounded p-1 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-800"
           aria-label={t('listWizard.header.closeWizard')}
         >
           <X className="w-4 h-4" />
@@ -100,7 +100,7 @@ function ChannelsSummary({ channels }: { channels: ChannelTuple[] }) {
   const { t } = useTranslations()
   if (channels.length === 0) {
     return (
-      <span className="text-base text-slate-400 italic dark:text-slate-500">
+      <span className="text-base text-tertiary italic dark:text-slate-500">
         {t('listWizard.header.noChannels')}
       </span>
     )
@@ -153,7 +153,7 @@ function ChannelsSummary({ channels }: { channels: ChannelTuple[] }) {
         ))}
         {mobileOverflow > 0 && (
           <span
-            className="inline-flex items-center h-5 px-1.5 rounded text-xs font-medium border border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
+            className="inline-flex items-center h-5 px-1.5 rounded text-xs font-medium border border-default bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
             title={summary}
           >
             {t('listWizard.header.overflow', { n: mobileOverflow })}
@@ -168,7 +168,7 @@ function ChannelsSummary({ channels }: { channels: ChannelTuple[] }) {
         ))}
         {desktopOverflow > 0 && (
           <span
-            className="inline-flex items-center h-5 px-1.5 rounded text-xs font-medium border border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
+            className="inline-flex items-center h-5 px-1.5 rounded text-xs font-medium border border-default bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
             title={summary}
           >
             {t('listWizard.header.overflow', { n: desktopOverflow })}
@@ -184,7 +184,7 @@ function ChannelsSummary({ channels }: { channels: ChannelTuple[] }) {
 function ChannelChip({ c }: { c: ChannelTuple }) {
   const tone =
     CHANNEL_TONE[c.platform] ??
-    'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+    'bg-slate-100 text-slate-700 border-default dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
   const platformLabel = CHANNEL_LABEL[c.platform] ?? c.platform
   const marketLabel =
     c.marketplace === 'GLOBAL'

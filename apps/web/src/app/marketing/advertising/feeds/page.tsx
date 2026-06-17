@@ -84,7 +84,7 @@ export default async function FeedsPage() {
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           How feeds are generated
         </h2>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3 text-sm text-slate-600 dark:text-slate-400 space-y-2">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-3 text-sm text-slate-600 dark:text-slate-400 space-y-2">
           <div className="flex items-start gap-2">
             <span className="font-mono text-violet-600 dark:text-violet-400 text-xs mt-0.5">1</span>
             <span>
@@ -125,7 +125,7 @@ export default async function FeedsPage() {
 
       {/* Env config */}
       <section className="mt-4">
-        <div className="bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3 text-xs text-slate-600 dark:text-slate-400 space-y-1.5">
+        <div className="bg-slate-50 dark:bg-slate-950/40 border border-default dark:border-slate-800 rounded-md px-4 py-3 text-xs text-slate-600 dark:text-slate-400 space-y-1.5">
           <div className="flex items-start gap-2 flex-wrap">
             <code className="shrink-0 px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-300">
               NEXUS_FEED_EXPORT_SCHEDULE=0 6 * * *
@@ -155,7 +155,7 @@ function FeedCard({
 }) {
   const backend = getBackendUrl()
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-4">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-4">
       <div className="flex items-start justify-between gap-2 mb-3">
         <div>
           <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</h3>
@@ -194,7 +194,7 @@ function FeedCard({
           {downloadLabel}
         </a>
         {summary?.generatedAt && (
-          <span className="text-[10px] text-slate-400">
+          <span className="text-[10px] text-tertiary">
             {new Date(summary.generatedAt).toLocaleDateString('en-GB', {
               month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
             })}

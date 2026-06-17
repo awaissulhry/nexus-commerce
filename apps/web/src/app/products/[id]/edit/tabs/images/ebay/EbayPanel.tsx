@@ -321,9 +321,9 @@ export default function EbayPanel({
   })
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl space-y-0">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-xl space-y-0">
       {/* Header */}
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-200 dark:border-slate-700">
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-default dark:border-slate-700">
         <ShoppingBag className="w-4 h-4 text-slate-500" />
         <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">eBay Images</span>
         <div className="ml-auto flex items-center gap-3">
@@ -386,11 +386,11 @@ export default function EbayPanel({
       {/* ── Gallery section ─────────────────────────────────────────── */}
       <section
         aria-labelledby="ebay-gallery-heading"
-        className="px-5 py-4 border-b border-slate-100 dark:border-slate-800"
+        className="px-5 py-4 border-b border-subtle dark:border-slate-800"
       >
         <div className="flex items-center gap-2 mb-3">
           <h3 id="ebay-gallery-heading" className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Gallery</h3>
-          <span className="text-xs text-slate-400">Position 1 = main listing image</span>
+          <span className="text-xs text-tertiary">Position 1 = main listing image</span>
         </div>
 
         {effectiveGallery.length === 0 ? (
@@ -398,7 +398,7 @@ export default function EbayPanel({
             role="button"
             tabIndex={0}
             aria-label="Add gallery images"
-            className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl py-10 flex flex-col items-center gap-2 text-slate-400 cursor-pointer hover:border-blue-300 transition-colors"
+            className="border-2 border-dashed border-default dark:border-slate-700 rounded-xl py-10 flex flex-col items-center gap-2 text-tertiary cursor-pointer hover:border-blue-300 transition-colors"
             onClick={() => setPickerTarget('gallery')}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPickerTarget('gallery') } }}
           >
@@ -436,7 +436,7 @@ export default function EbayPanel({
                     ? 'border-blue-400 ring-2 ring-blue-300'
                     : item.fromMaster
                       ? 'border-dashed border-slate-300 dark:border-slate-600 opacity-75'
-                      : 'border-slate-200 dark:border-slate-700',
+                      : 'border-default dark:border-slate-700',
                   item.isPending && 'ring-1 ring-amber-400',
                   onOpenLightboxForCell && 'cursor-zoom-in',
                 )}
@@ -494,7 +494,7 @@ export default function EbayPanel({
               <button
                 type="button"
                 onClick={() => setPickerTarget('gallery')}
-                className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1 text-slate-400 hover:border-blue-300 transition-colors flex-shrink-0"
+                className="w-20 h-20 rounded-xl border-2 border-dashed border-default dark:border-slate-700 flex flex-col items-center justify-center gap-1 text-tertiary hover:border-blue-300 transition-colors flex-shrink-0"
               >
                 <Plus className="w-5 h-5" />
                 <span className="text-[10px]">Add</span>
@@ -519,9 +519,9 @@ export default function EbayPanel({
         >
           <div className="flex items-center gap-2 mb-3">
             <h3 id="ebay-colorsets-heading" className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Color Sets</h3>
-            <span className="text-xs text-slate-400">(VariationSpecificPictureSet — picture dimension: {activeAxis})</span>
+            <span className="text-xs text-tertiary">(VariationSpecificPictureSet — picture dimension: {activeAxis})</span>
           </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+          <p className="text-xs text-tertiary dark:text-slate-500 mb-4">
             eBay shows these images when a buyer selects a specific {activeAxis.toLowerCase()}. Only one variation dimension is supported.
           </p>
 
@@ -552,7 +552,7 @@ export default function EbayPanel({
                           img.url,
                         )}
                         className={cn(
-                          'group relative w-16 h-16 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-900',
+                          'group relative w-16 h-16 rounded-lg border border-default dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-900',
                           onOpenLightboxForCell && 'cursor-zoom-in',
                         )}
                       >
@@ -576,7 +576,7 @@ export default function EbayPanel({
                       type="button"
                       aria-label={`Add ${colorValue} variation image`}
                       onClick={() => setPickerTarget({ colorValue })}
-                      className="w-16 h-16 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:border-blue-300 transition-colors"
+                      className="w-16 h-16 rounded-lg border-2 border-dashed border-default dark:border-slate-700 flex items-center justify-center text-tertiary hover:border-blue-300 transition-colors"
                     >
                       <Plus className="w-4 h-4" />
                     </button>
@@ -601,17 +601,17 @@ export default function EbayPanel({
       />
 
       {/* IR.5.4 — Buyer preview */}
-      <div className="border-t border-slate-100 dark:border-slate-800">
+      <div className="border-t border-subtle dark:border-slate-800">
         <button
           type="button"
           onClick={() => setPreviewOpen((p) => !p)}
           className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
           aria-expanded={previewOpen}
         >
-          <Eye className="w-3.5 h-3.5 text-slate-400" />
+          <Eye className="w-3.5 h-3.5 text-tertiary" />
           <span className="font-medium">Buyer preview</span>
-          <span className="text-slate-400 ml-1">— eBay listing card as a buyer would see it</span>
-          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-slate-400 transition-transform', previewOpen && 'rotate-180')} />
+          <span className="text-tertiary ml-1">— eBay listing card as a buyer would see it</span>
+          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-tertiary transition-transform', previewOpen && 'rotate-180')} />
         </button>
         {previewOpen && (
           <div className="px-4 pb-4">
@@ -627,17 +627,17 @@ export default function EbayPanel({
       </div>
 
       {/* IR.9.4 — Publish history */}
-      <div className="border-t border-slate-100 dark:border-slate-800">
+      <div className="border-t border-subtle dark:border-slate-800">
         <button
           type="button"
           onClick={() => setHistoryOpen((p) => !p)}
           className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
           aria-expanded={historyOpen}
         >
-          <Clock className="w-3.5 h-3.5 text-slate-400" />
+          <Clock className="w-3.5 h-3.5 text-tertiary" />
           <span className="font-medium">Publish history</span>
-          <span className="text-slate-400 ml-1">— eBay ReviseItem submissions + retry</span>
-          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-slate-400 transition-transform', historyOpen && 'rotate-180')} />
+          <span className="text-tertiary ml-1">— eBay ReviseItem submissions + retry</span>
+          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-tertiary transition-transform', historyOpen && 'rotate-180')} />
         </button>
         {historyOpen && (
           <div className="px-4 pb-4">
@@ -653,10 +653,10 @@ export default function EbayPanel({
           reach when the gallery + color sets push it below the fold. */}
       <div
         data-publish-anchor
-        className="sticky bottom-0 z-10 bg-white dark:bg-slate-900 rounded-b-xl px-5 py-3 border-t border-slate-100 dark:border-slate-800 shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.08)] dark:shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.5)] flex flex-col gap-1.5"
+        className="sticky bottom-0 z-10 bg-white dark:bg-slate-900 rounded-b-xl px-5 py-3 border-t border-subtle dark:border-slate-800 shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.08)] dark:shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.5)] flex flex-col gap-1.5"
       >
         <div className="flex items-center justify-between">
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-tertiary">
             ReviseItem · PictureDetails + VariationSpecificPictureSet via Trading API
             {publishedCount > 0 && (
               <span className="ml-2 text-emerald-600 dark:text-emerald-400">· {publishedCount} published</span>
@@ -665,7 +665,7 @@ export default function EbayPanel({
           <Button
             size="sm"
             variant="ghost"
-            className="gap-1.5 border border-slate-200 dark:border-slate-700"
+            className="gap-1.5 border border-default dark:border-slate-700"
             onClick={() => setPublishPreviewOpen(true)}
             disabled={publishing}
             title="Open pre-publish preview"
@@ -677,7 +677,7 @@ export default function EbayPanel({
             <Button
               size="sm"
               variant="ghost"
-              className="gap-1.5 border border-slate-200 dark:border-slate-700"
+              className="gap-1.5 border border-default dark:border-slate-700"
               onClick={onOpenRollback}
               disabled={publishing}
               title="Revert to the last successful eBay publish (per-browser snapshot)"
@@ -689,7 +689,7 @@ export default function EbayPanel({
           <Button
             size="sm"
             variant="ghost"
-            className="gap-1.5 border border-slate-200 dark:border-slate-700"
+            className="gap-1.5 border border-default dark:border-slate-700"
             disabled={publishing || validation.blocking.length > 0}
             title={validation.blocking.length > 0
               ? `${validation.blocking.length} blocking issue${validation.blocking.length === 1 ? '' : 's'} — see banner above`

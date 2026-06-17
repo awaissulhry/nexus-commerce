@@ -162,7 +162,7 @@ export default function EventsClient() {
 
       {loading && (
         <div className="flex justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+          <Loader2 className="h-6 w-6 animate-spin text-tertiary" />
         </div>
       )}
 
@@ -173,7 +173,7 @@ export default function EventsClient() {
       )}
 
       {!loading && !error && events.length === 0 && (
-        <div className="text-center py-16 text-sm text-slate-400">
+        <div className="text-center py-16 text-sm text-tertiary">
           No sync events yet. They will appear here as products are synced.
         </div>
       )}
@@ -185,7 +185,7 @@ export default function EventsClient() {
             const dataEntries = ev.data ? Object.entries(ev.data) : []
             return (
               <div key={ev.id}
-                className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                className="border border-default dark:border-slate-700 rounded-lg overflow-hidden">
                 <button onClick={() => toggleExpand(ev.id)}
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                   <EventIcon eventType={ev.eventType} />
@@ -198,15 +198,15 @@ export default function EventsClient() {
                       <span className="ml-2 font-sans text-slate-500">· {ev.metadata.fileName}</span>
                     )}
                   </span>
-                  <span className="text-xs text-slate-400 shrink-0">{relativeTime(ev.createdAt)}</span>
+                  <span className="text-xs text-tertiary shrink-0">{relativeTime(ev.createdAt)}</span>
                   {dataEntries.length > 0 && (
                     isOpen
-                      ? <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                      : <ChevronRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      ? <ChevronDown className="h-3.5 w-3.5 text-tertiary shrink-0" />
+                      : <ChevronRight className="h-3.5 w-3.5 text-tertiary shrink-0" />
                   )}
                 </button>
                 {isOpen && dataEntries.length > 0 && (
-                  <div className="border-t border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+                  <div className="border-t border-default dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
                     {dataEntries.map(([k, v]) => (
                       <div key={k} className="flex gap-2 px-3 py-1.5 text-xs font-mono">
                         <span className="text-slate-500 w-36 shrink-0 truncate">{k}</span>

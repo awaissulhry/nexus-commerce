@@ -199,14 +199,14 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
         </p>
 
         {loading && (
-          <div className="flex items-center gap-2 text-sm text-slate-400">
+          <div className="flex items-center gap-2 text-sm text-tertiary">
             <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
             {t('products.edit.cockpit.xchannel.loading')}
           </div>
         )}
         {error && <div className="text-sm text-rose-600 dark:text-rose-400">{error}</div>}
         {rows && rows.length === 0 && !loading && (
-          <div className="text-sm text-slate-400">{t('products.edit.cockpit.xchannel.empty')}</div>
+          <div className="text-sm text-tertiary">{t('products.edit.cockpit.xchannel.empty')}</div>
         )}
 
         {rows && rows.length > 0 && (
@@ -214,7 +214,7 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
             {/* Propagation bar. Native selects (matches the rest of the UI);
                 they work now that the drawer no longer thrashes focus on
                 every re-render. */}
-            <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+            <div className="flex flex-wrap items-end gap-2 rounded-lg border border-default dark:border-slate-800 p-3">
               <label className="text-xs text-slate-500 dark:text-slate-400">
                 {t('products.edit.cockpit.xchannel.fieldLabel')}
                 <select
@@ -224,7 +224,7 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
                     setPreview(null)
                     setApplyResult(null)
                   }}
-                  className="mt-1 block rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm text-slate-900 dark:text-slate-100"
+                  className="mt-1 block rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm text-slate-900 dark:text-slate-100"
                 >
                   {fieldOptions.map((o) => (
                     <option key={o.v} value={o.v}>
@@ -242,7 +242,7 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
                     setPreview(null)
                     setApplyResult(null)
                   }}
-                  className="mt-1 block rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm text-slate-900 dark:text-slate-100"
+                  className="mt-1 block rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm text-slate-900 dark:text-slate-100"
                 >
                   {rows.map((r) => (
                     <option key={coordKey(r.channel, r.marketplace)} value={coordKey(r.channel, r.marketplace)}>
@@ -268,8 +268,8 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
 
             {/* Diff panel */}
             {preview && (
-              <div className="rounded-lg border border-slate-200 dark:border-slate-800">
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-3 py-2">
+              <div className="rounded-lg border border-default dark:border-slate-800">
+                <div className="flex items-center justify-between border-b border-subtle dark:border-slate-800 px-3 py-2">
                   <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
                     {t('products.edit.cockpit.xchannel.proposed')}
                   </span>
@@ -304,7 +304,7 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
                   )}
                 </div>
                 {preview.entries.length === 0 ? (
-                  <div className="px-3 py-3 text-xs text-slate-400">
+                  <div className="px-3 py-3 text-xs text-tertiary">
                     {t('products.edit.cockpit.xchannel.noChanges')}
                   </div>
                 ) : (
@@ -342,7 +342,7 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
                                 </span>
                               )}
                               {e.unchanged && (
-                                <span className="text-[10px] text-slate-400">
+                                <span className="text-[10px] text-tertiary">
                                   {t('products.edit.cockpit.xchannel.unchanged')}
                                 </span>
                               )}
@@ -373,7 +373,7 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
                                   type="button"
                                   onClick={() => void handleVerify(e)}
                                   disabled={backTrBusy.has(k)}
-                                  className="inline-flex items-center gap-1 rounded border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 text-[10.5px] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                                  className="inline-flex items-center gap-1 rounded border border-default dark:border-slate-700 px-1.5 py-0.5 text-[10.5px] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                                 >
                                   {backTrBusy.has(k) ? (
                                     <Loader2 aria-hidden className="h-3 w-3 animate-spin" />
@@ -391,7 +391,7 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
                   </ul>
                 )}
                 {applyResult && applyResult.ok > 0 && (
-                  <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
+                  <div className="border-t border-subtle dark:border-slate-800 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
                     {t('products.edit.cockpit.xchannel.pendingPublish', { n: String(applyResult.ok) })}
                   </div>
                 )}
@@ -399,7 +399,7 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
             )}
 
             {/* Comparison table */}
-            <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+            <div className="overflow-x-auto rounded-lg border border-default dark:border-slate-800">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-xs text-slate-500 dark:bg-slate-900/40 dark:text-slate-400">
                   <tr>

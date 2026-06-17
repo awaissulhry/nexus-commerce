@@ -90,11 +90,11 @@ interface ListingRow {
 type MarkdownRow = EbayMarkdown & GridLensRow
 
 const STATUS_TONE: Record<string, string> = {
-  DRAFT:     'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+  DRAFT:     'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700',
   SCHEDULED: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900',
   ACTIVE:    'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
-  ENDED:     'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700',
-  CANCELLED: 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700',
+  ENDED:     'bg-slate-50 dark:bg-slate-800 text-tertiary dark:text-slate-500 border-default dark:border-slate-700',
+  CANCELLED: 'bg-slate-50 dark:bg-slate-800 text-tertiary dark:text-slate-500 border-default dark:border-slate-700',
   FAILED:    'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
 }
 
@@ -289,7 +289,7 @@ export default function EbayMarkdownsClient() {
       <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setMarketplaceFilter('')}
-          className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplaceFilter === '' ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
+          className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplaceFilter === '' ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-default hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
         >
           All markets
         </button>
@@ -297,7 +297,7 @@ export default function EbayMarkdownsClient() {
           <button
             key={mp}
             onClick={() => setMarketplaceFilter(`EBAY_${mp}`)}
-            className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplaceFilter === `EBAY_${mp}` ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
+            className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplaceFilter === `EBAY_${mp}` ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-default hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
           >
             {COUNTRY_NAMES[mp] ?? mp}
           </button>
@@ -325,7 +325,7 @@ export default function EbayMarkdownsClient() {
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
-              className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
+              className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
               aria-label="Filter by status"
             >
               <option value="">All statuses</option>
@@ -398,7 +398,7 @@ export default function EbayMarkdownsClient() {
         <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Coming soon</div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-600 dark:text-slate-400">
           <div className="flex items-start gap-2">
-            <MessageCircle size={14} className="mt-0.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+            <MessageCircle size={14} className="mt-0.5 text-tertiary dark:text-slate-500 flex-shrink-0" />
             <div>
               <span className="font-medium text-slate-700 dark:text-slate-300">Best Offer manager —</span>{' '}
               per-listing toggle + auto-accept/decline thresholds. Needs a{' '}
@@ -407,7 +407,7 @@ export default function EbayMarkdownsClient() {
             </div>
           </div>
           <div className="flex items-start gap-2">
-            <Repeat size={14} className="mt-0.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+            <Repeat size={14} className="mt-0.5 text-tertiary dark:text-slate-500 flex-shrink-0" />
             <div>
               <span className="font-medium text-slate-700 dark:text-slate-300">Auto-relist controls —</span>{' '}
               eBay re-lists ENDED items automatically when configured. Needs an{' '}
@@ -494,20 +494,20 @@ function CreateMarkdownModal({ onClose, onCreated }: { onClose: () => void; onCr
           <div>
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">eBay listing</label>
             <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search SKU, name, or eBay item ID…" autoFocus />
-            <div className="mt-2 max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded">
+            <div className="mt-2 max-h-48 overflow-y-auto border border-default dark:border-slate-700 rounded">
               {listings.length === 0 ? (
-                <div className="text-sm text-slate-400 dark:text-slate-500 p-3 text-center">No matching ACTIVE eBay listings</div>
+                <div className="text-sm text-tertiary dark:text-slate-500 p-3 text-center">No matching ACTIVE eBay listings</div>
               ) : (
                 <ul>
                   {listings.map(l => (
                     <li key={l.id} onClick={() => setSelectedListingId(l.id)}
-                      className={`px-3 py-2 cursor-pointer flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 last:border-b-0 ${
+                      className={`px-3 py-2 cursor-pointer flex items-center gap-2 border-b border-subtle dark:border-slate-800 last:border-b-0 ${
                         selectedListingId === l.id ? 'bg-blue-50 dark:bg-blue-950/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
                       }`}>
-                      <Tag size={11} className="text-slate-400 dark:text-slate-500" />
+                      <Tag size={11} className="text-tertiary dark:text-slate-500" />
                       <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{l.product.sku}</span>
                       <span className="text-sm text-slate-700 dark:text-slate-300 truncate flex-1">{l.product.name}</span>
-                      <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">{l.marketplace}</span>
+                      <span className="text-xs text-tertiary dark:text-slate-500 font-mono">{l.marketplace}</span>
                       {l.price != null && <span className="text-sm tabular-nums text-slate-700 dark:text-slate-300">{l.price.toFixed(2)}</span>}
                     </li>
                   ))}
@@ -549,7 +549,7 @@ function CreateMarkdownModal({ onClose, onCreated }: { onClose: () => void; onCr
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                End date <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
+                End date <span className="text-tertiary dark:text-slate-500 font-normal">(optional)</span>
               </label>
               <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
             </div>
@@ -558,7 +558,7 @@ function CreateMarkdownModal({ onClose, onCreated }: { onClose: () => void; onCr
       </ModalBody>
       <ModalFooter>
         <button onClick={onClose} disabled={busy}
-          className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">
+          className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">
           Cancel
         </button>
         <button onClick={submit} disabled={busy || !selectedListingId}

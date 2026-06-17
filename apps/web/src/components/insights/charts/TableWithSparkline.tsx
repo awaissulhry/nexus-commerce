@@ -43,7 +43,7 @@ function renderCell(
     case 'delta': {
       const v = raw == null ? null : Number(raw)
       if (v == null || Number.isNaN(v))
-        return <span className="text-slate-400">—</span>
+        return <span className="text-tertiary">—</span>
       const tone =
         Math.abs(v) < 0.5
           ? 'text-slate-500'
@@ -61,7 +61,7 @@ function renderCell(
     case 'sparkline': {
       const series = (raw as number[] | null | undefined) ?? []
       if (series.length < 2)
-        return <span className="text-slate-400 text-xs">—</span>
+        return <span className="text-tertiary text-xs">—</span>
       const data = series.map((v, i) => ({ i, v }))
       return (
         <div className="h-6 w-20 inline-block">
@@ -113,7 +113,7 @@ export function TableWithSparkline<T>({
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
-          <tr className="border-b border-slate-200 dark:border-slate-800">
+          <tr className="border-b border-default dark:border-slate-800">
             {columns.map((c) => (
               <th
                 key={c.key}
@@ -136,7 +136,7 @@ export function TableWithSparkline<T>({
             <tr
               key={rowKey(row)}
               className={cn(
-                'border-b border-slate-100 dark:border-slate-800/60 last:border-b-0',
+                'border-b border-subtle dark:border-slate-800/60 last:border-b-0',
                 onRowClick &&
                   'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40',
               )}

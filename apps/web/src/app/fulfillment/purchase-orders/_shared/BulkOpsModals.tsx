@@ -139,7 +139,7 @@ export function BulkReassignSupplierModal({
               value={supplierId}
               onChange={(e) => setSupplierId(e.target.value)}
               disabled={submitting}
-              className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
             >
               <option value="">— Clear supplier —</option>
               {suppliers?.map((s) => (
@@ -371,7 +371,7 @@ export function BulkMergeModal({
                 rows={2}
                 placeholder="Defaults to 'Merged from PO-XXX, PO-YYY, ...'"
                 disabled={submitting}
-                className="w-full px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                className="w-full px-2 py-1.5 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               />
             </div>
           )}
@@ -460,8 +460,8 @@ function Shell({
         if (e.target === e.currentTarget && !disabled) onClose()
       }}
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-5 py-3 flex items-center justify-between gap-2 z-10">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-default dark:border-slate-700 px-5 py-3 flex items-center justify-between gap-2 z-10">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
             {icon}
             {title}
@@ -498,7 +498,7 @@ function Footer({
   disabled?: boolean
 }) {
   return (
-    <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 px-5 py-3 flex items-center justify-end gap-2 -mx-5 -mb-5 mt-5">
+    <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-default dark:border-slate-700 px-5 py-3 flex items-center justify-end gap-2 -mx-5 -mb-5 mt-5">
       <Button variant="secondary" size="sm" onClick={onClose} disabled={submitting}>
         Cancel
       </Button>

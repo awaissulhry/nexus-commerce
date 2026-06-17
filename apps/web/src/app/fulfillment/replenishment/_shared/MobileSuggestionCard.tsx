@@ -43,7 +43,7 @@ export function MobileSuggestionCard({
     <div
       data-suggestion-id={s.productId}
       className={cn(
-        'border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 p-3 space-y-2',
+        'border border-default dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 p-3 space-y-2',
         focused && 'ring-1 ring-blue-300 dark:ring-blue-800 bg-blue-50/40 dark:bg-blue-950/30',
       )}
     >
@@ -142,7 +142,7 @@ export function MobileSuggestionCard({
           <div className="tabular-nums text-slate-700 dark:text-slate-300">
             {s.velocity}/d
             {s.forecastSource === 'TRAILING_VELOCITY' && (
-              <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">
+              <span className="ml-1 text-xs text-tertiary dark:text-slate-500">
                 trailing
               </span>
             )}
@@ -161,7 +161,7 @@ export function MobileSuggestionCard({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+      <div className="flex items-center gap-2 pt-1 border-t border-subtle dark:border-slate-800">
         <button
           onClick={onDraftPo}
           className="flex-1 h-8 text-sm bg-slate-900 dark:bg-slate-700 text-white rounded hover:bg-slate-800 dark:hover:bg-slate-600 inline-flex items-center justify-center gap-1"
@@ -191,7 +191,7 @@ export function MobileSuggestionCard({
         </button>
         <button
           onClick={onOpenDrawer}
-          className="h-8 px-3 text-sm border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+          className="h-8 px-3 text-sm border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
           aria-label={`Open detail for ${s.sku}`}
         >
           Details <ChevronRight size={11} aria-hidden="true" />

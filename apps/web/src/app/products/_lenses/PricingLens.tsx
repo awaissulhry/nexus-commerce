@@ -217,7 +217,7 @@ export function PricingLens({
       <Card noPadding>
         <div className="overflow-x-auto">
           <table className="w-full text-base">
-            <thead className="bg-slate-50 border-b border-slate-200 dark:bg-slate-800 dark:border-slate-800">
+            <thead className="bg-slate-50 border-b border-default dark:bg-slate-800 dark:border-slate-800">
               <tr>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[260px] dark:text-slate-300 dark:bg-slate-800">
                   {t('products.lens.pricing.col.product')}
@@ -236,9 +236,9 @@ export function PricingLens({
               {products.slice(0, 100).map((p) => (
                 <tr
                   key={p.id}
-                  className="border-b border-slate-100 hover:bg-slate-50/50 dark:border-slate-800 dark:hover:bg-slate-800/50"
+                  className="border-b border-subtle hover:bg-slate-50/50 dark:border-slate-800 dark:hover:bg-slate-800/50"
                 >
-                  <td className="px-3 py-2 sticky left-0 bg-white border-r border-slate-100 dark:bg-slate-900 dark:border-slate-800">
+                  <td className="px-3 py-2 sticky left-0 bg-white border-r border-subtle dark:bg-slate-900 dark:border-slate-800">
                     <Link
                       href={`/products/${p.id}/edit`}
                       className="block hover:text-blue-600 dark:hover:text-blue-400"
@@ -269,7 +269,7 @@ export function PricingLens({
                         ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
                         : cell.isClamped
                           ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
-                          : 'bg-white text-slate-900 border-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-800'
+                          : 'bg-white text-slate-900 border-default dark:bg-slate-900 dark:text-slate-100 dark:border-slate-800'
                     const titleParts: string[] = []
                     if (cell.isClamped)
                       titleParts.push(t('products.lens.pricing.cell.clamped'))

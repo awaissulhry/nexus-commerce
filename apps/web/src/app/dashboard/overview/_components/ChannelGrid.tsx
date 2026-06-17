@@ -73,7 +73,7 @@ export default function ChannelGrid({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {visible.map((c) => {
           const tone = CHANNEL_TONES[c.channel] ?? {
-            bg: 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700',
+            bg: 'bg-slate-50 border-default dark:bg-slate-800/40 dark:border-slate-700',
             text: 'text-slate-700 dark:text-slate-300',
           }
           const lastSyncLabel = relativeAgo(t, c.health.lastSyncAt)
@@ -104,7 +104,7 @@ export default function ChannelGrid({
                   <span className={cn('text-base font-semibold', tone.text)}>
                     {CHANNEL_LABELS[c.channel] ?? c.channel}
                   </span>
-                  <ChevronRight className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <ChevronRight className="w-3 h-3 text-tertiary opacity-0 group-hover:opacity-100 transition-opacity" />
                 </span>
                 <span className="text-xs text-slate-500 tabular-nums">
                   {t(

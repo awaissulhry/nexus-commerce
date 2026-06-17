@@ -243,7 +243,7 @@ export default async function HistoryTab({
 
   if (top.length === 0) {
     return (
-      <div className="border border-slate-200 dark:border-slate-800 rounded p-6 text-center text-sm text-slate-500">
+      <div className="border border-default dark:border-slate-800 rounded p-6 text-center text-sm text-slate-500">
         <Clock className="w-6 h-6 mx-auto mb-2 text-slate-300" />
         <div className="font-medium text-slate-700 dark:text-slate-300">
           {t('products.datasheetHub.history.empty.title')}
@@ -313,7 +313,7 @@ export default async function HistoryTab({
         </div>
       </div>
 
-      <div className="border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900 overflow-hidden">
+      <div className="border border-default dark:border-slate-800 rounded bg-white dark:bg-slate-900 overflow-hidden">
         <ul className="divide-y divide-slate-100 dark:divide-slate-800">
           {top.map((e) => (
             <li
@@ -329,7 +329,7 @@ export default async function HistoryTab({
                         ? 'w-3.5 h-3.5 text-emerald-500'
                         : e.outcomeOk === false
                           ? 'w-3.5 h-3.5 text-red-500'
-                          : 'w-3.5 h-3.5 text-slate-400'
+                          : 'w-3.5 h-3.5 text-tertiary'
                     }
                   />
                 )}
@@ -340,7 +340,7 @@ export default async function HistoryTab({
                         ? 'w-3.5 h-3.5 text-emerald-500'
                         : e.outcomeOk === false
                           ? 'w-3.5 h-3.5 text-red-500'
-                          : 'w-3.5 h-3.5 text-slate-400'
+                          : 'w-3.5 h-3.5 text-tertiary'
                     }
                   />
                 )}

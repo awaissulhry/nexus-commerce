@@ -139,7 +139,7 @@ function SnapshotPanel({
           <span>{uncertainCount} uncertain</span>
         </div>
         <div className="flex items-center gap-1.5 text-xs text-slate-500">
-          <span className="text-slate-400">{data.eventCount} events · {data.auditCount} audit entries scanned</span>
+          <span className="text-tertiary">{data.eventCount} events · {data.auditCount} audit entries scanned</span>
         </div>
       </div>
 
@@ -159,12 +159,12 @@ function SnapshotPanel({
       )}
 
       {/* Field table */}
-      <div className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-        <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+      <div className="rounded-lg border border-default dark:border-slate-700 overflow-hidden">
+        <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-default dark:border-slate-700 flex items-center justify-between">
           <span className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wide">
             Field values
           </span>
-          <div className="flex items-center gap-3 text-xs text-slate-400">
+          <div className="flex items-center gap-3 text-xs text-tertiary">
             <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-500" /> reconstructed</span>
             <span className="flex items-center gap-1"><HelpCircle className="h-3 w-3 text-amber-500" /> uncertain</span>
             <span className="flex items-center gap-1"><Minus className="h-3 w-3 text-slate-300" /> unchanged</span>
@@ -172,7 +172,7 @@ function SnapshotPanel({
         </div>
 
         {visibleFields.length === 0 ? (
-          <div className="px-3 py-4 text-sm text-slate-400 text-center">
+          <div className="px-3 py-4 text-sm text-tertiary text-center">
             No field changes detected after this point in time.
           </div>
         ) : (
@@ -211,7 +211,7 @@ function SnapshotPanel({
         {DISPLAY_FIELDS.length > visibleFields.length && (
           <button
             onClick={() => setShowAll((v) => !v)}
-            className="w-full flex items-center justify-center gap-1 px-3 py-2 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 border-t border-slate-100 dark:border-slate-800"
+            className="w-full flex items-center justify-center gap-1 px-3 py-2 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 border-t border-subtle dark:border-slate-800"
           >
             {showAll ? (
               <><ChevronUp className="h-3 w-3" /> Show changed fields only</>
@@ -339,7 +339,7 @@ export function SnapshotModal({ productId, productVersion, onClose, onRestored }
     >
       <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-default dark:border-slate-700">
           <div className="flex items-center gap-2">
             <Clock className="h-5 w-5 text-blue-500" />
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
@@ -348,7 +348,7 @@ export function SnapshotModal({ productId, productVersion, onClose, onRestored }
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            className="text-tertiary hover:text-slate-600 dark:hover:text-slate-300"
           >
             <X className="h-5 w-5" />
           </button>
@@ -403,7 +403,7 @@ export function SnapshotModal({ productId, productVersion, onClose, onRestored }
 
           {/* Coverage legend */}
           {!snapshot && !loading && !error && (
-            <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-4 py-3 space-y-2">
+            <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-default dark:border-slate-700 px-4 py-3 space-y-2">
               <p className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wide">
                 How reconstruction works
               </p>
@@ -435,7 +435,7 @@ export function SnapshotModal({ productId, productVersion, onClose, onRestored }
           {/* Loading */}
           {loading && (
             <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+              <Loader2 className="h-6 w-6 animate-spin text-tertiary" />
             </div>
           )}
 

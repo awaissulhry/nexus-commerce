@@ -222,7 +222,7 @@ export default function ImageActionBar({
   }
 
   return (
-    <div className="mt-4 flex items-center gap-2 py-3 px-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl">
+    <div className="mt-4 flex items-center gap-2 py-3 px-4 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-xl">
       {/* Save / Discard cluster — only when there are pending changes */}
       {dirtyCount > 0 && (
         <>
@@ -280,7 +280,7 @@ export default function ImageActionBar({
               {comboOpen && (
                 <div
                   role="menu"
-                  className="absolute left-0 bottom-10 z-30 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1 min-w-[260px] text-sm"
+                  className="absolute left-0 bottom-10 z-30 bg-white dark:bg-slate-800 border border-default dark:border-slate-700 rounded-xl shadow-xl py-1 min-w-[260px] text-sm"
                 >
                   {/* DSP.6 — "Save only" option sits at the top so the
                       operator can save without publishing in one click.
@@ -376,7 +376,7 @@ export default function ImageActionBar({
           onClick={onOpenCrossChannel}
           disabled={publishing || saving}
           className={cn(
-            'gap-1.5 border border-slate-200 dark:border-slate-700',
+            'gap-1.5 border border-default dark:border-slate-700',
             !autoPublishSlot && 'ml-auto',
           )}
           title="Plan a publish across Amazon + eBay + Shopify in one pass"
@@ -407,7 +407,7 @@ export default function ImageActionBar({
             <div
               role="menu"
               aria-label="Publish to channel"
-              className="absolute right-0 bottom-10 z-30 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1 min-w-[300px] text-sm"
+              className="absolute right-0 bottom-10 z-30 bg-white dark:bg-slate-800 border border-default dark:border-slate-700 rounded-xl shadow-xl py-1 min-w-[300px] text-sm"
             >
               {channelStatus.amazon.hasContent && (
                 <ChannelSection title="Amazon" status={channelStatus.amazon}>
@@ -472,7 +472,7 @@ export default function ImageActionBar({
                     onClick={() => { setOpen(false); onOpenSchedule() }}
                     className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center gap-2 text-slate-700 dark:text-slate-300"
                   >
-                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    <Calendar className="w-3.5 h-3.5 text-tertiary" />
                     Schedule for later…
                     {pendingScheduleCount > 0 && (
                       <span className="ml-auto text-[10px] font-medium px-1.5 py-px rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
@@ -508,7 +508,7 @@ function ChannelSection({
             {status.pendingCount} pending
           </span>
         )}
-        <span className="ml-auto normal-case font-normal text-slate-400 dark:text-slate-500">
+        <span className="ml-auto normal-case font-normal text-tertiary dark:text-slate-500">
           {status.lastPublishedAt ? `Last ${elapsed(status.lastPublishedAt)}` : 'Never published'}
         </span>
       </div>

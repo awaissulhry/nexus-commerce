@@ -201,7 +201,7 @@ export default function PublishDashboardClient({ modes, apiBase }: Props) {
       </div>
 
       {/* Asset URL input */}
-      <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="rounded-lg border border-default bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <label className="block">
           <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
             {t('publishDashboard.assetLabel')}
@@ -225,8 +225,8 @@ export default function PublishDashboardClient({ modes, apiBase }: Props) {
               key={cfg.channel}
               className={`rounded-lg border p-3 ${
                 enabled[cfg.channel]
-                  ? 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'
-                  : 'border-slate-200 bg-slate-50 opacity-70 dark:border-slate-800 dark:bg-slate-900/60'
+                  ? 'border-default bg-white dark:border-slate-800 dark:bg-slate-900'
+                  : 'border-default bg-slate-50 opacity-70 dark:border-slate-800 dark:bg-slate-900/60'
               }`}
             >
               <div className="mb-2 flex items-center justify-between">

@@ -757,14 +757,14 @@ export default function PurchaseOrdersClient() {
           <div className="relative">
             <Search
               size={12}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500"
             />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('po.search.placeholder')}
-              className="h-8 pl-7 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 w-56"
+              className="h-8 pl-7 pr-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-tertiary dark:placeholder:text-slate-500 w-56"
             />
           </div>
         }
@@ -782,7 +782,7 @@ export default function PurchaseOrdersClient() {
                       'px-3 py-1 text-sm font-medium rounded border transition-colors',
                       statusFilter === f.key
                         ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
-                        : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
+                        : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                     )}
                   >
                     {t(f.labelKey as any)}
@@ -819,7 +819,7 @@ export default function PurchaseOrdersClient() {
             <button
               type="button"
               onClick={() => setPreferencesOpen(true)}
-              className="h-8 px-2 inline-flex items-center gap-1 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="h-8 px-2 inline-flex items-center gap-1 text-sm border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
               title="Preferences"
               aria-label="Preferences"
             >
@@ -861,7 +861,7 @@ export default function PurchaseOrdersClient() {
             <button
               type="button"
               onClick={() => setImportOpen(true)}
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded-md inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
               title="Import POs from CSV"
             >
               <Upload className="w-3 h-3" />
@@ -871,7 +871,7 @@ export default function PurchaseOrdersClient() {
                 lists reusable templates + recurring schedules. */}
             <Link
               href="/fulfillment/purchase-orders/templates"
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded-md inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
               title="Reusable templates + recurring schedules"
             >
               <Repeat className="w-3 h-3" />
@@ -895,7 +895,7 @@ export default function PurchaseOrdersClient() {
                 'h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 transition-colors',
                 showDeleted
                   ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'
-                  : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800',
+                  : 'border-default hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800',
               )}
             >
               {showDeleted ? <ArrowLeft className="w-3 h-3" /> : <Trash2 className="w-3 h-3" />}
@@ -964,7 +964,7 @@ export default function PurchaseOrdersClient() {
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="h-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse"
+              className="h-16 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg animate-pulse"
             />
           ))}
         </div>
@@ -994,7 +994,7 @@ export default function PurchaseOrdersClient() {
       )}
 
       {pos && pos.length > 0 && filteredPos && filteredPos.length === 0 && (
-        <div className="text-md text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-6 text-center">
+        <div className="text-md text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded p-6 text-center">
           {t('po.search.noMatches', { q: search })}
         </div>
       )}
@@ -1259,8 +1259,8 @@ function BulkTransitionSummary({
     cancel: 'Bulk cancel',
   }
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
-      <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-sm">
+      <div className="px-4 py-2 border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
           {titleByTransition[result.transition] ?? `Bulk ${result.transition}`}
         </span>
@@ -1337,7 +1337,7 @@ function BulkTransitionSummary({
           </div>
         )}
       </div>
-      <div className="border-t border-slate-200 dark:border-slate-700 px-3 py-2 flex justify-end">
+      <div className="border-t border-default dark:border-slate-700 px-3 py-2 flex justify-end">
         <button
           type="button"
           onClick={onClose}
@@ -1361,7 +1361,7 @@ function ViewToggle({
 }) {
   return (
     <div
-      className="inline-flex items-center border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden h-8 text-sm"
+      className="inline-flex items-center border border-default dark:border-slate-700 rounded-md overflow-hidden h-8 text-sm"
       role="group"
       aria-label="View mode"
     >
@@ -1385,7 +1385,7 @@ function ViewToggle({
         title="Card view"
         aria-pressed={value === 'card'}
         className={cn(
-          'px-3 h-full inline-flex items-center border-l border-slate-200 dark:border-slate-700',
+          'px-3 h-full inline-flex items-center border-l border-default dark:border-slate-700',
           value === 'card'
             ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
             : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800',
@@ -1443,9 +1443,9 @@ function PoTable({
   ])
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-x-auto">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg overflow-x-auto">
       <table className="w-full border-collapse">
-        <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+        <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-default dark:border-slate-700">
           <tr>
             {cols.map((c) => {
               const sortable = sortableKeys.has(c.key)
@@ -1484,7 +1484,7 @@ function PoTable({
                     >
                       {c.label}
                       {sortKey.by === c.key && (
-                        <span className="text-slate-400 dark:text-slate-500">
+                        <span className="text-tertiary dark:text-slate-500">
                           {sortKey.dir === 'asc' ? '↑' : '↓'}
                         </span>
                       )}
@@ -1580,7 +1580,7 @@ function PoTableRow({
   ]
 
   const rowCls = cn(
-    'border-b border-slate-100 dark:border-slate-800 transition-colors group cursor-pointer',
+    'border-b border-subtle dark:border-slate-800 transition-colors group cursor-pointer',
     isSelected
       ? 'bg-blue-50/40 dark:bg-blue-950/20'
       : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
@@ -1719,7 +1719,7 @@ function PoTableCell({
           {po.warehouse.code}
         </span>
       ) : (
-        <span className="text-slate-400 dark:text-slate-500">—</span>
+        <span className="text-tertiary dark:text-slate-500">—</span>
       )
     case 'total':
       return (
@@ -1731,7 +1731,7 @@ function PoTableCell({
       return (
         <span className="tabular-nums text-slate-700 dark:text-slate-300 block text-right">
           {po.items.length}
-          <span className="text-slate-400 dark:text-slate-500 ml-1">
+          <span className="text-tertiary dark:text-slate-500 ml-1">
             / {totalReceived}/{totalUnits} u
           </span>
         </span>
@@ -1748,7 +1748,7 @@ function PoTableCell({
           {new Date(po.expectedDeliveryDate).toISOString().slice(0, 10)}
         </span>
       ) : (
-        <span className="text-slate-400 dark:text-slate-500">—</span>
+        <span className="text-tertiary dark:text-slate-500">—</span>
       )
     case 'confirmedDate':
       return po.supplierConfirmedDeliveryDate ? (
@@ -1759,7 +1759,7 @@ function PoTableCell({
       ) : po.status === 'SUBMITTED' || po.status === 'APPROVED' ? (
         <span className="text-amber-700 dark:text-amber-300 text-sm">Awaiting</span>
       ) : (
-        <span className="text-slate-400 dark:text-slate-500">—</span>
+        <span className="text-tertiary dark:text-slate-500">—</span>
       )
     case 'createdAt':
       return (
@@ -1841,7 +1841,7 @@ function PoCard({
         'bg-white dark:bg-slate-900 border rounded-lg overflow-hidden transition-colors',
         isSelected
           ? 'border-blue-400 dark:border-blue-500 bg-blue-50/30 dark:bg-blue-950/20'
-          : 'border-slate-200 dark:border-slate-700',
+          : 'border-default dark:border-slate-700',
       )}
     >
       <button
@@ -1880,9 +1880,9 @@ function PoCard({
         )}
         <div className="flex-shrink-0">
           {expanded ? (
-            <ChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+            <ChevronDown className="w-4 h-4 text-tertiary dark:text-slate-500" />
           ) : (
-            <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+            <ChevronRight className="w-4 h-4 text-tertiary dark:text-slate-500" />
           )}
         </div>
         <StatusIcon status={po.status} />
@@ -1937,7 +1937,7 @@ function PoCard({
       </button>
 
       {expanded && (
-        <div className="bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-5 py-4 space-y-4">
+        <div className="bg-slate-50 dark:bg-slate-800 border-t border-default dark:border-slate-700 px-5 py-4 space-y-4">
           {transitions.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
               {transitions.map((tr) => {
@@ -1957,7 +1957,7 @@ function PoCard({
                       tr.variant === 'primary' &&
                         'bg-slate-900 dark:bg-slate-100 text-white border-slate-900 hover:bg-slate-800',
                       tr.variant === 'secondary' &&
-                        'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
+                        'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
                       tr.variant === 'danger' &&
                         'bg-white dark:bg-slate-900 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900 hover:bg-red-50 dark:hover:bg-red-950/40',
                     )}
@@ -2002,7 +2002,7 @@ function PoCard({
                     setShowCancelConfirm(false)
                     setCancelReason('')
                   }}
-                  className="px-3 py-1 text-base font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="px-3 py-1 text-base font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   {t('po.cancel.keep')}
                 </button>
@@ -2010,12 +2010,12 @@ function PoCard({
             </div>
           )}
 
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
-            <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+          <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded overflow-hidden">
+            <div className="px-3 py-2 border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
               {t('po.lineItems')}
             </div>
             <table className="w-full text-base">
-              <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-default dark:border-slate-700">
                 <tr>
                   <th className="text-left font-medium px-3 py-1.5">{t('po.col.sku')}</th>
                   <th className="text-right font-medium px-3 py-1.5">{t('po.col.ordered')}</th>
@@ -2028,7 +2028,7 @@ function PoCard({
                 {po.items.map((it) => (
                   <tr
                     key={it.id}
-                    className="border-b border-slate-100 dark:border-slate-800 last:border-0"
+                    className="border-b border-subtle dark:border-slate-800 last:border-0"
                   >
                     <td className="px-3 py-1.5 font-mono text-sm">{it.sku}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums">{it.quantityOrdered}</td>
@@ -2036,7 +2036,7 @@ function PoCard({
                       <span
                         className={cn(
                           it.quantityReceived === 0
-                            ? 'text-slate-400 dark:text-slate-500'
+                            ? 'text-tertiary dark:text-slate-500'
                             : it.quantityReceived < it.quantityOrdered
                               ? 'text-amber-700 dark:text-amber-300'
                               : 'text-green-700 dark:text-green-300',
@@ -2057,7 +2057,7 @@ function PoCard({
             </table>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-3">
+          <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded p-3">
             <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-2">
               {t('po.auditTrail')}
             </div>

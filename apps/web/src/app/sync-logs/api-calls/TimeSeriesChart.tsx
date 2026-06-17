@@ -103,8 +103,8 @@ export default function TimeSeriesChart({
 
   if (loading) {
     return (
-      <div className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900 p-6 flex items-center justify-center">
-        <Loader2 className="w-4 h-4 animate-spin text-slate-400 dark:text-slate-500" />
+      <div className="border border-default dark:border-slate-800 rounded-md bg-white dark:bg-slate-900 p-6 flex items-center justify-center">
+        <Loader2 className="w-4 h-4 animate-spin text-tertiary dark:text-slate-500" />
       </div>
     )
   }
@@ -127,7 +127,7 @@ export default function TimeSeriesChart({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* Latency percentiles */}
-      <div className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900 px-3 py-2">
+      <div className="border border-default dark:border-slate-800 rounded-md bg-white dark:bg-slate-900 px-3 py-2">
         <header className="flex items-center justify-between mb-1">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
             Latency over time
@@ -218,7 +218,7 @@ export default function TimeSeriesChart({
       </div>
 
       {/* Volume + failures */}
-      <div className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900 px-3 py-2">
+      <div className="border border-default dark:border-slate-800 rounded-md bg-white dark:bg-slate-900 px-3 py-2">
         <header className="flex items-center justify-between mb-1">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
             Call volume over time

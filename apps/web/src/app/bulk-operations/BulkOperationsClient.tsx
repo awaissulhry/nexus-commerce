@@ -190,13 +190,13 @@ const GROUP_TONE: Record<string, GroupTone> = {
   Physical: { band: 'bg-sky-50 dark:bg-sky-950/40 border-sky-200', text: 'text-sky-900', ring: 'border-sky-200', cell: 'bg-sky-50/30' },
   'Physical attributes': { band: 'bg-sky-50 dark:bg-sky-950/40 border-sky-200', text: 'text-sky-900', ring: 'border-sky-200', cell: 'bg-sky-50/30' },
   'Compliance & safety': { band: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900', text: 'text-amber-900', ring: 'border-amber-200 dark:border-amber-900', cell: 'bg-amber-50/30' },
-  'Other attributes': { band: 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700', text: 'text-slate-700 dark:text-slate-300', ring: 'border-slate-200 dark:border-slate-700', cell: 'bg-slate-50/30' },
+  'Other attributes': { band: 'bg-slate-50 dark:bg-slate-800 border-default dark:border-slate-700', text: 'text-slate-700 dark:text-slate-300', ring: 'border-default dark:border-slate-700', cell: 'bg-slate-50/30' },
 }
 
 const NEUTRAL_TONE: GroupTone = {
-  band: 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700',
+  band: 'bg-slate-100 dark:bg-slate-800 border-default dark:border-slate-700',
   text: 'text-slate-900 dark:text-slate-100',
-  ring: 'border-slate-200 dark:border-slate-700',
+  ring: 'border-default dark:border-slate-700',
   cell: 'bg-white dark:bg-slate-900',
 }
 
@@ -419,7 +419,7 @@ function DeleteRowButton({
           ? `Delete master ${sku} (cascades to its variants + listings)`
           : `Delete variant ${sku}`
       }
-      className="w-full h-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+      className="w-full h-full flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
     >
       <Trash2 className="w-3 h-3" />
     </button>
@@ -3294,7 +3294,7 @@ export default function BulkOperationsClient() {
           even though they are at z-30 internally. Elevating the whole
           toolbar wrapper above the table's SC keeps the popovers
           visually on top whenever they expand downward over the grid. */}
-      <div className="flex-shrink-0 mb-3 flex flex-col gap-1.5 px-1 pb-2 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 relative z-30">
+      <div className="flex-shrink-0 mb-3 flex flex-col gap-1.5 px-1 pb-2 border-b border-default dark:border-slate-700 bg-white dark:bg-slate-900 relative z-30">
         {/* ── Row 1 — primary scope + write actions ─────────────────── */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* Left: scope */}
@@ -3311,19 +3311,19 @@ export default function BulkOperationsClient() {
             <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" aria-hidden="true" />
 
             <div className="relative flex items-center">
-              <Search className="absolute left-2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500 pointer-events-none" />
+              <Search className="absolute left-2 w-3.5 h-3.5 text-tertiary dark:text-slate-500 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search SKU, name, brand…"
-                className="h-7 pl-7 pr-7 text-base border border-slate-200 dark:border-slate-700 rounded-md w-40 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="h-7 pl-7 pr-7 text-base border border-default dark:border-slate-700 rounded-md w-40 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-1.5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                  className="absolute right-1.5 text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                   aria-label="Clear search"
                 >
                   <X className="w-3 h-3" />
@@ -3437,7 +3437,7 @@ export default function BulkOperationsClient() {
           {/* Left: history. V.2 — count badges show stack depth at a
               glance so undo/redo state is visible in real time. */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="flex items-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded-md">
+            <div className="flex items-center gap-0.5 border border-default dark:border-slate-700 rounded-md">
               <button
                 type="button"
                 onClick={undo}
@@ -3496,7 +3496,7 @@ export default function BulkOperationsClient() {
                 'h-7 px-2 inline-flex items-center gap-1 rounded border text-xs font-medium transition-colors',
                 conditionalRules.some((r) => r.enabled)
                   ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/60'
-                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+                  : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
               )}
             >
               <Wand2 className="w-3 h-3" />
@@ -3526,7 +3526,7 @@ export default function BulkOperationsClient() {
                   'h-7 px-1.5 text-xs border rounded',
                   groupByColumnId
                     ? 'bg-purple-50 border-purple-300 text-purple-700'
-                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400',
+                    : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-600 dark:text-slate-400',
                 )}
               >
                 <option value="">Group: (none)</option>
@@ -3642,7 +3642,7 @@ export default function BulkOperationsClient() {
                   'inline-flex items-center gap-1 h-7 px-2 text-sm font-medium border rounded-md transition-colors',
                   updateFlash === 'saved'
                     ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
-                    : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                    : 'border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
                 )}
               >
                 {updateFlash === 'saving'
@@ -3657,7 +3657,7 @@ export default function BulkOperationsClient() {
                 type="button"
                 onClick={resetColumnWidths}
                 title="Reset column widths to defaults"
-                className="inline-flex items-center gap-1 h-7 px-2 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+                className="inline-flex items-center gap-1 h-7 px-2 text-slate-600 dark:text-slate-400 border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
               >
                 <RotateCcw className="w-3 h-3" />
                 Reset widths
@@ -3667,8 +3667,8 @@ export default function BulkOperationsClient() {
                 it's always reachable; clicking the band chevrons one
                 by one is fine for a few groups but tedious past 5+. */}
             {groupedFields.length > 1 && (
-              <div className="inline-flex items-center gap-0.5 h-7 px-1 text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900">
-                <span className="px-1.5 text-slate-400 dark:text-slate-500">Groups</span>
+              <div className="inline-flex items-center gap-0.5 h-7 px-1 text-sm text-slate-600 dark:text-slate-400 border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900">
+                <span className="px-1.5 text-tertiary dark:text-slate-500">Groups</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -3719,7 +3719,7 @@ export default function BulkOperationsClient() {
 
       <div
         ref={containerRef}
-        className="flex-1 min-h-0 overflow-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg select-none relative"
+        className="flex-1 min-h-0 overflow-auto bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg select-none relative"
         style={{ contain: 'strict' }}
       >
         {/* U.9 — empty-grid overlay. The virtualized table renders no
@@ -3732,7 +3732,7 @@ export default function BulkOperationsClient() {
         {!loading && !error && filteredProducts.length === 0 && (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/95 pointer-events-none">
             <div className="max-w-md w-full mx-6 text-center pointer-events-auto">
-              <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 mb-3">
+              <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 border border-default dark:border-slate-700 mb-3">
                 <Search className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               </div>
               {products.length > 0 ? (
@@ -3771,7 +3771,7 @@ export default function BulkOperationsClient() {
                     <button
                       type="button"
                       onClick={() => setNewProductOpen(true)}
-                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
                     >
                       New product
                     </button>
@@ -3788,7 +3788,7 @@ export default function BulkOperationsClient() {
             the table. */}
         {groupedFields.length > 0 && (
           <div
-            className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex"
+            className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-default dark:border-slate-700 flex"
             style={{ minWidth: tableMinWidth, height: 28 }}
           >
             {groupedFields.map((g) => {
@@ -3871,7 +3871,7 @@ export default function BulkOperationsClient() {
                   }}
                   style={{ width, flexShrink: 0, minWidth: 80 }}
                   className={cn(
-                    'relative border-r border-slate-200/70 last:border-r-0',
+                    'relative border-r border-default/70 last:border-r-0',
                     draggedGroupKey === g.key && 'opacity-40',
                   )}
                 >
@@ -3920,7 +3920,7 @@ export default function BulkOperationsClient() {
           </div>
         )}
         <div
-          className="sticky z-20 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex"
+          className="sticky z-20 bg-slate-50 dark:bg-slate-800 border-b border-default dark:border-slate-700 flex"
           style={{
             top: groupedFields.length > 0 ? 28 : 0,
             height: HEADER_HEIGHT,
@@ -4049,14 +4049,14 @@ export default function BulkOperationsClient() {
                       header.column.id === 'sku' ||
                       header.column.id === '__actions'
                     ) {
-                      return 'border-r border-slate-200/70 last:border-r-0 text-slate-700 dark:text-slate-300'
+                      return 'border-r border-default/70 last:border-r-0 text-slate-700 dark:text-slate-300'
                     }
                     return cn(
                       tone.band,
                       tone.text,
                       tone.isGroupEdge
                         ? 'border-r-2'
-                        : 'border-r border-slate-200/70',
+                        : 'border-r border-default/70',
                     )
                   })(),
                   isDraggable && 'cursor-grab active:cursor-grabbing',
@@ -4108,7 +4108,7 @@ export default function BulkOperationsClient() {
                     the column is draggable. */}
                 {isDraggable && (
                   <span
-                    className="text-slate-400 dark:text-slate-500 flex-shrink-0"
+                    className="text-tertiary dark:text-slate-500 flex-shrink-0"
                     aria-hidden="true"
                     title="Drag to reorder"
                   >
@@ -4147,7 +4147,7 @@ export default function BulkOperationsClient() {
                 })()}
                 {isReadOnly && (
                   <Lock
-                    className="w-2.5 h-2.5 text-slate-400 dark:text-slate-500 flex-shrink-0"
+                    className="w-2.5 h-2.5 text-tertiary dark:text-slate-500 flex-shrink-0"
                     aria-label="Read-only"
                   />
                 )}

@@ -779,7 +779,7 @@ export const EditableCell = memo(
               value={hex}
               onChange={(e) => setDraftValue(e.target.value.toLowerCase())}
               onBlur={handleBlur}
-              className="w-7 border-r border-slate-200 dark:border-slate-700 cursor-pointer"
+              className="w-7 border-r border-default dark:border-slate-700 cursor-pointer"
               aria-label="Pick color"
             />
             <input
@@ -872,7 +872,7 @@ export const EditableCell = memo(
         const code = (meta.currency ?? 'EUR').toUpperCase()
         return (
           <div className="w-full h-full flex items-stretch bg-white dark:bg-slate-900 ring-2 ring-blue-500">
-            <span className="flex items-center px-2 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700">
+            <span className="flex items-center px-2 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border-r border-default dark:border-slate-700">
               {code}
             </span>
             <input
@@ -1011,7 +1011,7 @@ export const EditableCell = memo(
           )}
         >
           <span
-            className="text-[10px] text-slate-400 dark:text-slate-500 font-mono select-none flex-shrink-0"
+            className="text-[10px] text-tertiary dark:text-slate-500 font-mono select-none flex-shrink-0"
             aria-hidden="true"
           >
             {icon}
@@ -1076,7 +1076,7 @@ export const EditableCell = memo(
               {visible.map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center max-w-[120px] truncate px-1.5 py-0.5 text-xs rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                  className="inline-flex items-center max-w-[120px] truncate px-1.5 py-0.5 text-xs rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700"
                 >
                   {tag}
                 </span>
@@ -1327,7 +1327,7 @@ export const EditableCell = memo(
           {b === true ? (
             <span className="text-emerald-600 dark:text-emerald-400 font-semibold" aria-label="True">✓</span>
           ) : b === false ? (
-            <span className="text-slate-400 dark:text-slate-500 font-semibold" aria-label="False">✗</span>
+            <span className="text-tertiary dark:text-slate-500 font-semibold" aria-label="False">✗</span>
           ) : (
             <span className="text-slate-300 dark:text-slate-600">—</span>
           )}
@@ -1403,7 +1403,7 @@ function ImageCellThumb({ url }: { url: string }) {
     <>
       {failed ? (
         <span
-          className="w-7 h-7 flex items-center justify-center rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 text-[10px]"
+          className="w-7 h-7 flex items-center justify-center rounded bg-slate-100 dark:bg-slate-800 border border-default dark:border-slate-700 text-tertiary dark:text-slate-500 text-[10px]"
           aria-label="Broken image"
           title="Broken image"
         >
@@ -1416,7 +1416,7 @@ function ImageCellThumb({ url }: { url: string }) {
           alt=""
           loading="lazy"
           onError={() => setFailed(true)}
-          className="w-7 h-7 object-cover rounded border border-slate-200 dark:border-slate-700 flex-shrink-0"
+          className="w-7 h-7 object-cover rounded border border-default dark:border-slate-700 flex-shrink-0"
         />
       )}
       <span className="truncate text-xs text-slate-600 dark:text-slate-400">{filename}</span>

@@ -115,7 +115,7 @@ function ImageHeaderWithText({
           unoptimized
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-slate-400">
+        <div className="flex h-full w-full items-center justify-center text-tertiary">
           <ImageIcon className="w-8 h-8" />
         </div>
       )}
@@ -132,7 +132,7 @@ function ImageHeaderWithText({
         </div>
       )}
       {!imageUrl && !headline && !subhead && (
-        <p className="absolute inset-0 flex items-center justify-center text-xs text-slate-400">
+        <p className="absolute inset-0 flex items-center justify-center text-xs text-tertiary">
           {t('aplus.builder.preview.headerHint')}
         </p>
       )}
@@ -176,7 +176,7 @@ function ImageGallery4({
                 unoptimized
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-slate-400">
+              <div className="flex h-full w-full items-center justify-center text-tertiary">
                 <ImageIcon className="w-5 h-5" />
               </div>
             )}
@@ -184,7 +184,7 @@ function ImageGallery4({
         )
       })}
       {list.length === 0 && (
-        <p className="col-span-2 text-center text-[11px] text-slate-400">
+        <p className="col-span-2 text-center text-[11px] text-tertiary">
           {t('aplus.builder.preview.galleryHint')}
         </p>
       )}
@@ -210,13 +210,13 @@ function Faq({ payload }: { payload: Record<string, unknown> }) {
       </p>
     )
   return (
-    <ul className="space-y-1.5 rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/50">
+    <ul className="space-y-1.5 rounded-md border border-default bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/50">
       {items.map((qa, idx) => (
         <li key={idx} className="space-y-0.5">
           <p className="flex items-start gap-1 text-xs font-semibold text-slate-900 dark:text-slate-100">
             <MessageSquare className="w-3.5 h-3.5 flex-shrink-0 text-blue-500" />
             {qa.question || (
-              <span className="italic text-slate-400">
+              <span className="italic text-tertiary">
                 {t('aplus.builder.preview.faqEmptyQuestion')}
               </span>
             )}
@@ -244,7 +244,7 @@ function StandardImageText({
   const headline = (payload.headline as string) || ''
   const body = (payload.body as string) || ''
   return (
-    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 rounded-md border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 rounded-md border border-default bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
       <div className="relative aspect-square overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
         {url ? (
           <Image
@@ -256,7 +256,7 @@ function StandardImageText({
             unoptimized
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-slate-400">
+          <div className="flex h-full w-full items-center justify-center text-tertiary">
             <ImageIcon className="w-5 h-5" />
           </div>
         )}
@@ -267,7 +267,7 @@ function StandardImageText({
             {headline}
           </p>
         ) : (
-          <p className="text-xs italic text-slate-400">
+          <p className="text-xs italic text-tertiary">
             {t('aplus.builder.preview.headlineHint')}
           </p>
         )}
@@ -276,7 +276,7 @@ function StandardImageText({
             {body}
           </p>
         ) : (
-          <p className="text-xs italic text-slate-400">
+          <p className="text-xs italic text-tertiary">
             {t('aplus.builder.preview.bodyHint')}
           </p>
         )}
@@ -301,7 +301,7 @@ function SingleImageSidebar({
       )
     : []
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_180px] gap-3 rounded-md border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+    <div className="grid grid-cols-[minmax(0,1fr)_180px] gap-3 rounded-md border border-default bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
       <div className="relative aspect-square overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
         {url ? (
           <Image
@@ -313,7 +313,7 @@ function SingleImageSidebar({
             unoptimized
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-slate-400">
+          <div className="flex h-full w-full items-center justify-center text-tertiary">
             <ImageIcon className="w-6 h-6" />
           </div>
         )}
@@ -321,12 +321,12 @@ function SingleImageSidebar({
       <div className="flex flex-col gap-1.5">
         <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
           {headline ||
-            <span className="italic text-slate-400">
+            <span className="italic text-tertiary">
               {t('aplus.builder.preview.sidebarHeadlineHint')}
             </span>}
         </p>
         {items.length === 0 ? (
-          <p className="text-xs italic text-slate-400">
+          <p className="text-xs italic text-tertiary">
             {t('aplus.builder.preview.sidebarItemsHint')}
           </p>
         ) : (
@@ -364,7 +364,7 @@ function MultipleImageTextPanels({
     : []
   if (panels.length === 0)
     return (
-      <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs italic text-slate-400 dark:border-slate-700 dark:bg-slate-800/50">
+      <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs italic text-tertiary dark:border-slate-700 dark:bg-slate-800/50">
         {t('aplus.builder.preview.panelsHint')}
       </p>
     )
@@ -382,7 +382,7 @@ function MultipleImageTextPanels({
         return (
           <div
             key={idx}
-            className="space-y-1 rounded-md border border-slate-200 bg-white p-1.5 dark:border-slate-700 dark:bg-slate-900"
+            className="space-y-1 rounded-md border border-default bg-white p-1.5 dark:border-slate-700 dark:bg-slate-900"
           >
             <div className="relative aspect-square overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
               {url ? (
@@ -395,7 +395,7 @@ function MultipleImageTextPanels({
                   unoptimized
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center text-slate-400">
+                <div className="flex h-full w-full items-center justify-center text-tertiary">
                   <ImageIcon className="w-4 h-4" />
                 </div>
               )}
@@ -437,7 +437,7 @@ function ComparisonChart({
     : []
   if (asins.length === 0 && attributes.length === 0)
     return (
-      <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs italic text-slate-400 dark:border-slate-700 dark:bg-slate-800/50">
+      <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs italic text-tertiary dark:border-slate-700 dark:bg-slate-800/50">
         {t('aplus.builder.preview.comparisonHint')}
       </p>
     )
@@ -446,7 +446,7 @@ function ComparisonChart({
   const cols = [...asins.slice(0, columns)]
   while (cols.length < columns) cols.push('')
   return (
-    <div className="overflow-x-auto rounded-md border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+    <div className="overflow-x-auto rounded-md border border-default bg-white dark:border-slate-700 dark:bg-slate-900">
       <table className="w-full text-xs">
         <thead className="bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
           <tr>
@@ -459,7 +459,7 @@ function ComparisonChart({
                 className="px-2 py-1 text-left font-mono text-[11px]"
               >
                 {asin || (
-                  <span className="italic text-slate-400">
+                  <span className="italic text-tertiary">
                     ASIN {idx + 1}
                   </span>
                 )}
@@ -471,11 +471,11 @@ function ComparisonChart({
           {(attributes.length ? attributes : ['—']).map((attr, rowIdx) => (
             <tr
               key={rowIdx}
-              className="border-t border-slate-100 dark:border-slate-800"
+              className="border-t border-subtle dark:border-slate-800"
             >
               <td className="px-2 py-1 font-medium text-slate-700 dark:text-slate-300">
                 {attr || (
-                  <span className="italic text-slate-400">
+                  <span className="italic text-tertiary">
                     {t('aplus.builder.preview.comparisonAttrPlaceholder')}
                   </span>
                 )}
@@ -509,12 +509,12 @@ function BulletedListWithImages({
     : []
   if (items.length === 0)
     return (
-      <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs italic text-slate-400 dark:border-slate-700 dark:bg-slate-800/50">
+      <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs italic text-tertiary dark:border-slate-700 dark:bg-slate-800/50">
         {t('aplus.builder.preview.bulletedHint')}
       </p>
     )
   return (
-    <ul className="space-y-1.5 rounded-md border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+    <ul className="space-y-1.5 rounded-md border border-default bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
       {items.slice(0, 6).map((item, idx) => {
         const url = resolveAssetUrl(item.assetId) ?? item.url ?? null
         return (
@@ -530,7 +530,7 @@ function BulletedListWithImages({
                   unoptimized
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center text-slate-400">
+                <div className="flex h-full w-full items-center justify-center text-tertiary">
                   <ImageIcon className="w-4 h-4" />
                 </div>
               )}
@@ -611,13 +611,13 @@ function PremiumImageTextImage({
   const right = resolveAssetUrl(payload.rightAssetId)
   const body = (payload.body as string) || ''
   return (
-    <div className="grid grid-cols-3 gap-2 rounded-md border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+    <div className="grid grid-cols-3 gap-2 rounded-md border border-default bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
       <Bookend url={left} alt="Left image" />
       <div className="flex items-center justify-center text-center text-xs text-slate-700 dark:text-slate-300">
         {body ? (
           <p className="line-clamp-6">{body}</p>
         ) : (
-          <p className="italic text-slate-400">
+          <p className="italic text-tertiary">
             {t('aplus.builder.preview.itiHint')}
           </p>
         )}
@@ -640,7 +640,7 @@ function Bookend({ url, alt }: { url: string | null; alt: string }) {
           unoptimized
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-slate-400">
+        <div className="flex h-full w-full items-center justify-center text-tertiary">
           <ImageIcon className="w-5 h-5" />
         </div>
       )}
@@ -661,7 +661,7 @@ function PremiumDynamicCarousel({
     : []
   if (slides.length === 0)
     return (
-      <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs italic text-slate-400 dark:border-slate-700 dark:bg-slate-800/50">
+      <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs italic text-tertiary dark:border-slate-700 dark:bg-slate-800/50">
         {t('aplus.builder.preview.carouselHint')}
       </p>
     )
@@ -669,7 +669,7 @@ function PremiumDynamicCarousel({
   // operator a sense of how the live carousel paginates without
   // building an actual auto-advance loop in the canvas.
   return (
-    <div className="relative rounded-md border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+    <div className="relative rounded-md border border-default bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
       <div className="flex gap-2 overflow-x-auto pb-1.5">
         {slides.map((slide, idx) => {
           const url = resolveAssetUrl(slide.assetId) ?? slide.url ?? null
@@ -690,7 +690,7 @@ function PremiumDynamicCarousel({
                     unoptimized
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-slate-400">
+                  <div className="flex h-full w-full items-center justify-center text-tertiary">
                     <ImageIcon className="w-4 h-4" />
                   </div>
                 )}
@@ -728,12 +728,12 @@ function PremiumQa({ payload }: { payload: Record<string, unknown> }) {
     : []
   if (items.length === 0)
     return (
-      <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs italic text-slate-400 dark:border-slate-700 dark:bg-slate-800/50">
+      <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs italic text-tertiary dark:border-slate-700 dark:bg-slate-800/50">
         {t('aplus.builder.preview.premiumQaHint')}
       </p>
     )
   return (
-    <ul className="space-y-2 rounded-md border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+    <ul className="space-y-2 rounded-md border border-default bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
       {items.map((qa, idx) => (
         <li
           key={idx}
@@ -742,7 +742,7 @@ function PremiumQa({ payload }: { payload: Record<string, unknown> }) {
           <p className="flex items-start gap-1 text-xs font-semibold text-slate-900 dark:text-slate-100">
             <Quote className="w-3 h-3 flex-shrink-0 mt-0.5 text-blue-500" />
             {qa.question || (
-              <span className="italic text-slate-400">
+              <span className="italic text-tertiary">
                 {t('aplus.builder.preview.faqEmptyQuestion')}
               </span>
             )}
@@ -790,7 +790,7 @@ function PremiumImageHotspots({
             unoptimized
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-slate-400">
+          <div className="flex h-full w-full items-center justify-center text-tertiary">
             <ImageIcon className="w-8 h-8" />
           </div>
         )}
@@ -819,7 +819,7 @@ function PremiumImageHotspots({
         })}
       </div>
       {hotspots.length === 0 ? (
-        <p className="text-xs italic text-slate-400">
+        <p className="text-xs italic text-tertiary">
           {t('aplus.builder.preview.hotspotsHint')}
         </p>
       ) : (
@@ -861,7 +861,7 @@ function PremiumTextOverlay({
           unoptimized
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-slate-400">
+        <div className="flex h-full w-full items-center justify-center text-tertiary">
           <ImageIcon className="w-8 h-8" />
         </div>
       )}
@@ -900,14 +900,14 @@ function PremiumBrandStory({
     : []
   if (sections.length === 0)
     return (
-      <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs italic text-slate-400 dark:border-slate-700 dark:bg-slate-800/50">
+      <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs italic text-tertiary dark:border-slate-700 dark:bg-slate-800/50">
         {t('aplus.builder.preview.brandStoryHint')}
       </p>
     )
   // Vertical scrolling narrative — each section renders full-bleed
   // then text underneath.
   return (
-    <div className="space-y-2 rounded-md border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+    <div className="space-y-2 rounded-md border border-default bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
       {sections.slice(0, 5).map((section, idx) => {
         const url = resolveAssetUrl(section.assetId) ?? section.url ?? null
         return (
@@ -923,7 +923,7 @@ function PremiumBrandStory({
                   unoptimized
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center text-slate-400">
+                <div className="flex h-full w-full items-center justify-center text-tertiary">
                   <ImageIcon className="w-6 h-6" />
                 </div>
               )}

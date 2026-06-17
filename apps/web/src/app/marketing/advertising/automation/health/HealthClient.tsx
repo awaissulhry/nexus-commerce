@@ -26,7 +26,7 @@ const STATUS_CHIP: Record<string, string> = {
 
 function Tile({ label, value, sub, tone = 'slate' }: { label: string; value: string | number; sub?: string; tone?: string }) {
   const c = tone === 'emerald' ? 'text-emerald-600' : tone === 'amber' ? 'text-amber-600' : tone === 'rose' ? 'text-rose-600' : 'text-slate-900 dark:text-slate-100'
-  return <div className="rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2"><div className="text-xs text-slate-500">{label}</div><div className={`text-lg font-semibold ${c}`}>{value}</div>{sub && <div className="text-[11px] text-slate-400">{sub}</div>}</div>
+  return <div className="rounded-lg border border-default dark:border-slate-800 px-3 py-2"><div className="text-xs text-slate-500">{label}</div><div className={`text-lg font-semibold ${c}`}>{value}</div>{sub && <div className="text-[11px] text-tertiary">{sub}</div>}</div>
 }
 
 export function HealthClient() {
@@ -65,15 +65,15 @@ export function HealthClient() {
             </div>
           )}
 
-          <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="rounded-lg border border-default dark:border-slate-800 overflow-hidden">
             <div className="px-3 py-2 bg-slate-50 dark:bg-slate-900/60 text-xs font-medium text-slate-600 dark:text-slate-300">Recent executions</div>
             <table className="w-full text-sm">
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {h.recent.length === 0 ? <tr><td className="px-3 py-6 text-center text-slate-400 text-xs">No executions yet — enable a rule to start.</td></tr> : h.recent.map((e) => (
+                {h.recent.length === 0 ? <tr><td className="px-3 py-6 text-center text-tertiary text-xs">No executions yet — enable a rule to start.</td></tr> : h.recent.map((e) => (
                   <tr key={e.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
                     <td className="px-3 py-1.5">{e.ruleName}</td>
                     <td className="px-3 py-1.5"><span className={`px-1.5 py-0.5 rounded text-[11px] ${STATUS_CHIP[e.status] ?? STATUS_CHIP.NO_MATCH}`}>{e.status.toLowerCase().replace('_', ' ')}</span>{e.error ? <span className="text-xs text-rose-500 ml-2">{e.error}</span> : null}</td>
-                    <td className="px-3 py-1.5 text-right text-xs text-slate-400">{new Date(e.startedAt).toLocaleString()}</td>
+                    <td className="px-3 py-1.5 text-right text-xs text-tertiary">{new Date(e.startedAt).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

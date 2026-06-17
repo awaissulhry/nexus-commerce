@@ -36,7 +36,7 @@ export function ReviewsNav() {
   const pathname = usePathname()
   const isAdvanced = ADVANCED_PREFIXES.some((p) => pathname.startsWith(p))
   return (
-    <div className="border-b border-slate-200 dark:border-slate-800 mb-4">
+    <div className="border-b border-default dark:border-slate-800 mb-4">
       <nav>
         <ul className="flex items-center gap-1 -mb-px">
           {TABS.map((tab) => {

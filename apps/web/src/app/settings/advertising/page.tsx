@@ -250,7 +250,7 @@ export default function AdvertisingSettingsPage() {
 
       {/* Existing connections */}
       {loading ? (
-        <Card><div className="py-8 text-center text-slate-400 text-sm flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div></Card>
+        <Card><div className="py-8 text-center text-tertiary text-sm flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div></Card>
       ) : connections.length > 0 ? (
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Active Connections</h2>
@@ -282,7 +282,7 @@ export default function AdvertisingSettingsPage() {
                     </div>
                   )}
                   {/* MM.1 — make the 3-step go-live path explicit */}
-                  <div className="text-xs text-slate-400">
+                  <div className="text-xs text-tertiary">
                     {conn.mode !== 'production'
                       ? 'Next: Promote to production →'
                       : !conn.writesEnabledAt
@@ -294,7 +294,7 @@ export default function AdvertisingSettingsPage() {
                   <button
                     onClick={() => handleTest(conn.profileId)}
                     disabled={testing === conn.profileId}
-                    className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    className="inline-flex items-center gap-1 rounded border border-default bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                   >
                     {testing === conn.profileId ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                     Test
@@ -312,7 +312,7 @@ export default function AdvertisingSettingsPage() {
                     <button
                       onClick={() => handleSetMode(conn.profileId, conn.marketplace, 'sandbox')}
                       disabled={busyAction === conn.profileId}
-                      className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                      className="inline-flex items-center gap-1 rounded border border-default bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
                     >
                       <Undo2 className="h-3 w-3" /> Back to sandbox
                     </button>
@@ -372,9 +372,9 @@ export default function AdvertisingSettingsPage() {
                 placeholder="e.g. 4141223456789012"
                 value={form.profileId}
                 onChange={(e) => setForm((f) => ({ ...f, profileId: e.target.value }))}
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-md border border-default px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
-              <p className="mt-1 text-xs text-slate-400">Find via GET /v2/profiles in sandbox</p>
+              <p className="mt-1 text-xs text-tertiary">Find via GET /v2/profiles in sandbox</p>
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Account Label</label>
@@ -383,7 +383,7 @@ export default function AdvertisingSettingsPage() {
                 placeholder="e.g. Xavia IT"
                 value={form.accountLabel}
                 onChange={(e) => setForm((f) => ({ ...f, accountLabel: e.target.value }))}
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-md border border-default px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -394,7 +394,7 @@ export default function AdvertisingSettingsPage() {
               <select
                 value={form.marketplace}
                 onChange={(e) => setForm((f) => ({ ...f, marketplace: e.target.value }))}
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-md border border-default px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 {MARKETPLACE_OPTIONS.map((m) => (
                   <option key={m.value} value={m.value}>{m.label}</option>
@@ -406,7 +406,7 @@ export default function AdvertisingSettingsPage() {
               <select
                 value={form.region}
                 onChange={(e) => setForm((f) => ({ ...f, region: e.target.value }))}
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-md border border-default px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 {REGION_OPTIONS.map((r) => (
                   <option key={r.value} value={r.value}>{r.label}</option>
@@ -415,7 +415,7 @@ export default function AdvertisingSettingsPage() {
             </div>
           </div>
 
-          <hr className="border-slate-100" />
+          <hr className="border-subtle" />
 
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">LWA Credentials</span>
@@ -437,7 +437,7 @@ export default function AdvertisingSettingsPage() {
               placeholder="amzn1.application-oa2-client...."
               value={form.clientId}
               onChange={(e) => setForm((f) => ({ ...f, clientId: e.target.value }))}
-              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-md border border-default px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
@@ -448,7 +448,7 @@ export default function AdvertisingSettingsPage() {
               required
               value={form.clientSecret}
               onChange={(e) => setForm((f) => ({ ...f, clientSecret: e.target.value }))}
-              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-md border border-default px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
@@ -460,9 +460,9 @@ export default function AdvertisingSettingsPage() {
               placeholder="Atzr|..."
               value={form.refreshToken}
               onChange={(e) => setForm((f) => ({ ...f, refreshToken: e.target.value }))}
-              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-md border border-default px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-tertiary">
               Requires <code className="font-mono">advertising::campaign_management</code> scope — separate from your SP-API refresh token
             </p>
           </div>

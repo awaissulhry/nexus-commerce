@@ -453,7 +453,7 @@ export default function AutomationClient() {
             <Wand2 className="w-3.5 h-3.5 text-purple-500" />
             Rules
             {rules.length > 0 && (
-              <span className="text-xs text-slate-400 tabular-nums">
+              <span className="text-xs text-tertiary tabular-nums">
                 {rules.length}
               </span>
             )}
@@ -474,7 +474,7 @@ export default function AutomationClient() {
             Loading…
           </div>
         ) : rules.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center text-sm text-slate-500">
+          <div className="bg-white dark:bg-slate-900 border border-dashed border-default dark:border-slate-800 rounded p-4 text-center text-sm text-slate-500">
             No rules yet. Hit <strong>+ New</strong> and configure your
             first trigger / conditions / actions stack.
           </div>
@@ -489,7 +489,7 @@ export default function AutomationClient() {
                   'w-full text-left rounded border px-2 py-1.5 transition-colors',
                   editingId === r.id
                     ? 'border-purple-300 bg-purple-50 dark:bg-purple-950/40'
-                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800',
+                    : 'border-default dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800',
                 )}
               >
                 <div className="flex items-center gap-1.5">
@@ -506,7 +506,7 @@ export default function AutomationClient() {
                   <span className="text-sm font-medium truncate flex-1">
                     {r.name}
                   </span>
-                  <ChevronRight className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                  <ChevronRight className="w-3 h-3 text-tertiary flex-shrink-0" />
                 </div>
                 <div className="flex items-center gap-1 mt-0.5">
                   <Badge variant="default" size="sm">
@@ -523,7 +523,7 @@ export default function AutomationClient() {
                     </Badge>
                   )}
                 </div>
-                <div className="text-[10px] text-slate-400 mt-0.5 tabular-nums">
+                <div className="text-[10px] text-tertiary mt-0.5 tabular-nums">
                   {r.executionCount} exec · {r.matchCount} match · {r.evaluationCount} eval
                 </div>
               </button>
@@ -533,7 +533,7 @@ export default function AutomationClient() {
       </div>
 
       {/* ── Right: builder ────────────────────────────────────── */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 space-y-4">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-4 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 inline-flex items-center gap-1.5">
             <Sparkles className="w-4 h-4 text-amber-500" />
@@ -549,7 +549,7 @@ export default function AutomationClient() {
                     <button
                       type="button"
                       onClick={() => setEnabled(r, !r.enabled)}
-                      className="h-7 px-2 text-xs font-medium border border-slate-200 dark:border-slate-700 rounded inline-flex items-center gap-1 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      className="h-7 px-2 text-xs font-medium border border-default dark:border-slate-700 rounded inline-flex items-center gap-1 hover:bg-slate-50 dark:hover:bg-slate-800"
                     >
                       {r.enabled ? (
                         <>
@@ -585,7 +585,7 @@ export default function AutomationClient() {
             value={draft.name}
             onChange={(e) => setDraft({ ...draft, name: e.target.value })}
             placeholder='e.g. "Pause schedules on failure burst"'
-            className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
         </label>
 
@@ -598,19 +598,19 @@ export default function AutomationClient() {
             value={draft.description}
             onChange={(e) => setDraft({ ...draft, description: e.target.value })}
             placeholder="What this rule does (optional)"
-            className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
         </label>
 
         {/* Trigger panel */}
-        <section className="border border-slate-200 dark:border-slate-800 rounded p-2 space-y-1.5">
+        <section className="border border-default dark:border-slate-800 rounded p-2 space-y-1.5">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             1. Trigger
           </div>
           <select
             value={draft.trigger}
             onChange={(e) => setDraft({ ...draft, trigger: e.target.value })}
-            className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded"
+            className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
           >
             {TRIGGERS.map((t) => (
               <option key={t.id} value={t.id}>
@@ -624,7 +624,7 @@ export default function AutomationClient() {
         </section>
 
         {/* Conditions panel */}
-        <section className="border border-slate-200 dark:border-slate-800 rounded p-2 space-y-1.5">
+        <section className="border border-default dark:border-slate-800 rounded p-2 space-y-1.5">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center justify-between">
             <span>2. Conditions (all must match)</span>
             <button
@@ -659,7 +659,7 @@ export default function AutomationClient() {
                   setDraft({ ...draft, conditions: next })
                 }}
                 placeholder="job.failureRate"
-                className="flex-1 h-7 px-2 text-xs font-mono border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded"
+                className="flex-1 h-7 px-2 text-xs font-mono border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
               />
               <select
                 value={c.op}
@@ -668,7 +668,7 @@ export default function AutomationClient() {
                   next[i] = { ...c, op: e.target.value }
                   setDraft({ ...draft, conditions: next })
                 }}
-                className="h-7 px-1.5 text-xs border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded"
+                className="h-7 px-1.5 text-xs border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
               >
                 {COMMON_OPS.map((op) => (
                   <option key={op} value={op}>
@@ -685,7 +685,7 @@ export default function AutomationClient() {
                   setDraft({ ...draft, conditions: next })
                 }}
                 placeholder="0.2"
-                className="flex-1 h-7 px-2 text-xs border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded"
+                className="flex-1 h-7 px-2 text-xs border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
               />
               <button
                 type="button"
@@ -705,7 +705,7 @@ export default function AutomationClient() {
         </section>
 
         {/* Actions panel */}
-        <section className="border border-slate-200 dark:border-slate-800 rounded p-2 space-y-1.5">
+        <section className="border border-default dark:border-slate-800 rounded p-2 space-y-1.5">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center justify-between">
             <span>3. Actions (in order)</span>
             <button
@@ -730,7 +730,7 @@ export default function AutomationClient() {
           {draft.actions.map((a, i) => (
             <div
               key={i}
-              className="border border-slate-100 dark:border-slate-800 rounded p-1.5 space-y-1"
+              className="border border-subtle dark:border-slate-800 rounded p-1.5 space-y-1"
             >
               <div className="flex items-center gap-1.5">
                 <select
@@ -740,7 +740,7 @@ export default function AutomationClient() {
                     next[i] = { type: e.target.value }
                     setDraft({ ...draft, actions: next })
                   }}
-                  className="flex-1 h-7 px-1.5 text-xs border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded"
+                  className="flex-1 h-7 px-1.5 text-xs border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
                 >
                   {ACTION_TYPES.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -762,7 +762,7 @@ export default function AutomationClient() {
                   <X className="w-3 h-3" />
                 </button>
               </div>
-              <div className="text-[10px] text-slate-400 pl-1">
+              <div className="text-[10px] text-tertiary pl-1">
                 {ACTION_TYPES.find((t) => t.id === a.type)?.helpText}
               </div>
             </div>
@@ -770,7 +770,7 @@ export default function AutomationClient() {
         </section>
 
         {/* Safety controls */}
-        <section className="border border-slate-200 dark:border-slate-800 rounded p-2 space-y-1.5">
+        <section className="border border-default dark:border-slate-800 rounded p-2 space-y-1.5">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             4. Safety
           </div>
@@ -807,7 +807,7 @@ export default function AutomationClient() {
                   maxExecutionsPerDay: v === '' ? null : Number(v),
                 })
               }}
-              className="w-full h-7 px-2 text-xs border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded tabular-nums"
+              className="w-full h-7 px-2 text-xs border border-default dark:border-slate-700 dark:bg-slate-900 rounded tabular-nums"
             />
           </label>
         </section>
@@ -830,7 +830,7 @@ export default function AutomationClient() {
                 value={contextJson}
                 onChange={(e) => setContextJson(e.target.value)}
                 rows={5}
-                className="w-full font-mono text-xs px-2 py-1 border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full font-mono text-xs px-2 py-1 border border-default dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </label>
             {contextError && (
@@ -943,7 +943,7 @@ export default function AutomationClient() {
                 <button
                   type="button"
                   onClick={() => decideApproval(a.id, 'reject')}
-                  className="h-7 px-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded inline-flex items-center gap-1"
+                  className="h-7 px-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-default dark:border-slate-700 rounded inline-flex items-center gap-1"
                 >
                   <XCircle className="w-3 h-3" />
                   Reject
@@ -955,7 +955,7 @@ export default function AutomationClient() {
 
         {/* W7.8 — Execution history for the active rule. */}
         {editingId && (
-          <section className="border border-slate-200 dark:border-slate-800 rounded p-2 space-y-1.5">
+          <section className="border border-default dark:border-slate-800 rounded p-2 space-y-1.5">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 inline-flex items-center gap-1.5 justify-between">
               <span className="inline-flex items-center gap-1.5">
                 <HistoryIcon className="w-3 h-3" />
@@ -992,7 +992,7 @@ export default function AutomationClient() {
                       (e.status === 'NO_MATCH' ||
                         e.status === 'CAP_EXCEEDED' ||
                         e.status === 'PARTIAL') &&
-                        'border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40',
+                        'border-default dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40',
                     )}
                   >
                     <span

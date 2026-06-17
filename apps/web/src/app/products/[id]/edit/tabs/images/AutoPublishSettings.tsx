@@ -94,7 +94,7 @@ export default function AutoPublishSettings({ productId, availableChannels, onCh
         size="sm"
         variant="ghost"
         onClick={() => setOpen((p) => !p)}
-        className="gap-1.5 border border-slate-200 dark:border-slate-700"
+        className="gap-1.5 border border-default dark:border-slate-700"
         title="Auto-publish settings"
       >
         <Settings className="w-3.5 h-3.5" />
@@ -111,7 +111,7 @@ export default function AutoPublishSettings({ productId, availableChannels, onCh
         <div
           role="menu"
           aria-label="Auto-publish settings"
-          className="absolute right-0 bottom-10 z-30 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-2 min-w-[300px] text-sm"
+          className="absolute right-0 bottom-10 z-30 bg-white dark:bg-slate-800 border border-default dark:border-slate-700 rounded-xl shadow-xl py-2 min-w-[300px] text-sm"
         >
           <div className="px-3 pb-1 text-[10px] uppercase font-semibold tracking-wide text-slate-500 dark:text-slate-400">
             Auto-publish after Save
@@ -140,12 +140,12 @@ export default function AutoPublishSettings({ productId, availableChannels, onCh
                 />
                 <span className="flex-1 text-slate-700 dark:text-slate-300">{CHANNEL_LABEL[c]}</span>
                 {!available && (
-                  <span className="text-[10px] text-slate-400">no content</span>
+                  <span className="text-[10px] text-tertiary">no content</span>
                 )}
               </label>
             )
           })}
-          <div className="border-t border-slate-100 dark:border-slate-700 mt-2 pt-2">
+          <div className="border-t border-subtle dark:border-slate-700 mt-2 pt-2">
             <div className="px-3 pb-1 text-[10px] uppercase font-semibold tracking-wide text-slate-500 dark:text-slate-400">
               Approval gate
             </div>
@@ -160,11 +160,11 @@ export default function AutoPublishSettings({ productId, availableChannels, onCh
                 Require approval before publishing
               </span>
             </label>
-            <div className="px-3 pt-1 pb-2 text-[10px] text-slate-400 leading-snug">
+            <div className="px-3 pt-1 pb-2 text-[10px] text-tertiary leading-snug">
               Every publish becomes a deferred queue entry. Open the approval modal to fire or reject.
             </div>
           </div>
-          <div className="border-t border-slate-100 dark:border-slate-700 pt-2 px-3 pb-1 text-[10px] text-slate-400 leading-snug">
+          <div className="border-t border-subtle dark:border-slate-700 pt-2 px-3 pb-1 text-[10px] text-tertiary leading-snug">
             Per-browser preferences. Cleared when you clear site data.
           </div>
         </div>

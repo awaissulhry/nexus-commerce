@@ -63,7 +63,7 @@ export function RuleToggleClient({
   }
 
   return (
-    <div className="mb-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-3">
+    <div className="mb-4 bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-3">
       <div className="flex items-center gap-3 flex-wrap">
         <button
           type="button"
@@ -113,7 +113,7 @@ export function RuleToggleClient({
               setTimeout(() => router.refresh(), 30_000)
             } catch { setSimResult('Error triggering simulation') } finally { setSimBusy(false) }
           }}
-          className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-50"
+          className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-50"
         >
           {simBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
           Simulate now

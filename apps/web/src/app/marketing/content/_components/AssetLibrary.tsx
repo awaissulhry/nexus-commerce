@@ -280,7 +280,7 @@ export default function AssetLibrary({
   if (!loading && visibleItems.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white py-16 text-center dark:border-slate-700 dark:bg-slate-900">
-        <ImageIcon className="w-8 h-8 text-slate-400" />
+        <ImageIcon className="w-8 h-8 text-tertiary" />
         <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
           {search
             ? t('marketingContent.library.emptySearchTitle')
@@ -296,8 +296,8 @@ export default function AssetLibrary({
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+    <div className="rounded-lg border border-default bg-white dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex items-center justify-between border-b border-default px-3 py-2 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
         <div className="flex items-center gap-2">
           {onToggleBulk && visibleItems.length > 0 && (
             <input
@@ -353,7 +353,7 @@ export default function AssetLibrary({
           </span>
         </div>
         {loading && (
-          <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-tertiary" />
         )}
       </div>
 
@@ -376,7 +376,7 @@ export default function AssetLibrary({
                     key={row.key}
                     data-index={row.index}
                     ref={virtualizer.measureElement}
-                    className="absolute inset-x-0 flex items-baseline gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900"
+                    className="absolute inset-x-0 flex items-baseline gap-2 border-b border-default bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900"
                     style={{
                       transform: `translateY(${row.start}px)`,
                       height: TIMELINE_HEADER_HEIGHT_PX,
@@ -385,7 +385,7 @@ export default function AssetLibrary({
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       {t(`marketingContent.timeline.${tlRow.bucket satisfies TimelineBucket}`)}
                     </h3>
-                    <span className="text-xs text-slate-400 dark:text-slate-500">
+                    <span className="text-xs text-tertiary dark:text-slate-500">
                       {tlRow.count}
                     </span>
                   </div>
@@ -471,7 +471,7 @@ export default function AssetLibrary({
                   }
                 }}
                 aria-pressed={selectedId === item.id}
-                className={`absolute inset-x-0 flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 text-left transition-colors hover:bg-slate-50 focus:outline-none focus-visible:bg-blue-50 dark:border-slate-800 dark:hover:bg-slate-800 dark:focus-visible:bg-blue-950 ${
+                className={`absolute inset-x-0 flex cursor-pointer items-center gap-3 border-b border-subtle px-3 text-left transition-colors hover:bg-slate-50 focus:outline-none focus-visible:bg-blue-50 dark:border-slate-800 dark:hover:bg-slate-800 dark:focus-visible:bg-blue-950 ${
                   selectedId === item.id
                     ? 'bg-blue-50 dark:bg-blue-950/40'
                     : ''
@@ -502,7 +502,7 @@ export default function AssetLibrary({
                       unoptimized
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-slate-400">
+                    <div className="flex h-full w-full items-center justify-center text-tertiary">
                       <ImageIcon className="w-5 h-5" />
                     </div>
                   )}

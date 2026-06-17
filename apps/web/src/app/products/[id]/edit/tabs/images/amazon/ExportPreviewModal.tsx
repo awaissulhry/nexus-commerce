@@ -63,10 +63,10 @@ export function ExportPreviewModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-700 p-4 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-default dark:border-slate-700 p-4 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
           <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Export {isAll ? 'all markets' : `Amazon ${marketplace}`} — preview</span>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><X className="w-4 h-4" /></button>
+          <button type="button" onClick={onClose} className="text-tertiary hover:text-slate-600 dark:hover:text-slate-300"><X className="w-4 h-4" /></button>
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
           {isAll
@@ -76,14 +76,14 @@ export function ExportPreviewModal({
         </p>
 
         {loading ? (
-          <div className="py-8 text-center text-sm text-slate-400"><Loader2 className="w-4 h-4 animate-spin inline mr-1" /> Computing coverage…</div>
+          <div className="py-8 text-center text-sm text-tertiary"><Loader2 className="w-4 h-4 animate-spin inline mr-1" /> Computing coverage…</div>
         ) : error ? (
           <div className="py-4 text-sm text-rose-600 dark:text-rose-400">{error}</div>
         ) : manifest ? (
           <>
             <div className="space-y-1.5 mb-3">
               {manifest.perMarket.map((m) => (
-                <div key={m.market} className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm">
+                <div key={m.market} className="rounded-lg border border-default dark:border-slate-700 px-3 py-2 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-slate-700 dark:text-slate-200">{m.market}</span>
                     <span className="text-slate-600 dark:text-slate-300">{m.asinCount} ASIN{m.asinCount === 1 ? '' : 's'} · ~{m.estimatedFiles} image{m.estimatedFiles === 1 ? '' : 's'}</span>

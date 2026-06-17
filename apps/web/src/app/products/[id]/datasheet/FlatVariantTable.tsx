@@ -221,7 +221,7 @@ export default function FlatVariantTable({
       )}
 
       {pendingState.kind === 'running' && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-200">
+        <div className="flex items-center gap-2 px-3 py-2 rounded border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-200">
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
           <span>{t('products.datasheetHub.variants.bulk.running')}</span>
         </div>
@@ -255,9 +255,9 @@ export default function FlatVariantTable({
         </div>
       )}
 
-      <div className="border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900 overflow-x-auto">
+      <div className="border border-default dark:border-slate-800 rounded bg-white dark:bg-slate-900 overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800">
+          <thead className="bg-slate-50 dark:bg-slate-800/40 border-b border-default dark:border-slate-800">
             <tr className="text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <th className="py-2 px-3 font-medium w-8">
                 <input
@@ -312,7 +312,7 @@ export default function FlatVariantTable({
                 <tr
                   key={c.id}
                   className={
-                    'border-b border-slate-100 dark:border-slate-800 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-800/30 ' +
+                    'border-b border-subtle dark:border-slate-800 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-800/30 ' +
                     (isSelected ? 'bg-blue-50/40 dark:bg-blue-950/20' : '')
                   }
                 >
@@ -332,7 +332,7 @@ export default function FlatVariantTable({
                   <td className="py-2 px-3">
                     <Link
                       href={`/products/${c.id}/datasheet`}
-                      className="block w-9 h-9 border border-slate-200 dark:border-slate-700 rounded overflow-hidden bg-slate-50 dark:bg-slate-800"
+                      className="block w-9 h-9 border border-default dark:border-slate-700 rounded overflow-hidden bg-slate-50 dark:bg-slate-800"
                     >
                       {c.heroUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -369,7 +369,7 @@ export default function FlatVariantTable({
                         className="py-2 px-3 text-slate-700 dark:text-slate-300 align-middle"
                       >
                         {display ? (
-                          <span className="inline-block px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-xs">
+                          <span className="inline-block px-1.5 py-0.5 rounded border border-default dark:border-slate-700 text-xs">
                             {display}
                           </span>
                         ) : (
@@ -416,7 +416,7 @@ export default function FlatVariantTable({
                   <td className="py-2 px-3 align-middle">
                     <Link
                       href={`/products/${c.id}/datasheet`}
-                      className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      className="inline-flex items-center justify-center w-6 h-6 rounded text-tertiary hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                       title={t('products.datasheetHub.variants.openVariant')}
                       aria-label={t(
                         'products.datasheetHub.variants.openVariant',

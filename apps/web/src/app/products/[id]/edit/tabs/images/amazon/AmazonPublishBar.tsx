@@ -76,7 +76,7 @@ export default function AmazonPublishBar({
   return (
     <div
       data-publish-anchor
-      className="sticky bottom-0 z-10 bg-white dark:bg-slate-900 rounded-b-xl border-t border-slate-200 dark:border-slate-700 shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.08)] dark:shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.5)] px-4 pt-3 pb-2 space-y-3"
+      className="sticky bottom-0 z-10 bg-white dark:bg-slate-900 rounded-b-xl border-t border-default dark:border-slate-700 shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.08)] dark:shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.5)] px-4 pt-3 pb-2 space-y-3"
     >
       {/* Publish buttons row */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -91,7 +91,7 @@ export default function AmazonPublishBar({
             disabled={publishing || publishingAll}
             className={cn(
               'text-xs gap-1',
-              activeMarketplace !== mkt && 'border border-slate-200 dark:border-slate-700',
+              activeMarketplace !== mkt && 'border border-default dark:border-slate-700',
             )}
           >
             {publishing && activeMarketplace === mkt
@@ -120,7 +120,7 @@ export default function AmazonPublishBar({
             variant="ghost"
             onClick={() => onPreview(activeMarketplace)}
             disabled={publishing || publishingAll}
-            className="text-xs gap-1 ml-1 border border-slate-200 dark:border-slate-700"
+            className="text-xs gap-1 ml-1 border border-default dark:border-slate-700"
             title="Preview what will publish before submitting"
           >
             Preview
@@ -135,7 +135,7 @@ export default function AmazonPublishBar({
             variant="ghost"
             onClick={() => onOpenRollback(activeMarketplace)}
             disabled={publishing || publishingAll}
-            className="text-xs gap-1 ml-1 border border-slate-200 dark:border-slate-700"
+            className="text-xs gap-1 ml-1 border border-default dark:border-slate-700"
             title={`Revert images on Amazon ${activeMarketplace} to the last successful publish (per-browser snapshot)`}
           >
             <RotateCcw className="w-3 h-3" />
@@ -149,7 +149,7 @@ export default function AmazonPublishBar({
             type="button"
             onClick={() => { if (!isExporting) setZipMenuOpen((p) => !p) }}
             disabled={isExporting}
-            className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-2 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 text-xs text-tertiary hover:text-slate-600 dark:hover:text-slate-300 px-2 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : '···'}
             {isExporting
@@ -164,7 +164,7 @@ export default function AmazonPublishBar({
           {zipMenuOpen && (
             <>
               <div className="fixed inset-0 z-20" onClick={() => setZipMenuOpen(false)} />
-              <div className="absolute right-0 bottom-8 z-30 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1 min-w-[220px] text-sm">
+              <div className="absolute right-0 bottom-8 z-30 bg-white dark:bg-slate-800 border border-default dark:border-slate-700 rounded-xl shadow-xl py-1 min-w-[220px] text-sm">
                 {AMAZON_MARKETPLACES.map((mkt) => (
                   <button
                     key={mkt}
@@ -187,7 +187,7 @@ export default function AmazonPublishBar({
                     asks for SKU-named exports; default ASIN matches
                     Amazon's bulk-upload spec. */}
                 <div className="h-px bg-slate-100 dark:bg-slate-700 my-1" />
-                <div className="px-3 py-1.5 text-[10px] text-slate-400 leading-tight">
+                <div className="px-3 py-1.5 text-[10px] text-tertiary leading-tight">
                   Filename: <span className="font-mono">{'{ASIN}.{SLOT}.jpg'}</span> · per Amazon spec
                 </div>
               </div>

@@ -73,10 +73,10 @@ export default function PastePreviewModal({ preview, onCancel, onApply }: Props)
       aria-label="Paste preview"
     >
       <div
-        className="bg-white dark:bg-slate-900 rounded-lg shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-3xl max-h-[80vh] flex flex-col"
+        className="bg-white dark:bg-slate-900 rounded-lg shadow-2xl border border-default dark:border-slate-700 w-full max-w-3xl max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <div className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ClipboardPaste className="w-4 h-4 text-slate-500 dark:text-slate-400" />
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -90,7 +90,7 @@ export default function PastePreviewModal({ preview, onCancel, onApply }: Props)
           <button
             type="button"
             onClick={onCancel}
-            className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-700"
+            className="text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-700"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -103,7 +103,7 @@ export default function PastePreviewModal({ preview, onCancel, onApply }: Props)
               <div className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
                 Changes
               </div>
-              <ul className="divide-y divide-slate-100 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50/50">
+              <ul className="divide-y divide-slate-100 border border-default dark:border-slate-700 rounded-md bg-slate-50/50">
                 {previewItems.map((c) => (
                   <li
                     key={`${c.rowId}:${c.columnId}`}
@@ -113,10 +113,10 @@ export default function PastePreviewModal({ preview, onCancel, onApply }: Props)
                       {c.sku}
                     </span>
                     <span className="text-slate-700 dark:text-slate-300">{c.fieldLabel}:</span>
-                    <span className="text-slate-400 dark:text-slate-500 line-through tabular-nums">
+                    <span className="text-tertiary dark:text-slate-500 line-through tabular-nums">
                       {formatValue(c.oldValue)}
                     </span>
-                    <span className="text-slate-400 dark:text-slate-500">→</span>
+                    <span className="text-tertiary dark:text-slate-500">→</span>
                     <span className="bg-yellow-100 text-yellow-900 px-1.5 py-0.5 rounded tabular-nums">
                       {formatValue(c.newValue)}
                     </span>
@@ -164,7 +164,7 @@ export default function PastePreviewModal({ preview, onCancel, onApply }: Props)
           )}
         </div>
 
-        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-2">
+        <div className="px-5 py-3 border-t border-default dark:border-slate-700 flex items-center justify-end gap-2">
           <Button variant="secondary" size="sm" onClick={onCancel}>
             Cancel
           </Button>

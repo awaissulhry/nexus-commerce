@@ -107,16 +107,16 @@ export function LiveWritesPanel({ campaignId }: { campaignId: string }) {
     } catch (e) { setMsg((e as Error).message) } finally { setBusy(false) }
   }
 
-  if (loading) return <div className="p-4 text-sm text-slate-400">Loading live-write status…</div>
+  if (loading) return <div className="p-4 text-sm text-tertiary">Loading live-write status…</div>
   if (err) return <div className="p-4 text-sm text-rose-600">Couldn’t load live-write status: {err}</div>
   if (!data) return null
 
   const live = data.adsMode === 'live'
   const allowed = data.gate.allowed
-  const inputCls = 'mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950'
+  const inputCls = 'mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950'
 
   return (
-    <div className="border-t border-slate-200 dark:border-slate-800 pt-4 mt-4 space-y-4">
+    <div className="border-t border-default dark:border-slate-800 pt-4 mt-4 space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Live writes &amp; guardrails</h3>
         <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${live ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
@@ -125,7 +125,7 @@ export function LiveWritesPanel({ campaignId }: { campaignId: string }) {
       </div>
 
       {/* Gate dry-run banner */}
-      <div className={`rounded-md px-3 py-2 text-sm border ${allowed ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300' : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300'}`}>
+      <div className={`rounded-md px-3 py-2 text-sm border ${allowed ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300' : 'border-default bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300'}`}>
         {allowed ? (
           <>✓ A live bid write to this campaign would be <strong>allowed</strong> ({(data.gate as { mode: string }).mode}).</>
         ) : (
@@ -134,10 +134,10 @@ export function LiveWritesPanel({ campaignId }: { campaignId: string }) {
       </div>
 
       {/* Allowlist toggle */}
-      <div className="flex items-center justify-between rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2.5">
+      <div className="flex items-center justify-between rounded-md border border-default dark:border-slate-700 px-3 py-2.5">
         <div>
           <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Allow live bid writes for this campaign</div>
-          <div className="text-xs text-slate-500">Default-deny. Automation and the bidding engine only touch Amazon for allowlisted campaigns. {data.campaign.writesToday > 0 && <span className="text-slate-400">· {data.campaign.writesToday} live write(s) today</span>}</div>
+          <div className="text-xs text-slate-500">Default-deny. Automation and the bidding engine only touch Amazon for allowlisted campaigns. {data.campaign.writesToday > 0 && <span className="text-tertiary">· {data.campaign.writesToday} live write(s) today</span>}</div>
         </div>
         <button
           onClick={() => void toggleAllowlist(!data.campaign.liveBidWritesEnabled)}
@@ -151,7 +151,7 @@ export function LiveWritesPanel({ campaignId }: { campaignId: string }) {
       </div>
 
       {/* Guardrails */}
-      <div className="rounded-md border border-slate-200 dark:border-slate-700 px-3 py-3 space-y-3">
+      <div className="rounded-md border border-default dark:border-slate-700 px-3 py-3 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <label className="text-xs text-slate-500 flex flex-col">
             Max bid change per move (%)
@@ -182,9 +182,9 @@ export function LiveWritesPanel({ campaignId }: { campaignId: string }) {
           <button onClick={() => void load()} disabled={busy} className="text-xs text-blue-600 hover:underline disabled:opacity-50">Refresh</button>
         </div>
         {data.pending.length === 0 ? (
-          <div className="text-xs text-slate-400 px-1 py-2">Nothing queued for this campaign.</div>
+          <div className="text-xs text-tertiary px-1 py-2">Nothing queued for this campaign.</div>
         ) : (
-          <div className="overflow-x-auto rounded border border-slate-200 dark:border-slate-700">
+          <div className="overflow-x-auto rounded border border-default dark:border-slate-700">
             <table className="w-full text-xs">
               <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-500">
                 <tr>
@@ -196,11 +196,11 @@ export function LiveWritesPanel({ campaignId }: { campaignId: string }) {
               </thead>
               <tbody>
                 {data.pending.map((p) => (
-                  <tr key={p.queueId} className="border-t border-slate-100 dark:border-slate-800">
+                  <tr key={p.queueId} className="border-t border-subtle dark:border-slate-800">
                     <td className="px-2 py-1.5 font-mono text-slate-600 dark:text-slate-300">{p.requestPreview.endpoint}</td>
                     <td className="px-2 py-1.5 font-mono text-slate-500">{p.externalId ?? '—'}</td>
                     <td className="px-2 py-1.5 text-slate-600 dark:text-slate-300">{Object.entries(p.requestPreview.changes).map(([k, v]) => `${k}=${v}`).join(', ') || '—'}</td>
-                    <td className="px-2 py-1.5">{p.graceExpired ? <span className="text-amber-600">now</span> : <span className="text-slate-400">in grace</span>}</td>
+                    <td className="px-2 py-1.5">{p.graceExpired ? <span className="text-amber-600">now</span> : <span className="text-tertiary">in grace</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -213,7 +213,7 @@ export function LiveWritesPanel({ campaignId }: { campaignId: string }) {
       {data.recent && data.recent.length > 0 && (
         <div>
           <h4 className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Recent writes</h4>
-          <div className="overflow-x-auto rounded border border-slate-200 dark:border-slate-700">
+          <div className="overflow-x-auto rounded border border-default dark:border-slate-700">
             <table className="w-full text-xs">
               <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-500">
                 <tr>
@@ -224,7 +224,7 @@ export function LiveWritesPanel({ campaignId }: { campaignId: string }) {
               </thead>
               <tbody>
                 {data.recent.map((r) => (
-                  <tr key={r.queueId} className="border-t border-slate-100 dark:border-slate-800">
+                  <tr key={r.queueId} className="border-t border-subtle dark:border-slate-800">
                     <td className="px-2 py-1.5">
                       <span className={`font-medium ${r.status === 'SUCCESS' ? 'text-emerald-600' : r.status === 'FAILED' ? 'text-rose-600' : 'text-slate-500'}`}>{r.status}</span>
                     </td>

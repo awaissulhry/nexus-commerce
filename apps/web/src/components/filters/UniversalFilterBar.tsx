@@ -148,20 +148,20 @@ export default function UniversalFilterBar({
     <div className={cn('flex flex-wrap items-center gap-2', className)}>
       {/* Search */}
       <div className="relative flex-1 min-w-[260px] max-w-[420px]">
-        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <Search className="w-3.5 h-3.5 text-tertiary absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
         <input
           type="text"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder={searchPlaceholder}
           aria-label="Search"
-          className="w-full h-8 pl-8 pr-7 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-300"
+          className="w-full h-8 pl-8 pr-7 text-base border border-default rounded-md bg-white focus:outline-none focus:border-blue-300"
         />
         {searchInput && (
           <button
             type="button"
             onClick={() => setSearchInput('')}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-tertiary hover:text-slate-600"
             aria-label="Clear search"
           >
             <X className="w-3 h-3" />
@@ -219,7 +219,7 @@ export default function UniversalFilterBar({
           <button
             type="button"
             onClick={clearAll}
-            className="h-8 px-2.5 text-sm text-slate-700 hover:text-slate-900 border border-slate-200 rounded-md hover:bg-slate-50"
+            className="h-8 px-2.5 text-sm text-slate-700 hover:text-slate-900 border border-default rounded-md hover:bg-slate-50"
           >
             Clear all
           </button>
@@ -244,7 +244,7 @@ interface MultiSelectProps {
 }
 
 const TONE_CHIP: Record<NonNullable<StatusOption['tone']>, string> = {
-  neutral: 'bg-slate-50 border-slate-200 text-slate-700',
+  neutral: 'bg-slate-50 border-default text-slate-700',
   success: 'bg-emerald-50 border-emerald-200 text-emerald-800',
   warn: 'bg-amber-50 border-amber-200 text-amber-800',
   danger: 'bg-rose-50 border-rose-200 text-rose-800',
@@ -300,7 +300,7 @@ function MultiSelect({
           'inline-flex items-center gap-1.5 h-8 px-2.5 text-base rounded-md border transition-colors',
           selected.length > 0
             ? 'bg-blue-50 border-blue-300 text-blue-800'
-            : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300',
+            : 'bg-white border-default text-slate-700 hover:border-slate-300',
         )}
       >
         {buttonLabel}
@@ -309,10 +309,10 @@ function MultiSelect({
       {open && (
         <div
           role="listbox"
-          className="absolute z-20 top-full mt-1 left-0 min-w-[200px] max-h-[320px] overflow-auto bg-white border border-slate-200 rounded-md shadow-lg py-1"
+          className="absolute z-20 top-full mt-1 left-0 min-w-[200px] max-h-[320px] overflow-auto bg-white border border-default rounded-md shadow-lg py-1"
         >
           {options.length === 0 ? (
-            <div className="px-3 py-2 text-sm text-slate-400">
+            <div className="px-3 py-2 text-sm text-tertiary">
               No options
             </div>
           ) : (
@@ -347,7 +347,7 @@ function MultiSelect({
             })
           )}
           {selected.length > 0 && (
-            <div className="border-t border-slate-100 mt-1 pt-1 px-2">
+            <div className="border-t border-subtle mt-1 pt-1 px-2">
               <button
                 type="button"
                 onClick={() => {

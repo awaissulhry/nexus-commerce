@@ -77,7 +77,7 @@ export default async function ExecutionsPage() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md overflow-hidden">
         {items.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-slate-500">
             No executions recorded. Run the evaluator from the automation page.

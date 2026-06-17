@@ -146,7 +146,7 @@ export default function ChannelExpansion({
 
   return (
     <table className="w-full text-xs">
-      <thead className="bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-700">
+      <thead className="bg-slate-50 dark:bg-slate-800/40 border-b border-default dark:border-slate-700">
         <tr className="text-left text-slate-500 dark:text-slate-400">
           <th className="py-1.5 px-3 font-medium">
             {t('products.datasheetHub.expansion.col.channel')}
@@ -180,7 +180,7 @@ export default function ChannelExpansion({
           return (
             <tr
               key={l.id}
-              className="border-b border-slate-100 dark:border-slate-800 last:border-b-0"
+              className="border-b border-subtle dark:border-slate-800 last:border-b-0"
             >
               <td className="py-1.5 px-3 align-top">
                 <span className="text-slate-700 dark:text-slate-200 font-medium">
@@ -201,7 +201,7 @@ export default function ChannelExpansion({
               </td>
               <td className="py-1.5 px-3 align-top text-slate-900 dark:text-slate-100">
                 {cell.value ?? (
-                  <span className="text-slate-400 italic">
+                  <span className="text-tertiary italic">
                     {t('products.datasheetHub.expansion.empty')}
                   </span>
                 )}
@@ -210,7 +210,7 @@ export default function ChannelExpansion({
                     href={liveUrl}
                     target="_blank"
                     rel="noopener"
-                    className="ml-2 inline-flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    className="ml-2 inline-flex items-center text-tertiary hover:text-slate-600 dark:hover:text-slate-300"
                     title={t('products.datasheetHub.expansion.openLive')}
                     aria-label={t(
                       'products.datasheetHub.expansion.openLive',

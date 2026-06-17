@@ -48,10 +48,10 @@ export default function SourceDiffModal() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="source-diff-title"
-        className="w-full max-w-2xl mx-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl"
+        className="w-full max-w-2xl mx-4 rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-subtle dark:border-slate-800 flex items-center justify-between">
           <div>
             <div id="source-diff-title" className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               Switch <span className="font-mono">{pendingDiff.fieldLabel}</span> source
@@ -65,7 +65,7 @@ export default function SourceDiffModal() {
           <button
             type="button"
             onClick={pendingDiff.onCancel}
-            className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded"
+            className="p-1 text-tertiary hover:text-slate-700 dark:hover:text-slate-200 rounded"
             aria-label="Cancel"
           >
             <X className="w-4 h-4" />
@@ -91,14 +91,14 @@ export default function SourceDiffModal() {
           </div>
         )}
 
-        <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
-          <span className="text-[10.5px] text-slate-400 mr-auto">
+        <div className="px-4 py-3 border-t border-subtle dark:border-slate-800 flex items-center justify-end gap-2">
+          <span className="text-[10.5px] text-tertiary mr-auto">
             ESC to cancel · ⌘/Ctrl + Enter to apply
           </span>
           <button
             type="button"
             onClick={pendingDiff.onCancel}
-            className="px-3 py-1.5 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="px-3 py-1.5 text-xs font-medium rounded border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             Cancel
           </button>
@@ -131,11 +131,11 @@ function ValueBlock({ label, tone, value }: { label: string; tone: 'from' | 'to'
         className={cn(
           'rounded border p-2.5 text-xs whitespace-pre-wrap break-words font-mono leading-relaxed min-h-[2.5rem]',
           tone === 'from'
-            ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300'
+            ? 'border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300'
             : 'border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/30 text-blue-900 dark:text-blue-200',
         )}
       >
-        {value || <em className="not-italic text-slate-400">(empty)</em>}
+        {value || <em className="not-italic text-tertiary">(empty)</em>}
       </div>
     </div>
   )

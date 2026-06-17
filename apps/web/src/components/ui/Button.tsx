@@ -54,7 +54,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           // button into a near-invisible block of mid-grey.
           // `disabled:` overrides every variant/className color so
           // disabled actions read as the same muted state app-wide.
-          'disabled:cursor-not-allowed disabled:!bg-slate-100 disabled:!text-slate-400 disabled:!border-slate-200',
+          'disabled:cursor-not-allowed disabled:!bg-slate-100 disabled:!text-tertiary disabled:!border-default',
           'disabled:dark:!bg-slate-800 disabled:dark:!text-slate-500 disabled:dark:!border-slate-700',
           VARIANT[variant],
           SIZE[size],

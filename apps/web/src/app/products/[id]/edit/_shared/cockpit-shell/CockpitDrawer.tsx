@@ -135,7 +135,7 @@ export default function CockpitDrawer({
         )}
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+        <div className="flex items-start justify-between gap-3 border-b border-default px-4 py-3 dark:border-slate-800">
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               {title}
@@ -146,7 +146,7 @@ export default function CockpitDrawer({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            className="shrink-0 rounded-md p-1 text-tertiary hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
           >
             <X className="h-4 w-4" />
           </button>
@@ -157,7 +157,7 @@ export default function CockpitDrawer({
 
         {/* Footer */}
         {footer && (
-          <div className="border-t border-slate-200 px-4 py-3 dark:border-slate-800">
+          <div className="border-t border-default px-4 py-3 dark:border-slate-800">
             {footer}
           </div>
         )}

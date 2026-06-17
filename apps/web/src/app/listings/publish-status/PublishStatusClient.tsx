@@ -195,7 +195,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
             <EnvCell label="Amazon publish" enabled={status?.env.AMAZON_PUBLISH_ENABLED} mode={status?.env.AMAZON_PUBLISH_MODE} />
             <EnvCell label="eBay publish" enabled={status?.env.EBAY_PUBLISH_ENABLED} mode={status?.env.EBAY_PUBLISH_MODE} />
           </div>
-          <div className="text-xs text-slate-400 dark:text-slate-500">
+          <div className="text-xs text-tertiary dark:text-slate-500">
             Defaults: gated + dry-run. Flip via Railway env vars
             (NEXUS_ENABLE_&lt;CH&gt;_PUBLISH, &lt;CH&gt;_PUBLISH_MODE) — see PHASE_B_VERIFICATION.md.
           </div>
@@ -343,7 +343,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
                     const tone = OUTCOME_TONE[r.outcome] ?? { bg: 'bg-slate-50 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-400', icon: AlertTriangle }
                     const Icon = tone.icon
                     return (
-                      <tr key={i} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50/50">
+                      <tr key={i} className="border-t border-subtle dark:border-slate-800 hover:bg-slate-50/50">
                         <td className="px-2 py-1 text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">{new Date(r.at).toLocaleString()}</td>
                         <td className="px-2 py-1 font-mono text-xs">{r.channel}</td>
                         <td className="px-2 py-1 font-mono text-xs">{r.mode}</td>
@@ -400,7 +400,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
                 </thead>
                 <tbody>
                   {status?.skuCoverage.map((r, i) => (
-                    <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+                    <tr key={i} className="border-t border-subtle dark:border-slate-800">
                       <td className="px-2 py-1 font-mono text-xs">{r.channel}</td>
                       <td className="px-2 py-1 font-mono text-xs">{r.mode}</td>
                       <td className="px-2 py-1 text-right tabular-nums">{r.distinct_skus}</td>
@@ -440,7 +440,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
                 </thead>
                 <tbody>
                   {status?.repeatAttempts.map((r, i) => (
-                    <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+                    <tr key={i} className="border-t border-subtle dark:border-slate-800">
                       <td className="px-2 py-1 font-mono text-xs">
                         {r.sku ? (
                           <Link
@@ -472,7 +472,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
         </Card>
       )}
 
-      <div className="text-xs text-slate-400 dark:text-slate-500 text-right">
+      <div className="text-xs text-tertiary dark:text-slate-500 text-right">
         Last fetched {lastFetchedAt ? new Date(lastFetchedAt).toLocaleTimeString() : '—'} ·{' '}
         polls every 30s ·{' '}
         <button onClick={() => refetch()} className="underline hover:text-slate-600">
@@ -494,14 +494,14 @@ function EnvCell({
 }) {
   if (enabled == null) {
     return (
-      <div className="border border-slate-200 dark:border-slate-700 rounded p-2">
+      <div className="border border-default dark:border-slate-700 rounded p-2">
         <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
-        <div className="text-sm text-slate-400 dark:text-slate-500">loading…</div>
+        <div className="text-sm text-tertiary dark:text-slate-500">loading…</div>
       </div>
     )
   }
   const tone =
-    !enabled ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800'
+    !enabled ? 'border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800'
     : mode === 'live' ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40'
     : mode === 'sandbox' ? 'border-amber-300 bg-amber-50 dark:bg-amber-950/40'
     : 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800'
@@ -530,7 +530,7 @@ function Stat({
 }) {
   const cls =
     value === 0
-      ? 'text-slate-400 dark:text-slate-500'
+      ? 'text-tertiary dark:text-slate-500'
       : tone === 'emerald' ? 'text-emerald-700 dark:text-emerald-300 font-semibold'
       : tone === 'rose' ? 'text-rose-700 dark:text-rose-300 font-semibold'
       : tone === 'amber' ? 'text-amber-700 dark:text-amber-300 font-semibold'
@@ -539,7 +539,7 @@ function Stat({
   return (
     <div>
       <div className={`text-sm tabular-nums ${cls}`}>{value}</div>
-      <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">{label}</div>
+      <div className="text-[10px] uppercase tracking-wider text-tertiary dark:text-slate-500">{label}</div>
     </div>
   )
 }
@@ -562,7 +562,7 @@ function ActivityTable({ rows }: { rows: Array<{ channel: string; mode: string; 
             const tone = OUTCOME_TONE[r.outcome] ?? { bg: 'bg-slate-50 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-400', icon: AlertTriangle }
             const Icon = tone.icon
             return (
-              <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+              <tr key={i} className="border-t border-subtle dark:border-slate-800">
                 <td className="px-2 py-1 font-mono text-xs">{r.channel}</td>
                 <td className="px-2 py-1 font-mono text-xs">{r.mode}</td>
                 <td className="px-2 py-1">
@@ -601,7 +601,7 @@ function Sparkline({ points }: { points: DailyTrendPoint[] }) {
 
   if (points.length === 0) {
     return (
-      <div className="h-7 w-[112px] flex items-center justify-center text-[10px] text-slate-400 dark:text-slate-500">
+      <div className="h-7 w-[112px] flex items-center justify-center text-[10px] text-tertiary dark:text-slate-500">
         no 14d data
       </div>
     )

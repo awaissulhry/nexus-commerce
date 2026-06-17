@@ -99,7 +99,7 @@ export function BreakdownBar({
                       ? 'text-emerald-600 dark:text-emerald-400'
                       : entry.delta < 0
                         ? 'text-rose-600 dark:text-rose-400'
-                        : 'text-slate-400',
+                        : 'text-tertiary',
                   )}
                 >
                   {entry.delta > 0 ? '+' : ''}

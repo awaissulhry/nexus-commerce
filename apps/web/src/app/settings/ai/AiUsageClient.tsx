@@ -231,7 +231,7 @@ export default function AiUsageClient({
           type="button"
           onClick={() => void refresh()}
           disabled={refreshing}
-          className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50"
+          className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50"
         >
           {refreshing ? (
             <Loader2 className="w-3 h-3 animate-spin" />
@@ -296,7 +296,7 @@ export default function AiUsageClient({
           {providers.map((p) => (
             <div
               key={p.name}
-              className="border border-slate-200 dark:border-slate-700 rounded-md p-3 bg-white dark:bg-slate-900"
+              className="border border-default dark:border-slate-700 rounded-md p-3 bg-white dark:bg-slate-900"
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -355,9 +355,9 @@ export default function AiUsageClient({
           <Activity className="w-3 h-3" />
           Recent calls
         </h2>
-        <div className="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden bg-white dark:bg-slate-900">
+        <div className="border border-default dark:border-slate-700 rounded-md overflow-hidden bg-white dark:bg-slate-900">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-default dark:border-slate-700">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-24">
                   When
@@ -390,7 +390,7 @@ export default function AiUsageClient({
                 <tr>
                   <td
                     colSpan={8}
-                    className="px-3 py-8 text-center text-slate-400 dark:text-slate-500 italic"
+                    className="px-3 py-8 text-center text-tertiary dark:text-slate-500 italic"
                   >
                     No AI calls yet. Trigger a bulk fill on /products and
                     refresh.
@@ -400,7 +400,7 @@ export default function AiUsageClient({
               {recent.map((r) => (
                 <tr
                   key={r.id}
-                  className={`border-b border-slate-100 dark:border-slate-800 ${
+                  className={`border-b border-subtle dark:border-slate-800 ${
                     r.ok ? '' : 'bg-rose-50/40'
                   }`}
                   title={r.errorMessage ?? undefined}
@@ -412,7 +412,7 @@ export default function AiUsageClient({
                     {PROVIDER_LABEL[r.provider] ?? r.provider}
                   </td>
                   <td className="px-3 py-1.5 text-slate-700 dark:text-slate-300">
-                    {r.feature ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
+                    {r.feature ?? <span className="text-tertiary dark:text-slate-500">—</span>}
                   </td>
                   <td className="px-3 py-1.5 text-slate-500 dark:text-slate-400 font-mono truncate">
                     {r.model}
@@ -451,7 +451,7 @@ function RollupCard({
 }) {
   if (!summary) {
     return (
-      <div className="border border-slate-200 dark:border-slate-700 rounded-md p-3 bg-white dark:bg-slate-900">
+      <div className="border border-default dark:border-slate-700 rounded-md p-3 bg-white dark:bg-slate-900">
         <div className="text-md font-semibold text-slate-700 dark:text-slate-300">{title}</div>
         <div className="text-base text-slate-500 dark:text-slate-400 mt-2 italic">
           No data
@@ -460,16 +460,16 @@ function RollupCard({
     )
   }
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900">
-      <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+    <div className="border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900">
+      <div className="px-3 py-2 border-b border-subtle dark:border-slate-800 flex items-center justify-between gap-2">
         <div className="text-md font-semibold text-slate-700 dark:text-slate-300">{title}</div>
         <div className="text-2xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">
           {fmtUSD(summary.totals.costUSD)}
         </div>
       </div>
-      <div className="px-3 py-2 grid grid-cols-3 gap-2 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
+      <div className="px-3 py-2 grid grid-cols-3 gap-2 text-sm text-slate-600 dark:text-slate-400 border-b border-subtle dark:border-slate-800">
         <div>
-          <div className="text-slate-400 dark:text-slate-500 uppercase tracking-wider text-xs">
+          <div className="text-tertiary dark:text-slate-500 uppercase tracking-wider text-xs">
             Calls
           </div>
           <div className="text-lg font-medium text-slate-900 dark:text-slate-100 tabular-nums">
@@ -477,7 +477,7 @@ function RollupCard({
           </div>
         </div>
         <div>
-          <div className="text-slate-400 dark:text-slate-500 uppercase tracking-wider text-xs">
+          <div className="text-tertiary dark:text-slate-500 uppercase tracking-wider text-xs">
             Input
           </div>
           <div className="text-lg font-medium text-slate-900 dark:text-slate-100 tabular-nums">
@@ -485,7 +485,7 @@ function RollupCard({
           </div>
         </div>
         <div>
-          <div className="text-slate-400 dark:text-slate-500 uppercase tracking-wider text-xs">
+          <div className="text-tertiary dark:text-slate-500 uppercase tracking-wider text-xs">
             Output
           </div>
           <div className="text-lg font-medium text-slate-900 dark:text-slate-100 tabular-nums">
@@ -495,8 +495,8 @@ function RollupCard({
       </div>
 
       {summary.byProvider.length > 0 && (
-        <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
-          <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
+        <div className="px-3 py-2 border-b border-subtle dark:border-slate-800">
+          <div className="text-xs text-tertiary dark:text-slate-500 uppercase tracking-wider mb-1">
             By provider
           </div>
           <div className="space-y-1">
@@ -519,7 +519,7 @@ function RollupCard({
 
       {summary.byFeature.length > 0 && (
         <div className="px-3 py-2">
-          <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
+          <div className="text-xs text-tertiary dark:text-slate-500 uppercase tracking-wider mb-1">
             By feature
           </div>
           <div className="space-y-1">
@@ -619,7 +619,7 @@ function BudgetHorizonCard({
   const over = !disabled && spent > limit
   const tone = disabled
     ? {
-        border: 'border-slate-200 dark:border-slate-700',
+        border: 'border-default dark:border-slate-700',
         bg: 'bg-white dark:bg-slate-900',
         bar: 'bg-slate-300 dark:bg-slate-700',
         text: 'text-slate-500 dark:text-slate-400',
@@ -639,7 +639,7 @@ function BudgetHorizonCard({
             text: 'text-amber-700 dark:text-amber-300',
           }
         : {
-            border: 'border-slate-200 dark:border-slate-700',
+            border: 'border-default dark:border-slate-700',
             bg: 'bg-white dark:bg-slate-900',
             bar: 'bg-emerald-500',
             text: 'text-slate-500 dark:text-slate-400',
@@ -668,7 +668,7 @@ function BudgetHorizonCard({
             </div>
           )}
           {disabled && (
-            <div className="text-sm text-slate-400 dark:text-slate-500 italic mt-0.5">
+            <div className="text-sm text-tertiary dark:text-slate-500 italic mt-0.5">
               cap disabled
             </div>
           )}
@@ -726,9 +726,9 @@ function TopWizardsCard({ topWizards }: { topWizards: TopWizards }) {
           )}
         </div>
       </div>
-      <div className="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden bg-white dark:bg-slate-900">
+      <div className="border border-default dark:border-slate-700 rounded-md overflow-hidden bg-white dark:bg-slate-900">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+          <thead className="bg-slate-50 dark:bg-slate-800 border-b border-default dark:border-slate-700">
             <tr>
               <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                 Product
@@ -783,14 +783,14 @@ function TopWizardRowView({ row }: { row: TopWizardRow }) {
         ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900 text-blue-800 dark:text-blue-300'
         : row.status === 'FAILED'
           ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300'
-          : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+          : 'bg-slate-50 dark:bg-slate-800 border-default dark:border-slate-700 text-slate-700 dark:text-slate-300'
   const isPublished = row.status === 'LIVE' || row.status === 'SUBMITTED'
   const productHref = row.productId
     ? `/products/${row.productId}/list-wizard`
     : null
   return (
     <tr
-      className="border-b border-slate-100 dark:border-slate-800 last:border-b-0"
+      className="border-b border-subtle dark:border-slate-800 last:border-b-0"
     >
       <td className="px-3 py-1.5">
         {productHref ? (
@@ -838,7 +838,7 @@ function TopWizardRowView({ row }: { row: TopWizardRow }) {
             {fmtUSD(row.timeSavedUSD)}
           </span>
         ) : (
-          <span className="text-slate-400 dark:text-slate-500 italic">
+          <span className="text-tertiary dark:text-slate-500 italic">
             —
           </span>
         )}
@@ -857,7 +857,7 @@ function TopWizardRowView({ row }: { row: TopWizardRow }) {
             {row.roi >= 100 ? `${row.roi.toFixed(0)}×` : `${row.roi.toFixed(1)}×`}
           </span>
         ) : (
-          <span className="text-slate-400 dark:text-slate-500 italic">
+          <span className="text-tertiary dark:text-slate-500 italic">
             —
           </span>
         )}

@@ -226,7 +226,7 @@ export default function SetFieldModal({
                 setField(e.target.value)
                 setValue('')
               }}
-              className="h-8 px-2 text-base border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 rounded w-full"
+              className="h-8 px-2 text-base border border-default dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 rounded w-full"
             >
               {FIELDS.map((f) => (
                 <option key={f.field} value={f.field}>
@@ -243,7 +243,7 @@ export default function SetFieldModal({
             >
               {def.label}
               {def.allowClear && (
-                <span className="ml-2 text-xs font-normal normal-case text-slate-400 dark:text-slate-500">
+                <span className="ml-2 text-xs font-normal normal-case text-tertiary dark:text-slate-500">
                   (leave blank to clear on every selected row)
                 </span>
               )}
@@ -253,7 +253,7 @@ export default function SetFieldModal({
                 id="set-field-value"
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                className="h-8 px-2 text-base border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 rounded w-full"
+                className="h-8 px-2 text-base border border-default dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 rounded w-full"
               >
                 <option value="">— pick —</option>
                 {def.options?.map((o) => (
@@ -268,7 +268,7 @@ export default function SetFieldModal({
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 rows={6}
-                className="px-2 py-1.5 text-base border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 rounded w-full font-mono"
+                className="px-2 py-1.5 text-base border border-default dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 rounded w-full font-mono"
               />
             ) : (
               <input
@@ -278,7 +278,7 @@ export default function SetFieldModal({
                 min={def.min}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                className="h-8 px-2 text-base border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 rounded w-full"
+                className="h-8 px-2 text-base border border-default dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 rounded w-full"
               />
             )}
             <div className="text-sm text-slate-500 dark:text-slate-400">

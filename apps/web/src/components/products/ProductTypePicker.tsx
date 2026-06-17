@@ -280,7 +280,7 @@ export default function ProductTypePicker({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder ?? 'Channel-specific category id'}
           disabled={disabled}
-          className="w-full h-8 px-2 text-base font-mono border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-400"
+          className="w-full h-8 px-2 text-base font-mono border border-default rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-tertiary"
         />
         <p className="text-xs text-amber-700">
           {channel} taxonomy isn't wired yet — type the channel's id
@@ -311,8 +311,8 @@ export default function ProductTypePicker({
         className={cn(
           'w-full inline-flex items-center justify-between gap-2 h-8 px-2 text-base border rounded-md bg-white transition-colors',
           value
-            ? 'border-slate-200 text-slate-900'
-            : 'border-slate-200 text-slate-500',
+            ? 'border-default text-slate-900'
+            : 'border-default text-slate-500',
           'hover:border-slate-300 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
           disabled && 'bg-slate-50 cursor-not-allowed opacity-60',
         )}
@@ -320,25 +320,25 @@ export default function ProductTypePicker({
         <span className="flex-1 text-left truncate">
           {triggerLabel}
           {value && selected && (
-            <span className="ml-2 text-xs font-mono text-slate-400">
+            <span className="ml-2 text-xs font-mono text-tertiary">
               {selected.productType}
             </span>
           )}
         </span>
         {loading && !open && (
-          <Loader2 className="w-3 h-3 animate-spin text-slate-400 flex-shrink-0" />
+          <Loader2 className="w-3 h-3 animate-spin text-tertiary flex-shrink-0" />
         )}
-        <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0" />
+        <ChevronDown className="w-3 h-3 text-tertiary flex-shrink-0" />
       </button>
 
       {open && (
         <div
           ref={panelRef}
-          className="absolute left-0 right-0 top-full mt-1 z-30 bg-white border border-slate-200 rounded-lg shadow-lg flex flex-col max-h-[360px]"
+          className="absolute left-0 right-0 top-full mt-1 z-30 bg-white border border-default rounded-lg shadow-lg flex flex-col max-h-[360px]"
         >
           {/* Search row */}
-          <div className="flex items-center gap-1 px-2 py-1.5 border-b border-slate-100">
-            <Search className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+          <div className="flex items-center gap-1 px-2 py-1.5 border-b border-subtle">
+            <Search className="w-3.5 h-3.5 text-tertiary flex-shrink-0" />
             <input
               ref={inputRef}
               type="text"
@@ -349,13 +349,13 @@ export default function ProductTypePicker({
                   ? `Type to search ${channel} categories…`
                   : 'Search product types'
               }
-              className="flex-1 h-6 text-base outline-none placeholder:text-slate-400"
+              className="flex-1 h-6 text-base outline-none placeholder:text-tertiary"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch('')}
-                className="text-slate-400 hover:text-slate-700 p-0.5"
+                className="text-tertiary hover:text-slate-700 p-0.5"
                 aria-label="Clear search"
               >
                 <X className="w-3 h-3" />
@@ -444,7 +444,7 @@ export default function ProductTypePicker({
                             ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
                             : i.matchPercentage >= 60
                             ? 'text-amber-700 bg-amber-50 border-amber-200'
-                            : 'text-slate-600 bg-slate-50 border-slate-200',
+                            : 'text-slate-600 bg-slate-50 border-default',
                         )}
                         title={`eBay confidence: ${i.matchPercentage}%`}
                       >
@@ -469,7 +469,7 @@ export default function ProductTypePicker({
           </div>
 
           {/* Footer */}
-          <div className="border-t border-slate-100 px-3 py-1.5 text-xs text-slate-500 flex items-center justify-between">
+          <div className="border-t border-subtle px-3 py-1.5 text-xs text-slate-500 flex items-center justify-between">
             <span>
               {mode === 'search'
                 ? `${filtered.length} match${

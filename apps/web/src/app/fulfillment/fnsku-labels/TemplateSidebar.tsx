@@ -125,8 +125,8 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
   const sheetColsWarn = (template.sheetCols ?? 0) > maxSafeCols
 
   return (
-    <div className="w-80 shrink-0 flex flex-col bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 overflow-y-auto">
-      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+    <div className="w-80 shrink-0 flex flex-col bg-white dark:bg-slate-900 border-l border-default dark:border-slate-800 overflow-y-auto">
+      <div className="px-4 py-3 border-b border-default dark:border-slate-800">
         <h2 className="font-semibold text-sm text-slate-800 dark:text-slate-200">Template</h2>
       </div>
 
@@ -225,13 +225,13 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
           {activePreset === 'custom' && (
             <div className="flex items-center gap-2 mt-2">
               <div className="flex-1">
-                <label className="text-xs text-slate-400 block">Width (mm)</label>
+                <label className="text-xs text-tertiary block">Width (mm)</label>
                 <input type="number" min="20" max="300" step="0.5" value={template.labelSize.widthMm}
                   onChange={e => patch({ labelSize: { ...template.labelSize, widthMm: parseFloat(e.target.value) || 100 } })}
                   className="w-full h-6 px-2 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none" />
               </div>
               <div className="flex-1">
-                <label className="text-xs text-slate-400 block">Height (mm)</label>
+                <label className="text-xs text-tertiary block">Height (mm)</label>
                 <input type="number" min="20" max="300" step="0.5" value={template.labelSize.heightMm}
                   onChange={e => patch({ labelSize: { ...template.labelSize, heightMm: parseFloat(e.target.value) || 70 } })}
                   className="w-full h-6 px-2 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none" />
@@ -247,7 +247,7 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
           <SliderRow label="Right column width" value={colSplit} min={15} max={55} unit="%"
             onChange={v => patch({ columnSplitPct: v })} />
           <div className="flex items-center gap-3 mt-2">
-            <label className="text-xs text-slate-400 whitespace-nowrap">Padding (mm)</label>
+            <label className="text-xs text-tertiary whitespace-nowrap">Padding (mm)</label>
             <input type="number" min={0} max={5} step={0.5} value={padMm}
               onChange={e => patch({ paddingMm: parseFloat(e.target.value) || 0 })}
               className="w-16 h-6 px-2 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none" />
@@ -258,7 +258,7 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
 
         {/* ── Typography ──────────────────────────── */}
         <Section title="Typography">
-          <label className="text-xs text-slate-400 block mb-0.5">Font family</label>
+          <label className="text-xs text-tertiary block mb-0.5">Font family</label>
           <select value={template.fontFamily ?? 'Arial'}
             onChange={e => patch({ fontFamily: e.target.value })}
             className="w-full h-7 px-2 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 mb-2">
@@ -274,15 +274,15 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
         <Section title="Field rows">
           <div className="space-y-2">
             {template.rows.map((row, idx) => (
-              <div key={row.id} className="rounded border border-slate-200 dark:border-slate-700 p-2">
+              <div key={row.id} className="rounded border border-default dark:border-slate-700 p-2">
                 <div className="flex items-center gap-1 mb-1.5">
                   <div className="flex flex-col gap-0.5">
                     <button onClick={() => moveRow(row.id, -1)} disabled={idx === 0}
-                      className="h-3.5 w-3.5 flex items-center justify-center text-slate-400 hover:text-slate-600 disabled:opacity-20">
+                      className="h-3.5 w-3.5 flex items-center justify-center text-tertiary hover:text-slate-600 disabled:opacity-20">
                       <ChevronUp size={10} />
                     </button>
                     <button onClick={() => moveRow(row.id, 1)} disabled={idx === template.rows.length - 1}
-                      className="h-3.5 w-3.5 flex items-center justify-center text-slate-400 hover:text-slate-600 disabled:opacity-20">
+                      className="h-3.5 w-3.5 flex items-center justify-center text-tertiary hover:text-slate-600 disabled:opacity-20">
                       <ChevronDown size={10} />
                     </button>
                   </div>
@@ -290,7 +290,7 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
                     placeholder="Badge" className="flex-1 h-6 px-2 text-xs uppercase font-bold rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500" />
                   <input type="checkbox" checked={row.show} onChange={e => patchRow(row.id, { show: e.target.checked })}
                     className="text-violet-600" title="Show row" />
-                  <button onClick={() => removeRow(row.id)} className="text-slate-400 hover:text-red-500">
+                  <button onClick={() => removeRow(row.id)} className="text-tertiary hover:text-red-500">
                     <XIcon size={12} />
                   </button>
                 </div>
@@ -306,20 +306,20 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
                 )}
                 {/* Per-row controls */}
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[10px] text-slate-400 shrink-0">Size ×{(row.fontScale ?? 1).toFixed(2)}</span>
+                  <span className="text-[10px] text-tertiary shrink-0">Size ×{(row.fontScale ?? 1).toFixed(2)}</span>
                   <input type="range" min={0.5} max={2.0} step={0.05} value={row.fontScale ?? 1}
                     onChange={e => patchRow(row.id, { fontScale: parseFloat(e.target.value) })}
                     className="flex-1 accent-violet-500 h-1" />
                 </div>
                 <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-[10px] text-slate-400">Transform:</span>
+                  <span className="text-[10px] text-tertiary">Transform:</span>
                   {(['uppercase', 'none', 'capitalize'] as const).map(tx => (
                     <button key={tx} onClick={() => patchRow(row.id, { textTransform: tx })}
                       className={`h-5 px-1.5 text-[10px] rounded border transition-colors ${(row.textTransform ?? 'uppercase') === tx ? 'bg-violet-600 text-white border-violet-600' : 'border-slate-300 dark:border-slate-600 text-slate-500 hover:border-violet-400'}`}>
                       {tx === 'uppercase' ? 'AA' : tx === 'none' ? 'aa' : 'Aa'}
                     </button>
                   ))}
-                  <label className="ml-auto flex items-center gap-1 text-[10px] text-slate-400 cursor-pointer">
+                  <label className="ml-auto flex items-center gap-1 text-[10px] text-tertiary cursor-pointer">
                     <input type="checkbox" checked={row.boldValue !== false}
                       onChange={e => patchRow(row.id, { boldValue: e.target.checked })}
                       className="text-violet-600" /> Bold
@@ -382,15 +382,15 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
                 </div>
                 {(template.titleTruncationMode ?? 'lines') === 'smart' && (
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-400 shrink-0 w-28">First / last</span>
+                    <span className="text-[10px] text-tertiary shrink-0 w-28">First / last</span>
                     <input type="number" min={1} max={10} value={template.titleFirstWords ?? 5}
                       onChange={e => patch({ titleFirstWords: Math.max(1, parseInt(e.target.value) || 1) })}
                       className="w-10 h-6 px-1.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none" />
-                    <span className="text-[10px] text-slate-400">…</span>
+                    <span className="text-[10px] text-tertiary">…</span>
                     <input type="number" min={1} max={10} value={template.titleLastWords ?? 4}
                       onChange={e => patch({ titleLastWords: Math.max(1, parseInt(e.target.value) || 1) })}
                       className="w-10 h-6 px-1.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none" />
-                    <span className="text-[10px] text-slate-400">words</span>
+                    <span className="text-[10px] text-tertiary">words</span>
                   </div>
                 )}
               </div>
@@ -440,10 +440,10 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
         <Section title="Barcode">
           <SliderRow label="Height" value={barcodeH} min={10} max={55} unit="%" onChange={v => patch({ barcodeHeightPct: v })} />
           <SliderRow label="Width"  value={template.barcodeWidthPct ?? 100} min={20} max={200} unit="%" onChange={v => patch({ barcodeWidthPct: v })} />
-          <p className="text-[10px] text-slate-400 mt-0.5">&gt;100% extends into left column.</p>
+          <p className="text-[10px] text-tertiary mt-0.5">&gt;100% extends into left column.</p>
           <SliderRow label="FNSKU text" value={template.fnskuTextScale ?? 1} min={0.5} max={2.0} step={0.05} unit="×"
             onChange={v => patch({ fnskuTextScale: v })} />
-          <p className="text-[10px] text-slate-400 mt-1">
+          <p className="text-[10px] text-tertiary mt-1">
             Width: ~{barWidthMm.toFixed(1)}mm · module: ~{(moduleWidthMm * 1000).toFixed(0)}µm
           </p>
           {barcodeWarn && (
@@ -473,7 +473,7 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
               }}
               className={`w-16 h-6 px-2 text-xs rounded border bg-white dark:bg-slate-800 focus:outline-none ${sheetColsWarn ? 'border-amber-400 dark:border-amber-600' : 'border-slate-300 dark:border-slate-700'}`}
             />
-            <span className="text-xs text-slate-400">max {maxSafeCols}</span>
+            <span className="text-xs text-tertiary">max {maxSafeCols}</span>
           </div>
           {sheetColsWarn && (
             <p className="text-[10px] text-amber-600 dark:text-amber-400 mb-1">
@@ -485,7 +485,7 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
           <SliderRow label="Label gap" value={template.sheetGapMm ?? 2} min={0} max={10} step={0.5} unit="mm"
             onChange={v => patch({ sheetGapMm: v })} />
           <Checkbox label="Crop marks" checked={template.showCropMarks ?? false} onChange={v => patch({ showCropMarks: v })} />
-          <p className="text-[10px] text-slate-400 ml-5 -mt-1">Tiny corner ticks for guillotine-cut alignment (A4 only).</p>
+          <p className="text-[10px] text-tertiary ml-5 -mt-1">Tiny corner ticks for guillotine-cut alignment (A4 only).</p>
         </Section>
 
         {/* ── Logo URL ────────────────────────────── */}
@@ -494,7 +494,7 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
             <input value={template.logoUrl} onChange={e => patch({ logoUrl: e.target.value })}
               placeholder="https://…/logo.png"
               className="w-full h-7 px-2 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500" />
-            <p className="text-xs text-slate-400 mt-1 mb-2">Direct image URL. Leave blank for placeholder.</p>
+            <p className="text-xs text-tertiary mt-1 mb-2">Direct image URL. Leave blank for placeholder.</p>
             <SliderRow label="Logo height" value={template.logoHeightPct ?? 22} min={10} max={40} step={1} unit="% h"
               onChange={v => patch({ logoHeightPct: v })} />
           </Section>

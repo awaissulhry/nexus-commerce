@@ -80,7 +80,7 @@ function actionIcon(action: string) {
   if (action === 'imagePublishFailed')    return <AlertCircle className="w-3 h-3 text-rose-500" />
   if (action === 'imagePublishScheduled') return <Calendar className="w-3 h-3 text-amber-500" />
   if (action === 'imagePublishBulk')      return <Layers className="w-3 h-3 text-purple-500" />
-  return <Clock className="w-3 h-3 text-slate-400" />
+  return <Clock className="w-3 h-3 text-tertiary" />
 }
 
 function actionLabel(action: string): string {
@@ -132,19 +132,19 @@ export default function PublishAuditLog({ productId, refreshKey = 0 }: Props) {
   }, [open, fetchAudit, refreshKey])
 
   return (
-    <div className="border-t border-slate-100 dark:border-slate-800">
+    <div className="border-t border-subtle dark:border-slate-800">
       <button
         type="button"
         onClick={() => setOpen((p) => !p)}
         className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
         aria-expanded={open}
       >
-        <Clock className="w-3.5 h-3.5 text-slate-400" />
+        <Clock className="w-3.5 h-3.5 text-tertiary" />
         <span className="font-medium">Publish audit log</span>
-        <span className="text-slate-400 ml-1">— who/what/when on every image-publish action</span>
-        {loading && open && <Loader2 className="w-3 h-3 animate-spin text-slate-400 ml-auto" />}
+        <span className="text-tertiary ml-1">— who/what/when on every image-publish action</span>
+        {loading && open && <Loader2 className="w-3 h-3 animate-spin text-tertiary ml-auto" />}
         {!loading && (
-          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-slate-400 transition-transform', open && 'rotate-180')} />
+          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-tertiary transition-transform', open && 'rotate-180')} />
         )}
       </button>
       {open && (
@@ -153,13 +153,13 @@ export default function PublishAuditLog({ productId, refreshKey = 0 }: Props) {
             <div className="text-xs text-rose-600 dark:text-rose-400 px-2 py-1">{error}</div>
           )}
           {!error && rows.length === 0 && !loading && (
-            <div className="text-xs text-slate-400 italic px-2 py-3">No image-publish actions logged for this product yet.</div>
+            <div className="text-xs text-tertiary italic px-2 py-3">No image-publish actions logged for this product yet.</div>
           )}
           {rows.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="text-left text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
+                  <tr className="text-left text-slate-500 dark:text-slate-400 border-b border-subtle dark:border-slate-800">
                     <th className="py-1.5 pr-3 font-medium">Action</th>
                     <th className="py-1.5 pr-3 font-medium">Channel</th>
                     <th className="py-1.5 pr-3 font-medium">Market</th>
@@ -193,10 +193,10 @@ export default function PublishAuditLog({ productId, refreshKey = 0 }: Props) {
                       <td className="py-1.5 pr-3 text-slate-500 dark:text-slate-400">
                         <Detail row={r} />
                       </td>
-                      <td className="py-1.5 pr-3 font-mono text-[11px] text-slate-400">
+                      <td className="py-1.5 pr-3 font-mono text-[11px] text-tertiary">
                         {r.userId ?? '—'}
                       </td>
-                      <td className="py-1.5 pr-3 font-mono text-slate-400" title={r.createdAt}>
+                      <td className="py-1.5 pr-3 font-mono text-tertiary" title={r.createdAt}>
                         {elapsed(r.createdAt)}
                       </td>
                     </tr>

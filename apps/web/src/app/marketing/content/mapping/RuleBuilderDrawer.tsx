@@ -178,11 +178,11 @@ export function RuleBuilderDrawer({
       {/* Drawer */}
       <div className="fixed right-0 top-0 bottom-0 w-full max-w-lg bg-white dark:bg-slate-900 shadow-xl z-50 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-default dark:border-slate-800">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
             {isEdit ? 'Edit transform rule' : 'New transform rule'}
           </h2>
-          <button type="button" onClick={onClose} className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+          <button type="button" onClick={onClose} className="p-1 rounded text-tertiary hover:text-slate-700 dark:hover:text-slate-200">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -298,7 +298,7 @@ export function RuleBuilderDrawer({
           </div>
 
           {/* Condition */}
-          <div className="border border-slate-200 dark:border-slate-800 rounded-md p-3 space-y-3">
+          <div className="border border-default dark:border-slate-800 rounded-md p-3 space-y-3">
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -311,7 +311,7 @@ export function RuleBuilderDrawer({
                   Add condition (IF)
                 </span>
               </label>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-tertiary">
                 {hasCondition ? '' : 'Rule applies to all products unconditionally'}
               </span>
             </div>
@@ -358,7 +358,7 @@ export function RuleBuilderDrawer({
           </div>
 
           {/* Action */}
-          <div className="border border-slate-200 dark:border-slate-800 rounded-md p-3 space-y-3">
+          <div className="border border-default dark:border-slate-800 rounded-md p-3 space-y-3">
             <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Action (THEN)
             </h3>
@@ -375,7 +375,7 @@ export function RuleBuilderDrawer({
                     className={`px-3 py-2 text-sm rounded border text-left transition-colors ${
                       actionType === t
                         ? 'border-violet-500 bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300'
-                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                        : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'
                     }`}
                   >
                     <span className="font-semibold uppercase text-[11px]">{t}</span>
@@ -446,7 +446,7 @@ export function RuleBuilderDrawer({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2">
+        <div className="px-5 py-4 border-t border-default dark:border-slate-800 flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={onClose}

@@ -81,7 +81,7 @@ export default function ModuleCanvas({
   if (modules.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white py-16 text-center dark:border-slate-700 dark:bg-slate-900">
-        <Sparkles className="w-8 h-8 text-slate-400" />
+        <Sparkles className="w-8 h-8 text-tertiary" />
         <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
           {t('aplus.builder.canvasEmpty')}
         </p>
@@ -94,11 +94,11 @@ export default function ModuleCanvas({
 
   return (
     <div
-      className="rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+      className="rounded-lg border border-default bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
       role="region"
       aria-label={t('aplus.builder.canvasLabel')}
     >
-      <header className="flex items-center justify-between border-b border-slate-200 px-3 py-2 dark:border-slate-800">
+      <header className="flex items-center justify-between border-b border-default px-3 py-2 dark:border-slate-800">
         <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
           {t('aplus.builder.canvasTitle')}
         </p>
@@ -136,7 +136,7 @@ export default function ModuleCanvas({
               }`}
             >
               <div className="flex items-start gap-2">
-                <span className="flex flex-col items-center pt-1 text-slate-400">
+                <span className="flex flex-col items-center pt-1 text-tertiary">
                   <GripVertical className="w-4 h-4 cursor-grab" />
                   <span className="text-[10px] font-mono">{index + 1}</span>
                 </span>
@@ -150,7 +150,7 @@ export default function ModuleCanvas({
                     {spec?.tier === 'premium' ? (
                       <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                     ) : (
-                      <BadgeCheck className="w-3.5 h-3.5 text-slate-400" />
+                      <BadgeCheck className="w-3.5 h-3.5 text-tertiary" />
                     )}
                     {spec?.label ?? module.type}
                     {issues.length > 0 && (
@@ -179,7 +179,7 @@ export default function ModuleCanvas({
                     onDelete(module.id)
                   }}
                   aria-label={t('aplus.builder.deleteModule')}
-                  className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800 dark:hover:text-red-400"
+                  className="rounded p-1 text-tertiary hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800 dark:hover:text-red-400"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>

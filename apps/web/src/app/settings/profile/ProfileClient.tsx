@@ -216,8 +216,8 @@ function Card({
   children: React.ReactNode
 }) {
   return (
-    <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5">
-      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+    <section className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-5">
+      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-subtle dark:border-slate-800">
         {icon && (
           <div className="shrink-0 w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400">
             {icon}
@@ -321,7 +321,7 @@ function IdentitySection({
                 className="w-full h-full object-cover"
               />
             ) : (
-              <span className="text-2xl text-slate-400 dark:text-slate-500">
+              <span className="text-2xl text-tertiary dark:text-slate-500">
                 {draft.displayName?.[0]?.toUpperCase() ?? '👤'}
               </span>
             )}
@@ -626,7 +626,7 @@ function PasswordSection({ hasPassword }: { hasPassword: boolean }) {
               <button
                 type="button"
                 onClick={() => setShowCurrent((s) => !s)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-tertiary hover:text-slate-700 dark:hover:text-slate-200"
                 aria-label={showCurrent ? 'Hide password' : 'Show password'}
                 tabIndex={-1}
               >
@@ -651,7 +651,7 @@ function PasswordSection({ hasPassword }: { hasPassword: boolean }) {
               <button
                 type="button"
                 onClick={() => setShowNew((s) => !s)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-tertiary hover:text-slate-700 dark:hover:text-slate-200"
                 aria-label={showNew ? 'Hide password' : 'Show password'}
                 tabIndex={-1}
               >

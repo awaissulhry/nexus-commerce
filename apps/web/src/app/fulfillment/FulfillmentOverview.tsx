@@ -114,7 +114,7 @@ export default function FulfillmentOverview() {
               </span>
             </Tooltip>
             <PushHealthChip />
-            <button onClick={fetchData} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
+            <button onClick={fetchData} className="h-8 px-3 text-base border border-default rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
               <RefreshCw size={12} /> Refresh
             </button>
           </div>
@@ -276,7 +276,7 @@ function SectionCard({
           <div className={`w-10 h-10 rounded-md inline-flex items-center justify-center ${tone}`}>
             <Icon size={18} />
           </div>
-          <ArrowRight size={14} className="text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+          <ArrowRight size={14} className="text-tertiary group-hover:translate-x-0.5 transition-transform" />
         </div>
         <div className="text-lg font-semibold text-slate-900">{title}</div>
         <div className="text-sm text-slate-500 mb-3">{cta}</div>

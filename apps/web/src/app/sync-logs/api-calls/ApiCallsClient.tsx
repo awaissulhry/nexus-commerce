@@ -376,7 +376,7 @@ export default function ApiCallsClient() {
                 'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                 urlSinceKey === p.key
                   ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
               )}
             >
               {p.label}
@@ -399,7 +399,7 @@ export default function ApiCallsClient() {
                 'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                 urlChannel === c.channel
                   ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
               )}
             >
               {c.channel}
@@ -424,7 +424,7 @@ export default function ApiCallsClient() {
                 'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                 urlErrorType === t
                   ? 'bg-rose-600 text-white border-rose-600'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
               )}
             >
               {t}
@@ -443,7 +443,7 @@ export default function ApiCallsClient() {
               'ml-3 px-2 py-0.5 text-sm font-medium rounded border transition-colors',
               urlSuccess === 'false'
                 ? 'bg-rose-600 text-white border-rose-600'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
             )}
           >
             {t('syncLogs.apiCalls.filter.failuresOnly')}
@@ -521,14 +521,14 @@ export default function ApiCallsClient() {
           )}
 
           <span
-            className="ml-auto hidden md:inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500"
+            className="ml-auto hidden md:inline-flex items-center gap-1 text-xs text-tertiary dark:text-slate-500"
             aria-hidden
             title="Use j/k to navigate rows, Enter to open, Esc to close"
           >
-            <kbd className="px-1 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-[10px]">
+            <kbd className="px-1 py-0.5 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-[10px]">
               j
             </kbd>
-            <kbd className="px-1 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-[10px]">
+            <kbd className="px-1 py-0.5 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-[10px]">
               k
             </kbd>
             navigate
@@ -541,7 +541,7 @@ export default function ApiCallsClient() {
               'h-7 px-2 text-sm font-medium rounded border inline-flex items-center gap-1.5 transition-colors',
               live
                 ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
             )}
             title={live ? t('syncLogs.apiCalls.live.pause') : t('syncLogs.apiCalls.live.start')}
           >
@@ -632,7 +632,7 @@ export default function ApiCallsClient() {
 
       {/* KPI strip */}
       {rollup && (
-        <section className="border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3 grid grid-cols-2 md:grid-cols-5 gap-3 bg-white dark:bg-slate-900">
+        <section className="border border-default dark:border-slate-800 rounded-md px-4 py-3 grid grid-cols-2 md:grid-cols-5 gap-3 bg-white dark:bg-slate-900">
           <Kpi label={t('syncLogs.apiCalls.kpi.total')} value={rollup.stats.total} />
           <Kpi
             label={t('syncLogs.apiCalls.kpi.failed')}
@@ -698,7 +698,7 @@ export default function ApiCallsClient() {
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div
               key={i}
-              className="h-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md animate-pulse"
+              className="h-10 bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md animate-pulse"
             />
           ))}
         </div>
@@ -709,9 +709,9 @@ export default function ApiCallsClient() {
           description={t('syncLogs.apiCalls.empty.description')}
         />
       ) : (
-        <div className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900 overflow-hidden">
+        <div className="border border-default dark:border-slate-800 rounded-md bg-white dark:bg-slate-900 overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-default dark:border-slate-800">
               <tr>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-2"></th>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-20">
@@ -743,7 +743,7 @@ export default function ApiCallsClient() {
                     setSelected(r)
                   }}
                   className={cn(
-                    'border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors',
+                    'border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors',
                     !r.success && 'bg-rose-50/30 dark:bg-rose-950/30',
                     idx === highlightIndex &&
                       'bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-50 dark:hover:bg-blue-950/40',
@@ -804,7 +804,7 @@ export default function ApiCallsClient() {
           </table>
 
           {nextCursor && (
-            <div className="border-t border-slate-200 dark:border-slate-800 p-2 flex justify-center">
+            <div className="border-t border-default dark:border-slate-800 p-2 flex justify-center">
               <Button
                 variant="secondary"
                 size="sm"
@@ -857,12 +857,12 @@ function DetailPanel({
         aria-hidden
       />
       <aside
-        className="relative w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-800 overflow-y-auto"
+        className="relative w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl border-l border-default dark:border-slate-800 overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label={t('syncLogs.apiCalls.detail.aria')}
       >
-        <header className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 flex items-center justify-between">
+        <header className="px-4 py-3 border-b border-default dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 flex items-center justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span
@@ -889,7 +889,7 @@ function DetailPanel({
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+            className="p-1 text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             aria-label={t('syncLogs.apiCalls.detail.close')}
           >
             <X className="w-4 h-4" />
@@ -934,7 +934,7 @@ function DetailPanel({
                 className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-1 rounded inline-flex items-center gap-1.5 transition-colors"
               >
                 {row.requestId}
-                <span className="text-slate-400">{t('syncLogs.apiCalls.detail.requestIdFilterArrow')}</span>
+                <span className="text-tertiary">{t('syncLogs.apiCalls.detail.requestIdFilterArrow')}</span>
               </button>
             </Section>
           )}

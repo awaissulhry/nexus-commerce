@@ -186,7 +186,7 @@ export function LabelsPicker({
   return (
     <div className="space-y-3">
       {/* Format/page options */}
-      <div className="border border-slate-200 dark:border-slate-700 rounded p-3 bg-slate-50/40 dark:bg-slate-900/30 space-y-2">
+      <div className="border border-default dark:border-slate-700 rounded p-3 bg-slate-50/40 dark:bg-slate-900/30 space-y-2">
         <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
           Label format
         </div>
@@ -301,8 +301,8 @@ function ShipmentLabelCard({
     downloads.every((d) => expirationLabel(d.expiration)?.expired)
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded">
-      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+    <div className="border border-default dark:border-slate-700 rounded">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[11px] tabular-nums text-slate-500 dark:text-slate-400">
             Shipment {index + 1} of
@@ -343,7 +343,7 @@ function ShipmentLabelCard({
                   className="flex items-center justify-between gap-3 p-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800/40"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <FileText size={12} className="text-slate-400 dark:text-slate-500 shrink-0" />
+                    <FileText size={12} className="text-tertiary dark:text-slate-500 shrink-0" />
                     <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
                       {doc.downloadType || `Document ${i + 1}`}
                     </span>

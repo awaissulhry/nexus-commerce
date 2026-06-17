@@ -103,7 +103,7 @@ function buildQuery(state: InsightsFilterState): URLSearchParams {
 }
 
 function cohortToneFor(pct: number): string {
-  if (pct === 0) return 'bg-slate-50 dark:bg-slate-900 text-slate-400'
+  if (pct === 0) return 'bg-slate-50 dark:bg-slate-900 text-tertiary'
   if (pct < 0.05) return 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200'
   if (pct < 0.15) return 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-900 dark:text-emerald-100'
   if (pct < 0.3) return 'bg-emerald-300 dark:bg-emerald-800/70 text-emerald-950 dark:text-emerald-50'
@@ -228,7 +228,7 @@ export default function CustomersClient() {
             {r.rfmLabel}
           </span>
         ) : (
-          <span className="text-slate-400">—</span>
+          <span className="text-tertiary">—</span>
         ),
       format: 'text',
       width: '110px',
@@ -243,7 +243,7 @@ export default function CustomersClient() {
             {new Date(r.lastOrderAt).toLocaleDateString('it-IT')}
           </span>
         ) : (
-          <span className="text-slate-400">—</span>
+          <span className="text-tertiary">—</span>
         ),
       format: 'text',
       width: '90px',
@@ -352,7 +352,7 @@ export default function CustomersClient() {
               centerValue={formatNum(report.rfm.reduce((s, r) => s + r.count, 0))}
             />
           ) : (
-            <div className="h-[220px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[220px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No RFM data'}
             </div>
           )}
@@ -369,7 +369,7 @@ export default function CustomersClient() {
               total={report.ltvBands.reduce((s, b) => s + b.count, 0)}
             />
           ) : (
-            <div className="h-[220px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[220px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No LTV data'}
             </div>
           )}
@@ -377,7 +377,7 @@ export default function CustomersClient() {
         <Card title="New vs returning" description="Revenue mix this window">
           {report ? (
             <div className="space-y-3">
-              <div className="rounded-md border border-slate-200 dark:border-slate-700 p-2.5">
+              <div className="rounded-md border border-default dark:border-slate-700 p-2.5">
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="font-medium text-slate-700">Returning</span>
                   <span className="tabular-nums font-semibold">
@@ -394,7 +394,7 @@ export default function CustomersClient() {
                   {newReturningPct.toFixed(1)}% of window revenue
                 </div>
               </div>
-              <div className="rounded-md border border-slate-200 dark:border-slate-700 p-2.5">
+              <div className="rounded-md border border-default dark:border-slate-700 p-2.5">
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="font-medium text-slate-700">New</span>
                   <span className="tabular-nums font-semibold">
@@ -413,7 +413,7 @@ export default function CustomersClient() {
               </div>
             </div>
           ) : (
-            <div className="h-[220px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[220px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : ''}
             </div>
           )}
@@ -475,7 +475,7 @@ export default function CustomersClient() {
               </tbody>
             </table>
           ) : (
-            <div className="h-[200px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[200px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No cohort data'}
             </div>
           )}
@@ -496,7 +496,7 @@ export default function CustomersClient() {
               total={report.byGeography.reduce((s, g) => s + g.revenue, 0)}
             />
           ) : (
-            <div className="h-[200px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[200px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : 'No data'}
             </div>
           )}
@@ -512,7 +512,7 @@ export default function CustomersClient() {
               <div className="text-xs text-slate-500 mt-1">orders / customer this window</div>
             </div>
           ) : (
-            <div className="h-[200px] flex items-center justify-center text-slate-400 text-sm">
+            <div className="h-[200px] flex items-center justify-center text-tertiary text-sm">
               {loading ? 'Loading…' : ''}
             </div>
           )}
@@ -533,7 +533,7 @@ export default function CustomersClient() {
             emptyLabel="No customers in scope"
           />
         ) : (
-          <div className="text-sm text-slate-400 py-6 text-center">
+          <div className="text-sm text-tertiary py-6 text-center">
             {loading ? 'Loading…' : ''}
           </div>
         )}

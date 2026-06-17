@@ -125,16 +125,16 @@ export default function ManageInventoryClient({
       </div>
 
       {/* ── Search & Filter Toolbar ─────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-4 bg-white rounded-md border border-slate-200 p-3">
+      <div className="flex items-center justify-between gap-4 bg-white rounded-md border border-default p-3">
         {/* Search Input */}
         <div className="flex-1 relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tertiary" />
           <input
             type="text"
             placeholder="Search SKU, name, or ASIN…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-1.5 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent tracking-tight"
+            className="w-full pl-9 pr-4 py-1.5 text-xs border border-default rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent tracking-tight"
           />
         </div>
 
@@ -229,7 +229,7 @@ export default function ManageInventoryClient({
       </div>
 
       {/* ── Amazon Filter Tabs (All | Fix | Optimise) ────────────────── */}
-      <div className="flex items-center gap-6 border-b border-slate-200 bg-white px-3">
+      <div className="flex items-center gap-6 border-b border-default bg-white px-3">
         {TABS.map((tab) => (
           <button
             key={tab}
@@ -250,10 +250,10 @@ export default function ManageInventoryClient({
 
       {/* ── Table ─────────────────────────────────────────────────── */}
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 bg-white rounded-md border border-slate-200">
+        <div className="flex flex-col items-center justify-center py-16 bg-white rounded-md border border-default">
           <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mb-4">
             <svg
-              className="w-7 h-7 text-slate-400"
+              className="w-7 h-7 text-tertiary"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"

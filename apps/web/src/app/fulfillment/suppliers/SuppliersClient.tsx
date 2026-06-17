@@ -120,15 +120,15 @@ export default function SuppliersClient() {
       <FollowUpsDueBanner onPick={setSelectedId} />
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[280px_1fr]">
       {/* Supplier list */}
-      <div className="rounded-lg border border-slate-200 bg-white">
-        <div className="flex items-center gap-2 border-b border-slate-200 p-2">
+      <div className="rounded-lg border border-default bg-white">
+        <div className="flex items-center gap-2 border-b border-default p-2">
           <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-tertiary" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search suppliers"
-              className="w-full rounded border border-slate-300 bg-white py-1 pl-7 pr-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none"
+              className="w-full rounded border border-slate-300 bg-white py-1 pl-7 pr-2 text-xs text-slate-900 placeholder:text-tertiary focus:border-blue-500 focus:outline-none"
             />
           </div>
           <button
@@ -141,7 +141,7 @@ export default function SuppliersClient() {
         </div>
         <div className="max-h-[70vh] overflow-y-auto">
           {loadingSuppliers ? (
-            <div className="flex items-center justify-center p-6 text-slate-400">
+            <div className="flex items-center justify-center p-6 text-tertiary">
               <Loader2 className="h-4 w-4 animate-spin" />
             </div>
           ) : filtered.length === 0 ? (
@@ -152,7 +152,7 @@ export default function SuppliersClient() {
             filtered.map((s) => (
               <div
                 key={s.id}
-                className={`group flex w-full items-center justify-between border-b border-slate-100 px-3 py-2 text-xs hover:bg-slate-50 ${
+                className={`group flex w-full items-center justify-between border-b border-subtle px-3 py-2 text-xs hover:bg-slate-50 ${
                   s.id === selectedId ? 'bg-slate-100' : ''
                 }`}
               >
@@ -171,7 +171,7 @@ export default function SuppliersClient() {
                   <button
                     onClick={() => deleteSupplier(s)}
                     title="Delete supplier"
-                    className="rounded p-1 text-slate-400 opacity-0 transition hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"
+                    className="rounded p-1 text-tertiary opacity-0 transition hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -183,7 +183,7 @@ export default function SuppliersClient() {
       </div>
 
       {/* Catalog */}
-      <div className="rounded-lg border border-slate-200 bg-white">
+      <div className="rounded-lg border border-default bg-white">
         {selected ? (
           <SupplierCatalog supplier={selected} onChanged={loadSuppliers} />
         ) : (
@@ -218,7 +218,7 @@ function FollowUpsDueBanner({ onPick }: { onPick: (id: string) => void }) {
         {items.slice(0, 12).map((f) => {
           const od = new Date(f.dueDate) < today
           return (
-            <button key={f.id} onClick={() => onPick(f.supplier.id)} className={`rounded border px-1.5 py-0.5 text-[11px] ${od ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
+            <button key={f.id} onClick={() => onPick(f.supplier.id)} className={`rounded border px-1.5 py-0.5 text-[11px] ${od ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100' : 'border-default bg-white text-slate-700 hover:bg-slate-50'}`}>
               <span className="font-medium">{f.supplier.name}</span> · {f.title} · {new Date(f.dueDate).toLocaleDateString()}
             </button>
           )
@@ -323,7 +323,7 @@ function SupplierCatalog({
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-default p-3">
         <div>
           <h2 className="text-sm font-semibold text-slate-900">{supplier.name}</h2>
           <p className="text-[11px] text-slate-500">
@@ -343,7 +343,7 @@ function SupplierCatalog({
       <SupplierDetailPanel supplierId={supplier.id} />
 
       {/* Add row */}
-      <div className="flex flex-wrap items-end gap-2 border-b border-slate-200 bg-slate-50 p-3">
+      <div className="flex flex-wrap items-end gap-2 border-b border-default bg-slate-50 p-3">
         <div>
           <label className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-500">
             Product SKU
@@ -352,7 +352,7 @@ function SupplierCatalog({
             value={newSku}
             onChange={(e) => setNewSku(e.target.value)}
             placeholder="e.g. GALE-JACKET-BLACK-MEN-L"
-            className="w-56 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none"
+            className="w-56 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 placeholder:text-tertiary focus:border-blue-500 focus:outline-none"
           />
         </div>
         <div>
@@ -364,7 +364,7 @@ function SupplierCatalog({
             onChange={(e) => setNewCost(e.target.value)}
             placeholder="0.00"
             inputMode="decimal"
-            className="w-24 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none"
+            className="w-24 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 placeholder:text-tertiary focus:border-blue-500 focus:outline-none"
           />
         </div>
         <button
@@ -381,7 +381,7 @@ function SupplierCatalog({
       {/* Grid */}
       <div className="overflow-x-auto">
         {loading ? (
-          <div className="flex items-center justify-center p-8 text-slate-400">
+          <div className="flex items-center justify-center p-8 text-tertiary">
             <Loader2 className="h-4 w-4 animate-spin" />
           </div>
         ) : rows.length === 0 ? (
@@ -391,7 +391,7 @@ function SupplierCatalog({
         ) : (
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-[10px] uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-default text-left text-[10px] uppercase tracking-wide text-slate-500">
                 <th className="px-3 py-2">SKU / Product</th>
                 <th className="px-2 py-2">Supplier SKU</th>
                 <th className="px-2 py-2" title="Name the factory understands — auto-fills PO lines">Factory name</th>
@@ -503,7 +503,7 @@ function SupplierDetailPanel({ supplierId }: { supplierId: string }) {
   }
 
   return (
-    <div className="border-b border-slate-200">
+    <div className="border-b border-default">
       <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 px-3 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50">
         <span>{open ? '▾' : '▸'}</span> Details &amp; contacts{data ? ` (${data.contacts.length})` : ''}
       </button>
@@ -571,20 +571,20 @@ function SupplierFollowUpsSection({ supplierId }: { supplierId: string }) {
         {items.map((f) => {
           const overdue = f.status === 'OPEN' && new Date(f.dueDate) < today
           return (
-            <div key={f.id} className={`flex items-center gap-2 rounded border px-2 py-1 text-[11px] ${f.status === 'DONE' ? 'border-slate-200 opacity-50' : overdue ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-white'}`}>
+            <div key={f.id} className={`flex items-center gap-2 rounded border px-2 py-1 text-[11px] ${f.status === 'DONE' ? 'border-default opacity-50' : overdue ? 'border-rose-200 bg-rose-50' : 'border-default bg-white'}`}>
               <input type="checkbox" checked={f.status === 'DONE'} onChange={() => patch(f.id, { status: f.status === 'DONE' ? 'OPEN' : 'DONE' })} />
               <div className="min-w-0 flex-1">
-                <div className={`truncate ${f.status === 'DONE' ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{f.title}</div>
+                <div className={`truncate ${f.status === 'DONE' ? 'text-tertiary line-through' : 'text-slate-800'}`}>{f.title}</div>
                 {f.nextAction && <div className="truncate text-slate-500">{f.nextAction}</div>}
               </div>
               <span className={overdue ? 'text-rose-600' : 'text-slate-500'}>{new Date(f.dueDate).toLocaleDateString()}</span>
-              <button onClick={() => del(f.id)} className="text-slate-400 hover:text-rose-600">✕</button>
+              <button onClick={() => del(f.id)} className="text-tertiary hover:text-rose-600">✕</button>
             </div>
           )
         })}
         <div className="flex flex-wrap items-center gap-1.5">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Follow-up (e.g. chase sample)" className="w-44 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none" />
-          <input value={nextAction} onChange={(e) => setNextAction(e.target.value)} placeholder="Next action" className="w-32 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none" />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Follow-up (e.g. chase sample)" className="w-44 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 placeholder:text-tertiary focus:border-blue-500 focus:outline-none" />
+          <input value={nextAction} onChange={(e) => setNextAction(e.target.value)} placeholder="Next action" className="w-32 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 placeholder:text-tertiary focus:border-blue-500 focus:outline-none" />
           <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none" />
           <button onClick={add} disabled={!title.trim() || !due} className="rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">Add</button>
         </div>
@@ -656,17 +656,17 @@ function SupplierCommsSection({ supplierId, contacts }: { supplierId: string; co
         </div>
         {msg && <span className="text-[11px] text-emerald-600">{msg}</span>}
       </div>
-      <div className="space-y-1.5 rounded border border-slate-200 bg-slate-50 p-2">
+      <div className="space-y-1.5 rounded border border-default bg-slate-50 p-2">
         {mode === 'email' && (
           <div className="flex flex-wrap gap-1.5">
-            <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="recipient@factory.com" list="supplier-emails" className="w-56 rounded border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none" />
+            <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="recipient@factory.com" list="supplier-emails" className="w-56 rounded border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-900 placeholder:text-tertiary focus:border-blue-500 focus:outline-none" />
             <datalist id="supplier-emails">
               {contacts.filter((c) => c.email).map((c) => <option key={c.id} value={c.email!}>{c.name}</option>)}
             </datalist>
-            <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" className="flex-1 rounded border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none" />
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" className="flex-1 rounded border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-900 placeholder:text-tertiary focus:border-blue-500 focus:outline-none" />
           </div>
         )}
-        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder={mode === 'email' ? 'Message to the factory…' : 'Call summary / note…'} className="w-full rounded border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none" />
+        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder={mode === 'email' ? 'Message to the factory…' : 'Call summary / note…'} className="w-full rounded border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-900 placeholder:text-tertiary focus:border-blue-500 focus:outline-none" />
         <div className="flex justify-end">
           <button onClick={send} disabled={busy || !body.trim()} className="rounded bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50">
             {busy ? '…' : mode === 'email' ? 'Send email' : 'Log'}
@@ -676,12 +676,12 @@ function SupplierCommsSection({ supplierId, contacts }: { supplierId: string; co
       {items.length > 0 && (
         <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
           {items.map((c) => (
-            <li key={c.id} className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px]">
+            <li key={c.id} className="rounded border border-default bg-white px-2 py-1 text-[11px]">
               <div className="flex items-center justify-between">
                 <span className="font-medium text-slate-700">
                   {c.channel}{c.emailTo ? ` → ${c.emailTo}` : ''}{c.channel === 'EMAIL' ? (c.emailOk ? ' ✓' : ' ⚠') : ''}
                 </span>
-                <span className="text-slate-400">{new Date(c.createdAt).toLocaleString()}</span>
+                <span className="text-tertiary">{new Date(c.createdAt).toLocaleString()}</span>
               </div>
               {c.subject && <div className="text-slate-600">{c.subject}</div>}
               <div className="truncate text-slate-500">{c.body}</div>
@@ -713,11 +713,11 @@ function ContactRow({
   }
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <input value={name} onChange={(e) => setName(e.target.value)} onBlur={isNew ? undefined : submit} placeholder="Name" className="w-28 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none" />
-      <input value={role} onChange={(e) => setRole(e.target.value)} onBlur={isNew ? undefined : submit} placeholder="Role" className="w-20 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none" />
-      <input value={email} onChange={(e) => setEmail(e.target.value)} onBlur={isNew ? undefined : submit} placeholder="Email" className="w-40 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none" />
-      <input value={phone} onChange={(e) => setPhone(e.target.value)} onBlur={isNew ? undefined : submit} placeholder="Phone" className="w-28 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none" />
-      <input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} onBlur={isNew ? undefined : submit} placeholder="WhatsApp/WeChat" className="w-32 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none" />
+      <input value={name} onChange={(e) => setName(e.target.value)} onBlur={isNew ? undefined : submit} placeholder="Name" className="w-28 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 placeholder:text-tertiary focus:border-blue-500 focus:outline-none" />
+      <input value={role} onChange={(e) => setRole(e.target.value)} onBlur={isNew ? undefined : submit} placeholder="Role" className="w-20 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 placeholder:text-tertiary focus:border-blue-500 focus:outline-none" />
+      <input value={email} onChange={(e) => setEmail(e.target.value)} onBlur={isNew ? undefined : submit} placeholder="Email" className="w-40 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 placeholder:text-tertiary focus:border-blue-500 focus:outline-none" />
+      <input value={phone} onChange={(e) => setPhone(e.target.value)} onBlur={isNew ? undefined : submit} placeholder="Phone" className="w-28 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 placeholder:text-tertiary focus:border-blue-500 focus:outline-none" />
+      <input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} onBlur={isNew ? undefined : submit} placeholder="WhatsApp/WeChat" className="w-32 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 placeholder:text-tertiary focus:border-blue-500 focus:outline-none" />
       {isNew ? (
         <button onClick={submit} className="rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700 hover:bg-emerald-100">Add</button>
       ) : (
@@ -775,7 +775,7 @@ function EditableNum({
       className="rounded px-1 py-0.5 text-slate-800 hover:bg-slate-100"
     >
       {value == null ? (
-        <span className="text-slate-400">{placeholder}</span>
+        <span className="text-tertiary">{placeholder}</span>
       ) : (
         `${prefix ?? ''}${value}${suffix ?? ''}`
       )}
@@ -817,7 +817,7 @@ function EditableText({
       onClick={() => { setDraft(value ?? ''); setEditing(true) }}
       className="rounded px-1 py-0.5 text-left text-slate-800 hover:bg-slate-100"
     >
-      {value ? value : <span className="text-slate-400">{placeholder}</span>}
+      {value ? value : <span className="text-tertiary">{placeholder}</span>}
     </button>
   )
 }
@@ -889,13 +889,13 @@ function LeadTimeCell({
         onClick={() => setOpen((v) => !v)}
         title="Production + shipping time"
         className={`rounded px-1.5 py-0.5 hover:bg-slate-100 ${
-          hasSplit || legacy != null ? 'text-slate-800' : 'text-slate-400'
+          hasSplit || legacy != null ? 'text-slate-800' : 'text-tertiary'
         }`}
       >
         {summary}
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-30 mt-1 w-56 space-y-2 rounded-md border border-slate-200 bg-white p-2 text-xs shadow-lg">
+        <div className="absolute left-0 top-full z-30 mt-1 w-56 space-y-2 rounded-md border border-default bg-white p-2 text-xs shadow-lg">
           <div className="text-[10px] uppercase tracking-wide text-slate-500">Production</div>
           <div className="flex gap-1">
             <button
@@ -979,7 +979,7 @@ function CatalogRowView({
   const [costEditing, setCostEditing] = useState(false)
   const [costDraft, setCostDraft] = useState('')
   return (
-    <tr className="border-b border-slate-100 hover:bg-slate-50">
+    <tr className="border-b border-subtle hover:bg-slate-50">
       <td className="px-3 py-2">
         <div className="font-medium text-slate-900">{row.product?.sku ?? '—'}</div>
         <div className="max-w-[260px] truncate text-[11px] text-slate-500">
@@ -1048,7 +1048,7 @@ function CatalogRowView({
         >
           <Star
             className={`h-4 w-4 ${
-              row.isPrimary ? 'fill-amber-400 text-amber-400' : 'text-slate-300 hover:text-slate-400'
+              row.isPrimary ? 'fill-amber-400 text-amber-400' : 'text-slate-300 hover:text-tertiary'
             }`}
           />
         </button>
@@ -1056,7 +1056,7 @@ function CatalogRowView({
       <td className="px-2 py-2 text-right">
         <button
           onClick={onDelete}
-          className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+          className="rounded p-1 text-tertiary hover:bg-rose-50 hover:text-rose-600"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
@@ -1177,12 +1177,12 @@ function ImportModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-200 p-3">
+      <div className="w-full max-w-2xl rounded-lg border border-default bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-default p-3">
           <h3 className="text-sm font-semibold text-slate-900">
             Import costs → {supplier.name}
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
+          <button onClick={onClose} className="text-tertiary hover:text-slate-700">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -1212,7 +1212,7 @@ function ImportModal({
             onChange={(e) => setText(e.target.value)}
             rows={8}
             placeholder={'sku,cost,moq,leadTime,primary\nGALE-JACKET-BLACK-MEN-L,42.50,50,21,true'}
-            className="w-full rounded border border-slate-300 bg-white p-2 font-mono text-[11px] text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none"
+            className="w-full rounded border border-slate-300 bg-white p-2 font-mono text-[11px] text-slate-900 placeholder:text-tertiary focus:border-blue-500 focus:outline-none"
           />
           <div className="flex items-center justify-between">
             <span className="text-[11px] text-slate-500">
@@ -1232,7 +1232,7 @@ function ImportModal({
             </button>
           </div>
           {result && (
-            <div className="rounded border border-slate-200 bg-slate-50 p-2 text-[11px]">
+            <div className="rounded border border-default bg-slate-50 p-2 text-[11px]">
               {result.error ? (
                 <span className="text-rose-600">{result.error}</span>
               ) : (

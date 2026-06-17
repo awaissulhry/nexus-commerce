@@ -110,7 +110,7 @@ export default function LiveClient() {
           href="/insights"
           className={cn(
             'inline-flex items-center gap-1 text-xs hover:text-slate-700',
-            fullscreen ? 'text-slate-400' : 'text-slate-500',
+            fullscreen ? 'text-tertiary' : 'text-slate-500',
           )}
         >
           <ChevronLeft className="w-3 h-3" />
@@ -129,7 +129,7 @@ export default function LiveClient() {
             <span
               className={cn(
                 'text-[11px] tabular-nums',
-                fullscreen ? 'text-slate-400' : 'text-slate-500',
+                fullscreen ? 'text-tertiary' : 'text-slate-500',
               )}
             >
               Refreshed {lastRefreshedAt.toLocaleTimeString('it-IT')}
@@ -142,7 +142,7 @@ export default function LiveClient() {
               'inline-flex items-center gap-1.5 h-7 px-2.5 text-sm rounded-md border',
               fullscreen
                 ? 'border-slate-700 text-slate-300 hover:bg-slate-800'
-                : 'border-slate-200 text-slate-700 hover:bg-slate-50',
+                : 'border-default text-slate-700 hover:bg-slate-50',
             )}
           >
             {fullscreen ? (
@@ -167,7 +167,7 @@ export default function LiveClient() {
         <p
           className={cn(
             'text-sm',
-            fullscreen ? 'text-slate-400' : 'text-slate-500',
+            fullscreen ? 'text-tertiary' : 'text-slate-500',
           )}
         >
           Today's KPIs vs yesterday — auto-refreshes every 60 seconds.
@@ -242,7 +242,7 @@ export default function LiveClient() {
                 rightAxisFormat="number"
               />
             ) : (
-              <div className="h-[260px] flex items-center justify-center text-slate-400 text-sm">
+              <div className="h-[260px] flex items-center justify-center text-tertiary text-sm">
                 Waiting for today's data…
               </div>
             )}

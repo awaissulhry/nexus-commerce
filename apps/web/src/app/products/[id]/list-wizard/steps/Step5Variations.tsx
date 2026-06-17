@@ -514,7 +514,7 @@ export default function Step5Variations({
 
       {loading && !payload && (
         <div
-          className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-6 space-y-3"
+          className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-6 space-y-3"
           aria-busy="true"
           aria-label="Loading variations"
         >
@@ -552,7 +552,7 @@ export default function Step5Variations({
           )}
 
           {/* Common theme picker */}
-          <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3 mb-4">
+          <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3 mb-4">
             <div className="flex items-baseline justify-between gap-2 mb-2">
               <label className="text-base font-medium text-slate-700 dark:text-slate-300">
                 Common theme (applies to every selected channel)
@@ -568,7 +568,7 @@ export default function Step5Variations({
                   onClick={() => setLiveThemesKey((k) => k + 1)}
                   disabled={liveThemesBusy}
                   title="Refresh live themes from Amazon SP-API"
-                  className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                 >
                   <RefreshCw className={cn('w-3 h-3', liveThemesBusy && 'animate-spin')} />
                   Refresh
@@ -723,7 +723,7 @@ export default function Step5Variations({
             <select
               value={commonTheme ?? ''}
               onChange={(e) => setCommonTheme(e.target.value || null)}
-              className="w-full h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+              className="w-full h-8 px-2 text-md border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
               disabled={effectivePayload.commonThemes.length === 0}
             >
               {effectivePayload.commonThemes.length === 0 ? (
@@ -755,8 +755,8 @@ export default function Step5Variations({
               shows the channel's resolved theme (override or inherits
               common) plus a "Same as" / custom path. */}
           {channelKeys.length > 0 && (
-            <div className="mb-4 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
-              <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between text-base">
+            <div className="mb-4 border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
+              <div className="px-4 py-2 border-b border-subtle dark:border-slate-800 flex items-center justify-between text-base">
                 <span className="font-medium text-slate-700 dark:text-slate-300">
                   Per-marketplace themes
                 </span>
@@ -768,7 +768,7 @@ export default function Step5Variations({
                     : 'all inherit common'}
                 </span>
               </div>
-              <div className="border-t border-slate-100 dark:border-slate-800 px-4 py-3 space-y-2">
+              <div className="border-t border-subtle dark:border-slate-800 px-4 py-3 space-y-2">
                 {channelKeys.map((channelKey) => {
                     const themes = effectivePayload.themesByChannel[channelKey] ?? []
                     const overrideValue = themeByChannel[channelKey] ?? ''
@@ -841,7 +841,7 @@ export default function Step5Variations({
                                 })
                               }
                             }}
-                            className="flex-1 h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+                            className="flex-1 h-7 px-2 text-base border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
                           >
                             <option value="">
                               {inherits && commonTheme
@@ -944,7 +944,7 @@ export default function Step5Variations({
                                 })
                               }}
                               placeholder="size, color, material"
-                              className="flex-1 h-7 px-2 text-base font-mono border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                              className="flex-1 h-7 px-2 text-base font-mono border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                             />
                           </div>
                         )}
@@ -965,7 +965,7 @@ export default function Step5Variations({
                   'h-7 px-3 text-sm rounded-md border inline-flex items-center gap-1.5',
                   showMatrix
                     ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+                    : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
                 )}
               >
                 <Layers className="w-3.5 h-3.5" />
@@ -1013,7 +1013,7 @@ export default function Step5Variations({
               <button
                 type="button"
                 onClick={() => setShowAddRow(true)}
-                className="h-7 px-3 text-sm rounded-md border border-dashed border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400"
+                className="h-7 px-3 text-sm rounded-md border border-dashed border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Add variant
@@ -1162,17 +1162,17 @@ function VariantsTable({
 
   if (children.length === 0) {
     return (
-      <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-3 py-6 text-base text-slate-500 dark:text-slate-400 text-center">
+      <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-3 py-6 text-base text-slate-500 dark:text-slate-400 text-center">
         No children found. Add a variant below.
       </div>
     )
   }
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-x-auto">
+    <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
+          <tr className="border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
             <th className="w-8 px-2 py-2 text-center">
               <span className="sr-only">Include</span>
             </th>
@@ -1202,7 +1202,7 @@ function VariantsTable({
                 key={child.id}
                 data-blocker-row={hasBlocking ? 'true' : undefined}
                 className={cn(
-                  'border-b border-slate-100 dark:border-slate-800 last:border-b-0 scroll-mt-24',
+                  'border-b border-subtle dark:border-slate-800 last:border-b-0 scroll-mt-24',
                   hasBlocking && 'bg-amber-50/40 dark:bg-amber-950/10',
                   isEditing && 'bg-blue-50/30 dark:bg-blue-950/10',
                 )}
@@ -1221,7 +1221,7 @@ function VariantsTable({
                       type="text"
                       value={editDraft!.sku}
                       onChange={(e) => setEditDraft((d) => d ? { ...d, sku: e.target.value } : d)}
-                      className="w-full h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 font-mono"
+                      className="w-full h-7 px-2 text-sm border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 font-mono"
                     />
                   ) : (
                     <div>
@@ -1244,11 +1244,11 @@ function VariantsTable({
                           )
                         }
                         placeholder={`${attr} (empty = remove)`}
-                        className="w-full h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+                        className="w-full h-7 px-2 text-sm border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
                       />
                     ) : (
                       <span className="text-slate-700 dark:text-slate-300">
-                        {child.attributes[attr] ?? <span className="text-slate-400 dark:text-slate-600 italic">—</span>}
+                        {child.attributes[attr] ?? <span className="text-tertiary dark:text-slate-600 italic">—</span>}
                       </span>
                     )}
                   </td>
@@ -1261,7 +1261,7 @@ function VariantsTable({
                       step="0.01"
                       value={editDraft!.price}
                       onChange={(e) => setEditDraft((d) => d ? { ...d, price: e.target.value } : d)}
-                      className="w-20 h-7 px-2 text-sm text-right border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+                      className="w-20 h-7 px-2 text-sm text-right border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
                     />
                   ) : (
                     <span className="tabular-nums text-slate-700 dark:text-slate-300">€{child.price.toFixed(2)}</span>
@@ -1274,7 +1274,7 @@ function VariantsTable({
                       min="0"
                       value={editDraft!.stock}
                       onChange={(e) => setEditDraft((d) => d ? { ...d, stock: e.target.value } : d)}
-                      className="w-16 h-7 px-2 text-sm text-right border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+                      className="w-16 h-7 px-2 text-sm text-right border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
                     />
                   ) : (
                     <span className="tabular-nums text-slate-700 dark:text-slate-300">{child.stock}</span>
@@ -1311,7 +1311,7 @@ function VariantsTable({
                           type="button"
                           onClick={cancelEdit}
                           title="Cancel"
-                          className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-default dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
                         >
                           <XCircle className="w-3.5 h-3.5" />
                         </button>
@@ -1322,7 +1322,7 @@ function VariantsTable({
                           type="button"
                           onClick={() => startEdit(child)}
                           title="Edit"
-                          className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-default dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
@@ -1330,7 +1330,7 @@ function VariantsTable({
                           type="button"
                           onClick={() => void handleDelete(child)}
                           title="Delete"
-                          className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-200 dark:hover:border-rose-800"
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-default dark:border-slate-700 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-200 dark:hover:border-rose-800"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1418,7 +1418,7 @@ function AddVariantRow({
           value={sku}
           onChange={(e) => setSku(e.target.value)}
           placeholder="SKU *"
-          className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 font-mono w-36"
+          className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 font-mono w-36"
         />
         {attrCols.map((attr) => (
           <input
@@ -1427,7 +1427,7 @@ function AddVariantRow({
             value={attrs[attr] ?? ''}
             onChange={(e) => setAttrs((a) => ({ ...a, [attr]: e.target.value }))}
             placeholder={attr}
-            className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 w-24"
+            className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 w-24"
           />
         ))}
         <input
@@ -1437,7 +1437,7 @@ function AddVariantRow({
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           placeholder="Price"
-          className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 w-20"
+          className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 w-20"
         />
         <input
           type="number"
@@ -1445,7 +1445,7 @@ function AddVariantRow({
           value={stock}
           onChange={(e) => setStock(e.target.value)}
           placeholder="Stock"
-          className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 w-16"
+          className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 w-16"
         />
       </div>
       {error && (
@@ -1467,7 +1467,7 @@ function AddVariantRow({
         <button
           type="button"
           onClick={onCancel}
-          className="h-7 px-3 text-sm rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+          className="h-7 px-3 text-sm rounded-md border border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           Cancel
         </button>
@@ -1685,7 +1685,7 @@ function SingleProductSetup({
                 'px-2 py-0.5 rounded-md border text-sm',
                 promoteMode === 'matrix'
                   ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+                  : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
               )}
             >
               Matrix (axes × axes)
@@ -1697,7 +1697,7 @@ function SingleProductSetup({
                 'px-2 py-0.5 rounded-md border text-sm',
                 promoteMode === 'manual'
                   ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+                  : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
               )}
             >
               Manual (one-by-one)
@@ -1735,7 +1735,7 @@ function ModeCard({
         'text-left border rounded-lg p-3 transition-colors',
         active
           ? 'border-blue-300 bg-blue-50 dark:bg-blue-950/40'
-          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600',
+          : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600',
       )}
     >
       <Icon
@@ -1758,7 +1758,7 @@ function StandalonePanel({
   sku: string
 }) {
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-5 py-4">
+    <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-5 py-4">
       <div className="flex items-start gap-3">
         <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
         <div className="text-base text-slate-700 dark:text-slate-300">
@@ -1909,10 +1909,10 @@ function LinkParentPanel({ onLinked }: { onLinked: () => void }) {
   }
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
-      <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+    <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
+      <div className="px-5 py-4 border-b border-subtle dark:border-slate-800">
         <div className="flex items-center gap-2">
-          <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+          <Search className="w-3.5 h-3.5 text-tertiary dark:text-slate-500" />
           <input
             type="text"
             value={search}
@@ -1922,7 +1922,7 @@ function LinkParentPanel({ onLinked }: { onLinked: () => void }) {
             autoFocus
           />
           {searching && (
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400 dark:text-slate-500" />
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-tertiary dark:text-slate-500" />
           )}
         </div>
       </div>
@@ -1939,7 +1939,7 @@ function LinkParentPanel({ onLinked }: { onLinked: () => void }) {
               key={p.id}
               type="button"
               onClick={() => setSelected(p)}
-              className="w-full text-left px-5 py-2.5 text-base hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800 last:border-b-0"
+              className="w-full text-left px-5 py-2.5 text-base hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-subtle dark:border-slate-800 last:border-b-0"
             >
               <div className="font-mono text-slate-900 dark:text-slate-100">{p.sku}</div>
               <div className="text-sm text-slate-500 dark:text-slate-400 truncate">{p.name}</div>
@@ -1950,7 +1950,7 @@ function LinkParentPanel({ onLinked }: { onLinked: () => void }) {
 
       {selected && (
         <div className="px-5 py-4">
-          <div className="flex items-start justify-between gap-3 mb-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-start justify-between gap-3 mb-3 pb-3 border-b border-subtle dark:border-slate-800">
             <div>
               <div className="text-base text-slate-500 dark:text-slate-400">Linking under:</div>
               <div className="font-mono text-lg text-slate-900 dark:text-slate-100 mt-0.5">
@@ -1961,7 +1961,7 @@ function LinkParentPanel({ onLinked }: { onLinked: () => void }) {
             <button
               type="button"
               onClick={() => setSelected(null)}
-              className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              className="text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
               aria-label="Pick a different parent"
             >
               <X className="w-4 h-4" />
@@ -2113,8 +2113,8 @@ function PromotePanel({ onPromoted }: { onPromoted: () => void }) {
   }
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
-      <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+    <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
+      <div className="px-5 py-4 border-b border-subtle dark:border-slate-800">
         <div className="text-base text-slate-700 dark:text-slate-300">
           Add at least one variant. After save, this product becomes the
           parent and the wizard refreshes to let you pick variation themes
@@ -2123,14 +2123,14 @@ function PromotePanel({ onPromoted }: { onPromoted: () => void }) {
       </div>
       <div className="px-5 py-4 space-y-3">
         {variants.length === 0 ? (
-          <div className="text-center py-6 border border-dashed border-slate-200 dark:border-slate-700 rounded-lg">
+          <div className="text-center py-6 border border-dashed border-default dark:border-slate-700 rounded-lg">
             <p className="text-base text-slate-500 dark:text-slate-400 mb-3">
               No variants yet.
             </p>
             <button
               type="button"
               onClick={addRow}
-              className="h-7 px-3 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+              className="h-7 px-3 text-sm rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
             >
               <Plus className="w-3 h-3" />
               Add variant
@@ -2150,7 +2150,7 @@ function PromotePanel({ onPromoted }: { onPromoted: () => void }) {
             <button
               type="button"
               onClick={addRow}
-              className="w-full h-7 text-sm rounded-md border border-dashed border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center justify-center gap-1"
+              className="w-full h-7 text-sm rounded-md border border-dashed border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center justify-center gap-1"
             >
               <Plus className="w-3 h-3" />
               Add another variant
@@ -2208,7 +2208,7 @@ function PromoteVariantRow({
     onChange({ attrs: rest })
   }
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-md p-3 bg-slate-50/50">
+    <div className="border border-default dark:border-slate-700 rounded-md p-3 bg-slate-50/50">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-medium">
           Variant #{index + 1}
@@ -2228,14 +2228,14 @@ function PromoteVariantRow({
           value={row.sku}
           onChange={(e) => onChange({ sku: e.target.value })}
           placeholder="Variant SKU"
-          className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+          className="h-7 px-2 text-base border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
         />
         <input
           type="text"
           value={row.name}
           onChange={(e) => onChange({ name: e.target.value })}
           placeholder="Variant name"
-          className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+          className="h-7 px-2 text-base border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
         />
       </div>
       <div className="grid grid-cols-2 gap-2 mb-2">
@@ -2246,7 +2246,7 @@ function PromoteVariantRow({
           value={row.price}
           onChange={(e) => onChange({ price: e.target.value })}
           placeholder="Price (opt)"
-          className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+          className="h-7 px-2 text-base border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
         />
         <input
           type="number"
@@ -2254,7 +2254,7 @@ function PromoteVariantRow({
           value={row.stock}
           onChange={(e) => onChange({ stock: e.target.value })}
           placeholder="Stock (opt)"
-          className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+          className="h-7 px-2 text-base border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
         />
       </div>
       {Object.entries(row.attrs).length > 0 && (
@@ -2262,7 +2262,7 @@ function PromoteVariantRow({
           {Object.entries(row.attrs).map(([k, val]) => (
             <span
               key={k}
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-default dark:border-slate-700 text-xs"
             >
               <span className="font-mono">{k}</span>: {val}
               <button
@@ -2283,7 +2283,7 @@ function PromoteVariantRow({
           value={attrKeyDraft}
           onChange={(e) => setAttrKeyDraft(e.target.value)}
           placeholder="key (color)"
-          className="flex-1 h-6 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+          className="flex-1 h-6 px-2 text-sm border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
         />
         <input
           type="text"
@@ -2296,13 +2296,13 @@ function PromoteVariantRow({
             }
           }}
           placeholder="value (red)"
-          className="flex-1 h-6 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+          className="flex-1 h-6 px-2 text-sm border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
         />
         <button
           type="button"
           onClick={addAttr}
           disabled={!attrKeyDraft.trim() || !attrValDraft.trim()}
-          className="h-6 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-white disabled:opacity-40 bg-white dark:bg-slate-900"
+          className="h-6 px-2 text-sm rounded-md border border-default dark:border-slate-700 hover:bg-white disabled:opacity-40 bg-white dark:bg-slate-900"
         >
           Add
         </button>

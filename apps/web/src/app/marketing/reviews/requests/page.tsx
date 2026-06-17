@@ -141,7 +141,7 @@ export default async function ReviewRequestsPage() {
             <Stat label="😊 Positive" value={stats.sentiment.positive} tone="emerald" />
             <Stat label="😕 Negative (diverted)" value={stats.sentiment.negative} tone={stats.sentiment.negative > 0 ? 'rose' : null} />
           </div>
-          <p className="mt-1 text-[11px] text-slate-400">
+          <p className="mt-1 text-[11px] text-tertiary">
             Negative customers are routed to support before they hit Amazon — average rating lift typically +0.2 to +0.5 stars.
           </p>
         </div>
@@ -159,13 +159,13 @@ export default async function ReviewRequestsPage() {
           </h2>
 
           {analytics.overall.sent === 0 ? (
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-4 mb-3 text-sm text-slate-500 dark:text-slate-400">
+            <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-4 mb-3 text-sm text-slate-500 dark:text-slate-400">
               No review requests sent in the last {analytics.window.days} days.{' '}
               <span className="font-semibold text-slate-700 dark:text-slate-300">{stats.sent.toLocaleString()}</span> sent all-time — these analytics track only the last {analytics.window.days} days.
             </div>
           ) : (<>
           {/* Overall headline */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-4 mb-3">
+          <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-4 mb-3">
             <div className="flex items-baseline gap-4 flex-wrap">
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-slate-500">Sent</div>
@@ -185,7 +185,7 @@ export default async function ReviewRequestsPage() {
                   {(analytics.overall.conversionRate * 100).toFixed(1)}%
                 </div>
               </div>
-              <div className="ml-auto text-[11px] text-slate-400">
+              <div className="ml-auto text-[11px] text-tertiary">
                 Industry baseline: 5–15%
               </div>
             </div>
@@ -252,14 +252,14 @@ export default async function ReviewRequestsPage() {
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Upcoming ({stats.upcoming.length})
         </h2>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md overflow-hidden">
           {stats.upcoming.length === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-slate-500">
               No scheduled requests. Run the mailer cron to schedule newly delivered orders.
             </div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
+              <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-default dark:border-slate-800">
                 <tr className="text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   <th className="px-3 py-2">Send date</th>
                   <th className="px-3 py-2">Order</th>
@@ -308,7 +308,7 @@ export default async function ReviewRequestsPage() {
                       <td className="px-3 py-2 text-xs text-slate-600 dark:text-slate-400 max-w-[200px] truncate">
                         {product?.name ?? '—'}
                         {product?.productType && (
-                          <span className="ml-1 text-slate-400 text-[10px]">
+                          <span className="ml-1 text-tertiary text-[10px]">
                             ({product.productType})
                           </span>
                         )}
@@ -328,16 +328,16 @@ export default async function ReviewRequestsPage() {
       {/* UX.5b — settings, timing reference & test mode tucked into a collapsed
           disclosure so the daily view stays simple (KPIs · run/pause · health ·
           analytics · upcoming). One click away, fully functional. */}
-      <details className="mb-6 rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+      <details className="mb-6 rounded-md border border-default dark:border-slate-800 bg-white dark:bg-slate-900">
         <summary className="cursor-pointer select-none px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-950/40">
           Settings, timing reference &amp; test mode
         </summary>
-        <div className="px-4 pb-4 pt-3 space-y-6 border-t border-slate-200 dark:border-slate-800">
+        <div className="px-4 pb-4 pt-3 space-y-6 border-t border-default dark:border-slate-800">
       {/* Timing — the old hardcoded reference table is retired; timing is now set
           by rules + the editable per-product-type baseline (RRT-series). */}
       <section>
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Timing</h2>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
           When each request is sent is set by your{' '}
           <Link href="/orders/reviews/rules" className="text-blue-600 dark:text-blue-400 hover:underline">request rules</Link>{' '}
           and the editable{' '}
@@ -416,12 +416,12 @@ function Stat({
           ? 'text-rose-700 dark:text-rose-300'
           : 'text-slate-900 dark:text-slate-100'
   return (
-    <div title={hint} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2">
+    <div title={hint} className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
         {label}
       </div>
       <div className={`text-base font-semibold tabular-nums ${valueClass}`}>{value}</div>
-      {sub && <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 leading-tight">{sub}</div>}
+      {sub && <div className="text-[10px] text-tertiary dark:text-slate-500 mt-0.5 leading-tight">{sub}</div>}
     </div>
   )
 }
@@ -461,10 +461,10 @@ function PerRuleTable({
   }>
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
-      <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 font-medium flex items-center justify-between">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md overflow-hidden">
+      <div className="px-3 py-2 border-b border-default dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 font-medium flex items-center justify-between">
         <span>By rule</span>
-        <span className="text-[10px] normal-case text-slate-400">
+        <span className="text-[10px] normal-case text-tertiary">
           Compare conversion across active rules — keep the winners, retire the rest
         </span>
       </div>
@@ -540,8 +540,8 @@ function BreakdownTable({
   labelKey: 'marketplace' | 'productType'
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
-      <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 font-medium">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md overflow-hidden">
+      <div className="px-3 py-2 border-b border-default dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 font-medium">
         {title}
       </div>
       {rows.length === 0 ? (

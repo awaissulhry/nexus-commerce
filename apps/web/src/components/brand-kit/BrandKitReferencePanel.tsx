@@ -101,10 +101,10 @@ export default function BrandKitReferencePanel({ brand, apiBase }: Props) {
       <details className="rounded-md border border-dashed border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/50">
         <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-xs">
           <span className="flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-300">
-            <Palette className="w-3.5 h-3.5 text-slate-400" />
+            <Palette className="w-3.5 h-3.5 text-tertiary" />
             {t('brandKitRef.noKitTitle', { brand })}
           </span>
-          <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+          <ChevronDown className="w-3.5 h-3.5 text-tertiary" />
         </summary>
         <div className="px-3 pb-3 text-xs text-slate-600 dark:text-slate-400">
           <p>{t('brandKitRef.noKitBody')}</p>
@@ -126,24 +126,24 @@ export default function BrandKitReferencePanel({ brand, apiBase }: Props) {
     <details
       open={open}
       onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
-      className="rounded-md border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+      className="rounded-md border border-default bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-800">
+      <summary className="flex cursor-pointer list-none items-center justify-between border-b border-subtle px-3 py-2 dark:border-slate-800">
         <span className="flex items-center gap-1.5 text-sm font-medium text-slate-900 dark:text-slate-100">
-          <Palette className="w-4 h-4 text-slate-400" />
+          <Palette className="w-4 h-4 text-tertiary" />
           {t('brandKitRef.title', { brand: kit.displayName ?? kit.brand })}
         </span>
         <span className="flex items-center gap-1.5">
           <Link
             href={`/marketing/brand-kit/${encodeURIComponent(kit.brand)}`}
             onClick={(e) => e.stopPropagation()}
-            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            className="rounded p-1 text-tertiary hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
             title={t('brandKitRef.openKit')}
           >
             <ExternalLink className="w-3.5 h-3.5" />
           </Link>
           <ChevronDown
-            className={`w-3.5 h-3.5 text-slate-400 transition-transform ${
+            className={`w-3.5 h-3.5 text-tertiary transition-transform ${
               open ? 'rotate-180' : ''
             }`}
           />
@@ -180,17 +180,17 @@ export default function BrandKitReferencePanel({ brand, apiBase }: Props) {
                   key={`${color.hex}-${idx}`}
                   type="button"
                   onClick={() => copy(color.hex, color.name || color.hex)}
-                  className="group/c flex items-center gap-1.5 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600"
+                  className="group/c flex items-center gap-1.5 rounded border border-default bg-white px-1.5 py-0.5 text-[10px] hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600"
                   title={`${color.name || color.role} · ${color.hex}`}
                 >
                   <span
-                    className="inline-block h-4 w-4 rounded-sm border border-slate-200 dark:border-slate-700"
+                    className="inline-block h-4 w-4 rounded-sm border border-default dark:border-slate-700"
                     style={{ backgroundColor: color.hex }}
                   />
                   <span className="font-mono text-slate-700 dark:text-slate-300">
                     {color.hex.toUpperCase()}
                   </span>
-                  <Copy className="w-2.5 h-2.5 text-slate-400 opacity-0 group-hover/c:opacity-100" />
+                  <Copy className="w-2.5 h-2.5 text-tertiary opacity-0 group-hover/c:opacity-100" />
                 </button>
               ))}
             </div>
@@ -207,7 +207,7 @@ export default function BrandKitReferencePanel({ brand, apiBase }: Props) {
                   onClick={() =>
                     copy(logo.url ?? logo.assetId ?? '', logo.name || logo.role)
                   }
-                  className="group/l flex items-center gap-1.5 rounded border border-slate-200 bg-white p-1 text-left text-[10px] hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600"
+                  className="group/l flex items-center gap-1.5 rounded border border-default bg-white p-1 text-left text-[10px] hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600"
                   title={logo.name || logo.role}
                 >
                   <div className="relative h-8 w-8 flex-shrink-0 overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
@@ -224,11 +224,11 @@ export default function BrandKitReferencePanel({ brand, apiBase }: Props) {
                     <p className="truncate font-medium text-slate-700 dark:text-slate-300">
                       {logo.name || logo.role}
                     </p>
-                    <p className="truncate uppercase tracking-wide text-slate-400">
+                    <p className="truncate uppercase tracking-wide text-tertiary">
                       {logo.role}
                     </p>
                   </div>
-                  <Copy className="w-2.5 h-2.5 flex-shrink-0 text-slate-400 opacity-0 group-hover/l:opacity-100" />
+                  <Copy className="w-2.5 h-2.5 flex-shrink-0 text-tertiary opacity-0 group-hover/l:opacity-100" />
                 </button>
               ))}
             </div>
@@ -241,7 +241,7 @@ export default function BrandKitReferencePanel({ brand, apiBase }: Props) {
               {kit.fonts.map((font, idx) => (
                 <li
                   key={idx}
-                  className="flex items-center gap-1.5 rounded border border-slate-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900"
+                  className="flex items-center gap-1.5 rounded border border-default bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900"
                 >
                   <span
                     className="flex-1 truncate"
@@ -249,7 +249,7 @@ export default function BrandKitReferencePanel({ brand, apiBase }: Props) {
                   >
                     {font.family || font.name}
                     {font.weight ? (
-                      <span className="ml-1 text-[10px] text-slate-400">
+                      <span className="ml-1 text-[10px] text-tertiary">
                         · {font.weight}
                       </span>
                     ) : null}
@@ -261,7 +261,7 @@ export default function BrandKitReferencePanel({ brand, apiBase }: Props) {
                     type="button"
                     onClick={() => copy(font.family, font.name || font.role)}
                     aria-label={t('brandKitRef.copyAria', { label: font.role })}
-                    className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                    className="rounded p-0.5 text-tertiary hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                   >
                     <Copy className="w-2.5 h-2.5" />
                   </button>
@@ -273,7 +273,7 @@ export default function BrandKitReferencePanel({ brand, apiBase }: Props) {
 
         {kit.voiceNotes && (
           <Group title={t('brandKitRef.voice')}>
-            <p className="rounded-md border border-slate-200 bg-slate-50 p-2 text-xs italic text-slate-600 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400">
+            <p className="rounded-md border border-default bg-slate-50 p-2 text-xs italic text-slate-600 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400">
               {kit.voiceNotes}
             </p>
           </Group>

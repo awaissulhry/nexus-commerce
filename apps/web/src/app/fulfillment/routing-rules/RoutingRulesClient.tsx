@@ -284,7 +284,7 @@ export default function RoutingRulesClient() {
       {loading && !data && (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-14 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse" />
+            <div key={i} className="h-14 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg animate-pulse" />
           ))}
         </div>
       )}
@@ -300,9 +300,9 @@ export default function RoutingRulesClient() {
       )}
 
       {data && data.rules.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg overflow-hidden">
           <table className="w-full text-base">
-            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-default dark:border-slate-700">
               <tr>
                 <th className="text-left font-medium px-3 py-2 w-16">{t('routingRules.col.priority')}</th>
                 <th className="text-left font-medium px-3 py-2">{t('routingRules.col.nameCriteria')}</th>
@@ -313,7 +313,7 @@ export default function RoutingRulesClient() {
             </thead>
             <tbody>
               {data.rules.map((rule) => (
-                <tr key={rule.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                <tr key={rule.id} className="border-b border-subtle dark:border-slate-800 last:border-0">
                   <td className="px-3 py-2 font-mono tabular-nums text-slate-700 dark:text-slate-300">
                     {rule.priority}
                   </td>
@@ -330,7 +330,7 @@ export default function RoutingRulesClient() {
                         <Badge variant="default" size="sm">→ {rule.shippingCountry}</Badge>
                       ) : null}
                       {!rule.channel && !rule.marketplace && !rule.shippingCountry && (
-                        <span className="text-xs text-slate-400 dark:text-slate-500 italic">
+                        <span className="text-xs text-tertiary dark:text-slate-500 italic">
                           {t('routingRules.matchesAll')}
                         </span>
                       )}
@@ -502,10 +502,10 @@ function RuleFormModal({
       aria-label={form.id ? t('routingRules.editTitle') : t('routingRules.newTitle')}
     >
       <div
-        className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-xl max-h-[80vh] overflow-y-auto"
+        className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-default dark:border-slate-700 w-full max-w-xl max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <div className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             {form.id ? t('routingRules.editTitle') : t('routingRules.newTitle')}
           </h2>
@@ -513,7 +513,7 @@ function RuleFormModal({
             type="button"
             onClick={() => setForm(null)}
             disabled={submitting}
-            className="min-h-[44px] sm:min-h-0 min-w-[44px] sm:min-w-0 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-50"
+            className="min-h-[44px] sm:min-h-0 min-w-[44px] sm:min-w-0 text-tertiary hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-50"
             aria-label={t('common.close')}
           >
             <X className="w-4 h-4" aria-hidden="true" />
@@ -557,7 +557,7 @@ function RuleFormModal({
                 id="rule-warehouse"
                 value={form.warehouseId}
                 onChange={(e) => setForm({ ...form, warehouseId: e.target.value })}
-                className="mt-1 w-full px-3 py-1.5 text-md border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="mt-1 w-full px-3 py-1.5 text-md border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
                 required
               >
                 <option value="">{t('routingRules.field.warehouseSelect')}</option>
@@ -570,7 +570,7 @@ function RuleFormModal({
             </div>
           </div>
 
-          <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-3 space-y-2">
+          <div className="bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 rounded p-3 space-y-2">
             <div className="text-sm font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wide">
               {t('routingRules.field.criteria')}
             </div>
@@ -623,7 +623,7 @@ function RuleFormModal({
             {t('routingRules.field.activeLabel')}
           </label>
 
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+          <div className="flex items-center gap-2 pt-2 border-t border-default dark:border-slate-700">
             <Button type="submit" variant="primary" size="sm" disabled={submitting}>
               {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> : <Check className="w-3.5 h-3.5" aria-hidden="true" />}
               {form.id ? t('common.save') : t('routingRules.create')}

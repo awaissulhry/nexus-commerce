@@ -69,11 +69,11 @@ export function MobileProductList({
   if (products.length === 0) {
     return (
       <div
-        // U.25 — was `text-md text-slate-400` while in-card variant
+        // U.25 — was `text-md text-tertiary` while in-card variant
         // empty/loading states used `text-base text-slate-500 italic`.
         // Aligned the two scales so empty messaging reads
         // consistently across the component.
-        className="border border-slate-200 dark:border-slate-800 rounded-md py-12 text-center text-base text-slate-500 dark:text-slate-400 italic"
+        className="border border-default dark:border-slate-800 rounded-md py-12 text-center text-base text-slate-500 dark:text-slate-400 italic"
       >
         {t('products.mobile.empty')}
       </div>
@@ -106,7 +106,7 @@ export function MobileProductList({
               }
             />
             {isExpanded && (
-              <div className="ml-6 space-y-1 border-l-2 border-slate-200 dark:border-slate-800 pl-2">
+              <div className="ml-6 space-y-1 border-l-2 border-default dark:border-slate-800 pl-2">
                 {isLoading ? (
                   <div className="text-base text-slate-500 dark:text-slate-400 italic px-2 py-1.5 bg-slate-50/60 dark:bg-slate-800/60 rounded">
                     {t('products.mobile.loadingVariants')}
@@ -162,8 +162,8 @@ function MobileProductCard({
   const status = p.status ?? 'DRAFT'
   const statusColor: Record<string, string> = {
     ACTIVE: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
-    DRAFT: 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-800',
-    INACTIVE: 'bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-800',
+    DRAFT: 'bg-slate-50 text-slate-600 border-default dark:bg-slate-800 dark:text-slate-400 dark:border-slate-800',
+    INACTIVE: 'bg-slate-50 text-slate-500 border-default dark:bg-slate-800 dark:text-slate-400 dark:border-slate-800',
   }
   return (
     // U.30 — was a plain <div onClick>; keyboard / screen-reader users
@@ -183,10 +183,10 @@ function MobileProductCard({
       aria-label={t('products.mobile.openAria', { sku: p.sku, name: p.name ?? '' })}
       className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border bg-white cursor-pointer active:bg-slate-50 dark:bg-slate-900 dark:active:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-700 ${
         isChild
-          ? 'border-slate-100 bg-slate-50/40 dark:border-slate-800 dark:bg-slate-800/40'
+          ? 'border-subtle bg-slate-50/40 dark:border-slate-800 dark:bg-slate-800/40'
           : selected
             ? 'border-blue-300 bg-blue-50/40 dark:border-blue-700 dark:bg-blue-950/40'
-            : 'border-slate-200 dark:border-slate-800'
+            : 'border-default dark:border-slate-800'
       }`}
     >
       {/* U.22 — 44×44 mobile target. Visible swatch stays w-5/h-5 via
@@ -219,7 +219,7 @@ function MobileProductCard({
           className="w-12 h-12 rounded object-cover bg-slate-100 dark:bg-slate-800 flex-shrink-0"
         />
       ) : (
-        <div className="w-12 h-12 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 flex-shrink-0">
+        <div className="w-12 h-12 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-tertiary dark:text-slate-500 flex-shrink-0">
           <Package className="w-5 h-5" />
         </div>
       )}
@@ -230,7 +230,7 @@ function MobileProductCard({
         <div className="text-sm text-slate-500 dark:text-slate-400 font-mono truncate flex items-center gap-1.5">
           <span>{p.sku}</span>
           {chevron && (
-            <span className="text-slate-400 dark:text-slate-500">
+            <span className="text-tertiary dark:text-slate-500">
               ·{' '}
               {t(
                 chevron.childCount === 1
@@ -275,7 +275,7 @@ function MobileProductCard({
           // for the same compact look; the button itself expands so a
           // near-miss tap doesn't hit the surrounding card and open the
           // drawer instead.
-          className="min-h-11 min-w-11 -m-3 p-3 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300 flex-shrink-0"
+          className="min-h-11 min-w-11 -m-3 p-3 inline-flex items-center justify-center text-tertiary hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300 flex-shrink-0"
         >
           {/* E.22 — single ChevronRight that rotates 90° instead of
               swapping icons. Same smoothness as the desktop ProductRow. */}

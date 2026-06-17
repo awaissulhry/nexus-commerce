@@ -24,7 +24,7 @@ export default function FieldLock({ locked, onToggle }: Props) {
         'inline-flex items-center justify-center w-6 h-6 rounded border transition-colors',
         locked
           ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400'
-          : 'border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+          : 'border-default dark:border-slate-700 text-tertiary hover:text-slate-700 dark:hover:text-slate-200',
       )}
       title={locked ? 'Locked — source refreshes will skip this field' : 'Lock against source refresh'}
       aria-pressed={locked}

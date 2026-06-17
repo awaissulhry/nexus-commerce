@@ -115,7 +115,7 @@ function toBody(d: Draft) {
 
 const STATUS_TONE: Record<string, string> = {
   SUCCESS: 'text-emerald-600 dark:text-emerald-400', DRY_RUN: 'text-amber-600 dark:text-amber-400',
-  PARTIAL: 'text-amber-600 dark:text-amber-400', NO_MATCH: 'text-slate-400',
+  PARTIAL: 'text-amber-600 dark:text-amber-400', NO_MATCH: 'text-tertiary',
   FAILED: 'text-rose-600 dark:text-rose-400', CAP_EXCEEDED: 'text-rose-600 dark:text-rose-400',
 }
 
@@ -224,15 +224,15 @@ export default function AutomationClient() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-3">
       {/* ── Rules list ─────────────────────────────────────────────── */}
-      <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-        <div className="px-4 py-3 flex items-center justify-between border-b border-slate-100 dark:border-slate-800">
+      <div className="rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="px-4 py-3 flex items-center justify-between border-b border-subtle dark:border-slate-800">
           <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Rules</div>
           <Button size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={newRule}>New rule</Button>
         </div>
         {loading ? (
-          <div className="p-6 flex items-center gap-2 text-sm text-slate-400"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
+          <div className="p-6 flex items-center gap-2 text-sm text-tertiary"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
         ) : rules.length === 0 ? (
-          <div className="p-6 text-sm text-slate-400">No listing rules yet. Create one — it ships disabled + dry-run, so it’s safe to experiment.</div>
+          <div className="p-6 text-sm text-tertiary">No listing rules yet. Create one — it ships disabled + dry-run, so it’s safe to experiment.</div>
         ) : (
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {rules.map((r) => (
@@ -245,10 +245,10 @@ export default function AutomationClient() {
                   <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{trig(r.trigger)?.label ?? r.trigger}</div>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                  <button type="button" aria-label={r.enabled ? 'Disable' : 'Enable'} onClick={() => void toggleEnabled(r)} className={cn('p-1 rounded', r.enabled ? 'text-emerald-600' : 'text-slate-400')}>
+                  <button type="button" aria-label={r.enabled ? 'Disable' : 'Enable'} onClick={() => void toggleEnabled(r)} className={cn('p-1 rounded', r.enabled ? 'text-emerald-600' : 'text-tertiary')}>
                     {r.enabled ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
                   </button>
-                  <button type="button" aria-label="Delete" onClick={() => void remove(r)} className="p-1 rounded text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>
+                  <button type="button" aria-label="Delete" onClick={() => void remove(r)} className="p-1 rounded text-tertiary hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>
                 </div>
               </li>
             ))}
@@ -257,30 +257,30 @@ export default function AutomationClient() {
       </div>
 
       {/* ── Builder ────────────────────────────────────────────────── */}
-      <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+      <div className="rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900">
         {!draft ? (
-          <div className="p-6 text-sm text-slate-400">Select a rule to edit, or create a new one.</div>
+          <div className="p-6 text-sm text-tertiary">Select a rule to edit, or create a new one.</div>
         ) : (
           <div className="p-4 space-y-4">
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{draft.id ? 'Edit rule' : 'New rule'}</div>
-              <button type="button" onClick={() => setDraft(null)} aria-label="Close"><X className="w-4 h-4 text-slate-400" /></button>
+              <button type="button" onClick={() => setDraft(null)} aria-label="Close"><X className="w-4 h-4 text-tertiary" /></button>
             </div>
 
             {error && <div className="text-sm text-rose-600 dark:text-rose-400">{error}</div>}
 
             <label className="block">
               <span className="text-xs text-slate-500 dark:text-slate-400">Name</span>
-              <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="mt-1 w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm" placeholder="e.g. Match Amazon DE/FR to master when price diverges >10%" />
+              <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="mt-1 w-full rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm" placeholder="e.g. Match Amazon DE/FR to master when price diverges >10%" />
             </label>
 
             {/* Trigger */}
             <label className="block">
               <span className="text-xs text-slate-500 dark:text-slate-400">When (trigger)</span>
-              <select value={draft.trigger} onChange={(e) => setDraft({ ...draft, trigger: e.target.value })} className="mt-1 w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm">
+              <select value={draft.trigger} onChange={(e) => setDraft({ ...draft, trigger: e.target.value })} className="mt-1 w-full rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm">
                 {TRIGGERS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
               </select>
-              <span className="mt-1 block text-[11px] text-slate-400">{trig(draft.trigger)?.help}</span>
+              <span className="mt-1 block text-[11px] text-tertiary">{trig(draft.trigger)?.help}</span>
             </label>
 
             {/* Conditions */}
@@ -290,15 +290,15 @@ export default function AutomationClient() {
                 <button type="button" className="text-xs text-blue-600 hover:underline" onClick={() => setDraft({ ...draft, conditions: [...draft.conditions, { field: '', op: 'gt', value: '' }] })}>+ condition</button>
               </div>
               <div className="space-y-1.5">
-                {draft.conditions.length === 0 && <div className="text-[11px] text-slate-400">No conditions — fires on every trigger (pair with a low daily cap).</div>}
+                {draft.conditions.length === 0 && <div className="text-[11px] text-tertiary">No conditions — fires on every trigger (pair with a low daily cap).</div>}
                 {draft.conditions.map((c, i) => (
                   <div key={i} className="flex items-center gap-1.5">
-                    <input value={c.field} onChange={(e) => { const n = [...draft.conditions]; n[i] = { ...c, field: e.target.value }; setDraft({ ...draft, conditions: n }) }} placeholder="price.spreadPct" className="flex-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs font-mono" />
-                    <select value={c.op} onChange={(e) => { const n = [...draft.conditions]; n[i] = { ...c, op: e.target.value }; setDraft({ ...draft, conditions: n }) }} className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1 py-1 text-xs">
+                    <input value={c.field} onChange={(e) => { const n = [...draft.conditions]; n[i] = { ...c, field: e.target.value }; setDraft({ ...draft, conditions: n }) }} placeholder="price.spreadPct" className="flex-1 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs font-mono" />
+                    <select value={c.op} onChange={(e) => { const n = [...draft.conditions]; n[i] = { ...c, op: e.target.value }; setDraft({ ...draft, conditions: n }) }} className="rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1 py-1 text-xs">
                       {OPS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
-                    {c.op !== 'exists' && <input value={c.value ?? ''} onChange={(e) => { const n = [...draft.conditions]; n[i] = { ...c, value: e.target.value }; setDraft({ ...draft, conditions: n }) }} placeholder="10" className="w-20 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs" />}
-                    <button type="button" onClick={() => setDraft({ ...draft, conditions: draft.conditions.filter((_, j) => j !== i) })} className="text-slate-400 hover:text-rose-500"><X className="w-3.5 h-3.5" /></button>
+                    {c.op !== 'exists' && <input value={c.value ?? ''} onChange={(e) => { const n = [...draft.conditions]; n[i] = { ...c, value: e.target.value }; setDraft({ ...draft, conditions: n }) }} placeholder="10" className="w-20 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs" />}
+                    <button type="button" onClick={() => setDraft({ ...draft, conditions: draft.conditions.filter((_, j) => j !== i) })} className="text-tertiary hover:text-rose-500"><X className="w-3.5 h-3.5" /></button>
                   </div>
                 ))}
               </div>
@@ -314,45 +314,45 @@ export default function AutomationClient() {
                 {draft.actions.map((a, i) => {
                   const set = (patch: Partial<Act>) => { const n = [...draft.actions]; n[i] = { ...a, ...patch }; setDraft({ ...draft, actions: n }) }
                   return (
-                    <div key={i} className="rounded border border-slate-200 dark:border-slate-700 p-2 space-y-1.5">
+                    <div key={i} className="rounded border border-default dark:border-slate-700 p-2 space-y-1.5">
                       <div className="flex items-center gap-1.5">
-                        <select value={a.type} onChange={(e) => set({ type: e.target.value })} className="flex-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs">
+                        <select value={a.type} onChange={(e) => set({ type: e.target.value })} className="flex-1 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs">
                           {ACTION_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
                         </select>
-                        <button type="button" onClick={() => setDraft({ ...draft, actions: draft.actions.filter((_, j) => j !== i) })} className="text-slate-400 hover:text-rose-500"><X className="w-3.5 h-3.5" /></button>
+                        <button type="button" onClick={() => setDraft({ ...draft, actions: draft.actions.filter((_, j) => j !== i) })} className="text-tertiary hover:text-rose-500"><X className="w-3.5 h-3.5" /></button>
                       </div>
                       {a.type === 'sync_price_to_marketplaces' && (
                         <div className="grid grid-cols-2 gap-1.5 text-xs">
                           <label className="flex flex-col">Reference price
-                            <select value={a.referencePrice ?? 'master'} onChange={(e) => set({ referencePrice: e.target.value })} className="mt-0.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1 py-1">
+                            <select value={a.referencePrice ?? 'master'} onChange={(e) => set({ referencePrice: e.target.value })} className="mt-0.5 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1 py-1">
                               <option value="master">Master (basePrice)</option><option value="min">Lowest market</option><option value="max">Highest market</option>
                             </select>
                           </label>
                           <label className="flex items-center gap-1.5 mt-4"><input type="checkbox" checked={a.onlySameCurrency !== false} onChange={(e) => set({ onlySameCurrency: e.target.checked })} /> Same currency only</label>
-                          <input value={a.channels ?? ''} onChange={(e) => set({ channels: e.target.value })} placeholder="channels (AMAZON,EBAY)" className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
-                          <input value={a.marketplaces ?? ''} onChange={(e) => set({ marketplaces: e.target.value })} placeholder="markets (DE,FR)" className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
+                          <input value={a.channels ?? ''} onChange={(e) => set({ channels: e.target.value })} placeholder="channels (AMAZON,EBAY)" className="rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
+                          <input value={a.marketplaces ?? ''} onChange={(e) => set({ marketplaces: e.target.value })} placeholder="markets (DE,FR)" className="rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
                         </div>
                       )}
                       {a.type === 'sync_inventory_to_marketplaces' && (
                         <div className="grid grid-cols-2 gap-1.5 text-xs">
-                          <input value={a.quantity ?? ''} onChange={(e) => set({ quantity: e.target.value })} placeholder="quantity (blank = from context)" className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
+                          <input value={a.quantity ?? ''} onChange={(e) => set({ quantity: e.target.value })} placeholder="quantity (blank = from context)" className="rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
                           <span />
-                          <input value={a.channels ?? ''} onChange={(e) => set({ channels: e.target.value })} placeholder="channels (AMAZON,EBAY)" className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
-                          <input value={a.marketplaces ?? ''} onChange={(e) => set({ marketplaces: e.target.value })} placeholder="markets (DE,FR)" className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
+                          <input value={a.channels ?? ''} onChange={(e) => set({ channels: e.target.value })} placeholder="channels (AMAZON,EBAY)" className="rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
+                          <input value={a.marketplaces ?? ''} onChange={(e) => set({ marketplaces: e.target.value })} placeholder="markets (DE,FR)" className="rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
                         </div>
                       )}
                       {a.type === 'cascade_translate_content' && (
                         <div className="grid grid-cols-2 gap-1.5 text-xs">
-                          <input value={a.sourceLanguage ?? ''} onChange={(e) => set({ sourceLanguage: e.target.value })} placeholder="source lang (en)" className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
+                          <input value={a.sourceLanguage ?? ''} onChange={(e) => set({ sourceLanguage: e.target.value })} placeholder="source lang (en)" className="rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
                           <span />
-                          <input value={a.channels ?? ''} onChange={(e) => set({ channels: e.target.value })} placeholder="channels (AMAZON,EBAY)" className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
-                          <input value={a.marketplaces ?? ''} onChange={(e) => set({ marketplaces: e.target.value })} placeholder="markets (DE,FR)" className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
+                          <input value={a.channels ?? ''} onChange={(e) => set({ channels: e.target.value })} placeholder="channels (AMAZON,EBAY)" className="rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
+                          <input value={a.marketplaces ?? ''} onChange={(e) => set({ marketplaces: e.target.value })} placeholder="markets (DE,FR)" className="rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
                         </div>
                       )}
                       {a.type === 'notify' && (
-                        <input value={a.message ?? ''} onChange={(e) => set({ message: e.target.value })} placeholder="Message to log/notify" className="w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs" />
+                        <input value={a.message ?? ''} onChange={(e) => set({ message: e.target.value })} placeholder="Message to log/notify" className="w-full rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs" />
                       )}
-                      <span className="block text-[10.5px] text-slate-400">{ACTION_TYPES.find((t) => t.id === a.type)?.help}</span>
+                      <span className="block text-[10.5px] text-tertiary">{ACTION_TYPES.find((t) => t.id === a.type)?.help}</span>
                     </div>
                   )
                 })}
@@ -364,10 +364,10 @@ export default function AutomationClient() {
               <label className="flex items-center gap-1.5"><input type="checkbox" checked={draft.enabled} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} /> Enabled</label>
               <label className="flex items-center gap-1.5"><input type="checkbox" checked={draft.dryRun} onChange={(e) => setDraft({ ...draft, dryRun: e.target.checked })} /> Dry-run (no writes)</label>
               <label className="flex flex-col">Max executions/day
-                <input value={draft.maxExecutionsPerDay} onChange={(e) => setDraft({ ...draft, maxExecutionsPerDay: e.target.value })} placeholder="50" className="mt-0.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
+                <input value={draft.maxExecutionsPerDay} onChange={(e) => setDraft({ ...draft, maxExecutionsPerDay: e.target.value })} placeholder="50" className="mt-0.5 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
               </label>
               <label className="flex flex-col">Max value (€ cents/exec)
-                <input value={draft.maxValueCentsEur} onChange={(e) => setDraft({ ...draft, maxValueCentsEur: e.target.value })} placeholder="(none)" className="mt-0.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
+                <input value={draft.maxValueCentsEur} onChange={(e) => setDraft({ ...draft, maxValueCentsEur: e.target.value })} placeholder="(none)" className="mt-0.5 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
               </label>
             </div>
 
@@ -383,10 +383,10 @@ export default function AutomationClient() {
 
             {/* History */}
             {draft.id && (
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="pt-2 border-t border-subtle dark:border-slate-800">
                 <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 mb-1"><HistoryIcon className="w-3.5 h-3.5" /> Recent runs</div>
                 {executions.length === 0 ? (
-                  <div className="text-[11px] text-slate-400">No runs yet.</div>
+                  <div className="text-[11px] text-tertiary">No runs yet.</div>
                 ) : (
                   <ul className="space-y-0.5">
                     {executions.map((e) => (
@@ -394,7 +394,7 @@ export default function AutomationClient() {
                         <span className={cn('font-medium', STATUS_TONE[e.status] ?? 'text-slate-500')}>
                           {e.status === 'SUCCESS' ? <CheckCircle2 className="inline w-3 h-3 mr-1" /> : null}{e.status}{e.dryRun ? ' (dry)' : ''}
                         </span>
-                        <span className="text-slate-400">{new Date(e.startedAt).toLocaleString()}{e.errorMessage ? ` · ${e.errorMessage}` : ''}</span>
+                        <span className="text-tertiary">{new Date(e.startedAt).toLocaleString()}{e.errorMessage ? ` · ${e.errorMessage}` : ''}</span>
                       </li>
                     ))}
                   </ul>

@@ -241,7 +241,7 @@ export default function AiWizardTemplatesClient({ initialRows }: Props) {
           type="button"
           onClick={() => void refresh()}
           disabled={refreshing}
-          className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50"
+          className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50"
         >
           {refreshing ? (
             <Loader2 className="w-3 h-3 animate-spin" />
@@ -259,7 +259,7 @@ export default function AiWizardTemplatesClient({ initialRows }: Props) {
       </div>
 
       {rows.length === 0 ? (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 px-4 py-6 text-center text-base text-slate-500 dark:text-slate-400 italic">
+        <div className="border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 px-4 py-6 text-center text-base text-slate-500 dark:text-slate-400 italic">
           No templates yet. The 5 built-in seeds land via the
           WT.1 migration; check that it&apos;s applied.
         </div>
@@ -272,7 +272,7 @@ export default function AiWizardTemplatesClient({ initialRows }: Props) {
             return (
               <li
                 key={row.id}
-                className="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
+                className="border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
               >
                 <div className="px-3 py-2 flex items-start justify-between gap-3">
                   <button
@@ -281,9 +281,9 @@ export default function AiWizardTemplatesClient({ initialRows }: Props) {
                     className="flex-1 min-w-0 text-left flex items-start gap-2"
                   >
                     {isExpanded ? (
-                      <ChevronDown className="w-4 h-4 mt-0.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                      <ChevronDown className="w-4 h-4 mt-0.5 text-tertiary dark:text-slate-500 flex-shrink-0" />
                     ) : (
-                      <ChevronRight className="w-4 h-4 mt-0.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                      <ChevronRight className="w-4 h-4 mt-0.5 text-tertiary dark:text-slate-500 flex-shrink-0" />
                     )}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -291,7 +291,7 @@ export default function AiWizardTemplatesClient({ initialRows }: Props) {
                           {row.name}
                         </span>
                         {row.builtIn && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border bg-slate-50 dark:bg-slate-800 border-default dark:border-slate-700 text-slate-600 dark:text-slate-400">
                             built-in
                           </span>
                         )}
@@ -314,7 +314,7 @@ export default function AiWizardTemplatesClient({ initialRows }: Props) {
                         {row.channels.map((c, i) => (
                           <span
                             key={`${c.platform}:${c.marketplace}:${i}`}
-                            className="inline-flex items-center h-5 px-1.5 rounded text-xs font-mono font-medium border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                            className="inline-flex items-center h-5 px-1.5 rounded text-xs font-mono font-medium border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
                           >
                             {c.platform}
                             {c.marketplace !== 'GLOBAL' && (
@@ -356,7 +356,7 @@ export default function AiWizardTemplatesClient({ initialRows }: Props) {
                 </div>
 
                 {isEditing && !row.builtIn && (
-                  <div className="ml-6 mr-3 mb-3 space-y-2 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800/40 p-3">
+                  <div className="ml-6 mr-3 mb-3 space-y-2 border border-default dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800/40 p-3">
                     <input
                       type="text"
                       value={draft.name}
@@ -364,7 +364,7 @@ export default function AiWizardTemplatesClient({ initialRows }: Props) {
                         setDraft((p) => ({ ...p, name: e.target.value }))
                       }
                       placeholder="Template name"
-                      className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                      className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                       autoFocus
                     />
                     <textarea
@@ -377,7 +377,7 @@ export default function AiWizardTemplatesClient({ initialRows }: Props) {
                       }
                       placeholder="Description"
                       rows={2}
-                      className="w-full px-2 py-1 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                      className="w-full px-2 py-1 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                     />
                     <input
                       type="text"
@@ -389,7 +389,7 @@ export default function AiWizardTemplatesClient({ initialRows }: Props) {
                         }))
                       }
                       placeholder="Category hint (e.g. helmet)"
-                      className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                      className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                     />
                     <div className="flex items-center gap-2">
                       <Button
@@ -430,7 +430,7 @@ export default function AiWizardTemplatesClient({ initialRows }: Props) {
                     <pre
                       className={cn(
                         'whitespace-pre-wrap font-mono text-xs px-2 py-1.5 border rounded',
-                        'border-slate-200 dark:border-slate-700',
+                        'border-default dark:border-slate-700',
                         'bg-slate-50 dark:bg-slate-900',
                       )}
                     >

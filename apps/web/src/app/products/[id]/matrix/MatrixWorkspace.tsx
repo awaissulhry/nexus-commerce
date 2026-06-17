@@ -357,7 +357,7 @@ export default function MatrixWorkspace({
             type="button"
             onClick={() => void refetchChildren()}
             disabled={refreshing}
-            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5 disabled:opacity-50"
+            className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5 disabled:opacity-50"
           >
             {refreshing ? (
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -380,7 +380,7 @@ export default function MatrixWorkspace({
       )}
 
       {axes.length === 0 ? (
-        <div className="border border-slate-200 dark:border-slate-800 rounded-md px-4 py-8 text-center text-base text-slate-500 dark:text-slate-400">
+        <div className="border border-default dark:border-slate-800 rounded-md px-4 py-8 text-center text-base text-slate-500 dark:text-slate-400">
           No variation axes set yet. Add a variant with{' '}
           <span className="font-mono">{`{ "Size": "M" }`}</span> on the
           product detail page and they&apos;ll appear here.
@@ -412,7 +412,7 @@ export default function MatrixWorkspace({
         />
       )}
 
-      <div className="text-sm text-slate-500 dark:text-slate-400 pt-3 border-t border-slate-100 dark:border-slate-800">
+      <div className="text-sm text-slate-500 dark:text-slate-400 pt-3 border-t border-subtle dark:border-slate-800">
         <div className="font-medium mb-1">Tips</div>
         <ul className="list-disc pl-4 space-y-0.5">
           <li>Click a price or stock cell to edit. Enter saves, Esc cancels.</li>
@@ -457,9 +457,9 @@ function FlatTable({
   commitDragFill: () => Promise<void>
 }) {
   return (
-    <div className="border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+    <div className="border border-default dark:border-slate-800 rounded-md overflow-hidden">
       <table className="w-full text-base">
-        <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800">
+        <thead className="bg-slate-50 dark:bg-slate-800 border-b border-default dark:border-slate-800">
           <tr>
             <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide w-48">
               SKU
@@ -488,7 +488,7 @@ function FlatTable({
         </thead>
         <tbody>
           {rows.map((child) => (
-            <tr key={child.id} className="border-b border-slate-100 dark:border-slate-800">
+            <tr key={child.id} className="border-b border-subtle dark:border-slate-800">
               <td className="px-3 py-1.5 font-mono text-slate-700 dark:text-slate-300">
                 {child.sku}
               </td>
@@ -589,10 +589,10 @@ function PivotGrid({
   const colValues = axisValues.get(axisCol) ?? []
 
   return (
-    <div className="border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden overflow-x-auto">
+    <div className="border border-default dark:border-slate-800 rounded-md overflow-hidden overflow-x-auto">
       <table className="text-base border-collapse">
         <thead>
-          <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800">
+          <tr className="bg-slate-50 dark:bg-slate-800 border-b border-default dark:border-slate-800">
             <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide sticky left-0 bg-slate-50 dark:bg-slate-800 z-10">
               {axisRow} ↓ / {axisCol} →
             </th>
@@ -608,7 +608,7 @@ function PivotGrid({
         </thead>
         <tbody>
           {rowValues.map((rv) => (
-            <tr key={rv} className="border-b border-slate-100 dark:border-slate-800">
+            <tr key={rv} className="border-b border-subtle dark:border-slate-800">
               <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide bg-slate-50 dark:bg-slate-800 sticky left-0 z-10 align-top">
                 {rv}
               </th>
@@ -619,7 +619,7 @@ function PivotGrid({
                   return (
                     <td
                       key={cv}
-                      className="px-3 py-2 text-center text-slate-300 dark:text-slate-600 border-l border-slate-100 dark:border-slate-800"
+                      className="px-3 py-2 text-center text-slate-300 dark:text-slate-600 border-l border-subtle dark:border-slate-800"
                     >
                       —
                     </td>
@@ -632,9 +632,9 @@ function PivotGrid({
                 return (
                   <td
                     key={cv}
-                    className="px-2 py-1.5 border-l border-slate-100 dark:border-slate-800 align-top min-w-[140px]"
+                    className="px-2 py-1.5 border-l border-subtle dark:border-slate-800 align-top min-w-[140px]"
                   >
-                    <div className="text-xs font-mono text-slate-400 dark:text-slate-500 truncate mb-1">
+                    <div className="text-xs font-mono text-tertiary dark:text-slate-500 truncate mb-1">
                       {child.sku}
                     </div>
                     <NumericCell

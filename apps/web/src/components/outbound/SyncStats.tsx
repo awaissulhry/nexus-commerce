@@ -58,7 +58,7 @@ export default function SyncStats({ stats }: SyncStatsProps) {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Pending Syncs */}
-        <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
+        <div className="bg-white rounded-lg border border-default p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-600">Pending Syncs</p>
@@ -86,7 +86,7 @@ export default function SyncStats({ stats }: SyncStatsProps) {
         </div>
 
         {/* Successful Syncs */}
-        <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
+        <div className="bg-white rounded-lg border border-default p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-600">
@@ -116,7 +116,7 @@ export default function SyncStats({ stats }: SyncStatsProps) {
         </div>
 
         {/* Failed Syncs */}
-        <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
+        <div className="bg-white rounded-lg border border-default p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-600">Failed Syncs</p>
@@ -144,7 +144,7 @@ export default function SyncStats({ stats }: SyncStatsProps) {
         </div>
 
         {/* Total Processed */}
-        <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
+        <div className="bg-white rounded-lg border border-default p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-600">
@@ -175,7 +175,7 @@ export default function SyncStats({ stats }: SyncStatsProps) {
       </div>
 
       {/* Process Queue Button */}
-      <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
+      <div className="bg-white rounded-lg border border-default p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">
@@ -190,7 +190,7 @@ export default function SyncStats({ stats }: SyncStatsProps) {
             disabled={isProcessing || pendingCount === 0}
             className={`px-6 py-2 rounded-lg font-medium transition-colors ${
               isProcessing || pendingCount === 0
-                ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                ? "bg-slate-100 text-tertiary cursor-not-allowed"
                 : "bg-blue-600 text-white hover:bg-blue-700"
             }`}
           >
@@ -218,7 +218,7 @@ export default function SyncStats({ stats }: SyncStatsProps) {
         </div>
 
         {processMessage && (
-          <div className="mt-4 p-3 bg-slate-50 rounded border border-slate-200 text-sm">
+          <div className="mt-4 p-3 bg-slate-50 rounded border border-default text-sm">
             {processMessage}
           </div>
         )}

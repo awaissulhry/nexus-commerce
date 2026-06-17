@@ -630,7 +630,7 @@ export default function OrdersWorkspace() {
             </Link>
             <a
               href={`${getBackendUrl()}/api/orders/export.csv?${searchParams.toString()}`}
-              className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-default rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
               download
             >
               <Download size={12} /> {t('orders.action.exportCsv')}
@@ -644,13 +644,13 @@ export default function OrdersWorkspace() {
               className={`h-8 px-3 text-base border rounded inline-flex items-center gap-1.5 transition-colors ${
                 showDeleted
                   ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'
-                  : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+                  : 'border-default hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
               }`}
             >
               {showDeleted ? <ArrowLeft size={12} /> : <Trash2 size={12} />}
               {showDeleted ? t('orders.recycleBin.exit') : t('orders.recycleBin.label')}
             </button>
-            <button onClick={() => fetchOrders()} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
+            <button onClick={() => fetchOrders()} className="h-8 px-3 text-base border border-default rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
               <RefreshCw size={12} /> {t('orders.action.refresh')}
             </button>
           </div>
@@ -744,7 +744,7 @@ export default function OrdersWorkspace() {
           <button
             type="button"
             onClick={() => setShortcutsOpen(true)}
-            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            className="h-7 w-7 inline-flex items-center justify-center border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
             title="Keyboard shortcuts (?)"
             aria-label="Keyboard shortcuts"
           >
@@ -866,14 +866,14 @@ function DateRangePicker({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded inline-flex items-center gap-1.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
+        className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded inline-flex items-center gap-1.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
       >
         <span className="text-slate-500 dark:text-slate-400">Date Range:</span>
         <span className="font-medium text-slate-900 dark:text-slate-100">{currentLabel}</span>
         <ChevronDown size={12} className={open ? 'rotate-180 transition-transform' : 'transition-transform'} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-30 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg p-2 space-y-1">
+        <div className="absolute right-0 top-full mt-1 z-30 w-72 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-md shadow-lg p-2 space-y-1">
           {presets.map((p) => {
             const active = !dateFrom && !dateTo && preset === p.key
             return (
@@ -892,22 +892,22 @@ function DateRangePicker({
               </button>
             )
           })}
-          <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1.5">
+          <div className="pt-2 border-t border-default dark:border-slate-700 space-y-1.5">
             <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold px-1">Custom</div>
             <div className="flex items-center gap-1">
               <input
                 type="date"
                 defaultValue={dateFrom}
                 onChange={(e) => onChange({ dateFrom: e.target.value || undefined, dateRange: undefined })}
-                className="flex-1 h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                className="flex-1 h-7 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                 aria-label="Start date"
               />
-              <span className="text-slate-400">→</span>
+              <span className="text-tertiary">→</span>
               <input
                 type="date"
                 defaultValue={dateTo}
                 onChange={(e) => onChange({ dateTo: e.target.value || undefined, dateRange: undefined })}
-                className="flex-1 h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                className="flex-1 h-7 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                 aria-label="End date"
               />
             </div>
@@ -999,7 +999,7 @@ function StatusTabs({
   onSelect: (spec: StatusTabSpec) => void
 }) {
   return (
-    <div className="border-b border-slate-200 dark:border-slate-700 overflow-x-auto [scrollbar-width:thin]">
+    <div className="border-b border-default dark:border-slate-700 overflow-x-auto [scrollbar-width:thin]">
       <nav role="tablist" aria-label="Order status" className="inline-flex items-center gap-1 min-w-full">
         {STATUS_TAB_DEFS.map((tab) => {
           // Italian-fiscal-only tab — hide when this seller has no
@@ -1067,7 +1067,7 @@ function FulfilmentSegmentedControl({
     <div
       role="tablist"
       aria-label="Fulfilment scope"
-      className="inline-flex items-stretch bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden divide-x divide-slate-200 dark:divide-slate-700"
+      className="inline-flex items-stretch bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-md overflow-hidden divide-x divide-slate-200 dark:divide-slate-700"
     >
       {segments.map((s) => {
         const active = current === s.key

@@ -117,7 +117,7 @@ export function BrandBrainActionsClient() {
         </div>
 
         {queryResults !== null && (
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
+          <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md">
             {queryResults.length === 0 ? (
               <div className="px-4 py-4 text-sm text-slate-500 text-center">
                 No results — run the ingester first to populate the index.
@@ -131,7 +131,7 @@ export function BrandBrainActionsClient() {
                         {r.entityType}
                       </span>
                       <span className="text-[10px] font-mono text-slate-500">{r.field}</span>
-                      <span className="ml-auto text-[11px] tabular-nums text-slate-400">
+                      <span className="ml-auto text-[11px] tabular-nums text-tertiary">
                         dist {Number(r.distance).toFixed(4)}
                       </span>
                     </div>

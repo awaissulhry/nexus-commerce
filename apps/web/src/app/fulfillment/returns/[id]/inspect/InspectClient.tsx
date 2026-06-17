@@ -248,7 +248,7 @@ export default function InspectClient({ returnId }: { returnId: string }) {
   if (loading || !ret) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-800 flex items-center justify-center">
-        <Loader2 size={20} className="animate-spin text-slate-400 dark:text-slate-500" />
+        <Loader2 size={20} className="animate-spin text-tertiary dark:text-slate-500" />
       </div>
     )
   }
@@ -282,7 +282,7 @@ export default function InspectClient({ returnId }: { returnId: string }) {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-800 pb-32">
       {/* Sticky header — small enough that the per-item cards still
           dominate the viewport on a phone. */}
-      <header className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+      <header className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-default dark:border-slate-700">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link
             href={`/fulfillment/returns?drawer=${returnId}`}
@@ -305,7 +305,7 @@ export default function InspectClient({ returnId }: { returnId: string }) {
         {/* Compact RMA barcode for warehouse identification — small
             so it doesn't dominate; printed labels render larger. */}
         {ret.rmaNumber && (
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-3 flex justify-center">
+          <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded p-3 flex justify-center">
             <Barcode128 value={ret.rmaNumber} moduleWidthPx={1.2} height={40} />
           </div>
         )}
@@ -313,7 +313,7 @@ export default function InspectClient({ returnId }: { returnId: string }) {
         {/* Scan input — autofocus so a USB scanner gun's first read
             lands here without a tap. Camera toggle lets a phone-only
             operator switch in. */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-3">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded p-3">
           <BarcodeScanInput
             label="Scan item barcode"
             placeholder="Scan SKU or product barcode…"
@@ -327,7 +327,7 @@ export default function InspectClient({ returnId }: { returnId: string }) {
         </div>
 
         {ret.reason && (
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-3 text-base">
+          <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded p-3 text-base">
             <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5">
               Customer reason
             </div>
@@ -342,7 +342,7 @@ export default function InspectClient({ returnId }: { returnId: string }) {
             className={`bg-white dark:bg-slate-900 rounded border p-3 space-y-3 ${
               focusedItemId === it.id
                 ? 'border-blue-500 ring-1 ring-blue-200'
-                : 'border-slate-200 dark:border-slate-700'
+                : 'border-default dark:border-slate-700'
             }`}
           >
             <ItemHeader item={it} graded={!!grades[it.id]} />
@@ -379,7 +379,7 @@ export default function InspectClient({ returnId }: { returnId: string }) {
 
       {/* Sticky bottom CTA. Big enough for thumb tap on a phone.
           Disabled until at least one item is graded. */}
-      <div className="fixed bottom-0 inset-x-0 z-10 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
+      <div className="fixed bottom-0 inset-x-0 z-10 bg-white dark:bg-slate-900 border-t border-default dark:border-slate-700 px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
         <div className="max-w-2xl mx-auto">
           <button
             onClick={submitInspection}
@@ -431,7 +431,7 @@ function GradePicker({
             className={`h-11 px-2 text-sm font-semibold rounded border ${
               active
                 ? `${g.tone} border-transparent shadow-sm`
-                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
             {g.label}
@@ -469,7 +469,7 @@ function DispositionPicker({
               className={`h-11 px-2 text-sm font-semibold rounded border ${
                 active
                   ? `${d.tone} border-transparent shadow-sm`
-                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
               {d.label}
@@ -541,7 +541,7 @@ function ItemChecklistEditor({
     <div className="space-y-1.5 text-sm">
       <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold inline-flex items-center gap-2">
         Checklist
-        {busy && <Loader2 size={11} className="animate-spin text-slate-400 dark:text-slate-500" />}
+        {busy && <Loader2 size={11} className="animate-spin text-tertiary dark:text-slate-500" />}
       </div>
       <div className="grid grid-cols-2 gap-1.5">
         {([
@@ -556,7 +556,7 @@ function ItemChecklistEditor({
             className={`h-11 px-3 text-sm rounded border inline-flex items-center justify-between ${
               checklist[key]
                 ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 text-blue-900'
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
             <span>{label}</span>
@@ -573,7 +573,7 @@ function ItemChecklistEditor({
             className={`h-9 px-2.5 text-sm rounded border ${
               checklist.signsOfUse === s
                 ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
             {s}
@@ -656,7 +656,7 @@ function ItemPhotoGallery({
                 <img
                   src={u}
                   alt="Item condition"
-                  className="w-full h-24 object-cover rounded border border-slate-200 dark:border-slate-700"
+                  className="w-full h-24 object-cover rounded border border-default dark:border-slate-700"
                 />
               </a>
               <button
@@ -740,7 +740,7 @@ function ItemNotesEditor({
         onBlur={save}
         rows={2}
         placeholder="Defect location, observations…"
-        className="w-full px-2 py-2 text-base border border-slate-200 dark:border-slate-700 rounded resize-y focus:outline-none focus:ring-1 focus:ring-slate-400"
+        className="w-full px-2 py-2 text-base border border-default dark:border-slate-700 rounded resize-y focus:outline-none focus:ring-1 focus:ring-slate-400"
       />
       {busy && (
         <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 inline-flex items-center gap-1">

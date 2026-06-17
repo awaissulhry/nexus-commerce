@@ -91,7 +91,7 @@ export default async function ExecutionHistoryPage() {
 
       {executions.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white py-16 text-center dark:border-slate-700 dark:bg-slate-900">
-          <History className="w-8 h-8 text-slate-400" />
+          <History className="w-8 h-8 text-tertiary" />
           <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
             No executions yet
           </p>
@@ -101,9 +101,9 @@ export default async function ExecutionHistoryPage() {
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="overflow-hidden rounded-lg border border-default bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <table className="w-full text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-400">
+            <thead className="border-b border-default bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-400">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold">Rule</th>
                 <th className="px-3 py-2 text-left font-semibold">Status</th>

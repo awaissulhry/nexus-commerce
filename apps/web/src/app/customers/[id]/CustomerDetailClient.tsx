@@ -113,7 +113,7 @@ const CHANNEL_TONE: Record<string, string> = {
   SHOPIFY: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
   WOOCOMMERCE: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-900',
   ETSY: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
-  MANUAL: 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+  MANUAL: 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700',
 }
 
 const STATUS_VARIANT: Record<
@@ -355,7 +355,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
         actions={
           <button
             onClick={refreshCache}
-            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             title={t('customers.cache.refreshTitle')}
           >
             <RefreshCw size={12} /> {t('customers.cache.refresh')}
@@ -435,7 +435,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
               {Object.entries(customer.channelOrderCounts ?? {}).map(([ch, n]) => (
                 <span
                   key={ch}
-                  className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[ch] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}
+                  className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[ch] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700'}`}
                 >
                   {ch} {n}
                 </span>
@@ -445,7 +445,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
         </div>
 
         {(customer.riskFlag || customer.manualReviewState) && (
-          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
+          <div className="mt-3 pt-3 border-t border-subtle dark:border-slate-800 flex items-center gap-2 flex-wrap">
             {customer.riskFlag && (
               <Badge
                 variant={
@@ -480,7 +480,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
               </button>
               <button
                 onClick={recomputeRisk}
-                className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+                className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 {t('customers.risk.recompute')}
               </button>
@@ -488,7 +488,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
           </div>
         )}
 
-        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+        <div className="mt-3 pt-3 border-t border-subtle dark:border-slate-800">
           <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5">
             {t('customers.tags.label')}
           </div>
@@ -497,7 +497,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
               placeholder={t('customers.tags.placeholder')}
-              className="flex-1 max-w-md h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
+              className="flex-1 max-w-md h-8 px-2 text-base border border-default dark:border-slate-700 rounded"
             />
             <button
               onClick={saveTags}
@@ -514,7 +514,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
           {/* AU.2 — Orders tab (default) */}
           {tabParam === 'orders' && (
           <Card noPadding>
-            <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <div className="px-3 py-2 border-b border-default dark:border-slate-700 flex items-center justify-between">
               <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
                 <ShoppingCart size={12} /> {t('customers.detail.ordersTitle')}
               </div>
@@ -529,7 +529,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-md">
-                  <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                  <thead className="bg-slate-50 dark:bg-slate-800 border-b border-default dark:border-slate-700">
                     <tr>
                       <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 dark:text-slate-300">
                         {t('orders.table.header.channel')}
@@ -552,11 +552,11 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                     {customer.orders.map((o) => (
                       <tr
                         key={o.id}
-                        className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+                        className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                       >
                         <td className="px-3 py-2">
                           <span
-                            className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[o.channel] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}
+                            className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[o.channel] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700'}`}
                           >
                             {o.channel}
                           </span>
@@ -691,7 +691,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                   value={noteDraft}
                   onChange={(e) => setNoteDraft(e.target.value)}
                   placeholder={t('customers.notes.placeholder')}
-                  className="flex-1 h-32 px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded"
+                  className="flex-1 h-32 px-2 py-1.5 text-base border border-default dark:border-slate-700 rounded"
                 />
                 <button
                   onClick={addNote}
@@ -713,7 +713,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                       className={`text-sm border rounded p-2 ${
                         n.pinned
                           ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40'
-                          : 'border-slate-200 dark:border-slate-700'
+                          : 'border-default dark:border-slate-700'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -761,7 +761,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                 {customer.addresses.map((a) => (
                   <li
                     key={a.id}
-                    className="text-sm text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded p-2"
+                    className="text-sm text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded p-2"
                   >
                     <div className="flex items-center gap-1.5 mb-1">
                       <Badge variant="default" size="sm">
@@ -804,7 +804,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                   value={noteDraft}
                   onChange={(e) => setNoteDraft(e.target.value)}
                   placeholder={t('customers.notes.placeholder')}
-                  className="flex-1 h-16 px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded"
+                  className="flex-1 h-16 px-2 py-1.5 text-base border border-default dark:border-slate-700 rounded"
                 />
                 <button
                   onClick={addNote}
@@ -826,7 +826,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                       className={`text-sm border rounded p-2 ${
                         n.pinned
                           ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40'
-                          : 'border-slate-200 dark:border-slate-700'
+                          : 'border-default dark:border-slate-700'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -1023,7 +1023,7 @@ function FiscalDataCard({
           <select
             value={fiscalKind}
             onChange={(e) => setFiscalKind(e.target.value as '' | 'B2B' | 'B2C')}
-            className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
+            className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded"
           >
             <option value="">— Non specificato</option>
             <option value="B2B">B2B (azienda con P. IVA)</option>
@@ -1039,7 +1039,7 @@ function FiscalDataCard({
             onChange={(e) => setCodiceFiscale(e.target.value.toUpperCase())}
             placeholder="16 caratteri alfanumerici"
             maxLength={16}
-            className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded font-mono"
+            className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded font-mono"
           />
         </div>
         <div>
@@ -1051,7 +1051,7 @@ function FiscalDataCard({
             onChange={(e) => setPartitaIva(e.target.value.replace(/\D/g, '').slice(0, 11))}
             placeholder="11 cifre"
             inputMode="numeric"
-            className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded font-mono"
+            className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded font-mono"
           />
         </div>
         <div>
@@ -1063,7 +1063,7 @@ function FiscalDataCard({
             onChange={(e) => setPecEmail(e.target.value)}
             placeholder="indirizzo@pec.it (per fallback SDI)"
             type="email"
-            className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
+            className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded"
           />
         </div>
         <div>
@@ -1075,10 +1075,10 @@ function FiscalDataCard({
             onChange={(e) => setCodiceDestinatario(e.target.value.toUpperCase().slice(0, 7))}
             placeholder="7 caratteri (vuoto = SDI usa PEC)"
             maxLength={7}
-            className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded font-mono"
+            className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded font-mono"
           />
         </div>
-        <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-2 pt-2 border-t border-subtle dark:border-slate-800">
           <button
             onClick={save}
             disabled={busy}
@@ -1089,7 +1089,7 @@ function FiscalDataCard({
           <button
             onClick={() => setEditing(false)}
             disabled={busy}
-            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             Annulla
           </button>

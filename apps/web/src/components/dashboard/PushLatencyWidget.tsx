@@ -60,7 +60,7 @@ function formatMs(ms: number | null): string {
 }
 
 function latencyTone(p95: number | null): string {
-  if (p95 === null) return 'text-slate-400'
+  if (p95 === null) return 'text-tertiary'
   if (p95 < 60_000) return 'text-emerald-600 dark:text-emerald-400'
   if (p95 < 5 * 60_000) return 'text-amber-600 dark:text-amber-400'
   return 'text-rose-600 dark:text-rose-400'
@@ -104,7 +104,7 @@ export function PushLatencyWidget() {
       description="End-to-end provider-push latency per source — provider timestamp → DB write"
       noPadding
     >
-      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
+      <div className="px-4 py-3 border-b border-default dark:border-slate-800 flex items-center gap-2">
         <span className="text-xs text-slate-500 dark:text-slate-400">Window:</span>
         {(['24h', '7d'] as const).map((w) => (
           <button
@@ -121,14 +121,14 @@ export function PushLatencyWidget() {
           </button>
         ))}
         {data && (
-          <span className="ml-auto text-[10px] text-slate-400 dark:text-slate-500">
+          <span className="ml-auto text-[10px] text-tertiary dark:text-slate-500">
             Updated {new Date(data.checkedAt).toLocaleTimeString('it-IT')}
           </span>
         )}
       </div>
 
       {loading && !data && (
-        <div className="px-4 py-8 text-center text-sm text-slate-400">Loading…</div>
+        <div className="px-4 py-8 text-center text-sm text-tertiary">Loading…</div>
       )}
 
       {data && (
@@ -151,7 +151,7 @@ export function PushLatencyWidget() {
                     {s.sampleCount} sample{s.sampleCount === 1 ? '' : 's'}
                     {s.missingTimestamp > 0 && (
                       <span
-                        className="ml-1 text-slate-400"
+                        className="ml-1 text-tertiary"
                         title="Rows in window without a provider timestamp (excluded from percentile)"
                       >
                         · +{s.missingTimestamp} missing ts
@@ -187,7 +187,7 @@ export function PushLatencyWidget() {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-xs text-slate-400 italic py-2">
+                  <div className="text-xs text-tertiary italic py-2">
                     No samples in this window
                     {s.missingTimestamp > 0 && (
                       <> ({s.missingTimestamp} row{s.missingTimestamp === 1 ? '' : 's'} without provider timestamp)</>
@@ -213,7 +213,7 @@ function Stat({
   tone: string
 }) {
   return (
-    <div className="rounded border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 px-2.5 py-1.5">
+    <div className="rounded border border-default dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 px-2.5 py-1.5">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
         {label}
       </div>

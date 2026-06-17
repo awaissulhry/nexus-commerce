@@ -286,7 +286,7 @@ export default function PackStationClient({ shipmentId }: Props) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => window.open(`${getBackendUrl()}/api/fulfillment/shipments/${shipment.id}/pack-slip.html`, '_blank')}
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <FileText size={12} /> {t('pack.printPackSlip')}
             </button>
@@ -296,7 +296,7 @@ export default function PackStationClient({ shipmentId }: Props) {
                   ? `/fulfillment/outbound?drawer=${shipment.orderId}`
                   : '/fulfillment/outbound'
               }
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <ArrowLeft size={12} /> {t('common.back')}
             </Link>
@@ -314,7 +314,7 @@ export default function PackStationClient({ shipmentId }: Props) {
                 setSplitMode((v) => !v)
                 setSplitQty({})
               }}
-              className="ml-auto h-6 px-2 text-xs text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1 normal-case font-normal tracking-normal"
+              className="ml-auto h-6 px-2 text-xs text-slate-600 dark:text-slate-400 border border-default dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1 normal-case font-normal tracking-normal"
             >
               <Split size={11} />
               {splitMode ? t('common.cancel') : t('pack.split.cta')}
@@ -346,12 +346,12 @@ export default function PackStationClient({ shipmentId }: Props) {
                     splitMode
                       ? splitVal > 0
                         ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900'
-                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'
+                        : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700'
                       : verified
                       ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900'
                       : count > 0
                       ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900'
-                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'
+                      : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700'
                   }`}
                 >
                   {splitMode ? (
@@ -359,7 +359,7 @@ export default function PackStationClient({ shipmentId }: Props) {
                   ) : verified ? (
                     <CheckCircle2 size={14} className="text-emerald-600 dark:text-emerald-400" />
                   ) : (
-                    <Package size={14} className="text-slate-400 dark:text-slate-500" />
+                    <Package size={14} className="text-tertiary dark:text-slate-500" />
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="text-md font-mono text-slate-900 dark:text-slate-100">{it.sku}</div>
@@ -380,7 +380,7 @@ export default function PackStationClient({ shipmentId }: Props) {
                         }
                         className="w-16 h-7 px-2 text-md tabular-nums border border-slate-300 dark:border-slate-600 rounded outline-none focus:border-blue-500 text-right"
                       />
-                      <span className="text-slate-400 dark:text-slate-500">/ {it.quantity}</span>
+                      <span className="text-tertiary dark:text-slate-500">/ {it.quantity}</span>
                     </div>
                   ) : (
                     <div className="text-md tabular-nums">
@@ -391,7 +391,7 @@ export default function PackStationClient({ shipmentId }: Props) {
                       >
                         {count}
                       </span>
-                      <span className="text-slate-400 dark:text-slate-500"> / {it.quantity}</span>
+                      <span className="text-tertiary dark:text-slate-500"> / {it.quantity}</span>
                     </div>
                   )}
                 </div>
@@ -510,7 +510,7 @@ export default function PackStationClient({ shipmentId }: Props) {
                   <div
                     key={l.sku}
                     className={`flex items-center gap-3 px-3 py-1.5 border rounded text-sm ${
-                      hasIssue ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'
+                      hasIssue ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900' : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700'
                     }`}
                   >
                     <span className="font-mono text-slate-900 dark:text-slate-100 min-w-[120px]">{l.sku}</span>
@@ -543,7 +543,7 @@ export default function PackStationClient({ shipmentId }: Props) {
               </div>
             )}
             {!customs.ready && (
-              <div className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded border border-slate-200 dark:border-slate-700">
+              <div className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded border border-default dark:border-slate-700">
                 {t('pack.customs.hint')}
               </div>
             )}

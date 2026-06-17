@@ -127,7 +127,7 @@ export default function BrandKitEditClient({
 
       {/* Identity section */}
       <Section
-        icon={<Quote className="w-4 h-4 text-slate-400" />}
+        icon={<Quote className="w-4 h-4 text-tertiary" />}
         title={t('brandKit.section.identity')}
         onSave={() =>
           save('identity', { displayName, tagline, voiceNotes })
@@ -169,7 +169,7 @@ export default function BrandKitEditClient({
 
       {/* Colors section */}
       <Section
-        icon={<Palette className="w-4 h-4 text-slate-400" />}
+        icon={<Palette className="w-4 h-4 text-tertiary" />}
         title={t('brandKit.section.colors', { n: colors.length.toString() })}
         onSave={() => save('colors', { colors })}
         busy={busy === 'colors'}
@@ -178,7 +178,7 @@ export default function BrandKitEditClient({
           {colors.map((color, idx) => (
             <li
               key={idx}
-              className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/50"
+              className="flex items-center gap-2 rounded-md border border-default bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/50"
             >
               <input
                 type="color"
@@ -233,7 +233,7 @@ export default function BrandKitEditClient({
                   setColors(colors.filter((_, i) => i !== idx))
                 }
                 aria-label={t('common.delete')}
-                className="rounded p-1 text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+                className="rounded p-1 text-tertiary hover:text-red-600 dark:hover:text-red-400"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -257,7 +257,7 @@ export default function BrandKitEditClient({
 
       {/* Fonts section */}
       <Section
-        icon={<Type className="w-4 h-4 text-slate-400" />}
+        icon={<Type className="w-4 h-4 text-tertiary" />}
         title={t('brandKit.section.fonts', { n: fonts.length.toString() })}
         onSave={() => save('fonts', { fonts })}
         busy={busy === 'fonts'}
@@ -266,7 +266,7 @@ export default function BrandKitEditClient({
           {fonts.map((font, idx) => (
             <li
               key={idx}
-              className="grid gap-2 rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/50 sm:grid-cols-[1fr_1fr_100px_120px_auto]"
+              className="grid gap-2 rounded-md border border-default bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/50 sm:grid-cols-[1fr_1fr_100px_120px_auto]"
             >
               <input
                 type="text"
@@ -323,7 +323,7 @@ export default function BrandKitEditClient({
                   setFonts(fonts.filter((_, i) => i !== idx))
                 }
                 aria-label={t('common.delete')}
-                className="rounded p-1 text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+                className="rounded p-1 text-tertiary hover:text-red-600 dark:hover:text-red-400"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -347,7 +347,7 @@ export default function BrandKitEditClient({
 
       {/* Logos section */}
       <Section
-        icon={<ImageIcon className="w-4 h-4 text-slate-400" />}
+        icon={<ImageIcon className="w-4 h-4 text-tertiary" />}
         title={t('brandKit.section.logos', { n: logos.length.toString() })}
         onSave={() => save('logos', { logos })}
         busy={busy === 'logos'}
@@ -356,7 +356,7 @@ export default function BrandKitEditClient({
           {logos.map((logo, idx) => (
             <li
               key={idx}
-              className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/50"
+              className="flex items-center gap-2 rounded-md border border-default bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/50"
             >
               <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded bg-white dark:bg-slate-900">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -367,7 +367,7 @@ export default function BrandKitEditClient({
                     className="h-full w-full object-contain"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-slate-400">
+                  <div className="flex h-full w-full items-center justify-center text-tertiary">
                     <ImageIcon className="w-4 h-4" />
                   </div>
                 )}
@@ -415,7 +415,7 @@ export default function BrandKitEditClient({
                   setLogos(logos.filter((_, i) => i !== idx))
                 }
                 aria-label={t('common.delete')}
-                className="rounded p-1 text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+                className="rounded p-1 text-tertiary hover:text-red-600 dark:hover:text-red-400"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -436,7 +436,7 @@ export default function BrandKitEditClient({
 
       {/* Notes */}
       <Section
-        icon={<Quote className="w-4 h-4 text-slate-400" />}
+        icon={<Quote className="w-4 h-4 text-tertiary" />}
         title={t('brandKit.section.notes')}
         onSave={() => save('notes', { notes })}
         busy={busy === 'notes'}
@@ -477,7 +477,7 @@ function Section({
 }) {
   const { t } = useTranslations()
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <section className="rounded-lg border border-default bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <header className="mb-3 flex items-center justify-between">
         <h2 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
           {icon}

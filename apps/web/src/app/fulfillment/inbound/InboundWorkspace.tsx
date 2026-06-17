@@ -313,7 +313,7 @@ export default function InboundWorkspace() {
               className={`h-8 px-3 text-base border rounded inline-flex items-center gap-1.5 transition-colors ${
                 showDeleted
                   ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'
-                  : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+                  : 'border-default hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
               }`}
             >
               {showDeleted ? <ArrowLeft size={12} /> : <Trash2 size={12} />}
@@ -344,7 +344,7 @@ export default function InboundWorkspace() {
           <button
             type="button"
             onClick={() => setShortcutsOpen(true)}
-            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            className="h-7 w-7 inline-flex items-center justify-center border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
             title="Keyboard shortcuts (?)"
             aria-label="Keyboard shortcuts"
           >
@@ -390,12 +390,12 @@ export default function InboundWorkspace() {
                   onClick={() => updateUrl({ type: typ === 'ALL' ? undefined : typ, page: undefined })}
                   className={`h-7 px-3 text-sm rounded-full font-medium border ${
                     active ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
-                           : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                           : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
                   {t(`inbound.filter.type.${typ}` as any)}
                   {kpis?.typeCounts?.[typ] != null && typ !== 'ALL' && (
-                    <span className={`ml-1.5 text-xs tabular-nums ${active ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400 dark:text-slate-500'}`}>
+                    <span className={`ml-1.5 text-xs tabular-nums ${active ? 'text-slate-300 dark:text-slate-600' : 'text-tertiary dark:text-slate-500'}`}>
                       {kpis.typeCounts[typ]}
                     </span>
                   )}
@@ -405,9 +405,9 @@ export default function InboundWorkspace() {
           </div>
 
           {/* Search + status chips */}
-          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-subtle dark:border-slate-800">
             <div className="flex-1 min-w-[240px] max-w-md relative">
-              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500" />
               <Input
                 placeholder={t('inbound.search.placeholder')}
                 value={searchInput}
@@ -419,7 +419,7 @@ export default function InboundWorkspace() {
             <select
               value={status}
               onChange={(e) => updateUrl({ status: e.target.value || undefined, page: undefined })}
-              className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded font-medium"
+              className="h-7 px-2 text-base border border-default dark:border-slate-700 rounded font-medium"
             >
               <option value="">{t('inbound.filter.all')}</option>
               {STATUS_OPTIONS.map((s) => (
@@ -430,14 +430,14 @@ export default function InboundWorkspace() {
               onClick={() => updateUrl({ delayed: delayed ? undefined : 'true', page: undefined })}
               className={`h-7 px-3 text-sm rounded-full font-medium border inline-flex items-center gap-1 ${
                 delayed ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300'
-                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
               }`}
               title={t('inbound.filter.delayed.tooltip')}
             >
               <CalendarClock size={11} />
               {t('inbound.filter.delayed')}
               {kpis?.delayed != null && kpis.delayed > 0 && (
-                <span className={`ml-0.5 text-xs tabular-nums ${delayed ? 'text-rose-500' : 'text-slate-400 dark:text-slate-500'}`}>
+                <span className={`ml-0.5 text-xs tabular-nums ${delayed ? 'text-rose-500' : 'text-tertiary dark:text-slate-500'}`}>
                   {kpis.delayed}
                 </span>
               )}
@@ -477,7 +477,7 @@ export default function InboundWorkspace() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+              <thead className="border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <tr>
                   <SortableTh label={t('inbound.col.type')} sortKey="type" current={sortBy} dir={sortDir} onSort={toggleSort} />
                   <SortableTh label={t('inbound.col.status')} sortKey="status" current={sortBy} dir={sortDir} onSort={toggleSort} />
@@ -502,7 +502,7 @@ export default function InboundWorkspace() {
                     <tr
                       key={it.id}
                       onClick={() => setDrawerId(it.id)}
-                      className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                      className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
                     >
                       <td className="px-3 py-2">
                         <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${TYPE_TONE[it.type]}`}>
@@ -522,7 +522,7 @@ export default function InboundWorkspace() {
                            it.reference ?? '—'}
                         </div>
                         {it.warehouse && (
-                          <div className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-0.5">→ {it.warehouse.code}</div>
+                          <div className="text-xs text-tertiary dark:text-slate-500 font-mono mt-0.5">→ {it.warehouse.code}</div>
                         )}
                       </td>
                       <td className="px-3 py-2">
@@ -557,7 +557,7 @@ export default function InboundWorkspace() {
                               )
                             })()}
                           </div>
-                        ) : <span className="text-slate-400 dark:text-slate-500">—</span>}
+                        ) : <span className="text-tertiary dark:text-slate-500">—</span>}
                       </td>
                       <td className="px-3 py-2 text-right">
                         <div className="inline-flex items-center gap-1.5 justify-end">
@@ -573,11 +573,11 @@ export default function InboundWorkspace() {
                           )}
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-right text-sm text-slate-400 dark:text-slate-500 tabular-nums">
+                      <td className="px-3 py-2 text-right text-sm text-tertiary dark:text-slate-500 tabular-nums">
                         {new Date(it.createdAt).toLocaleDateString('en-GB')}
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <ChevronRight size={14} className="text-slate-400 dark:text-slate-500 inline" />
+                        <ChevronRight size={14} className="text-tertiary dark:text-slate-500 inline" />
                       </td>
                     </tr>
                   )
@@ -595,12 +595,12 @@ export default function InboundWorkspace() {
             <button
               onClick={() => updateUrl({ page: page <= 2 ? undefined : String(page - 1) })}
               disabled={page === 1}
-              className="h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40"
+              className="h-7 px-3 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40"
             >{t('inbound.pagination.previous')}</button>
             <button
               onClick={() => updateUrl({ page: String(Math.min(totalPages, page + 1)) })}
               disabled={page >= totalPages}
-              className="h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40"
+              className="h-7 px-3 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40"
             >{t('inbound.pagination.next')}</button>
           </div>
         </div>
@@ -673,7 +673,7 @@ function KpiStrip({ kpis, onQcClick }: { kpis: Kpis | null; onQcClick?: () => vo
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
         {[0, 1, 2, 3, 4].map((i) => (
-          <Card key={i}><div className="h-[68px] flex items-center justify-center text-base text-slate-400 dark:text-slate-500">…</div></Card>
+          <Card key={i}><div className="h-[68px] flex items-center justify-center text-base text-tertiary dark:text-slate-500">…</div></Card>
         ))}
       </div>
     )
@@ -773,7 +773,7 @@ function SortableTh({
 function CarrierLink({
   carrierCode, trackingNumber, trackingUrl,
 }: { carrierCode: string | null; trackingNumber: string | null; trackingUrl: string | null }) {
-  if (!trackingNumber && !carrierCode) return <span className="text-slate-400 dark:text-slate-500 text-sm">—</span>
+  if (!trackingNumber && !carrierCode) return <span className="text-tertiary dark:text-slate-500 text-sm">—</span>
   if (!trackingNumber) {
     return <span className="text-base text-slate-700 dark:text-slate-300 font-mono">{carrierCode}</span>
   }
@@ -1027,10 +1027,10 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
       <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" />
       <aside onClick={(e) => e.stopPropagation()} className="relative h-full w-full max-w-3xl bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto flex flex-col">
         {/* Sticky header */}
-        <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
+        <header className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
           <div className="text-md font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
             <PackageCheck size={14} /> Inbound shipment
-            {loading && <RefreshCw size={11} className="animate-spin text-slate-400 dark:text-slate-500" />}
+            {loading && <RefreshCw size={11} className="animate-spin text-tertiary dark:text-slate-500" />}
           </div>
           <div className="flex items-center gap-2">
             <button onClick={fetchOne} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Refresh">
@@ -1162,7 +1162,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                 }
               >
                 {shipment.discrepancies?.length === 0 ? (
-                  <div className="text-sm text-slate-400 dark:text-slate-500 py-2">No ship-level discrepancies.</div>
+                  <div className="text-sm text-tertiary dark:text-slate-500 py-2">No ship-level discrepancies.</div>
                 ) : (
                   <ul className="space-y-1.5">
                     {shipment.discrepancies.map((d: any) => (
@@ -1202,7 +1202,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                 }
               >
                 {shipment.attachments?.length === 0 ? (
-                  <div className="text-sm text-slate-400 dark:text-slate-500 py-2">No attachments.</div>
+                  <div className="text-sm text-tertiary dark:text-slate-500 py-2">No attachments.</div>
                 ) : (
                   <ul className="space-y-1">
                     {shipment.attachments.map((a: any) => (
@@ -1213,7 +1213,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                             {a.filename ?? a.url}
                           </a>
                         </span>
-                        <span className="text-xs text-slate-400 dark:text-slate-500 flex-shrink-0">{new Date(a.uploadedAt).toLocaleDateString('en-GB')}</span>
+                        <span className="text-xs text-tertiary dark:text-slate-500 flex-shrink-0">{new Date(a.uploadedAt).toLocaleDateString('en-GB')}</span>
                       </li>
                     ))}
                   </ul>
@@ -1232,7 +1232,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
 
         {/* Sticky action bar */}
         {shipment && !loading && (
-          <footer className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 flex-wrap sticky bottom-0 bg-white dark:bg-slate-900">
+          <footer className="px-5 py-3 border-t border-default dark:border-slate-700 flex items-center gap-2 flex-wrap sticky bottom-0 bg-white dark:bg-slate-900">
             <button
               onClick={submitReceive}
               disabled={busy || Object.keys(receiveBuf).length === 0}
@@ -1241,19 +1241,19 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
               <ArrowDownToLine size={12} /> {busy ? 'Submitting…' : 'Submit receive'}
             </button>
             {shipment.status === 'DRAFT' && (
-              <button onClick={() => transition('SUBMITTED')} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Mark submitted</button>
+              <button onClick={() => transition('SUBMITTED')} className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Mark submitted</button>
             )}
             {shipment.status === 'SUBMITTED' && (
-              <button onClick={() => transition('IN_TRANSIT')} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Mark in transit</button>
+              <button onClick={() => transition('IN_TRANSIT')} className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Mark in transit</button>
             )}
             {shipment.status === 'IN_TRANSIT' && (
-              <button onClick={() => transition('ARRIVED')} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Mark arrived</button>
+              <button onClick={() => transition('ARRIVED')} className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Mark arrived</button>
             )}
             {shipment.status === 'ARRIVED' && (
-              <button onClick={() => transition('RECEIVING')} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Start receiving</button>
+              <button onClick={() => transition('RECEIVING')} className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Start receiving</button>
             )}
             {(shipment.status === 'RECEIVED' || shipment.status === 'RECONCILED') && (
-              <button onClick={() => transition('CLOSED')} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Close</button>
+              <button onClick={() => transition('CLOSED')} className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Close</button>
             )}
             {shipment.status !== 'CLOSED' && shipment.status !== 'CANCELLED' && (
               <button
@@ -1334,10 +1334,10 @@ function DrawerSection({
   title, icon: Icon, right, children,
 }: { title: string; icon: any; right?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-md p-3">
+    <div className="border border-default dark:border-slate-700 rounded-md p-3">
       <div className="flex items-center justify-between mb-2">
         <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold inline-flex items-center gap-1.5">
-          <Icon size={11} className="text-slate-400 dark:text-slate-500" />
+          <Icon size={11} className="text-tertiary dark:text-slate-500" />
           {title}
         </div>
         {right}
@@ -1368,7 +1368,7 @@ function StatusTimeline({ current, cancelled }: { current: InboundStatus; cancel
                         : 'bg-slate-300'
         const labelCls = isCurrent ? 'text-blue-700 dark:text-blue-300 font-semibold'
                           : isPast  ? 'text-emerald-700 dark:text-emerald-300'
-                          : 'text-slate-400 dark:text-slate-500'
+                          : 'text-tertiary dark:text-slate-500'
         return (
           <div key={s} className="flex items-center gap-1 flex-shrink-0">
             <span className={`w-2 h-2 rounded-full ${dotCls}`} />
@@ -1490,7 +1490,7 @@ function LandedCostEditor({ shipment, onSaved }: { shipment: any; onSaved: () =>
         <DrawerCostInput label="Insurance" value={insurance} onChange={setInsurance} />
       </div>
 
-      <div className="border-t border-slate-100 dark:border-slate-800 pt-2">
+      <div className="border-t border-subtle dark:border-slate-800 pt-2">
         <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5">Per-line unit cost ({shipment.currencyCode})</div>
         <ul className="space-y-1">
           {(shipment.items ?? []).map((it: any) => (
@@ -1504,23 +1504,23 @@ function LandedCostEditor({ shipment, onSaved }: { shipment: any; onSaved: () =>
                 value={itemCosts[it.id] ?? ''}
                 onChange={(e) => setItemCosts((prev) => ({ ...prev, [it.id]: e.target.value }))}
                 placeholder="0.00"
-                className="h-6 w-20 px-1.5 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-sm"
+                className="h-6 w-20 px-1.5 text-right tabular-nums border border-default dark:border-slate-700 rounded text-sm"
               />
             </li>
           ))}
         </ul>
       </div>
 
-      <div className="border-t border-slate-100 dark:border-slate-800 pt-2 space-y-1 text-base">
+      <div className="border-t border-subtle dark:border-slate-800 pt-2 space-y-1 text-base">
         <CostRow label="Goods" cents={liveGoodsCents} />
         <CostRow label="Overhead (shipping + customs + duties + insurance)" cents={liveOverhead} />
-        <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-1.5 mt-1.5 text-md">
+        <div className="flex items-center justify-between border-t border-default dark:border-slate-700 pt-1.5 mt-1.5 text-md">
           <span className="font-semibold text-slate-900 dark:text-slate-100">Landed cost</span>
           <span className="font-semibold tabular-nums text-slate-900 dark:text-slate-100">{(liveTotal / 100).toFixed(2)} {shipment.currencyCode}</span>
         </div>
       </div>
 
-      <div className="border-t border-slate-100 dark:border-slate-800 pt-2 flex items-center gap-2 flex-wrap">
+      <div className="border-t border-subtle dark:border-slate-800 pt-2 flex items-center gap-2 flex-wrap">
         <label className="text-sm text-slate-600 dark:text-slate-400 inline-flex items-center gap-1">
           FX rate
           <input
@@ -1529,10 +1529,10 @@ function LandedCostEditor({ shipment, onSaved }: { shipment: any; onSaved: () =>
             value={exchangeRate}
             onChange={(e) => setExchangeRate(e.target.value)}
             placeholder="—"
-            className="h-6 w-24 px-1.5 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-sm"
+            className="h-6 w-24 px-1.5 text-right tabular-nums border border-default dark:border-slate-700 rounded text-sm"
           />
         </label>
-        <span className="text-xs text-slate-400 dark:text-slate-500">to {shipment.currencyCode}</span>
+        <span className="text-xs text-tertiary dark:text-slate-500">to {shipment.currencyCode}</span>
         <div className="flex-1" />
         {error && <span className="text-sm text-rose-700 dark:text-rose-300">{error}</span>}
         <button
@@ -1558,7 +1558,7 @@ function DrawerCostInput({ label, value, onChange }: { label: string; value: str
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="0.00"
-        className="h-6 w-24 px-1.5 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded"
+        className="h-6 w-24 px-1.5 text-right tabular-nums border border-default dark:border-slate-700 rounded"
       />
     </label>
   )
@@ -1583,9 +1583,9 @@ function ItemRow({
   const onHold = item.qcStatus === 'HOLD' || item.qcStatus === 'FAIL'
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded">
+    <div className="border border-default dark:border-slate-700 rounded">
       <div className="px-3 py-2 flex items-center gap-3 flex-wrap">
-        <button onClick={onToggleExpand} className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex-shrink-0">
+        <button onClick={onToggleExpand} className="h-6 w-6 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex-shrink-0">
           {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>
         <div className="flex-1 min-w-0">
@@ -1617,13 +1617,13 @@ function ItemRow({
           value={target}
           onChange={(e) => onBufChange({ qty: e.target.value, qc, photoUrl })}
           placeholder={String(item.quantityReceived)}
-          className="h-7 w-20 px-2 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-base"
+          className="h-7 w-20 px-2 text-right tabular-nums border border-default dark:border-slate-700 rounded text-base"
           title="Cumulative target. Server computes delta."
         />
         <select
           value={qc}
           onChange={(e) => onBufChange({ qty: target, qc: e.target.value, photoUrl })}
-          className="h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded"
+          className="h-7 px-1.5 text-sm border border-default dark:border-slate-700 rounded"
         >
           <option value="">QC —</option>
           <option value="PASS">PASS</option>
@@ -1633,7 +1633,7 @@ function ItemRow({
       </div>
 
       {expanded && (
-        <div className="px-3 pb-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+        <div className="px-3 pb-3 border-t border-subtle dark:border-slate-800 space-y-2">
           {/* Photo URL paste */}
           <div className="pt-2">
             <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1 inline-flex items-center gap-1">
@@ -1644,7 +1644,7 @@ function ItemRow({
               value={photoUrl}
               onChange={(e) => onBufChange({ qty: target, qc, photoUrl: e.target.value })}
               placeholder="https://res.cloudinary.com/…"
-              className="w-full h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded"
+              className="w-full h-7 px-2 text-sm border border-default dark:border-slate-700 rounded"
             />
             <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Submitted with the next receive call. Camera + direct upload land in Commit 7.</div>
           </div>
@@ -1654,7 +1654,7 @@ function ItemRow({
             <div className="flex items-center gap-1.5 flex-wrap">
               {item.photoUrls.map((u: string, i: number) => (
                 <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="block">
-                  <img src={u} alt="" className="w-12 h-12 rounded object-cover border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800" />
+                  <img src={u} alt="" className="w-12 h-12 rounded object-cover border border-default dark:border-slate-700 bg-slate-100 dark:bg-slate-800" />
                 </a>
               ))}
             </div>
@@ -1676,7 +1676,7 @@ function ItemRow({
                       {r.qcStatus && <span className="ml-2 uppercase">{r.qcStatus}</span>}
                       {r.notes && <span className="ml-2 italic text-slate-500 dark:text-slate-400 truncate">— {r.notes}</span>}
                     </span>
-                    <span className="text-slate-400 dark:text-slate-500 tabular-nums">{new Date(r.receivedAt).toLocaleString()}</span>
+                    <span className="text-tertiary dark:text-slate-500 tabular-nums">{new Date(r.receivedAt).toLocaleString()}</span>
                   </li>
                 ))}
               </ul>
@@ -1703,7 +1703,7 @@ function ItemRow({
           <div className="flex items-center gap-2 pt-1">
             <button
               onClick={onAddDiscrepancy}
-              className="h-7 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+              className="h-7 px-2 text-xs border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
             >
               <Plus size={10} /> Add discrepancy
             </button>
@@ -1730,7 +1730,7 @@ function DiscrepancyRow({ d, onUpdateStatus }: { d: any; onUpdateStatus: (s: str
     'bg-rose-100 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300'
   const isOpen = d.status === 'REPORTED' || d.status === 'ACKNOWLEDGED'
   return (
-    <li className="flex items-start justify-between gap-2 py-1 border-b border-slate-100 dark:border-slate-800 last:border-0">
+    <li className="flex items-start justify-between gap-2 py-1 border-b border-subtle dark:border-slate-800 last:border-0">
       <div className="min-w-0 flex-1">
         <div className="inline-flex items-center gap-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 px-1.5 py-0.5 rounded">
@@ -1741,7 +1741,7 @@ function DiscrepancyRow({ d, onUpdateStatus }: { d: any; onUpdateStatus: (s: str
           </span>
         </div>
         {d.description && <div className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">{d.description}</div>}
-        <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{new Date(d.reportedAt).toLocaleDateString('en-GB')}{d.reportedBy ? ` · ${d.reportedBy}` : ''}</div>
+        <div className="text-xs text-tertiary dark:text-slate-500 mt-0.5">{new Date(d.reportedAt).toLocaleDateString('en-GB')}{d.reportedBy ? ` · ${d.reportedBy}` : ''}</div>
       </div>
       {isOpen && (
         <div className="flex items-center gap-1 flex-shrink-0">
@@ -1786,7 +1786,7 @@ function DiscrepancyComposer({
       <div className="grid grid-cols-2 gap-2">
         <div>
           <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Reason</div>
-          <select value={reasonCode} onChange={(e) => setReasonCode(e.target.value)} className="h-7 w-full px-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded">
+          <select value={reasonCode} onChange={(e) => setReasonCode(e.target.value)} className="h-7 w-full px-1.5 text-sm border border-default dark:border-slate-700 rounded">
             {DISCREPANCY_REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
         </div>
@@ -1797,7 +1797,7 @@ function DiscrepancyComposer({
             value={qtyImpact}
             onChange={(e) => setQtyImpact(e.target.value)}
             placeholder="+5 = over, -5 = short"
-            className="h-7 w-full px-2 text-sm tabular-nums border border-slate-200 dark:border-slate-700 rounded"
+            className="h-7 w-full px-2 text-sm tabular-nums border border-default dark:border-slate-700 rounded"
           />
         </div>
       </div>
@@ -1806,7 +1806,7 @@ function DiscrepancyComposer({
         onChange={(e) => setDescription(e.target.value)}
         placeholder="Description (visible to supplier on resolution PDF — Commit 17)"
         rows={2}
-        className="w-full px-2 py-1 text-sm border border-slate-200 dark:border-slate-700 rounded"
+        className="w-full px-2 py-1 text-sm border border-default dark:border-slate-700 rounded"
       />
       <div className="flex items-center justify-end gap-2">
         <button onClick={onCancel} className="h-7 px-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">Cancel</button>
@@ -1837,13 +1837,13 @@ function AttachmentComposer({
       <div className="grid grid-cols-2 gap-2">
         <div>
           <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Kind</div>
-          <select value={kind} onChange={(e) => setKind(e.target.value)} className="h-7 w-full px-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded">
+          <select value={kind} onChange={(e) => setKind(e.target.value)} className="h-7 w-full px-1.5 text-sm border border-default dark:border-slate-700 rounded">
             {ATTACHMENT_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
           </select>
         </div>
         <div>
           <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Filename (optional)</div>
-          <input value={filename} onChange={(e) => setFilename(e.target.value)} placeholder="invoice.pdf" className="h-7 w-full px-2 text-sm border border-slate-200 dark:border-slate-700 rounded" />
+          <input value={filename} onChange={(e) => setFilename(e.target.value)} placeholder="invoice.pdf" className="h-7 w-full px-2 text-sm border border-default dark:border-slate-700 rounded" />
         </div>
       </div>
       <div>
@@ -1853,7 +1853,7 @@ function AttachmentComposer({
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://res.cloudinary.com/.../inbound/.../file.pdf"
-          className="w-full h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded"
+          className="w-full h-7 px-2 text-sm border border-default dark:border-slate-700 rounded"
         />
       </div>
       <div className="flex items-center justify-end gap-2">
@@ -2099,7 +2099,7 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
     <div className="fixed inset-0 z-30 flex items-center justify-center p-6" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-900/40" />
       <div onClick={(e) => e.stopPropagation()} className="relative bg-white dark:bg-slate-900 rounded-lg shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto">
-        <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
+        <header className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
           <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">New inbound shipment</div>
           <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700"><X size={16} /></button>
         </header>
@@ -2139,7 +2139,7 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
                   <button
                     key={t}
                     onClick={() => setType(t)}
-                    className={`h-7 px-3 text-sm border rounded ${type === t ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}
+                    className={`h-7 px-3 text-sm border rounded ${type === t ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700'}`}
                   >{t}</button>
                 ))}
               </div>
@@ -2150,7 +2150,7 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
                 type="date"
                 value={expectedAt}
                 onChange={(e) => setExpectedAt(e.target.value)}
-                className="h-8 w-full px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
+                className="h-8 w-full px-2 text-base border border-default dark:border-slate-700 rounded"
               />
             </div>
           </div>
@@ -2161,7 +2161,7 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
               <input
                 type="text" value={reference} onChange={(e) => setReference(e.target.value)}
                 placeholder="Invoice #, transport doc…"
-                className="h-8 w-full px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
+                className="h-8 w-full px-2 text-base border border-default dark:border-slate-700 rounded"
               />
             </div>
             <div>
@@ -2169,7 +2169,7 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
               <input
                 type="text" value={asnNumber} onChange={(e) => setAsnNumber(e.target.value)}
                 placeholder="Supplier-provided ASN ref"
-                className="h-8 w-full px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
+                className="h-8 w-full px-2 text-base border border-default dark:border-slate-700 rounded"
               />
             </div>
           </div>
@@ -2185,14 +2185,14 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
             />
           )}
           {source === 'CSV' && (
-            <div className="border border-slate-200 dark:border-slate-700 rounded p-3 space-y-2">
+            <div className="border border-default dark:border-slate-700 rounded p-3 space-y-2">
               <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">CSV import</div>
               <textarea
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
                 placeholder={`sku,quantityExpected,unitCostCents\nSKU-001,10,1200\nSKU-002,5,800`}
                 rows={5}
-                className="w-full font-mono text-sm border border-slate-200 dark:border-slate-700 rounded p-2"
+                className="w-full font-mono text-sm border border-default dark:border-slate-700 rounded p-2"
               />
               <div className="flex items-center justify-between">
                 <div className="text-xs text-slate-500 dark:text-slate-400">Header optional. unitCostCents optional.</div>
@@ -2214,18 +2214,18 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
             <div className="grid grid-cols-3 gap-2">
               <div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Carrier</div>
-                <select value={carrierCode} onChange={(e) => setCarrierCode(e.target.value)} className="h-7 w-full px-1.5 text-base border border-slate-200 dark:border-slate-700 rounded">
+                <select value={carrierCode} onChange={(e) => setCarrierCode(e.target.value)} className="h-7 w-full px-1.5 text-base border border-default dark:border-slate-700 rounded">
                   {carrierOptions.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
               </div>
               <div className="col-span-2">
                 <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Tracking number</div>
-                <input type="text" value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} placeholder="Carrier tracking #" className="h-7 w-full px-2 text-base font-mono border border-slate-200 dark:border-slate-700 rounded" />
+                <input type="text" value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} placeholder="Carrier tracking #" className="h-7 w-full px-2 text-base font-mono border border-default dark:border-slate-700 rounded" />
               </div>
             </div>
             <div className="mt-2">
               <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Override tracking URL (optional — frontend computes from carrier + number when blank)</div>
-              <input type="url" value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="https://…" className="h-7 w-full px-2 text-sm border border-slate-200 dark:border-slate-700 rounded" />
+              <input type="url" value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="https://…" className="h-7 w-full px-2 text-sm border border-default dark:border-slate-700 rounded" />
             </div>
           </CollapseSection>
 
@@ -2239,13 +2239,13 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Currency</div>
-                <select value={currencyCode} onChange={(e) => setCurrencyCode(e.target.value)} className="h-7 w-full px-1.5 text-base border border-slate-200 dark:border-slate-700 rounded">
+                <select value={currencyCode} onChange={(e) => setCurrencyCode(e.target.value)} className="h-7 w-full px-1.5 text-base border border-default dark:border-slate-700 rounded">
                   {CURRENCY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">FX rate to EUR (optional)</div>
-                <input type="number" step="0.0001" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} placeholder="e.g. 0.92" className="h-7 w-full px-2 text-base tabular-nums border border-slate-200 dark:border-slate-700 rounded" />
+                <input type="number" step="0.0001" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} placeholder="e.g. 0.92" className="h-7 w-full px-2 text-base tabular-nums border border-default dark:border-slate-700 rounded" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2 mt-2">
@@ -2270,7 +2270,7 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
             </div>
             <table className="w-full text-base">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-700">
+                <tr className="border-b border-default dark:border-slate-700">
                   <th className="px-1.5 py-1 text-left text-xs uppercase text-slate-500 dark:text-slate-400">SKU</th>
                   <th className="px-1.5 py-1 text-right text-xs uppercase text-slate-500 dark:text-slate-400 w-20">Qty</th>
                   <th className="px-1.5 py-1 text-right text-xs uppercase text-slate-500 dark:text-slate-400 w-24">Unit cost ({currencyCode})</th>
@@ -2279,20 +2279,20 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
               </thead>
               <tbody>
                 {items.map((row, i) => (
-                  <tr key={i} className="border-b border-slate-100 dark:border-slate-800">
+                  <tr key={i} className="border-b border-subtle dark:border-slate-800">
                     <td className="px-1.5 py-1">
                       <input
                         type="text" value={row.sku}
                         onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, sku: e.target.value } : s))}
                         placeholder="SKU"
-                        className="w-full h-7 px-1.5 text-base font-mono border border-slate-200 dark:border-slate-700 rounded"
+                        className="w-full h-7 px-1.5 text-base font-mono border border-default dark:border-slate-700 rounded"
                       />
                     </td>
                     <td className="px-1.5 py-1 text-right">
                       <input
                         type="number" min="1" value={row.quantityExpected}
                         onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, quantityExpected: Number(e.target.value) || 1 } : s))}
-                        className="w-full h-7 px-1.5 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded"
+                        className="w-full h-7 px-1.5 text-right tabular-nums border border-default dark:border-slate-700 rounded"
                       />
                     </td>
                     <td className="px-1.5 py-1 text-right">
@@ -2301,13 +2301,13 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
                         value={row.unitCostCents != null ? (row.unitCostCents / 100).toFixed(2) : ''}
                         onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, unitCostCents: e.target.value ? Math.round(Number(e.target.value) * 100) : null } : s))}
                         placeholder="—"
-                        className="w-full h-7 px-1.5 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded"
+                        className="w-full h-7 px-1.5 text-right tabular-nums border border-default dark:border-slate-700 rounded"
                       />
                     </td>
                     <td className="text-center">
                       <button
                         onClick={() => setItems(items.filter((_, j) => j !== i))}
-                        className="h-7 w-7 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-600"
+                        className="h-7 w-7 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-rose-600"
                       ><Trash2 size={12} /></button>
                     </td>
                   </tr>
@@ -2326,17 +2326,17 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
               value={notes} onChange={(e) => setNotes(e.target.value)}
               rows={2}
               placeholder="Internal notes (visible in drawer)"
-              className="w-full px-2 py-1 text-base border border-slate-200 dark:border-slate-700 rounded"
+              className="w-full px-2 py-1 text-base border border-default dark:border-slate-700 rounded"
             />
           </div>
         </div>
 
-        <footer className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between sticky bottom-0 bg-white dark:bg-slate-900">
+        <footer className="px-5 py-3 border-t border-default dark:border-slate-700 flex items-center justify-between sticky bottom-0 bg-white dark:bg-slate-900">
           <div className="text-sm text-slate-500 dark:text-slate-400">
             Saves as DRAFT. Transition to SUBMITTED from the drawer.
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onClose} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+            <button onClick={onClose} className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
             <button onClick={submit} disabled={busy} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50">
               {busy ? 'Creating…' : 'Create draft'}
             </button>
@@ -2355,7 +2355,7 @@ function SourceCard({
       onClick={onClick}
       className={`p-3 rounded text-left transition-colors border ${
         active ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
-               : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+               : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
       }`}
     >
       <div className="flex items-center gap-2 mb-0.5">
@@ -2371,7 +2371,7 @@ function CollapseSection({
   label, open, onToggle, count, children,
 }: { label: string; open: boolean; onToggle: () => void; count: number; children: React.ReactNode }) {
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded">
+    <div className="border border-default dark:border-slate-700 rounded">
       <button
         onClick={onToggle}
         className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-slate-50 dark:hover:bg-slate-800"
@@ -2380,7 +2380,7 @@ function CollapseSection({
           {label}
           {count > 0 && <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">{count}</span>}
         </span>
-        {open ? <ChevronUp size={12} className="text-slate-400 dark:text-slate-500" /> : <ChevronDown size={12} className="text-slate-400 dark:text-slate-500" />}
+        {open ? <ChevronUp size={12} className="text-tertiary dark:text-slate-500" /> : <ChevronDown size={12} className="text-tertiary dark:text-slate-500" />}
       </button>
       {open && <div className="px-3 pb-3 pt-1">{children}</div>}
     </div>
@@ -2397,7 +2397,7 @@ function CostInput({
         type="number" step="0.01" value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="0.00"
-        className="h-7 w-full px-2 text-base tabular-nums border border-slate-200 dark:border-slate-700 rounded"
+        className="h-7 w-full px-2 text-base tabular-nums border border-default dark:border-slate-700 rounded"
       />
     </div>
   )
@@ -2413,7 +2413,7 @@ function PoPicker({
   onRefresh: () => void
 }) {
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded p-3 space-y-2">
+    <div className="border border-default dark:border-slate-700 rounded p-3 space-y-2">
       <div className="flex items-center justify-between">
         <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Open POs</div>
         <button onClick={onRefresh} className="h-6 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1">
@@ -2436,8 +2436,8 @@ function PoPicker({
                   disabled={totalRemaining === 0}
                   className={`w-full text-left px-2 py-1.5 rounded border text-base ${
                     selected ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 text-emerald-900' :
-                    totalRemaining === 0 ? 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed' :
-                    'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                    totalRemaining === 0 ? 'bg-slate-50 dark:bg-slate-800 border-default dark:border-slate-700 text-tertiary dark:text-slate-500 cursor-not-allowed' :
+                    'bg-white dark:bg-slate-900 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -2541,14 +2541,14 @@ function QcQueueModal({ onClose, onChanged }: { onClose: () => void; onChanged: 
     <div className="fixed inset-0 z-30 flex items-center justify-center p-6" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-900/40" />
       <div onClick={(e) => e.stopPropagation()} className="relative bg-white dark:bg-slate-900 rounded-lg shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto">
-        <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
+        <header className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
           <div className="text-lg font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
             <Unlock size={16} className="text-violet-600 dark:text-violet-400" /> QC queue ({items.length})
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => fetchQueue()}
-              className="h-7 px-2.5 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+              className="h-7 px-2.5 text-sm border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
               title="Refresh"
             >
               <RefreshCw size={11} /> Refresh
@@ -2575,7 +2575,7 @@ function QcQueueModal({ onClose, onChanged }: { onClose: () => void; onChanged: 
           {!loading && items.length > 0 && (
             <ul className="space-y-2">
               {items.map((it) => (
-                <li key={it.itemId} className="border border-slate-200 dark:border-slate-700 rounded p-3">
+                <li key={it.itemId} className="border border-default dark:border-slate-700 rounded p-3">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -2597,7 +2597,7 @@ function QcQueueModal({ onClose, onChanged }: { onClose: () => void; onChanged: 
                         )}
                       </div>
                       {it.qcNotes && (
-                        <div className="text-sm text-slate-600 dark:text-slate-400 mt-1.5 px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded">
+                        <div className="text-sm text-slate-600 dark:text-slate-400 mt-1.5 px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 rounded">
                           <span className="text-slate-500 dark:text-slate-400 mr-1">QC note:</span>{it.qcNotes}
                         </div>
                       )}
@@ -2777,7 +2777,7 @@ function SavedViewsBar({
         <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mt-1">Views</span>
         <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
           {views.length === 0 && !savingOpen && (
-            <span className="text-sm text-slate-400 dark:text-slate-500 italic">No saved views yet — set up your filters and click "Save view" to capture them.</span>
+            <span className="text-sm text-tertiary dark:text-slate-500 italic">No saved views yet — set up your filters and click "Save view" to capture them.</span>
           )}
           {views.map((v) => (
             <span
@@ -2785,7 +2785,7 @@ function SavedViewsBar({
               className={`group inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-full border text-sm ${
                 v.isDefault
                   ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900 text-blue-800'
-                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
               <button
@@ -2807,7 +2807,7 @@ function SavedViewsBar({
               )}
               <button
                 onClick={() => removeView(v.id)}
-                className="h-5 w-5 inline-flex items-center justify-center rounded-full text-slate-400 dark:text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                className="h-5 w-5 inline-flex items-center justify-center rounded-full text-tertiary dark:text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                 title="Delete view"
               >
                 <X size={11} />
@@ -2818,20 +2818,20 @@ function SavedViewsBar({
         {!savingOpen && (
           <button
             onClick={() => { setSavingOpen(true); setError(null) }}
-            className="h-7 px-2.5 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+            className="h-7 px-2.5 text-sm border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
           >
             <Plus size={11} /> Save view
           </button>
         )}
       </div>
       {savingOpen && (
-        <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 flex-wrap">
+        <div className="mt-2 pt-2 border-t border-default dark:border-slate-700 flex items-center gap-2 flex-wrap">
           <input
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="View name (e.g. Late from Vendor X)"
-            className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded flex-1 min-w-[180px]"
+            className="h-7 px-2 text-base border border-default dark:border-slate-700 rounded flex-1 min-w-[180px]"
             autoFocus
           />
           <label className="text-sm text-slate-600 dark:text-slate-400 inline-flex items-center gap-1 cursor-pointer">
@@ -2852,7 +2852,7 @@ function SavedViewsBar({
           </button>
           <button
             onClick={() => { setSavingOpen(false); setNewName(''); setNewDefault(false); setError(null) }}
-            className="h-7 px-2.5 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="h-7 px-2.5 text-sm border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             Cancel
           </button>
@@ -2981,7 +2981,7 @@ function BulkReceiveModal({ onClose, onReceived }: { onClose: () => void; onRece
     <div className="fixed inset-0 z-30 flex items-center justify-center p-6" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-900/40" />
       <div onClick={(e) => e.stopPropagation()} className="relative bg-white dark:bg-slate-900 rounded-lg shadow-2xl w-full max-w-xl max-h-[85vh] overflow-y-auto">
-        <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
+        <header className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
           <div className="text-lg font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
             <ArrowDownToLine size={16} className="text-emerald-600 dark:text-emerald-400" /> Bulk receive
           </div>
@@ -3008,7 +3008,7 @@ function BulkReceiveModal({ onClose, onReceived }: { onClose: () => void; onRece
                 value={qty}
                 onChange={(e) => setQty(Number(e.target.value) || 1)}
                 disabled={busy}
-                className="h-10 w-20 px-2 text-right tabular-nums text-lg border border-slate-200 dark:border-slate-700 rounded"
+                className="h-10 w-20 px-2 text-right tabular-nums text-lg border border-default dark:border-slate-700 rounded"
               />
               <button
                 type="submit"
@@ -3038,7 +3038,7 @@ function BulkReceiveModal({ onClose, onReceived }: { onClose: () => void; onRece
                     <button
                       onClick={() => applyReceive(c, qty)}
                       disabled={busy}
-                      className="w-full text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:border-emerald-300 disabled:opacity-50"
+                      className="w-full text-left bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded p-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:border-emerald-300 disabled:opacity-50"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
@@ -3062,7 +3062,7 @@ function BulkReceiveModal({ onClose, onReceived }: { onClose: () => void; onRece
 
           {/* Receive log */}
           {log.length > 0 && (
-            <div className="border-t border-slate-200 dark:border-slate-700 pt-3">
+            <div className="border-t border-default dark:border-slate-700 pt-3">
               <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5">This session ({log.filter((l) => l.ok).reduce((n, l) => n + l.applied, 0)} units received)</div>
               <ul className="space-y-1">
                 {log.map((entry, i) => (
@@ -3076,7 +3076,7 @@ function BulkReceiveModal({ onClose, onReceived }: { onClose: () => void; onRece
                         ? `+${entry.applied} into ${entry.shipmentRef ?? '?'}`
                         : (entry.message ?? 'Failed')}
                     </span>
-                    <span className="text-slate-400 dark:text-slate-500 tabular-nums">{new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                    <span className="text-tertiary dark:text-slate-500 tabular-nums">{new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                   </li>
                 ))}
               </ul>
@@ -3126,12 +3126,12 @@ function FbaLabelDownload({ shipmentId }: { shipmentId: string }) {
     <div className="space-y-1.5">
       <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Labels</div>
       <div className="flex items-center gap-2 flex-wrap">
-        <select value={labelType} onChange={(e) => setLabelType(e.target.value as any)} className="h-7 text-sm px-2 border border-slate-200 dark:border-slate-700 rounded">
+        <select value={labelType} onChange={(e) => setLabelType(e.target.value as any)} className="h-7 text-sm px-2 border border-default dark:border-slate-700 rounded">
           <option value="BARCODE_2D">FNSKU (unit)</option>
           <option value="UNIQUE">Carton</option>
           <option value="PALLET">Pallet</option>
         </select>
-        <select value={pageType} onChange={(e) => setPageType(e.target.value as any)} className="h-7 text-sm px-2 border border-slate-200 dark:border-slate-700 rounded">
+        <select value={pageType} onChange={(e) => setPageType(e.target.value as any)} className="h-7 text-sm px-2 border border-default dark:border-slate-700 rounded">
           <option value="PackageLabel_A4_4">A4 — 4 per sheet</option>
           <option value="PackageLabel_Letter_4">Letter — 4 per sheet</option>
           <option value="PackageLabel_Thermal">Thermal</option>
@@ -3266,7 +3266,7 @@ function FbaSkuPicker({
       {/* Autocomplete search */}
       <div className="relative">
         <div className="relative">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500 pointer-events-none" />
           <input
             type="text"
             value={query}
@@ -3274,11 +3274,11 @@ function FbaSkuPicker({
             onFocus={() => setOpen(true)}
             onBlur={() => window.setTimeout(() => setOpen(false), 150)}
             placeholder="Search SKU or product name…"
-            className="w-full h-9 pl-8 pr-3 text-base border border-slate-200 dark:border-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400"
+            className="w-full h-9 pl-8 pr-3 text-base border border-default dark:border-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400"
           />
         </div>
         {open && query.trim().length >= 2 && (
-          <div className="absolute z-10 mt-1 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded shadow-lg max-h-72 overflow-y-auto">
+          <div className="absolute z-10 mt-1 w-full bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded shadow-lg max-h-72 overflow-y-auto">
             {loading && <div className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">Searching…</div>}
             {!loading && results.length === 0 && (
               <div className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">No products match "{query.trim()}"</div>
@@ -3287,13 +3287,13 @@ function FbaSkuPicker({
               <button
                 key={p.id}
                 onMouseDown={(e) => { e.preventDefault(); addProduct(p) }}
-                className="w-full flex items-center gap-2 px-2.5 py-2 text-left hover:bg-orange-50 border-b border-slate-100 dark:border-slate-800 last:border-b-0"
+                className="w-full flex items-center gap-2 px-2.5 py-2 text-left hover:bg-orange-50 border-b border-subtle dark:border-slate-800 last:border-b-0"
               >
                 {p.imageUrl ? (
                   <img src={p.imageUrl} alt="" className="h-9 w-9 rounded object-cover bg-slate-100 dark:bg-slate-800 flex-shrink-0" />
                 ) : (
                   <div className="h-9 w-9 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
-                    <Boxes size={14} className="text-slate-400 dark:text-slate-500" />
+                    <Boxes size={14} className="text-tertiary dark:text-slate-500" />
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
@@ -3319,18 +3319,18 @@ function FbaSkuPicker({
 
       {/* Selected rows */}
       {realRows.length === 0 ? (
-        <div className="text-sm text-slate-500 dark:text-slate-400 italic px-2 py-3 border border-dashed border-slate-200 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-800 text-center">
+        <div className="text-sm text-slate-500 dark:text-slate-400 italic px-2 py-3 border border-dashed border-default dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-800 text-center">
           No SKUs added yet. Search above and click a result to add it.
         </div>
       ) : (
         <ul className="space-y-1.5">
           {items.map((row, i) => row.sku.trim() ? (
-            <li key={`${row.sku}-${i}`} className="flex items-center gap-2 p-2 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900">
+            <li key={`${row.sku}-${i}`} className="flex items-center gap-2 p-2 border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900">
               {row.imageUrl ? (
                 <img src={row.imageUrl} alt="" className="h-9 w-9 rounded object-cover bg-slate-100 dark:bg-slate-800 flex-shrink-0" />
               ) : (
                 <div className="h-9 w-9 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
-                  <Boxes size={14} className="text-slate-400 dark:text-slate-500" />
+                  <Boxes size={14} className="text-tertiary dark:text-slate-500" />
                 </div>
               )}
               <div className="flex-1 min-w-0">
@@ -3353,11 +3353,11 @@ function FbaSkuPicker({
                 min="1"
                 value={row.quantity}
                 onChange={(e) => updateQty(i, Number(e.target.value))}
-                className="h-7 w-16 px-2 text-right tabular-nums text-base border border-slate-200 dark:border-slate-700 rounded flex-shrink-0"
+                className="h-7 w-16 px-2 text-right tabular-nums text-base border border-default dark:border-slate-700 rounded flex-shrink-0"
               />
               <button
                 onClick={() => removeRow(i)}
-                className="h-7 w-7 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-600 flex-shrink-0"
+                className="h-7 w-7 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-rose-600 flex-shrink-0"
                 aria-label="Remove"
               >
                 <X size={14} />
@@ -3415,7 +3415,7 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
     <div className="fixed inset-0 z-30 flex items-center justify-center p-6" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-900/40" />
       <div onClick={(e) => e.stopPropagation()} className="relative bg-white dark:bg-slate-900 rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-        <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <header className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between">
           <div className="text-lg font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
             <Truck size={16} className="text-orange-600" /> Send to Amazon FBA
           </div>
@@ -3445,8 +3445,8 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
           <div className="p-5 space-y-3">
             <div className="text-base text-slate-500 dark:text-slate-400">Step 1 of 2 — pick the SKUs and quantities to ship to Amazon. Search by SKU or product name.</div>
             <FbaSkuPicker items={items} onChange={setItems} />
-            <footer className="pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 justify-end">
-              <button onClick={onClose} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+            <footer className="pt-3 border-t border-default dark:border-slate-700 flex items-center gap-2 justify-end">
+              <button onClick={onClose} className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
               <button
                 onClick={buildPlan}
                 disabled={busy || items.filter((i) => i.sku.trim()).length === 0}
@@ -3462,7 +3462,7 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
           <div className="p-5 space-y-3">
             <div className="text-base text-slate-500 dark:text-slate-400">Step 2 of 2 — Amazon-issued shipment IDs below. Confirm to write local records, then download FNSKU labels for each shipment.</div>
             {plan.shipmentPlans.map((sp: any, i: number) => (
-              <div key={i} className="border border-slate-200 dark:border-slate-700 rounded-md p-3">
+              <div key={i} className="border border-default dark:border-slate-700 rounded-md p-3">
                 <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
                   <div className="text-base font-semibold text-slate-900 dark:text-slate-100 font-mono">{sp.shipmentId}</div>
                   <span className="text-sm font-mono bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded">→ {sp.destinationFC}</span>
@@ -3475,7 +3475,7 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
                     </li>
                   ))}
                 </ul>
-                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                <div className="mt-2 pt-2 border-t border-subtle dark:border-slate-800 space-y-3">
                   <FbaLabelDownload shipmentId={sp.shipmentId} />
                   {/* F.6.6 — v0 transport booking removed (Amazon
                       deprecated). Operators book transport in the
@@ -3494,8 +3494,8 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
                 </div>
               </div>
             ))}
-            <footer className="pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 justify-end">
-              <button onClick={() => setStep('plan')} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Back</button>
+            <footer className="pt-3 border-t border-default dark:border-slate-700 flex items-center gap-2 justify-end">
+              <button onClick={() => setStep('plan')} className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Back</button>
               <button onClick={commit} disabled={busy} className="h-8 px-3 text-base bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50">Create shipment</button>
             </footer>
           </div>

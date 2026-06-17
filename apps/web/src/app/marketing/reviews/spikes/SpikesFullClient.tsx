@@ -126,7 +126,7 @@ export function SpikesFullClient({ initial }: { initial: SpikeRow[] }) {
       </div>
 
       {visible.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
           No spikes matching these filters.
         </div>
       ) : (
@@ -139,7 +139,7 @@ export function SpikesFullClient({ initial }: { initial: SpikeRow[] }) {
             return (
               <li
                 key={s.id}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3"
+                className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-3"
               >
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <span

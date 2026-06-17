@@ -155,7 +155,7 @@ export default function SavedSearchPicker({
         disabled={items.length === 0}
         className={cn(
           'h-7 px-2 text-sm font-medium rounded border inline-flex items-center gap-1.5 transition-colors',
-          'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800',
+          'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800',
           'hover:border-slate-300 dark:hover:border-slate-700',
           'disabled:opacity-50 disabled:cursor-not-allowed',
         )}
@@ -180,7 +180,7 @@ export default function SavedSearchPicker({
         }}
         className={cn(
           'h-7 px-2 text-sm font-medium rounded border inline-flex items-center gap-1.5 transition-colors',
-          'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800',
+          'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800',
           'hover:border-slate-300 dark:hover:border-slate-700',
         )}
         title={t('syncLogs.savedSearch.tooltipSave')}
@@ -191,7 +191,7 @@ export default function SavedSearchPicker({
 
       {/* Saved-list popover */}
       {open && items.length > 0 && (
-        <div className="absolute top-9 right-0 z-20 w-72 rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg overflow-hidden">
+        <div className="absolute top-9 right-0 z-20 w-72 rounded-md border border-default dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg overflow-hidden">
           <ul className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
             {items.map((s) => (
               <li
@@ -218,7 +218,7 @@ export default function SavedSearchPicker({
                 <button
                   type="button"
                   onClick={() => void remove(s.id, s.name)}
-                  className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
+                  className="p-1 text-tertiary hover:text-rose-600 dark:hover:text-rose-400"
                   title={t('syncLogs.savedSearch.tooltipDelete')}
                 >
                   <Trash2 className="w-3 h-3" />
@@ -231,7 +231,7 @@ export default function SavedSearchPicker({
 
       {/* Save-prompt popover */}
       {savePromptOpen && (
-        <div className="absolute top-9 right-0 z-20 w-72 rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg p-3">
+        <div className="absolute top-9 right-0 z-20 w-72 rounded-md border border-default dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg p-3">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
               {t('syncLogs.savedSearch.savePromptHeading')}
@@ -239,7 +239,7 @@ export default function SavedSearchPicker({
             <button
               type="button"
               onClick={() => setSavePromptOpen(false)}
-              className="p-0.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+              className="p-0.5 text-tertiary hover:text-slate-700 dark:hover:text-slate-300"
             >
               <X className="w-3 h-3" />
             </button>
@@ -254,7 +254,7 @@ export default function SavedSearchPicker({
             }}
             placeholder={t('syncLogs.savedSearch.savePromptPlaceholder')}
             autoFocus
-            className="w-full px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-slate-400 dark:focus:border-slate-500"
+            className="w-full px-2 py-1 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-slate-400 dark:focus:border-slate-500"
           />
           <div className="text-xs text-slate-500 dark:text-slate-500 mt-1.5 font-mono truncate">
             {Object.entries(currentFilters)
@@ -266,7 +266,7 @@ export default function SavedSearchPicker({
             <button
               type="button"
               onClick={() => setSavePromptOpen(false)}
-              className="h-7 px-2 text-sm font-medium rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600"
+              className="h-7 px-2 text-sm font-medium rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600"
             >
               {t('syncLogs.savedSearch.savePromptCancel')}
             </button>

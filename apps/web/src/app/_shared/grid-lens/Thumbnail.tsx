@@ -218,7 +218,7 @@ function ThumbnailImpl({
       role="img"
       aria-label={alt || 'No image'}
       style={style}
-      className="rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500"
+      className="rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-tertiary dark:text-slate-500"
     >
       <ImageIcon size={iconPx} aria-hidden="true" />
     </div>
@@ -328,7 +328,7 @@ function ThumbnailImpl({
           <div
             role="tooltip"
             style={{ top: previewPos.top, left: previewPos.left }}
-            className="fixed z-[60] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-1 pointer-events-none"
+            className="fixed z-[60] rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-1 pointer-events-none"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img

@@ -88,7 +88,7 @@ export default function ListingEssentialsCard({
 
   return (
     <Card noPadding>
-      <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+      <div className="px-4 py-2.5 border-b border-subtle dark:border-slate-800 flex items-center gap-2">
         <Sparkles className="w-4 h-4 text-blue-500" />
         <div className="text-md font-medium text-slate-900 dark:text-slate-100">
           {t('products.edit.cockpit.ebay.essentials.title')}
@@ -135,7 +135,7 @@ export default function ListingEssentialsCard({
               onChange={(e) => onChange(e.target.value)}
               maxLength={80}
               placeholder={t('products.edit.cockpit.ebay.essentials.titlePlaceholder')}
-              className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2.5 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              className="w-full text-sm border border-default dark:border-slate-700 rounded px-2.5 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
             />
           )}
         </FieldSourceRow>
@@ -166,7 +166,7 @@ export default function ListingEssentialsCard({
               onChange={(e) => onChange(e.target.value)}
               rows={4}
               placeholder={t('products.edit.cockpit.ebay.essentials.descriptionPlaceholder')}
-              className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2.5 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              className="w-full text-sm border border-default dark:border-slate-700 rounded px-2.5 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
             />
           )}
         </FieldSourceRow>
@@ -200,12 +200,12 @@ export default function ListingEssentialsCard({
               value={value}
               onChange={(e) => onChange(e.target.value)}
               placeholder="0.00"
-              className="w-40 text-sm border border-slate-200 dark:border-slate-700 rounded px-2.5 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              className="w-40 text-sm border border-default dark:border-slate-700 rounded px-2.5 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
             />
           )}
         </FieldSourceRow>
 
-        <div className="text-[10.5px] text-slate-400 italic pt-1 border-t border-slate-100 dark:border-slate-800">
+        <div className="text-[10.5px] text-tertiary italic pt-1 border-t border-subtle dark:border-slate-800">
           State lives in localStorage during the EC engagement, hoisted to
           ChannelListing.platformAttributes._fieldSources by EC.10&apos;s
           save flow. Per-field AI source is stubbed (deterministic);

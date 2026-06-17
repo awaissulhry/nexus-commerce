@@ -50,7 +50,7 @@ export default function CockpitPreviewBand({
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="w-full px-4 py-2.5 flex items-center justify-between text-left border-b border-slate-100 dark:border-slate-800"
+        className="w-full px-4 py-2.5 flex items-center justify-between text-left border-b border-subtle dark:border-slate-800"
       >
         <div className="flex items-center gap-2">
           <span className="text-md font-medium text-slate-900 dark:text-slate-100">
@@ -62,9 +62,9 @@ export default function CockpitPreviewBand({
           {deviceToggle}
         </div>
         {open ? (
-          <ChevronUp className="w-4 h-4 text-slate-400" />
+          <ChevronUp className="w-4 h-4 text-tertiary" />
         ) : (
-          <ChevronDown className="w-4 h-4 text-slate-400" />
+          <ChevronDown className="w-4 h-4 text-tertiary" />
         )}
       </button>
 

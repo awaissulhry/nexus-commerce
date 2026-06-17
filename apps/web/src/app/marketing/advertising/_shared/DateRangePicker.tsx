@@ -114,13 +114,13 @@ export function DateRangePicker({ value, onChange, dataThrough, livePartial }: {
         </span>
       )}
       <button onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800">
-        <Calendar size={14} className="text-slate-400" />
+        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800">
+        <Calendar size={14} className="text-tertiary" />
         <span className="font-medium text-slate-700 dark:text-slate-200">{labelFor(value)}</span>
-        <ChevronDown size={14} className="text-slate-400" />
+        <ChevronDown size={14} className="text-tertiary" />
       </button>
       {open && (
-        <div role="listbox" className="absolute right-0 z-30 mt-1 w-64 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg p-1">
+        <div role="listbox" className="absolute right-0 z-30 mt-1 w-64 rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg p-1">
           <div className="max-h-72 overflow-y-auto">
             {RANGE_PRESETS.map((p) => (
               <button key={p.key} role="option" aria-selected={value.preset === p.key}
@@ -130,17 +130,17 @@ export function DateRangePicker({ value, onChange, dataThrough, livePartial }: {
               </button>
             ))}
           </div>
-          <div className="border-t border-slate-100 dark:border-slate-800 mt-1 pt-2 px-1.5 pb-1">
+          <div className="border-t border-subtle dark:border-slate-800 mt-1 pt-2 px-1.5 pb-1">
             <div className={`text-xs mb-1 ${value.preset === 'custom' ? 'text-blue-700 dark:text-blue-300 font-medium' : 'text-slate-500'}`}>Custom range</div>
             <div className="flex items-center gap-1">
-              <input type="date" value={customStart} max={customEnd || today} onChange={(e) => setCustomStart(e.target.value)} aria-label="Start date" className="flex-1 min-w-0 px-1.5 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" />
-              <span className="text-slate-400 text-xs">–</span>
-              <input type="date" value={customEnd} min={customStart} max={today} onChange={(e) => setCustomEnd(e.target.value)} aria-label="End date" className="flex-1 min-w-0 px-1.5 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" />
+              <input type="date" value={customStart} max={customEnd || today} onChange={(e) => setCustomStart(e.target.value)} aria-label="Start date" className="flex-1 min-w-0 px-1.5 py-1 text-xs rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900" />
+              <span className="text-tertiary text-xs">–</span>
+              <input type="date" value={customEnd} min={customStart} max={today} onChange={(e) => setCustomEnd(e.target.value)} aria-label="End date" className="flex-1 min-w-0 px-1.5 py-1 text-xs rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900" />
             </div>
             <button onClick={applyCustom} disabled={!customStart || !customEnd}
               className="mt-1.5 w-full px-2 py-1 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40">Apply</button>
           </div>
-          {dataThrough && <div className="px-2.5 pt-1.5 pb-0.5 text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 mt-1">Data through {dataThrough}</div>}
+          {dataThrough && <div className="px-2.5 pt-1.5 pb-0.5 text-[11px] text-tertiary border-t border-subtle dark:border-slate-800 mt-1">Data through {dataThrough}</div>}
         </div>
       )}
     </div>

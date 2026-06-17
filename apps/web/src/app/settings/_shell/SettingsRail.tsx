@@ -53,7 +53,7 @@ export function SettingsRailMobileTrigger() {
     <button
       type="button"
       onClick={() => setMobileOpen(true)}
-      className="lg:hidden inline-flex items-center justify-center h-9 w-9 rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+      className="lg:hidden inline-flex items-center justify-center h-9 w-9 rounded-md border border-default bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
       aria-label="Open settings navigation"
     >
       <Menu size={16} />
@@ -97,7 +97,7 @@ export function SettingsRail() {
 
       <aside
         className={cn(
-          'shrink-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800',
+          'shrink-0 bg-white dark:bg-slate-900 border-r border-default dark:border-slate-800',
           // Desktop: persistent left rail. lg breakpoint = 1024px.
           'lg:block lg:w-64 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto',
           // Mobile: off-canvas drawer.
@@ -107,7 +107,7 @@ export function SettingsRail() {
         )}
         aria-label="Settings navigation"
       >
-        <div className="px-4 py-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 lg:border-b-0">
+        <div className="px-4 py-4 flex items-center justify-between border-b border-default dark:border-slate-800 lg:border-b-0">
           <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
             Settings
           </div>
@@ -150,7 +150,7 @@ export function SettingsRail() {
                           className={cn(
                             isActive
                               ? 'text-blue-600 dark:text-blue-400'
-                              : 'text-slate-400 dark:text-slate-500',
+                              : 'text-tertiary dark:text-slate-500',
                           )}
                         />
                         <span className="flex-1 truncate">{item.label}</span>

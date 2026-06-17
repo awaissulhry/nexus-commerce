@@ -164,7 +164,7 @@ export default function CrossChannelPublishModal({
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={publishing ? undefined : onClose} />
 
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
-        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-start justify-between px-5 py-4 border-b border-default dark:border-slate-700">
           <div>
             <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               Cross-channel publish preview
@@ -267,7 +267,7 @@ export default function CrossChannelPublishModal({
 
           {/* Progress block */}
           {progress.length > 0 && (
-            <div className="mt-3 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 space-y-1.5">
+            <div className="mt-3 px-3 py-2 rounded-lg border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 space-y-1.5">
               <div className="text-[10px] uppercase font-semibold tracking-wide text-slate-500 dark:text-slate-400">
                 {done ? 'Done' : 'Publishing…'}
               </div>
@@ -278,7 +278,7 @@ export default function CrossChannelPublishModal({
                   {p.status === 'done'      && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
                   {p.status === 'error'     && <AlertTriangle className="w-3 h-3 text-rose-500" />}
                   <span className="font-mono text-slate-700 dark:text-slate-300">{labelFor(p.channel)}</span>
-                  <span className="text-slate-400">—</span>
+                  <span className="text-tertiary">—</span>
                   <span className={cn(
                     p.status === 'done' && 'text-emerald-600 dark:text-emerald-400',
                     p.status === 'error' && 'text-rose-600 dark:text-rose-400',
@@ -295,7 +295,7 @@ export default function CrossChannelPublishModal({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-900/50">
+        <div className="px-5 py-3 border-t border-default dark:border-slate-700 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-900/50">
           <span className="text-xs text-slate-500 dark:text-slate-400">
             {selected.size} channel{selected.size === 1 ? '' : 's'} selected
           </span>
@@ -366,7 +366,7 @@ function ChannelCard({
       'flex items-start gap-3 px-3 py-3 rounded-xl border cursor-pointer transition-colors',
       checked
         ? 'border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/20'
-        : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50',
+        : 'border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50',
       disabled && 'opacity-50 cursor-not-allowed',
     )}>
       <input

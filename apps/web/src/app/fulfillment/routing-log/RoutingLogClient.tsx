@@ -132,7 +132,7 @@ export function RoutingLogClient({ initialDecisions }: { initialDecisions: Routi
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Simulate routing
         </h2>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-4 space-y-3">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-4 space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
             <select
               value={simChannel}
@@ -169,7 +169,7 @@ export function RoutingLogClient({ initialDecisions }: { initialDecisions: Routi
           </div>
 
           {simResult && (
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1">
+            <div className="pt-2 border-t border-default dark:border-slate-800 space-y-1">
               <div className="flex items-center gap-2">
                 <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset font-medium ${METHOD_COLORS[simResult.method] ?? ''}`}>
                   {METHOD_LABEL[simResult.method] ?? simResult.method}
@@ -200,14 +200,14 @@ export function RoutingLogClient({ initialDecisions }: { initialDecisions: Routi
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Recent routing decisions
         </h2>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md overflow-hidden">
           {initialDecisions.length === 0 ? (
             <div className="px-6 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
               No routing decisions logged yet. Decisions are recorded when orders are ingested.
             </div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800">
+              <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-default dark:border-slate-800">
                 <tr>
                   <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-slate-500 font-medium">Order</th>
                   <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-slate-500 font-medium">Channel</th>
@@ -224,7 +224,7 @@ export function RoutingLogClient({ initialDecisions }: { initialDecisions: Routi
                       <div className="text-xs font-medium text-slate-900 dark:text-slate-100">
                         {d.order.channelOrderId}
                       </div>
-                      <div className="text-[10px] text-slate-400">{d.order.customerName}</div>
+                      <div className="text-[10px] text-tertiary">{d.order.customerName}</div>
                     </td>
                     <td className="px-3 py-2 text-xs text-slate-600 dark:text-slate-400">
                       {d.order.channel}
@@ -241,7 +241,7 @@ export function RoutingLogClient({ initialDecisions }: { initialDecisions: Routi
                         {METHOD_LABEL[d.method] ?? d.method}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-xs text-slate-400 whitespace-nowrap">
+                    <td className="px-3 py-2 text-xs text-tertiary whitespace-nowrap">
                       {new Date(d.createdAt).toLocaleDateString('en-GB', {
                         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
                       })}

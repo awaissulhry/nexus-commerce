@@ -516,11 +516,11 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
       aria-label={t('outbound.drawer.lifecycle')}
     >
       <div
-        className="w-full max-w-[640px] bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col h-full animate-slide-from-right"
+        className="w-full max-w-[640px] bg-white dark:bg-slate-900 shadow-2xl border-l border-default dark:border-slate-700 flex flex-col h-full animate-slide-from-right"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ───────────────────────────────────────────── */}
-        <div className="flex items-start gap-3 px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-start gap-3 px-5 py-4 border-b border-default dark:border-slate-700">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">
@@ -565,7 +565,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 <span>—</span>
               )}
               {data?.fulfillmentMethod && (
-                <span className="text-slate-400 dark:text-slate-500">{data.fulfillmentMethod}</span>
+                <span className="text-tertiary dark:text-slate-500">{data.fulfillmentMethod}</span>
               )}
             </div>
           </div>
@@ -704,14 +704,14 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                                   ? 'bg-emerald-500 text-white'
                                   : isCurrent
                                   ? 'bg-blue-600 dark:bg-blue-700 text-white ring-4 ring-blue-100'
-                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-300 dark:border-slate-600'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-tertiary dark:text-slate-500 border border-slate-300 dark:border-slate-600'
                               }`}
                             >
                               {isPast ? '✓' : idx + 1}
                             </div>
                             <span
                               className={`text-[10px] uppercase tracking-wider whitespace-nowrap ${
-                                isCurrent ? 'text-blue-700 dark:text-blue-300 font-semibold' : isPast ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500'
+                                isCurrent ? 'text-blue-700 dark:text-blue-300 font-semibold' : isPast ? 'text-slate-700 dark:text-slate-300' : 'text-tertiary dark:text-slate-500'
                               }`}
                             >
                               {step.label}
@@ -767,7 +767,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                       [ship.StateOrRegion ?? ship.stateOrProvince ?? ship.state, ship.CountryCode ?? ship.countryCode ?? ship.country].filter(Boolean).join(' · '),
                     ].filter(Boolean) as string[]
                     return (
-                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <div className="pt-2 border-t border-subtle dark:border-slate-800">
                         <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                           <MapPin size={12} /> {t('outbound.drawer.shipTo')}
                           <button
@@ -780,7 +780,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                               }
                             }}
                             title={t('outbound.drawer.copyAddress.title')}
-                            className="ml-auto h-5 w-5 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded normal-case"
+                            className="ml-auto h-5 w-5 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded normal-case"
                           >
                             <Copy size={11} />
                           </button>
@@ -842,7 +842,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                         <>
                           <a
                             href={`${getBackendUrl()}/api/orders/${data.id}/fattura-pa.xml`}
-                            className="h-7 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+                            className="h-7 px-3 text-sm border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
                             download
                           >
                             <ExternalLink size={11} /> XML SDI
@@ -891,7 +891,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={it.product.imageUrl} alt="" className="w-full h-full object-cover" />
                           ) : (
-                            <Package className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                            <Package className="w-4 h-4 text-tertiary dark:text-slate-500" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -909,7 +909,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                         {it.productId && (
                           <Link
                             href={`/products/${it.productId}/edit`}
-                            className="text-slate-400 dark:text-slate-500 hover:text-blue-600"
+                            className="text-tertiary dark:text-slate-500 hover:text-blue-600"
                             title="Open product"
                           >
                             <ExternalLink size={12} />
@@ -936,7 +936,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                       {data.shipments.map((s) => (
                         <div
                           key={s.id}
-                          className="flex items-center gap-2 px-3 py-2 border border-slate-100 dark:border-slate-800 rounded"
+                          className="flex items-center gap-2 px-3 py-2 border border-subtle dark:border-slate-800 rounded"
                         >
                           <Badge variant={SHIPMENT_TONE[s.status] ?? 'default'} size="sm">
                             {s.status.replace(/_/g, ' ')}
@@ -987,7 +987,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                             href={`${getBackendUrl()}/api/fulfillment/shipments/${s.id}/pack-slip.html`}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-slate-400 dark:text-slate-500 hover:text-blue-600"
+                            className="text-tertiary dark:text-slate-500 hover:text-blue-600"
                             title={t('outbound.drawer.printPackSlip')}
                           >
                             <FileText size={12} />
@@ -997,7 +997,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                               href={s.labelUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-slate-400 dark:text-slate-500 hover:text-blue-600"
+                              className="text-tertiary dark:text-slate-500 hover:text-blue-600"
                               title={t('outbound.drawer.printLabel.button')}
                             >
                               <Printer size={12} />
@@ -1039,7 +1039,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                             key={`${r.source}-${r.serviceCode}`}
                             onClick={() => applyRate(r)}
                             className={`w-full flex items-center gap-3 px-3 py-2 border rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-left transition-colors ${
-                              idx === 0 ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/50' : 'border-slate-200 dark:border-slate-700'
+                              idx === 0 ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/50' : 'border-default dark:border-slate-700'
                             }`}
                           >
                             {idx === 0 && (
@@ -1089,7 +1089,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                         const errors = c.issues.filter((i) => i.severity === 'error')
                         const warnings = c.issues.filter((i) => i.severity === 'warning')
                         return (
-                          <div key={c.shipmentId} className="space-y-2 border border-slate-200 dark:border-slate-700 rounded p-2">
+                          <div key={c.shipmentId} className="space-y-2 border border-default dark:border-slate-700 rounded p-2">
                             <div className="flex items-center gap-2 text-xs">
                               <span className="text-slate-500 dark:text-slate-400">{t('outbound.drawer.customs.destination')}</span>
                               <span className="font-mono font-medium text-slate-900 dark:text-slate-100">{c.destinationCountry ?? '—'}</span>
@@ -1111,7 +1111,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                                 right form based on weight + value. Opens
                                 in a new tab and auto-prints. */}
                             {c.isInternational && (
-                              <div className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                              <div className="flex items-center gap-2 pt-1 border-t border-subtle dark:border-slate-800">
                                 <a
                                   href={`${getBackendUrl()}/api/fulfillment/shipments/${c.shipmentId}/customs-declaration.html`}
                                   target="_blank"
@@ -1203,7 +1203,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                             {c.isInternational && c.lines.length > 0 && (
                               <table className="w-full text-xs">
                                 <thead>
-                                  <tr className="text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
+                                  <tr className="text-slate-500 dark:text-slate-400 border-b border-subtle dark:border-slate-800">
                                     <th className="text-left font-normal py-1">{t('outbound.drawer.customs.col.sku')}</th>
                                     <th className="text-right font-normal py-1">{t('outbound.drawer.customs.col.qty')}</th>
                                     <th className="text-left font-normal py-1 px-2">{t('outbound.drawer.customs.col.hs')}</th>
@@ -1401,7 +1401,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                     <CreditCard size={12} className="inline mr-1" />
                     {t('outbound.drawer.channelMeta')}
                   </summary>
-                  <pre className="mt-2 p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-700 dark:text-slate-300 overflow-x-auto max-h-64 overflow-y-auto">
+                  <pre className="mt-2 p-3 bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 rounded text-xs text-slate-700 dark:text-slate-300 overflow-x-auto max-h-64 overflow-y-auto">
                     {JSON.stringify(channelMetadata, null, 2)}
                   </pre>
                 </details>
@@ -1412,7 +1412,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
 
         {/* ── Footer ───────────────────────────────────────────── */}
         {data && (
-          <div className="flex items-center gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+          <div className="flex items-center gap-2 px-5 py-3 border-t border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
             {!hasActiveShipment ? (
               <button
                 onClick={createShipment}
@@ -1502,7 +1502,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                   {hasActiveShipment && (
                     <Link
                       href={`/fulfillment/returns?new=1&orderId=${data.id}`}
-                      className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1.5"
+                      className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1.5"
                     >
                       <Undo2 size={11} />
                       {returns.length > 0
@@ -1525,7 +1525,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
             )}
             <Link
               href={`/orders/${data.id}`}
-              className="ml-auto h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1.5"
+              className="ml-auto h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1.5"
             >
               {t('outbound.drawer.openFullOrder')}
               <ExternalLink size={11} />

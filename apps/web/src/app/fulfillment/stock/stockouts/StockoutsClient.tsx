@@ -281,7 +281,7 @@ export default function StockoutsClient() {
       case 'location':
         return row.location ? (
           <span className="inline-flex items-center gap-1 text-sm text-slate-700 dark:text-slate-300">
-            <MapPin size={11} className="text-slate-400 dark:text-slate-500" />
+            <MapPin size={11} className="text-tertiary dark:text-slate-500" />
             {row.location.code}
           </span>
         ) : <span className="text-slate-300 dark:text-slate-600">—</span>
@@ -369,7 +369,7 @@ export default function StockoutsClient() {
                 className={cn('px-3 py-1 text-sm font-medium rounded border transition-colors',
                   statusFilter === s
                     ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600')}>
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600')}>
                 {t(`stock.stockouts.status.${s}`)}
               </button>
             ))}
@@ -377,23 +377,23 @@ export default function StockoutsClient() {
           <div className="flex items-center gap-1.5">
             <label htmlFor="stockouts-window" className="text-sm text-slate-500 dark:text-slate-400">{t('stock.stockouts.windowLabel')}</label>
             <select id="stockouts-window" value={windowDays} onChange={e => setWindowDays(Number(e.target.value))}
-              className="h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900">
+              className="h-8 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900">
               {WINDOW_OPTIONS.map(d => <option key={d} value={d}>{d}d</option>)}
             </select>
           </div>
           <div className="flex items-center gap-1.5">
             <label htmlFor="stockouts-location" className="text-sm text-slate-500 dark:text-slate-400">{t('stock.stockouts.locationLabel')}</label>
             <select id="stockouts-location" value={locationFilter} onChange={e => setLocationFilter(e.target.value)}
-              className="h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900">
+              className="h-8 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900">
               <option value="">{t('stock.stockouts.locationAny')}</option>
               {locations.map(l => <option key={l.id} value={l.id}>{l.code} — {l.name}</option>)}
             </select>
           </div>
           <div className="flex items-center gap-1 flex-1 min-w-[200px]">
-            <Search className="w-3.5 h-3.5 text-slate-400" />
+            <Search className="w-3.5 h-3.5 text-tertiary" />
             <input type="text" value={skuQuery} onChange={e => setSkuQuery(e.target.value)}
               placeholder={t('stock.stockouts.skuPlaceholder')}
-              className="flex-1 h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
+              className="flex-1 h-8 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
             {skuQuery && (
               <button type="button" onClick={() => setSkuQuery('')} aria-label={t('common.close')}
                 className="h-8 w-8 inline-flex items-center justify-center rounded text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">

@@ -281,7 +281,7 @@ export default function PricingCard({
   return (
     <div
       data-jump-target="pricing"
-      className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-3"
+      className="rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-3"
     >
       {/* Header */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -291,7 +291,7 @@ export default function PricingCard({
             {t('products.edit.cockpit.amazon.cards.pricing')}
           </span>
           {loading && (
-            <Loader2 className="w-3 h-3 animate-spin text-slate-400" />
+            <Loader2 className="w-3 h-3 animate-spin text-tertiary" />
           )}
         </div>
         <button
@@ -307,7 +307,7 @@ export default function PricingCard({
       </div>
 
       {/* ── 1. Price block (AC.9.2 inline editor) ─────────────────── */}
-      <div className="rounded border border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-2.5">
+      <div className="rounded border border-subtle dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-2.5">
         {editingPrice ? (
           <div className="space-y-1.5">
             <div className="grid grid-cols-2 gap-2">
@@ -324,7 +324,7 @@ export default function PricingCard({
                 />
               </label>
               <label className="text-[10.5px] text-slate-500 dark:text-slate-400">
-                Sale price <span className="text-slate-400">(blank = none)</span>
+                Sale price <span className="text-tertiary">(blank = none)</span>
                 <input
                   type="number"
                   step="0.01"
@@ -375,7 +375,7 @@ export default function PricingCard({
               </span>
               {salePrice != null && price != null && salePrice < price && (
                 <>
-                  <span className="text-sm line-through text-slate-400">
+                  <span className="text-sm line-through text-tertiary">
                     {formatPrice(price, currency)}
                   </span>
                   {savePct != null && (
@@ -439,7 +439,7 @@ export default function PricingCard({
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <div className="inline-flex items-center gap-1.5">
-            <Trophy className="w-3.5 h-3.5 text-slate-400" />
+            <Trophy className="w-3.5 h-3.5 text-tertiary" />
             <span className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Buy Box
             </span>
@@ -463,7 +463,7 @@ export default function PricingCard({
           )}
         </div>
         {!buyBox ? (
-          <div className="rounded border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40 p-2 text-[11px] text-slate-500 dark:text-slate-400 italic">
+          <div className="rounded border border-dashed border-default dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40 p-2 text-[11px] text-slate-500 dark:text-slate-400 italic">
             No Buy Box observations yet for this product on{' '}
             {marketplace}. The sp-api-pricing cron populates BuyBoxHistory
             every few hours.
@@ -524,10 +524,10 @@ export default function PricingCard({
       </div>
 
       {/* ── 3. Repricing rule + decisions ─────────────────────────── */}
-      <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+      <div className="space-y-1.5 pt-2 border-t border-subtle dark:border-slate-800">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="inline-flex items-center gap-1.5">
-            <Target className="w-3.5 h-3.5 text-slate-400" />
+            <Target className="w-3.5 h-3.5 text-tertiary" />
             <span className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Repricing rule
             </span>
@@ -554,7 +554,7 @@ export default function PricingCard({
           </a>
         </div>
         {!data?.rule ? (
-          <div className="rounded border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40 p-2 text-[11px] text-slate-500 dark:text-slate-400">
+          <div className="rounded border border-dashed border-default dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40 p-2 text-[11px] text-slate-500 dark:text-slate-400">
             No repricing rule for this product on {marketplace}. Set one in{' '}
             <a
               href={`/pricing/rules?productId=${productId}`}
@@ -568,7 +568,7 @@ export default function PricingCard({
           </div>
         ) : (
           <>
-            <div className="rounded border border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-2 text-[11.5px] text-slate-700 dark:text-slate-300 space-y-0.5">
+            <div className="rounded border border-subtle dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-2 text-[11.5px] text-slate-700 dark:text-slate-300 space-y-0.5">
               <div className="flex items-center gap-1.5">
                 <span className="font-medium">
                   {STRATEGY_LABEL[data.rule.strategy] ?? data.rule.strategy}
@@ -605,7 +605,7 @@ export default function PricingCard({
                         'font-mono flex-1 min-w-0 truncate',
                         d.applied
                           ? 'text-slate-900 dark:text-slate-100'
-                          : 'text-slate-400 line-through',
+                          : 'text-tertiary line-through',
                       )}
                       title={d.reason ?? ''}
                     >
@@ -642,7 +642,7 @@ export default function PricingCard({
       />
 
       {onJumpToClassic && (
-        <div className="pt-1 text-[10.5px] text-slate-400 italic flex items-center justify-between">
+        <div className="pt-1 text-[10.5px] text-tertiary italic flex items-center justify-between">
           <span>
             S&S / business pricing / coupons need SP-API surfaces — deferred to AC.9.3.
           </span>
@@ -677,7 +677,7 @@ function KpiBox({
           ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30'
           : tone === 'warn'
           ? 'border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30'
-          : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40',
+          : 'border-default dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40',
       )}
     >
       <div className="text-[9.5px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -831,7 +831,7 @@ function AddOnsEditor({
       Subscribe & Save · {snsDiscountPercent ?? 5}%
     </span>
   ) : (
-    <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-[10.5px] text-slate-500 dark:text-slate-400">
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-default dark:border-slate-700 text-[10.5px] text-slate-500 dark:text-slate-400">
       Subscribe & Save
     </span>
   )
@@ -842,13 +842,13 @@ function AddOnsEditor({
         Business · ≥{businessQty} at {currency} {businessPrice.toFixed(2)}
       </span>
     ) : (
-      <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-[10.5px] text-slate-500 dark:text-slate-400">
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-default dark:border-slate-700 text-[10.5px] text-slate-500 dark:text-slate-400">
         Business pricing
       </span>
     )
 
   return (
-    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+    <div className="pt-2 border-t border-subtle dark:border-slate-800 space-y-1.5">
       <div className="flex items-center gap-1.5 flex-wrap">
         <span className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           Add-ons
@@ -859,7 +859,7 @@ function AddOnsEditor({
           href="/pricing/promotions"
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-[10.5px] text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+          className="inline-flex items-center px-1.5 py-0.5 rounded border border-default dark:border-slate-700 text-[10.5px] text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
           title="Manage promotions + lightning deals in /pricing/promotions"
         >
           Promotions ↗
@@ -876,7 +876,7 @@ function AddOnsEditor({
         )}
       </div>
       {editing && (
-        <div className="rounded border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40 p-2 space-y-2">
+        <div className="rounded border border-default dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40 p-2 space-y-2">
           <div className="space-y-1">
             <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-700 dark:text-slate-300">
               <input

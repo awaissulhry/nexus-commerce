@@ -157,7 +157,7 @@ export default function CostGridClient() {
           <button
             type="button"
             onClick={() => void load()}
-            className="h-9 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+            className="h-9 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
           >
             <RefreshCw className="w-4 h-4" /> Reload
           </button>
@@ -179,12 +179,12 @@ export default function CostGridClient() {
 
       <div className="flex items-center gap-3 text-sm">
         <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-2 top-2.5 text-slate-400" />
+          <Search className="w-3.5 h-3.5 absolute left-2 top-2.5 text-tertiary" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Filter SKU / name…"
-            className="h-8 pl-7 pr-3 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 w-64"
+            className="h-8 pl-7 pr-3 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 w-64"
           />
         </div>
         <span className="text-slate-500 dark:text-slate-400">
@@ -203,7 +203,7 @@ export default function CostGridClient() {
           <Loader2 className="w-4 h-4 animate-spin" /> loading…
         </div>
       ) : (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+        <div className="border border-default dark:border-slate-700 rounded-md overflow-hidden">
           <table className="w-full text-base">
             <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-sm sticky top-0">
               <tr>
@@ -223,7 +223,7 @@ export default function CostGridClient() {
                 return (
                   <tr
                     key={r.id}
-                    className={`border-t border-slate-100 dark:border-slate-800 ${dirty ? 'bg-amber-50/50 dark:bg-amber-950/10' : ''}`}
+                    className={`border-t border-subtle dark:border-slate-800 ${dirty ? 'bg-amber-50/50 dark:bg-amber-950/10' : ''}`}
                   >
                     <td className="px-3 py-1.5 font-mono text-sm text-slate-700 dark:text-slate-300">
                       {r.sku}
@@ -244,13 +244,13 @@ export default function CostGridClient() {
                         onChange={(e) => setCost(r.id, parseCost(e.target.value))}
                         onPaste={(e) => onPaste(e, i)}
                         placeholder="—"
-                        className="w-20 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 focus:border-blue-400 focus:outline-none"
+                        className="w-20 text-right tabular-nums border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 focus:border-blue-400 focus:outline-none"
                       />
                     </td>
                     <td
                       className={`px-3 py-1.5 text-right tabular-nums ${
                         m == null
-                          ? 'text-slate-400'
+                          ? 'text-tertiary'
                           : m < 0
                             ? 'text-rose-600 dark:text-rose-400 font-medium'
                             : m < 15
@@ -260,7 +260,7 @@ export default function CostGridClient() {
                     >
                       {m != null ? `${m.toFixed(0)}%` : '—'}
                     </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-400">
+                    <td className="px-3 py-1.5 text-right tabular-nums text-tertiary">
                       {r.unitsSold90d || ''}
                     </td>
                   </tr>

@@ -266,13 +266,13 @@ export default function SchedulesClient() {
           Loading schedules…
         </div>
       ) : schedules.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 rounded p-6 text-center text-sm text-slate-500">
+        <div className="bg-white dark:bg-slate-900 border border-dashed border-default dark:border-slate-800 rounded p-6 text-center text-sm text-slate-500">
           No schedules yet. Open a bulk operation in the modal and toggle
           <strong className="mx-1">Schedule…</strong>
           to create your first.
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800/60 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">
               <tr>
@@ -308,7 +308,7 @@ export default function SchedulesClient() {
                   <td className="px-3 py-2 font-mono text-xs text-slate-600 dark:text-slate-300">
                     {s.actionType.replace(/_/g, ' ')}
                     {s.channel && (
-                      <span className="ml-1 text-slate-400">@ {s.channel}</span>
+                      <span className="ml-1 text-tertiary">@ {s.channel}</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-xs">
@@ -321,9 +321,9 @@ export default function SchedulesClient() {
                         once @ {formatDateTime(s.scheduledFor)}
                       </span>
                     ) : (
-                      <span className="text-slate-400">—</span>
+                      <span className="text-tertiary">—</span>
                     )}
-                    <div className="text-[10px] text-slate-400">
+                    <div className="text-[10px] text-tertiary">
                       tz: {s.timezone}
                     </div>
                   </td>

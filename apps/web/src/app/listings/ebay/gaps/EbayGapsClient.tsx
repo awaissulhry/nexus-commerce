@@ -172,7 +172,7 @@ export default function EbayGapsClient({ marketplace: initMarketplace, initialGa
               <button
                 key={mp}
                 onClick={() => handleMarketplace(mp)}
-                className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplace === mp ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
+                className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplace === mp ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-default hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
               >
                 {COUNTRY_NAMES[mp] ?? mp}
               </button>

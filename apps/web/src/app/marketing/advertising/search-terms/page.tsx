@@ -160,7 +160,7 @@ export default async function SearchTermsPage({ searchParams }: PageProps) {
       {/* Filters */}
       <form
         method="get"
-        className="flex flex-wrap items-end gap-2 mb-4 p-3 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-md"
+        className="flex flex-wrap items-end gap-2 mb-4 p-3 bg-slate-50 dark:bg-slate-950/40 border border-default dark:border-slate-800 rounded-md"
       >
         <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
           <Filter className="h-3.5 w-3.5" />
@@ -172,7 +172,7 @@ export default async function SearchTermsPage({ searchParams }: PageProps) {
           <select
             name="lookbackDays"
             defaultValue={lookbackDays}
-            className="h-7 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 px-2"
+            className="h-7 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 px-2"
           >
             <option value="7">Last 7 days</option>
             <option value="14">Last 14 days</option>
@@ -187,7 +187,7 @@ export default async function SearchTermsPage({ searchParams }: PageProps) {
           <select
             name="adProduct"
             defaultValue={adProduct}
-            className="h-7 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 px-2"
+            className="h-7 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 px-2"
           >
             <option value="">All</option>
             <option value="SPONSORED_PRODUCTS">SP</option>
@@ -201,7 +201,7 @@ export default async function SearchTermsPage({ searchParams }: PageProps) {
             name="marketplace"
             defaultValue={marketplace}
             placeholder="e.g. APJ6JRA9NG5V4"
-            className="h-7 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 px-2 w-44"
+            className="h-7 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 px-2 w-44"
           />
         </label>
 
@@ -210,7 +210,7 @@ export default async function SearchTermsPage({ searchParams }: PageProps) {
           <select
             name="hasOrders"
             defaultValue={hasOrders}
-            className="h-7 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 px-2"
+            className="h-7 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 px-2"
           >
             <option value="any">Any</option>
             <option value="none">Zero only (waste)</option>
@@ -226,7 +226,7 @@ export default async function SearchTermsPage({ searchParams }: PageProps) {
             step="0.5"
             min="0"
             defaultValue={minSpend}
-            className="h-7 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 px-2 w-20"
+            className="h-7 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 px-2 w-20"
           />
         </label>
 
@@ -235,7 +235,7 @@ export default async function SearchTermsPage({ searchParams }: PageProps) {
           <select
             name="sortBy"
             defaultValue={sortBy}
-            className="h-7 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 px-2"
+            className="h-7 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 px-2"
           >
             <option value="spend">Spend</option>
             <option value="clicks">Clicks</option>
@@ -254,7 +254,7 @@ export default async function SearchTermsPage({ searchParams }: PageProps) {
 
       {/* Table */}
       {data.items.length === 0 ? (
-        <div className="text-center py-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
+        <div className="text-center py-12 bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md">
           <Search className="h-10 w-10 text-slate-300 dark:text-slate-700 mx-auto mb-2" />
           <div className="text-sm text-slate-600 dark:text-slate-300 font-medium mb-1">
             No search terms found
@@ -268,7 +268,7 @@ export default async function SearchTermsPage({ searchParams }: PageProps) {
           </div>
         </div>
       ) : (
-        <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-md">
+        <div className="overflow-x-auto border border-default dark:border-slate-800 rounded-md">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-950/40 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400">
               <tr>
@@ -334,7 +334,7 @@ export default async function SearchTermsPage({ searchParams }: PageProps) {
                       ? <span className={r.acos > 50 ? 'text-rose-600 dark:text-rose-400 font-medium' : r.acos > 25 ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}>
                           {formatPct(r.acos)}
                         </span>
-                      : <span className="text-slate-400">—</span>}
+                      : <span className="text-tertiary">—</span>}
                   </td>
                   <td className="px-2 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-400">
                     {formatRatio(r.roas)}
@@ -348,7 +348,7 @@ export default async function SearchTermsPage({ searchParams }: PageProps) {
                         marketplace={r.marketplace}
                       />
                     ) : (
-                      <span className="text-[10px] text-slate-400" title="Only SP supports negative-keyword automation via API today.">SP only</span>
+                      <span className="text-[10px] text-tertiary" title="Only SP supports negative-keyword automation via API today.">SP only</span>
                     )}
                   </td>
                 </tr>
@@ -388,7 +388,7 @@ function Tile({
       ? 'text-emerald-700 dark:text-emerald-300'
       : 'text-slate-900 dark:text-slate-100'
   return (
-    <div className="border border-slate-200 dark:border-slate-800 rounded-md p-3 bg-white dark:bg-slate-900">
+    <div className="border border-default dark:border-slate-800 rounded-md p-3 bg-white dark:bg-slate-900">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
         {label}
       </div>

@@ -195,9 +195,9 @@ export function ReadinessLens({
       </div>
 
       {/* Per-product matrix */}
-      <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+      <div className="border border-default dark:border-slate-800 rounded-lg overflow-hidden">
         <table className="w-full text-base">
-          <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+          <thead className="bg-slate-50 dark:bg-slate-900 border-b border-default dark:border-slate-800">
             <tr className="text-left">
               <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
                 {t('products.lens.readiness.col.product')}
@@ -221,7 +221,7 @@ export function ReadinessLens({
               return (
                 <tr
                   key={p.id}
-                  className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40"
+                  className="border-t border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40"
                 >
                   <td className="px-3 py-2">
                     <Link
@@ -233,7 +233,7 @@ export function ReadinessLens({
                     <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate max-w-md">
                       {p.sku}
                       {p.brand && (
-                        <span className="ml-1 text-slate-400 dark:text-slate-500">
+                        <span className="ml-1 text-tertiary dark:text-slate-500">
                           · {p.brand}
                         </span>
                       )}
@@ -250,7 +250,7 @@ export function ReadinessLens({
                     }
                     if (!cr) {
                       return (
-                        <td key={ch} className="px-3 py-2 text-center text-xs text-slate-400">
+                        <td key={ch} className="px-3 py-2 text-center text-xs text-tertiary">
                           —
                         </td>
                       )

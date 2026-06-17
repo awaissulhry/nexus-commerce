@@ -237,7 +237,7 @@ export default function AutomationListClient({
 
       {rules.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-300 bg-white py-16 text-center dark:border-slate-700 dark:bg-slate-900">
-          <Zap className="w-8 h-8 text-slate-400" />
+          <Zap className="w-8 h-8 text-tertiary" />
           <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
             {t('automation.empty.title')}
           </p>
@@ -323,8 +323,8 @@ function RuleRowCard({
     <li
       className={`rounded-lg border p-3 shadow-sm transition-shadow hover:shadow-md ${
         rule.enabled
-          ? 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'
-          : 'border-slate-200 bg-slate-50 opacity-80 dark:border-slate-800 dark:bg-slate-900/60'
+          ? 'border-default bg-white dark:border-slate-800 dark:bg-slate-900'
+          : 'border-default bg-slate-50 opacity-80 dark:border-slate-800 dark:bg-slate-900/60'
       }`}
     >
       <div className="flex items-center gap-3">
@@ -368,7 +368,7 @@ function RuleRowCard({
               {t('automation.summary.when')}
             </span>{' '}
             {triggerSpec?.label ?? rule.trigger}
-            <span className="mx-1.5 text-slate-400">→</span>
+            <span className="mx-1.5 text-tertiary">→</span>
             <span className="font-medium">
               {t('automation.summary.do')}
             </span>{' '}
@@ -399,7 +399,7 @@ function RuleRowCard({
             onClick={onFire}
             aria-label={t('automation.fireNowAria')}
             title={t('automation.fireNowAria')}
-            className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-slate-800 dark:hover:text-blue-400"
+            className="rounded p-1.5 text-tertiary hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-slate-800 dark:hover:text-blue-400"
           >
             <Play className="w-3.5 h-3.5" />
           </button>
@@ -407,7 +407,7 @@ function RuleRowCard({
             type="button"
             onClick={onEdit}
             aria-label={t('common.edit')}
-            className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            className="rounded p-1.5 text-tertiary hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
           >
             <Edit className="w-3.5 h-3.5" />
           </button>
@@ -415,7 +415,7 @@ function RuleRowCard({
             type="button"
             onClick={onDelete}
             aria-label={t('common.delete')}
-            className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800 dark:hover:text-red-400"
+            className="rounded p-1.5 text-tertiary hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800 dark:hover:text-red-400"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -533,7 +533,7 @@ function RuleEditor({ apiBase, rule, onClose, onSaved }: EditorProps) {
           </label>
 
           <Section
-            icon={<Power className="w-3.5 h-3.5 text-slate-400" />}
+            icon={<Power className="w-3.5 h-3.5 text-tertiary" />}
             title={t('automation.section.trigger')}
           >
             <select
@@ -551,7 +551,7 @@ function RuleEditor({ apiBase, rule, onClose, onSaved }: EditorProps) {
               ))}
             </select>
             {triggerSpec && triggerSpec.fields.length > 0 && (
-              <div className="mt-2 space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/50">
+              <div className="mt-2 space-y-2 rounded-md border border-default bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/50">
                 {triggerSpec.fields.map((field) => (
                   <FieldEditor
                     key={field.key}
@@ -567,7 +567,7 @@ function RuleEditor({ apiBase, rule, onClose, onSaved }: EditorProps) {
           </Section>
 
           <Section
-            icon={<Zap className="w-3.5 h-3.5 text-slate-400" />}
+            icon={<Zap className="w-3.5 h-3.5 text-tertiary" />}
             title={t('automation.section.action')}
           >
             <select
@@ -599,7 +599,7 @@ function RuleEditor({ apiBase, rule, onClose, onSaved }: EditorProps) {
               </div>
             )}
             {actionSpec && actionSpec.fields.length > 0 && (
-              <div className="mt-2 space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/50">
+              <div className="mt-2 space-y-2 rounded-md border border-default bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/50">
                 {actionSpec.fields.map((field) => (
                   <FieldEditor
                     key={field.key}
@@ -614,7 +614,7 @@ function RuleEditor({ apiBase, rule, onClose, onSaved }: EditorProps) {
             )}
           </Section>
 
-          <div className="flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/50">
+          <div className="flex items-center gap-3 rounded-md border border-default bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/50">
             <label className="flex items-center gap-1.5 text-xs">
               <input
                 type="checkbox"

@@ -58,7 +58,7 @@ export default function ImagesSummaryCard({
         }
       >
         <div className="flex items-center gap-3">
-          <div className="h-14 w-14 shrink-0 overflow-hidden rounded border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
+          <div className="h-14 w-14 shrink-0 overflow-hidden rounded border border-default bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
             {hasPrimary ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img

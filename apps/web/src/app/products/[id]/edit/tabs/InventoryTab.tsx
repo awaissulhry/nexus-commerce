@@ -251,7 +251,7 @@ export default function InventoryTab({
             value={`€${snap.salesVelocity.last30Revenue.toFixed(2)}`}
           />
         </div>
-        <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div className="px-4 py-2 border-t border-subtle dark:border-slate-800 flex items-center justify-between">
           <div className="text-xs text-slate-500 dark:text-slate-400">
             {t('products.edit.inventory.thresholdHint', {
               threshold: snap.product.lowStockThreshold,
@@ -284,11 +284,11 @@ export default function InventoryTab({
         description={t('products.edit.inventory.byLocationDesc')}
       >
         {snap.stockLevels.length === 0 ? (
-          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center">
+          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-default dark:border-slate-800 rounded p-4 text-center">
             {t('products.edit.inventory.byLocationEmpty')}
           </div>
         ) : (
-          <table className="w-full text-sm border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
+          <table className="w-full text-sm border border-default dark:border-slate-800 rounded overflow-hidden">
             <thead className="bg-slate-50 dark:bg-slate-900">
               <tr className="text-left">
                 <th className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -318,7 +318,7 @@ export default function InventoryTab({
                 return (
                   <tr
                     key={sl.id}
-                    className="border-t border-slate-200 dark:border-slate-800"
+                    className="border-t border-default dark:border-slate-800"
                   >
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
@@ -378,7 +378,7 @@ export default function InventoryTab({
           title={t('products.edit.inventory.byChannelTitle')}
           description={t('products.edit.inventory.byChannelDesc')}
         >
-          <table className="w-full text-sm border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
+          <table className="w-full text-sm border border-default dark:border-slate-800 rounded overflow-hidden">
             <thead className="bg-slate-50 dark:bg-slate-900">
               <tr className="text-left">
                 <th className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -410,7 +410,7 @@ export default function InventoryTab({
                 return (
                   <tr
                     key={cl.id}
-                    className="border-t border-slate-200 dark:border-slate-800"
+                    className="border-t border-default dark:border-slate-800"
                   >
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
@@ -461,7 +461,7 @@ export default function InventoryTab({
           title={t('products.edit.inventory.reservationsTitle')}
           description={t('products.edit.inventory.reservationsDesc')}
         >
-          <table className="w-full text-sm border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
+          <table className="w-full text-sm border border-default dark:border-slate-800 rounded overflow-hidden">
             <thead className="bg-slate-50 dark:bg-slate-900">
               <tr className="text-left">
                 <th className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -482,7 +482,7 @@ export default function InventoryTab({
               {snap.reservations.map((r) => (
                 <tr
                   key={r.id}
-                  className="border-t border-slate-200 dark:border-slate-800"
+                  className="border-t border-default dark:border-slate-800"
                 >
                   <td className="px-3 py-2">
                     <Badge mono variant="default">
@@ -511,11 +511,11 @@ export default function InventoryTab({
         description={t('products.edit.inventory.movementsDesc')}
       >
         {snap.movements.length === 0 ? (
-          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center">
+          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-default dark:border-slate-800 rounded p-4 text-center">
             {t('products.edit.inventory.movementsEmpty')}
           </div>
         ) : (
-          <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-default dark:border-slate-800 rounded-lg overflow-hidden">
             {snap.movements.slice(0, 50).map((m) => (
               <li
                 key={m.id}

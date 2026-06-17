@@ -370,7 +370,7 @@ export function FieldGroupSection({
     <div
       className={cn(
         'border rounded-lg bg-white dark:bg-slate-900 overflow-hidden',
-        (unsatisfiedCount ?? 0) > 0 ? 'border-amber-200 dark:border-amber-900' : 'border-slate-200 dark:border-slate-700',
+        (unsatisfiedCount ?? 0) > 0 ? 'border-amber-200 dark:border-amber-900' : 'border-default dark:border-slate-700',
       )}
     >
       <div className="flex items-stretch justify-between gap-2">
@@ -417,7 +417,7 @@ export function FieldGroupSection({
         )}
       </div>
       {expanded && (
-        <div className="border-t border-slate-100 dark:border-slate-800 p-3 space-y-3 bg-slate-50/30">
+        <div className="border-t border-subtle dark:border-slate-800 p-3 space-y-3 bg-slate-50/30">
           {children}
         </div>
       )}
@@ -514,7 +514,7 @@ export function FieldCard({
       tabIndex={-1}
       className={cn(
         'border rounded-lg bg-white dark:bg-slate-900 px-4 py-3 scroll-mt-32 outline-none transition-shadow',
-        hasUnsatisfied ? 'border-amber-200 dark:border-amber-900' : 'border-slate-200 dark:border-slate-700',
+        hasUnsatisfied ? 'border-amber-200 dark:border-amber-900' : 'border-default dark:border-slate-700',
         highlight && 'ring-2 ring-blue-400 ring-offset-2 shadow-md',
       )}
     >
@@ -524,7 +524,7 @@ export function FieldCard({
           {(viewMode === 'base'
             ? field.requiredFor.length > 0
             : isRequiredHere) && <span className="text-rose-600 dark:text-rose-400 ml-0.5">*</span>}
-          <span className="ml-2 text-sm font-mono font-normal text-slate-400 dark:text-slate-500">
+          <span className="ml-2 text-sm font-mono font-normal text-tertiary dark:text-slate-500">
             {field.id}
           </span>
         </label>
@@ -551,8 +551,8 @@ export function FieldCard({
                 isRequiredHere
                   ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900'
                   : isOptionalHere
-                  ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
-                  : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700',
+                  ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700'
+                  : 'bg-slate-50 dark:bg-slate-800 text-tertiary dark:text-slate-500 border-default dark:border-slate-700',
               )}
             >
               {isRequiredHere
@@ -649,12 +649,12 @@ export function FieldCard({
       )}
 
       {field.examples && field.examples.length > 0 && field.kind !== 'enum' && (
-        <p className="mt-1.5 text-sm text-slate-400 dark:text-slate-500">
+        <p className="mt-1.5 text-sm text-tertiary dark:text-slate-500">
           Examples: {field.examples.join(', ')}
         </p>
       )}
       {field.maxLength && field.kind !== 'enum' && (
-        <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">
+        <p className="mt-1 text-sm text-tertiary dark:text-slate-500">
           {currentLength(
             viewMode === 'base' ? baseValue : channelOverrideValue,
           )}{' '}
@@ -663,7 +663,7 @@ export function FieldCard({
       )}
 
       {viewMode === 'base' && field.requiredFor.length > 1 && (
-        <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-2">
+        <div className="mt-3 border-t border-subtle dark:border-slate-800 pt-2">
           <button
             type="button"
             onClick={onToggleExpanded}
@@ -757,7 +757,7 @@ export function FieldCard({
       )}
 
       {showVariantSection && (
-        <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-2">
+        <div className="mt-3 border-t border-subtle dark:border-slate-800 pt-2">
           <div className="flex items-center justify-between gap-2">
             <button
               type="button"
@@ -784,7 +784,7 @@ export function FieldCard({
                   not Amazon-eligible
                 </span>
               ) : (
-                <span className="text-xs text-slate-400 dark:text-slate-500 italic">
+                <span className="text-xs text-tertiary dark:text-slate-500 italic">
                   (variant-eligible)
                 </span>
               )}
@@ -947,7 +947,7 @@ export function FieldInput({
           placeholder={placeholder ?? '0'}
           onChange={(e) => emit(e.target.value, unitVal)}
           className={cn(
-            'flex-1 px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
+            'flex-1 px-2 text-md border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
             compact ? 'h-7' : 'h-8',
           )}
         />
@@ -956,7 +956,7 @@ export function FieldInput({
             value={unitVal}
             onChange={(e) => emit(numVal, e.target.value)}
             className={cn(
-              'px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900',
+              'px-2 text-md border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900',
               compact ? 'h-7' : 'h-8',
             )}
           >
@@ -971,7 +971,7 @@ export function FieldInput({
             placeholder="unit"
             onChange={(e) => emit(numVal, e.target.value)}
             className={cn(
-              'w-28 px-2 text-md font-mono border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
+              'w-28 px-2 text-md font-mono border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
               compact ? 'h-7' : 'h-8',
             )}
           />
@@ -996,7 +996,7 @@ export function FieldInput({
               : (placeholder ?? 'Enter JSON value…')
           }
           spellCheck={false}
-          className="w-full px-2 py-1.5 text-xs font-mono border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          className="w-full px-2 py-1.5 text-xs font-mono border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
         />
       </div>
     )
@@ -1009,7 +1009,7 @@ export function FieldInput({
         value={v}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
-          'w-full px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900',
+          'w-full px-2 text-md border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900',
           compact ? 'h-7' : 'h-8',
         )}
       >
@@ -1047,7 +1047,7 @@ export function FieldInput({
       <div className="space-y-1.5">
         {slots.map((slot, idx) => (
           <div key={idx} className="flex items-start gap-2">
-            <span className="text-xs font-mono text-slate-400 dark:text-slate-500 mt-2 flex-shrink-0">
+            <span className="text-xs font-mono text-tertiary dark:text-slate-500 mt-2 flex-shrink-0">
               {idx + 1}.
             </span>
             <textarea
@@ -1065,10 +1065,10 @@ export function FieldInput({
                 }
                 onChange(next.length === 0 ? '' : JSON.stringify(next))
               }}
-              className="flex-1 px-2 py-1 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="flex-1 px-2 py-1 text-md border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
             {field.maxLength && (
-              <span className="text-xs font-mono text-slate-400 dark:text-slate-500 mt-2 tabular-nums w-12 text-right flex-shrink-0">
+              <span className="text-xs font-mono text-tertiary dark:text-slate-500 mt-2 tabular-nums w-12 text-right flex-shrink-0">
                 {slot.length}/{field.maxLength}
               </span>
             )}
@@ -1094,7 +1094,7 @@ export function FieldInput({
           }
         }}
         className={cn(
-          'w-full px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
+          'w-full px-2 text-md border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
           compact ? 'h-7' : 'h-8',
         )}
       />
@@ -1110,7 +1110,7 @@ export function FieldInput({
         rows={compact ? 2 : 4}
         maxLength={field.maxLength}
         placeholder={placeholder}
-        className="w-full px-2 py-1.5 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        className="w-full px-2 py-1.5 text-md border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
       />
     )
   }
@@ -1125,7 +1125,7 @@ export function FieldInput({
       maxLength={field.maxLength}
       placeholder={placeholder}
       className={cn(
-        'w-full px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
+        'w-full px-2 text-md border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
         compact ? 'h-7' : 'h-8',
       )}
     />
@@ -1142,7 +1142,7 @@ export function ChannelTagGroup({
   const toneClass =
     tone === 'required'
       ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900'
-      : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+      : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700'
   const label = tone === 'required' ? 'Required' : 'Optional'
   return (
     <div className="inline-flex items-center gap-1 flex-wrap">
@@ -1197,7 +1197,7 @@ export function AttributesTabStrip({
   const activePlatform = activeTab === 'base' ? null : activeTab.split(':')[0]
 
   return (
-    <div className="border-b border-slate-200 dark:border-slate-700">
+    <div className="border-b border-default dark:border-slate-700">
       <div className="flex items-end gap-1 overflow-x-auto">
         <TabButton
           label="Shared base"
@@ -1230,7 +1230,7 @@ export function AttributesTabStrip({
       </div>
 
       {activePlatform && (
-        <div className="flex items-center gap-1 px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border-t border-slate-100 dark:border-slate-800 overflow-x-auto">
+        <div className="flex items-center gap-1 px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border-t border-subtle dark:border-slate-800 overflow-x-auto">
           {byPlatform
             .find(([p]) => p === activePlatform)?.[1]
             .map((m) => {
@@ -1312,7 +1312,7 @@ export function SubTabButton({
         'h-7 px-2 text-sm font-mono font-medium rounded inline-flex items-center gap-1.5 transition-colors flex-shrink-0',
         active
           ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-800'
-          : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100',
+          : 'bg-white dark:bg-slate-900 border border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100',
       )}
     >
       {label}
@@ -1383,7 +1383,7 @@ export function OverrideMenu({
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded shadow-md py-1 min-w-[200px] text-base">
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded shadow-md py-1 min-w-[200px] text-base">
             {hasBase && (
               <button
                 type="button"
@@ -1398,7 +1398,7 @@ export function OverrideMenu({
             )}
             {otherChannels.length > 0 && (
               <>
-                <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-tertiary dark:text-slate-500">
                   Copy from
                 </div>
                 {otherChannels.map((k) => (
@@ -1434,8 +1434,8 @@ export function OverrideMenu({
             )}
             {!isEmpty(currentValue) && (
               <>
-                <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
-                <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                <div className="border-t border-subtle dark:border-slate-800 my-1" />
+                <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-tertiary dark:text-slate-500">
                   Apply this value to
                 </div>
                 <button
@@ -1511,7 +1511,7 @@ export function OverrideMenu({
                   onClear()
                   setOpen(false)
                 }}
-                className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-rose-700 dark:text-rose-300 border-t border-slate-100 dark:border-slate-800 mt-1"
+                className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-rose-700 dark:text-rose-300 border-t border-subtle dark:border-slate-800 mt-1"
               >
                 Clear override
               </button>
@@ -1566,7 +1566,7 @@ export function SchemaAgeIndicator({
     }
     return (
       <div className="mt-2 flex items-center gap-2 px-1">
-        <span className="text-xs text-slate-400 dark:text-slate-500">
+        <span className="text-xs text-tertiary dark:text-slate-500">
           Schema for <span className="font-mono">{channelKey}</span>: not yet fetched
         </span>
         {onFetch && (
@@ -1599,7 +1599,7 @@ export function SchemaAgeIndicator({
     <div className={cn('mt-2 text-xs px-1', tone)}>
       Schema for <span className="font-mono">{channelKey}</span>: {label}
       {schemaVersion && (
-        <span className="ml-1 text-slate-400 dark:text-slate-500">· version {schemaVersion}</span>
+        <span className="ml-1 text-tertiary dark:text-slate-500">· version {schemaVersion}</span>
       )}
     </div>
   )
@@ -1644,8 +1644,8 @@ export function VariantBroadcastMenu({
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded shadow-md py-1 min-w-[200px] text-base">
-            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded shadow-md py-1 min-w-[200px] text-base">
+            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-tertiary dark:text-slate-500">
               Apply this value to
             </div>
             <button

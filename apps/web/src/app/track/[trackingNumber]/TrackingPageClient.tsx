@@ -108,7 +108,7 @@ export default function TrackingPageClient({ trackingNumber }: { trackingNumber:
   if (error || !data) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-800 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6 text-center space-y-3">
+        <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-default dark:border-slate-700 p-6 text-center space-y-3">
           <AlertTriangle size={28} className="mx-auto text-amber-600 dark:text-amber-400" />
           <div className="text-md text-slate-700 dark:text-slate-300">{error ?? 'Tracking non disponibile.'}</div>
           <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">{trackingNumber}</div>
@@ -130,7 +130,7 @@ export default function TrackingPageClient({ trackingNumber }: { trackingNumber:
         </div>
 
         {/* Status hero */}
-        <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6 space-y-3">
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-default dark:border-slate-700 p-5 md:p-6 space-y-3">
           <div className="flex items-start gap-3">
             {isDelivered ? (
               <CheckCircle2 size={32} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
@@ -176,8 +176,8 @@ export default function TrackingPageClient({ trackingNumber }: { trackingNumber:
             </div>
           </div>
 
-          <div className="border-t border-slate-100 dark:border-slate-800 pt-3 flex items-center gap-3 text-sm">
-            <Package size={14} className="text-slate-400 dark:text-slate-500" />
+          <div className="border-t border-subtle dark:border-slate-800 pt-3 flex items-center gap-3 text-sm">
+            <Package size={14} className="text-tertiary dark:text-slate-500" />
             <div className="flex-1 font-mono text-slate-700 dark:text-slate-300">{data.trackingNumber}</div>
             <div className="text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">{data.carrier}</div>
             {data.carrierTrackingUrl && (
@@ -194,7 +194,7 @@ export default function TrackingPageClient({ trackingNumber }: { trackingNumber:
         </div>
 
         {/* Timeline */}
-        <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6">
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-default dark:border-slate-700 p-5 md:p-6">
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3">
             Cronologia
           </div>
@@ -222,7 +222,7 @@ export default function TrackingPageClient({ trackingNumber }: { trackingNumber:
                     {e.location && (
                       <div className="text-sm text-slate-500 dark:text-slate-400">{e.location}</div>
                     )}
-                    <div className="text-xs text-slate-400 dark:text-slate-500 tabular-nums">
+                    <div className="text-xs text-tertiary dark:text-slate-500 tabular-nums">
                       {new Date(e.occurredAt).toLocaleString('it-IT', {
                         day: 'numeric',
                         month: 'short',
@@ -237,7 +237,7 @@ export default function TrackingPageClient({ trackingNumber }: { trackingNumber:
           )}
         </div>
 
-        <div className="text-center text-xs text-slate-400 dark:text-slate-500">
+        <div className="text-center text-xs text-tertiary dark:text-slate-500">
           Hai domande? Scrivi a{' '}
           <a href="mailto:support@xavia.it" className="text-blue-600 dark:text-blue-400 hover:underline">
             support@xavia.it

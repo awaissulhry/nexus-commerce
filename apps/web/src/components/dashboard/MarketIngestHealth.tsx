@@ -213,7 +213,7 @@ export function MarketIngestHealth() {
           className="-mx-1 -my-0.5 px-1 py-0.5 inline-flex items-center gap-1.5 text-base font-semibold text-slate-900 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
         >
           Market ingest health
-          <span className="text-slate-400 dark:text-slate-500">
+          <span className="text-tertiary dark:text-slate-500">
             {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </span>
         </button>
@@ -238,7 +238,7 @@ export function MarketIngestHealth() {
           return (
             <div
               key={m.marketplaceId}
-              className={`relative px-3 py-2 rounded border border-slate-200 dark:border-slate-700 transition-opacity ${m.isActive && m.status === 'silent' ? 'bg-rose-50/40 dark:bg-rose-950/20' : ''} ${inactiveStyle}`}
+              className={`relative px-3 py-2 rounded border border-default dark:border-slate-700 transition-opacity ${m.isActive && m.status === 'silent' ? 'bg-rose-50/40 dark:bg-rose-950/20' : ''} ${inactiveStyle}`}
               title={
                 !m.isActive
                   ? 'Ingest disabled — cron skips this market on every tick. Toggle on to resume.'
@@ -261,7 +261,7 @@ export function MarketIngestHealth() {
                 <span>Last: <span className="text-slate-700 dark:text-slate-300 font-medium">{relativeAgo(m.lastOrderAt)}</span></span>
                 <span className="tabular-nums">
                   <span className="text-slate-700 dark:text-slate-300 font-medium">{m.ordersLast24h}</span>
-                  <span className="text-slate-400 dark:text-slate-500">/24h</span>
+                  <span className="text-tertiary dark:text-slate-500">/24h</span>
                 </span>
               </div>
               {/* MS.5 — operator toggle. Optimistic flip + PATCH. */}
@@ -283,7 +283,7 @@ export function MarketIngestHealth() {
         })}
       </div>
       <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-        Auto-refreshes every 60s. <span className="text-slate-400">Updated {relativeAgo(data.checkedAt)}.</span>
+        Auto-refreshes every 60s. <span className="text-tertiary">Updated {relativeAgo(data.checkedAt)}.</span>
       </div>
       </>)}
     </Card>

@@ -82,7 +82,7 @@ export function DraftsLens() {
             className={`h-7 px-3 text-sm border rounded inline-flex items-center transition-colors ${
               channel === c
                 ? `${CHANNEL_TONE[c]} font-semibold`
-                : 'bg-white text-slate-600 border-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800'
+                : 'bg-white text-slate-600 border-default dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800'
             }`}
           >
             {c}

@@ -359,7 +359,7 @@ export function GlobalSnapshot() {
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value as SnapshotPeriod)}
-            className="h-7 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+            className="h-7 px-2 text-xs border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
             title="Scope every tile to this period (Open Orders count stays right-now)"
           >
             {VALID_PERIODS.map((p) => (
@@ -371,7 +371,7 @@ export function GlobalSnapshot() {
             <select
               value={data.marketplace ?? ''}
               onChange={(e) => setMarketplace(e.target.value || null)}
-              className="h-7 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+              className="h-7 px-2 text-xs border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
               title="Filter every tile by marketplace"
             >
               <option value="">All marketplaces</option>
@@ -389,7 +389,7 @@ export function GlobalSnapshot() {
           <button
             type="button"
             onClick={fetchSnapshot}
-            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="h-7 w-7 inline-flex items-center justify-center border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
             aria-label="Refresh snapshot"
             title="Refresh"
           >
@@ -445,7 +445,7 @@ export function GlobalSnapshot() {
               {' · '}
               <span>{data.sales.total.units} units</span>
               {data.sales.total.compareLabel && (
-                <span className="ml-1 text-slate-400 dark:text-slate-500"> · {data.sales.total.compareLabel}</span>
+                <span className="ml-1 text-tertiary dark:text-slate-500"> · {data.sales.total.compareLabel}</span>
               )}
             </div>
             {/* SA.1 + SR.1 + GS-RT.6 — surface the awaiting-price
@@ -529,7 +529,7 @@ export function GlobalSnapshot() {
               </div>
             </PulseOnChange>
             <div className="text-xs text-slate-500 dark:text-slate-400">Total count</div>
-            <ul className="text-xs pt-2 mt-2 border-t border-slate-200 dark:border-slate-700 space-y-0.5">
+            <ul className="text-xs pt-2 mt-2 border-t border-default dark:border-slate-700 space-y-0.5">
               <SubLine label="FBM unshipped" value={data.openOrders.fbmUnshipped} href="/orders?fulfillment=FBM&status=PROCESSING,ON_HOLD" />
               <SubLine label="FBM pending" value={data.openOrders.fbmPending} href="/orders?fulfillment=FBM&status=PENDING,AWAITING_PAYMENT" />
               <SubLine label="FBA pending" value={data.openOrders.fbaPending} href="/orders?fulfillment=FBA&status=PENDING,AWAITING_PAYMENT" />
@@ -545,7 +545,7 @@ export function GlobalSnapshot() {
           buttonRef={messagesTileRef}
         >
           <div className="space-y-1">
-            <div className="text-2xl font-bold tabular-nums text-slate-400 dark:text-slate-500">—</div>
+            <div className="text-2xl font-bold tabular-nums text-tertiary dark:text-slate-500">—</div>
             <div className="text-xs text-slate-500 dark:text-slate-400">Not ingested yet</div>
           </div>
         </SnapshotTile>
@@ -564,7 +564,7 @@ export function GlobalSnapshot() {
           onClose={() => onToggle('sales')}
           align="left"
           ariaLabel="Sales detail"
-          className="w-[960px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden"
+          className="w-[960px] bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-xl overflow-hidden"
         >
           <PopoverHeader
             icon={ShoppingCart}
@@ -583,7 +583,7 @@ export function GlobalSnapshot() {
           onClose={() => onToggle('openOrders')}
           align="left"
           ariaLabel="Open orders detail"
-          className="w-[960px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden"
+          className="w-[960px] bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-xl overflow-hidden"
         >
           <PopoverHeader
             icon={Package}
@@ -602,7 +602,7 @@ export function GlobalSnapshot() {
           onClose={() => onToggle('messages')}
           align="left"
           ariaLabel="Buyer messages detail"
-          className="w-[400px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden"
+          className="w-[400px] bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-xl overflow-hidden"
         >
           <PopoverHeader
             icon={Mail}
@@ -632,7 +632,7 @@ function PopoverHeader({
   onClose: () => void
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+    <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
       <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
         <Icon size={14} className="text-slate-500 dark:text-slate-400" aria-hidden="true" />
         {label}
@@ -661,7 +661,7 @@ function SalesDelta({ deltaPct }: { deltaPct: number }) {
       ? 'text-emerald-600 dark:text-emerald-400'
       : rounded < 0
       ? 'text-rose-600 dark:text-rose-400'
-      : 'text-slate-400 dark:text-slate-500'
+      : 'text-tertiary dark:text-slate-500'
   return (
     <span
       className={`text-xs font-semibold tabular-nums ${tone}`}
@@ -751,7 +751,7 @@ function SnapshotTile({
           <Icon size={13} className="text-slate-500 dark:text-slate-400" aria-hidden="true" />
           {label}
         </div>
-        <span className="text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors">
+        <span className="text-tertiary dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors">
           <ArrowUpRight size={14} aria-hidden="true" />
         </span>
       </div>
@@ -787,7 +787,7 @@ function SubLine({ label, value, href }: { label: string; value: number; href: s
       <span className="text-slate-600 dark:text-slate-400">{label}</span>
       <Link
         href={href}
-        className={`tabular-nums font-semibold ${value > 0 ? 'text-blue-600 dark:text-blue-400 hover:underline' : 'text-slate-400 dark:text-slate-500'}`}
+        className={`tabular-nums font-semibold ${value > 0 ? 'text-blue-600 dark:text-blue-400 hover:underline' : 'text-tertiary dark:text-slate-500'}`}
         onClick={(e) => { if (value === 0) e.preventDefault() }}
       >
         {value}
@@ -1036,7 +1036,7 @@ function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; 
               ? 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-300'
               : recon.status === 'partial'
               ? 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/40 dark:border-amber-900 dark:text-amber-300'
-              : 'bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'
+              : 'bg-slate-50 border-default text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'
           }`}
         >
           <span aria-hidden="true">
@@ -1060,7 +1060,7 @@ function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; 
           value={period}
           onChange={(e) => setPeriod(e.target.value as PeriodKey)}
           aria-label="Period"
-          className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+          className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
         >
           {(['today', 'yesterday', '7d', '30d', '90d'] as PeriodKey[]).map((p) => (
             <option key={p} value={p}>{PERIOD_LABELS[p]}</option>
@@ -1080,7 +1080,7 @@ function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; 
           onChange={(e) => setBaseCurrency(e.target.value as 'EUR' | 'EUR_EQUIV')}
           aria-label="Currency basis"
           title="Choose how non-EUR sales display: EUR-only (native chips) or EUR-equivalent (converted via daily FX rate)"
-          className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+          className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
         >
           <option value="EUR">EUR</option>
           <option value="EUR_EQUIV">EUR equivalent</option>
@@ -1098,7 +1098,7 @@ function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; 
             </button>
           ))}
         </div>
-        {loading && <span className="text-xs text-slate-400">Loading…</span>}
+        {loading && <span className="text-xs text-tertiary">Loading…</span>}
         <div className="ml-auto text-xs tabular-nums text-slate-500 dark:text-slate-400">
           {(() => {
             // Match the tile-level combined headline (SR.1) so the
@@ -1135,7 +1135,7 @@ function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; 
             No sales in this period.
           </div>
         ) : (
-          <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+          <div className="border border-default dark:border-slate-700 rounded overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-slate-900 text-white dark:bg-slate-700">
                 <tr>
@@ -1179,7 +1179,7 @@ function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; 
                       {rows.map((r) => (
                         <tr
                           key={r.marketplace}
-                          className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                          className="border-t border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
                           onClick={(e) => {
                             // SA.4 — Cmd/Ctrl-click drills into /orders;
                             // plain click re-scopes the snapshot itself.
@@ -1268,7 +1268,7 @@ function SalesGraph({ data }: { data: Array<{ date: string; valueCents: number }
     return `€${(cents / 100).toFixed(0)}`
   }
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded p-3">
+    <div className="border border-default dark:border-slate-700 rounded p-3">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" aria-label="Sales sparkline">
         <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} className="stroke-slate-300 dark:stroke-slate-600" strokeWidth="1" />
         <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} className="stroke-slate-300 dark:stroke-slate-600" strokeWidth="1" />
@@ -1304,7 +1304,7 @@ function OpenOrdersPanelPlaceholder({ data, onSelectMarketplace }: { data: Snaps
     value: number,
   ) => {
     if (value === 0) {
-      return <span className="text-slate-400 dark:text-slate-500 tabular-nums">0</span>
+      return <span className="text-tertiary dark:text-slate-500 tabular-nums">0</span>
     }
     const params = new URLSearchParams({
       marketplace,
@@ -1331,7 +1331,7 @@ function OpenOrdersPanelPlaceholder({ data, onSelectMarketplace }: { data: Snaps
           No open orders.
         </div>
       ) : (
-        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+        <div className="border border-default dark:border-slate-700 rounded overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-900 text-white dark:bg-slate-700">
               <tr>
@@ -1358,7 +1358,7 @@ function OpenOrdersPanelPlaceholder({ data, onSelectMarketplace }: { data: Snaps
                     {rows.map((r) => (
                       <tr
                         key={r.marketplace}
-                        className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+                        className="border-t border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                       >
                         <td
                           className="px-3 py-1.5 text-slate-700 dark:text-slate-300 cursor-pointer"
@@ -1435,7 +1435,7 @@ function MessagesPanelPlaceholder() {
             href={`https://sellercentral.amazon.${m.tld}/messaging/inbox`}
             target="_blank"
             rel="noopener noreferrer"
-            className="h-8 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded inline-flex items-center gap-1.5 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
+            className="h-8 px-3 text-sm border border-default dark:border-slate-700 rounded inline-flex items-center gap-1.5 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
           >
             <span aria-hidden="true">{MARKETPLACE_FLAGS_GS[m.code] ?? '🏳️'}</span>
             <span>{m.label}</span>

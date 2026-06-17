@@ -243,7 +243,7 @@ export default function PricingAlertsClient() {
           <Card noPadding>
             <div className="overflow-x-auto">
               <table className="w-full text-md">
-                <thead className="border-b border-slate-200 dark:border-slate-800 bg-rose-50 dark:bg-rose-950">
+                <thead className="border-b border-default dark:border-slate-800 bg-rose-50 dark:bg-rose-950">
                   <tr>
                     <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-200">
                       {t('pricing.alerts.col.severity')}
@@ -270,7 +270,7 @@ export default function PricingAlertsClient() {
                   {data.driftRows.map((d) => (
                     <tr
                       key={d.id}
-                      className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                     >
                       <td className="px-3 py-2">
                         <SeverityChip tone="rose" label={t('pricing.alerts.severity.drift')} />
@@ -280,7 +280,7 @@ export default function PricingAlertsClient() {
                       </td>
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
                         {d.channel}{' '}
-                        <span className="text-slate-400 dark:text-slate-500">·</span>{' '}
+                        <span className="text-tertiary dark:text-slate-500">·</span>{' '}
                         <span className="font-mono text-sm">
                           {d.marketplace}
                         </span>
@@ -324,7 +324,7 @@ export default function PricingAlertsClient() {
             {t('pricing.alerts.section.lowMargin', {
               n: data.lowMarginRows.length,
             })}
-            <span className="ml-2 normal-case font-normal text-slate-400 dark:text-slate-500">
+            <span className="ml-2 normal-case font-normal text-tertiary dark:text-slate-500">
               {t('pricing.alerts.section.lowMarginSuffix', {
                 pct: data.thresholds.lowMarginPct,
               })}
@@ -333,7 +333,7 @@ export default function PricingAlertsClient() {
           <Card noPadding>
             <div className="overflow-x-auto">
               <table className="w-full text-md">
-                <thead className="border-b border-slate-200 dark:border-slate-800 bg-rose-50 dark:bg-rose-950">
+                <thead className="border-b border-default dark:border-slate-800 bg-rose-50 dark:bg-rose-950">
                   <tr>
                     <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-200">
                       {t('pricing.alerts.col.severity')}
@@ -362,7 +362,7 @@ export default function PricingAlertsClient() {
                     return (
                       <tr
                         key={m.id}
-                        className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+                        className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                       >
                         <td className="px-3 py-2">
                           <SeverityChip
@@ -379,7 +379,7 @@ export default function PricingAlertsClient() {
                         </td>
                         <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
                           {m.channel}{' '}
-                          <span className="text-slate-400 dark:text-slate-500">·</span>{' '}
+                          <span className="text-tertiary dark:text-slate-500">·</span>{' '}
                           <span className="font-mono text-sm">
                             {m.marketplace}
                           </span>
@@ -443,7 +443,7 @@ export default function PricingAlertsClient() {
       <Card noPadding>
         <div className="overflow-x-auto">
           <table className="w-full text-md">
-            <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
+            <thead className="border-b border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
               <tr>
                 <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                   {t('pricing.alerts.col.severity')}
@@ -484,7 +484,7 @@ export default function PricingAlertsClient() {
                 return (
                   <tr
                     key={r.id}
-                    className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                   >
                     <td className="px-3 py-2">
                       <SeverityChip tone={severity.tone} label={severity.label} />
@@ -494,7 +494,7 @@ export default function PricingAlertsClient() {
                     </td>
                     <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
                       {r.channel}{' '}
-                      <span className="text-slate-400 dark:text-slate-500">·</span>{' '}
+                      <span className="text-tertiary dark:text-slate-500">·</span>{' '}
                       <span className="font-mono text-sm">{r.marketplace}</span>
                       {r.fulfillmentMethod && (
                         <span className="ml-1 text-xs text-slate-500 dark:text-slate-400">

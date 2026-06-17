@@ -59,28 +59,28 @@ export function ArchitectClient() {
       <div className="grid md:grid-cols-2 gap-5">
         {/* Inputs */}
         <div className="space-y-3">
-          <label className="block text-xs text-slate-500">Base name<input value={baseName} onChange={(e) => setBaseName(e.target.value)} placeholder="e.g. Misano Jacket" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+          <label className="block text-xs text-slate-500">Base name<input value={baseName} onChange={(e) => setBaseName(e.target.value)} placeholder="e.g. Misano Jacket" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
           <div className="flex gap-2">
-            <label className="flex-1 text-xs text-slate-500">Market<select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">{['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK'].map((m) => <option key={m}>{m}</option>)}</select></label>
-            <label className="flex-1 text-xs text-slate-500">Daily budget €<input value={dailyBudgetEur} onChange={(e) => setDaily(e.target.value)} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
-            <label className="flex-1 text-xs text-slate-500">Default bid €<input value={defaultBidEur} onChange={(e) => setBid(e.target.value)} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+            <label className="flex-1 text-xs text-slate-500">Market<select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">{['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK'].map((m) => <option key={m}>{m}</option>)}</select></label>
+            <label className="flex-1 text-xs text-slate-500">Daily budget €<input value={dailyBudgetEur} onChange={(e) => setDaily(e.target.value)} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+            <label className="flex-1 text-xs text-slate-500">Default bid €<input value={defaultBidEur} onChange={(e) => setBid(e.target.value)} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
           </div>
-          <label className="block text-xs text-slate-500">Product SKU (optional, attaches the ad)<input value={productSku} onChange={(e) => setSku(e.target.value)} placeholder="MISANO-JACKET-XL-BLACK" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
-          <label className="block text-xs text-slate-500">Keywords (one per line)<textarea value={keywords} onChange={(e) => setKeywords(e.target.value)} rows={8} placeholder={'casco moto\ngiacca moto uomo\nguanti moto estivi'} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 font-mono" /></label>
-          <div className="text-xs text-slate-400">{keywords.split('\n').filter((k) => k.trim()).length} keywords</div>
+          <label className="block text-xs text-slate-500">Product SKU (optional, attaches the ad)<input value={productSku} onChange={(e) => setSku(e.target.value)} placeholder="MISANO-JACKET-XL-BLACK" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+          <label className="block text-xs text-slate-500">Keywords (one per line)<textarea value={keywords} onChange={(e) => setKeywords(e.target.value)} rows={8} placeholder={'casco moto\ngiacca moto uomo\nguanti moto estivi'} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950 font-mono" /></label>
+          <div className="text-xs text-tertiary">{keywords.split('\n').filter((k) => k.trim()).length} keywords</div>
         </div>
 
         {/* Strategy + actions */}
         <div className="space-y-3">
           <div className="text-xs text-slate-500">Strategy</div>
           {STRATEGIES.map((s) => (
-            <button key={s.key} onClick={() => { setStrategy(s.key); setPlan(null) }} className={`block w-full text-left p-2.5 rounded-lg border ${strategy === s.key ? 'border-violet-500 bg-violet-50 dark:bg-violet-950/30' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+            <button key={s.key} onClick={() => { setStrategy(s.key); setPlan(null) }} className={`block w-full text-left p-2.5 rounded-lg border ${strategy === s.key ? 'border-violet-500 bg-violet-50 dark:bg-violet-950/30' : 'border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
               <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{s.label}{strategy === s.key && <Check size={14} className="inline ml-1 text-violet-600" />}</div>
               <div className="text-xs text-slate-500">{s.blurb}</div>
             </button>
           ))}
           <div className="flex gap-2 pt-1">
-            <button onClick={preview} disabled={!baseName || !keywords.trim()} className="px-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">Preview</button>
+            <button onClick={preview} disabled={!baseName || !keywords.trim()} className="px-3 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">Preview</button>
             <button onClick={create} disabled={!plan || creating} className="px-3 py-1.5 text-sm rounded-md bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50">{creating ? 'Creating…' : 'Create campaigns'}</button>
           </div>
           {result && <div className="text-sm rounded-md px-3 py-2 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">{result} <Link href="/marketing/advertising/campaigns" className="underline">View campaigns</Link></div>}
@@ -89,14 +89,14 @@ export function ArchitectClient() {
 
       {/* Preview tree */}
       {plan && (
-        <div className="mt-5 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+        <div className="mt-5 rounded-lg border border-default dark:border-slate-800 p-3">
           <div className="text-sm font-medium mb-2">Preview — {plan.campaignCount} campaigns · {plan.adGroupCount} ad groups · {plan.keywordCount} keywords</div>
           <div className="space-y-2">
             {plan.campaigns.map((c, i) => (
               <div key={i} className="border-l-2 border-violet-300 pl-3">
-                <div className="text-sm font-medium text-slate-800 dark:text-slate-100">📁 {c.name} <span className="text-xs text-slate-400">({c.targetingType} · €{c.dailyBudgetEur}/d)</span></div>
+                <div className="text-sm font-medium text-slate-800 dark:text-slate-100">📁 {c.name} <span className="text-xs text-tertiary">({c.targetingType} · €{c.dailyBudgetEur}/d)</span></div>
                 {c.adGroups.map((g, j) => (
-                  <div key={j} className="ml-4 text-xs text-slate-600 dark:text-slate-300">↳ {g.name} <span className="text-slate-400">— {g.keywords.length} keyword{g.keywords.length === 1 ? '' : 's'}{g.keywords[0] ? ` (${g.keywords[0].matchType.toLowerCase()})` : ' (auto)'}</span></div>
+                  <div key={j} className="ml-4 text-xs text-slate-600 dark:text-slate-300">↳ {g.name} <span className="text-tertiary">— {g.keywords.length} keyword{g.keywords.length === 1 ? '' : 's'}{g.keywords[0] ? ` (${g.keywords[0].matchType.toLowerCase()})` : ' (auto)'}</span></div>
                 ))}
               </div>
             ))}

@@ -84,7 +84,7 @@ export function AutopilotClient() {
           <button
             key={n.mode}
             onClick={() => { setMode(n.mode); setPlan(null); setApplied(null) }}
-            className={`text-left rounded-lg border p-3 transition ${mode === n.mode ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/60 dark:bg-blue-950/30' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'}`}
+            className={`text-left rounded-lg border p-3 transition ${mode === n.mode ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/60 dark:bg-blue-950/30' : 'border-default dark:border-slate-700 hover:border-slate-300'}`}
             aria-pressed={mode === n.mode}
           >
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{n.title}</div>
@@ -95,7 +95,7 @@ export function AutopilotClient() {
 
       <div className="flex items-end gap-3">
         <label className="text-xs text-slate-500 flex flex-col">Marketplace
-          <input value={marketplace} onChange={(e) => setMarketplace(e.target.value)} placeholder="all" className="mt-0.5 w-24 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+          <input value={marketplace} onChange={(e) => setMarketplace(e.target.value)} placeholder="all" className="mt-0.5 w-24 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
         </label>
         <button onClick={() => void preview()} disabled={loading} className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">{loading ? 'Previewing…' : 'Preview plan'}</button>
         {plan && (plan.counts.bidChanges + plan.counts.topOfSearchChanges > 0) && (
@@ -113,13 +113,13 @@ export function AutopilotClient() {
 
       {/* The plan */}
       {plan && (
-        <div className="rounded-lg border border-slate-200 dark:border-slate-700">
-          <div className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800">
+        <div className="rounded-lg border border-default dark:border-slate-700">
+          <div className="px-3 py-2.5 border-b border-subtle dark:border-slate-800">
             <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{plan.headline}</div>
             <div className="text-xs text-slate-500 mt-0.5">North star: {plan.northStar.label} · {plan.counts.bidChanges} bid change(s), {plan.counts.topOfSearchChanges} top-of-search change(s)</div>
           </div>
           {plan.actions.length === 0 ? (
-            <div className="px-3 py-6 text-center text-sm text-slate-400">Nothing to change right now.</div>
+            <div className="px-3 py-6 text-center text-sm text-tertiary">Nothing to change right now.</div>
           ) : (
             <ul className="divide-y divide-slate-100 dark:divide-slate-800">
               {plan.actions.map((a, i) => (
@@ -136,7 +136,7 @@ export function AutopilotClient() {
         </div>
       )}
 
-      <p className="text-xs text-slate-400">Apply writes live bids only to campaigns on the live-write allowlist; all others are reported as skipped. Review the plan before applying.</p>
+      <p className="text-xs text-tertiary">Apply writes live bids only to campaigns on the live-write allowlist; all others are reported as skipped. Review the plan before applying.</p>
     </div>
   )
 }

@@ -695,7 +695,7 @@ export default async function ProductDatasheetPage({
       {/* Toolbar — Tailwind print:hidden replaces the F.6 .no-print
           class which had no CSS rule and was a no-op (the original
           toolbar printed). */}
-      <div className="print:hidden sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between gap-3 dark:bg-slate-900 dark:border-slate-800">
+      <div className="print:hidden sticky top-0 z-10 bg-white border-b border-default px-4 py-2 flex items-center justify-between gap-3 dark:bg-slate-900 dark:border-slate-800">
         {/* ATM.1 — Back now returns to the cross-channel attribute hub
             at /products/[id]/datasheet (which is where the operator
             launched Print from), not the edit page directly. */}
@@ -892,7 +892,7 @@ export default async function ProductDatasheetPage({
           <div>
             {heroImage ? (
               <div className="space-y-2">
-                <div className="aspect-[4/3] border border-slate-200 rounded overflow-hidden bg-slate-50 print:break-inside-avoid">
+                <div className="aspect-[4/3] border border-default rounded overflow-hidden bg-slate-50 print:break-inside-avoid">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={heroImage.url}
@@ -905,7 +905,7 @@ export default async function ProductDatasheetPage({
                     {thumbImages.map((img, i) => (
                       <div
                         key={i}
-                        className="aspect-square border border-slate-200 rounded overflow-hidden bg-slate-50 print:break-inside-avoid"
+                        className="aspect-square border border-default rounded overflow-hidden bg-slate-50 print:break-inside-avoid"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
@@ -919,7 +919,7 @@ export default async function ProductDatasheetPage({
                 )}
               </div>
             ) : (
-              <div className="border-2 border-dashed border-slate-200 rounded p-8 text-center text-slate-500 text-sm">
+              <div className="border-2 border-dashed border-default rounded p-8 text-center text-slate-500 text-sm">
                 {t('products.datasheet.noImages')}
               </div>
             )}
@@ -928,7 +928,7 @@ export default async function ProductDatasheetPage({
           {/* Spec table — W5.48 expanded with operator-relevant fields */}
           <div className="space-y-4 text-sm">
             <table className="w-full border-collapse print:break-inside-avoid">
-              <tbody className="[&>tr]:border-b [&>tr]:border-slate-100">
+              <tbody className="[&>tr]:border-b [&>tr]:border-subtle">
                 <SpecRow
                   label={t('products.col.productType')}
                   value={product.productType ?? '—'}
@@ -1103,7 +1103,7 @@ export default async function ProductDatasheetPage({
               )}
             </div>
             <table className="w-full border-collapse text-sm">
-              <thead className="border-b-2 border-slate-200">
+              <thead className="border-b-2 border-default">
                 <tr className="text-left">
                   <th className="py-1.5 pr-3 font-semibold text-slate-600">
                     {t('products.datasheet.section.variations.col.sku')}
@@ -1125,7 +1125,7 @@ export default async function ProductDatasheetPage({
                   )}
                 </tr>
               </thead>
-              <tbody className="[&>tr]:border-b [&>tr]:border-slate-100">
+              <tbody className="[&>tr]:border-b [&>tr]:border-subtle">
                 {product.children.map((c) => (
                   <tr key={c.id}>
                     <td className="py-1.5 pr-3 font-mono text-slate-700">
@@ -1164,7 +1164,7 @@ export default async function ProductDatasheetPage({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               {/* Left: customs + safety pillars */}
               <table className="w-full border-collapse">
-                <tbody className="[&>tr]:border-b [&>tr]:border-slate-100">
+                <tbody className="[&>tr]:border-b [&>tr]:border-subtle">
                   {countryDisplay && (
                     <SpecRow
                       label={t('products.datasheet.specs.countryOfOrigin')}
@@ -1269,7 +1269,7 @@ export default async function ProductDatasheetPage({
               {t('products.datasheet.section.attributes')}
             </div>
             <table className="w-full border-collapse text-sm">
-              <tbody className="[&>tr]:border-b [&>tr]:border-slate-100">
+              <tbody className="[&>tr]:border-b [&>tr]:border-subtle">
                 {Object.entries(categoryAttrs).map(([k, v]) => (
                   <SpecRow key={k} label={k} value={String(v ?? '—')} />
                 ))}
@@ -1292,12 +1292,12 @@ export default async function ProductDatasheetPage({
           </section>
         )}
 
-        <footer className="mt-8 pt-4 border-t border-slate-200 text-xs text-slate-500 flex items-center justify-between gap-4">
+        <footer className="mt-8 pt-4 border-t border-default text-xs text-slate-500 flex items-center justify-between gap-4">
           <div>{brand?.companyName ?? ''}</div>
           {/* DS.8 — Version stamp. Reader can verify they have the
               current revision by matching this against the master
               catalog. Tracks NN.1 optimistic-concurrency bumps. */}
-          <div className="font-mono text-[10px] text-slate-400">
+          <div className="font-mono text-[10px] text-tertiary">
             {versionStamp}
           </div>
           <div className="font-mono">{product.sku}</div>

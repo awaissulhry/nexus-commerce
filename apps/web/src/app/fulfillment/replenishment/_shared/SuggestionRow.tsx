@@ -61,7 +61,7 @@ export function SuggestionRow({
     <tr
       data-suggestion-id={s.productId}
       className={cn(
-        'border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/50',
+        'border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/50',
         focused &&
           'bg-blue-50/40 dark:bg-blue-950/30 ring-1 ring-inset ring-blue-300 dark:ring-blue-800',
       )}
@@ -144,7 +144,7 @@ export function SuggestionRow({
             +{s.inboundWithinLeadTime}
           </span>
         ) : (
-          <span className="text-slate-400 dark:text-slate-600">—</span>
+          <span className="text-tertiary dark:text-slate-600">—</span>
         )}
       </td>
       <td
@@ -156,7 +156,7 @@ export function SuggestionRow({
       <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
         {s.velocity}/d
         {s.forecastSource === 'TRAILING_VELOCITY' && (
-          <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">
+          <span className="ml-1 text-xs text-tertiary dark:text-slate-500">
             trailing
           </span>
         )}
@@ -171,7 +171,7 @@ export function SuggestionRow({
         {s.leadTimeDays}d
       </td>
       <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
-        {forecastBand ?? <span className="text-slate-400 dark:text-slate-600">—</span>}
+        {forecastBand ?? <span className="text-tertiary dark:text-slate-600">—</span>}
       </td>
       <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">
         {s.reorderQuantity}
@@ -200,11 +200,11 @@ export function SuggestionRow({
               )}
             </button>
           ) : (
-            <span className="text-xs text-slate-400 dark:text-slate-600">OK</span>
+            <span className="text-xs text-tertiary dark:text-slate-600">OK</span>
           )}
           <button
             onClick={() => onDismiss()}
-            className="h-7 w-7 flex items-center justify-center text-sm text-slate-400 dark:text-slate-500 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 border border-transparent hover:border-red-200 dark:hover:border-red-900 rounded"
+            className="h-7 w-7 flex items-center justify-center text-sm text-tertiary dark:text-slate-500 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 border border-transparent hover:border-red-200 dark:hover:border-red-900 rounded"
             title="Dismiss this recommendation"
             aria-label="Dismiss recommendation"
           >
@@ -215,7 +215,7 @@ export function SuggestionRow({
       <td className="px-3 py-2">
         <button
           onClick={onOpenDrawer}
-          className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+          className="text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
           aria-label={`Open detail for ${s.sku}`}
         >
           <ChevronRight size={14} aria-hidden="true" />

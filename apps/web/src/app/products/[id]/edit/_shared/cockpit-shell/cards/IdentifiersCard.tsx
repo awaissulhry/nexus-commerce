@@ -57,12 +57,12 @@ export default function IdentifiersCard({
                 ].join(' ')}
               >
                 {row.locked && (
-                  <span aria-hidden className="text-slate-400" title="Locked to master">
+                  <span aria-hidden className="text-tertiary" title="Locked to master">
                     🔒
                   </span>
                 )}
                 <span className="truncate">
-                  {row.value ?? <span className="text-slate-400">—</span>}
+                  {row.value ?? <span className="text-tertiary">—</span>}
                 </span>
                 {(row.source || row.onSourceClick) && (
                   <FieldSourceBadge

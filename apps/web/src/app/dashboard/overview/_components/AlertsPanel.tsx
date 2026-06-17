@@ -213,7 +213,7 @@ export default function AlertsPanel({
                 ? 'border-rose-200 dark:border-rose-900 bg-rose-50/40 dark:bg-rose-950/30 hover:bg-rose-50/80 dark:hover:bg-rose-950/50'
                 : it.tone === 'amber'
                 ? 'border-amber-200 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/30 hover:bg-amber-50/80 dark:hover:bg-amber-950/50'
-                : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
+                : 'border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
             )}
           >
             <div className="flex items-center justify-between gap-3">
@@ -247,7 +247,7 @@ export default function AlertsPanel({
 
         {/* Channel connectivity */}
         {alerts.channelConnections.length > 0 && (
-          <div className="border-t border-slate-100 dark:border-slate-800 pt-2 mt-2">
+          <div className="border-t border-subtle dark:border-slate-800 pt-2 mt-2">
             <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-1">
               {t('overview.alerts.connectionsHeading')}
             </div>
@@ -278,7 +278,7 @@ export default function AlertsPanel({
           </div>
         )}
         {/* Catalog touchpoints */}
-        <div className="border-t border-slate-100 dark:border-slate-800 pt-2 mt-2 grid grid-cols-2 gap-2 text-sm text-slate-700 dark:text-slate-300">
+        <div className="border-t border-subtle dark:border-slate-800 pt-2 mt-2 grid grid-cols-2 gap-2 text-sm text-slate-700 dark:text-slate-300">
           <div>
             <div className="text-slate-500 dark:text-slate-400 text-xs">
               {t('overview.alerts.liveListings')}
@@ -325,7 +325,7 @@ const SEVERITY_TONE: Record<
   },
   info: {
     container:
-      'border-slate-200 dark:border-slate-700 bg-slate-50/40 dark:bg-slate-800/40',
+      'border-default dark:border-slate-700 bg-slate-50/40 dark:bg-slate-800/40',
     icon: 'text-slate-500 dark:text-slate-400',
     Icon: Info,
   },
@@ -372,7 +372,7 @@ function NotificationRow({
         }}
         title={t('overview.alerts.dismiss')}
         aria-label={t('overview.alerts.dismiss')}
-        className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:opacity-100"
+        className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded text-tertiary hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:opacity-100"
       >
         <X className="w-3 h-3" />
       </button>

@@ -83,7 +83,7 @@ export function ColumnPicker<K extends string = string>({
       <button
         ref={btnRef}
         onClick={() => setOpen((o) => !o)}
-        className="h-8 px-2.5 text-sm inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
+        className="h-8 px-2.5 text-sm inline-flex items-center gap-1.5 border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
         title="Show / hide / reorder columns"
       >
         <Columns size={12} /> {buttonLabel ?? 'Columns'}
@@ -92,12 +92,12 @@ export function ColumnPicker<K extends string = string>({
         <AnchoredPopover
           anchorRef={btnRef}
           onClose={() => setOpen(false)}
-          className="w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg p-2 text-base"
+          className="w-64 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-md shadow-lg p-2 text-base"
           ariaLabel="Columns"
         >
             <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold px-1.5 pb-1.5 inline-flex items-center gap-1">
               Visible
-              <span className="text-slate-400 dark:text-slate-500 normal-case font-normal">· drag to reorder</span>
+              <span className="text-tertiary dark:text-slate-500 normal-case font-normal">· drag to reorder</span>
             </div>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
               <SortableContext items={visibleArr} strategy={verticalListSortingStrategy}>
@@ -121,7 +121,7 @@ export function ColumnPicker<K extends string = string>({
 
             {hidden.length > 0 && (
               <>
-                <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold px-1.5 pt-2 pb-1.5 mt-1.5 border-t border-slate-100 dark:border-slate-800">
+                <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold px-1.5 pt-2 pb-1.5 mt-1.5 border-t border-subtle dark:border-slate-800">
                   Hidden
                 </div>
                 <ul className="space-y-0.5">
@@ -143,7 +143,7 @@ export function ColumnPicker<K extends string = string>({
 
             <button
               onClick={() => onChange([...defaultVisible])}
-              className="w-full mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 text-left px-1.5 py-1"
+              className="w-full mt-1.5 pt-1.5 border-t border-subtle dark:border-slate-800 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 text-left px-1.5 py-1"
             >
               Reset to default
             </button>
@@ -173,19 +173,19 @@ function SortableColumnRow<K extends string>({
         {...attributes}
         {...listeners}
         aria-label={`Reorder ${label}`}
-        className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-grab active:cursor-grabbing rounded"
+        className="h-6 w-6 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-grab active:cursor-grabbing rounded"
       >
         <GripVertical size={12} aria-hidden="true" />
       </button>
       <span className="flex-1 text-slate-700 dark:text-slate-300">{label}</span>
       {alwaysOn ? (
-        <span className="text-xs text-slate-400 dark:text-slate-500">always on</span>
+        <span className="text-xs text-tertiary dark:text-slate-500">always on</span>
       ) : (
         <button
           type="button"
           onClick={onRemove}
           aria-label={`Hide ${label}`}
-          className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 opacity-0 group-hover:opacity-100 rounded"
+          className="h-6 w-6 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 opacity-0 group-hover:opacity-100 rounded"
         >
           <X size={12} aria-hidden="true" />
         </button>

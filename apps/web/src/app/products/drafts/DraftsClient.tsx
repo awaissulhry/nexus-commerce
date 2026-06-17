@@ -332,7 +332,7 @@ function KpiTile({
       ? 'border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30'
       : tone === 'good'
         ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/30'
-        : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'
+        : 'border-default bg-white dark:border-slate-800 dark:bg-slate-900'
   const valueClasses =
     tone === 'warn'
       ? 'text-amber-800 dark:text-amber-200'
@@ -351,7 +351,7 @@ function KpiTile({
         <span className="text-sm uppercase tracking-wide font-semibold text-slate-500 dark:text-slate-400">
           {label}
         </span>
-        <Icon className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+        <Icon className="w-3.5 h-3.5 text-tertiary dark:text-slate-500" />
       </div>
       <div className="flex items-baseline justify-between gap-2">
         {loading ? (
@@ -516,7 +516,7 @@ function DraftExpandedDetail({
   return (
     <td
       colSpan={7}
-      className="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800"
+      className="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/40 border-b border-subtle dark:border-slate-800"
     >
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Completeness checklist — every factor with its
@@ -583,7 +583,7 @@ function DraftExpandedDetail({
                     className={cn(
                       'inline-flex items-center h-4 px-1 rounded text-xs font-medium border',
                       CHANNEL_TONE[c.platform] ??
-                        'bg-slate-100 text-slate-700 border-slate-200',
+                        'bg-slate-100 text-slate-700 border-default',
                     )}
                   >
                     {c.platform}
@@ -642,7 +642,7 @@ function DraftExpandedDetail({
                         {t(labelKey)}
                         {e.step ? ` · step ${e.step}` : ''}
                       </div>
-                      <div className="text-xs text-slate-400 dark:text-slate-500">
+                      <div className="text-xs text-tertiary dark:text-slate-500">
                         {formatRelative(e.createdAt)}
                         {e.errorCode ? ` · ${e.errorCode}` : ''}
                       </div>
@@ -767,7 +767,7 @@ const DraftRow = memo(function DraftRow({
   return (
     <tr
       className={cn(
-        'border-b border-slate-100 dark:border-slate-800 last:border-0 transition-colors',
+        'border-b border-subtle dark:border-slate-800 last:border-0 transition-colors',
         d.isStale
           ? 'bg-amber-50/50 hover:bg-amber-50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30'
           : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
@@ -793,7 +793,7 @@ const DraftRow = memo(function DraftRow({
           onClick={() => onToggleExpand(d)}
           aria-expanded={isExpanded}
           aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
-          className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
+          className="inline-flex items-center justify-center w-6 h-6 rounded text-tertiary dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
         >
           {isExpanded ? (
             <ChevronDown className="w-3.5 h-3.5" />
@@ -810,12 +810,12 @@ const DraftRow = memo(function DraftRow({
                 content="Standalone product without a wizard yet"
                 placement="top"
               >
-                <span className="inline-flex items-center justify-center w-4 h-4 text-slate-400 dark:text-slate-500">
+                <span className="inline-flex items-center justify-center w-4 h-4 text-tertiary dark:text-slate-500">
                   <Box className="w-3 h-3" aria-hidden="true" />
                 </span>
               </Tooltip>
             )}
-            {d.productName ?? <em className="text-slate-400 dark:text-slate-500">Untitled</em>}
+            {d.productName ?? <em className="text-tertiary dark:text-slate-500">Untitled</em>}
           </div>
           <div className="text-sm text-slate-500 dark:text-slate-400 font-mono mt-0.5 flex items-center gap-2">
             <span>{d.productSku ?? '—'}</span>
@@ -855,14 +855,14 @@ const DraftRow = memo(function DraftRow({
       <td className="px-4 py-2.5">
         <div className="flex flex-wrap gap-1">
           {d.channels.length === 0 && (
-            <span className="text-slate-400 dark:text-slate-500 text-sm">
+            <span className="text-tertiary dark:text-slate-500 text-sm">
               {d.kind === 'product' ? 'no wizard yet' : 'none yet'}
             </span>
           )}
           {d.channels.map((c, i) => {
             const tone =
               CHANNEL_TONE[c.platform] ??
-              'bg-slate-100 text-slate-700 border-slate-200'
+              'bg-slate-100 text-slate-700 border-default'
             return (
               <span
                 key={`${c.platform}:${c.marketplace}:${i}`}
@@ -997,7 +997,7 @@ const DraftRow = memo(function DraftRow({
               onClick={() => onDelete(d)}
               aria-label="Delete draft"
               size="md"
-              className="h-11 w-11 sm:h-7 sm:w-7 text-slate-400 dark:text-slate-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:text-rose-300 dark:hover:bg-rose-950/40"
+              className="h-11 w-11 sm:h-7 sm:w-7 text-tertiary dark:text-slate-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:text-rose-300 dark:hover:bg-rose-950/40"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </IconButton>
@@ -1846,13 +1846,13 @@ export default function DraftsClient() {
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[260px]">
-          <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-3.5 h-3.5 text-tertiary dark:text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('drafts.searchPlaceholder')}
-            className="w-full h-8 pl-8 pr-3 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+            className="w-full h-8 pl-8 pr-3 text-base border border-default rounded-md bg-white focus:outline-none focus:border-blue-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
           />
         </div>
 
@@ -1868,7 +1868,7 @@ export default function DraftsClient() {
               'inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 sm:px-2.5 text-base rounded-md border transition-colors',
               staleOnly
                 ? 'bg-amber-50 border-amber-300 text-amber-800 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200'
-                : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600',
+                : 'bg-white border-default text-slate-700 hover:border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600',
             )}
             aria-pressed={staleOnly}
           >
@@ -1886,7 +1886,7 @@ export default function DraftsClient() {
           value={source}
           onChange={(e) => setSource(e.target.value as SourceFilter)}
           aria-label="Filter by source"
-          className="h-8 px-2 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500"
+          className="h-8 px-2 text-base border border-default rounded-md bg-white focus:outline-none focus:border-blue-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500"
         >
           {SOURCE_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -1899,7 +1899,7 @@ export default function DraftsClient() {
           value={sort}
           onChange={(e) => setSort(e.target.value as SortOption)}
           aria-label="Sort drafts"
-          className="h-8 px-2 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500"
+          className="h-8 px-2 text-base border border-default rounded-md bg-white focus:outline-none focus:border-blue-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500"
         >
           {SORT_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -1990,9 +1990,9 @@ export default function DraftsClient() {
         </div>
       )}
 
-      <div className="border border-slate-200 rounded-lg bg-white overflow-x-auto dark:border-slate-800 dark:bg-slate-900">
+      <div className="border border-default rounded-lg bg-white overflow-x-auto dark:border-slate-800 dark:bg-slate-900">
         <table className="w-full min-w-[720px] text-base">
-          <thead className="bg-slate-50 border-b border-slate-200 dark:bg-slate-900 dark:border-slate-800">
+          <thead className="bg-slate-50 border-b border-default dark:bg-slate-900 dark:border-slate-800">
             <tr className="text-left text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               <th className="px-4 py-2.5 w-[40px]">
                 <input
@@ -2025,7 +2025,7 @@ export default function DraftsClient() {
             {loading && drafts.length === 0 && (
               <>
                 {Array.from({ length: 4 }).map((_, i) => (
-                  <tr key={i} className="border-b border-slate-100 dark:border-slate-800">
+                  <tr key={i} className="border-b border-subtle dark:border-slate-800">
                     <td className="px-4 py-3">
                       <Skeleton variant="block" width={16} height={16} />
                     </td>
@@ -2061,7 +2061,7 @@ export default function DraftsClient() {
                       ? t('common.noResults')
                       : t('drafts.empty')}
                   </div>
-                  <div className="mt-1 text-sm text-slate-400 dark:text-slate-500">
+                  <div className="mt-1 text-sm text-tertiary dark:text-slate-500">
                     {t('drafts.emptyHint')}
                   </div>
                 </td>

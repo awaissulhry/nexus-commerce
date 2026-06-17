@@ -45,7 +45,7 @@ export function FilterBar(props: FilterBarProps) {
   return (
     <Card>
       <div className="space-y-3">
-        <div className="flex items-center gap-x-5 gap-y-2 flex-wrap pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-x-5 gap-y-2 flex-wrap pb-3 border-b border-subtle dark:border-slate-800">
           <MultiSelectChips
             label={t('orders.filter.group.channel')}
             options={ACTIVE_CHANNELS_OPTIONS}
@@ -72,7 +72,7 @@ export function FilterBar(props: FilterBarProps) {
         <div className="relative max-w-md">
           <Search
             size={12}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary"
           />
           <Input
             id="orders-search"

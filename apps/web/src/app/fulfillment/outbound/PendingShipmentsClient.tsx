@@ -82,9 +82,9 @@ const URGENCY_TONE: Record<Urgency, { tint: string; icon: typeof Clock }> = {
   OVERDUE: { tint: 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900', icon: AlertTriangle },
   TODAY: { tint: 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900', icon: Clock },
   TOMORROW: { tint: 'text-yellow-700 bg-yellow-50 border-yellow-200', icon: Clock },
-  THIS_WEEK: { tint: 'text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700', icon: Clock },
-  LATER: { tint: 'text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700', icon: Clock },
-  UNKNOWN: { tint: 'text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700', icon: Clock },
+  THIS_WEEK: { tint: 'text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 border-default dark:border-slate-700', icon: Clock },
+  LATER: { tint: 'text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border-default dark:border-slate-700', icon: Clock },
+  UNKNOWN: { tint: 'text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border-default dark:border-slate-700', icon: Clock },
 }
 
 const CHANNEL_LABEL: Record<string, string> = {
@@ -746,13 +746,13 @@ export default function PendingShipmentsClient() {
                 </Link>
                 <Link
                   href="/fulfillment/outbound/rules"
-                  className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+                  className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
                 >
                   {t('outbound.onboarding.defineRules')}
                 </Link>
                 <Link
                   href="/fulfillment/routing-rules"
-                  className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+                  className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
                 >
                   {t('outbound.onboarding.warehouseRouting')}
                 </Link>
@@ -766,7 +766,7 @@ export default function PendingShipmentsClient() {
       <GridToolbar
         searchSlot={
           <div className="relative">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500" />
             <Input
               placeholder={t('outbound.pending.searchPlaceholder')}
               value={searchInput}
@@ -806,12 +806,12 @@ export default function PendingShipmentsClient() {
                       ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
                       : isOverdue && !isActive
                       ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900 hover:bg-rose-100 dark:hover:bg-rose-900/60'
-                      : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                      : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
                   {t(f.tKey)}
                   {count != null && (
-                    <span className={`tabular-nums ${isActive ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400 dark:text-slate-500'}`}>
+                    <span className={`tabular-nums ${isActive ? 'text-slate-300 dark:text-slate-600' : 'text-tertiary dark:text-slate-500'}`}>
                       {count}
                     </span>
                   )}
@@ -824,7 +824,7 @@ export default function PendingShipmentsClient() {
           <select
             value={sort}
             onChange={(e) => setParam('sort', e.target.value === 'ship-by-asc' ? null : e.target.value)}
-            className="h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
+            className="h-8 px-2 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
           >
             <option value="ship-by-asc">{t('outbound.pending.sort.shipBy')}</option>
             <option value="value-desc">{t('outbound.pending.sort.value')}</option>
@@ -851,18 +851,18 @@ export default function PendingShipmentsClient() {
           <div className="relative">
             <button
               onClick={() => setShowViewsMenu((v) => !v)}
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <Bookmark size={12} /> {t('savedViews.label')}
               {views.length > 0 && (
-                <span className="ml-1 tabular-nums text-slate-400 dark:text-slate-500">{views.length}</span>
+                <span className="ml-1 tabular-nums text-tertiary dark:text-slate-500">{views.length}</span>
               )}
               <ChevronDown size={11} />
             </button>
             {showViewsMenu && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowViewsMenu(false)} />
-                <div className="absolute right-0 mt-1 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-20">
+                <div className="absolute right-0 mt-1 w-72 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-md shadow-lg z-20">
                   <div className="p-1 max-h-72 overflow-y-auto">
                     {views.length === 0 ? (
                       <div className="text-sm text-slate-500 dark:text-slate-400 px-3 py-2">
@@ -935,7 +935,7 @@ export default function PendingShipmentsClient() {
                             <button
                               onClick={() => deleteView(v.id)}
                               title={t('common.delete')}
-                              className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-600 rounded opacity-0 group-hover:opacity-100"
+                              className="h-6 w-6 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-rose-600 rounded opacity-0 group-hover:opacity-100"
                             >
                               <Trash2 size={11} />
                             </button>
@@ -944,7 +944,7 @@ export default function PendingShipmentsClient() {
                       })
                     )}
                   </div>
-                  <div className="border-t border-slate-200 dark:border-slate-700 p-1">
+                  <div className="border-t border-default dark:border-slate-700 p-1">
                     <button
                       onClick={saveCurrentAsView}
                       className="w-full px-2 py-1.5 text-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded inline-flex items-center gap-1.5"
@@ -961,7 +961,7 @@ export default function PendingShipmentsClient() {
           <button
             type="button"
             onClick={() => setShortcutsOpen(true)}
-            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            className="h-7 w-7 inline-flex items-center justify-center border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
             title="Keyboard shortcuts (?)"
             aria-label="Keyboard shortcuts"
           >
@@ -987,7 +987,7 @@ export default function PendingShipmentsClient() {
                     className={`h-8 px-3 text-base border rounded-l-md inline-flex items-center gap-1.5 ${
                       showSnoozed
                         ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900'
-                        : 'text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                        : 'text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                     }`}
                   >
                     <Clock size={12} />
@@ -1000,7 +1000,7 @@ export default function PendingShipmentsClient() {
                       setShowSnoozed(false)
                       toast.success(t('outbound.pending.snooze.wakeAllToast', { n: activeSnoozeCount }))
                     }}
-                    className="h-8 w-8 inline-flex items-center justify-center border border-l-0 border-slate-200 dark:border-slate-700 rounded-r-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    className="h-8 w-8 inline-flex items-center justify-center border border-l-0 border-default dark:border-slate-700 rounded-r-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800"
                     title={t('outbound.pending.snooze.wakeAllTooltip')}
                   >
                     <X size={12} />
@@ -1023,7 +1023,7 @@ export default function PendingShipmentsClient() {
               className={`h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 transition-colors ${
                 showDeleted
                   ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'
-                  : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+                  : 'border-default hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
               }`}
             >
               {showDeleted ? <ArrowLeft size={12} /> : <Trash2 size={12} />}
@@ -1046,11 +1046,11 @@ export default function PendingShipmentsClient() {
                 className={`h-6 px-2.5 text-sm border rounded-full inline-flex items-center gap-1 transition-colors ${
                   isActive
                     ? 'bg-blue-600 dark:bg-blue-700 text-white border-blue-600'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                 }`}
               >
                 {CHANNEL_LABEL[code] ?? code}
-                <span className={`tabular-nums ${isActive ? 'text-blue-100' : 'text-slate-400 dark:text-slate-500'}`}>
+                <span className={`tabular-nums ${isActive ? 'text-blue-100' : 'text-tertiary dark:text-slate-500'}`}>
                   {count}
                 </span>
               </button>
@@ -1105,7 +1105,7 @@ export default function PendingShipmentsClient() {
               <button
                 onClick={runPreflight}
                 disabled={preflightLoading}
-                className="h-11 md:h-7 px-4 md:px-3 text-base bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-white disabled:opacity-50 inline-flex items-center gap-1.5"
+                className="h-11 md:h-7 px-4 md:px-3 text-base bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-white disabled:opacity-50 inline-flex items-center gap-1.5"
                 title={t('outbound.pending.preflight.tooltip')}
               >
                 <AlertTriangle size={12} />
@@ -1131,7 +1131,7 @@ export default function PendingShipmentsClient() {
                     t('outbound.pending.snooze.bulkToast', { n: ids.length, hours: 1 }),
                   )
                 }}
-                className="h-11 md:h-7 px-4 md:px-3 text-base bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1.5"
+                className="h-11 md:h-7 px-4 md:px-3 text-base bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1.5"
                 title={t('outbound.pending.snooze.bulkTooltip')}
               >
                 <Clock size={12} /> {t('outbound.pending.snooze.bulkButton')}
@@ -1183,7 +1183,7 @@ export default function PendingShipmentsClient() {
                   URL.revokeObjectURL(url)
                   toast.success(t('outbound.pending.exportCsv.toast', { n: rows.length }))
                 }}
-                className="h-11 md:h-7 px-4 md:px-3 text-base bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1.5"
+                className="h-11 md:h-7 px-4 md:px-3 text-base bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1.5"
                 title={t('outbound.pending.exportCsv.tooltip')}
               >
                 <Download size={12} /> {t('outbound.pending.exportCsv.button')}
@@ -1227,7 +1227,7 @@ export default function PendingShipmentsClient() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+              <thead className="border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <tr>
                   <th className="px-3 py-2 w-8">
                     <input
@@ -1295,7 +1295,7 @@ export default function PendingShipmentsClient() {
                   return (
                     <tr
                       key={o.id}
-                      className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                      className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
                       onClick={openDrawer}
                     >
                       <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
@@ -1374,7 +1374,7 @@ export default function PendingShipmentsClient() {
                             <button
                               onClick={() => snooze(o.id, 1)}
                               title={t('outbound.pending.snooze.tooltip')}
-                              className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
+                              className="h-6 w-6 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
                             >
                               <Clock size={11} />
                             </button>
@@ -1466,7 +1466,7 @@ export default function PendingShipmentsClient() {
           onMouseDown={(e) => { if (e.target === e.currentTarget) setConfirmHardDelete(false) }}
         >
           <div
-            className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl p-5"
+            className="w-full max-w-lg bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-xl p-5"
             role="dialog"
             aria-label={t('outbound.bulk.confirmHardDelete.title')}
           >
@@ -1488,7 +1488,7 @@ export default function PendingShipmentsClient() {
                 type="button"
                 onClick={() => setConfirmHardDelete(false)}
                 disabled={recycleBusy}
-                className="h-8 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
+                className="h-8 px-3 text-sm border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
               >
                 {t('common.cancel')}
               </button>
@@ -1577,7 +1577,7 @@ function PreflightModal({
         className="bg-white dark:bg-slate-900 rounded-md shadow-xl w-full max-w-xl mx-4 max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-default dark:border-slate-700">
           <div>
             <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
               {t('outbound.pending.preflight.title')}
@@ -1592,7 +1592,7 @@ function PreflightModal({
           </div>
           <button
             onClick={onClose}
-            className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded"
+            className="h-6 w-6 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded"
           >
             <X size={12} />
           </button>
@@ -1630,7 +1630,7 @@ function PreflightModal({
                 </div>
                 <button
                   onClick={() => onOpenDrawer(o.orderId)}
-                  className="text-xs px-2 py-0.5 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-white"
+                  className="text-xs px-2 py-0.5 text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-white"
                 >
                   {t('common.open')}
                 </button>
@@ -1638,10 +1638,10 @@ function PreflightModal({
             ))
           )}
         </div>
-        <div className="flex items-center gap-2 px-4 py-3 border-t border-slate-200 dark:border-slate-700">
+        <div className="flex items-center gap-2 px-4 py-3 border-t border-default dark:border-slate-700">
           <button
             onClick={onClose}
-            className="h-7 px-3 text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="h-7 px-3 text-sm text-slate-600 dark:text-slate-400 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             {t('common.close')}
           </button>
@@ -1691,7 +1691,7 @@ function BulkCreateResultsModal({
         className="bg-white dark:bg-slate-900 rounded-md shadow-xl w-full max-w-xl mx-4 max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-default dark:border-slate-700">
           <div>
             <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
               {t('outbound.pending.bulkResults.title')}
@@ -1706,7 +1706,7 @@ function BulkCreateResultsModal({
           </div>
           <button
             onClick={onClose}
-            className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded"
+            className="h-6 w-6 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded"
           >
             <X size={12} />
           </button>
@@ -1729,7 +1729,7 @@ function BulkCreateResultsModal({
                   </div>
                   <button
                     onClick={() => onOpenDrawer(err.orderId)}
-                    className="text-xs px-2 py-0.5 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-white"
+                    className="text-xs px-2 py-0.5 text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-white"
                   >
                     {t('common.open')}
                   </button>
@@ -1792,7 +1792,7 @@ function AlertsModal({
         className="bg-white dark:bg-slate-900 rounded-md shadow-xl w-full max-w-md mx-4 max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-default dark:border-slate-700">
           <div>
             <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
               {t('outbound.alerts.modalTitle')}
@@ -1801,7 +1801,7 @@ function AlertsModal({
           </div>
           <button
             onClick={onClose}
-            className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded"
+            className="h-6 w-6 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded"
           >
             <X size={12} />
           </button>
@@ -1818,10 +1818,10 @@ function AlertsModal({
                 <li
                   key={a.id}
                   className={`flex items-center gap-2 px-2 py-1.5 border rounded ${
-                    a.isActive ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 opacity-60'
+                    a.isActive ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40' : 'border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 opacity-60'
                   }`}
                 >
-                  <Bell size={11} className={a.isActive ? 'text-amber-500' : 'text-slate-400 dark:text-slate-500'} fill="currentColor" />
+                  <Bell size={11} className={a.isActive ? 'text-amber-500' : 'text-tertiary dark:text-slate-500'} fill="currentColor" />
                   <span className="text-sm text-slate-700 dark:text-slate-300 flex-1">
                     {t(`outbound.alerts.comparison.${a.comparison}`)}
                     {' '}
@@ -1842,13 +1842,13 @@ function AlertsModal({
                       if (n === a.threshold) return
                       await onEditThreshold(a.id, n)
                     }}
-                    className="text-xs px-2 py-0.5 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded hover:bg-white"
+                    className="text-xs px-2 py-0.5 text-slate-600 dark:text-slate-400 border border-default dark:border-slate-700 rounded hover:bg-white"
                   >
                     {t('common.edit')}
                   </button>
                   <button
                     onClick={() => onRemove(a.id)}
-                    className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-600 rounded"
+                    className="h-6 w-6 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-rose-600 rounded"
                     title={t('common.delete')}
                   >
                     <Trash2 size={11} />
@@ -1859,7 +1859,7 @@ function AlertsModal({
           )}
         </div>
 
-        <form onSubmit={submit} className="border-t border-slate-200 dark:border-slate-700 px-4 py-3 space-y-2">
+        <form onSubmit={submit} className="border-t border-default dark:border-slate-700 px-4 py-3 space-y-2">
           <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
             {t('outbound.alerts.addAnother')}
           </div>
@@ -1867,7 +1867,7 @@ function AlertsModal({
             <select
               value={comparison}
               onChange={(e) => setComparison(e.target.value as typeof comparison)}
-              className="text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900"
+              className="text-sm border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900"
             >
               <option value="GT">{t('outbound.alerts.comparison.GT')}</option>
               <option value="LT">{t('outbound.alerts.comparison.LT')}</option>
@@ -1880,7 +1880,7 @@ function AlertsModal({
               step={1}
               value={thresholdInput}
               onChange={(e) => setThresholdInput(e.target.value)}
-              className="text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 w-24 tabular-nums"
+              className="text-sm border border-default dark:border-slate-700 rounded px-2 py-1 w-24 tabular-nums"
               placeholder="5"
             />
             <button

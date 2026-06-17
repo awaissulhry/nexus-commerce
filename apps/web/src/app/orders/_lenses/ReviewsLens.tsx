@@ -104,7 +104,7 @@ export function ReviewsLens() {
         </button>
         <button
           onClick={refresh}
-          className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+          className="h-8 px-3 text-base border border-default rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
         >
           <RefreshCw size={12} /> {t('orders.action.refresh')}
         </button>
@@ -124,7 +124,7 @@ export function ReviewsLens() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead className="bg-slate-50 border-b border-default">
                 <tr>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
                     {t('orders.table.header.order')}
@@ -150,7 +150,7 @@ export function ReviewsLens() {
                 {requests.map((r) => (
                   <tr
                     key={r.id}
-                    className="border-b border-slate-100 hover:bg-slate-50"
+                    className="border-b border-subtle hover:bg-slate-50"
                   >
                     <td className="px-3 py-2">
                       <Link
@@ -169,14 +169,14 @@ export function ReviewsLens() {
                     </td>
                     <td className="px-3 py-2">
                       <span
-                        className={`inline-block text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 border rounded ${REVIEW_STATUS_TONE[r.status] ?? 'bg-slate-50 text-slate-500 border-slate-200'}`}
+                        className={`inline-block text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 border rounded ${REVIEW_STATUS_TONE[r.status] ?? 'bg-slate-50 text-slate-500 border-default'}`}
                       >
                         {r.status}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-sm text-slate-600">
                       {r.rule?.name ?? (
-                        <span className="text-slate-400">—</span>
+                        <span className="text-tertiary">—</span>
                       )}
                     </td>
                     <td className="px-3 py-2 text-sm text-slate-500">

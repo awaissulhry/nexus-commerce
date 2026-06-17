@@ -164,7 +164,7 @@ function FailureView({
 }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-      <div className="max-w-md w-full bg-white border border-slate-200 rounded-lg shadow-sm p-6 text-center">
+      <div className="max-w-md w-full bg-white border border-default rounded-lg shadow-sm p-6 text-center">
         <h1 className="text-xl font-semibold text-slate-900 mb-2">
           {title}
         </h1>

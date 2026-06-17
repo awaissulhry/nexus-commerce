@@ -89,7 +89,7 @@ export function FbaRestockHealthCard() {
           <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
             Amazon Restock signal
           </span>
-          <span className="text-xs text-slate-400 dark:text-slate-500">
+          <span className="text-xs text-tertiary dark:text-slate-500">
             staleness cutoff {data.staleDays}d
           </span>
         </div>
@@ -109,7 +109,7 @@ export function FbaRestockHealthCard() {
             className={cn(
               'border rounded p-2 text-sm',
               it.hasFreshData
-                ? 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40'
+                ? 'border-default dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40'
                 : 'border-amber-200 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/30',
             )}
           >
@@ -176,7 +176,7 @@ export function FbaRestockSignalPanel({
         <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
           {label}
         </span>
-        <span className="text-xs text-slate-400 dark:text-slate-500">
+        <span className="text-xs text-tertiary dark:text-slate-500">
           Amazon Restock · {ageLabel}
         </span>
       </div>

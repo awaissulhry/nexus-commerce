@@ -258,7 +258,7 @@ export function TranslationsLens({
       )}
 
       {/* W5.8 — Bulk AI translate toolbar */}
-      <div className="flex items-center gap-2 flex-wrap text-sm border border-slate-200 dark:border-slate-800 rounded-md p-2 bg-slate-50/50 dark:bg-slate-900/40">
+      <div className="flex items-center gap-2 flex-wrap text-sm border border-default dark:border-slate-800 rounded-md p-2 bg-slate-50/50 dark:bg-slate-900/40">
         <span className="text-slate-600 dark:text-slate-400 inline-flex items-center gap-1">
           <Sparkles className="w-3.5 h-3.5" />
           {t('products.lens.translations.toolbar.label')}
@@ -266,7 +266,7 @@ export function TranslationsLens({
         <select
           value={translateLocale}
           onChange={(e) => setTranslateLocale(e.target.value)}
-          className="h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+          className="h-7 px-1.5 text-sm border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           disabled={translating}
         >
           {LOCALES.filter((l) => !l.primary).map((loc) => (
@@ -329,9 +329,9 @@ export function TranslationsLens({
       </div>
 
       {/* Per-product matrix */}
-      <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+      <div className="border border-default dark:border-slate-800 rounded-lg overflow-hidden">
         <table className="w-full text-base">
-          <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+          <thead className="bg-slate-50 dark:bg-slate-900 border-b border-default dark:border-slate-800">
             <tr className="text-left">
               <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
                 {t('products.lens.translations.col.product')}
@@ -343,7 +343,7 @@ export function TranslationsLens({
                 >
                   {loc.code}
                   {loc.primary && (
-                    <span className="ml-1 text-xs italic font-normal text-slate-400 dark:text-slate-500 normal-case tracking-normal">
+                    <span className="ml-1 text-xs italic font-normal text-tertiary dark:text-slate-500 normal-case tracking-normal">
                       {t('products.lens.translations.primary')}
                     </span>
                   )}
@@ -357,7 +357,7 @@ export function TranslationsLens({
               return (
                 <tr
                   key={p.id}
-                  className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40"
+                  className="border-t border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40"
                 >
                   <td className="px-3 py-2">
                     <Link
@@ -369,7 +369,7 @@ export function TranslationsLens({
                     <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate max-w-md">
                       {p.sku}
                       {p.brand && (
-                        <span className="ml-1 text-slate-400 dark:text-slate-500">
+                        <span className="ml-1 text-tertiary dark:text-slate-500">
                           · {p.brand}
                         </span>
                       )}

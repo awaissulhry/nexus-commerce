@@ -147,9 +147,9 @@ export default function MatrixFilterBar({
 
   return (
     <div className="flex items-center gap-2 flex-wrap text-xs">
-      <Filter className="w-3.5 h-3.5 text-slate-400" />
+      <Filter className="w-3.5 h-3.5 text-tertiary" />
 
-      <span className="text-[11px] uppercase tracking-wide text-slate-400 font-medium">
+      <span className="text-[11px] uppercase tracking-wide text-tertiary font-medium">
         {axisLabel}
       </span>
       <div className="flex items-center gap-1 flex-wrap">
@@ -162,7 +162,7 @@ export default function MatrixFilterBar({
               'text-[11px] px-2 py-0.5 rounded-full border transition-colors',
               activeValues.has(v)
                 ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-400 text-blue-700 dark:text-blue-300'
-                : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
             )}
           >
             {v}
@@ -172,13 +172,13 @@ export default function MatrixFilterBar({
 
       <span className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
 
-      <span className="text-[11px] uppercase tracking-wide text-slate-400 font-medium">
+      <span className="text-[11px] uppercase tracking-wide text-tertiary font-medium">
         Status
       </span>
       <select
         value={cellStatus}
         onChange={(e) => onCellStatusChange(e.target.value as CellStatus)}
-        className="text-[11px] border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
+        className="text-[11px] border border-default dark:border-slate-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
         title={STATUS_OPTIONS.find((o) => o.value === cellStatus)?.description}
       >
         {STATUS_OPTIONS.map((o) => (
@@ -213,22 +213,22 @@ export default function MatrixFilterBar({
             'inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border transition-colors',
             presetMenuOpen
               ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-400 text-amber-700 dark:text-amber-300'
-              : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+              : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
           )}
           title="Saved filter presets"
         >
           <Bookmark className="w-3 h-3" />
           Presets
           {presets.length > 0 && (
-            <span className="text-[10px] text-slate-400">({presets.length})</span>
+            <span className="text-[10px] text-tertiary">({presets.length})</span>
           )}
         </button>
         {presetMenuOpen && (
           <>
             <div className="fixed inset-0 z-20" onClick={() => { setPresetMenuOpen(false); setSavingNew(false) }} />
-            <div className="absolute right-0 top-7 z-30 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-1 min-w-[220px] text-xs">
+            <div className="absolute right-0 top-7 z-30 bg-white dark:bg-slate-800 border border-default dark:border-slate-700 rounded-lg shadow-xl py-1 min-w-[220px] text-xs">
               {presets.length === 0 && !savingNew && (
-                <div className="px-3 py-2 text-slate-400 italic">No saved presets yet</div>
+                <div className="px-3 py-2 text-tertiary italic">No saved presets yet</div>
               )}
               {presets.map((p) => (
                 <div
@@ -241,7 +241,7 @@ export default function MatrixFilterBar({
                     className="flex-1 text-left flex flex-col"
                   >
                     <span className="font-medium text-slate-700 dark:text-slate-200 truncate" title={p.name}>{p.name}</span>
-                    <span className="text-[10px] text-slate-400">
+                    <span className="text-[10px] text-tertiary">
                       {p.values.length === 0 ? 'all values' : `${p.values.length} value${p.values.length === 1 ? '' : 's'}`}
                       {p.status !== 'all' && ` · ${p.status}`}
                     </span>
@@ -250,7 +250,7 @@ export default function MatrixFilterBar({
                     type="button"
                     onClick={() => deletePreset(p.name)}
                     aria-label="Delete preset"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-slate-400 hover:text-red-500"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-tertiary hover:text-red-500"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -269,7 +269,7 @@ export default function MatrixFilterBar({
                       if (e.key === 'Escape') { setSavingNew(false); setNewPresetName('') }
                     }}
                     placeholder="Preset name…"
-                    className="flex-1 text-[11px] border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    className="flex-1 text-[11px] border border-default dark:border-slate-700 rounded px-1.5 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
                   />
                   <button
                     type="button"

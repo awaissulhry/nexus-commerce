@@ -131,7 +131,7 @@ function SupplierAlternativesPanel({
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+    <div className="rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
       <button
         type="button"
         onClick={() => {
@@ -141,12 +141,12 @@ function SupplierAlternativesPanel({
         className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100 w-full"
       >
         <span>Supplier alternatives</span>
-        <span className="text-xs text-slate-400 dark:text-slate-500">
+        <span className="text-xs text-tertiary dark:text-slate-500">
           {open ? '▼' : '▶'} {data ? `${data.candidates.length} suppliers` : ''}
         </span>
       </button>
       {open && loading && (
-        <div className="mt-2 text-base text-slate-400 dark:text-slate-500">
+        <div className="mt-2 text-base text-tertiary dark:text-slate-500">
           Loading…
         </div>
       )}
@@ -165,12 +165,12 @@ function SupplierAlternativesPanel({
                 'rounded border p-2 text-base',
                 c.isCurrentlyPreferred
                   ? 'border-indigo-300 dark:border-indigo-700 bg-indigo-50/40 dark:bg-indigo-950/30'
-                  : 'border-slate-200 dark:border-slate-700',
+                  : 'border-default dark:border-slate-700',
               )}
             >
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-slate-400 dark:text-slate-500">
+                  <span className="font-mono text-xs text-tertiary dark:text-slate-500">
                     #{c.rank}
                   </span>
                   <span className="font-semibold text-slate-900 dark:text-slate-100">
@@ -188,7 +188,7 @@ function SupplierAlternativesPanel({
               </div>
               <div className="grid grid-cols-4 gap-2 text-sm text-slate-600 dark:text-slate-400">
                 <div>
-                  <div className="text-slate-400 dark:text-slate-500">Cost</div>
+                  <div className="text-tertiary dark:text-slate-500">Cost</div>
                   <div className="font-mono">
                     {c.unitCostCentsEur != null
                       ? `€${(c.unitCostCentsEur / 100).toFixed(2)}`
@@ -196,15 +196,15 @@ function SupplierAlternativesPanel({
                   </div>
                 </div>
                 <div>
-                  <div className="text-slate-400 dark:text-slate-500">Lead</div>
+                  <div className="text-tertiary dark:text-slate-500">Lead</div>
                   <div className="font-mono">{c.leadTimeDays}d</div>
                 </div>
                 <div>
-                  <div className="text-slate-400 dark:text-slate-500">MOQ</div>
+                  <div className="text-tertiary dark:text-slate-500">MOQ</div>
                   <div className="font-mono">{c.moq}</div>
                 </div>
                 <div>
-                  <div className="text-slate-400 dark:text-slate-500">
+                  <div className="text-tertiary dark:text-slate-500">
                     Terms
                   </div>
                   <div className="font-mono truncate">
@@ -296,8 +296,8 @@ export function ForecastDetailDrawer({
         onClick={onClose}
         aria-hidden
       />
-      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-xl flex flex-col">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-800">
+      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border-l border-default dark:border-slate-800 shadow-xl flex flex-col">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-default dark:border-slate-800">
           <div className="min-w-0">
             {detail ? (
               <>
@@ -538,11 +538,11 @@ export function ForecastDetailDrawer({
                   <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
                     Open inbound shipments
                   </div>
-                  <div className="border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
+                  <div className="border border-default dark:border-slate-800 rounded overflow-hidden">
                     {detail.atp.openShipments.map((sh) => (
                       <div
                         key={sh.shipmentId}
-                        className="flex items-center justify-between px-3 py-1.5 text-base border-b border-slate-100 dark:border-slate-800 last:border-0"
+                        className="flex items-center justify-between px-3 py-1.5 text-base border-b border-subtle dark:border-slate-800 last:border-0"
                       >
                         <div>
                           <span className="font-mono text-sm text-slate-700 dark:text-slate-300">

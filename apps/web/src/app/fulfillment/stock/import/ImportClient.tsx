@@ -225,7 +225,7 @@ export default function ImportClient() {
               id="import-location"
               value={locationCode}
               onChange={(e) => setLocationCode(e.target.value)}
-              className="h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+              className="h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
             >
               {locations.map((l) => (
                 <option key={l.id} value={l.code}>{l.code} — {l.name}</option>
@@ -269,7 +269,7 @@ export default function ImportClient() {
 
       {preview && (
         <Card noPadding>
-          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2 flex-wrap">
+          <div className="px-4 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between gap-2 flex-wrap">
             <div className="text-sm">
               <span className="text-emerald-700 font-semibold">{t('stock.import.summarySucceeded', { n: preview.succeeded })}</span>
               {preview.failed > 0 && (
@@ -290,7 +290,7 @@ export default function ImportClient() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+              <thead className="border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <tr>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.import.colSku')}</th>
                   <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.import.colChange')}</th>
@@ -301,7 +301,7 @@ export default function ImportClient() {
               </thead>
               <tbody>
                 {preview.results.slice(0, 200).map((r, i) => (
-                  <tr key={`${r.sku}_${i}`} className={cn('border-b border-slate-100 dark:border-slate-800', r.error && 'bg-rose-50/40')}>
+                  <tr key={`${r.sku}_${i}`} className={cn('border-b border-subtle dark:border-slate-800', r.error && 'bg-rose-50/40')}>
                     <td className="px-3 py-2 font-mono text-sm text-slate-700 dark:text-slate-300">{r.sku}</td>
                     <td className={cn('px-3 py-2 text-right tabular-nums font-semibold', r.change > 0 ? 'text-emerald-700' : r.change < 0 ? 'text-rose-700' : 'text-slate-500 dark:text-slate-400')}>
                       {r.change > 0 ? '+' : ''}{r.change}
@@ -334,7 +334,7 @@ export default function ImportClient() {
                   </tr>
                 ))}
                 {preview.results.length > 200 && (
-                  <tr><td colSpan={5} className="px-3 py-2 text-sm text-slate-400 dark:text-slate-500 italic">+{preview.results.length - 200} more</td></tr>
+                  <tr><td colSpan={5} className="px-3 py-2 text-sm text-tertiary dark:text-slate-500 italic">+{preview.results.length - 200} more</td></tr>
                 )}
               </tbody>
             </table>

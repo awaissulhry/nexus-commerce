@@ -138,16 +138,16 @@ export default function ImageEditorModal({ productId, image, onClose, onSaved }:
     >
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-default dark:border-slate-700 flex-shrink-0">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             {t('products.edit.images.editor.title')}
-            <span className="ml-2 text-xs font-mono text-slate-400">{image.type}</span>
+            <span className="ml-2 text-xs font-mono text-tertiary">{image.type}</span>
           </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close editor"
-            className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+            className="p-1 text-tertiary hover:text-slate-700 dark:hover:text-slate-200"
             disabled={saving}
           >
             <X className="w-4 h-4" />
@@ -155,7 +155,7 @@ export default function ImageEditorModal({ productId, image, onClose, onSaved }:
         </div>
 
         {/* Aspect-ratio toolbar */}
-        <div className="flex items-center gap-2 px-5 py-2.5 border-b border-slate-100 dark:border-slate-800 flex-wrap">
+        <div className="flex items-center gap-2 px-5 py-2.5 border-b border-subtle dark:border-slate-800 flex-wrap">
           <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mr-1">{t('products.edit.images.editor.crop')}</span>
           {(Object.keys(ASPECT) as AspectMode[]).map((mode) => (
             <button
@@ -168,7 +168,7 @@ export default function ImageEditorModal({ productId, image, onClose, onSaved }:
                 'text-xs px-2.5 py-1 rounded border transition-colors',
                 aspect === mode
                   ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-400 text-blue-700 dark:text-blue-300'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                  : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
               )}
             >
               {t(ASPECT[mode].key)}
@@ -183,7 +183,7 @@ export default function ImageEditorModal({ productId, image, onClose, onSaved }:
             onClick={() => quickRotate(-90)}
             disabled={saving}
             title="Rotate counter-clockwise 90°"
-            className="text-xs px-2 py-1 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1"
+            className="text-xs px-2 py-1 rounded border border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1"
           >
             <RotateCcw className="w-3.5 h-3.5" /> 90°
           </button>
@@ -192,7 +192,7 @@ export default function ImageEditorModal({ productId, image, onClose, onSaved }:
             onClick={() => quickRotate(90)}
             disabled={saving}
             title="Rotate clockwise 90°"
-            className="text-xs px-2 py-1 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1"
+            className="text-xs px-2 py-1 rounded border border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1"
           >
             <RotateCw className="w-3.5 h-3.5" /> 90°
           </button>
@@ -201,7 +201,7 @@ export default function ImageEditorModal({ productId, image, onClose, onSaved }:
             onClick={() => quickFlip('H')}
             disabled={saving}
             title="Flip horizontally"
-            className="text-xs px-2 py-1 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="text-xs px-2 py-1 rounded border border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             <FlipHorizontal2 className="w-3.5 h-3.5" />
           </button>
@@ -210,7 +210,7 @@ export default function ImageEditorModal({ productId, image, onClose, onSaved }:
             onClick={() => quickFlip('V')}
             disabled={saving}
             title="Flip vertically"
-            className="text-xs px-2 py-1 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="text-xs px-2 py-1 rounded border border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             <FlipVertical2 className="w-3.5 h-3.5" />
           </button>
@@ -236,7 +236,7 @@ export default function ImageEditorModal({ productId, image, onClose, onSaved }:
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex-shrink-0 gap-3">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-default dark:border-slate-700 flex-shrink-0 gap-3">
           <div className="text-xs text-slate-500 dark:text-slate-400 min-w-0 truncate">
             {error ? (
               <span className="text-red-600 dark:text-red-400">{error}</span>

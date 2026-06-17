@@ -102,7 +102,7 @@ export default async function BrandBrainPage() {
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           How retrieval works
         </h2>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3 text-sm text-slate-600 dark:text-slate-400 space-y-2">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-3 text-sm text-slate-600 dark:text-slate-400 space-y-2">
           <div className="flex items-start gap-2">
             <span className="font-mono text-violet-600 dark:text-violet-400 text-xs mt-0.5">1</span>
             <span>
@@ -147,7 +147,7 @@ export default async function BrandBrainPage() {
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Configuration
         </h2>
-        <div className="bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3 text-xs text-slate-600 dark:text-slate-400 space-y-1.5">
+        <div className="bg-slate-50 dark:bg-slate-950/40 border border-default dark:border-slate-800 rounded-md px-4 py-3 text-xs text-slate-600 dark:text-slate-400 space-y-1.5">
           <ConfigRow
             env="NEXUS_ENABLE_BRAND_BRAIN"
             value="1"
@@ -171,7 +171,7 @@ export default async function BrandBrainPage() {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
         {label}
       </div>

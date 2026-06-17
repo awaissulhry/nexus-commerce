@@ -196,7 +196,7 @@ export default function VersionHistoryModal({
               {t('aplus.versions.empty')}
             </p>
           ) : (
-            <ol className="divide-y divide-slate-100 rounded-md border border-slate-200 dark:divide-slate-800 dark:border-slate-700">
+            <ol className="divide-y divide-slate-100 rounded-md border border-default dark:divide-slate-800 dark:border-slate-700">
               {versions.map((v) => {
                 const Icon = REASON_ICON[v.reason] ?? History
                 const label = REASON_LABEL[v.reason] ?? v.reason
@@ -205,7 +205,7 @@ export default function VersionHistoryModal({
                     key={v.id}
                     className="flex items-center gap-2 px-3 py-2"
                   >
-                    <Icon className="w-4 h-4 flex-shrink-0 text-slate-400" />
+                    <Icon className="w-4 h-4 flex-shrink-0 text-tertiary" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
                         v{v.version}{' '}

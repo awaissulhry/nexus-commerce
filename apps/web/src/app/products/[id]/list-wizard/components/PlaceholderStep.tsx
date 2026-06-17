@@ -29,7 +29,7 @@ export default function PlaceholderStep({ step }: Props) {
         </p>
       </div>
 
-      <div className="border border-slate-200 rounded-lg bg-white px-6 py-8 text-center">
+      <div className="border border-default rounded-lg bg-white px-6 py-8 text-center">
         <p className="text-md text-slate-700 mb-2">
           This step ships in{' '}
           <span className="font-semibold text-blue-700">
@@ -44,7 +44,7 @@ export default function PlaceholderStep({ step }: Props) {
         </p>
       </div>
 
-      <div className="mt-6 text-base text-slate-400 text-center">
+      <div className="mt-6 text-base text-tertiary text-center">
         For now, click Continue to walk through the wizard shell.
       </div>
     </div>

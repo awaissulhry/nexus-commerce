@@ -63,14 +63,14 @@ export function KeyboardHelpOverlay({ onClose }: { onClose: () => void }) {
         className="bg-white dark:bg-slate-900 rounded-lg shadow-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="border-b border-slate-200 dark:border-slate-800 px-5 py-3 flex items-center justify-between">
+        <div className="border-b border-default dark:border-slate-800 px-5 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-lg font-semibold text-slate-900 dark:text-slate-100">
             <Keyboard size={16} className="text-slate-500 dark:text-slate-400" />
             Keyboard shortcuts
           </div>
           <button
             onClick={onClose}
-            className="h-7 w-7 grid place-items-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="h-7 w-7 grid place-items-center text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
             aria-label="Close"
           >
             <X size={14} />
@@ -95,7 +95,7 @@ export function KeyboardHelpOverlay({ onClose }: { onClose: () => void }) {
                       {r.keys.map((k, j) => (
                         <kbd
                           key={j}
-                          className="font-mono text-xs px-1.5 py-0.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded shadow-[0_1px_0_0_rgb(226_232_240)] dark:shadow-[0_1px_0_0_rgb(15_23_42)] min-w-[20px] text-center text-slate-700 dark:text-slate-300"
+                          className="font-mono text-xs px-1.5 py-0.5 bg-slate-50 dark:bg-slate-950 border border-default dark:border-slate-700 rounded shadow-[0_1px_0_0_rgb(226_232_240)] dark:shadow-[0_1px_0_0_rgb(15_23_42)] min-w-[20px] text-center text-slate-700 dark:text-slate-300"
                         >
                           {k}
                         </kbd>
@@ -107,9 +107,9 @@ export function KeyboardHelpOverlay({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
-        <div className="border-t border-slate-200 dark:border-slate-800 px-5 py-3 text-sm text-slate-500 dark:text-slate-400">
+        <div className="border-t border-default dark:border-slate-800 px-5 py-3 text-sm text-slate-500 dark:text-slate-400">
           Tip: shortcuts pause while typing in inputs. Press{' '}
-          <kbd className="font-mono px-1 py-0.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300">
+          <kbd className="font-mono px-1 py-0.5 bg-slate-50 dark:bg-slate-950 border border-default dark:border-slate-700 rounded text-slate-700 dark:text-slate-300">
             Esc
           </kbd>{' '}
           to leave a search/filter field, then keys work again.

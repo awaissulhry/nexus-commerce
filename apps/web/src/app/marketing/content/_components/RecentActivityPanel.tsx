@@ -91,7 +91,7 @@ export default function RecentActivityPanel({ apiBase }: Props) {
   return (
     <section
       aria-label={t('marketingContent.activity.label')}
-      className="rounded-md border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"
+      className="rounded-md border border-default bg-white p-3 dark:border-slate-700 dark:bg-slate-900"
     >
       <header className="mb-2 flex items-center gap-1.5">
         <Activity className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
@@ -105,7 +105,7 @@ export default function RecentActivityPanel({ apiBase }: Props) {
           const channel = (e.metadata?.channel as string | undefined) ?? null
           return (
             <li key={e.id} className="flex items-center gap-2 py-1.5 text-xs">
-              <Icon className="w-3.5 h-3.5 flex-shrink-0 text-slate-400" />
+              <Icon className="w-3.5 h-3.5 flex-shrink-0 text-tertiary" />
               <span className="font-medium text-slate-900 dark:text-slate-100">
                 {describeAction(e.action)}
               </span>
@@ -114,7 +114,7 @@ export default function RecentActivityPanel({ apiBase }: Props) {
                   {channel}
                 </span>
               )}
-              <span className="ml-auto text-slate-400">
+              <span className="ml-auto text-tertiary">
                 {relativeTime(e.createdAt)}
               </span>
             </li>

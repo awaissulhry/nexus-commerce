@@ -244,7 +244,7 @@ export function BulkActionBar({
                 <button
                   onClick={printPackingSlips}
                   disabled={busy}
-                  className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1.5 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700"
+                  className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-default rounded hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1.5 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700"
                 >
                   <Printer size={12} /> Print packing slips
                 </button>
@@ -307,7 +307,7 @@ export function BulkActionBar({
           onMouseDown={(e) => { if (e.target === e.currentTarget) setConfirmHardDelete(false) }}
         >
           <div
-            className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl p-5"
+            className="w-full max-w-lg bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-xl p-5"
             role="dialog"
             aria-label={t('orders.bulk.confirmHardDelete.title')}
           >
@@ -349,7 +349,7 @@ export function BulkActionBar({
                 type="button"
                 onClick={() => setConfirmHardDelete(false)}
                 disabled={busy}
-                className="h-8 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
+                className="h-8 px-3 text-sm border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
               >
                 {t('common.cancel')}
               </button>
@@ -369,16 +369,16 @@ export function BulkActionBar({
       {/* RV.4.4 — bulk review-request drill-down modal */}
       {bulkReviewResult && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setBulkReviewResult(null)}>
-          <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl flex flex-col max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
-            <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-2xl flex flex-col max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-3 border-b border-default dark:border-slate-800 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                 Bulk review request — outcome
               </h3>
-              <button onClick={() => setBulkReviewResult(null)} aria-label="Close" className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setBulkReviewResult(null)} aria-label="Close" className="text-tertiary hover:text-slate-600">
                 <X size={16} />
               </button>
             </div>
-            <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 grid grid-cols-3 gap-3 text-sm">
+            <div className="px-5 py-3 border-b border-default dark:border-slate-800 grid grid-cols-3 gap-3 text-sm">
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-slate-500">Sent</div>
                 <div className="text-lg font-semibold text-emerald-700 dark:text-emerald-300 tabular-nums">{bulkReviewResult.sent}</div>
@@ -412,7 +412,7 @@ export function BulkActionBar({
                     </button>
                   </div>
                   <table className="w-full text-xs">
-                    <thead className="text-left text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200 dark:border-slate-800">
+                    <thead className="text-left text-[10px] uppercase tracking-wider text-slate-500 border-b border-default dark:border-slate-800">
                       <tr><th className="py-1">Order ID</th><th className="py-1">Reason</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -427,7 +427,7 @@ export function BulkActionBar({
                 </>
               )}
             </div>
-            <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+            <div className="px-5 py-3 border-t border-default dark:border-slate-800 flex justify-end">
               <button onClick={() => setBulkReviewResult(null)} className="h-8 px-3 text-sm rounded bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800">
                 Close
               </button>

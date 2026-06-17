@@ -57,19 +57,19 @@ export function GlobalFilterBar() {
     `px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
       active
         ? 'bg-blue-600 text-white border-blue-600'
-        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
     }`
 
   return (
     <div className="flex items-center gap-3 flex-wrap py-2.5">
       <div className="flex items-center gap-1.5" role="group" aria-label="Channel filter">
-        <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mr-0.5">Channel</span>
+        <span className="text-[10px] uppercase tracking-wider text-tertiary font-semibold mr-0.5">Channel</span>
         <button className={chip(channel === 'ALL')} aria-pressed={channel === 'ALL'} onClick={() => set('channel', 'ALL')}>All</button>
         {channels.map((c) => <button key={c} className={chip(channel === c)} aria-pressed={channel === c} onClick={() => set('channel', c)}>{chLabel(c)}</button>)}
       </div>
       <span className="w-px h-5 bg-slate-200 dark:bg-slate-700" aria-hidden="true" />
       <div className="flex items-center gap-1.5" role="group" aria-label="Market filter">
-        <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mr-0.5">Market</span>
+        <span className="text-[10px] uppercase tracking-wider text-tertiary font-semibold mr-0.5">Market</span>
         <button className={chip(market === 'ALL')} aria-pressed={market === 'ALL'} onClick={() => set('market', 'ALL')}>All</button>
         {markets.map((m) => <button key={m.code} className={chip(market === m.code)} aria-pressed={market === m.code} onClick={() => set('market', m.code)} title={m.name}>{m.code}</button>)}
       </div>

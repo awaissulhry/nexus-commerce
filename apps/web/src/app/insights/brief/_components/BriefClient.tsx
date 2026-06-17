@@ -169,7 +169,7 @@ export default function BriefClient() {
         rightExtra={
           <div
             role="tablist"
-            className="inline-flex items-center border border-slate-200 dark:border-slate-700 rounded-md p-0.5"
+            className="inline-flex items-center border border-default dark:border-slate-700 rounded-md p-0.5"
           >
             {(['it', 'en'] as const).map((code) => (
               <button
@@ -240,7 +240,7 @@ export default function BriefClient() {
                   return (
                     <li
                       key={i}
-                      className="flex items-start gap-3 rounded-md border border-slate-200 dark:border-slate-700 p-3"
+                      className="flex items-start gap-3 rounded-md border border-default dark:border-slate-700 p-3"
                     >
                       <div className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                         <Icon className="w-4 h-4" />
@@ -258,7 +258,7 @@ export default function BriefClient() {
                           >
                             {URGENCY_LABEL[action.urgency][language]}
                           </span>
-                          <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
+                          <span className="text-[10px] uppercase tracking-wider font-semibold text-tertiary">
                             {action.area}
                           </span>
                         </div>
@@ -275,7 +275,7 @@ export default function BriefClient() {
 
           {brief.sections.map((section, i) => (
             <Card key={i} title={section.heading} className="mb-3">
-              <ul className="space-y-1.5 list-disc list-inside marker:text-slate-400 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+              <ul className="space-y-1.5 list-disc list-inside marker:text-tertiary text-sm leading-relaxed text-slate-700 dark:text-slate-200">
                 {section.bullets.map((b, j) => (
                   <li key={j}>{b}</li>
                 ))}
@@ -299,7 +299,7 @@ export default function BriefClient() {
                     key={i}
                     className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200"
                   >
-                    <Eye className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+                    <Eye className="w-3.5 h-3.5 mt-0.5 shrink-0 text-tertiary" />
                     <span>{item}</span>
                   </li>
                 ))}

@@ -98,7 +98,7 @@ export function PipelineHealthStrip({ onRefreshPageData }: { onRefreshPageData?:
 
   if (loading && !health) {
     return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 text-xs text-slate-500">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2 text-xs text-slate-500">
         {t('replenishment.pipeline.loading')}
       </div>
     )
@@ -123,7 +123,7 @@ export function PipelineHealthStrip({ onRefreshPageData }: { onRefreshPageData?:
   ]
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mr-1">
           {t('replenishment.pipeline.label')}

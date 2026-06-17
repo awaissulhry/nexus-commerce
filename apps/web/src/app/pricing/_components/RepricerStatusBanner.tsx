@@ -102,7 +102,7 @@ export default function RepricerStatusBanner() {
 
   const toneCls = {
     slate:
-      'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300',
+      'border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300',
     amber:
       'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950 text-amber-800 dark:text-amber-200',
     emerald:

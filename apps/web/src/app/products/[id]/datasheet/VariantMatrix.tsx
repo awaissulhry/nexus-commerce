@@ -80,10 +80,10 @@ export default function VariantMatrix({
   const secondaryValues = secondary != null ? axes.values[secondary] : []
 
   return (
-    <div className="border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900 overflow-x-auto">
+    <div className="border border-default dark:border-slate-800 rounded bg-white dark:bg-slate-900 overflow-x-auto">
       <table className="border-collapse w-full">
         <thead>
-          <tr className="border-b border-slate-200 dark:border-slate-800">
+          <tr className="border-b border-default dark:border-slate-800">
             <th className="px-3 py-2 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 text-left bg-slate-50 dark:bg-slate-800/40 sticky left-0 z-10">
               {primary} {secondary ? `\\ ${secondary}` : ''}
             </th>
@@ -107,13 +107,13 @@ export default function VariantMatrix({
           {primaryValues.map((pv) => (
             <tr
               key={pv}
-              className="border-b border-slate-100 dark:border-slate-800 last:border-b-0"
+              className="border-b border-subtle dark:border-slate-800 last:border-b-0"
             >
               <th
                 scope="row"
                 className="px-3 py-2 text-left bg-slate-50/60 dark:bg-slate-800/20 sticky left-0 z-10 align-middle"
               >
-                <span className="inline-block px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200">
+                <span className="inline-block px-1.5 py-0.5 rounded border border-default dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200">
                   {pv}
                 </span>
               </th>
@@ -124,7 +124,7 @@ export default function VariantMatrix({
                   return (
                     <td
                       key={sv}
-                      className="border-l border-slate-100 dark:border-slate-800 p-1.5 align-top"
+                      className="border-l border-subtle dark:border-slate-800 p-1.5 align-top"
                     >
                       {data ? (
                         <FilledCell
@@ -140,7 +140,7 @@ export default function VariantMatrix({
                   )
                 })
               ) : (
-                <td className="border-l border-slate-100 dark:border-slate-800 p-1.5 align-top">
+                <td className="border-l border-subtle dark:border-slate-800 p-1.5 align-top">
                   {(() => {
                     const ax = axes.cellByKey.get(cellKey([pv]))
                     const data = ax ? childById.get(ax.id) : null
@@ -197,11 +197,11 @@ function FilledCell({
   return (
     <Link
       href={`/products/${data.id}/datasheet`}
-      className="block rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-1.5 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-sm transition min-w-[84px]"
+      className="block rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 p-1.5 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-sm transition min-w-[84px]"
       title={data.name}
     >
       <div className="flex items-center gap-1.5 mb-1">
-        <div className="relative w-8 h-8 flex-shrink-0 rounded border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800">
+        <div className="relative w-8 h-8 flex-shrink-0 rounded border border-default dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800">
           {data.heroUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -295,7 +295,7 @@ function EmptyCell({
 }) {
   return (
     <div
-      className="flex items-center justify-center min-h-[58px] min-w-[84px] border border-dashed border-slate-200 dark:border-slate-700 rounded text-slate-300 dark:text-slate-600"
+      className="flex items-center justify-center min-h-[58px] min-w-[84px] border border-dashed border-default dark:border-slate-700 rounded text-slate-300 dark:text-slate-600"
       title={t('products.datasheetHub.variants.cell.empty')}
       aria-label={t('products.datasheetHub.variants.cell.empty')}
     >

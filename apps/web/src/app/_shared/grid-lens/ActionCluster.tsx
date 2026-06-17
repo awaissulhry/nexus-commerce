@@ -248,7 +248,7 @@ export function ActionCluster({
       <div
         ref={menuRef}
         style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 9999 }}
-        className="w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl py-1 text-sm"
+        className="w-56 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-md shadow-xl py-1 text-sm"
         role="menu"
       >
         {dropdownItems!.map((item, idx) => {
@@ -256,7 +256,7 @@ export function ActionCluster({
           return (
             <div key={item.id}>
               {item.dividerBefore && idx > 0 && (
-                <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
+                <div className="border-t border-subtle dark:border-slate-800 my-1" />
               )}
               {inConfirm ? (
                 <div className="px-3 py-1.5 space-y-1.5">

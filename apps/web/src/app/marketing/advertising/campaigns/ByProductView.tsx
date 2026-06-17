@@ -241,7 +241,7 @@ export function ByProductView() {
           </div>
         )
         case 'campaigns': return <span className="text-xs text-slate-500" title={marketplaceCountryName(row.marketplace)}>{marketplaceCode(row.marketplace)}</span>
-        case 'markets': return <span className="text-[11px] text-slate-400">{(row.dailyBudgetCents ?? 0) > 0 ? `${eur(row.dailyBudgetCents)}/d` : '—'}</span>
+        case 'markets': return <span className="text-[11px] text-tertiary">{(row.dailyBudgetCents ?? 0) > 0 ? `${eur(row.dailyBudgetCents)}/d` : '—'}</span>
         case 'adspend': return <span className="tabular-nums">{eur(row.adSpendCents)}</span>
         case 'adsales': return <span className="tabular-nums">{eur(row.adSalesCents)}</span>
         case 'acos': return <span className={`tabular-nums ${tacosColor(row.acos)}`}>{pct(row.acos)}</span>
@@ -257,7 +257,7 @@ export function ByProductView() {
             <Thumbnail src={row.photoUrl ?? null} photoCount={row.photoCount} alt={row.name} />
             <div className="min-w-0">
               <a href={`/products/${row.id}/edit?tab=ads`} target="_blank" rel="noopener noreferrer" className="block truncate text-sm text-slate-700 dark:text-slate-200 hover:underline" title={row.name}>{row.sku ?? row.name}</a>
-              <span className="text-[10px] text-slate-400 truncate">{row.asin ?? ''} · {num(row.impressions)} impr · {num(row.clicks)} clk</span>
+              <span className="text-[10px] text-tertiary truncate">{row.asin ?? ''} · {num(row.impressions)} impr · {num(row.clicks)} clk</span>
             </div>
           </div>
         )
@@ -281,7 +281,7 @@ export function ByProductView() {
           <div className="min-w-0">
             <a href={`/products/${row.id}/edit?tab=ads`} target="_blank" rel="noopener noreferrer" className="block truncate text-sm font-medium text-slate-800 dark:text-slate-100 hover:underline">{row.name}</a>
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-[11px] text-slate-400 truncate">{row.sku}{row.asin ? ` · ${row.asin}` : ''}</span>
+              <span className="text-[11px] text-tertiary truncate">{row.sku}{row.asin ? ` · ${row.asin}` : ''}</span>
               {row.isParent && (row.variantCount ?? 0) > 0 && <span className="px-1 py-px text-[9px] rounded bg-slate-100 dark:bg-slate-800 text-slate-500 flex-shrink-0">{row.variantCount} variant{row.variantCount === 1 ? '' : 's'}</span>}
               {(() => { const rec = rowRec(row); return rec ? <span className={`px-1 py-px text-[9px] font-medium rounded ${rec.cls} flex-shrink-0`}>{rec.label}</span> : null })()}
             </div>
@@ -322,7 +322,7 @@ export function ByProductView() {
       <div className="flex items-center justify-between mb-3">
         <DateRangePicker value={range} onChange={setRange} />
         <span className="inline-flex items-center gap-1.5 text-xs">
-          {loading && <span className="text-slate-400">updating…</span>}
+          {loading && <span className="text-tertiary">updating…</span>}
           <span className={`inline-flex h-2 w-2 rounded-full ${liveTs ? 'bg-emerald-500 animate-pulse' : 'bg-emerald-500/70'}`} />
           <span className="text-emerald-600 dark:text-emerald-400 font-medium">{liveTs ? 'Updated just now' : 'Live'}</span>
         </span>
@@ -330,7 +330,7 @@ export function ByProductView() {
       <KpiStrip tiles={tiles} className="mb-4" />
 
       {/* Mode chips: advertised · opportunity · unmatched */}
-      <div className="inline-flex items-center rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 mb-3 bg-slate-50 dark:bg-slate-900">
+      <div className="inline-flex items-center rounded-lg border border-default dark:border-slate-700 p-0.5 mb-3 bg-slate-50 dark:bg-slate-900">
         {([['advertised', 'Advertised'], ['opportunity', 'Not advertised (opportunity)'], ['unmatched', 'Unmatched ASINs']] as const).map(([m, label]) => (
           <button key={m} onClick={() => { setMode(m); setSelected(new Set()) }}
             className={`px-3 py-1 text-xs rounded-md transition ${mode === m ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm font-medium' : 'text-slate-500 hover:text-slate-700'}`}>{label}</button>
@@ -340,20 +340,20 @@ export function ByProductView() {
       {/* Toolbar: search · market · channel · density · customize */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <div className="relative">
-          <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search products" placeholder="Search product / SKU / ASIN" className="pl-7 pr-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 w-60" />
+          <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-tertiary" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search products" placeholder="Search product / SKU / ASIN" className="pl-7 pr-2 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-950 w-60" />
         </div>
-        <select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} aria-label="Filter by marketplace" className="px-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
+        <select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} aria-label="Filter by marketplace" className="px-2 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-950">
           <option value="">All markets</option>
           {marketplaces.map((m) => <option key={m} value={m}>{marketplaceCode(m)}</option>)}
         </select>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter campaigns by status" title="Filters the campaigns shown when you expand a product" className="px-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter campaigns by status" title="Filters the campaigns shown when you expand a product" className="px-2 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-950">
           <option value="">All statuses</option>
           <option value="ENABLED">Enabled</option>
           <option value="PAUSED">Paused</option>
           <option value="ARCHIVED">Archived</option>
         </select>
-        <div className="inline-flex items-center rounded-md border border-slate-200 dark:border-slate-700 p-0.5">
+        <div className="inline-flex items-center rounded-md border border-default dark:border-slate-700 p-0.5">
           {CHANNELS.map((c) => (
             <span key={c.key} title={c.enabled ? c.label : `${c.label} — no keyword PPC yet`}
               className={`px-2 py-1 text-xs rounded ${c.enabled ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium' : 'text-slate-300 dark:text-slate-600 cursor-not-allowed'}`}>{c.label}</span>
@@ -361,14 +361,14 @@ export function ByProductView() {
         </div>
         <div className="ml-auto inline-flex items-center gap-2">
           {/* PCG.1 — what a product row expands into */}
-          <span className="inline-flex items-center rounded-md border border-slate-200 dark:border-slate-700 p-0.5 text-xs">
-            <span className="px-1.5 text-slate-400">Expand:</span>
+          <span className="inline-flex items-center rounded-md border border-default dark:border-slate-700 p-0.5 text-xs">
+            <span className="px-1.5 text-tertiary">Expand:</span>
             {(['campaigns', 'variants'] as const).map((m) => (
               <button key={m} onClick={() => setExpandMode(m)} className={`px-2 py-1 rounded ${expandMode === m ? 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-medium' : 'text-slate-500 hover:text-slate-700'}`}>{m === 'campaigns' ? 'Campaigns' : 'Variants'}</button>
             ))}
           </span>
           <DensityToggle density={density} onChange={setDensity} />
-          <button onClick={() => setPrefsOpen(true)} aria-label="Customize columns" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"><SlidersHorizontal size={14} /> Customize</button>
+          <button onClick={() => setPrefsOpen(true)} aria-label="Customize columns" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"><SlidersHorizontal size={14} /> Customize</button>
         </div>
       </div>
       <PreferencesModal
@@ -390,7 +390,7 @@ export function ByProductView() {
         ]} /></div>
       )}
       {rows.length === 0 && !loading ? (
-        <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-10 text-center text-sm text-slate-400">
+        <div className="rounded-lg border border-default dark:border-slate-800 p-10 text-center text-sm text-tertiary">
           {mode === 'opportunity' ? `No un-advertised products with sales in the last ${windowDays} days.`
             : mode === 'unmatched' ? 'No unmatched advertised ASINs (every ad maps to a product).'
             : `No advertised products with spend in the last ${windowDays} days.`}

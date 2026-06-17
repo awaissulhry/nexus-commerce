@@ -73,38 +73,38 @@ export function BudgetCenterClient({ initialPools }: { initialPools: BudgetPool[
         <button onClick={() => setCreating(true)} className="ml-auto inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-amber-600 text-white hover:bg-amber-700"><Plus size={14} /> New pool</button>
       </header>
 
-      {pools.length === 0 && <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-10 text-center text-slate-400">No budget pools yet. Create one and allocate campaigns across channels.</div>}
+      {pools.length === 0 && <div className="rounded-lg border border-default dark:border-slate-800 p-10 text-center text-tertiary">No budget pools yet. Create one and allocate campaigns across channels.</div>}
 
       <div className="space-y-4">
         {pools.map((p) => (
-          <div key={p.id} className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
-            <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800">
+          <div key={p.id} className="rounded-lg border border-default dark:border-slate-800 overflow-hidden">
+            <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-slate-50 dark:bg-slate-900/60 border-b border-default dark:border-slate-800">
               <span className="font-medium text-slate-800 dark:text-slate-100">{p.name}</span>
               <span className="text-sm text-slate-500">{eur(p.totalDailyCents, p.currency)}/day</span>
-              <select value={p.strategy} onChange={(e) => patchPool(p.id, { strategy: e.target.value })} className="text-xs px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">{STRATEGIES.map((s) => <option key={s}>{s}</option>)}</select>
-              <span className="text-xs text-slate-400">max-shift {p.maxShiftPerRebalancePct}% · cooldown {p.coolDownMinutes}m</span>
+              <select value={p.strategy} onChange={(e) => patchPool(p.id, { strategy: e.target.value })} className="text-xs px-1.5 py-0.5 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">{STRATEGIES.map((s) => <option key={s}>{s}</option>)}</select>
+              <span className="text-xs text-tertiary">max-shift {p.maxShiftPerRebalancePct}% · cooldown {p.coolDownMinutes}m</span>
               <button onClick={() => patchPool(p.id, { dryRun: !p.dryRun })} className={`px-1.5 py-0.5 rounded text-xs font-medium ${p.dryRun ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'}`}>{p.dryRun ? 'dry-run' : 'LIVE'}</button>
               <div className="ml-auto flex gap-2">
-                <button onClick={() => setAddingTo(p.id)} className="text-xs px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800">+ Campaign</button>
+                <button onClick={() => setAddingTo(p.id)} className="text-xs px-2 py-1 rounded border border-default dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800">+ Campaign</button>
                 <button onClick={() => doPreview(p.id)} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"><Scale size={12} /> Preview rebalance</button>
                 <button onClick={() => delPool(p.id)} className="text-rose-500 p-1"><Trash2 size={13} /></button>
               </div>
             </div>
 
             {addingTo === p.id && (
-              <div className="px-4 py-2 flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 bg-blue-50/30 dark:bg-blue-950/10">
-                <input autoFocus placeholder="Campaign id to allocate" value={newCampaignId} onChange={(e) => setNewCampaignId(e.target.value)} className="flex-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+              <div className="px-4 py-2 flex items-center gap-2 border-b border-subtle dark:border-slate-800 bg-blue-50/30 dark:bg-blue-950/10">
+                <input autoFocus placeholder="Campaign id to allocate" value={newCampaignId} onChange={(e) => setNewCampaignId(e.target.value)} className="flex-1 px-2 py-1 text-xs rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
                 <button onClick={() => addAlloc(p.id)} className="text-xs px-2 py-1 rounded bg-blue-600 text-white">Add</button>
-                <button onClick={() => { setAddingTo(null); setNewCampaignId('') }} className="text-xs text-slate-400">Cancel</button>
+                <button onClick={() => { setAddingTo(null); setNewCampaignId('') }} className="text-xs text-tertiary">Cancel</button>
               </div>
             )}
 
             <table className="w-full text-sm">
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {p.allocations.length === 0 && <tr><td className="px-4 py-3 text-xs text-slate-400">No campaigns allocated.</td></tr>}
+                {p.allocations.length === 0 && <tr><td className="px-4 py-3 text-xs text-tertiary">No campaigns allocated.</td></tr>}
                 {p.allocations.map((a) => (
                   <tr key={a.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
-                    <td className="px-4 py-1.5"><span className="text-slate-700 dark:text-slate-200">{a.campaign.name}</span> <span className="text-xs text-slate-400">{a.channel}{a.marketplace ? `·${a.marketplace}` : ''}</span></td>
+                    <td className="px-4 py-1.5"><span className="text-slate-700 dark:text-slate-200">{a.campaign.name}</span> <span className="text-xs text-tertiary">{a.channel}{a.marketplace ? `·${a.marketplace}` : ''}</span></td>
                     <td className="px-4 py-1.5 text-right tabular-nums text-slate-500">{eur(a.campaign.budgetCents, a.campaign.currency)}/day</td>
                     <td className="px-4 py-1.5 text-right"><button onClick={() => delAlloc(a.id)} className="text-rose-400"><X size={13} /></button></td>
                   </tr>
@@ -126,11 +126,11 @@ export function BudgetCenterClient({ initialPools }: { initialPools: BudgetPool[
                   <tbody>
                     {preview.data.proposals.map((pr) => (
                       <tr key={pr.campaignId}>
-                        <td className="py-0.5 text-slate-600 dark:text-slate-300">{pr.campaignName} <span className="text-slate-400">{pr.channel}</span></td>
+                        <td className="py-0.5 text-slate-600 dark:text-slate-300">{pr.campaignName} <span className="text-tertiary">{pr.channel}</span></td>
                         <td className="py-0.5 text-right tabular-nums text-slate-500">{eur(pr.currentCents)}</td>
-                        <td className="py-0.5 px-2 text-center text-slate-400"><ArrowRight size={11} className="inline" /></td>
+                        <td className="py-0.5 px-2 text-center text-tertiary"><ArrowRight size={11} className="inline" /></td>
                         <td className="py-0.5 text-right tabular-nums font-medium text-slate-800 dark:text-slate-100">{eur(pr.proposedCents)}</td>
-                        <td className={`py-0.5 pl-3 text-right tabular-nums ${pr.shiftCents > 0 ? 'text-emerald-600' : pr.shiftCents < 0 ? 'text-rose-600' : 'text-slate-400'}`}>{pr.shiftCents > 0 ? '+' : ''}{eur(pr.shiftCents)}</td>
+                        <td className={`py-0.5 pl-3 text-right tabular-nums ${pr.shiftCents > 0 ? 'text-emerald-600' : pr.shiftCents < 0 ? 'text-rose-600' : 'text-tertiary'}`}>{pr.shiftCents > 0 ? '+' : ''}{eur(pr.shiftCents)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -146,18 +146,18 @@ export function BudgetCenterClient({ initialPools }: { initialPools: BudgetPool[
           <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3"><h2 className="font-semibold">New budget pool</h2><button onClick={() => setCreating(false)}><X size={16} /></button></div>
             <div className="space-y-3">
-              <input autoFocus placeholder="Pool name (e.g. EU Helmets Q4)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+              <input autoFocus placeholder="Pool name (e.g. EU Helmets Q4)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
               <div className="flex gap-2">
-                <label className="flex-1 text-xs text-slate-500">Daily total €<input value={form.totalEur} onChange={(e) => setForm({ ...form, totalEur: e.target.value })} placeholder="500.00" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
-                <label className="flex-1 text-xs text-slate-500">Strategy<select value={form.strategy} onChange={(e) => setForm({ ...form, strategy: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">{STRATEGIES.map((s) => <option key={s}>{s}</option>)}</select></label>
+                <label className="flex-1 text-xs text-slate-500">Daily total €<input value={form.totalEur} onChange={(e) => setForm({ ...form, totalEur: e.target.value })} placeholder="500.00" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+                <label className="flex-1 text-xs text-slate-500">Strategy<select value={form.strategy} onChange={(e) => setForm({ ...form, strategy: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">{STRATEGIES.map((s) => <option key={s}>{s}</option>)}</select></label>
               </div>
               <div className="flex gap-2">
-                <label className="flex-1 text-xs text-slate-500">Max-shift %<input value={form.maxShift} onChange={(e) => setForm({ ...form, maxShift: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
-                <label className="flex-1 text-xs text-slate-500">Cooldown min<input value={form.cooldown} onChange={(e) => setForm({ ...form, cooldown: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+                <label className="flex-1 text-xs text-slate-500">Max-shift %<input value={form.maxShift} onChange={(e) => setForm({ ...form, maxShift: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+                <label className="flex-1 text-xs text-slate-500">Cooldown min<input value={form.cooldown} onChange={(e) => setForm({ ...form, cooldown: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
                 <label className="flex items-center gap-1 text-xs text-slate-500 mt-4"><input type="checkbox" checked={form.dryRun} onChange={(e) => setForm({ ...form, dryRun: e.target.checked })} /> dry-run</label>
               </div>
             </div>
-            <div className="flex justify-end gap-2 mt-4"><button onClick={() => setCreating(false)} className="px-3 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700">Cancel</button><button onClick={createPool} disabled={!form.name || !form.totalEur} className="px-3 py-1.5 text-sm rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50">Create</button></div>
+            <div className="flex justify-end gap-2 mt-4"><button onClick={() => setCreating(false)} className="px-3 py-1.5 text-sm rounded border border-default dark:border-slate-700">Cancel</button><button onClick={createPool} disabled={!form.name || !form.totalEur} className="px-3 py-1.5 text-sm rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50">Create</button></div>
           </div>
         </div>
       )}

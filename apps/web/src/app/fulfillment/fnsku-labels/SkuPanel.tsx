@@ -313,9 +313,9 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
   }
 
   return (
-    <div className="w-64 shrink-0 flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800">
+    <div className="w-64 shrink-0 flex flex-col bg-white dark:bg-slate-900 border-r border-default dark:border-slate-800">
       {/* Tab bar */}
-      <div className="flex border-b border-slate-200 dark:border-slate-800">
+      <div className="flex border-b border-default dark:border-slate-800">
         <button
           onClick={() => setTab('search')}
           className={`flex-1 h-9 text-xs font-medium inline-flex items-center justify-center gap-1 border-b-2 transition-colors ${tab === 'search' ? 'border-violet-500 text-violet-700 dark:text-violet-300' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
@@ -338,9 +338,9 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
 
       {/* Search tab */}
       {tab === 'search' && (
-        <div className="p-3 border-b border-slate-200 dark:border-slate-800" ref={dropdownRef}>
+        <div className="p-3 border-b border-default dark:border-slate-800" ref={dropdownRef}>
           <div className="relative">
-            <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400 pointer-events-none" />
+            <Search size={13} className="absolute left-2.5 top-2.5 text-tertiary pointer-events-none" />
             <input
               value={query}
               onChange={e => setQuery(e.target.value)}
@@ -349,9 +349,9 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
               autoComplete="off"
             />
             {searching
-              ? <Loader2 size={13} className="absolute right-2.5 top-2.5 text-slate-400 animate-spin pointer-events-none" />
+              ? <Loader2 size={13} className="absolute right-2.5 top-2.5 text-tertiary animate-spin pointer-events-none" />
               : query && (
-                <button onClick={() => { setQuery(''); setResults([]) }} className="absolute right-2 top-2 text-slate-400 hover:text-slate-600">
+                <button onClick={() => { setQuery(''); setResults([]) }} className="absolute right-2 top-2 text-tertiary hover:text-slate-600">
                   <X size={13} />
                 </button>
               )
@@ -359,7 +359,7 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
           </div>
 
           {results.length > 0 && (
-            <div className="absolute left-0 right-0 mt-1 mx-3 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 shadow-xl z-50 max-h-64 overflow-y-auto">
+            <div className="absolute left-0 right-0 mt-1 mx-3 border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-800 shadow-xl z-50 max-h-64 overflow-y-auto">
               {results.map(p => {
                 const attrs = p.variationAttributes ?? {}
                 const color  = pickAttr(attrs, 'color')
@@ -369,7 +369,7 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
                   <button
                     key={p.sku}
                     onClick={() => addVariant(p)}
-                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-violet-50 dark:hover:bg-violet-950/30 text-left border-b border-slate-100 dark:border-slate-800 last:border-0"
+                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-violet-50 dark:hover:bg-violet-950/30 text-left border-b border-subtle dark:border-slate-800 last:border-0"
                   >
                     {p.imageUrl && (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -392,14 +392,14 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
           )}
 
           {!searching && query.length >= 1 && results.length === 0 && (
-            <p className="mt-1.5 text-xs text-slate-400 text-center">No variants found</p>
+            <p className="mt-1.5 text-xs text-tertiary text-center">No variants found</p>
           )}
         </div>
       )}
 
       {/* Scan tab — USB scanner / camera */}
       {tab === 'scan' && (
-        <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-2">
+        <div className="p-3 border-b border-default dark:border-slate-800 flex flex-col gap-2">
           <p className="text-xs text-slate-500">Scan a SKU or FNSKU — USB scanner or camera mode.</p>
           <BarcodeScanInput
             onScan={handleScan}
@@ -422,7 +422,7 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
 
       {/* Paste SKUs tab */}
       {tab === 'paste' && (
-        <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-2">
+        <div className="p-3 border-b border-default dark:border-slate-800 flex flex-col gap-2">
           <p className="text-xs text-slate-500">One SKU per line, or comma-separated:</p>
           <textarea
             value={pasteText}
@@ -446,7 +446,7 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
 
       {/* Fetch FNSKUs + Clear all */}
       {items.length > 0 && (
-        <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-1.5">
+        <div className="px-3 py-2 border-b border-default dark:border-slate-800 flex flex-col gap-1.5">
           <button
             onClick={() => onFetchFnskus(true)}
             disabled={fetchingFnskus}
@@ -475,7 +475,7 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
 
       {/* Bulk selection bar — only visible when items exist */}
       {items.length > 0 && (
-        <div className="px-3 py-1.5 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 bg-slate-50 dark:bg-slate-900/60">
+        <div className="px-3 py-1.5 border-b border-default dark:border-slate-800 flex items-center gap-2 bg-slate-50 dark:bg-slate-900/60">
           {selectedSet.size === 0 ? (
             <>
               <button
@@ -486,7 +486,7 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
                 Select all
               </button>
               <span className="text-[11px] text-slate-300 dark:text-slate-700">·</span>
-              <span className="text-[11px] text-slate-400 tabular-nums">{items.length} SKU{items.length !== 1 ? 's' : ''}</span>
+              <span className="text-[11px] text-tertiary tabular-nums">{items.length} SKU{items.length !== 1 ? 's' : ''}</span>
             </>
           ) : (
             <>
@@ -514,7 +514,7 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
       {/* Item list — drag-to-reorder (order = PDF page order) */}
       <div className="flex-1 overflow-y-auto">
         {items.length === 0 && (
-          <p className="text-xs text-slate-400 text-center mt-8 px-4 leading-relaxed">
+          <p className="text-xs text-tertiary text-center mt-8 px-4 leading-relaxed">
             Search for variant SKUs above<br />or paste a list in bulk
           </p>
         )}
@@ -576,7 +576,7 @@ function SortableItemRow({ item: it, selected, onToggleSelect, onRemove, onUpdat
     <div
       ref={setNodeRef}
       style={style}
-      className={`px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-0 transition-colors bg-white dark:bg-slate-900 ${
+      className={`px-3 py-2.5 border-b border-subtle dark:border-slate-800 last:border-0 transition-colors bg-white dark:bg-slate-900 ${
         selected ? 'bg-violet-50/60 dark:bg-violet-950/30' : ''
       }`}
     >
@@ -587,7 +587,7 @@ function SortableItemRow({ item: it, selected, onToggleSelect, onRemove, onUpdat
           {...listeners}
           aria-label={`Drag ${it.sku}`}
           title="Drag to reorder (changes PDF page order)"
-          className="mt-1 shrink-0 text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 cursor-grab active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-violet-500 rounded"
+          className="mt-1 shrink-0 text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-tertiary cursor-grab active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-violet-500 rounded"
         >
           <GripVertical size={12} />
         </button>
@@ -604,7 +604,7 @@ function SortableItemRow({ item: it, selected, onToggleSelect, onRemove, onUpdat
           <img
             src={it.imageUrl}
             alt=""
-            className="w-9 h-9 rounded object-cover shrink-0 border border-slate-200 dark:border-slate-700"
+            className="w-9 h-9 rounded object-cover shrink-0 border border-default dark:border-slate-700"
           />
         ) : (
           <div className="w-9 h-9 rounded shrink-0 border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40" />
@@ -622,7 +622,7 @@ function SortableItemRow({ item: it, selected, onToggleSelect, onRemove, onUpdat
             </div>
           )}
         </div>
-        <button onClick={onRemove} className="text-slate-400 hover:text-red-500 shrink-0 mt-0.5">
+        <button onClick={onRemove} className="text-tertiary hover:text-red-500 shrink-0 mt-0.5">
           <X size={13} />
         </button>
       </div>
@@ -630,7 +630,7 @@ function SortableItemRow({ item: it, selected, onToggleSelect, onRemove, onUpdat
       {/* FNSKU input */}
       <div className="mt-1.5">
         <div className="flex items-center justify-between mb-0.5">
-          <label className="text-xs text-slate-400">FNSKU</label>
+          <label className="text-xs text-tertiary">FNSKU</label>
           {it.fnskuError && (
             <span className="flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400">
               <AlertTriangle size={9} /> {it.fnskuError.includes('not configured') ? 'SP-API off' : it.fnskuError.includes('not found') ? 'Not in DB' : 'API failed'}
@@ -649,13 +649,13 @@ function SortableItemRow({ item: it, selected, onToggleSelect, onRemove, onUpdat
             placeholder={it.fnskuLoading ? 'Fetching…' : 'e.g. X0029S704D'}
             className={`w-full h-6 px-2 text-xs font-mono rounded border bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500 ${(it.fnskuError && !it.fnsku) || showFormatWarn ? 'border-amber-400 dark:border-amber-600' : 'border-slate-300 dark:border-slate-700'}`}
           />
-          {it.fnskuLoading && <Loader2 size={11} className="absolute right-1.5 text-slate-400 animate-spin" />}
+          {it.fnskuLoading && <Loader2 size={11} className="absolute right-1.5 text-tertiary animate-spin" />}
         </div>
       </div>
 
       {/* Qty control */}
       <div className="mt-1.5 flex items-center gap-1.5">
-        <span className="text-xs text-slate-400">Copies:</span>
+        <span className="text-xs text-tertiary">Copies:</span>
         <button onClick={() => onUpdateQty(-1)} className="h-5 w-5 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
           <Minus size={10} />
         </button>

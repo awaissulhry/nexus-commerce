@@ -105,14 +105,14 @@ export function AutomationStudioClient({ initialRules }: { initialRules: Marketi
           Cross-channel campaign rules. Rules ship in dry-run — graduate to live explicitly; every money action is bounded by caps + the channel write gate (Amazon sandbox until cutover).
         </p>
         <div className="ml-auto flex gap-2">
-          <button onClick={evaluateNow} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><Play size={14} /> Evaluate now</button>
+          <button onClick={evaluateNow} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><Play size={14} /> Evaluate now</button>
           <button onClick={() => setCreating(true)} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-violet-600 text-white hover:bg-violet-700"><Plus size={14} /> New rule</button>
         </div>
       </header>
 
       {evalResult && <div className="mb-3 text-xs text-slate-500 bg-slate-50 dark:bg-slate-900 rounded px-3 py-2">Evaluator: {evalResult}</div>}
 
-      <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div className="rounded-lg border border-default dark:border-slate-800 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 dark:bg-slate-900/60 text-slate-500 text-xs uppercase">
             <tr>
@@ -125,12 +125,12 @@ export function AutomationStudioClient({ initialRules }: { initialRules: Marketi
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {rules.length === 0 && <tr><td colSpan={6} className="px-3 py-10 text-center text-slate-400">No rules yet. Create one to automate pauses, budget cuts, or boosts.</td></tr>}
+            {rules.length === 0 && <tr><td colSpan={6} className="px-3 py-10 text-center text-tertiary">No rules yet. Create one to automate pauses, budget cuts, or boosts.</td></tr>}
             {rules.map((r) => {
               const action = Array.isArray(r.actions) ? (r.actions[0] as { type?: string }) : null
               return (
                 <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40 align-top">
-                  <td className="px-3 py-2"><div className="font-medium text-slate-800 dark:text-slate-100">{r.name}</div>{r.maxValueCentsEur ? <div className="text-xs text-slate-400">cap €{(r.maxValueCentsEur / 100).toFixed(0)}</div> : null}</td>
+                  <td className="px-3 py-2"><div className="font-medium text-slate-800 dark:text-slate-100">{r.name}</div>{r.maxValueCentsEur ? <div className="text-xs text-tertiary">cap €{(r.maxValueCentsEur / 100).toFixed(0)}</div> : null}</td>
                   <td className="px-3 py-2 text-xs text-slate-600 dark:text-slate-300">{r.trigger}</td>
                   <td className="px-3 py-2 text-xs text-slate-600 dark:text-slate-300">{action?.type ?? '—'}</td>
                   <td className="px-3 py-2 text-center">
@@ -141,7 +141,7 @@ export function AutomationStudioClient({ initialRules }: { initialRules: Marketi
                   <td className="px-3 py-2 text-right tabular-nums text-slate-500">{r._count?.executions ?? r.executionCount ?? 0}</td>
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-center gap-1">
-                      <button onClick={() => patch(r.id, { enabled: !r.enabled })} title={r.enabled ? 'Disable' : 'Enable'} className={`p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 ${r.enabled ? 'text-emerald-600' : 'text-slate-400'}`}><Power size={14} /></button>
+                      <button onClick={() => patch(r.id, { enabled: !r.enabled })} title={r.enabled ? 'Disable' : 'Enable'} className={`p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 ${r.enabled ? 'text-emerald-600' : 'text-tertiary'}`}><Power size={14} /></button>
                       <button onClick={() => test(r.id)} title="Test (dry-run)" className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-blue-600"><FlaskConical size={14} /></button>
                       <button onClick={() => del(r.id)} title="Delete" className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-rose-500"><Trash2 size={14} /></button>
                     </div>
@@ -165,23 +165,23 @@ export function AutomationStudioClient({ initialRules }: { initialRules: Marketi
           <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3"><h2 className="font-semibold">New automation rule</h2><button onClick={() => setCreating(false)}><X size={16} /></button></div>
             <div className="space-y-3">
-              <input autoFocus placeholder="Rule name (e.g. Pause high-ACOS DE)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+              <input autoFocus placeholder="Rule name (e.g. Pause high-ACOS DE)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
               <label className="block text-xs text-slate-500">When (trigger)
-                <select value={form.trigger} onChange={(e) => setForm({ ...form, trigger: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">{TRIGGERS.map((t) => <option key={t}>{t}</option>)}</select>
+                <select value={form.trigger} onChange={(e) => setForm({ ...form, trigger: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">{TRIGGERS.map((t) => <option key={t}>{t}</option>)}</select>
               </label>
               <label className="block text-xs text-slate-500">Do (action)
-                <select value={form.action} onChange={(e) => setForm({ ...form, action: e.target.value, actionParam: '' })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">{ACTIONS.map((a) => <option key={a.type} value={a.type}>{a.label}</option>)}</select>
+                <select value={form.action} onChange={(e) => setForm({ ...form, action: e.target.value, actionParam: '' })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">{ACTIONS.map((a) => <option key={a.type} value={a.type}>{a.label}</option>)}</select>
               </label>
               {ACTIONS.find((a) => a.type === form.action)?.param && (
-                <input placeholder={ACTIONS.find((a) => a.type === form.action)?.param === 'deltaPct' ? 'e.g. -20 (cut 20%)' : 'e.g. 25.00 (€/day)'} value={form.actionParam} onChange={(e) => setForm({ ...form, actionParam: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+                <input placeholder={ACTIONS.find((a) => a.type === form.action)?.param === 'deltaPct' ? 'e.g. -20 (cut 20%)' : 'e.g. 25.00 (€/day)'} value={form.actionParam} onChange={(e) => setForm({ ...form, actionParam: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
               )}
               <div className="flex gap-2 items-center">
-                <input placeholder="Per-exec cap € (optional)" value={form.maxValueEur} onChange={(e) => setForm({ ...form, maxValueEur: e.target.value })} className="flex-1 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+                <input placeholder="Per-exec cap € (optional)" value={form.maxValueEur} onChange={(e) => setForm({ ...form, maxValueEur: e.target.value })} className="flex-1 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
                 <label className="flex items-center gap-1 text-xs text-slate-500"><input type="checkbox" checked={form.dryRun} onChange={(e) => setForm({ ...form, dryRun: e.target.checked })} /> dry-run</label>
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-4">
-              <button onClick={() => setCreating(false)} className="px-3 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700">Cancel</button>
+              <button onClick={() => setCreating(false)} className="px-3 py-1.5 text-sm rounded border border-default dark:border-slate-700">Cancel</button>
               <button onClick={createRule} disabled={!form.name} className="px-3 py-1.5 text-sm rounded bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50">Create</button>
             </div>
           </div>

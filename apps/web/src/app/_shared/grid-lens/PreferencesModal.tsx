@@ -291,7 +291,7 @@ export function PreferencesModal({
                 <select
                   value={draft.sortBy}
                   onChange={(e) => setDraft((d) => ({ ...d, sortBy: e.target.value }))}
-                  className="flex-1 h-9 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  className="flex-1 h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                 >
                   {sortFieldOptions.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -304,7 +304,7 @@ export function PreferencesModal({
                   onChange={(e) =>
                     setDraft((d) => ({ ...d, sortDir: e.target.value as 'asc' | 'desc' }))
                   }
-                  className="h-9 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  className="h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                 >
                   <option value="desc">↓ Descending</option>
                   <option value="asc">↑ Ascending</option>
@@ -324,7 +324,7 @@ export function PreferencesModal({
               {t('products.preferences.columnsHelp')}
             </p>
           </div>
-          <div className="border border-slate-200 dark:border-slate-700 rounded-md divide-y divide-slate-100 dark:divide-slate-800 max-h-[55vh] overflow-y-auto">
+          <div className="border border-default dark:border-slate-700 rounded-md divide-y divide-slate-100 dark:divide-slate-800 max-h-[55vh] overflow-y-auto">
             {orderedForDisplay.map((c) => {
               const isLocked = !!c.locked
               const isVisible = isLocked || draft.visibleColumns.includes(c.key)
@@ -358,7 +358,7 @@ export function PreferencesModal({
                     {c.labelKey ? t(c.labelKey) : c.label || c.key}
                   </span>
                   {isLocked && (
-                    <span className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    <span className="text-[10px] uppercase tracking-wider text-tertiary dark:text-slate-500">
                       {t('products.preferences.lockedHint')}
                     </span>
                   )}

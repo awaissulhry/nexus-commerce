@@ -158,7 +158,7 @@ export function TagEditor({
                       // (slate-700/300) guarantees contrast across any
                       // operator-picked color. Identity shows through
                       // the dot + tinted background.
-                      className={`inline-flex items-center gap-1 px-2 py-1 text-sm border rounded transition-colors text-slate-700 dark:text-slate-200 ${active ? 'border-slate-900 dark:border-slate-100' : 'border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700'}`}
+                      className={`inline-flex items-center gap-1 px-2 py-1 text-sm border rounded transition-colors text-slate-700 dark:text-slate-200 ${active ? 'border-slate-900 dark:border-slate-100' : 'border-default hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700'}`}
                       style={
                         active
                           ? {
@@ -188,7 +188,7 @@ export function TagEditor({
               </div>
             )}
           </div>
-          <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-2">
+          <div className="border-t border-subtle dark:border-slate-800 pt-4 space-y-2">
             <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               {t('products.tags.createSection')}
             </div>
@@ -198,13 +198,13 @@ export function TagEditor({
                 value={newTagName}
                 onChange={(e) => setNewTagName(e.target.value)}
                 placeholder={t('products.tags.namePlaceholder')}
-                className="flex-1 h-8 px-2 text-md border border-slate-200 rounded dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                className="flex-1 h-8 px-2 text-md border border-default rounded dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
               />
               <input
                 type="color"
                 value={newTagColor}
                 onChange={(e) => setNewTagColor(e.target.value)}
-                className="h-8 w-10 border border-slate-200 rounded dark:border-slate-800"
+                className="h-8 w-10 border border-default rounded dark:border-slate-800"
               />
               <button
                 onClick={createTag}

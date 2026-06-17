@@ -41,11 +41,11 @@ export function IncrementalityClient() {
 
       {/* Controls */}
       <div className="flex flex-wrap items-end gap-3 mb-3">
-        <div className="flex gap-1">{DAYS.map((d) => <button key={d} onClick={() => setDays(d)} className={`px-2.5 py-1 text-xs rounded-md border ${days === d ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{d}d</button>)}</div>
-        <label className="flex flex-col text-[11px] text-slate-500">Brand terms (comma-sep)<input value={brandTerms} onChange={(e) => setBrandTerms(e.target.value)} className="mt-0.5 px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 w-48" /></label>
+        <div className="flex gap-1">{DAYS.map((d) => <button key={d} onClick={() => setDays(d)} className={`px-2.5 py-1 text-xs rounded-md border ${days === d ? 'bg-blue-600 text-white border-blue-600' : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{d}d</button>)}</div>
+        <label className="flex flex-col text-[11px] text-slate-500">Brand terms (comma-sep)<input value={brandTerms} onChange={(e) => setBrandTerms(e.target.value)} className="mt-0.5 px-2 py-1 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950 w-48" /></label>
         <label className="flex flex-col text-[11px] text-slate-500">Branded incrementality ({Math.round(brandedFactor * 100)}%)<input type="range" min="0" max="1" step="0.05" value={brandedFactor} onChange={(e) => setBrandedFactor(Number(e.target.value))} className="mt-1 w-36" /></label>
         <label className="flex flex-col text-[11px] text-slate-500">Non-branded ({Math.round(nonBrandedFactor * 100)}%)<input type="range" min="0" max="1" step="0.05" value={nonBrandedFactor} onChange={(e) => setNonBrandedFactor(Number(e.target.value))} className="mt-1 w-36" /></label>
-        <button onClick={csv} className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><Download size={14} /> CSV</button>
+        <button onClick={csv} className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><Download size={14} /> CSV</button>
       </div>
 
       {/* Headline tiles */}
@@ -58,21 +58,21 @@ export function IncrementalityClient() {
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-x-auto">
+      <div className="rounded-lg border border-default dark:border-slate-800 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr>
             <th className="text-left px-3 py-2">Campaign</th><th className="text-left px-3 py-2">Type</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Ad sales</th><th className="text-right px-3 py-2">ROAS</th><th className="text-right px-3 py-2">Incr. factor</th><th className="text-right px-3 py-2">Incr. sales</th><th className="text-right px-3 py-2">iROAS</th>
           </tr></thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {(data?.rows ?? []).length === 0 && !loading && <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400 text-xs">No spend data in this window.</td></tr>}
+            {(data?.rows ?? []).length === 0 && !loading && <tr><td colSpan={8} className="px-3 py-8 text-center text-tertiary text-xs">No spend data in this window.</td></tr>}
             {(data?.rows ?? []).map((r) => (
               <tr key={r.campaignId} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
                 <td className="px-3 py-1.5 max-w-[260px] truncate">{r.name}</td>
                 <td className="px-3 py-1.5"><span className={`px-1.5 py-0.5 rounded text-[11px] ${r.branded ? 'bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300' : 'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300'}`}>{r.branded ? 'Branded' : 'Non-brand'}</span></td>
                 <td className="px-3 py-1.5 text-right tabular-nums">{eur(r.spendCents)}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums">{eur(r.adSalesCents)}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums text-slate-400">{x2(r.roas)}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums text-slate-400">×{r.incrementalityFactor}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums text-tertiary">{x2(r.roas)}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums text-tertiary">×{r.incrementalityFactor}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums text-emerald-600">{eur(r.incrementalSalesCents)}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums font-medium text-fuchsia-600">{x2(r.iroas)}</td>
               </tr>
@@ -80,12 +80,12 @@ export function IncrementalityClient() {
           </tbody>
         </table>
       </div>
-      {data && <p className="text-xs text-slate-400 mt-3">{data.note}</p>}
+      {data && <p className="text-xs text-tertiary mt-3">{data.note}</p>}
     </div>
   )
 }
 
 function Tile({ label, value, sub, tone = 'slate' }: { label: string; value: string; sub?: string; tone?: 'slate' | 'emerald' | 'fuchsia' }) {
   const c = tone === 'emerald' ? 'text-emerald-600' : tone === 'fuchsia' ? 'text-fuchsia-600' : 'text-slate-900 dark:text-slate-100'
-  return <div className="rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2"><div className="text-xs text-slate-500">{label}</div><div className={`text-lg font-semibold ${c}`}>{value}</div>{sub && <div className="text-[11px] text-slate-400">{sub}</div>}</div>
+  return <div className="rounded-lg border border-default dark:border-slate-800 px-3 py-2"><div className="text-xs text-slate-500">{label}</div><div className={`text-lg font-semibold ${c}`}>{value}</div>{sub && <div className="text-[11px] text-tertiary">{sub}</div>}</div>
 }

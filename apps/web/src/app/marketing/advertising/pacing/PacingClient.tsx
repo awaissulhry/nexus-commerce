@@ -32,19 +32,19 @@ export function PacingClient() {
     <div className="max-w-[1000px]">
       <div className="flex items-center gap-2 mb-1"><Wallet size={20} className="text-amber-500" /><h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Budget pacing</h1></div>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Stop leaving money on the table — raise budgets on profitable out-of-budget campaigns and trim the losers.{loading ? ' (loading…)' : ''}</p>
-      <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div className="rounded-lg border border-default dark:border-slate-800 overflow-hidden">
         <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr>
           <th className="px-2 py-2 w-8"><input type="checkbox" checked={props.length > 0 && props.every((p) => sel.has(p.campaignId))} onChange={(e) => setSel(e.target.checked ? new Set(props.map((p) => p.campaignId)) : new Set())} /></th>
           <th className="text-left px-3 py-2">Campaign</th><th className="text-right px-3 py-2">ROAS</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Budget</th><th className="text-right px-3 py-2">→ New</th><th className="text-left px-3 py-2">Why</th>
         </tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-          {props.length === 0 && <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-400 text-xs">No pacing actions — budgets look healthy.</td></tr>}
+          {props.length === 0 && <tr><td colSpan={7} className="px-3 py-6 text-center text-tertiary text-xs">No pacing actions — budgets look healthy.</td></tr>}
           {props.map((p) => (
             <tr key={p.campaignId} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
               <td className="px-2 py-1.5"><input type="checkbox" checked={sel.has(p.campaignId)} onChange={(e) => { const n = new Set(sel); e.target.checked ? n.add(p.campaignId) : n.delete(p.campaignId); setSel(n) }} /></td>
               <td className="px-3 py-1.5">{p.name}{p.outOfBudget && <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-rose-100 text-rose-700">out of budget</span>}</td>
               <td className="px-3 py-1.5 text-right tabular-nums">{p.roas != null ? `${p.roas.toFixed(1)}×` : '—'}</td>
               <td className="px-3 py-1.5 text-right tabular-nums">{eur(p.spendCents)}</td>
-              <td className="px-3 py-1.5 text-right tabular-nums text-slate-400">{eur(p.currentBudgetCents)}</td>
+              <td className="px-3 py-1.5 text-right tabular-nums text-tertiary">{eur(p.currentBudgetCents)}</td>
               <td className={`px-3 py-1.5 text-right tabular-nums font-medium ${p.proposedBudgetCents > p.currentBudgetCents ? 'text-emerald-600' : 'text-rose-600'}`}>{eur(p.proposedBudgetCents)}</td>
               <td className="px-3 py-1.5 text-xs text-slate-500">{p.reason}</td>
             </tr>

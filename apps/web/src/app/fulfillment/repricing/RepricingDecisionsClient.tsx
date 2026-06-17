@@ -53,7 +53,7 @@ function PriceDelta({ oldPrice, newPrice }: { oldPrice: string; newPrice: string
   const delta = next - old
   if (Math.abs(delta) < 0.01) {
     return (
-      <span className="text-slate-400 text-xs flex items-center gap-0.5">
+      <span className="text-tertiary text-xs flex items-center gap-0.5">
         <Minus className="h-3 w-3" /> no change
       </span>
     )
@@ -148,14 +148,14 @@ export function RepricingDecisionsClient({ initialDecisions }: { initialDecision
       </div>
 
       {/* Table */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md overflow-hidden">
         {displayed.length === 0 ? (
           <div className="px-6 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
             No repricing decisions yet — run the evaluator cron or wait for the next tick.
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-default dark:border-slate-800">
               <tr>
                 <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-slate-500 font-medium">Product</th>
                 <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-slate-500 font-medium">Channel</th>
@@ -177,7 +177,7 @@ export function RepricingDecisionsClient({ initialDecisions }: { initialDecision
                       {d.rule.product.name}
                     </div>
                     {d.rule.product.brand && (
-                      <div className="text-[10px] text-slate-400">{d.rule.product.brand}</div>
+                      <div className="text-[10px] text-tertiary">{d.rule.product.brand}</div>
                     )}
                   </td>
                   <td className="px-3 py-2">
@@ -185,7 +185,7 @@ export function RepricingDecisionsClient({ initialDecisions }: { initialDecision
                       {d.rule.channel}
                     </span>
                     {d.rule.marketplace && (
-                      <span className="text-[10px] text-slate-400 ml-1">{d.rule.marketplace}</span>
+                      <span className="text-[10px] text-tertiary ml-1">{d.rule.marketplace}</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-xs text-slate-600 dark:text-slate-400">
@@ -218,7 +218,7 @@ export function RepricingDecisionsClient({ initialDecisions }: { initialDecision
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-xs text-slate-400 whitespace-nowrap">
+                  <td className="px-3 py-2 text-xs text-tertiary whitespace-nowrap">
                     {new Date(d.createdAt).toLocaleDateString('en-GB', {
                       month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
                     })}

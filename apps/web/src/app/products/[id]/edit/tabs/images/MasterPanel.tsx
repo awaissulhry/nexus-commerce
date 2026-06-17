@@ -54,7 +54,7 @@ function formatImageMeta(img: ProductImage): string | null {
 
 const TYPE_COLORS: Record<ImageType, string> = {
   MAIN:      'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
-  ALT:       'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+  ALT:       'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-default dark:border-slate-700',
   LIFESTYLE: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
   SWATCH:    'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800',
   DIAGRAM:   'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
@@ -737,14 +737,14 @@ export default function MasterPanel({
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-xl overflow-hidden">
         {/* Header */}
-        <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
+        <div className="px-5 py-3 border-b border-subtle dark:border-slate-800 flex items-center gap-2 flex-wrap">
           <ImageIcon className="w-4 h-4 text-slate-500 flex-shrink-0" />
           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Master gallery</span>
-          <span className="text-xs text-slate-400">{images.length} image{images.length !== 1 ? 's' : ''}</span>
+          <span className="text-xs text-tertiary">{images.length} image{images.length !== 1 ? 's' : ''}</span>
           {reordering && (
-            <span className="flex items-center gap-1 text-xs text-slate-400 ml-1">
+            <span className="flex items-center gap-1 text-xs text-tertiary ml-1">
               <Loader2 className="w-3 h-3 animate-spin" /> Saving order…
             </span>
           )}
@@ -764,7 +764,7 @@ export default function MasterPanel({
           )}
           <div className="ml-auto flex items-center gap-2">
             <select
-              className="text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none"
+              className="text-xs border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none"
               onChange={(e) => { newTypeRef.current = e.target.value as ImageType }}
               defaultValue="ALT"
             >
@@ -892,7 +892,7 @@ export default function MasterPanel({
 
           {images.length === 0 ? (
             <div
-              className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl py-16 flex flex-col items-center gap-3 text-slate-400 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+              className="border-2 border-dashed border-default dark:border-slate-700 rounded-xl py-16 flex flex-col items-center gap-3 text-tertiary cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
               onClick={() => fileInputRef.current?.click()}
             >
               <ImageIcon className="w-10 h-10" />
@@ -933,7 +933,7 @@ export default function MasterPanel({
                       ? 'border-blue-500 ring-2 ring-blue-300 dark:ring-blue-600'
                       : dragOverIndex === index
                         ? 'border-blue-400 dark:border-blue-500 ring-2 ring-blue-300 dark:ring-blue-600 before:content-[""] before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-blue-500 before:rounded-l-xl before:animate-pulse'
-                        : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
+                        : 'border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                   )}
                   title="Drag to reorder, or drop on a channel cell to assign"
                 >
@@ -1008,7 +1008,7 @@ export default function MasterPanel({
                     </button>
 
                     {/* Position number — bottom-left */}
-                    <div className="absolute bottom-1 left-1.5 text-[10px] font-mono text-slate-400 dark:text-slate-500 bg-white/70 dark:bg-slate-900/70 rounded px-1">
+                    <div className="absolute bottom-1 left-1.5 text-[10px] font-mono text-tertiary dark:text-slate-500 bg-white/70 dark:bg-slate-900/70 rounded px-1">
                       {index + 1}
                     </div>
 
@@ -1074,7 +1074,7 @@ export default function MasterPanel({
                           onClick={(e) => { e.stopPropagation(); setMenuOpenId(null) }}
                         />
                         <div
-                          className="absolute top-7 right-1 z-30 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 min-w-[160px] text-sm"
+                          className="absolute top-7 right-1 z-30 bg-white dark:bg-slate-800 border border-default dark:border-slate-700 rounded-lg shadow-lg py-1 min-w-[160px] text-sm"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <button className="w-full text-left px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700" onClick={() => startEdit(img)}>
@@ -1123,7 +1123,7 @@ export default function MasterPanel({
                         <select
                           value={editType}
                           onChange={(e) => setEditType(e.target.value as ImageType)}
-                          className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 bg-white dark:bg-slate-900 focus:outline-none"
+                          className="w-full text-xs border border-default dark:border-slate-700 rounded px-1.5 py-1 bg-white dark:bg-slate-900 focus:outline-none"
                         >
                           {IMAGE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                         </select>
@@ -1131,7 +1131,7 @@ export default function MasterPanel({
                           value={editAlt}
                           onChange={(e) => setEditAlt(e.target.value)}
                           placeholder="Alt text…"
-                          className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 bg-white dark:bg-slate-900 focus:outline-none"
+                          className="w-full text-xs border border-default dark:border-slate-700 rounded px-1.5 py-1 bg-white dark:bg-slate-900 focus:outline-none"
                           onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditingId(null) }}
                           autoFocus
                         />
@@ -1165,12 +1165,12 @@ export default function MasterPanel({
                       </div>
                     )}
                     {img.alt && editingId !== img.id && (
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate" title={img.alt}>{img.alt}</p>
+                      <p className="text-[11px] text-tertiary dark:text-slate-500 truncate" title={img.alt}>{img.alt}</p>
                     )}
                     {editingId !== img.id && (() => {
                       const meta = formatImageMeta(img)
                       return meta ? (
-                        <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500 truncate" title={meta}>
+                        <p className="text-[10px] font-mono text-tertiary dark:text-slate-500 truncate" title={meta}>
                           {meta}
                         </p>
                       ) : null
@@ -1182,7 +1182,7 @@ export default function MasterPanel({
               {/* Add-more card */}
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="aspect-square rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1.5 text-slate-400 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+                className="aspect-square rounded-xl border-2 border-dashed border-default dark:border-slate-700 flex flex-col items-center justify-center gap-1.5 text-tertiary cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
               >
                 <Plus className="w-6 h-6" />
                 <span className="text-xs">Add more</span>
@@ -1231,7 +1231,7 @@ export default function MasterPanel({
           the existing image or force-upload the new one. */}
       {nearDup && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 dark:bg-slate-950/70 flex items-center justify-center px-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-2xl w-full p-6 space-y-5">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-default dark:border-slate-700 max-w-2xl w-full p-6 space-y-5">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
               <div className="space-y-1">
@@ -1252,7 +1252,7 @@ export default function MasterPanel({
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                   {t('products.edit.images.masterPanel.nearDupExisting')}
                 </p>
-                <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden border border-slate-200 dark:border-slate-700">
+                <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden border border-default dark:border-slate-700">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={nearDup.candidate.url}
@@ -1271,7 +1271,7 @@ export default function MasterPanel({
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                   {t('products.edit.images.masterPanel.nearDupNew')}
                 </p>
-                <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden border border-slate-200 dark:border-slate-700">
+                <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden border border-default dark:border-slate-700">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={URL.createObjectURL(nearDup.file)}
@@ -1285,7 +1285,7 @@ export default function MasterPanel({
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-subtle dark:border-slate-800">
               <Button
                 size="sm"
                 variant="ghost"

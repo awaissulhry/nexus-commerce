@@ -93,7 +93,7 @@ export function CommandCenterKpis({ onFilterCritical }: { onFilterCritical?: () 
         {Array.from({ length: 5 }).map((_, i) => (
           <div
             key={i}
-            className="h-[78px] rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 animate-pulse"
+            className="h-[78px] rounded-md border border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-950 animate-pulse"
           />
         ))}
       </div>
@@ -102,7 +102,7 @@ export function CommandCenterKpis({ onFilterCritical }: { onFilterCritical?: () 
   if (!data) return null
 
   const tileBase =
-    'rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50'
+    'rounded-md border border-default dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50'
   const labelClass =
     'text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold inline-flex items-center gap-1.5'
   const valueClass =

@@ -121,10 +121,10 @@ export function PullHistoryDrawer({
     <div className="fixed inset-0 z-[65] bg-black/30 backdrop-blur-[1px]">
       <div
         ref={drawerRef}
-        className="absolute right-0 top-0 h-full w-[440px] max-w-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-2xl flex flex-col"
+        className="absolute right-0 top-0 h-full w-[440px] max-w-full bg-white dark:bg-slate-900 border-l border-default dark:border-slate-700 shadow-2xl flex flex-col"
       >
         {/* Header */}
-        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
+        <div className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between flex-shrink-0">
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
               <History className="w-4 h-4 text-blue-600" />
@@ -142,7 +142,7 @@ export function PullHistoryDrawer({
             <button
               type="button"
               onClick={() => void load()}
-              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded"
+              className="text-tertiary hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded"
               title="Refresh"
               disabled={loading}
             >
@@ -151,7 +151,7 @@ export function PullHistoryDrawer({
             <button
               type="button"
               onClick={onClose}
-              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded"
+              className="text-tertiary hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded"
               title="Close (Esc)"
             >
               <X className="w-4 h-4" />
@@ -180,13 +180,13 @@ export function PullHistoryDrawer({
             return (
               <div
                 key={rec.id}
-                className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+                className="border border-default dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
               >
                 {/* Top row: time + re-pull */}
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="text-xs text-slate-700 dark:text-slate-200">
                     <span className="font-medium">{relativeTime(rec.appliedAt ?? rec.pulledAt)}</span>
-                    <span className="text-slate-400 ml-1.5">
+                    <span className="text-tertiary ml-1.5">
                       {absoluteTime(rec.appliedAt ?? rec.pulledAt)}
                     </span>
                   </div>
@@ -225,7 +225,7 @@ export function PullHistoryDrawer({
                       All columns
                     </span>
                   ) : cols.length === 0 ? (
-                    <span className="text-[10px] italic text-slate-400">no column data</span>
+                    <span className="text-[10px] italic text-tertiary">no column data</span>
                   ) : cols.map((c) => (
                     <span
                       key={c}

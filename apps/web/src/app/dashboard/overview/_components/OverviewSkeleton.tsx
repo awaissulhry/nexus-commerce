@@ -51,7 +51,7 @@ function KpiSkeleton() {
   // Mirrors the KpiCard internal structure: label, value, sparkline,
   // prev. Same dimensions so the swap-in is invisible.
   return (
-    <div className="border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 px-4 py-3 space-y-2">
+    <div className="border border-default dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 px-4 py-3 space-y-2">
       <Skeleton variant="text" width="40%" />
       <Skeleton variant="text" width="60%" className="h-6" />
       <Skeleton variant="block" height="24px" />

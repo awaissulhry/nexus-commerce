@@ -187,7 +187,7 @@ function AmazonGroupSkeleton() {
           <section
             key={colorKey}
             className={cn(
-              'border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden animate-pulse',
+              'border border-default dark:border-slate-700 rounded-lg overflow-hidden animate-pulse',
               theme.band,
             )}
           >
@@ -1402,7 +1402,7 @@ export default function ChannelFieldEditor({
                 'inline-flex items-center gap-1 h-7 px-2 text-sm border rounded disabled:opacity-40',
                 showAllOptional
                   ? 'border-blue-300 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
+                  : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
               )}
             >
               {showAllOptional
@@ -1444,13 +1444,13 @@ export default function ChannelFieldEditor({
       {manifest && (
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative flex-1 min-w-[180px] max-w-xs">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tertiary" />
             <input
               type="text"
               value={fieldQuery}
               onChange={(e) => setFieldQuery(e.target.value)}
               placeholder="Search fields…"
-              className="w-full h-7 pl-7 pr-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+              className="w-full h-7 pl-7 pr-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 placeholder:text-tertiary"
             />
           </div>
           {(['all', 'required', 'empty'] as const).map((f) => (
@@ -1462,7 +1462,7 @@ export default function ChannelFieldEditor({
                 'h-7 px-2 text-xs rounded border',
                 fieldFilter === f
                   ? 'border-blue-300 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+                  : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
               )}
             >
               {f === 'all' ? 'All' : f === 'required' ? 'Required' : 'Empty'}
@@ -1484,14 +1484,14 @@ export default function ChannelFieldEditor({
       )}
 
       {loading && !manifest && (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-12 text-center text-md text-slate-500 dark:text-slate-400 flex items-center justify-center gap-2">
+        <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-12 text-center text-md text-slate-500 dark:text-slate-400 flex items-center justify-center gap-2">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading schema…
         </div>
       )}
 
       {noCategorySet && !loading && (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50 px-4 py-6 text-center text-md text-slate-500 dark:text-slate-400">
+        <div className="border border-default dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50 px-4 py-6 text-center text-md text-slate-500 dark:text-slate-400">
           Pick a category in the <strong>Channel Setup</strong> card above ↑ — attribute fields load once a category is selected.
         </div>
       )}
@@ -1558,7 +1558,7 @@ export default function ChannelFieldEditor({
       )}
 
       {manifest && manifest.fields.length === 0 && !loading && (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-6 text-center text-base text-slate-500 dark:text-slate-400">
+        <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-6 text-center text-base text-slate-500 dark:text-slate-400">
           No fields surfaced for this channel yet.
         </div>
       )}
@@ -1729,7 +1729,7 @@ export default function ChannelFieldEditor({
                       // still draws the section frame. Header /body
                       // each carry their own rounded-t/b so the band
                       // doesn't bleed past the section's corners.
-                      'border border-slate-200 dark:border-slate-700 rounded-lg',
+                      'border border-default dark:border-slate-700 rounded-lg',
                       theme.band,
                     )}
                   >
@@ -1968,7 +1968,7 @@ function CopyFromSiblingMenu({
           compact ? 'h-7 px-2' : 'h-7 px-2.5',
           flash
             ? 'border-emerald-300 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40'
-            : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
+            : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
         )}
       >
         <Copy className="w-3 h-3" />
@@ -1981,8 +1981,8 @@ function CopyFromSiblingMenu({
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded shadow-md py-1 min-w-[220px] text-base">
-            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded shadow-md py-1 min-w-[220px] text-base">
+            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-tertiary dark:text-slate-500">
               Copy values from
             </div>
             {others.map(({ channelKey: sourceKey }) => {
@@ -2003,7 +2003,7 @@ function CopyFromSiblingMenu({
                   className={cn(
                     'w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center justify-between gap-2',
                     n === 0
-                      ? 'text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                      ? 'text-tertiary dark:text-slate-500 cursor-not-allowed'
                       : 'text-slate-700 dark:text-slate-300',
                   )}
                 >
@@ -2033,7 +2033,7 @@ function SaveStatusPill({
     <div
       className={cn(
         'inline-flex items-center gap-1.5 text-sm px-2 py-1 rounded border',
-        status === 'saving' && 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800',
+        status === 'saving' && 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800',
         status === 'saved' && 'border-emerald-200 dark:border-emerald-900 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40',
         status === 'error' && 'border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40',
       )}
@@ -2064,7 +2064,7 @@ function GtinStatusBanner({
     ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800'
     : status.reason === 'in_progress'
     ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-800'
-    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+    : 'border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
   const headline = (() => {
     switch (status.reason) {
       case 'has_gtin':
@@ -2263,13 +2263,13 @@ function ListingSetupCard({
   }
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
+    <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
       {/* Card header */}
-      <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 rounded-t-lg flex items-center justify-between">
+      <div className="px-4 py-2.5 border-b border-subtle dark:border-slate-800 rounded-t-lg flex items-center justify-between">
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
           Channel Setup
         </span>
-        <span className="text-xs text-slate-400 dark:text-slate-500">
+        <span className="text-xs text-tertiary dark:text-slate-500">
           {channel} · {marketplace}
         </span>
       </div>
@@ -2302,7 +2302,7 @@ function ListingSetupCard({
           {/* Copy from another eBay market */}
           {isEbay && ebaySiblings.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap pt-0.5">
-              <span className="text-xs text-slate-400">Copy from:</span>
+              <span className="text-xs text-tertiary">Copy from:</span>
               {ebaySiblings.map((s) => (
                 <button
                   key={s.marketplace}
@@ -2311,7 +2311,7 @@ function ListingSetupCard({
                     onChange('productType', s.categoryId)
                     setCategoryPath(null)
                   }}
-                  className="text-xs px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 font-mono"
+                  className="text-xs px-2 py-0.5 rounded border border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 font-mono"
                 >
                   eBay {s.marketplace} ({s.categoryId})
                 </button>
@@ -2323,18 +2323,18 @@ function ListingSetupCard({
           {isAmazon && (
             <div className="min-h-[1rem]">
               {categoryPathLoading ? (
-                <p className="text-xs text-slate-400 italic">Fetching category…</p>
+                <p className="text-xs text-tertiary italic">Fetching category…</p>
               ) : categoryPath ? (
                 <p className="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed">
                   {categoryPath.split('›').map((part, i, arr) => (
                     <span key={i}>
                       <span>{part.trim()}</span>
-                      {i < arr.length - 1 && <span className="mx-1 text-slate-400">›</span>}
+                      {i < arr.length - 1 && <span className="mx-1 text-tertiary">›</span>}
                     </span>
                   ))}
                 </p>
               ) : (
-                <p className="text-xs text-slate-400 dark:text-slate-500">
+                <p className="text-xs text-tertiary dark:text-slate-500">
                   {inheriting ? 'Inheriting master type — detect below to see category path.' : 'Detect below to confirm the category path.'}
                 </p>
               )}
@@ -2353,7 +2353,7 @@ function ListingSetupCard({
             <select
               value={variationTheme}
               onChange={(e) => onChange('variationTheme', e.target.value)}
-              className="w-full h-8 px-2 text-md font-mono border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              className="w-full h-8 px-2 text-md font-mono border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
             >
               <option value="">— none / single variant —</option>
               {schemaThemes.map((t) => (
@@ -2370,11 +2370,11 @@ function ListingSetupCard({
                   ? 'Loading from schema…'
                   : 'e.g. SIZE, COLOR, SIZE_NAME/COLOR_NAME'
               }
-              className="w-full h-8 px-2 text-md font-mono border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              className="w-full h-8 px-2 text-md font-mono border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
             />
           )}
 
-          <p className="text-xs text-slate-400 dark:text-slate-500">
+          <p className="text-xs text-tertiary dark:text-slate-500">
             {isAmazon && schemaThemes.length > 0
               ? `${schemaThemes.length} theme${schemaThemes.length !== 1 ? 's' : ''} supported by ${effectiveType} on Amazon ${marketplace}.`
               : 'Defines how variant axes are reported to the channel. Leave empty for single-variation listings.'}
@@ -2384,16 +2384,16 @@ function ListingSetupCard({
 
       {/* Detect from Amazon */}
       {isAmazon && (
-        <div className="border-t border-slate-100 dark:border-slate-800 pt-3 space-y-3">
+        <div className="border-t border-subtle dark:border-slate-800 pt-3 space-y-3">
           <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
             Auto-detect from Amazon
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {/* My listing */}
-            <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+            <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
               <span className="text-xs font-medium text-slate-700 dark:text-slate-300">My live listing</span>
-              <p className="text-xs text-slate-400 dark:text-slate-500">
+              <p className="text-xs text-tertiary dark:text-slate-500">
                 Reads the product type and variation theme from your own listing on Amazon {marketplace}.
               </p>
               <button
@@ -2407,9 +2407,9 @@ function ListingSetupCard({
             </div>
 
             {/* Competitor / reference */}
-            <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+            <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
               <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Competitor / reference ASIN</span>
-              <p className="text-xs text-slate-400 dark:text-slate-500">
+              <p className="text-xs text-tertiary dark:text-slate-500">
                 Paste any ASIN from the same category — Nexus reads its product type and variation theme from Amazon's catalog.
               </p>
               <div className="flex items-center gap-1.5 mt-auto">
@@ -2418,7 +2418,7 @@ function ListingSetupCard({
                   value={refAsin}
                   onChange={(e) => setRefAsin(e.target.value.trim())}
                   placeholder="B0XXXXXXXXX"
-                  className="flex-1 h-7 px-2 text-xs font-mono border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
+                  className="flex-1 h-7 px-2 text-xs font-mono border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
                 />
                 <button
                   type="button"

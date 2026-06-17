@@ -79,12 +79,12 @@ export default function AmazonLivePreview({ composed, className }: Props) {
   return (
     <div
       className={cn(
-        'rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900',
+        'rounded-xl border border-default dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900',
         className,
       )}
     >
       {/* Header strip — amazon wordmark + market chip + skin toggle */}
-      <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-[#232f3e] flex items-center justify-between gap-2">
+      <div className="px-3 py-2 border-b border-default dark:border-slate-800 bg-[#232f3e] flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-bold text-[15px] tracking-tight text-white leading-none">
             amazon
@@ -93,7 +93,7 @@ export default function AmazonLivePreview({ composed, className }: Props) {
           <span className="text-[11px] text-slate-300 font-mono truncate">
             {tld}
           </span>
-          <span className="text-[11px] text-slate-400">
+          <span className="text-[11px] text-tertiary">
             {flag} {composed.marketplace.code}
           </span>
         </div>
@@ -127,7 +127,7 @@ export default function AmazonLivePreview({ composed, className }: Props) {
           showing, mirrors EbayLivePreview's strip. AC.4 promotes this
           to the real health score; the strip here stays as a fast
           glance counter beside the score. */}
-      <div className="px-3 py-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+      <div className="px-3 py-2 border-t border-default dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
         <div className="flex items-center gap-3 flex-wrap">
           <span>Title {composed.healthHints.titleLength}/200</span>
           <span>Bullets {composed.healthHints.bulletCount}/5</span>
@@ -181,7 +181,7 @@ function MobileSkin(props: SkinProps) {
         )}
         <button
           type="button"
-          className="absolute top-2 right-2 w-9 h-9 rounded-full bg-white/95 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-rose-500 shadow-sm"
+          className="absolute top-2 right-2 w-9 h-9 rounded-full bg-white/95 border border-default flex items-center justify-center text-slate-500 hover:text-rose-500 shadow-sm"
           title="Add to List"
         >
           <Heart className="w-4 h-4" />
@@ -196,13 +196,13 @@ function MobileSkin(props: SkinProps) {
             Visit the {composed.brand.value} Store
           </div>
         ) : (
-          <div className="text-xs text-slate-400 italic">No brand set</div>
+          <div className="text-xs text-tertiary italic">No brand set</div>
         )}
 
         {/* Title */}
         <div className="text-[16px] leading-snug font-medium text-slate-900 dark:text-slate-100">
           {composed.title.value || (
-            <em className="text-slate-400">No title set</em>
+            <em className="text-tertiary">No title set</em>
           )}
         </div>
 
@@ -210,7 +210,7 @@ function MobileSkin(props: SkinProps) {
         <FakeRating />
 
         {/* Price block + Prime stamp */}
-        <div className="pt-1 pb-2 border-t border-b border-slate-200 dark:border-slate-800">
+        <div className="pt-1 pb-2 border-t border-b border-default dark:border-slate-800">
           <div className="flex items-baseline gap-1">
             <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300 self-start mt-1">
               {composed.currency === 'EUR' ? '€' : composed.currency === 'GBP' ? '£' : composed.currency === 'USD' ? '$' : composed.currency}
@@ -230,7 +230,7 @@ function MobileSkin(props: SkinProps) {
               <span className="text-slate-600 dark:text-slate-300">
                 FREE delivery
               </span>
-              <span className="text-slate-400">·</span>
+              <span className="text-tertiary">·</span>
               <span className="text-slate-600 dark:text-slate-300">FREE Returns</span>
             </div>
           )}
@@ -296,7 +296,7 @@ function DesktopSkin(props: SkinProps) {
               'aspect-square rounded border overflow-hidden bg-white dark:bg-slate-800',
               i === galleryIdx
                 ? 'border-[#e77600] ring-2 ring-[#e77600]/40'
-                : 'border-slate-200 dark:border-slate-700',
+                : 'border-default dark:border-slate-700',
             )}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -338,16 +338,16 @@ function DesktopSkin(props: SkinProps) {
             Visit the {composed.brand.value} Store
           </div>
         ) : (
-          <div className="text-[13px] text-slate-400 italic">No brand set</div>
+          <div className="text-[13px] text-tertiary italic">No brand set</div>
         )}
         <div className="text-[20px] leading-snug font-medium text-slate-900 dark:text-slate-100">
           {composed.title.value || (
-            <em className="text-slate-400">No title set</em>
+            <em className="text-tertiary">No title set</em>
           )}
         </div>
         <FakeRating />
 
-        <div className="border-t border-slate-200 dark:border-slate-800 pt-2">
+        <div className="border-t border-default dark:border-slate-800 pt-2">
           {composed.variationSummary.variantCount > 0 && (
             <VariationStrip composed={composed} />
           )}
@@ -359,7 +359,7 @@ function DesktopSkin(props: SkinProps) {
       </div>
 
       {/* Right: buy box */}
-      <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-3 space-y-2 h-fit">
+      <div className="border border-default dark:border-slate-800 rounded-lg p-3 space-y-2 h-fit">
         <div className="flex items-baseline gap-1">
           <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300 self-start mt-1">
             {composed.currency === 'EUR' ? '€' : composed.currency === 'GBP' ? '£' : composed.currency === 'USD' ? '$' : composed.currency}
@@ -399,7 +399,7 @@ function DesktopSkin(props: SkinProps) {
         </div>
         <div className="text-[11px] text-slate-600 dark:text-slate-400 space-y-0.5">
           <div className="flex items-center gap-1">
-            <MapPin className="w-3 h-3 text-slate-400" />
+            <MapPin className="w-3 h-3 text-tertiary" />
             Deliver to {composed.marketplace.code}
           </div>
           <div>
@@ -436,12 +436,12 @@ function DesktopSkin(props: SkinProps) {
             Buy Now
           </button>
         </div>
-        <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800 text-[10.5px] text-slate-500 space-y-0.5">
+        <div className="pt-1.5 border-t border-subtle dark:border-slate-800 text-[10.5px] text-slate-500 space-y-0.5">
           <div className="flex items-center gap-1.5">
-            <ShieldCheck className="w-3 h-3 text-slate-400" /> Secure transaction
+            <ShieldCheck className="w-3 h-3 text-tertiary" /> Secure transaction
           </div>
           <div className="flex items-center gap-1.5">
-            <Truck className="w-3 h-3 text-slate-400" />
+            <Truck className="w-3 h-3 text-tertiary" />
             {isFba ? 'Fulfilled by Amazon' : 'Ships from Xavia'}
           </div>
         </div>
@@ -474,7 +474,7 @@ function GalleryNav({
       <button
         type="button"
         onClick={() => setIdx((idx - 1 + total) % total)}
-        className="absolute top-1/2 -translate-y-1/2 left-1 w-7 h-7 rounded-full bg-white/90 border border-slate-200 flex items-center justify-center text-slate-600"
+        className="absolute top-1/2 -translate-y-1/2 left-1 w-7 h-7 rounded-full bg-white/90 border border-default flex items-center justify-center text-slate-600"
         aria-label="Previous image"
       >
         <ChevronLeft className="w-4 h-4" />
@@ -482,7 +482,7 @@ function GalleryNav({
       <button
         type="button"
         onClick={() => setIdx((idx + 1) % total)}
-        className="absolute top-1/2 -translate-y-1/2 right-1 w-7 h-7 rounded-full bg-white/90 border border-slate-200 flex items-center justify-center text-slate-600"
+        className="absolute top-1/2 -translate-y-1/2 right-1 w-7 h-7 rounded-full bg-white/90 border border-default flex items-center justify-center text-slate-600"
         aria-label="Next image"
       >
         <ChevronRight className="w-4 h-4" />
@@ -512,7 +512,7 @@ function FakeRating() {
       <span className="text-[#007185] dark:text-[#4ec5e0] hover:underline cursor-pointer">
         4.3
       </span>
-      <span className="text-slate-400">·</span>
+      <span className="text-tertiary">·</span>
       <span className="text-[#007185] dark:text-[#4ec5e0] hover:underline cursor-pointer">
         Ratings TBD
       </span>
@@ -562,7 +562,7 @@ function VariationStrip({
           </div>
         </div>
       ))}
-      <div className="text-[10.5px] text-slate-400 italic">
+      <div className="text-[10.5px] text-tertiary italic">
         AC.6 — real per-axis values + image swap.
       </div>
     </div>
@@ -574,7 +574,7 @@ function DeliveryRow({ composed }: { composed: ComposedAmazonListing }) {
   return (
     <div className="text-[11.5px] text-slate-700 dark:text-slate-300 space-y-0.5 pt-1">
       <div className="flex items-center gap-1.5">
-        <Truck className="w-3.5 h-3.5 text-slate-400" />
+        <Truck className="w-3.5 h-3.5 text-tertiary" />
         <span>
           {isFba ? (
             <>
@@ -588,7 +588,7 @@ function DeliveryRow({ composed }: { composed: ComposedAmazonListing }) {
         </span>
       </div>
       <div className="flex items-center gap-1.5">
-        <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
+        <ShieldCheck className="w-3.5 h-3.5 text-tertiary" />
         <span>30-day returns</span>
       </div>
     </div>
@@ -599,13 +599,13 @@ function BulletBlock({ composed }: { composed: ComposedAmazonListing }) {
   const bullets = composed.bullets.value
   if (bullets.length === 0) {
     return (
-      <div className="text-xs text-rose-600 dark:text-rose-400 italic pt-2 border-t border-slate-100 dark:border-slate-800">
+      <div className="text-xs text-rose-600 dark:text-rose-400 italic pt-2 border-t border-subtle dark:border-slate-800">
         No bullet points set — Amazon expects 5 short feature bullets.
       </div>
     )
   }
   return (
-    <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+    <div className="pt-2 border-t border-subtle dark:border-slate-800">
       <div className="text-[13px] font-semibold text-slate-900 dark:text-slate-100 mb-1.5">
         About this item
       </div>
@@ -629,14 +629,14 @@ function DescriptionBlock({ composed }: { composed: ComposedAmazonListing }) {
   const desc = composed.description.value
   if (!desc) {
     return (
-      <div className="text-xs text-slate-400 italic pt-2 border-t border-slate-100 dark:border-slate-800">
+      <div className="text-xs text-tertiary italic pt-2 border-t border-subtle dark:border-slate-800">
         No description set — buyers will see a sparse PDP on Amazon{' '}
         {composed.marketplace.code}.
       </div>
     )
   }
   return (
-    <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+    <div className="pt-2 border-t border-subtle dark:border-slate-800">
       <div className="text-[13px] font-semibold text-slate-900 dark:text-slate-100 mb-1.5">
         Product description
       </div>
@@ -651,7 +651,7 @@ function ComplianceFooter() {
   // Placeholder — AC.4 wires the real GPSR / hazmat / battery / CoO
   // checks here once the compliance manifest is plumbed through.
   return (
-    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-[10.5px] text-slate-500 dark:text-slate-400">
+    <div className="pt-2 border-t border-subtle dark:border-slate-800 text-[10.5px] text-slate-500 dark:text-slate-400">
       <span className="font-medium">Safety & Compliance:</span>{' '}
       <span className="italic">GPSR / hazmat / battery checks land in AC.4.</span>
     </div>

@@ -156,7 +156,7 @@ export default function FbaInboundV2Wizard({ breadcrumbs }: { breadcrumbs?: Brea
                 const isSelected = p.id === selectedPlanId
                 const tone = p.status === 'FAILED' ? 'border-rose-300 bg-rose-50/50'
                   : p.status === 'LABELS_READY' ? 'border-emerald-300 bg-emerald-50/50'
-                  : 'border-slate-200 dark:border-slate-700'
+                  : 'border-default dark:border-slate-700'
                 return (
                   <button
                     key={p.id}
@@ -225,7 +225,7 @@ function StepTracker({ plan }: { plan: Plan }) {
                 done ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 text-emerald-700 dark:text-emerald-300'
                 : failed ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 text-rose-700 dark:text-rose-300'
                 : active ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 text-blue-700 dark:text-blue-300'
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
+                : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-500 dark:text-slate-400'
               }`}
             >
               {done ? <CheckCircle2 size={10} className="inline mr-1" /> : null}

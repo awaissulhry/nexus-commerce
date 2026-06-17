@@ -260,7 +260,7 @@ function CreateForm({
   return (
     <form
       onSubmit={submit}
-      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5 space-y-5"
+      className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-5 space-y-5"
     >
       <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
         New API key
@@ -535,7 +535,7 @@ function KeyRow({
   return (
     <li
       className={cn(
-        'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4',
+        'bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-4',
         (row.revokedAt || (row.rotatedAt && !inGrace)) && 'opacity-60',
       )}
     >

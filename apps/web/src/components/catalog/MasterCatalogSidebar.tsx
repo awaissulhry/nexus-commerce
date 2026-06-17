@@ -130,9 +130,9 @@ export default function MasterCatalogSidebar({
   ).length;
 
   return (
-    <div className="w-80 bg-white border-r border-slate-200 flex flex-col h-full">
+    <div className="w-80 bg-white border-r border-default flex flex-col h-full">
       {/* Header */}
-      <div className="p-4 border-b border-slate-200">
+      <div className="p-4 border-b border-default">
         <h2 className="text-lg font-bold text-slate-900">Master Catalog</h2>
         <p className="text-xs text-slate-600 mt-1">
           Multi-channel inventory management
@@ -140,7 +140,7 @@ export default function MasterCatalogSidebar({
       </div>
 
       {/* Search Bar */}
-      <div className="p-4 border-b border-slate-200">
+      <div className="p-4 border-b border-default">
         <input
           type="text"
           placeholder="Search products..."
@@ -170,7 +170,7 @@ export default function MasterCatalogSidebar({
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto">
         {/* Marketplace Presence Section */}
-        <div className="border-b border-slate-200">
+        <div className="border-b border-default">
           <button
             onClick={() => toggleSection("marketplace")}
             className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors"
@@ -202,7 +202,7 @@ export default function MasterCatalogSidebar({
                     className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                       filters.marketplaces.includes(mp.channel)
                         ? "bg-blue-50 border-blue-300"
-                        : "bg-white border-slate-200 hover:border-slate-300"
+                        : "bg-white border-default hover:border-slate-300"
                     }`}
                   >
                     <input
@@ -255,7 +255,7 @@ export default function MasterCatalogSidebar({
         </div>
 
         {/* Stock Alerts Section */}
-        <div className="border-b border-slate-200">
+        <div className="border-b border-default">
           <button
             onClick={() => toggleSection("stockAlerts")}
             className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors"
@@ -279,7 +279,7 @@ export default function MasterCatalogSidebar({
           {expandedSections.stockAlerts && (
             <div className="px-4 py-3 space-y-2 bg-slate-50">
               {/* Low Stock Filter */}
-              <label className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:border-slate-300 cursor-pointer transition-all">
+              <label className="flex items-center gap-3 p-3 rounded-lg border border-default hover:border-slate-300 cursor-pointer transition-all">
                 <input
                   type="checkbox"
                   checked={filters.stockAlerts.includes("low")}
@@ -300,7 +300,7 @@ export default function MasterCatalogSidebar({
               </label>
 
               {/* Out of Stock Filter */}
-              <label className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:border-slate-300 cursor-pointer transition-all">
+              <label className="flex items-center gap-3 p-3 rounded-lg border border-default hover:border-slate-300 cursor-pointer transition-all">
                 <input
                   type="checkbox"
                   checked={filters.stockAlerts.includes("out-of-stock")}
@@ -370,7 +370,7 @@ export default function MasterCatalogSidebar({
       </div>
 
       {/* Footer */}
-      <div className="p-4 border-t border-slate-200 text-xs text-slate-600">
+      <div className="p-4 border-t border-default text-xs text-slate-600">
         <p>Last updated: {new Date().toLocaleTimeString()}</p>
       </div>
     </div>

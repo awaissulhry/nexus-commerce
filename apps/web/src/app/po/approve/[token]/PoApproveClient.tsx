@@ -153,8 +153,8 @@ export default function PoApproveClient({ token }: { token: string }) {
 
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4">
-      <div className="max-w-3xl mx-auto bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-900 text-white">
+      <div className="max-w-3xl mx-auto bg-white border border-default rounded-lg shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-default bg-slate-900 text-white">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h1 className="text-xl font-semibold font-mono">{po.poNumber}</h1>
             <span className="text-sm opacity-80">
@@ -185,7 +185,7 @@ export default function PoApproveClient({ token }: { token: string }) {
           </div>
         )}
 
-        <div className="px-6 py-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-base border-b border-slate-200">
+        <div className="px-6 py-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-base border-b border-default">
           <Field label="Total">
             <span className="font-semibold tabular-nums">
               {fmt(po.totalCents, po.currencyCode)}
@@ -206,7 +206,7 @@ export default function PoApproveClient({ token }: { token: string }) {
 
         <div className="overflow-x-auto">
           <table className="w-full text-base">
-            <thead className="bg-slate-50 text-sm text-slate-600 border-b border-slate-200">
+            <thead className="bg-slate-50 text-sm text-slate-600 border-b border-default">
               <tr>
                 <th className="text-left font-medium px-4 py-2 w-10">#</th>
                 <th className="text-left font-medium px-4 py-2">SKU</th>
@@ -217,7 +217,7 @@ export default function PoApproveClient({ token }: { token: string }) {
             </thead>
             <tbody>
               {po.items.map((it, i) => (
-                <tr key={i} className="border-b border-slate-100 last:border-0">
+                <tr key={i} className="border-b border-subtle last:border-0">
                   <td className="px-4 py-2 text-sm text-slate-500">{i + 1}</td>
                   <td className="px-4 py-2 font-mono text-sm">
                     {it.sku}
@@ -239,7 +239,7 @@ export default function PoApproveClient({ token }: { token: string }) {
         </div>
 
         {po.notes && (
-          <div className="px-6 py-4 border-t border-slate-200">
+          <div className="px-6 py-4 border-t border-default">
             <div className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-2">
               Buyer notes
             </div>
@@ -248,7 +248,7 @@ export default function PoApproveClient({ token }: { token: string }) {
         )}
 
         {!outcome && !po.expired && po.status === 'REVIEW' && (
-          <div className="px-6 py-5 border-t border-slate-200 space-y-4 bg-slate-50">
+          <div className="px-6 py-5 border-t border-default space-y-4 bg-slate-50">
             <div>
               <label className="text-sm font-medium text-slate-700 block mb-1">
                 If declining — reason (optional)
@@ -258,7 +258,7 @@ export default function PoApproveClient({ token }: { token: string }) {
                 value={declineReason}
                 onChange={(e) => setDeclineReason(e.target.value)}
                 placeholder="e.g. revise quantities, wait for next quarter, …"
-                className="h-9 px-2 text-base border border-slate-200 rounded bg-white text-slate-900 w-full"
+                className="h-9 px-2 text-base border border-default rounded bg-white text-slate-900 w-full"
               />
             </div>
 
@@ -299,7 +299,7 @@ export default function PoApproveClient({ token }: { token: string }) {
           </div>
         )}
 
-        <div className="px-6 py-3 text-xs text-slate-500 border-t border-slate-200">
+        <div className="px-6 py-3 text-xs text-slate-500 border-t border-default">
           Your decision is logged on the buyer's side. If you weren't expecting this,
           forward the email to the sender for context.
         </div>

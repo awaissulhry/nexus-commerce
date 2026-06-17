@@ -152,7 +152,7 @@ export default function BulkImagesModal({ productIds, onClose, onComplete }: Bul
               <button
                 type="button"
                 onClick={() => { setSource(null); setSearch('') }}
-                className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                className="p-1 text-tertiary hover:text-slate-700 dark:hover:text-slate-200"
                 aria-label="Clear source"
               >
                 <X className="w-3.5 h-3.5" />
@@ -161,18 +161,18 @@ export default function BulkImagesModal({ productIds, onClose, onComplete }: Bul
           ) : (
             <>
               <div className="relative">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tertiary pointer-events-none" />
                 <input
                   type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={t('products.bulkImages.searchPlaceholder')}
-                  className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded pl-7 pr-2 py-1.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  className="w-full text-sm border border-default dark:border-slate-700 rounded pl-7 pr-2 py-1.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
                   autoFocus
                 />
               </div>
               {search.length > 0 && (
-                <ul className="mt-1 max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded divide-y divide-slate-100 dark:divide-slate-800">
+                <ul className="mt-1 max-h-48 overflow-y-auto border border-default dark:border-slate-700 rounded divide-y divide-slate-100 dark:divide-slate-800">
                   {searching && (
                     <li className="flex items-center gap-2 px-3 py-2 text-xs text-slate-500">
                       <Loader2 className="w-3 h-3 animate-spin" />
@@ -180,7 +180,7 @@ export default function BulkImagesModal({ productIds, onClose, onComplete }: Bul
                     </li>
                   )}
                   {!searching && searchResults.length === 0 && (
-                    <li className="px-3 py-2 text-xs text-slate-400 italic">
+                    <li className="px-3 py-2 text-xs text-tertiary italic">
                       {t('products.bulkImages.noResults')}
                     </li>
                   )}
@@ -214,7 +214,7 @@ export default function BulkImagesModal({ productIds, onClose, onComplete }: Bul
               disabled={busy}
               className={mode === 'replace'
                 ? 'flex-1 px-3 py-2 text-xs rounded border-2 border-blue-400 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300'
-                : 'flex-1 px-3 py-2 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                : 'flex-1 px-3 py-2 text-xs rounded border border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
               }
             >
               <div className="font-medium">{t('products.bulkImages.replaceTitle')}</div>
@@ -226,7 +226,7 @@ export default function BulkImagesModal({ productIds, onClose, onComplete }: Bul
               disabled={busy}
               className={mode === 'append'
                 ? 'flex-1 px-3 py-2 text-xs rounded border-2 border-blue-400 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300'
-                : 'flex-1 px-3 py-2 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                : 'flex-1 px-3 py-2 text-xs rounded border border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
               }
             >
               <div className="font-medium">{t('products.bulkImages.appendTitle')}</div>

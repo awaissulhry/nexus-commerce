@@ -100,7 +100,7 @@ export function AmazonMirrorControls({
           </span>
           <span className="text-slate-500 dark:text-slate-400">· {diff.asins} ASIN{diff.asins === 1 ? '' : 's'}</span>
           {diff.skipped > 0 && (
-            <span className="text-slate-400">· {diff.skipped} skipped (no main image)</span>
+            <span className="text-tertiary">· {diff.skipped} skipped (no main image)</span>
           )}
         </div>
       )}

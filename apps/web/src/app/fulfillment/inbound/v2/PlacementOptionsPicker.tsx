@@ -181,7 +181,7 @@ export function PlacementOptionsPicker({
 
   if (loading && options === null) {
     return (
-      <div className="border border-slate-200 dark:border-slate-700 rounded p-4 bg-slate-50 dark:bg-slate-900/50">
+      <div className="border border-default dark:border-slate-700 rounded p-4 bg-slate-50 dark:bg-slate-900/50">
         <div className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
           <Loader2 size={12} className="animate-spin" />
           Loading placement options from SP-API…
@@ -207,7 +207,7 @@ export function PlacementOptionsPicker({
   }
   if (!options || options.length === 0) {
     return (
-      <div className="border border-slate-200 dark:border-slate-700 rounded p-4 bg-slate-50 dark:bg-slate-900/50 text-sm text-slate-500 dark:text-slate-400">
+      <div className="border border-default dark:border-slate-700 rounded p-4 bg-slate-50 dark:bg-slate-900/50 text-sm text-slate-500 dark:text-slate-400">
         No placement options returned by SP-API.
       </div>
     )
@@ -244,15 +244,15 @@ export function PlacementOptionsPicker({
                 isSelected
                   ? 'border-blue-400 bg-blue-50/40 dark:bg-blue-950/30 ring-1 ring-blue-400'
                   : expired
-                    ? 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30 opacity-60 cursor-not-allowed'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 bg-white dark:bg-slate-900'
+                    ? 'border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30 opacity-60 cursor-not-allowed'
+                    : 'border-default dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 bg-white dark:bg-slate-900'
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     {isSelected && <CheckCircle2 size={12} className="text-blue-600 dark:text-blue-400 shrink-0" />}
-                    <Truck size={12} className="text-slate-400 dark:text-slate-500 shrink-0" />
+                    <Truck size={12} className="text-tertiary dark:text-slate-500 shrink-0" />
                     <span className="font-mono text-xs text-slate-700 dark:text-slate-300 truncate">
                       {opt.placementOptionId}
                     </span>
@@ -388,7 +388,7 @@ function Chip({ children, tone = 'slate' }: { children: React.ReactNode; tone?: 
       ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
       : tone === 'sky'
         ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-800'
-        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-default dark:border-slate-700'
   return (
     <span className={`text-[10px] px-1.5 py-0.5 rounded border ${cls}`}>
       {children}

@@ -14,7 +14,7 @@ export function ChannelSplitWidget({
   if (loading && !breakdown) {
     return (
       <Card title="Channel split">
-        <div className="h-[220px] flex items-center justify-center text-slate-400 text-sm">
+        <div className="h-[220px] flex items-center justify-center text-tertiary text-sm">
           Loading…
         </div>
       </Card>

@@ -194,7 +194,7 @@ export default function MoveWorkflowStageModal({
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
                 autoFocus
-                className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+                className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
               >
                 {Object.entries(stagesByWorkflow).map(([wfId, wfStages]) => (
                   <optgroup key={wfId} label={wfStages[0]?.workflowLabel ?? wfId}>
@@ -218,7 +218,7 @@ export default function MoveWorkflowStageModal({
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="Reason / note for the audit log"
-                className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+                className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
               />
             </div>
           </>

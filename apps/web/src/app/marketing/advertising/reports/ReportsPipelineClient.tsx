@@ -101,8 +101,8 @@ function JobRow({ job }: { job: ReportJobRow }) {
       >
         <td className="px-3 py-2 whitespace-nowrap">
           {expanded
-            ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-            : <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
+            ? <ChevronDown className="h-3.5 w-3.5 text-tertiary" />
+            : <ChevronRight className="h-3.5 w-3.5 text-tertiary" />}
         </td>
         <td className="px-3 py-2 font-mono text-xs text-slate-500">{job.profileId.slice(-8)}</td>
         <td className="px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300">{job.adProduct}</td>
@@ -116,30 +116,30 @@ function JobRow({ job }: { job: ReportJobRow }) {
           {job.rowsIngested > 0 ? job.rowsIngested.toLocaleString() : '—'}
         </td>
         <td className="px-3 py-2 text-xs text-slate-500">{formatBytes(job.fileSize)}</td>
-        <td className="px-3 py-2 text-xs text-slate-400">{formatDate(job.createdAt)}</td>
+        <td className="px-3 py-2 text-xs text-tertiary">{formatDate(job.createdAt)}</td>
       </tr>
       {expanded && (
         <tr className="bg-slate-50/80 dark:bg-slate-800/20">
-          <td colSpan={10} className="px-6 py-3 border-t border-slate-100 dark:border-slate-800">
+          <td colSpan={10} className="px-6 py-3 border-t border-subtle dark:border-slate-800">
             <div className="space-y-2 text-xs">
               <div className="flex gap-8 flex-wrap">
                 <div>
-                  <span className="text-slate-400 uppercase tracking-wider text-[10px]">Job ID</span>
+                  <span className="text-tertiary uppercase tracking-wider text-[10px]">Job ID</span>
                   <p className="font-mono text-slate-600 dark:text-slate-300 mt-0.5">{job.id}</p>
                 </div>
                 <div>
-                  <span className="text-slate-400 uppercase tracking-wider text-[10px]">External Report ID</span>
+                  <span className="text-tertiary uppercase tracking-wider text-[10px]">External Report ID</span>
                   <p className="font-mono text-slate-600 dark:text-slate-300 mt-0.5">{job.externalReportId || '—'}</p>
                 </div>
                 {job.lastPolledAt && (
                   <div>
-                    <span className="text-slate-400 uppercase tracking-wider text-[10px]">Last Polled</span>
+                    <span className="text-tertiary uppercase tracking-wider text-[10px]">Last Polled</span>
                     <p className="text-slate-600 dark:text-slate-300 mt-0.5">{formatDate(job.lastPolledAt)}</p>
                   </div>
                 )}
                 {job.completedAt && (
                   <div>
-                    <span className="text-slate-400 uppercase tracking-wider text-[10px]">Completed</span>
+                    <span className="text-tertiary uppercase tracking-wider text-[10px]">Completed</span>
                     <p className="text-slate-600 dark:text-slate-300 mt-0.5">{formatDate(job.completedAt)}</p>
                   </div>
                 )}
@@ -151,7 +151,7 @@ function JobRow({ job }: { job: ReportJobRow }) {
                 </div>
               )}
               <details className="group">
-                <summary className="cursor-pointer text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 list-none flex items-center gap-1">
+                <summary className="cursor-pointer text-tertiary hover:text-slate-600 dark:hover:text-slate-300 list-none flex items-center gap-1">
                   <ChevronRight className="h-3 w-3 group-open:rotate-90 transition-transform" />
                   Configuration JSON
                 </summary>
@@ -286,7 +286,7 @@ function TriggerPanel({ backendUrl }: TriggerPanelProps) {
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 mb-4">
+    <div className="rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 p-4 mb-4">
       <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">Manual Triggers</h2>
 
       {/* Date range */}
@@ -298,7 +298,7 @@ function TriggerPanel({ backendUrl }: TriggerPanelProps) {
           onChange={(e) => setStartDate(e.target.value)}
           className="text-xs border border-slate-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300"
         />
-        <span className="text-xs text-slate-400">to</span>
+        <span className="text-xs text-tertiary">to</span>
         <input
           type="date"
           value={endDate}
@@ -415,12 +415,12 @@ export function ReportsPipelineClient({ jobs, backendUrl, statusFilter }: Report
 
       {/* Job table */}
       {jobs.length === 0 ? (
-        <div className="text-sm text-slate-400 py-12 text-center">No report jobs found.</div>
+        <div className="text-sm text-tertiary py-12 text-center">No report jobs found.</div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+        <div className="overflow-x-auto rounded-lg border border-default dark:border-slate-700">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-default dark:border-slate-700">
                 <th className="w-6 px-3 py-2" />
                 <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Profile</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Ad Product</th>

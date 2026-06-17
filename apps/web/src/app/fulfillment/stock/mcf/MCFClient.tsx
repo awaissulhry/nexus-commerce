@@ -238,7 +238,7 @@ export default function MCFClient() {
           <div className="text-sm text-slate-500 dark:text-slate-400" title={new Date(row.requestedAt).toLocaleString()}>
             <div>{formatRelative(row.requestedAt, t)}</div>
             {row.lastSyncedAt && (
-              <div className="text-xs text-slate-400 dark:text-slate-500">
+              <div className="text-xs text-tertiary dark:text-slate-500">
                 {t('stock.mcf.syncedAt', { when: formatRelative(row.lastSyncedAt, t) })}
               </div>
             )}
@@ -249,7 +249,7 @@ export default function MCFClient() {
           <div className="inline-flex items-center gap-1">
             <button type="button" onClick={() => handleSync(row)} disabled={actingId === row.id}
               title={t('stock.mcf.syncTitle')} aria-label={t('stock.mcf.syncTitle')}
-              className="h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">
+              className="h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">
               <RefreshCw size={11} className={actingId === row.id ? 'animate-spin' : ''} />
             </button>
             {!TERMINAL_STATUSES.has(row.status) && (
@@ -293,7 +293,7 @@ export default function MCFClient() {
                 className={cn('min-h-[44px] sm:min-h-0 px-2.5 py-1 text-sm font-medium rounded border transition-colors',
                   filter === f.key
                     ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600')}>
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600')}>
                 {t(f.labelKey)}
               </button>
             ))}
@@ -324,7 +324,7 @@ export default function MCFClient() {
 
       {loading && !shipments && (
         <div className="space-y-2">
-          {[0,1,2].map(i => <div key={i} className="h-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse" />)}
+          {[0,1,2].map(i => <div key={i} className="h-16 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg animate-pulse" />)}
         </div>
       )}
 

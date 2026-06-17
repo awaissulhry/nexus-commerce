@@ -52,8 +52,8 @@ export function RequestRowActions({ requestId, status }: Props) {
   return (
     <div className="flex items-center gap-1">
       {/* Snooze dropdown — inline buttons keep the table dense */}
-      <div className="inline-flex items-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded text-[10px]" title="Defer the send by N hours">
-        <Clock className="h-3 w-3 text-slate-400 ml-1" />
+      <div className="inline-flex items-center gap-0.5 border border-default dark:border-slate-700 rounded text-[10px]" title="Defer the send by N hours">
+        <Clock className="h-3 w-3 text-tertiary ml-1" />
         {SNOOZE_OPTIONS.map((opt) => (
           <button
             key={opt.hours}

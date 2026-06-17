@@ -34,7 +34,7 @@ const TONE_TEXT: Record<DeltaTone, string> = {
   pos: 'text-emerald-600 dark:text-emerald-400',
   neg: 'text-rose-600 dark:text-rose-400',
   flat: 'text-slate-500 dark:text-slate-400',
-  na: 'text-slate-400 dark:text-slate-500',
+  na: 'text-tertiary dark:text-slate-500',
 }
 
 export function KPICard({
@@ -59,7 +59,7 @@ export function KPICard({
   const inner = (
     <div
       className={cn(
-        'group relative overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-3 flex flex-col gap-1.5',
+        'group relative overflow-hidden rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-3 flex flex-col gap-1.5',
         interactive &&
           'transition hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-sm cursor-pointer',
       )}

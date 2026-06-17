@@ -33,7 +33,7 @@ const DELTA_TONE: Record<string, string> = {
   pos: 'text-emerald-600 dark:text-emerald-400',
   neg: 'text-rose-600 dark:text-rose-400',
   flat: 'text-slate-500 dark:text-slate-400',
-  na: 'text-slate-400 dark:text-slate-500',
+  na: 'text-tertiary dark:text-slate-500',
 }
 
 export function MarketplaceMatrixWidget({
@@ -49,7 +49,7 @@ export function MarketplaceMatrixWidget({
         title="Per-marketplace P&L"
         description="Native currency per row — no implicit conversion"
       >
-        <div className="h-[180px] flex items-center justify-center text-slate-400 text-sm">
+        <div className="h-[180px] flex items-center justify-center text-tertiary text-sm">
           Loading…
         </div>
       </Card>
@@ -73,7 +73,7 @@ export function MarketplaceMatrixWidget({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <tr className="border-b border-default dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <th className="text-left font-medium px-3 py-2">Channel</th>
               <th className="text-left font-medium px-3 py-2">Market</th>
               <th className="text-right font-medium px-3 py-2">Revenue</th>
@@ -97,7 +97,7 @@ export function MarketplaceMatrixWidget({
               return (
                 <tr
                   key={key}
-                  className="border-b border-slate-100 dark:border-slate-800/60 last:border-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/30"
+                  className="border-b border-subtle dark:border-slate-800/60 last:border-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/30"
                 >
                   <td className="px-3 py-2">
                     <span
@@ -110,7 +110,7 @@ export function MarketplaceMatrixWidget({
                     <span className="font-medium text-slate-900 dark:text-slate-100">
                       {row.marketplace}
                     </span>
-                    <span className="ml-1.5 text-[11px] text-slate-400 dark:text-slate-500 font-mono">
+                    <span className="ml-1.5 text-[11px] text-tertiary dark:text-slate-500 font-mono">
                       {row.currency}
                     </span>
                   </td>

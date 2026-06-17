@@ -48,8 +48,8 @@ export function StockSplit({ fba, fbm, inline, muted, fbmLowThreshold, onAdjustF
 
   const fbaQty = localFba ?? fba ?? 0
   const fbmQty = localFbm ?? fbm ?? 0
-  const fbaTone = muted ? 'text-slate-400 dark:text-slate-500' : 'text-orange-700 dark:text-orange-400'
-  const fbmTone = muted ? 'text-slate-400 dark:text-slate-500' : toneFor(fbmQty, fbmLowThreshold)
+  const fbaTone = muted ? 'text-tertiary dark:text-slate-500' : 'text-orange-700 dark:text-orange-400'
+  const fbmTone = muted ? 'text-tertiary dark:text-slate-500' : toneFor(fbmQty, fbmLowThreshold)
   const editable = !!onAdjustFbm
 
   const startEdit = (e: React.MouseEvent) => {
@@ -128,12 +128,12 @@ export function StockSplit({ fba, fbm, inline, muted, fbmLowThreshold, onAdjustF
     return (
       <span className="text-xs tabular-nums whitespace-nowrap inline-flex items-center">
         <span className={`font-semibold ${fbaTone}`}>{fbaQty}</span>
-        <span className="text-[10px] uppercase tracking-wider ml-0.5 text-slate-400 dark:text-slate-500">FBA</span>
+        <span className="text-[10px] uppercase tracking-wider ml-0.5 text-tertiary dark:text-slate-500">FBA</span>
         <Lock size={9} className="ml-0.5 text-slate-300 dark:text-slate-600" />
         <span className="mx-1 text-slate-300 dark:text-slate-600">·</span>
         {fbmInput}
-        <span className="text-[10px] uppercase tracking-wider ml-0.5 text-slate-400 dark:text-slate-500">FBM</span>
-        {busy && <Loader2 size={10} className="ml-1 animate-spin text-slate-400" />}
+        <span className="text-[10px] uppercase tracking-wider ml-0.5 text-tertiary dark:text-slate-500">FBM</span>
+        {busy && <Loader2 size={10} className="ml-1 animate-spin text-tertiary" />}
       </span>
     )
   }
@@ -142,13 +142,13 @@ export function StockSplit({ fba, fbm, inline, muted, fbmLowThreshold, onAdjustF
     <div className="space-y-0.5">
       <div className="flex items-center gap-1.5 text-sm tabular-nums">
         <span className={`font-semibold ${fbaTone}`}>{fbaQty}</span>
-        <span className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">FBA</span>
+        <span className="text-[10px] uppercase tracking-wider text-tertiary dark:text-slate-500">FBA</span>
         <Lock size={10} className="text-slate-300 dark:text-slate-600" aria-label="Amazon-managed; read-only" />
       </div>
       <div className="flex items-center gap-1.5 text-sm tabular-nums">
         {fbmInput}
-        <span className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">FBM</span>
-        {busy && <Loader2 size={10} className="animate-spin text-slate-400" />}
+        <span className="text-[10px] uppercase tracking-wider text-tertiary dark:text-slate-500">FBM</span>
+        {busy && <Loader2 size={10} className="animate-spin text-tertiary" />}
       </div>
     </div>
   )

@@ -25,7 +25,7 @@ const TONES: Record<FieldSource, { bg: string; text: string; ring: string }> = {
   translations: { bg: 'bg-violet-50 dark:bg-violet-950/40',     text: 'text-violet-700 dark:text-violet-300',       ring: 'ring-violet-200 dark:ring-violet-800' },
   ai:           { bg: 'bg-amber-50 dark:bg-amber-950/40',       text: 'text-amber-700 dark:text-amber-300',         ring: 'ring-amber-200 dark:ring-amber-800' },
   sibling:      { bg: 'bg-emerald-50 dark:bg-emerald-950/40',   text: 'text-emerald-700 dark:text-emerald-300',     ring: 'ring-emerald-200 dark:ring-emerald-800' },
-  default:      { bg: 'bg-slate-50 dark:bg-slate-900',          text: 'text-slate-400 dark:text-slate-500',         ring: 'ring-slate-200 dark:ring-slate-800' },
+  default:      { bg: 'bg-slate-50 dark:bg-slate-900',          text: 'text-tertiary dark:text-slate-500',         ring: 'ring-slate-200 dark:ring-slate-800' },
 }
 
 interface Props {

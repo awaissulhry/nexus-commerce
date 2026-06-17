@@ -184,7 +184,7 @@ export default function AssetTagPicker({
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-default bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-900">
         {current.map((tag) => (
           <span
             key={tag.id}
@@ -237,12 +237,12 @@ export default function AssetTagPicker({
           }
           className="flex-1 min-w-[120px] bg-transparent text-sm text-slate-900 placeholder-slate-400 focus:outline-none dark:text-slate-100 dark:placeholder-slate-500"
         />
-        {busy && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
+        {busy && <Loader2 className="w-3.5 h-3.5 animate-spin text-tertiary" />}
       </div>
       {open && (suggestions.length > 0 || input.trim()) && (
         <div
           role="listbox"
-          className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
+          className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded-md border border-default bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
         >
           {suggestions.map((s) => (
             <button
@@ -271,7 +271,7 @@ export default function AssetTagPicker({
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => void addByName(input)}
-                className="flex w-full items-center gap-2 border-t border-slate-200 px-3 py-1.5 text-left text-sm text-blue-600 hover:bg-slate-50 dark:border-slate-800 dark:text-blue-400 dark:hover:bg-slate-800"
+                className="flex w-full items-center gap-2 border-t border-default px-3 py-1.5 text-left text-sm text-blue-600 hover:bg-slate-50 dark:border-slate-800 dark:text-blue-400 dark:hover:bg-slate-800"
               >
                 <Plus className="w-3.5 h-3.5" />
                 {t('marketingContent.tagPicker.create', { name: input.trim() })}

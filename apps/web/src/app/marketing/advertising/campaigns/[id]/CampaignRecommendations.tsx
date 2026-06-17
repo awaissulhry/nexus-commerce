@@ -69,14 +69,14 @@ export function CampaignRecommendations({
     }
   }, [negate, negated])
 
-  if (insights == null) return <div className="mb-4 rounded-lg border border-slate-200 dark:border-slate-800 p-3 text-sm text-slate-400">Loading recommendations…</div>
+  if (insights == null) return <div className="mb-4 rounded-lg border border-default dark:border-slate-800 p-3 text-sm text-tertiary">Loading recommendations…</div>
   if (insights.length === 0) return null
 
   return (
     <div className="mb-4 space-y-2">
       <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-200">
         <Sparkles size={15} className="text-violet-500" /> Recommendations
-        <span className="text-xs font-normal text-slate-400">· last 30 days</span>
+        <span className="text-xs font-normal text-tertiary">· last 30 days</span>
       </div>
       {insights.map((ins, i) => {
         const sev = SEVERITY[ins.severity] ?? SEVERITY.info
@@ -88,7 +88,7 @@ export function CampaignRecommendations({
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{ins.title}</span>
-                  {ins.totalSpendCents > 0 && <span className="text-xs text-slate-400">{eur(ins.totalSpendCents)} at stake</span>}
+                  {ins.totalSpendCents > 0 && <span className="text-xs text-tertiary">{eur(ins.totalSpendCents)} at stake</span>}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{ins.description}</p>
 
@@ -98,7 +98,7 @@ export function CampaignRecommendations({
                       const done = negated.has(it.query)
                       return (
                         <div key={it.query} className="flex items-center justify-between gap-2 text-xs">
-                          <span className="truncate"><span className="font-medium text-slate-700 dark:text-slate-200">{it.query}</span> <span className="text-slate-400">· {it.clicks} clicks · {eurUnits(it.costEur)}</span></span>
+                          <span className="truncate"><span className="font-medium text-slate-700 dark:text-slate-200">{it.query}</span> <span className="text-tertiary">· {it.clicks} clicks · {eurUnits(it.costEur)}</span></span>
                           <button onClick={() => negate(it.query)} disabled={done || busy === it.query}
                             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border flex-shrink-0 ${done ? 'border-emerald-300 text-emerald-600 dark:border-emerald-800' : 'border-rose-300 text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:hover:bg-rose-950/40'} disabled:opacity-50`}>
                             {done ? <><Check size={11} /> Negated</> : busy === it.query ? 'Negating…' : '⊘ Negate'}

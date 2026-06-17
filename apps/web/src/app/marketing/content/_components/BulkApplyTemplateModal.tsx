@@ -171,7 +171,7 @@ export default function BulkApplyTemplateModal({
               {renderedRows.map((row) => (
                 <li
                   key={row.item.id}
-                  className="overflow-hidden rounded border border-slate-200 dark:border-slate-700"
+                  className="overflow-hidden rounded border border-default dark:border-slate-700"
                 >
                   <div className="relative aspect-square w-full bg-slate-100 dark:bg-slate-800">
                     {row.renderedUrl ? (

@@ -129,7 +129,7 @@ export function SegmentsClient({ initialSegments }: { initialSegments: Segment[]
         <button
           type="button"
           onClick={() => startTransition(() => router.refresh())}
-          className="p-1.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+          className="p-1.5 rounded text-tertiary hover:text-slate-700 dark:hover:text-slate-200"
         >
           <RefreshCw className="h-3.5 w-3.5" />
         </button>
@@ -137,10 +137,10 @@ export function SegmentsClient({ initialSegments }: { initialSegments: Segment[]
 
       {/* Segment cards */}
       {segments.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-6 py-10 text-center">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-6 py-10 text-center">
           <Users className="h-8 w-8 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
           <p className="text-sm text-slate-500">No segments yet.</p>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-tertiary mt-1">
             Click <strong>New segment</strong> to define your first customer cohort.
           </p>
         </div>
@@ -149,7 +149,7 @@ export function SegmentsClient({ initialSegments }: { initialSegments: Segment[]
           {segments.map((seg) => (
             <div
               key={seg.id}
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-4"
+              className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-4"
             >
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div>
@@ -170,7 +170,7 @@ export function SegmentsClient({ initialSegments }: { initialSegments: Segment[]
                     type="button"
                     onClick={() => deleteSegment(seg.id)}
                     disabled={deletingId === seg.id}
-                    className="p-1 rounded text-slate-400 hover:text-rose-600 disabled:opacity-40"
+                    className="p-1 rounded text-tertiary hover:text-rose-600 disabled:opacity-40"
                   >
                     {deletingId === seg.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                   </button>
@@ -190,20 +190,20 @@ export function SegmentsClient({ initialSegments }: { initialSegments: Segment[]
                   </span>
                 ))}
                 {seg.conditions.length === 0 && (
-                  <span className="text-xs text-slate-400 italic">No conditions — matches all customers</span>
+                  <span className="text-xs text-tertiary italic">No conditions — matches all customers</span>
                 )}
               </div>
 
               {/* Count + actions row */}
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-1.5">
-                  <Users className="h-3.5 w-3.5 text-slate-400" />
+                  <Users className="h-3.5 w-3.5 text-tertiary" />
                   <span className="text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
                     {seg.customerCount.toLocaleString()}
                   </span>
-                  <span className="text-xs text-slate-400">customers</span>
+                  <span className="text-xs text-tertiary">customers</span>
                   {seg.lastCountedAt && (
-                    <span className="text-[10px] text-slate-400">
+                    <span className="text-[10px] text-tertiary">
                       · counted {new Date(seg.lastCountedAt).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })}
                     </span>
                   )}

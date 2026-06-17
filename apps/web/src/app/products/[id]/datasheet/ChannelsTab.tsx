@@ -164,7 +164,7 @@ export default async function ChannelsTab({
 
   if (listings.length === 0) {
     return (
-      <div className="border border-slate-200 dark:border-slate-800 rounded p-6 text-center text-sm text-slate-500">
+      <div className="border border-default dark:border-slate-800 rounded p-6 text-center text-sm text-slate-500">
         <div className="font-medium text-slate-700 dark:text-slate-300">
           {t('products.datasheetHub.channels.empty.title')}
         </div>
@@ -447,7 +447,7 @@ function ChannelCard({
   const qScore = snapshot?.overallScore
   const qTone =
     qScore == null
-      ? 'text-slate-400'
+      ? 'text-tertiary'
       : qScore >= 80
         ? 'text-emerald-700 dark:text-emerald-400'
         : qScore >= 50
@@ -455,7 +455,7 @@ function ChannelCard({
           : 'text-red-700 dark:text-red-400'
 
   return (
-    <div className="border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900 p-3 space-y-2">
+    <div className="border border-default dark:border-slate-800 rounded bg-white dark:bg-slate-900 p-3 space-y-2">
       {/* Header — channel label + status + live link */}
       <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="min-w-0 flex-1">
@@ -479,7 +479,7 @@ function ChannelCard({
               href={liveUrl}
               target="_blank"
               rel="noopener"
-              className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="inline-flex items-center justify-center w-6 h-6 rounded text-tertiary hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
               title={t('products.datasheetHub.expansion.openLive')}
               aria-label={t('products.datasheetHub.expansion.openLive')}
             >
@@ -501,7 +501,7 @@ function ChannelCard({
             </span>
           ) : (
             <span
-              className="text-slate-400 italic"
+              className="text-tertiary italic"
               title={t('products.datasheetHub.channels.qualityNoSnapshot')}
             >
               {t('products.datasheetHub.channels.qualityNone')}
@@ -634,7 +634,7 @@ function ChannelCard({
       )}
 
       {/* Last-sync footer */}
-      <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-1.5">
+      <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 border-t border-subtle dark:border-slate-800 pt-1.5">
         <Clock className="w-3 h-3" />
         <span>
           {listing.lastSyncedAt

@@ -46,7 +46,7 @@ export default function ModuleEditor({
     return (
       <aside
         aria-label={t('aplus.builder.editorLabel')}
-        className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"
+        className="rounded-lg border border-default bg-white p-4 text-sm text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"
       >
         {t('aplus.builder.editorEmpty')}
       </aside>
@@ -63,9 +63,9 @@ export default function ModuleEditor({
   return (
     <aside
       aria-label={t('aplus.builder.editorLabel')}
-      className="flex flex-col rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+      className="flex flex-col rounded-lg border border-default bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
     >
-      <header className="border-b border-slate-200 px-3 py-2 dark:border-slate-800">
+      <header className="border-b border-default px-3 py-2 dark:border-slate-800">
         <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
           {spec?.label ?? module.type}
         </p>
@@ -75,7 +75,7 @@ export default function ModuleEditor({
       </header>
 
       {issues.length > 0 && (
-        <ul className="border-b border-slate-200 bg-amber-50 px-3 py-2 text-xs dark:border-slate-800 dark:bg-amber-950/30">
+        <ul className="border-b border-default bg-amber-50 px-3 py-2 text-xs dark:border-slate-800 dark:bg-amber-950/30">
           {issues.map((issue, idx) => (
             <li
               key={idx}
@@ -130,12 +130,12 @@ function FieldEditor({ field, value, onChange }: FieldEditorProps) {
         )}
       </span>
       {field.max && typeof value === 'string' && (
-        <span className="text-[10px] text-slate-400">
+        <span className="text-[10px] text-tertiary">
           {value.length}/{field.max}
         </span>
       )}
       {field.max && Array.isArray(value) && (
-        <span className="text-[10px] text-slate-400">
+        <span className="text-[10px] text-tertiary">
           {value.length}/{field.max}
         </span>
       )}
@@ -249,7 +249,7 @@ function FieldEditor({ field, value, onChange }: FieldEditorProps) {
                 type="button"
                 onClick={() => removeItem(idx)}
                 aria-label={t('aplus.builder.listRemove')}
-                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800 dark:hover:text-red-400"
+                className="rounded p-1 text-tertiary hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800 dark:hover:text-red-400"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -296,7 +296,7 @@ function FieldEditor({ field, value, onChange }: FieldEditorProps) {
           {list.map((item, idx) => (
             <li
               key={idx}
-              className="space-y-1 rounded-md border border-slate-200 p-2 dark:border-slate-700"
+              className="space-y-1 rounded-md border border-default p-2 dark:border-slate-700"
             >
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-mono text-slate-500">
@@ -306,7 +306,7 @@ function FieldEditor({ field, value, onChange }: FieldEditorProps) {
                   type="button"
                   onClick={() => removeItem(idx)}
                   aria-label={t('aplus.builder.listRemove')}
-                  className="rounded p-0.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+                  className="rounded p-0.5 text-tertiary hover:text-red-600 dark:hover:text-red-400"
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>
@@ -372,7 +372,7 @@ function FieldEditor({ field, value, onChange }: FieldEditorProps) {
           {list.map((item, idx) => (
             <li
               key={idx}
-              className="space-y-1 rounded-md border border-slate-200 p-2 dark:border-slate-700"
+              className="space-y-1 rounded-md border border-default p-2 dark:border-slate-700"
             >
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-mono text-slate-500">
@@ -382,7 +382,7 @@ function FieldEditor({ field, value, onChange }: FieldEditorProps) {
                   type="button"
                   onClick={() => removeItem(idx)}
                   aria-label={t('aplus.builder.listRemove')}
-                  className="rounded p-0.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+                  className="rounded p-0.5 text-tertiary hover:text-red-600 dark:hover:text-red-400"
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>

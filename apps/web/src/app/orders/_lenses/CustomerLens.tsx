@@ -82,7 +82,7 @@ export function CustomerLens() {
         <div className="flex-1 max-w-md relative">
           <Search
             size={12}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary"
           />
           <Input
             placeholder={t('orders.search.customerEmail')}
@@ -106,7 +106,7 @@ export function CustomerLens() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead className="bg-slate-50 border-b border-default">
                 <tr>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
                     {t('orders.table.header.customer')}
@@ -126,7 +126,7 @@ export function CustomerLens() {
                 {groups.map((g) => (
                   <tr
                     key={g.email}
-                    className="border-b border-slate-100 hover:bg-slate-50"
+                    className="border-b border-subtle hover:bg-slate-50"
                   >
                     <td className="px-3 py-2">
                       <Link

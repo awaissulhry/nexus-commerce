@@ -125,7 +125,7 @@ export default function ProductEditForm({ product }: ProductEditFormProps) {
       )}
 
       {/* Basic Information */}
-      <div className="bg-white rounded-lg border border-slate-200 p-6">
+      <div className="bg-white rounded-lg border border-default p-6">
         <h2 className="text-lg font-semibold text-slate-900 mb-4">
           Basic Information
         </h2>
@@ -200,7 +200,7 @@ export default function ProductEditForm({ product }: ProductEditFormProps) {
 
       {/* Category Attributes */}
       {attributeKeys.length > 0 && (
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
+        <div className="bg-white rounded-lg border border-default p-6">
           <h2 className="text-lg font-semibold text-slate-900 mb-4">
             Category Attributes ({product.productType})
           </h2>
@@ -253,7 +253,7 @@ export default function ProductEditForm({ product }: ProductEditFormProps) {
           disabled={isSubmitting || success}
           className={`px-6 py-2 rounded-lg font-medium transition-colors ${
             isSubmitting || success
-              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+              ? "bg-slate-100 text-tertiary cursor-not-allowed"
               : "bg-blue-600 text-white hover:bg-blue-700"
           }`}
         >

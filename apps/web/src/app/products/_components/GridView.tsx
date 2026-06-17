@@ -261,7 +261,7 @@ function DraggableHandle({
       className={`px-1 py-2 flex items-center justify-center touch-none select-none transition-colors ${rowBg} ${
         isDragging
           ? 'cursor-grabbing text-blue-500'
-          : 'cursor-grab text-slate-300 hover:text-slate-500 dark:text-slate-600 dark:hover:text-slate-400'
+          : 'cursor-grab text-slate-300 hover:text-slate-500 dark:text-slate-600 dark:hover:text-tertiary'
       }`}
       style={{ width: 28, minWidth: 28 }}
       role="cell"
@@ -392,7 +392,7 @@ function RowContextMenuContent({
   )
   return (
     <>
-      <div className="px-2.5 py-1.5 text-xs uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-100 mb-1 truncate dark:text-slate-400 dark:border-slate-800">
+      <div className="px-2.5 py-1.5 text-xs uppercase tracking-wider text-slate-500 font-semibold border-b border-subtle mb-1 truncate dark:text-slate-400 dark:border-slate-800">
         {product.sku}
       </div>
       {item(<Eye size={14} />, 'Open in drawer', () => {
@@ -409,7 +409,7 @@ function RowContextMenuContent({
       {item(<Sparkles size={14} />, 'Open list wizard', () => {
         window.location.href = `/products/${product.id}/list-wizard`
       })}
-      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+      <div className="my-1 border-t border-subtle dark:border-slate-800" />
       {product.status !== 'ACTIVE' &&
         item(<CheckCircle2 size={14} />, 'Activate', () => flip('ACTIVE'))}
       {product.status !== 'DRAFT' &&
@@ -418,7 +418,7 @@ function RowContextMenuContent({
         item(<XCircle size={14} />, 'Set to inactive', () =>
           flip('INACTIVE'),
         )}
-      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+      <div className="my-1 border-t border-subtle dark:border-slate-800" />
       {item(<Copy size={14} />, 'Duplicate', duplicate)}
     </>
   )
@@ -531,7 +531,7 @@ const EDITABLE_FIELDS: Record<string, FieldMeta> = {
       <span className="text-md text-slate-900">
         <Highlight text={p.name} query={q} />
         {p.isParent && (
-          <Layers size={10} className="inline ml-1 text-slate-400" />
+          <Layers size={10} className="inline ml-1 text-tertiary" />
         )}
       </span>
     ),
@@ -1192,7 +1192,7 @@ const ProductCell = memo(function ProductCell({
         p.status === 'ACTIVE'
           ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
           : p.status === 'INACTIVE'
-          ? 'bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+          ? 'bg-slate-100 text-slate-500 border border-default dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
           : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
       if (isParentRow) {
         return (
@@ -1286,7 +1286,7 @@ const ProductCell = memo(function ProductCell({
             <span className="text-sm font-medium text-slate-800 dark:text-slate-100 tabular-nums">
               {formatted}
             </span>
-            <Pencil size={10} className="text-slate-400 flex-shrink-0" />
+            <Pencil size={10} className="text-tertiary flex-shrink-0" />
           </div>
           <div className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 size={10} strokeWidth={2.5} />
@@ -1300,7 +1300,7 @@ const ProductCell = memo(function ProductCell({
           </Link>
         </div>
       ) : (
-        <span className="text-sm text-slate-400 dark:text-slate-500">—</span>
+        <span className="text-sm text-tertiary dark:text-slate-500">—</span>
       )
     }
 
@@ -1366,7 +1366,7 @@ const ProductCell = memo(function ProductCell({
       if (!p.family) {
         return (
           <span
-            className="text-xs italic text-slate-400 dark:text-slate-500"
+            className="text-xs italic text-tertiary dark:text-slate-500"
             title={t('products.grid.noFamily')}
           >
             —
@@ -1390,7 +1390,7 @@ const ProductCell = memo(function ProductCell({
       if (!p.workflowStage) {
         return (
           <span
-            className="text-xs italic text-slate-400 dark:text-slate-500"
+            className="text-xs italic text-tertiary dark:text-slate-500"
             title={t('products.grid.noWorkflow')}
           >
             —
@@ -1425,7 +1425,7 @@ const ProductCell = memo(function ProductCell({
       return (
         <div className="flex items-center gap-1 flex-wrap">
           <span
-            className="text-xs text-slate-400 mr-0.5 tabular-nums"
+            className="text-xs text-tertiary mr-0.5 tabular-nums"
             title={t('products.grid.coverageTooltip', { covered: coveredCount, total: ALL_CHANNELS.length })}
           >
             {coveredCount}/{ALL_CHANNELS.length}
@@ -1439,8 +1439,8 @@ const ProductCell = memo(function ProductCell({
                   : c.live > 0
                     ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
                     : c.draft > 0
-                      ? 'border-slate-200 bg-slate-50 text-slate-600'
-                      : 'border-slate-200 bg-white text-slate-400'
+                      ? 'border-default bg-slate-50 text-slate-600'
+                      : 'border-default bg-white text-tertiary'
               return (
                 <Link
                   key={ch}
@@ -1458,7 +1458,7 @@ const ProductCell = memo(function ProductCell({
                 key={ch}
                 href={`/products/${p.id}/list-wizard?channel=${ch}`}
                 title={t('products.grid.notListedOn', { channel: ch })}
-                className="inline-flex items-center gap-0.5 px-1.5 h-5 text-xs font-mono border border-dashed border-slate-300 bg-white text-slate-400 rounded hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50"
+                className="inline-flex items-center gap-0.5 px-1.5 h-5 text-xs font-mono border border-dashed border-slate-300 bg-white text-tertiary rounded hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50"
               >
                 {ch.slice(0, 3)}
                 <span className="text-xs leading-none">+</span>
@@ -1566,7 +1566,7 @@ const ProductCell = memo(function ProductCell({
             // which collapsed the desktop hit zone to 4×4 (visible icon
             // mismatched click area). Desktop now uses h-5/w-5; mobile
             // expands to 44×44 via the standard pattern.
-            className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 sm:h-5 sm:w-5 inline-flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded text-xs"
+            className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 sm:h-5 sm:w-5 inline-flex items-center justify-center text-tertiary hover:text-blue-600 hover:bg-blue-50 rounded text-xs"
           >
             +
           </button>
@@ -1657,7 +1657,7 @@ const ProductCell = memo(function ProductCell({
       }
       if (lh.score === null || lh.total === 0) {
         return (
-          <span className="text-xs italic text-slate-400 dark:text-slate-500">
+          <span className="text-xs italic text-tertiary dark:text-slate-500">
             {t('products.grid.notListed')}
           </span>
         )
@@ -1683,7 +1683,7 @@ const ProductCell = memo(function ProductCell({
           <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded overflow-hidden">
             <div className={`h-full ${hTone}`} style={{ width: `${hScore}%` }} />
           </div>
-          <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
+          <span className="text-[11px] text-tertiary dark:text-slate-500 tabular-nums">
             {lh.ready}/{lh.total}
           </span>
         </div>
@@ -1703,7 +1703,7 @@ const ProductCell = memo(function ProductCell({
       if (fc.score === -1) {
         return (
           <span
-            className="text-xs italic text-slate-400 dark:text-slate-500"
+            className="text-xs italic text-tertiary dark:text-slate-500"
             title={t('products.grid.notFamilyScoreable')}
           >
             —
@@ -1735,7 +1735,7 @@ const ProductCell = memo(function ProductCell({
       // to SUCCEEDED triggers a refetch within ~250ms.
       const q = p.syncQueue
       if (!q || q.mostUrgentStatus == null) {
-        return <span className="text-xs text-slate-400">—</span>
+        return <span className="text-xs text-tertiary">—</span>
       }
       const ch = q.mostUrgentChannel?.slice(0, 3) ?? '???'
       if (q.mostUrgentStatus === 'DEAD') {
@@ -1779,7 +1779,7 @@ const ProductCell = memo(function ProductCell({
       if (q.syncedAt) {
         const ageMs = Date.now() - new Date(q.syncedAt).getTime()
         if (ageMs > 24 * 60 * 60_000) {
-          return <span className="text-xs text-slate-400">—</span>
+          return <span className="text-xs text-tertiary">—</span>
         }
         const ageMin = Math.max(1, Math.floor(ageMs / 60_000))
         const label =
@@ -1797,7 +1797,7 @@ const ProductCell = memo(function ProductCell({
           </span>
         )
       }
-      return <span className="text-xs text-slate-400">—</span>
+      return <span className="text-xs text-tertiary">—</span>
     }
     case 'updated':
       return (

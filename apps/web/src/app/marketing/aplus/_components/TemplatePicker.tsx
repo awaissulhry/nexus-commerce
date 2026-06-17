@@ -116,7 +116,7 @@ export default function TemplatePicker({
                         className={`flex w-full items-start gap-2 rounded-md border p-2 text-left transition-colors ${
                           selectedId === tpl.id
                             ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-950/40'
-                            : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
+                            : 'border-default hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
                         }`}
                       >
                         <Sparkles className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-500" />
@@ -127,7 +127,7 @@ export default function TemplatePicker({
                           <p className="text-xs text-slate-500 dark:text-slate-400">
                             {tpl.description}
                           </p>
-                          <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-slate-400">
+                          <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-tertiary">
                             <Layers className="w-3 h-3" />
                             {tpl.modules.length}{' '}
                             {t('aplus.templates.modules')}
@@ -141,7 +141,7 @@ export default function TemplatePicker({
             ))}
           </div>
 
-          <aside className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+          <aside className="space-y-3 rounded-md border border-default bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
             {selected ? (
               <>
                 <div>

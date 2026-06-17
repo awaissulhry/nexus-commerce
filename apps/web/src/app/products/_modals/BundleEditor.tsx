@@ -126,7 +126,7 @@ export default function BundleEditor({
     // Modal's default `title` prop renders text-only; header={null}
     // keeps the existing sticky-top header with the close X.
     <Modal open onClose={onClose} placement="centered" size="3xl" header={null}>
-        <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10 dark:bg-slate-900 dark:border-slate-800">
+        <header className="px-5 py-3 border-b border-default dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10 dark:bg-slate-900 dark:border-slate-800">
           <div className="text-lg font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2 dark:text-slate-100"><Package size={16} /> Bundles</div>
           <IconButton onClick={onClose} aria-label="Close" size="md" className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"><X size={16} /></IconButton>
         </header>
@@ -148,7 +148,7 @@ export default function BundleEditor({
               ) : (
                 <div className="space-y-2">
                   {bundles.map((b) => (
-                    <div key={b.id} className="border border-slate-200 dark:border-slate-700 rounded p-3">
+                    <div key={b.id} className="border border-default dark:border-slate-700 rounded p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="text-md font-semibold text-slate-900 dark:text-slate-100">{b.name}</div>
@@ -167,7 +167,7 @@ export default function BundleEditor({
                           onClick={() => deleteBundle(b.id)}
                           aria-label={`Delete bundle ${b.name}`}
                           size="md"
-                          className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-slate-400 dark:text-slate-500 hover:text-rose-600"
+                          className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-tertiary dark:text-slate-500 hover:text-rose-600"
                         >
                           <Trash2 size={14} />
                         </IconButton>
@@ -186,7 +186,7 @@ export default function BundleEditor({
 
               <div>
                 <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Bundle name</label>
-                <input type="text" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="w-full h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded mt-1" placeholder="e.g. Starter kit — Jacket + Helmet + Gloves" />
+                <input type="text" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="w-full h-8 px-2 text-md border border-default dark:border-slate-700 rounded mt-1" placeholder="e.g. Starter kit — Jacket + Helmet + Gloves" />
               </div>
 
               <div>
@@ -198,11 +198,11 @@ export default function BundleEditor({
                   </div>
                 ) : (
                   <>
-                    <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search SKU or name…" className="w-full h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded mt-1" />
+                    <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search SKU or name…" className="w-full h-8 px-2 text-md border border-default dark:border-slate-700 rounded mt-1" />
                     {searchResults.length > 0 && (
-                      <div className="mt-1 border border-slate-200 dark:border-slate-700 rounded max-h-40 overflow-y-auto">
+                      <div className="mt-1 border border-default dark:border-slate-700 rounded max-h-40 overflow-y-auto">
                         {searchResults.map((p) => (
-                          <button key={p.id} onClick={() => { setDraft({ ...draft, wrapperProductId: p.id, wrapperName: `${p.sku} — ${p.name}` }); setSearch('') }} className="w-full text-left px-2 py-1.5 text-base hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                          <button key={p.id} onClick={() => { setDraft({ ...draft, wrapperProductId: p.id, wrapperName: `${p.sku} — ${p.name}` }); setSearch('') }} className="w-full text-left px-2 py-1.5 text-base hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-subtle dark:border-slate-800 last:border-0">
                             <div className="font-mono text-slate-700 dark:text-slate-300">{p.sku}</div>
                             <div className="text-slate-500 dark:text-slate-400">{p.name}</div>
                           </button>
@@ -220,7 +220,7 @@ export default function BundleEditor({
                     {draft.components.map((c, i) => (
                       <li key={i} className="flex items-center gap-2 px-2 py-1 bg-slate-50 dark:bg-slate-800 rounded">
                         <span className="text-base font-mono flex-1 truncate">{c.sku}</span>
-                        <input type="number" min="1" value={c.quantity} onChange={(e) => setDraft({ ...draft, components: draft.components.map((cc, j) => j === i ? { ...cc, quantity: Number(e.target.value) || 1 } : cc) })} className="w-16 h-7 px-1 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-base" />
+                        <input type="number" min="1" value={c.quantity} onChange={(e) => setDraft({ ...draft, components: draft.components.map((cc, j) => j === i ? { ...cc, quantity: Number(e.target.value) || 1 } : cc) })} className="w-16 h-7 px-1 text-right tabular-nums border border-default dark:border-slate-700 rounded text-base" />
                         <IconButton
                           onClick={() => setDraft({ ...draft, components: draft.components.filter((_, j) => j !== i) })}
                           aria-label={`Remove ${c.sku} from bundle`}
@@ -234,10 +234,10 @@ export default function BundleEditor({
                   </ul>
                 )}
                 {searchResults.length > 0 && search && !draft.wrapperProductId === false && (
-                  <div className="mt-1 border border-slate-200 dark:border-slate-700 rounded max-h-40 overflow-y-auto">
+                  <div className="mt-1 border border-default dark:border-slate-700 rounded max-h-40 overflow-y-auto">
                     <div className="px-2 py-1 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800">Add as component</div>
                     {searchResults.map((p) => (
-                      <button key={`comp-${p.id}`} onClick={() => { setDraft({ ...draft, components: [...draft.components, { productId: p.id, sku: p.sku, name: p.name, quantity: 1 }] }); setSearch('') }} className="w-full text-left px-2 py-1.5 text-base hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                      <button key={`comp-${p.id}`} onClick={() => { setDraft({ ...draft, components: [...draft.components, { productId: p.id, sku: p.sku, name: p.name, quantity: 1 }] }); setSearch('') }} className="w-full text-left px-2 py-1.5 text-base hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-subtle dark:border-slate-800 last:border-0">
                         <div className="font-mono text-slate-700 dark:text-slate-300">{p.sku}</div>
                       </button>
                     ))}

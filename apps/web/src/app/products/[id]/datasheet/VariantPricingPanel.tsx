@@ -157,9 +157,9 @@ export default function VariantPricingPanel({
           )}
         </div>
       </div>
-      <div className="border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900 overflow-x-auto">
+      <div className="border border-default dark:border-slate-800 rounded bg-white dark:bg-slate-900 overflow-x-auto">
         <table className="w-full text-xs">
-          <thead className="bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800">
+          <thead className="bg-slate-50 dark:bg-slate-800/40 border-b border-default dark:border-slate-800">
             <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <th className="py-2 px-3 font-medium sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/40">
                 {t('products.col.sku')}
@@ -188,7 +188,7 @@ export default function VariantPricingPanel({
               return (
                 <tr
                   key={v.id}
-                  className="border-b border-slate-100 dark:border-slate-800 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-800/30"
+                  className="border-b border-subtle dark:border-slate-800 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-800/30"
                 >
                   <td className="py-2 px-3 sticky left-0 z-10 bg-white dark:bg-slate-900 align-middle">
                     <Link
@@ -350,7 +350,7 @@ function ChannelChip({
         ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300'
         : chip.isOverride
           ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300'
-          : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'
+          : 'border-default bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'
 
   const tooltipParts = [chip.label, chip.priceDisplay]
   if (chip.qtyDisplay !== '—')

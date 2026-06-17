@@ -55,7 +55,7 @@ function DraggableValueList({ values, onReorder }: { values: string[]; onReorder
             draggingIdx === i ? 'opacity-40' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50')}
         >
           <GripVertical className="w-3 h-3 text-slate-300 dark:text-slate-600 flex-shrink-0" />
-          <span className="text-xs text-slate-700 dark:text-slate-300 flex-1 truncate">{val || <span className="italic text-slate-400">empty</span>}</span>
+          <span className="text-xs text-slate-700 dark:text-slate-300 flex-1 truncate">{val || <span className="italic text-tertiary">empty</span>}</span>
           <span className="text-[9px] font-mono text-slate-300 dark:text-slate-600 flex-shrink-0">#{i + 1}</span>
         </div>
       ))}
@@ -120,20 +120,20 @@ export default function MatrixSortPanel({ fields, valuesFor, initial, onApply, o
 
   return (
     <div ref={panelRef}
-      className="absolute left-0 top-full mt-1 z-50 w-[430px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden">
+      className="absolute left-0 top-full mt-1 z-50 w-[430px] bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-xl shadow-xl overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-subtle dark:border-slate-800 flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Sort variants</div>
-          <div className="text-xs text-slate-400">Levels applied top → bottom. Drag ⠿ to reprioritize.</div>
+          <div className="text-xs text-tertiary">Levels applied top → bottom. Drag ⠿ to reprioritize.</div>
         </div>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+        <button onClick={onClose} className="text-tertiary hover:text-slate-600"><X className="w-4 h-4" /></button>
       </div>
 
       {/* Levels */}
       <div className="max-h-[60vh] overflow-y-auto">
         {levels.length === 0 && (
-          <p className="px-4 py-6 text-center text-xs text-slate-400 italic">No sort levels — add one below.</p>
+          <p className="px-4 py-6 text-center text-xs text-tertiary italic">No sort levels — add one below.</p>
         )}
         {levels.map((level, i) => (
           <div
@@ -143,15 +143,15 @@ export default function MatrixSortPanel({ fields, valuesFor, initial, onApply, o
             onDragEnd={() => setDraggingLevelId(null)}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => { e.preventDefault(); if (draggingLevelId && draggingLevelId !== level.id) reorderLevels(draggingLevelId, level.id); setDraggingLevelId(null) }}
-            className={cn('border-b border-slate-100 dark:border-slate-800 last:border-0', draggingLevelId === level.id && 'opacity-40')}
+            className={cn('border-b border-subtle dark:border-slate-800 last:border-0', draggingLevelId === level.id && 'opacity-40')}
           >
             <div className="flex items-center gap-2 px-3 py-2.5">
               <GripVertical className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 cursor-grab flex-shrink-0" />
-              <span className="text-[10px] font-mono text-slate-400 w-3 text-center flex-shrink-0">{i + 1}</span>
+              <span className="text-[10px] font-mono text-tertiary w-3 text-center flex-shrink-0">{i + 1}</span>
               <select
                 value={level.colId}
                 onChange={(e) => changeCol(level.id, e.target.value)}
-                className="flex-1 min-w-0 text-xs border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="flex-1 min-w-0 text-xs border border-default dark:border-slate-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 {grouped.map((g) => (
                   <optgroup key={g.group} label={g.group}>
@@ -159,11 +159,11 @@ export default function MatrixSortPanel({ fields, valuesFor, initial, onApply, o
                   </optgroup>
                 ))}
               </select>
-              <div className="flex border border-slate-200 dark:border-slate-700 rounded overflow-hidden flex-shrink-0">
+              <div className="flex border border-default dark:border-slate-700 rounded overflow-hidden flex-shrink-0">
                 {(['asc', 'desc', 'custom'] as const).map((m, mi) => (
                   <button key={m} type="button" onClick={() => changeMode(level.id, m)}
                     className={cn('text-[10px] px-1.5 py-0.5 transition-colors',
-                      mi > 0 && 'border-l border-slate-200 dark:border-slate-700',
+                      mi > 0 && 'border-l border-default dark:border-slate-700',
                       level.mode === m ? 'bg-blue-500 text-white' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800')}>
                     {m === 'asc' ? 'A→Z' : m === 'desc' ? 'Z→A' : 'Custom'}
                   </button>
@@ -175,13 +175,13 @@ export default function MatrixSortPanel({ fields, valuesFor, initial, onApply, o
               </button>
             </div>
             {level.mode === 'custom' && (
-              <div className="mx-3 mb-2.5 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <div className="px-2 py-1 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <div className="mx-3 mb-2.5 rounded-lg border border-default dark:border-slate-700 overflow-hidden">
+                <div className="px-2 py-1 bg-slate-50 dark:bg-slate-800/60 border-b border-default dark:border-slate-700 flex items-center justify-between">
                   <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">Custom order — drag to arrange</span>
-                  <span className="text-[10px] text-slate-400 tabular-nums">{level.customOrder.length} values</span>
+                  <span className="text-[10px] text-tertiary tabular-nums">{level.customOrder.length} values</span>
                 </div>
                 {level.customOrder.length === 0
-                  ? <p className="px-3 py-2 text-xs text-slate-400 italic text-center">No values in current rows for this column.</p>
+                  ? <p className="px-3 py-2 text-xs text-tertiary italic text-center">No values in current rows for this column.</p>
                   : <DraggableValueList values={level.customOrder} onReorder={(from, to) => reorderValues(level.id, from, to)} />}
               </div>
             )}
@@ -190,7 +190,7 @@ export default function MatrixSortPanel({ fields, valuesFor, initial, onApply, o
       </div>
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+      <div className="px-4 py-3 border-t border-subtle dark:border-slate-800 flex items-center gap-2">
         <button type="button" onClick={addLevel} disabled={fields.length === 0}
           className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 font-medium disabled:opacity-40">
           + Add sort level

@@ -103,7 +103,7 @@ export default function FilterDropdown({
           'inline-flex items-center gap-1.5 h-7 px-2 text-sm border rounded-md transition-colors',
           activeCount > 0
             ? 'border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100'
-            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+            : 'border-default bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900',
         )}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -119,10 +119,10 @@ export default function FilterDropdown({
       {open && (
         <div
           ref={panelRef}
-          className="absolute right-0 top-full mt-1 w-80 max-h-[80vh] overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg z-30"
+          className="absolute right-0 top-full mt-1 w-80 max-h-[80vh] overflow-y-auto bg-white border border-default rounded-lg shadow-lg z-30"
           role="dialog"
         >
-          <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white">
+          <div className="px-3 py-2 border-b border-default flex items-center justify-between sticky top-0 bg-white">
             <span className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
               Filters
             </span>
@@ -130,7 +130,7 @@ export default function FilterDropdown({
               type="button"
               onClick={onReset}
               disabled={activeCount === 0}
-              className="text-sm text-blue-700 hover:text-blue-900 disabled:text-slate-400 disabled:cursor-default"
+              className="text-sm text-blue-700 hover:text-blue-900 disabled:text-tertiary disabled:cursor-default"
             >
               Reset all
             </button>

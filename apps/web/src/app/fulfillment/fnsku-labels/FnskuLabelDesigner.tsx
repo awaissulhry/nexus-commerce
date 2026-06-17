@@ -632,7 +632,7 @@ export default function FnskuLabelDesigner() {
             1. left: nav + title + shipment chip
             2. center: destination + status chips (module warning, label count)
             3. right: action cluster (fill, exports) */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 flex-wrap">
+      <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border-b border-default dark:border-slate-800 shrink-0 flex-wrap">
         {/* ── Zone 1: nav + title ── */}
         <button
           onClick={() => window.close()}
@@ -726,7 +726,7 @@ export default function FnskuLabelDesigner() {
               max={Math.max(1, Math.floor(MAX_LABELS_PER_PDF / Math.max(1, labelsPerSheet)))}
               value={fillSheetsN}
               onChange={e => setFillSheetsN(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-8 h-5 px-1 text-xs text-center font-mono tabular-nums rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              className="w-8 h-5 px-1 text-xs text-center font-mono tabular-nums rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500"
               aria-label="Number of A4 sheets to fill"
             />
             <button
@@ -826,7 +826,7 @@ export default function FnskuLabelDesigner() {
         {/* Center: preview */}
         <div className="flex-1 flex flex-col items-center justify-center p-6 overflow-auto">
           {items.length === 0 ? (
-            <div className="text-center text-slate-400">
+            <div className="text-center text-tertiary">
               <p className="text-lg font-medium mb-1">No SKUs added yet</p>
               <p className="text-sm">Search for products in the left panel</p>
             </div>
@@ -879,12 +879,12 @@ export default function FnskuLabelDesigner() {
           onClick={() => setShortcutsOpen(false)}
         >
           <div
-            className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl"
+            className="w-full max-w-md bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
-            <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div className="px-5 py-3 border-b border-default dark:border-slate-800 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Keyboard shortcuts</h3>
-              <button onClick={() => setShortcutsOpen(false)} aria-label="Close" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+              <button onClick={() => setShortcutsOpen(false)} aria-label="Close" className="text-tertiary hover:text-slate-600 dark:hover:text-slate-200">
                 <XIcon size={16} />
               </button>
             </div>
@@ -909,14 +909,14 @@ export default function FnskuLabelDesigner() {
                 ]},
               ].map(section => (
                 <div key={section.group}>
-                  <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">{section.group}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-tertiary mb-1">{section.group}</div>
                   <ul className="space-y-1">
                     {section.items.map(item => (
                       <li key={item.label} className="flex items-center justify-between gap-3 text-xs">
                         <span className="text-slate-700 dark:text-slate-300">{item.label}</span>
                         <span className="flex gap-1">
                           {item.keys.map(k => (
-                            <kbd key={k} className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">{k}</kbd>
+                            <kbd key={k} className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-100 dark:bg-slate-800 border border-default dark:border-slate-700 text-slate-600 dark:text-slate-400">{k}</kbd>
                           ))}
                         </span>
                       </li>

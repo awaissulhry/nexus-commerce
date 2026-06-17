@@ -248,10 +248,10 @@ export function TemplateLibrary(props: TemplateLibraryProps) {
       onClick={onClose}
     >
       <div
-        className="bg-white border border-slate-200 rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden"
+        className="bg-white border border-default rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-default flex items-center justify-between">
           <div className="inline-flex items-center gap-2 text-base font-semibold text-slate-700">
             <Sparkles className="w-4 h-4 text-amber-500" />
             Templates
@@ -266,7 +266,7 @@ export function TemplateLibrary(props: TemplateLibraryProps) {
           </button>
         </div>
 
-        <div className="px-4 py-2 border-b border-slate-200 flex items-center gap-2">
+        <div className="px-4 py-2 border-b border-default flex items-center gap-2">
           <button
             type="button"
             onClick={() => setActiveTab('browse')}
@@ -308,15 +308,15 @@ export function TemplateLibrary(props: TemplateLibraryProps) {
 
         {activeTab === 'browse' && (
           <>
-            <div className="px-4 py-2 border-b border-slate-200">
+            <div className="px-4 py-2 border-b border-default">
               <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-tertiary" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search templates…"
-                  className="w-full h-7 pl-7 pr-2 text-md border border-slate-200 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full h-7 pl-7 pr-2 text-md border border-default rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -333,7 +333,7 @@ export function TemplateLibrary(props: TemplateLibraryProps) {
                 </div>
               ) : (
                 Array.from(grouped.entries()).map(([cat, list]) => (
-                  <div key={cat} className="border-b border-slate-100 last:border-0">
+                  <div key={cat} className="border-b border-subtle last:border-0">
                     <div className="px-4 py-1.5 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
                       {CATEGORY_LABELS[cat] ?? cat}
                     </div>
@@ -357,7 +357,7 @@ export function TemplateLibrary(props: TemplateLibraryProps) {
                                 aria-label="Built-in template"
                               />
                             )}
-                            <span className="text-xs text-slate-400 font-mono uppercase tracking-wide flex-shrink-0">
+                            <span className="text-xs text-tertiary font-mono uppercase tracking-wide flex-shrink-0">
                               {t.actionType.replace(/_/g, ' ')}
                             </span>
                           </div>
@@ -367,7 +367,7 @@ export function TemplateLibrary(props: TemplateLibraryProps) {
                             </div>
                           )}
                           {t.usageCount > 0 && (
-                            <div className="text-[10px] text-slate-400 mt-0.5 tabular-nums">
+                            <div className="text-[10px] text-tertiary mt-0.5 tabular-nums">
                               Used {t.usageCount} time
                               {t.usageCount === 1 ? '' : 's'}
                               {t.lastUsedAt &&
@@ -419,7 +419,7 @@ export function TemplateLibrary(props: TemplateLibraryProps) {
                 value={saveName}
                 onChange={(e) => setSaveName(e.target.value)}
                 placeholder="Spring sale 5%"
-                className="w-full h-8 px-2 text-sm border border-slate-200 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full h-8 px-2 text-sm border border-default rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </label>
             <label className="block">
@@ -431,7 +431,7 @@ export function TemplateLibrary(props: TemplateLibraryProps) {
                 value={saveDescription}
                 onChange={(e) => setSaveDescription(e.target.value)}
                 placeholder="What this template does"
-                className="w-full h-8 px-2 text-sm border border-slate-200 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full h-8 px-2 text-sm border border-default rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </label>
             <label className="block">
@@ -441,7 +441,7 @@ export function TemplateLibrary(props: TemplateLibraryProps) {
               <select
                 value={saveCategory}
                 onChange={(e) => setSaveCategory(e.target.value)}
-                className="w-full h-8 px-2 text-sm border border-slate-200 rounded bg-white"
+                className="w-full h-8 px-2 text-sm border border-default rounded bg-white"
               >
                 <option value="">(none)</option>
                 {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
@@ -451,7 +451,7 @@ export function TemplateLibrary(props: TemplateLibraryProps) {
                 ))}
               </select>
             </label>
-            <div className="bg-slate-50 border border-slate-200 rounded p-2 text-xs">
+            <div className="bg-slate-50 border border-default rounded p-2 text-xs">
               <div className="font-medium text-slate-700 mb-1">
                 Captured operation
               </div>

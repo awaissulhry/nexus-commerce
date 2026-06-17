@@ -217,7 +217,7 @@ export default function ContentHubClient({
   return (
     <div className="space-y-4">
       {/* Sub-navigation */}
-      <nav className="border-b border-slate-200 dark:border-slate-800">
+      <nav className="border-b border-default dark:border-slate-800">
         <ul className="flex items-center gap-1 -mb-px">
           {contentTabs.map((tab) => {
             const active = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href)
@@ -273,7 +273,7 @@ export default function ContentHubClient({
       <div className="flex items-center justify-end gap-2">
         <a
           href="/marketing/content/analytics"
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-600"
+          className="inline-flex items-center gap-1.5 rounded-md border border-default bg-white px-2 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-600"
         >
           <BarChart3 className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
           {t('marketingContent.viewAnalytics')}

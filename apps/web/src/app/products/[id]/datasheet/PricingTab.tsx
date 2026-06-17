@@ -133,7 +133,7 @@ export default async function PricingTab({
 
   if (listings.length === 0) {
     return (
-      <div className="border border-slate-200 dark:border-slate-800 rounded p-6 text-center text-sm text-slate-500">
+      <div className="border border-default dark:border-slate-800 rounded p-6 text-center text-sm text-slate-500">
         <div className="font-medium text-slate-700 dark:text-slate-300">
           {t('products.datasheetHub.pricing.tab.empty.title')}
         </div>
@@ -189,9 +189,9 @@ export default async function PricingTab({
         </div>
       </div>
 
-      <div className="border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900 overflow-x-auto">
+      <div className="border border-default dark:border-slate-800 rounded bg-white dark:bg-slate-900 overflow-x-auto">
         <table className="w-full text-xs">
-          <thead className="bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800">
+          <thead className="bg-slate-50 dark:bg-slate-800/40 border-b border-default dark:border-slate-800">
             <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <th className="py-2 px-3 font-medium sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/40 min-w-[140px]">
                 {t('products.datasheetHub.pricing.tab.col.market')}
@@ -259,7 +259,7 @@ export default async function PricingTab({
                 <tr
                   key={l.id}
                   className={
-                    'border-b border-slate-100 dark:border-slate-800 last:border-b-0 ' +
+                    'border-b border-subtle dark:border-slate-800 last:border-b-0 ' +
                     (inactive ? 'opacity-60' : '')
                   }
                 >
@@ -339,7 +339,7 @@ export default async function PricingTab({
                       </span>
                     )}
                     {l.competitorFetchedAt && (
-                      <span className="block text-[10px] text-slate-400">
+                      <span className="block text-[10px] text-tertiary">
                         {relAge(l.competitorFetchedAt)}
                       </span>
                     )}
@@ -371,7 +371,7 @@ export default async function PricingTab({
                       <span className="text-slate-300">—</span>
                     )}
                     {l.feeFetchedAt && (
-                      <span className="block text-[10px] text-slate-400">
+                      <span className="block text-[10px] text-tertiary">
                         {relAge(l.feeFetchedAt)}
                       </span>
                     )}

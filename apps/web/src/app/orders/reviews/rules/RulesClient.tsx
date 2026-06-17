@@ -331,7 +331,7 @@ export default function RulesClient() {
           <Card noPadding>
             <div className="overflow-x-auto">
               <table className="w-full text-md">
-                <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                <thead className="bg-slate-50 dark:bg-slate-800 border-b border-default dark:border-slate-700">
                   <tr>
                     <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 dark:text-slate-300">Name</th>
                     <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 dark:text-slate-300">Scope</th>
@@ -343,7 +343,7 @@ export default function RulesClient() {
                 </thead>
                 <tbody>
                   {rules.map((r) => (
-                    <tr key={r.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
+                    <tr key={r.id} className="border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
                       <td className="px-3 py-2">
                         <div className="text-md font-medium text-slate-900 dark:text-slate-100">{r.name}</div>
                         {r.notes && <div className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-md">{r.notes}</div>}
@@ -358,7 +358,7 @@ export default function RulesClient() {
                           {r.exclusions.map((e) => (
                             <span key={e} className="text-xs font-mono bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 px-1.5 py-0.5 rounded">{e}</span>
                           ))}
-                          {r.exclusions.length === 0 && <span className="text-xs text-slate-400 dark:text-slate-500">none</span>}
+                          {r.exclusions.length === 0 && <span className="text-xs text-tertiary dark:text-slate-500">none</span>}
                         </div>
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700 dark:text-slate-300">{r.requestCount}</td>
@@ -555,13 +555,13 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
 
           <div>
             <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Name</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Amazon IT — safe 7d" className="w-full h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded mt-1" />
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Amazon IT — safe 7d" className="w-full h-8 px-2 text-md border border-default dark:border-slate-700 rounded mt-1" />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Scope</label>
-              <select value={scope} onChange={(e) => setScope(e.target.value)} className="w-full h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded mt-1">
+              <select value={scope} onChange={(e) => setScope(e.target.value)} className="w-full h-8 px-2 text-md border border-default dark:border-slate-700 rounded mt-1">
                 {SCOPES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
               {scopeHelp && <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{scopeHelp}</div>}
@@ -569,7 +569,7 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
             {scope === 'AMAZON_PER_MARKETPLACE' && (
               <div>
                 <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Marketplace</label>
-                <select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} className="w-full h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded mt-1">
+                <select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} className="w-full h-8 px-2 text-md border border-default dark:border-slate-700 rounded mt-1">
                   {AMAZON_MARKETPLACES.map((m) => <option key={m} value={m}>{m} · {COUNTRY_NAMES[m] ?? ''}</option>)}
                 </select>
               </div>
@@ -579,25 +579,25 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
           <div>
             <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Send window (days post-delivery)</label>
             <div className="flex items-center gap-2 mt-1">
-              <input type="number" min="4" max="30" value={minDays} onChange={(e) => setMinDays(Math.max(4, Math.min(30, Number(e.target.value) || 7)))} className="w-20 h-8 px-2 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-md" />
+              <input type="number" min="4" max="30" value={minDays} onChange={(e) => setMinDays(Math.max(4, Math.min(30, Number(e.target.value) || 7)))} className="w-20 h-8 px-2 text-right tabular-nums border border-default dark:border-slate-700 rounded text-md" />
               <span className="text-sm text-slate-500 dark:text-slate-400">to</span>
-              <input type="number" min="4" max="30" value={maxDays} onChange={(e) => setMaxDays(Math.max(4, Math.min(30, Number(e.target.value) || 25)))} className="w-20 h-8 px-2 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-md" />
+              <input type="number" min="4" max="30" value={maxDays} onChange={(e) => setMaxDays(Math.max(4, Math.min(30, Number(e.target.value) || 25)))} className="w-20 h-8 px-2 text-right tabular-nums border border-default dark:border-slate-700 rounded text-md" />
               <span className="text-xs text-slate-500 dark:text-slate-400">Amazon caps at 4–30 days (the eligibility window)</span>
             </div>
           </div>
 
           {/* RRT.8 — Send timing (delay / anchor / product-type / hour / weekends + live preview) */}
-          <div className="border-t border-slate-200 dark:border-slate-800 pt-3 space-y-3">
+          <div className="border-t border-default dark:border-slate-800 pt-3 space-y-3">
             <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Send timing</label>
 
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <div className="inline-flex rounded-md border border-default dark:border-slate-700 overflow-hidden">
                 <button type="button" onClick={() => setDelayMode('table')} className={`h-8 px-3 text-sm ${delayMode === 'table' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'}`}>Use baseline table</button>
-                <button type="button" onClick={() => setDelayMode('custom')} className={`h-8 px-3 text-sm border-l border-slate-200 dark:border-slate-700 ${delayMode === 'custom' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'}`}>Custom delay</button>
+                <button type="button" onClick={() => setDelayMode('custom')} className={`h-8 px-3 text-sm border-l border-default dark:border-slate-700 ${delayMode === 'custom' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'}`}>Custom delay</button>
               </div>
               {delayMode === 'custom' ? (
                 <span className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
-                  Send <input type="number" min={1} max={60} value={sendDelayDays} onChange={(e) => setSendDelayDays(Math.max(1, Math.min(60, Number(e.target.value) || 12)))} className="w-16 h-8 px-2 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded" /> days after {(isAmazonScope ? 'delivery' : anchor.toLowerCase())}
+                  Send <input type="number" min={1} max={60} value={sendDelayDays} onChange={(e) => setSendDelayDays(Math.max(1, Math.min(60, Number(e.target.value) || 12)))} className="w-16 h-8 px-2 text-right tabular-nums border border-default dark:border-slate-700 rounded" /> days after {(isAmazonScope ? 'delivery' : anchor.toLowerCase())}
                 </span>
               ) : (
                 <Link href="/orders/reviews/rules/timing" className="text-sm text-blue-600 hover:underline">uses the per-product-type baseline →</Link>
@@ -606,29 +606,29 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
 
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-slate-500 dark:text-slate-400 w-16 shrink-0">Anchor</span>
-              <select value={isAmazonScope ? 'DELIVERY' : anchor} disabled={isAmazonScope} onChange={(e) => setAnchor(e.target.value)} className="h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 disabled:opacity-60">
+              <select value={isAmazonScope ? 'DELIVERY' : anchor} disabled={isAmazonScope} onChange={(e) => setAnchor(e.target.value)} className="h-8 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 disabled:opacity-60">
                 <option value="DELIVERY">After delivery</option>
                 <option value="SHIP">After ship</option>
                 <option value="PURCHASE">After purchase</option>
               </select>
-              {isAmazonScope && <span className="text-xs text-slate-400">Amazon Solicitations is delivery-based</span>}
+              {isAmazonScope && <span className="text-xs text-tertiary">Amazon Solicitations is delivery-based</span>}
             </div>
 
             <div>
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs text-slate-500 dark:text-slate-400 w-16 shrink-0">Products</span>
-                {productTypes.length === 0 && <span className="text-xs text-slate-400">All product types</span>}
+                {productTypes.length === 0 && <span className="text-xs text-tertiary">All product types</span>}
                 {productTypes.map((p) => (
                   <span key={p} className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900">
                     {p}<button type="button" onClick={() => setProductTypes(productTypes.filter((x) => x !== p))} aria-label={`Remove ${p}`}>×</button>
                   </span>
                 ))}
-                <input value={ptInput} onChange={(e) => setPtInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPt(ptInput) } }} placeholder="add pattern…" className="h-6 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded w-28 bg-white dark:bg-slate-900" />
+                <input value={ptInput} onChange={(e) => setPtInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPt(ptInput) } }} placeholder="add pattern…" className="h-6 px-2 text-xs border border-default dark:border-slate-700 rounded w-28 bg-white dark:bg-slate-900" />
               </div>
               {ptSuggestions.filter((s) => !productTypes.includes(s)).length > 0 && (
                 <div className="flex items-center gap-1 flex-wrap mt-1 ml-[4.5rem]">
                   {ptSuggestions.filter((s) => !productTypes.includes(s)).slice(0, 12).map((s) => (
-                    <button key={s} type="button" onClick={() => addPt(s)} className="h-5 px-1.5 text-[11px] rounded border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">+ {s}</button>
+                    <button key={s} type="button" onClick={() => addPt(s)} className="h-5 px-1.5 text-[11px] rounded border border-default dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">+ {s}</button>
                   ))}
                 </div>
               )}
@@ -638,11 +638,11 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
               <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
                 <input type="checkbox" checked={sendHourLocal != null} onChange={(e) => setSendHourLocal(e.target.checked ? 11 : null)} /> Preferred hour
                 {sendHourLocal != null && (
-                  <select value={sendHourLocal} onChange={(e) => setSendHourLocal(Number(e.target.value))} className="h-7 px-1 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900">
+                  <select value={sendHourLocal} onChange={(e) => setSendHourLocal(Number(e.target.value))} className="h-7 px-1 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900">
                     {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>)}
                   </select>
                 )}
-                {sendHourLocal != null && preview?.tz && <span className="text-xs text-slate-400">{preview.tz}</span>}
+                {sendHourLocal != null && preview?.tz && <span className="text-xs text-tertiary">{preview.tz}</span>}
               </label>
               <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
                 <input type="checkbox" checked={skipWeekends} onChange={(e) => setSkipWeekends(e.target.checked)} /> Skip weekends
@@ -652,17 +652,17 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
               </label>
             </div>
             {sendHourLocal == null && (
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-tertiary">
                 No preferred hour set → the send hour follows the per-weekday{' '}
                 <Link href="/orders/reviews/rules/send-times" className="underline hover:text-blue-600">send-times table</Link>.
               </p>
             )}
 
             {preview?.scheduledFor && (
-              <div className="text-xs rounded-md bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 px-3 py-2 text-slate-600 dark:text-slate-300">
+              <div className="text-xs rounded-md bg-slate-50 dark:bg-slate-950/40 border border-default dark:border-slate-800 px-3 py-2 text-slate-600 dark:text-slate-300">
                 <span className="font-medium text-slate-800 dark:text-slate-200">Preview:</span> a {productTypes[0] || 'helmet'} {preview.anchorUsed.toLowerCase()} today → asked{' '}
                 <span className="font-semibold">{new Date(preview.scheduledFor).toLocaleString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>{' '}
-                <span className="text-slate-400">({preview.anchorUsed.toLowerCase()} + {preview.effectiveDelayDays}d{preview.source === 'timing-table' ? ' · baseline' : preview.source === 'rule-override' ? ' · custom' : ''}{preview.sendHourSource === 'window' ? ' · best time' : ''})</span>
+                <span className="text-tertiary">({preview.anchorUsed.toLowerCase()} + {preview.effectiveDelayDays}d{preview.source === 'timing-table' ? ' · baseline' : preview.source === 'rule-override' ? ' · custom' : ''}{preview.sendHourSource === 'window' ? ' · best time' : ''})</span>
               </div>
             )}
           </div>
@@ -673,7 +673,7 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
               {EXCLUSIONS.map((e) => {
                 const active = exclusions.includes(e.value)
                 return (
-                  <button key={e.value} onClick={() => toggleExclusion(e.value)} className={`h-7 px-2 text-sm border rounded ${active ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}`}>
+                  <button key={e.value} onClick={() => toggleExclusion(e.value)} className={`h-7 px-2 text-sm border rounded ${active ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}`}>
                     {active && <CheckCircle2 size={10} className="inline mr-1" />}
                     {e.label}
                   </button>
@@ -685,13 +685,13 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
 
           <div>
             <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Min order total (€, optional)</label>
-            <input type="number" step="0.01" value={minOrderTotal} onChange={(e) => setMinOrderTotal(e.target.value)} placeholder="0.00" className="w-32 h-8 px-2 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-md mt-1" />
+            <input type="number" step="0.01" value={minOrderTotal} onChange={(e) => setMinOrderTotal(e.target.value)} placeholder="0.00" className="w-32 h-8 px-2 text-right tabular-nums border border-default dark:border-slate-700 rounded text-md mt-1" />
             <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Skip low-value orders below this gross.</div>
           </div>
 
           <div>
             <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Notes</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full h-16 px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded mt-1" />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full h-16 px-2 py-1.5 text-base border border-default dark:border-slate-700 rounded mt-1" />
             {/* RX.6 — ToS-compliance lint */}
             {lintIssues.length > 0 && (
               <div className="mt-1.5 space-y-1">
@@ -712,7 +712,7 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
           </div>
 
           {/* RV.6.5 — Negative-feedback diversion toggle */}
-          <div className="rounded border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/50 dark:bg-slate-950/30">
+          <div className="rounded border border-default dark:border-slate-700 p-3 bg-slate-50/50 dark:bg-slate-950/30">
             <label className="flex items-start gap-2 text-base text-slate-700 dark:text-slate-300 cursor-pointer">
               <input
                 type="checkbox"
@@ -738,7 +738,7 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
             </label>
             {/* RX.6 — per-rule no-response fallback */}
             {useSentimentDiversion && (
-              <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+              <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer mt-3 pt-3 border-t border-default dark:border-slate-700">
                 <input
                   type="checkbox"
                   checked={fallbackOnNoResponse}
@@ -778,7 +778,7 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
           type="button"
           onClick={save}
           disabled={busy}
-          className="h-8 px-3 text-sm font-semibold bg-slate-900 text-white border border-slate-900 rounded-md hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100 dark:hover:bg-slate-200 disabled:cursor-not-allowed disabled:!bg-slate-200 disabled:!text-slate-500 disabled:!border-slate-200 disabled:dark:!bg-slate-700 disabled:dark:!text-slate-400 disabled:dark:!border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="h-8 px-3 text-sm font-semibold bg-slate-900 text-white border border-slate-900 rounded-md hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100 dark:hover:bg-slate-200 disabled:cursor-not-allowed disabled:!bg-slate-200 disabled:!text-slate-500 disabled:!border-default disabled:dark:!bg-slate-700 disabled:dark:!text-tertiary disabled:dark:!border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
           {rule ? 'Save changes' : 'Create rule'}
         </button>
@@ -871,7 +871,7 @@ function PreviewModal({ rule, onClose, onRun }: { rule: Rule; onClose: () => voi
             type="button"
             onClick={runIt}
             disabled={running || data.matchCount === 0}
-            className="h-8 px-3 text-sm font-semibold bg-emerald-600 text-white border border-emerald-600 rounded-md hover:bg-emerald-700 dark:bg-emerald-700 dark:border-emerald-700 dark:hover:bg-emerald-800 disabled:cursor-not-allowed disabled:!bg-slate-200 disabled:!text-slate-500 disabled:!border-slate-200 disabled:dark:!bg-slate-700 disabled:dark:!text-slate-400 disabled:dark:!border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-sm font-semibold bg-emerald-600 text-white border border-emerald-600 rounded-md hover:bg-emerald-700 dark:bg-emerald-700 dark:border-emerald-700 dark:hover:bg-emerald-800 disabled:cursor-not-allowed disabled:!bg-slate-200 disabled:!text-slate-500 disabled:!border-default disabled:dark:!bg-slate-700 disabled:dark:!text-tertiary disabled:dark:!border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 inline-flex items-center gap-1.5"
           >
             <Play size={12} /> Enqueue all {data.matchCount}
           </button>

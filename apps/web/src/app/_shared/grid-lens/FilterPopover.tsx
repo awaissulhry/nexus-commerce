@@ -263,7 +263,7 @@ export function FilterPopover({
             ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
             : activeCount > 0
             ? 'border-slate-400 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
-            : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+            : 'border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
         }`}
       >
         <FilterIcon size={13} />
@@ -314,7 +314,7 @@ export function FilterPopover({
         <AnchoredPopover
           anchorRef={btnRef}
           onClose={() => setOpen(false)}
-          className="w-[480px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl"
+          className="w-[480px] bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-md shadow-xl"
           ariaLabel="Filters"
         >
           <FilterPopoverContents
@@ -356,7 +356,7 @@ function FilterPopoverContents({
 }) {
   return (
     <>
-      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-800">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-default dark:border-slate-800">
         <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 inline-flex items-center gap-2">
           Filters
           {activeCount > 0 && (
@@ -368,7 +368,7 @@ function FilterPopoverContents({
         <button
           type="button"
           onClick={onClose}
-          className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 rounded"
+          className="h-6 w-6 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 rounded"
           aria-label="Close filters"
         >
           <X size={12} />
@@ -376,7 +376,7 @@ function FilterPopoverContents({
       </div>
 
       {appliedChips.length > 0 && (
-        <div className="flex items-center gap-1.5 flex-wrap px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60">
+        <div className="flex items-center gap-1.5 flex-wrap px-3 py-2 border-b border-default dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60">
           {appliedChips.map((chip) => (
             <span
               key={chip.key}
@@ -415,7 +415,7 @@ function FilterPopoverContents({
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-slate-200 dark:border-slate-800 flex-wrap">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-default dark:border-slate-800 flex-wrap">
         <div className="flex items-center gap-3 text-sm">
           <button
             type="button"
@@ -445,7 +445,7 @@ function FilterPopoverContents({
               type="button"
               onClick={() => { onSaveView(); onClose() }}
               disabled={activeCount === 0}
-              className="h-7 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-7 px-3 text-sm border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
               title="Save the current filter state as a reusable view"
             >
               {saveViewLabel ?? 'Save as view'}
@@ -469,7 +469,7 @@ function DimensionCard({ dimension, dragHandle }: { dimension: FilterDimension; 
   const active = activeCountFor(dimension)
 
   return (
-    <div className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+    <div className="border-b border-subtle dark:border-slate-800 last:border-0">
       <div className="w-full flex items-center gap-1 px-1 py-1 rounded group">
         {dragHandle}
         <button
@@ -487,7 +487,7 @@ function DimensionCard({ dimension, dragHandle }: { dimension: FilterDimension; 
           </span>
           <ChevronDown
             size={13}
-            className={`text-slate-400 dark:text-slate-500 transition-transform ${collapsed ? '-rotate-90' : ''}`}
+            className={`text-tertiary dark:text-slate-500 transition-transform ${collapsed ? '-rotate-90' : ''}`}
           />
         </button>
       </div>
@@ -558,13 +558,13 @@ function MultiSelectBody({ dimension }: { dimension: Extract<FilterDimension, { 
     <div className="space-y-1.5">
       {dimension.searchable && (
         <div className="relative">
-          <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-tertiary" />
           <input
             type="text"
             placeholder={`Search ${dimension.label.toLowerCase()}…`}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full h-7 pl-6 pr-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+            className="w-full h-7 pl-6 pr-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
           />
         </div>
       )}
@@ -606,14 +606,14 @@ function MultiSelectBody({ dimension }: { dimension: Extract<FilterDimension, { 
                 />
                 <span className="flex-1 text-sm text-slate-700 dark:text-slate-300">{opt.label}</span>
                 {opt.count != null && (
-                  <span className="text-xs text-slate-400 dark:text-slate-500 tabular-nums">{opt.count}</span>
+                  <span className="text-xs text-tertiary dark:text-slate-500 tabular-nums">{opt.count}</span>
                 )}
               </label>
             </li>
           )
         })}
         {optionsFiltered.length === 0 && (
-          <li className="text-sm text-slate-400 dark:text-slate-500 italic px-1.5 py-2 text-center">
+          <li className="text-sm text-tertiary dark:text-slate-500 italic px-1.5 py-2 text-center">
             No options match "{query}".
           </li>
         )}
@@ -639,7 +639,7 @@ function SingleSelectBody({ dimension }: { dimension: Extract<FilterDimension, {
               />
               <span className="flex-1 text-sm text-slate-700 dark:text-slate-300">{opt.label}</span>
               {opt.count != null && (
-                <span className="text-xs text-slate-400 dark:text-slate-500 tabular-nums">{opt.count}</span>
+                <span className="text-xs text-tertiary dark:text-slate-500 tabular-nums">{opt.count}</span>
               )}
             </label>
           </li>

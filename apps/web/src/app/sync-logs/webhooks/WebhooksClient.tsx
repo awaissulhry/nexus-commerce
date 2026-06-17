@@ -213,7 +213,7 @@ export default function WebhooksClient() {
                 'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                 !urlChannel
                   ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
               )}
             >
               {t('syncLogs.webhooks.filter.all')}
@@ -229,7 +229,7 @@ export default function WebhooksClient() {
                   'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                   urlChannel === c.channel
                     ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
-                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
                 )}
               >
                 {c.channel}
@@ -251,7 +251,7 @@ export default function WebhooksClient() {
                 'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                 urlProcessed === 'true'
                   ? 'bg-emerald-600 text-white border-emerald-600'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
               )}
             >
               {t('syncLogs.webhooks.filter.processed')}{totals && ` ${totals.processed}`}
@@ -267,7 +267,7 @@ export default function WebhooksClient() {
                 'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                 urlProcessed === 'false'
                   ? 'bg-rose-600 text-white border-rose-600'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
               )}
             >
               {t('syncLogs.webhooks.filter.unprocessed')}{totals && ` ${totals.unprocessed}`}
@@ -289,7 +289,7 @@ export default function WebhooksClient() {
                       'px-2 py-0.5 text-sm font-mono rounded border transition-colors',
                       urlEventType === et
                         ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
-                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
                     )}
                   >
                     {et}
@@ -344,7 +344,7 @@ export default function WebhooksClient() {
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="h-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md animate-pulse"
+              className="h-10 bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md animate-pulse"
             />
           ))}
         </div>
@@ -355,9 +355,9 @@ export default function WebhooksClient() {
           description={t('syncLogs.webhooks.empty.description')}
         />
       ) : (
-        <div className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900 overflow-hidden">
+        <div className="border border-default dark:border-slate-800 rounded-md bg-white dark:bg-slate-900 overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-default dark:border-slate-800">
               <tr>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-2"></th>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-20">
@@ -392,7 +392,7 @@ export default function WebhooksClient() {
                   key={r.id}
                   onClick={() => void openDetail(r)}
                   className={cn(
-                    'border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors',
+                    'border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors',
                     !r.isProcessed && 'bg-rose-50/30 dark:bg-rose-950/30',
                   )}
                 >
@@ -445,7 +445,7 @@ export default function WebhooksClient() {
           </table>
 
           {nextCursor && (
-            <div className="border-t border-slate-200 dark:border-slate-800 p-2 flex justify-center">
+            <div className="border-t border-default dark:border-slate-800 p-2 flex justify-center">
               <Button
                 variant="secondary"
                 size="sm"
@@ -533,12 +533,12 @@ function DetailPanel({
     >
       <div className="absolute inset-0 bg-slate-900/30" aria-hidden />
       <aside
-        className="relative w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-800 overflow-y-auto"
+        className="relative w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl border-l border-default dark:border-slate-800 overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label={t('syncLogs.webhooks.detail.aria')}
       >
-        <header className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 flex items-center justify-between">
+        <header className="px-4 py-3 border-b border-default dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 flex items-center justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               {row.isProcessed ? (
@@ -574,7 +574,7 @@ function DetailPanel({
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+            className="p-1 text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             aria-label={t('syncLogs.webhooks.detail.close')}
           >
             <X className="w-4 h-4" />
@@ -606,7 +606,7 @@ function DetailPanel({
 
           <Section label={t('syncLogs.webhooks.detail.payload')}>
             {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-slate-400 dark:text-slate-500" />
+              <Loader2 className="w-4 h-4 animate-spin text-tertiary dark:text-slate-500" />
             ) : (
               <pre className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-1.5 rounded overflow-x-auto max-h-96 whitespace-pre-wrap break-all">
                 {JSON.stringify(row.payload, null, 2)}
@@ -616,7 +616,7 @@ function DetailPanel({
 
           {/* L.17.0 — replay action */}
           {replaySupported && (
-            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="pt-2 border-t border-subtle dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => void replay()}
@@ -636,7 +636,7 @@ function DetailPanel({
             </div>
           )}
           {!replaySupported && (
-            <p className="text-xs text-slate-500 dark:text-slate-500 italic pt-2 border-t border-slate-100 dark:border-slate-800">
+            <p className="text-xs text-slate-500 dark:text-slate-500 italic pt-2 border-t border-subtle dark:border-slate-800">
               {t('syncLogs.webhooks.detail.replayUnsupported', { channel: row.channel })}
             </p>
           )}

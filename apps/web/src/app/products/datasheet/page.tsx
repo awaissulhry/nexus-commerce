@@ -180,7 +180,7 @@ export default async function ProductLineSheetPage({ searchParams }: PageProps) 
   return (
     <div className="bg-slate-50 dark:bg-slate-950 min-h-screen print:bg-white">
       <PrintBodyFlag />
-      <div className="print:hidden sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between gap-3 dark:bg-slate-900 dark:border-slate-800">
+      <div className="print:hidden sticky top-0 z-10 bg-white border-b border-default px-4 py-2 flex items-center justify-between gap-3 dark:bg-slate-900 dark:border-slate-800">
         <Link
           href="/products"
           className="inline-flex items-center gap-1.5 h-8 px-3 text-md text-slate-700 hover:bg-slate-100 rounded-md dark:text-slate-200 dark:hover:bg-slate-800"
@@ -250,9 +250,9 @@ export default async function ProductLineSheetPage({ searchParams }: PageProps) 
             return (
               <div
                 key={p.id}
-                className="border border-slate-200 rounded p-3 flex gap-3 print:break-inside-avoid"
+                className="border border-default rounded p-3 flex gap-3 print:break-inside-avoid"
               >
-                <div className="w-20 h-20 flex-shrink-0 border border-slate-200 rounded overflow-hidden bg-slate-50">
+                <div className="w-20 h-20 flex-shrink-0 border border-default rounded overflow-hidden bg-slate-50">
                   {hero ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img

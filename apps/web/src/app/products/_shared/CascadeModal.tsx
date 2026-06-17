@@ -127,7 +127,7 @@ export function CascadeModal({
     >
       <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-xl shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-default dark:border-slate-700">
           <div className="flex items-center gap-2">
             <GitFork className="h-4 w-4 text-blue-500" />
             <div>
@@ -139,7 +139,7 @@ export function CascadeModal({
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+          <button onClick={onClose} className="text-tertiary hover:text-slate-600 dark:hover:text-slate-300">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -150,7 +150,7 @@ export function CascadeModal({
             Select fields to push to all other variants in this product family:
           </p>
           {withValues.length === 0 ? (
-            <p className="text-xs text-slate-400 italic">No field values available to cascade.</p>
+            <p className="text-xs text-tertiary italic">No field values available to cascade.</p>
           ) : (
             withValues.map((f) => (
               <label
@@ -181,7 +181,7 @@ export function CascadeModal({
 
         {/* Preview result */}
         {preview && (
-          <div className="mx-4 mb-3 flex items-center gap-2 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs">
+          <div className="mx-4 mb-3 flex items-center gap-2 rounded-md bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 px-3 py-2 text-xs">
             <ArrowDownToLine className="h-3.5 w-3.5 text-blue-500 shrink-0" />
             <span className="text-slate-700 dark:text-slate-300">
               {preview.affected === 0
@@ -206,7 +206,7 @@ export function CascadeModal({
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
           <Button variant="ghost" size="sm" onClick={() => runCascade(true)} disabled={selected.size === 0 || previewing || applying || done}>
             {previewing ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
             Preview

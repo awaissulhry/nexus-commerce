@@ -110,9 +110,9 @@ export default function AiCopilot({
         <div
           role="dialog"
           aria-label={`${title} copilot`}
-          className="fixed inset-y-0 right-0 z-50 w-full sm:w-[440px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-2xl flex flex-col"
+          className="fixed inset-y-0 right-0 z-50 w-full sm:w-[440px] bg-white dark:bg-slate-900 border-l border-default dark:border-slate-700 shadow-2xl flex flex-col"
         >
-          <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+          <header className="flex items-center justify-between px-4 py-3 border-b border-default dark:border-slate-700">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-slate-700 dark:text-slate-300" />
               <span className="font-semibold text-slate-900 dark:text-slate-100">
@@ -126,7 +126,7 @@ export default function AiCopilot({
               type="button"
               aria-label="Close copilot"
               onClick={() => setOpen(false)}
-              className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+              className="text-tertiary hover:text-slate-700 dark:hover:text-slate-200"
             >
               <X className="w-5 h-5" />
             </button>
@@ -154,14 +154,14 @@ export default function AiCopilot({
                   'rounded-lg px-3 py-2 text-base',
                   m.role === 'user'
                     ? 'bg-slate-100 dark:bg-slate-800 ml-8'
-                    : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 mr-2',
+                    : 'bg-white dark:bg-slate-900 border border-default dark:border-slate-700 mr-2',
                 )}
               >
                 <div className="whitespace-pre-wrap break-words text-slate-800 dark:text-slate-200">
                   {m.content}
                 </div>
                 {m.role === 'assistant' && m.toolsUsed && m.toolsUsed.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-sm text-slate-400 dark:text-slate-500 inline-flex items-center gap-1.5 flex-wrap">
+                  <div className="mt-2 pt-2 border-t border-subtle dark:border-slate-800 text-sm text-tertiary dark:text-slate-500 inline-flex items-center gap-1.5 flex-wrap">
                     <Wrench className="w-3 h-3" />
                     used: {m.toolsUsed.join(' → ')}
                   </div>
@@ -197,7 +197,7 @@ export default function AiCopilot({
             )}
           </div>
 
-          <div className="border-t border-slate-200 dark:border-slate-700 p-3">
+          <div className="border-t border-default dark:border-slate-700 p-3">
             <div className="flex items-end gap-2">
               <textarea
                 value={input}
@@ -211,7 +211,7 @@ export default function AiCopilot({
                 rows={2}
                 placeholder={placeholder}
                 disabled={loading}
-                className="flex-1 resize-none text-base border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 disabled:opacity-50"
+                className="flex-1 resize-none text-base border border-default dark:border-slate-700 rounded-md px-3 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 disabled:opacity-50"
               />
               <button
                 type="button"
@@ -227,7 +227,7 @@ export default function AiCopilot({
                 )}
               </button>
             </div>
-            <p className="mt-1.5 text-sm text-slate-400 dark:text-slate-500">
+            <p className="mt-1.5 text-sm text-tertiary dark:text-slate-500">
               Suggestions are free; high-stakes actions (pricing, publishing,
               messages) queue for your approval.
             </p>

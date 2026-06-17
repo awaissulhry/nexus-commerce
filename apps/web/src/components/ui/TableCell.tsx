@@ -162,7 +162,7 @@ export function ImageCell({ src, alt = '', size = 'md', className }: ImageCellPr
     return (
       <div
         className={cn(
-          'rounded bg-slate-100 flex items-center justify-center text-slate-400',
+          'rounded bg-slate-100 flex items-center justify-center text-tertiary',
           IMAGE_SIZE[size],
           className,
         )}

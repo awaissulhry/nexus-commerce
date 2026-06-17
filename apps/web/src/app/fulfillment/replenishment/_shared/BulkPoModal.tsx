@@ -135,8 +135,8 @@ export function BulkPoModal({
         onClick={onClose}
         aria-hidden
       />
-      <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-800">
+      <div className="relative bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-default dark:border-slate-800">
           <div>
             <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
               {createdPos
@@ -235,11 +235,11 @@ export function BulkPoModal({
                     </>
                   )}
                 </div>
-                <div className="border border-slate-200 dark:border-slate-800 rounded">
+                <div className="border border-default dark:border-slate-800 rounded">
                   {items.map((s) => (
                     <div
                       key={s.productId}
-                      className="flex items-center justify-between gap-3 px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 last:border-0 text-base"
+                      className="flex items-center justify-between gap-3 px-3 py-1.5 border-b border-subtle dark:border-slate-800 last:border-0 text-base"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="text-slate-800 dark:text-slate-200 truncate">
@@ -260,7 +260,7 @@ export function BulkPoModal({
                               parseInt(e.target.value, 10) || s.reorderQuantity,
                           }))
                         }
-                        className="w-20 h-7 px-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded text-base tabular-nums text-right"
+                        className="w-20 h-7 px-2 border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded text-base tabular-nums text-right"
                       />
                     </div>
                   ))}
@@ -270,7 +270,7 @@ export function BulkPoModal({
           </div>
         )}
 
-        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div className="px-5 py-3 border-t border-default dark:border-slate-800 flex items-center justify-between">
           {error ? (
             <span className="text-base text-rose-700 dark:text-rose-400 inline-flex items-center gap-1">
               <AlertCircle size={12} /> {error}
@@ -298,7 +298,7 @@ export function BulkPoModal({
                 <button
                   onClick={onClose}
                   disabled={submitting}
-                  className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                  className="h-8 px-3 text-base border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -360,7 +360,7 @@ function PoSuccessRow({
     ? () => navigator.clipboard?.writeText(po.supplierEmail!)
     : null
   return (
-    <div className="border border-slate-200 dark:border-slate-800 rounded px-3 py-2 flex items-center justify-between gap-3">
+    <div className="border border-default dark:border-slate-800 rounded px-3 py-2 flex items-center justify-between gap-3">
       <div className="min-w-0">
         <div className="text-md font-mono font-medium text-slate-900 dark:text-slate-100">
           {po.poNumber}
@@ -382,7 +382,7 @@ function PoSuccessRow({
         {mailtoUrl ? (
           <a
             href={mailtoUrl}
-            className="h-7 px-2.5 text-base border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+            className="h-7 px-2.5 text-base border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             title={`Email ${po.supplierEmail}`}
           >
             <Mail size={12} /> Email
@@ -391,7 +391,7 @@ function PoSuccessRow({
           <button
             type="button"
             disabled
-            className="h-7 px-2.5 text-base border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-600 rounded cursor-not-allowed inline-flex items-center gap-1.5"
+            className="h-7 px-2.5 text-base border border-default dark:border-slate-700 text-tertiary dark:text-slate-600 rounded cursor-not-allowed inline-flex items-center gap-1.5"
             title={
               po.supplierId
                 ? 'Supplier has no email on file — set it in Suppliers'
@@ -405,7 +405,7 @@ function PoSuccessRow({
           <button
             type="button"
             onClick={copyEmail}
-            className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="h-7 px-2 text-base border border-default dark:border-slate-700 text-slate-500 dark:text-slate-400 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
             title="Copy supplier email to clipboard"
           >
             <Copy size={12} />

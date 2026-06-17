@@ -116,7 +116,7 @@ export function SubstitutionPanel({
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+    <div className="rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
       <div className="mb-3 flex items-center justify-between">
         <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
           Substitution-aware demand
@@ -163,7 +163,7 @@ export function SubstitutionPanel({
       )}
 
       {adding && (
-        <div className="mb-3 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-2 text-xs">
+        <div className="mb-3 rounded border border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-2 text-xs">
           <div className="mb-2 grid grid-cols-3 gap-2">
             <select
               value={newRole}
@@ -228,7 +228,7 @@ export function SubstitutionPanel({
                   <span className="font-mono text-slate-900 dark:text-slate-100">
                     {other?.sku ?? '(missing)'}
                   </span>{' '}
-                  <span className="text-slate-400 dark:text-slate-500">
+                  <span className="text-tertiary dark:text-slate-500">
                     — {other?.name ?? ''}
                   </span>
                 </div>

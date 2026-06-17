@@ -26,14 +26,14 @@ const toneClasses: Record<NonNullable<TileProps['tone']>, string> = {
 }
 
 const iconToneClasses: Record<NonNullable<TileProps['tone']>, string> = {
-  default: 'text-slate-400 dark:text-slate-500',
+  default: 'text-tertiary dark:text-slate-500',
   warn: 'text-amber-500 dark:text-amber-400',
   success: 'text-emerald-500 dark:text-emerald-400',
 }
 
 function Tile({ label, value, secondary, icon: Icon, tone = 'default' }: TileProps) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div className="rounded-lg border border-default bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-slate-500 dark:text-slate-400 truncate">

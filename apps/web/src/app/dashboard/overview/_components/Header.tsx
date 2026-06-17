@@ -70,7 +70,7 @@ export default function Header({
           <div
             role="tablist"
             aria-label={t('overview.title')}
-            className="inline-flex items-center border border-slate-200 dark:border-slate-700 rounded-md p-0.5 bg-white dark:bg-slate-900"
+            className="inline-flex items-center border border-default dark:border-slate-700 rounded-md p-0.5 bg-white dark:bg-slate-900"
           >
             {WINDOWS.map((w) => (
               <button
@@ -109,13 +109,13 @@ export default function Header({
                 }
                 className={cn(
                   'h-7 px-2 text-sm rounded-md border tabular-nums',
-                  'border-slate-200 dark:border-slate-700',
+                  'border-default dark:border-slate-700',
                   'bg-white dark:bg-slate-900',
                   'text-slate-700 dark:text-slate-300',
                   'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
                 )}
               />
-              <span className="text-xs text-slate-400 dark:text-slate-500">
+              <span className="text-xs text-tertiary dark:text-slate-500">
                 →
               </span>
               <input
@@ -128,7 +128,7 @@ export default function Header({
                 }
                 className={cn(
                   'h-7 px-2 text-sm rounded-md border tabular-nums',
-                  'border-slate-200 dark:border-slate-700',
+                  'border-default dark:border-slate-700',
                   'bg-white dark:bg-slate-900',
                   'text-slate-700 dark:text-slate-300',
                   'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
@@ -147,7 +147,7 @@ export default function Header({
               onChange={(e) => onApplyView(e.target.value as string | '__live__')}
               className={cn(
                 'h-7 pl-2 pr-7 text-sm rounded-md border bg-white dark:bg-slate-900',
-                'border-slate-200 dark:border-slate-700',
+                'border-default dark:border-slate-700',
                 'text-slate-700 dark:text-slate-300',
                 'hover:bg-slate-50 dark:hover:bg-slate-800',
                 'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
@@ -172,7 +172,7 @@ export default function Header({
             onChange={(e) => onCompareChange(e.target.value as CompareKey)}
             className={cn(
               'h-7 pl-2 pr-7 text-sm rounded-md border bg-white dark:bg-slate-900',
-              'border-slate-200 dark:border-slate-700',
+              'border-default dark:border-slate-700',
               'text-slate-700 dark:text-slate-300',
               'hover:bg-slate-50 dark:hover:bg-slate-800',
               'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
@@ -200,7 +200,7 @@ export default function Header({
               'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
               liveMode
                 ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400'
-                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+                : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
             )}
           >
             <CircleDot
@@ -233,7 +233,7 @@ export default function Header({
             aria-label={t('overview.customize.title')}
             className={cn(
               'inline-flex items-center justify-center h-7 w-7 rounded-md border',
-              'border-slate-200 dark:border-slate-700',
+              'border-default dark:border-slate-700',
               'bg-white dark:bg-slate-900',
               'text-slate-500 dark:text-slate-400',
               'hover:bg-slate-50 dark:hover:bg-slate-800',
@@ -274,7 +274,7 @@ function PdfExportMenu({ t }: { t: T }) {
         aria-expanded={open}
         className={cn(
           'inline-flex items-center justify-center h-7 w-7 rounded-md border',
-          'border-slate-200 dark:border-slate-700',
+          'border-default dark:border-slate-700',
           'bg-white dark:bg-slate-900',
           'text-slate-500 dark:text-slate-400',
           'hover:bg-slate-50 dark:hover:bg-slate-800',
@@ -289,7 +289,7 @@ function PdfExportMenu({ t }: { t: T }) {
           role="menu"
           className={cn(
             'absolute right-0 top-full mt-1 z-30 min-w-[160px] py-1 rounded-md border shadow-lg',
-            'border-slate-200 dark:border-slate-700',
+            'border-default dark:border-slate-700',
             'bg-white dark:bg-slate-900',
           )}
         >

@@ -91,10 +91,10 @@ export function TestModeClient() {
         Test mode — exercise the pipeline without touching real customers
       </h2>
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md overflow-hidden">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
           {/* Locale + product */}
-          <div className="md:col-span-3 grid grid-cols-2 gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="md:col-span-3 grid grid-cols-2 gap-3 pb-3 border-b border-subtle dark:border-slate-800">
             <div>
               <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">
                 Locale
@@ -124,7 +124,7 @@ export function TestModeClient() {
           </div>
 
           {/* Action 1 — preview */}
-          <div className="border border-slate-200 dark:border-slate-800 rounded p-3 flex flex-col">
+          <div className="border border-default dark:border-slate-800 rounded p-3 flex flex-col">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               <Eye className="h-3.5 w-3.5" /> Preview email HTML
             </div>
@@ -140,7 +140,7 @@ export function TestModeClient() {
           </div>
 
           {/* Action 2 — send test */}
-          <div className="border border-slate-200 dark:border-slate-800 rounded p-3 flex flex-col">
+          <div className="border border-default dark:border-slate-800 rounded p-3 flex flex-col">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               <Mail className="h-3.5 w-3.5" /> Send test email
             </div>
@@ -167,7 +167,7 @@ export function TestModeClient() {
           </div>
 
           {/* Action 3 — dry tick */}
-          <div className="border border-slate-200 dark:border-slate-800 rounded p-3 flex flex-col">
+          <div className="border border-default dark:border-slate-800 rounded p-3 flex flex-col">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               <Activity className="h-3.5 w-3.5" /> Dry tick
             </div>
@@ -212,7 +212,7 @@ export function TestModeClient() {
         </div>
 
         {showPreview && (
-          <div className="border-t border-slate-200 dark:border-slate-800 p-3">
+          <div className="border-t border-default dark:border-slate-800 p-3">
             <iframe
               src={`/marketing/reviews/requests/test/preview?locale=${locale}&productName=${encodeURIComponent(productName)}`}
               className="w-full bg-white"

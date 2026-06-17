@@ -88,7 +88,7 @@ export default function VideoSection({
         <div className="flex items-center gap-2">
           <Film className="w-4 h-4 text-slate-500" />
           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-            Videos {videos.length > 0 && <span className="text-slate-400 font-normal">({videos.length})</span>}
+            Videos {videos.length > 0 && <span className="text-tertiary font-normal">({videos.length})</span>}
           </h3>
         </div>
         <button
@@ -108,7 +108,7 @@ export default function VideoSection({
       {videos.length === 0 ? (
         <div
           onClick={() => inputRef.current?.click()}
-          className="rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 py-8 flex flex-col items-center justify-center gap-1.5 text-slate-400 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+          className="rounded-xl border-2 border-dashed border-default dark:border-slate-700 py-8 flex flex-col items-center justify-center gap-1.5 text-tertiary cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
         >
           <Film className="w-6 h-6" />
           <span className="text-xs">No videos yet — upload a product video (MP4, MOV, WebM)</span>
@@ -118,7 +118,7 @@ export default function VideoSection({
           {videos.map((v) => {
             const warnings = validateVideo(v)
             return (
-            <div key={v.id} className="group relative rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800/40">
+            <div key={v.id} className="group relative rounded-xl border border-default dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800/40">
               <div className="relative aspect-square">
                 {playingId === v.id ? (
                   <video src={v.url} poster={v.posterUrl ?? undefined} controls autoPlay className="w-full h-full object-contain bg-black" />
@@ -127,7 +127,7 @@ export default function VideoSection({
                     {v.posterUrl ? (
                       <img src={v.posterUrl} alt={v.alt ?? 'video'} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-400">
+                      <div className="w-full h-full flex items-center justify-center text-tertiary">
                         <Film className="w-8 h-8" />
                       </div>
                     )}
@@ -161,7 +161,7 @@ export default function VideoSection({
                   onClick={() => handleDelete(v.id)}
                   disabled={deletingId === v.id}
                   title="Delete video"
-                  className="flex-shrink-0 text-slate-400 hover:text-rose-600 disabled:opacity-50"
+                  className="flex-shrink-0 text-tertiary hover:text-rose-600 disabled:opacity-50"
                 >
                   {deletingId === v.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                 </button>

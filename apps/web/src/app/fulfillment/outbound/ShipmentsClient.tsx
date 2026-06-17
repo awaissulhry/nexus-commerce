@@ -584,7 +584,7 @@ export default function ShipmentsClient() {
       <GridToolbar
         searchSlot={
           <div className="relative">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500" />
             <Input
               placeholder={t('outbound.shipments.searchPlaceholder')}
               value={search}
@@ -599,11 +599,11 @@ export default function ShipmentsClient() {
               <button
                 key={p.key}
                 onClick={() => setStatusFilter(p.key)}
-                className={`h-7 px-3 text-base border rounded-full inline-flex items-center gap-1.5 transition-colors ${statusFilter === p.key ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:border-slate-600'}`}
+                className={`h-7 px-3 text-base border rounded-full inline-flex items-center gap-1.5 transition-colors ${statusFilter === p.key ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100' : 'bg-white text-slate-700 border-default hover:border-slate-300 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:border-slate-600'}`}
               >
                 {t(p.tKey)}
                 {counts[p.key] != null && (
-                  <span className={`tabular-nums ${statusFilter === p.key ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400 dark:text-slate-500'}`}>{counts[p.key]}</span>
+                  <span className={`tabular-nums ${statusFilter === p.key ? 'text-slate-300 dark:text-slate-600' : 'text-tertiary dark:text-slate-500'}`}>{counts[p.key]}</span>
                 )}
               </button>
             ))}
@@ -628,7 +628,7 @@ export default function ShipmentsClient() {
           <button
             type="button"
             onClick={() => setShortcutsOpen(true)}
-            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            className="h-7 w-7 inline-flex items-center justify-center border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
             title="Keyboard shortcuts (?)"
             aria-label="Keyboard shortcuts"
           >
@@ -654,7 +654,7 @@ export default function ShipmentsClient() {
             className={`h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 transition-colors ${
               showDeleted
                 ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'
-                : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+                : 'border-default hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
             }`}
           >
             {showDeleted ? <ArrowLeft size={12} /> : <Trash2 size={12} />}
@@ -709,7 +709,7 @@ export default function ShipmentsClient() {
                   <button onClick={bulkRelease} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900 dark:hover:bg-emerald-900/60 inline-flex items-center gap-1.5">
                     <Play size={12} /> {t('outbound.shipments.bulk.release')}
                   </button>
-                  <button onClick={bulkExportCsv} className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700 inline-flex items-center gap-1.5">
+                  <button onClick={bulkExportCsv} className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-default rounded hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700 inline-flex items-center gap-1.5">
                     <Download size={12} /> {t('outbound.shipments.bulk.exportCsv')}
                   </button>
                   <button
@@ -741,7 +741,7 @@ export default function ShipmentsClient() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+              <thead className="border-b border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <tr>
                   <th className="px-3 py-2 w-8">
                     <input
@@ -766,7 +766,7 @@ export default function ShipmentsClient() {
                 {items.map((s) => (
                   <tr
                     key={s.id}
-                    className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 ${s.orderId ? 'cursor-pointer' : ''}`}
+                    className={`border-b border-subtle dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 ${s.orderId ? 'cursor-pointer' : ''}`}
                     onClick={() => s.orderId && openDrawer(s.orderId)}
                   >
                     <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
@@ -785,7 +785,7 @@ export default function ShipmentsClient() {
                         >
                           {s.orderId.slice(0, 12)}…
                         </button>
-                      ) : <span className="text-slate-400 dark:text-slate-500 text-base">—</span>}
+                      ) : <span className="text-tertiary dark:text-slate-500 text-base">—</span>}
                     </td>
                     <td className="px-3 py-2">
                       <Badge variant={STATUS_TONE[s.status] ?? 'default'} size="sm">{s.status.replace(/_/g, ' ')}</Badge>
@@ -819,12 +819,12 @@ export default function ShipmentsClient() {
                               }
                             }}
                             title={t('outbound.shipments.copy.title')}
-                            className="opacity-0 group-hover/track:opacity-100 h-5 w-5 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 rounded transition-opacity"
+                            className="opacity-0 group-hover/track:opacity-100 h-5 w-5 inline-flex items-center justify-center text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 rounded transition-opacity"
                           >
                             <Copy size={10} />
                           </button>
                         </span>
-                      ) : <span className="text-slate-400 dark:text-slate-500 text-base">—</span>}
+                      ) : <span className="text-tertiary dark:text-slate-500 text-base">—</span>}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-base text-slate-600 dark:text-slate-400">
                       {s.costCents != null ? `€${(s.costCents / 100).toFixed(2)}` : '—'}
@@ -903,7 +903,7 @@ export default function ShipmentsClient() {
           onMouseDown={(e) => { if (e.target === e.currentTarget) setConfirmHardDelete(false) }}
         >
           <div
-            className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl p-5"
+            className="w-full max-w-lg bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg shadow-xl p-5"
             role="dialog"
             aria-label={t('outbound.bulk.confirmHardDelete.title')}
           >
@@ -946,7 +946,7 @@ export default function ShipmentsClient() {
                 type="button"
                 onClick={() => setConfirmHardDelete(false)}
                 disabled={recycleBusy}
-                className="h-8 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
+                className="h-8 px-3 text-sm border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
               >
                 {t('common.cancel')}
               </button>

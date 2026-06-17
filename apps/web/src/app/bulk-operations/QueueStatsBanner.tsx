@@ -73,8 +73,8 @@ export default function QueueStatsBanner() {
         role="status"
         aria-live="polite"
       >
-        <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-1.5 text-sm text-slate-600 dark:text-slate-400 inline-flex items-center gap-2">
-          <Activity className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+        <div className="bg-slate-50 dark:bg-slate-900/60 border border-default dark:border-slate-800 rounded-md px-3 py-1.5 text-sm text-slate-600 dark:text-slate-400 inline-flex items-center gap-2">
+          <Activity className="w-3.5 h-3.5 text-tertiary dark:text-slate-500" aria-hidden="true" />
           <span>
             BullMQ not enabled — jobs run inline. Jobs over{' '}
             <span className="font-medium tabular-nums">
@@ -95,7 +95,7 @@ export default function QueueStatsBanner() {
       aria-live="polite"
       aria-atomic="true"
     >
-      <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-1.5 inline-flex items-center gap-3 text-sm">
+      <div className="bg-slate-50 dark:bg-slate-900/60 border border-default dark:border-slate-800 rounded-md px-3 py-1.5 inline-flex items-center gap-3 text-sm">
         <span className="text-slate-700 dark:text-slate-300 font-medium inline-flex items-center gap-1.5">
           <Activity className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
           Queue health

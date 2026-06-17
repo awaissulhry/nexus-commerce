@@ -279,9 +279,9 @@ export default async function LaunchReadiness({
         </div>
       </div>
 
-      <div className="border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900 overflow-x-auto">
+      <div className="border border-default dark:border-slate-800 rounded bg-white dark:bg-slate-900 overflow-x-auto">
         <table className="w-full text-xs">
-          <thead className="bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800">
+          <thead className="bg-slate-50 dark:bg-slate-800/40 border-b border-default dark:border-slate-800">
             <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <th className="py-2 px-3 font-medium sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/40 min-w-[140px]">
                 {t('products.datasheetHub.launch.col.market')}
@@ -298,7 +298,7 @@ export default async function LaunchReadiness({
             {rows.map((r) => (
               <tr
                 key={r.key}
-                className="border-b border-slate-100 dark:border-slate-800 last:border-b-0"
+                className="border-b border-subtle dark:border-slate-800 last:border-b-0"
               >
                 <td className="py-2 px-3 sticky left-0 z-10 bg-white dark:bg-slate-900 align-middle text-slate-900 dark:text-slate-100 font-medium">
                   {r.label}

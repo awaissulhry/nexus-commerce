@@ -505,7 +505,7 @@ export function BulkActionBar({
     <div
       role="region"
       aria-label="Bulk actions"
-      className="sticky top-0 z-30 -mx-2 px-2 py-1.5 bg-white/95 backdrop-blur border-b border-slate-200 dark:bg-slate-900/95 dark:border-slate-800"
+      className="sticky top-0 z-30 -mx-2 px-2 py-1.5 bg-white/95 backdrop-blur border-b border-default dark:bg-slate-900/95 dark:border-slate-800"
     >
       <div className="flex items-center gap-2 flex-wrap">
         {countLabel}
@@ -571,7 +571,7 @@ export function BulkActionBar({
                 size="sm"
                 onClick={() => setStatusBulk('DRAFT')}
                 disabled={busy || !hasSelection}
-                className="bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-700"
+                className="bg-slate-50 text-slate-700 border-default hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-700"
                 icon={<EyeOff size={12} />}
               >
                 Draft
@@ -618,7 +618,7 @@ export function BulkActionBar({
               <div
                 role="menu"
                 aria-label="Tag actions"
-                className="absolute left-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-72 overflow-y-auto dark:bg-slate-900 dark:border-slate-800"
+                className="absolute left-0 top-full mt-1 w-64 bg-white border border-default rounded-md shadow-lg z-30 p-2 max-h-72 overflow-y-auto dark:bg-slate-900 dark:border-slate-800"
               >
                 {allTags.length === 0 ? (
                   <div className="text-base text-slate-500 dark:text-slate-400 text-center py-3">
@@ -680,7 +680,7 @@ export function BulkActionBar({
               <div
                 role="menu"
                 aria-label="Publish destinations"
-                className="absolute left-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-96 overflow-y-auto dark:bg-slate-900 dark:border-slate-800"
+                className="absolute left-0 top-full mt-1 w-72 bg-white border border-default rounded-md shadow-lg z-30 p-2 max-h-96 overflow-y-auto dark:bg-slate-900 dark:border-slate-800"
               >
                 <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1">
                   Amazon EU
@@ -754,7 +754,7 @@ export function BulkActionBar({
               <div
                 role="menu"
                 aria-label="Publish images destinations"
-                className="absolute left-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-96 overflow-y-auto dark:bg-slate-900 dark:border-slate-800"
+                className="absolute left-0 top-full mt-1 w-72 bg-white border border-default rounded-md shadow-lg z-30 p-2 max-h-96 overflow-y-auto dark:bg-slate-900 dark:border-slate-800"
               >
                 <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1">
                   Amazon
@@ -782,7 +782,7 @@ export function BulkActionBar({
                 >
                   All Amazon markets
                 </button>
-                <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
+                <div className="border-t border-subtle dark:border-slate-800 my-1" />
                 <button
                   role="menuitem"
                   onClick={() => {
@@ -803,7 +803,7 @@ export function BulkActionBar({
                 >
                   Shopify
                 </button>
-                <div className="border-t border-slate-100 dark:border-slate-800 mt-1 pt-1 px-2 text-[10px] text-slate-400 leading-snug">
+                <div className="border-t border-subtle dark:border-slate-800 mt-1 pt-1 px-2 text-[10px] text-tertiary leading-snug">
                   Max 50 products per call. Larger batches will surface a server-side error; chunk and re-run.
                 </div>
               </div>
@@ -1158,7 +1158,7 @@ function HardDeleteConfirmModal({
         aria-labelledby="hard-delete-title"
         className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-rose-200 dark:border-rose-900 w-full max-w-2xl max-h-[90vh] flex flex-col"
       >
-        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+        <div className="px-5 py-4 border-b border-default dark:border-slate-700 flex-shrink-0">
           <h2
             id="hard-delete-title"
             className="text-lg font-semibold text-rose-700 dark:text-rose-300 inline-flex items-center gap-2"
@@ -1182,7 +1182,7 @@ function HardDeleteConfirmModal({
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
               {t('products.hardDelete.affectedSkus')}
             </div>
-            <div className="max-h-32 overflow-y-auto rounded border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+            <div className="max-h-32 overflow-y-auto rounded border border-default dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
               {preview.map((p) => (
                 <div
                   key={p.id}
@@ -1285,7 +1285,7 @@ function HardDeleteConfirmModal({
               <legend className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
                 {t('products.hardDelete.channelAction.legend')}
               </legend>
-              <label className={`flex items-start gap-2 rounded border p-2 cursor-pointer ${channelAction === 'unpublish' ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/40' : 'border-slate-200 dark:border-slate-700'}`}>
+              <label className={`flex items-start gap-2 rounded border p-2 cursor-pointer ${channelAction === 'unpublish' ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/40' : 'border-default dark:border-slate-700'}`}>
                 <input
                   type="radio"
                   name="channelAction"
@@ -1300,7 +1300,7 @@ function HardDeleteConfirmModal({
                   <span className="block text-xs text-slate-600 dark:text-slate-400">{t('products.hardDelete.channelAction.unpublish.body')}</span>
                 </span>
               </label>
-              <label className={`flex items-start gap-2 rounded border p-2 cursor-pointer ${channelAction === 'delete' ? 'border-rose-300 bg-rose-50 dark:border-rose-700 dark:bg-rose-950/40' : 'border-slate-200 dark:border-slate-700'}`}>
+              <label className={`flex items-start gap-2 rounded border p-2 cursor-pointer ${channelAction === 'delete' ? 'border-rose-300 bg-rose-50 dark:border-rose-700 dark:bg-rose-950/40' : 'border-default dark:border-slate-700'}`}>
                 <input
                   type="radio"
                   name="channelAction"
@@ -1315,7 +1315,7 @@ function HardDeleteConfirmModal({
                   <span className="block text-xs text-slate-600 dark:text-slate-400">{t('products.hardDelete.channelAction.delete.body')}</span>
                 </span>
               </label>
-              <label className={`flex items-start gap-2 rounded border p-2 cursor-pointer ${channelAction === 'none' ? 'border-slate-400 bg-slate-50 dark:border-slate-500 dark:bg-slate-800' : 'border-slate-200 dark:border-slate-700'}`}>
+              <label className={`flex items-start gap-2 rounded border p-2 cursor-pointer ${channelAction === 'none' ? 'border-slate-400 bg-slate-50 dark:border-slate-500 dark:bg-slate-800' : 'border-default dark:border-slate-700'}`}>
                 <input
                   type="radio"
                   name="channelAction"
@@ -1347,7 +1347,7 @@ function HardDeleteConfirmModal({
           </label>
         </div>
 
-        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2 flex-shrink-0">
+        <div className="px-5 py-3 border-t border-default dark:border-slate-700 flex justify-end gap-2 flex-shrink-0">
           <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
             {t('products.hardDelete.cancel')}
           </Button>
@@ -1446,13 +1446,13 @@ function BulkAvailabilityModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
-      <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md">
-        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+      <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-default dark:border-slate-700 w-full max-w-md">
+        <div className="px-5 py-4 border-b border-default dark:border-slate-700 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Market Availability</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{productIds.length} product{productIds.length !== 1 ? 's' : ''} selected</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+          <button type="button" onClick={onClose} aria-label="Close" className="text-tertiary hover:text-slate-700 dark:hover:text-slate-200">
             <X size={18} />
           </button>
         </div>
@@ -1463,14 +1463,14 @@ function BulkAvailabilityModal({
             <button
               type="button"
               onClick={() => setOfferActive(false)}
-              className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${!offerActive ? 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-700 dark:bg-rose-950/40 dark:text-rose-300' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'}`}
+              className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${!offerActive ? 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-700 dark:bg-rose-950/40 dark:text-rose-300' : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'}`}
             >
               Pause offers
             </button>
             <button
               type="button"
               onClick={() => setOfferActive(true)}
-              className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${offerActive ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'}`}
+              className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${offerActive ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'}`}
             >
               Activate offers
             </button>
@@ -1491,7 +1491,7 @@ function BulkAvailabilityModal({
                 const key = marketKey(m)
                 const checked = selected.has(key)
                 return (
-                  <label key={key} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors text-sm ${checked ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'}`}>
+                  <label key={key} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors text-sm ${checked ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'}`}>
                     <input type="checkbox" checked={checked} onChange={() => toggle(key)} className="rounded" />
                     {m.label}
                   </label>
@@ -1501,7 +1501,7 @@ function BulkAvailabilityModal({
           </div>
         </div>
 
-        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
+        <div className="px-5 py-3 border-t border-default dark:border-slate-700 flex justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
           <Button
             size="sm"

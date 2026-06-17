@@ -87,7 +87,7 @@ function pct(n: number): string {
 
 // CSS sparkline — no external chart library
 function Sparkline({ values, colorClass }: { values: number[]; colorClass: string }) {
-  if (!values.length) return <span className="text-slate-400 text-xs">—</span>
+  if (!values.length) return <span className="text-tertiary text-xs">—</span>
   const max = Math.max(...values, 1)
   return (
     <div className="flex items-end gap-0.5 h-8">
@@ -130,7 +130,7 @@ export function AnalyticsTab({ productId }: { productId: string }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-16 text-slate-400">
+      <div className="flex items-center justify-center py-16 text-tertiary">
         <Loader2 className="h-5 w-5 animate-spin mr-2" />
         Loading analytics…
       </div>
@@ -166,7 +166,7 @@ export function AnalyticsTab({ productId }: { productId: string }) {
             {d}d
           </button>
         ))}
-        <span className="text-xs text-slate-400 ml-1">trailing window</span>
+        <span className="text-xs text-tertiary ml-1">trailing window</span>
       </div>
 
       {/* KPI strip */}
@@ -179,17 +179,17 @@ export function AnalyticsTab({ productId }: { productId: string }) {
 
       {/* Trend sparklines */}
       {trend.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-3">
           <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">
             Trend (last {trend.length} days)
           </h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <div className="text-[10px] text-slate-400 mb-1">Revenue</div>
+              <div className="text-[10px] text-tertiary mb-1">Revenue</div>
               <Sparkline values={trendRevenue} colorClass="bg-violet-400 dark:bg-violet-500" />
             </div>
             <div>
-              <div className="text-[10px] text-slate-400 mb-1">Units</div>
+              <div className="text-[10px] text-tertiary mb-1">Units</div>
               <Sparkline values={trendUnits} colorClass="bg-slate-300 dark:bg-slate-600" />
             </div>
           </div>
@@ -198,9 +198,9 @@ export function AnalyticsTab({ productId }: { productId: string }) {
 
       {/* By channel table */}
       {analytics.sales.byChannel.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
-          <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-slate-400" />
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md overflow-hidden">
+          <div className="px-4 py-2 border-b border-default dark:border-slate-800 flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-tertiary" />
             <h3 className="text-xs font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wider">
               By channel
             </h3>
@@ -218,7 +218,7 @@ export function AnalyticsTab({ productId }: { productId: string }) {
                 <tr key={`${ch.channel}:${ch.marketplace}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                   <td className="px-3 py-2">
                     <span className={`text-xs font-medium ${CHANNEL_COLORS[ch.channel] ?? ''}`}>{ch.channel}</span>
-                    {ch.marketplace && <span className="text-[10px] text-slate-400 ml-1">{ch.marketplace}</span>}
+                    {ch.marketplace && <span className="text-[10px] text-tertiary ml-1">{ch.marketplace}</span>}
                   </td>
                   <td className="px-3 py-2 text-xs tabular-nums">{ch.units}</td>
                   <td className="px-3 py-2 text-xs tabular-nums">{fmt(ch.revenue)}</td>
@@ -235,13 +235,13 @@ export function AnalyticsTab({ productId }: { productId: string }) {
       {/* Quality + Inventory + Repricing row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {/* Listing quality */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-3">
           <div className="flex items-center gap-2 mb-2">
-            <Star className="h-4 w-4 text-slate-400" />
+            <Star className="h-4 w-4 text-tertiary" />
             <h3 className="text-xs font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wider">Quality</h3>
           </div>
           {analytics.quality.byChannel.length === 0 ? (
-            <p className="text-xs text-slate-400">No scores yet — run quality check in List Wizard.</p>
+            <p className="text-xs text-tertiary">No scores yet — run quality check in List Wizard.</p>
           ) : (
             <div className="space-y-2">
               {analytics.quality.byChannel.map((q) => (
@@ -252,7 +252,7 @@ export function AnalyticsTab({ productId }: { productId: string }) {
                   </div>
                   {Object.entries(q.dimensions).map(([dim, score]) => (
                     <div key={dim} className="flex items-center gap-2 mb-0.5">
-                      <span className="text-[10px] text-slate-400 w-16 shrink-0">{dim}</span>
+                      <span className="text-[10px] text-tertiary w-16 shrink-0">{dim}</span>
                       <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full ${score >= 75 ? 'bg-emerald-500' : score >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
@@ -265,7 +265,7 @@ export function AnalyticsTab({ productId }: { productId: string }) {
                 </div>
               ))}
               {analytics.quality.latestScoreAt && (
-                <p className="text-[10px] text-slate-400 mt-1">
+                <p className="text-[10px] text-tertiary mt-1">
                   Scored {new Date(analytics.quality.latestScoreAt).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })}
                 </p>
               )}
@@ -274,9 +274,9 @@ export function AnalyticsTab({ productId }: { productId: string }) {
         </div>
 
         {/* Inventory health */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-3">
           <div className="flex items-center gap-2 mb-2">
-            <Package className="h-4 w-4 text-slate-400" />
+            <Package className="h-4 w-4 text-tertiary" />
             <h3 className="text-xs font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wider">Inventory</h3>
           </div>
           <div className="space-y-2">
@@ -303,9 +303,9 @@ export function AnalyticsTab({ productId }: { productId: string }) {
         </div>
 
         {/* Repricing context */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3">
+        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-3">
           <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="h-4 w-4 text-slate-400" />
+            <TrendingUp className="h-4 w-4 text-tertiary" />
             <h3 className="text-xs font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wider">Repricing</h3>
           </div>
           {analytics.pricing.latestRepricingDecision ? (
@@ -326,11 +326,11 @@ export function AnalyticsTab({ productId }: { productId: string }) {
               <p className="text-xs text-slate-500 line-clamp-2">{analytics.pricing.latestRepricingDecision.reason}</p>
             </div>
           ) : (
-            <p className="text-xs text-slate-400">No repricing rule configured.</p>
+            <p className="text-xs text-tertiary">No repricing rule configured.</p>
           )}
           {analytics.pricing.currentPrices.length > 0 && (
             <div className="mt-3 space-y-1">
-              <div className="text-[10px] text-slate-400 uppercase tracking-wider">Current prices</div>
+              <div className="text-[10px] text-tertiary uppercase tracking-wider">Current prices</div>
               {analytics.pricing.currentPrices.slice(0, 3).map((p) => (
                 <div key={`${p.channel}:${p.marketplace}`} className="flex items-center justify-between">
                   <span className={`text-[10px] ${CHANNEL_COLORS[p.channel] ?? ''}`}>
@@ -359,7 +359,7 @@ export function AnalyticsTab({ productId }: { productId: string }) {
 
 function KpiCard({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</div>
       <div className={`text-xl font-semibold tabular-nums ${warn ? 'text-rose-700 dark:text-rose-400' : 'text-slate-900 dark:text-slate-100'}`}>
         {value}

@@ -159,7 +159,7 @@ export default async function CompliancePerMarketTab({
 
   if (listings.length === 0) {
     return (
-      <div className="border border-slate-200 dark:border-slate-800 rounded p-6 text-center text-sm text-slate-500">
+      <div className="border border-default dark:border-slate-800 rounded p-6 text-center text-sm text-slate-500">
         <ShieldCheck className="w-6 h-6 mx-auto mb-2 text-slate-300" />
         <div className="font-medium text-slate-700 dark:text-slate-300">
           {t('products.datasheetHub.compliancePerMarket.empty.title')}
@@ -342,7 +342,7 @@ export default async function CompliancePerMarketTab({
         {cards.map((c) => (
           <div
             key={c.key}
-            className="border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900 p-3 space-y-2"
+            className="border border-default dark:border-slate-800 rounded bg-white dark:bg-slate-900 p-3 space-y-2"
           >
             <div className="flex items-center justify-between gap-2">
               <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
@@ -352,7 +352,7 @@ export default async function CompliancePerMarketTab({
             </div>
             <ul className="space-y-1 text-xs">
               {c.items.length === 0 ? (
-                <li className="text-slate-400 italic">
+                <li className="text-tertiary italic">
                   {t(
                     'products.datasheetHub.compliancePerMarket.noRequirements',
                   )}

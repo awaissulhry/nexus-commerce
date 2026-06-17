@@ -120,7 +120,7 @@ export function UnifiedFilterExtras({ value, onChange }: Props) {
           value={value.search}
           onChange={(e) => onChange({ ...value, search: e.target.value })}
           placeholder="SKU or name…"
-          className="w-full h-6 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full h-6 px-2 text-xs border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
       </FFFilterSection>
 
@@ -168,7 +168,7 @@ export function UnifiedFilterExtras({ value, onChange }: Props) {
           ))}
         </div>
         {value.channels.length > 0 && (
-          <p className="text-[10px] text-slate-400 mt-1">Selected channels shown as column groups</p>
+          <p className="text-[10px] text-tertiary mt-1">Selected channels shown as column groups</p>
         )}
       </FFFilterSection>
 
@@ -190,7 +190,7 @@ export function UnifiedFilterExtras({ value, onChange }: Props) {
                   />
                   <span className="truncate font-mono">{bn.label}</span>
                 </div>
-                <span className="text-[10px] text-slate-400 flex-shrink-0">{bn.count}</span>
+                <span className="text-[10px] text-tertiary flex-shrink-0">{bn.count}</span>
               </label>
             ))}
           </div>
@@ -204,7 +204,7 @@ export function UnifiedFilterExtras({ value, onChange }: Props) {
           value={categorySearch}
           onChange={(e) => { setCategorySearch(e.target.value); if (!e.target.value) onChange({ ...value, ebayCategory: '' }) }}
           placeholder="Search eBay categories…"
-          className="w-full h-6 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full h-6 px-2 text-xs border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
         {value.ebayCategory && (
           <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-1">
@@ -212,9 +212,9 @@ export function UnifiedFilterExtras({ value, onChange }: Props) {
             <button className="ml-2 underline" onClick={() => { onChange({ ...value, ebayCategory: '' }); setCategorySearch('') }}>clear</button>
           </p>
         )}
-        {categoryLoading && <p className="text-[10px] text-slate-400 mt-1">Searching…</p>}
+        {categoryLoading && <p className="text-[10px] text-tertiary mt-1">Searching…</p>}
         {categorySuggestions.length > 0 && (
-          <div className="mt-1 border border-slate-200 dark:border-slate-700 rounded text-xs overflow-hidden">
+          <div className="mt-1 border border-default dark:border-slate-700 rounded text-xs overflow-hidden">
             {categorySuggestions.map((cat) => (
               <button
                 key={cat.categoryId}
@@ -224,10 +224,10 @@ export function UnifiedFilterExtras({ value, onChange }: Props) {
                   setCategorySearch(cat.categoryName)
                   setCategorySuggestions([])
                 }}
-                className="w-full text-left px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 truncate border-b border-slate-100 dark:border-slate-800 last:border-0"
+                className="w-full text-left px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 truncate border-b border-subtle dark:border-slate-800 last:border-0"
               >
                 <span className="font-medium text-slate-800 dark:text-slate-200">{cat.categoryName}</span>
-                <span className="text-slate-400 ml-1 text-[10px]">{cat.categoryId}</span>
+                <span className="text-tertiary ml-1 text-[10px]">{cat.categoryId}</span>
               </button>
             ))}
           </div>
@@ -246,7 +246,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
         'text-[10px] font-medium px-2 py-0.5 rounded border transition-colors',
         active
           ? 'bg-blue-600 text-white border-blue-600'
-          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300',
+          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:border-slate-300',
       )}
     >
       {children}

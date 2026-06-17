@@ -145,7 +145,7 @@ export default function TransfersClient() {
             {row.product?.thumbnailUrl ? (
               <img src={row.product.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100 dark:bg-slate-800 flex-shrink-0" />
             ) : (
-              <div className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 flex-shrink-0">
+              <div className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-tertiary flex-shrink-0">
                 <Package size={14} />
               </div>
             )}
@@ -160,16 +160,16 @@ export default function TransfersClient() {
         )
       case 'from':
         return row.from ? (
-          <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700" title={row.from.name}>
+          <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700" title={row.from.name}>
             {row.from.code}
           </span>
         ) : <span className="text-slate-300 dark:text-slate-600">—</span>
       case 'to':
         return (
           <span className="inline-flex items-center gap-1">
-            <ArrowRightLeft size={12} className="text-slate-400 dark:text-slate-500 flex-shrink-0" />
+            <ArrowRightLeft size={12} className="text-tertiary dark:text-slate-500 flex-shrink-0" />
             {row.to ? (
-              <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700" title={row.to.name}>
+              <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700" title={row.to.name}>
                 {row.to.code}
               </span>
             ) : <span className="text-slate-300 dark:text-slate-600">—</span>}
@@ -245,7 +245,7 @@ export default function TransfersClient() {
       {loading && !transfers && (
         <div className="space-y-2">
           {[0, 1, 2, 3].map(i => (
-            <div key={i} className="h-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse" />
+            <div key={i} className="h-16 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg animate-pulse" />
           ))}
         </div>
       )}

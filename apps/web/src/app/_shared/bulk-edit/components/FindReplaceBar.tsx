@@ -219,23 +219,23 @@ export function FindReplaceBar(props: FindReplaceBarProps) {
       role="dialog"
       aria-label="Find and replace"
       onKeyDown={onBarKeyDown}
-      className="absolute right-3 top-3 z-20 w-[420px] bg-white border border-slate-200 rounded-lg shadow-lg p-2 space-y-2"
+      className="absolute right-3 top-3 z-20 w-[420px] bg-white border border-default rounded-lg shadow-lg p-2 space-y-2"
     >
       {/* Find row */}
       <div className="flex items-center gap-1.5">
-        <Search className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+        <Search className="w-3.5 h-3.5 text-tertiary flex-shrink-0" />
         <input
           ref={queryRef}
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Find…"
-          className="flex-1 h-7 px-2 text-md border border-slate-200 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          className="flex-1 h-7 px-2 text-md border border-default rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
         />
         <span
           className={cn(
             'text-xs tabular-nums whitespace-nowrap min-w-[3rem] text-center',
-            matches.length === 0 ? 'text-slate-400' : 'text-slate-600',
+            matches.length === 0 ? 'text-tertiary' : 'text-slate-600',
             regexInvalid && 'text-red-600',
           )}
           aria-live="polite"
@@ -286,7 +286,7 @@ export function FindReplaceBar(props: FindReplaceBarProps) {
             'h-6 px-1.5 rounded font-mono uppercase tracking-wide border',
             caseSensitive
               ? 'bg-blue-50 border-blue-300 text-blue-700'
-              : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50',
+              : 'bg-white border-default text-slate-500 hover:bg-slate-50',
           )}
           aria-pressed={caseSensitive}
           title="Case sensitive"
@@ -300,7 +300,7 @@ export function FindReplaceBar(props: FindReplaceBarProps) {
             'h-6 px-1.5 rounded font-mono uppercase tracking-wide border',
             wholeWord
               ? 'bg-blue-50 border-blue-300 text-blue-700'
-              : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50',
+              : 'bg-white border-default text-slate-500 hover:bg-slate-50',
           )}
           aria-pressed={wholeWord}
           title="Whole word"
@@ -314,7 +314,7 @@ export function FindReplaceBar(props: FindReplaceBarProps) {
             'h-6 px-1.5 rounded font-mono uppercase tracking-wide border',
             regex
               ? 'bg-blue-50 border-blue-300 text-blue-700'
-              : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50',
+              : 'bg-white border-default text-slate-500 hover:bg-slate-50',
           )}
           aria-pressed={regex}
           title="Regular expression"
@@ -322,11 +322,11 @@ export function FindReplaceBar(props: FindReplaceBarProps) {
           .*
         </button>
 
-        <span className="ml-1 text-slate-400">in</span>
+        <span className="ml-1 text-tertiary">in</span>
         <select
           value={scope}
           onChange={(e) => setScope(e.target.value as Scope)}
-          className="h-6 px-1.5 text-xs border border-slate-200 rounded bg-white"
+          className="h-6 px-1.5 text-xs border border-default rounded bg-white"
         >
           <option value="all">All cells</option>
           <option value="selection" disabled={!rangeBounds}>
@@ -338,7 +338,7 @@ export function FindReplaceBar(props: FindReplaceBarProps) {
           <select
             value={columnId}
             onChange={(e) => setColumnId(e.target.value)}
-            className="h-6 px-1.5 text-xs border border-slate-200 rounded bg-white max-w-[140px]"
+            className="h-6 px-1.5 text-xs border border-default rounded bg-white max-w-[140px]"
           >
             {visibleColumns.map((c) => (
               <option key={c.id} value={c.id}>
@@ -355,7 +355,7 @@ export function FindReplaceBar(props: FindReplaceBarProps) {
             'ml-auto h-6 px-1.5 inline-flex items-center gap-1 rounded border text-xs',
             showReplace
               ? 'bg-blue-50 border-blue-300 text-blue-700'
-              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
+              : 'bg-white border-default text-slate-600 hover:bg-slate-50',
           )}
           aria-pressed={showReplace}
         >
@@ -367,19 +367,19 @@ export function FindReplaceBar(props: FindReplaceBarProps) {
       {/* Replace row */}
       {showReplace && (
         <div className="flex items-center gap-1.5">
-          <Replace className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+          <Replace className="w-3.5 h-3.5 text-tertiary flex-shrink-0" />
           <input
             type="text"
             value={replacement}
             onChange={(e) => setReplacement(e.target.value)}
             placeholder="Replace with…"
-            className="flex-1 h-7 px-2 text-md border border-slate-200 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="flex-1 h-7 px-2 text-md border border-default rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
           <button
             type="button"
             onClick={replaceOne}
             disabled={matches.length === 0 || regexInvalid}
-            className="h-7 px-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40"
+            className="h-7 px-2 text-xs font-medium text-slate-700 bg-white border border-default rounded hover:bg-slate-50 disabled:opacity-40"
             title="Replace this match"
           >
             Replace

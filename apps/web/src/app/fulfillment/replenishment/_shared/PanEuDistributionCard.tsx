@@ -91,7 +91,7 @@ export function PanEuDistributionCard() {
 
   if (loading && !data) {
     return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 text-xs text-slate-500">
+      <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-3 py-2 text-xs text-slate-500">
         {t('replenishment.panEu.loading')}
       </div>
     )
@@ -102,8 +102,8 @@ export function PanEuDistributionCard() {
   if (!data || data.recommendations.length === 0) return null
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
-      <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 flex-wrap">
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md">
+      <div className="px-3 py-2 border-b border-default dark:border-slate-800 flex items-center gap-2 flex-wrap">
         <Globe
           className="h-4 w-4 text-slate-500 dark:text-slate-400"
           aria-hidden="true"
@@ -122,7 +122,7 @@ export function PanEuDistributionCard() {
 
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
-          <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <thead className="border-b border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
             <tr>
               <th className="text-left px-3 py-1.5 font-semibold">
                 {t('replenishment.panEu.col.sku')}
@@ -180,7 +180,7 @@ export function PanEuDistributionCard() {
                     })}
                   </div>
                 </td>
-                <td className="px-1 py-1.5 text-slate-400">
+                <td className="px-1 py-1.5 text-tertiary">
                   <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                 </td>
                 <td className="px-3 py-1.5">

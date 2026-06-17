@@ -52,11 +52,11 @@ export default function SendHourReport() {
       <div className="flex items-center gap-2 mb-1">
         <BarChart3 size={16} className="text-blue-600" />
         <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Conversion by send time</h2>
-        <span className="text-xs text-slate-400">last 90 days</span>
+        <span className="text-xs text-tertiary">last 90 days</span>
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400 py-6">Loading…</p>
+        <p className="text-sm text-tertiary py-6">Loading…</p>
       ) : !data || data.totalSent === 0 ? (
         <p className="text-sm text-slate-500 dark:text-slate-400 py-4">No requests sent in the last 90 days yet — this fills in as the mailer sends.</p>
       ) : (
@@ -80,7 +80,7 @@ export default function SendHourReport() {
                 <tr>
                   <th className="w-8" />
                   {Array.from({ length: 24 }, (_, h) => (
-                    <th key={h} className="text-[9px] text-slate-400 font-normal tabular-nums w-5">{h % 3 === 0 ? h : ''}</th>
+                    <th key={h} className="text-[9px] text-tertiary font-normal tabular-nums w-5">{h % 3 === 0 ? h : ''}</th>
                   ))}
                 </tr>
               </thead>
@@ -105,7 +105,7 @@ export default function SendHourReport() {
               </tbody>
             </table>
           </div>
-          <p className="text-[11px] text-slate-400 mt-2">Shaded by send volume; green = had an attributed review. Hours are each request’s marketplace-local time.</p>
+          <p className="text-[11px] text-tertiary mt-2">Shaded by send volume; green = had an attributed review. Hours are each request’s marketplace-local time.</p>
         </>
       )}
     </Card>

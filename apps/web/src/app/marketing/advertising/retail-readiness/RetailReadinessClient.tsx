@@ -57,19 +57,19 @@ export function RetailReadinessClient() {
         </div>
       )}
 
-      <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden mb-3">
+      <div className="inline-flex rounded-md border border-default dark:border-slate-700 overflow-hidden mb-3">
         {([['all', 'All'], ['pause', 'Pause'], ['watch', 'Watch'], ['ok', 'Healthy']] as const).map(([v, label]) => (
-          <button key={v} onClick={() => setFilter(v)} className={`px-2.5 py-1.5 text-xs border-l first:border-l-0 border-slate-200 dark:border-slate-700 ${filter === v ? 'bg-slate-900 text-white dark:bg-slate-700' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{label}</button>
+          <button key={v} onClick={() => setFilter(v)} className={`px-2.5 py-1.5 text-xs border-l first:border-l-0 border-default dark:border-slate-700 ${filter === v ? 'bg-slate-900 text-white dark:bg-slate-700' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{label}</button>
         ))}
       </div>
 
-      <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-x-auto">
+      <div className="rounded-lg border border-default dark:border-slate-800 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr>
             <th className="text-left px-3 py-2">Campaign</th><th className="text-left px-3 py-2">Status</th><th className="text-right px-3 py-2">Products</th><th className="text-right px-3 py-2">OOS</th><th className="text-right px-3 py-2">Lost BB</th><th className="text-right px-3 py-2">Uncompet.</th><th className="text-left px-3 py-2">Reason</th><th className="px-3 py-2"></th>
           </tr></thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {rows.length === 0 && !loading && <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400 text-xs">No campaigns to show.</td></tr>}
+            {rows.length === 0 && !loading && <tr><td colSpan={8} className="px-3 py-8 text-center text-tertiary text-xs">No campaigns to show.</td></tr>}
             {rows.map((c) => {
               const done = paused.has(c.campaignId)
               return (
@@ -77,9 +77,9 @@ export function RetailReadinessClient() {
                   <td className="px-3 py-1.5"><Link href={`/marketing/advertising/campaigns/${c.campaignId}`} className="text-blue-600 hover:underline truncate block max-w-[240px]">{c.name}</Link></td>
                   <td className="px-3 py-1.5"><span className={`px-1.5 py-0.5 rounded text-xs ${VERDICT_CHIP[c.verdict]}`}>{done ? 'paused ✓' : c.verdict}</span></td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{c.products}</td>
-                  <td className={`px-3 py-1.5 text-right tabular-nums ${c.outOfStock ? 'text-rose-600 font-medium' : 'text-slate-400'}`}>{c.outOfStock}</td>
-                  <td className={`px-3 py-1.5 text-right tabular-nums ${c.lostBuyBox ? 'text-rose-600 font-medium' : 'text-slate-400'}`}>{c.lostBuyBox}</td>
-                  <td className={`px-3 py-1.5 text-right tabular-nums ${c.uncompetitive ? 'text-amber-600' : 'text-slate-400'}`}>{c.uncompetitive}</td>
+                  <td className={`px-3 py-1.5 text-right tabular-nums ${c.outOfStock ? 'text-rose-600 font-medium' : 'text-tertiary'}`}>{c.outOfStock}</td>
+                  <td className={`px-3 py-1.5 text-right tabular-nums ${c.lostBuyBox ? 'text-rose-600 font-medium' : 'text-tertiary'}`}>{c.lostBuyBox}</td>
+                  <td className={`px-3 py-1.5 text-right tabular-nums ${c.uncompetitive ? 'text-amber-600' : 'text-tertiary'}`}>{c.uncompetitive}</td>
                   <td className="px-3 py-1.5 text-xs text-slate-500 max-w-[320px] truncate">{c.reason}</td>
                   <td className="px-3 py-1.5 text-right">{c.verdict === 'pause' && !done ? <button disabled={busy === c.campaignId} onClick={() => pause([c.campaignId])} className="text-xs text-rose-600 hover:underline disabled:opacity-40">{busy === c.campaignId ? '…' : 'Pause'}</button> : c.verdict === 'ok' ? <ShieldCheck size={14} className="text-emerald-500 inline" /> : null}</td>
                 </tr>
@@ -88,7 +88,7 @@ export function RetailReadinessClient() {
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-slate-400 mt-3">Auto-pilot: set <code className="px-1 rounded bg-slate-100 dark:bg-slate-800">NEXUS_ADS_RETAIL_GUARD_APPLY=1</code> + enable the ads cron to pause at-risk campaigns automatically. Writes honour the live-write gate (sandbox-safe until go-live).</p>
+      <p className="text-xs text-tertiary mt-3">Auto-pilot: set <code className="px-1 rounded bg-slate-100 dark:bg-slate-800">NEXUS_ADS_RETAIL_GUARD_APPLY=1</code> + enable the ads cron to pause at-risk campaigns automatically. Writes honour the live-write gate (sandbox-safe until go-live).</p>
     </div>
   )
 }

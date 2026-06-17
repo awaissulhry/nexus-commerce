@@ -196,7 +196,7 @@ export default function OrganizeClient() {
       <nav
         role="tablist"
         aria-label={t('organize.title')}
-        className="sticky top-0 z-10 -mx-6 px-6 bg-white/85 backdrop-blur border-b border-slate-200 dark:border-slate-700 flex items-center gap-1 overflow-x-auto dark:bg-slate-950/85 dark:border-slate-800"
+        className="sticky top-0 z-10 -mx-6 px-6 bg-white/85 backdrop-blur border-b border-default dark:border-slate-700 flex items-center gap-1 overflow-x-auto dark:bg-slate-950/85 dark:border-slate-800"
       >
         {TABS.map((tabDef) => (
           <button
@@ -375,13 +375,13 @@ function GroupsTab({
       <GridToolbar
         searchSlot={
           <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tertiary dark:text-slate-500" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search base name or master SKU"
-              className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full h-8 pl-8 pr-2 text-base border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
         }
@@ -462,7 +462,7 @@ function GroupsTab({
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4"
+              className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg p-4"
             >
               <Skeleton variant="text" lines={2} />
             </div>
@@ -549,7 +549,7 @@ function GroupRow({
         'bg-white dark:bg-slate-900 border-2 rounded-lg overflow-hidden transition-colors',
         isApproved && 'border-emerald-400',
         isRejected && 'border-rose-300 opacity-60',
-        !isApproved && !isRejected && 'border-slate-200 dark:border-slate-700',
+        !isApproved && !isRejected && 'border-default dark:border-slate-700',
       )}
     >
       <div className="p-4 flex items-center gap-3 flex-wrap">
@@ -583,7 +583,7 @@ function GroupRow({
             {group.detectionMethod && (
               <>
                 <span>·</span>
-                <span className="uppercase tracking-wide text-xs text-slate-400 dark:text-slate-500">
+                <span className="uppercase tracking-wide text-xs text-tertiary dark:text-slate-500">
                   {group.detectionMethod.replace(/_/g, ' ')}
                 </span>
               </>
@@ -623,12 +623,12 @@ function GroupRow({
         </div>
       </div>
       {isExpanded && (
-        <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
+        <div className="border-t border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
           <ul className="space-y-1.5">
             {group.members.map((m) => (
               <li
                 key={m.productId}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md p-2.5 flex items-center justify-between gap-3"
+                className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-md p-2.5 flex items-center justify-between gap-3"
               >
                 <div className="flex-1 min-w-0">
                   <div className="text-md font-medium text-slate-900 dark:text-slate-100 truncate font-mono">
@@ -749,13 +749,13 @@ export function StandaloneTab({
       <GridToolbar
         searchSlot={
           <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tertiary dark:text-slate-500" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search SKU, name, brand"
-              className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full h-8 pl-8 pr-2 text-base border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
         }
@@ -763,7 +763,7 @@ export function StandaloneTab({
           <select
             value={coverage}
             onChange={(e) => setCoverage(e.target.value as any)}
-            className="h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
+            className="h-8 px-2 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
           >
             <option value="all">All</option>
             <option value="unlisted">Unlisted only</option>
@@ -830,7 +830,7 @@ export function StandaloneTab({
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 p-3"
+              className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 p-3"
             >
               <Skeleton variant="text" lines={2} />
             </div>
@@ -843,7 +843,7 @@ export function StandaloneTab({
           description="Either every product is grouped, or your filters exclude them all."
         />
       ) : (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
+        <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
           <table className="w-full text-base">
             <thead className="bg-slate-50 dark:bg-slate-800">
               <tr>
@@ -884,7 +884,7 @@ export function StandaloneTab({
               {items.map((p) => (
                 <tr
                   key={p.id}
-                  className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50/50"
+                  className="border-t border-subtle dark:border-slate-800 hover:bg-slate-50/50"
                 >
                   <td className="px-3 py-2">
                     <input
@@ -936,7 +936,7 @@ export function StandaloneTab({
                       <button
                         type="button"
                         onClick={() => setPromoteId(p)}
-                        className="h-6 px-2 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300"
+                        className="h-6 px-2 text-xs rounded-md border border-default dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300"
                         title="Mark as parent (will accept variants)"
                       >
                         Promote
@@ -1025,7 +1025,7 @@ export function StandaloneTab({
 function CoverageBadge({ cov }: { cov: StandaloneItem['channelCoverage'] }) {
   if (cov.status === 'unlisted') {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
         unlisted
       </span>
     )
@@ -1270,17 +1270,17 @@ function AttachModal({
                 Search parent SKU or name
               </label>
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tertiary dark:text-slate-500" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Min 2 characters"
-                  className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full h-8 pl-8 pr-2 text-base border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   autoFocus
                 />
               </div>
-              <div className="mt-2 max-h-[200px] overflow-y-auto border border-slate-100 dark:border-slate-800 rounded-md">
+              <div className="mt-2 max-h-[200px] overflow-y-auto border border-subtle dark:border-slate-800 rounded-md">
                 {searching && (
                   <div className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -1297,7 +1297,7 @@ function AttachModal({
                     key={p.id}
                     type="button"
                     onClick={() => setSelected(p)}
-                    className="w-full text-left px-3 py-2 text-base hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800 last:border-b-0"
+                    className="w-full text-left px-3 py-2 text-base hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-subtle dark:border-slate-800 last:border-b-0"
                   >
                     <div className="font-mono text-slate-900 dark:text-slate-100">{p.sku}</div>
                     <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
@@ -1311,7 +1311,7 @@ function AttachModal({
 
           {selected && (
             <>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2 flex items-center justify-between">
+              <div className="border border-default dark:border-slate-700 rounded-md px-3 py-2 flex items-center justify-between">
                 <div>
                   <div className="text-sm text-slate-500 dark:text-slate-400">Parent</div>
                   <div className="font-mono text-md text-slate-900 dark:text-slate-100">
@@ -1331,7 +1331,7 @@ function AttachModal({
               </div>
 
               {parentAxes.length > 0 && parentVariants.length > 0 && (
-                <div className="border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2">
+                <div className="border border-default dark:border-slate-700 rounded-md px-3 py-2">
                   <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-1">
                     Existing variants under this parent
                   </div>
@@ -1350,7 +1350,7 @@ function AttachModal({
                       </div>
                     ))}
                     {parentVariants.length > 8 && (
-                      <div className="text-xs text-slate-400 dark:text-slate-500">
+                      <div className="text-xs text-tertiary dark:text-slate-500">
                         …and {parentVariants.length - 8} more
                       </div>
                     )}
@@ -1428,7 +1428,7 @@ function ProductAxisRow({
   onChange: (axis: string, value: string) => void
 }) {
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-md p-2.5 bg-slate-50/30">
+    <div className="border border-default dark:border-slate-700 rounded-md p-2.5 bg-slate-50/30">
       <div className="text-xs font-mono text-slate-500 dark:text-slate-400 mb-1.5 truncate">
         {productId}
       </div>
@@ -1446,7 +1446,7 @@ function ProductAxisRow({
                   if (e.target.value === '__custom__') onChange(axis, '')
                   else onChange(axis, e.target.value)
                 }}
-                className="w-full h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+                className="w-full h-7 px-2 text-base border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
               >
                 <option value="">— Select —</option>
                 {known.map((k) => (
@@ -1462,7 +1462,7 @@ function ProductAxisRow({
                   value={v}
                   onChange={(e) => onChange(axis, e.target.value)}
                   placeholder={`New ${axis} value`}
-                  className="mt-1 w-full h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+                  className="mt-1 w-full h-7 px-2 text-sm border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
                 />
               )}
             </div>
@@ -1563,7 +1563,7 @@ function PromoteModal({
                     'text-left rounded-md border px-2.5 py-2 transition-colors',
                     active
                       ? 'border-blue-300 bg-blue-50/40 ring-1 ring-blue-200'
-                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600',
+                      : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600',
                     submitting && 'opacity-50 cursor-not-allowed',
                   )}
                   aria-pressed={active}
@@ -1583,7 +1583,7 @@ function PromoteModal({
                 'text-left rounded-md border px-2.5 py-2 transition-colors',
                 selectedTheme === 'CUSTOM'
                   ? 'border-blue-300 bg-blue-50/40 ring-1 ring-blue-200'
-                  : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600',
+                  : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600',
                 submitting && 'opacity-50 cursor-not-allowed',
               )}
               aria-pressed={selectedTheme === 'CUSTOM'}
@@ -1603,7 +1603,7 @@ function PromoteModal({
                 'text-left rounded-md border px-2.5 py-2 transition-colors',
                 selectedTheme === null
                   ? 'border-blue-300 bg-blue-50/40 ring-1 ring-blue-200'
-                  : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600',
+                  : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600',
                 submitting && 'opacity-50 cursor-not-allowed',
               )}
               aria-pressed={selectedTheme === null}
@@ -1624,7 +1624,7 @@ function PromoteModal({
               onChange={(e) => setCustomTheme(e.target.value)}
               placeholder="Size / Color"
               autoFocus
-              className="mt-2 w-full h-8 px-2.5 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="mt-2 w-full h-8 px-2.5 text-base border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               disabled={submitting}
             />
           )}
@@ -1775,7 +1775,7 @@ const ChildItem = memo(function ChildItem({
       <div className="flex items-center gap-1">
         <Link
           href={`/products/${c.id}/edit`}
-          className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+          className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
         >
           Open
           <ChevronRight className="w-3 h-3" />
@@ -1785,7 +1785,7 @@ const ChildItem = memo(function ChildItem({
             type="button"
             onClick={() => void onDetach(parentId, c)}
             aria-label="Detach from parent"
-            className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+            className="inline-flex items-center justify-center w-6 h-6 rounded text-tertiary dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -2081,13 +2081,13 @@ export function ParentsTab({
       <GridToolbar
         searchSlot={
           <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tertiary dark:text-slate-500" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search parent SKU or name"
-              className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full h-8 pl-8 pr-2 text-base border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
         }
@@ -2130,7 +2130,7 @@ export function ParentsTab({
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-900"
+              className="border border-default dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-900"
             >
               <Skeleton variant="text" lines={2} />
             </div>
@@ -2143,7 +2143,7 @@ export function ParentsTab({
           description="Promote a standalone or apply a suggested group to create one."
         />
       ) : (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
+        <div className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
           <table className="w-full text-base">
             <thead className="bg-slate-50 dark:bg-slate-800">
               <tr>
@@ -2179,7 +2179,7 @@ export function ParentsTab({
                   <Fragment key={p.id}>
                     <tr
                       className={cn(
-                        'border-t border-slate-100 dark:border-slate-800',
+                        'border-t border-subtle dark:border-slate-800',
                         isExpanded
                           ? 'bg-blue-50/40'
                           : 'hover:bg-slate-50/50',
@@ -2294,7 +2294,7 @@ export function ParentsTab({
                       <td className="px-3 py-2 text-right">
                         <Link
                           href={`/products/${p.id}/edit`}
-                          className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+                          className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
                         >
                           Open
                           <ChevronRight className="w-3 h-3" />
@@ -2305,7 +2305,7 @@ export function ParentsTab({
                       <tr id={`children-${p.id}`}>
                         <td
                           colSpan={8}
-                          className="bg-slate-50/60 border-t border-slate-100 dark:border-slate-800 px-4 py-3"
+                          className="bg-slate-50/60 border-t border-subtle dark:border-slate-800 px-4 py-3"
                         >
                           {panel?.loading && (
                             <div
@@ -2351,7 +2351,7 @@ export function ParentsTab({
                                   No children — this parent is empty.
                                 </div>
                               ) : (
-                                <ul className="divide-y divide-slate-100 border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900">
+                                <ul className="divide-y divide-slate-100 border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900">
                                   {panel.children.map((c) => (
                                     <ChildItem
                                       key={c.id}

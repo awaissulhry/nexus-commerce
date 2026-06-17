@@ -111,10 +111,10 @@ export default function CascadeChoiceModal({
       aria-label="Apply change to"
     >
       <div
-        className="bg-white rounded-lg shadow-2xl border border-slate-200 w-full max-w-[520px] max-h-[80vh] flex flex-col"
+        className="bg-white rounded-lg shadow-2xl border border-default w-full max-w-[520px] max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-default flex-shrink-0">
           <h2 className="text-lg font-semibold text-slate-900">
             {confirmStep ? 'Confirm large cascade' : 'Apply change to'}
           </h2>
@@ -177,7 +177,7 @@ export default function CascadeChoiceModal({
 
               {/* Child preview */}
               {cascade && childCount > 0 && (
-                <div className="border border-slate-200 rounded-md p-3 bg-slate-50">
+                <div className="border border-default rounded-md p-3 bg-slate-50">
                   <div className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
                     Will update {childCount} {childCount === 1 ? 'child' : 'children'}
                   </div>
@@ -214,7 +214,7 @@ export default function CascadeChoiceModal({
               )}
             </div>
 
-            <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2 flex-shrink-0">
+            <div className="px-5 py-3 border-t border-default flex items-center justify-end gap-2 flex-shrink-0">
               <Button variant="secondary" size="sm" onClick={onCancel}>
                 Cancel
               </Button>
@@ -265,13 +265,13 @@ export default function CascadeChoiceModal({
                     'focus:outline-none focus:ring-2 focus:ring-blue-500/20',
                     confirmText === CONFIRM_TOKEN
                       ? 'border-green-400 focus:border-green-500'
-                      : 'border-slate-200 focus:border-blue-500'
+                      : 'border-default focus:border-blue-500'
                   )}
                   autoFocus
                 />
               </div>
             </div>
-            <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2 flex-shrink-0">
+            <div className="px-5 py-3 border-t border-default flex items-center justify-end gap-2 flex-shrink-0">
               <Button
                 variant="secondary"
                 size="sm"
@@ -317,7 +317,7 @@ function Choice({
         'w-full flex items-start gap-2.5 px-3 py-2.5 rounded-md border text-left transition-colors',
         selected
           ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-300'
-          : 'bg-white border-slate-200 hover:bg-slate-50',
+          : 'bg-white border-default hover:bg-slate-50',
         disabled && 'opacity-50 cursor-not-allowed'
       )}
     >

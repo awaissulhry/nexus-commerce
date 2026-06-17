@@ -189,10 +189,10 @@ export default function ScheduledReportsSection({ t }: { t: T }) {
 
   const inputClass = cn(
     'h-7 px-2 text-sm rounded-md border tabular-nums',
-    'border-slate-200 dark:border-slate-700',
+    'border-default dark:border-slate-700',
     'bg-white dark:bg-slate-900',
     'text-slate-700 dark:text-slate-300',
-    'placeholder:text-slate-400 dark:placeholder:text-slate-500',
+    'placeholder:text-tertiary dark:placeholder:text-slate-500',
     'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
   )
 
@@ -207,7 +207,7 @@ export default function ScheduledReportsSection({ t }: { t: T }) {
           {t('common.loading')}
         </div>
       ) : (
-        <ul className="border border-slate-200 dark:border-slate-800 rounded-md divide-y divide-slate-100 dark:divide-slate-800">
+        <ul className="border border-default dark:border-slate-800 rounded-md divide-y divide-slate-100 dark:divide-slate-800">
           {reports.length === 0 && (
             <li className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400 italic">
               {t('overview.reports.empty')}

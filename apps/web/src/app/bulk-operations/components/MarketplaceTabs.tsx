@@ -60,7 +60,7 @@ export default function MarketplaceTabs({
   const isMaster = primaryKey === null
 
   return (
-    <div className="flex-shrink-0 mb-2 flex items-center gap-1 overflow-x-auto border-b border-slate-200">
+    <div className="flex-shrink-0 mb-2 flex items-center gap-1 overflow-x-auto border-b border-default">
       <TabBtn
         active={isMaster}
         onClick={() => onSelect(null, '')}
@@ -80,7 +80,7 @@ export default function MarketplaceTabs({
               title={`${m.name} — ${m.currency} · ${m.language.toUpperCase()}`}
             >
               <span className="font-mono">{m.code}</span>
-              <span className="text-slate-400 text-xs uppercase">
+              <span className="text-tertiary text-xs uppercase">
                 {channel === 'AMAZON' ? 'amz' : 'ebay'}
               </span>
             </TabBtn>
