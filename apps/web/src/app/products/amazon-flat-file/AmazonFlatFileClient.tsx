@@ -1357,6 +1357,36 @@ export default function AmazonFlatFileClient({
     setFillDragEnd(null)
   }, [normSel, fillTarget, pushSnapshot])
 
+  // GX.6 — double-click the fill handle to fill the selection down to the bottom
+  // of the data (the last real, non-ghost row), like Sheets. Tiles a multi-row
+  // selection; for a single cell it just copies the value down.
+  const fillToBottom = useCallback(() => {
+    if (!normSel) return
+    const dr = displayRowsRef.current
+    let lastDataRi = -1
+    for (let i = dr.length - 1; i >= 0; i--) { if (!dr[i]?._ghost) { lastDataRi = i; break } }
+    if (lastDataRi <= normSel.rMax) return // nothing below to fill into
+    pushSnapshot()
+    const { rMin, rMax, cMin, cMax } = normSel
+    const selH = rMax - rMin + 1
+    setRows((prev) => {
+      const next = [...prev]
+      for (let ri = rMax + 1; ri <= lastDataRi; ri++) {
+        const targetDr = dr[ri]; if (!targetDr || targetDr._ghost) continue
+        const srcDr = dr[rMin + ((ri - (rMax + 1)) % selH)]; if (!srcDr) continue
+        const idx = prev.findIndex((r) => r._rowId === targetDr._rowId); if (idx === -1) continue
+        const updated: Row = { ...prev[idx], _dirty: true }
+        for (let ci = cMin; ci <= cMax; ci++) {
+          const col = allColumnsRef.current[ci]
+          if (col) updated[col.id] = srcDr[col.id]
+        }
+        next[idx] = updated
+      }
+      return next
+    })
+    setSelEnd({ ri: lastDataRi, ci: cMax })
+  }, [normSel, pushSnapshot])
+
   const handleCellPointerDown = useCallback((ri: number, ci: number, shiftKey: boolean) => {
     if (shiftKey && selAnchor) {
       setSelEnd({ ri, ci })
@@ -3916,6 +3946,7 @@ export default function AmazonFlatFileClient({
                     if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
                   }}
                   onFillHandlePointerDown={handleFillHandlePointerDown}
+                  onFillToBottom={fillToBottom}
                   onFillDrop={handleFillDrop}
                   stickyLeftByColIdx={stickyLeftByColIdx}
                   cellErrors={cellErrors}
@@ -4437,6 +4468,7 @@ interface RowProps {
   onCellDoubleClick: (ri: number, ci: number) => void
   onRowSelect: (ri: number) => void
   onFillHandlePointerDown: (ri: number, ci: number) => void
+  onFillToBottom: () => void
   onFillDrop: () => void
   showOverrideBadges: boolean
   showCascadeButtons: boolean
@@ -4451,7 +4483,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
   matchKeys, toneMap,
   onSelect, onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate, onRowResizeStart,
   onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
-  onCellPointerDown, onCellDoubleClick, onRowSelect, onFillHandlePointerDown, onFillDrop,
+  onCellPointerDown, onCellDoubleClick, onRowSelect, onFillHandlePointerDown, onFillToBottom, onFillDrop,
   showOverrideBadges, showCascadeButtons, onCascadeRow }: RowProps) {
   const rowId = row._rowId as string
   const status = row._status
@@ -4745,6 +4777,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             onCellPointerDown={(shiftKey) => onCellPointerDown(rowIdx, ci, shiftKey)}
             onCellDoubleClick={() => onCellDoubleClick(rowIdx, ci)}
             onFillHandlePointerDown={() => onFillHandlePointerDown(rowIdx, ci)}
+            onFillToBottom={onFillToBottom}
             onFillDrop={onFillDrop}
             onDeactivate={onDeactivate}
             onChange={(v) => onChange(col.id, v)}
@@ -4934,6 +4967,7 @@ interface CellProps {
   onCellPointerDown: (shiftKey: boolean) => void
   onCellDoubleClick: () => void
   onFillHandlePointerDown: () => void
+  onFillToBottom: () => void
   onFillDrop: () => void
   onDeactivate: () => void
   onChange: (val: unknown) => void
@@ -4973,7 +5007,7 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
   isEditing, editInitialChar, isClipboard, clipboardEdges,
   validIssue, stickyLeft, isMatch, toneCls,
   guidanceLevel, isGhost,
-  onCellPointerDown, onCellDoubleClick, onFillHandlePointerDown, onFillDrop,
+  onCellPointerDown, onCellDoubleClick, onFillHandlePointerDown, onFillToBottom, onFillDrop,
   onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate }: CellProps) {
   const displayValue = value != null ? String(value) : ''
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
@@ -5127,6 +5161,8 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
         e.currentTarget.releasePointerCapture(e.pointerId)
         onFillHandlePointerDown()
       }}
+      onDoubleClick={(e) => { e.stopPropagation(); e.preventDefault(); onFillToBottom() }}
+      title="Double-click to fill down to the bottom of the data"
     />
   ) : null
 
