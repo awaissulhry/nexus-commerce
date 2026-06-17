@@ -23,6 +23,7 @@ import {
 } from '../services/amazon/flat-file.service.js'
 import { renderExport } from '../services/export/renderers.js'
 import { parseCsv, parseXlsx, parseJson, detectFileKind, sniffDelimiter } from '../services/import/parsers.js'
+import { suggestFlatFileMapping } from '../services/amazon/flat-file-mapping.js'
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
 import { preflightRow, buildPerTypeValidation } from '../services/listing-preflight.service.js'
@@ -592,6 +593,44 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       return reply.send({ kind, headers: parsed.headers, rows: parsed.rows, count: parsed.rows.length })
     } catch (err: any) {
       return reply.code(400).send({ error: err?.message ?? 'Parse failed' })
+    }
+  })
+
+  // ── POST /api/amazon/flat-file/suggest-mapping ──────────────────────
+  // FX.3 — given the raw headers of an uploaded external file (FX.2 /parse) +
+  // the target market/product type(s), suggest the best flat-file column for
+  // each header with a confidence + source. Manifest-aware (accurate per market
+  // + product type) and MT-union aware (maps across a mixed Jacket+Pants sheet).
+  // Deterministic; the AI tail for ambiguous headers lands in FX.4.
+  fastify.post<{
+    Body: { headers: string[]; marketplace?: string; productType?: string; productTypes?: string[] }
+  }>('/amazon/flat-file/suggest-mapping', async (request, reply) => {
+    const { headers, marketplace = 'IT', productType, productTypes } = request.body
+    if (!Array.isArray(headers) || headers.length === 0) {
+      return reply.code(400).send({ error: 'headers (non-empty array) required' })
+    }
+    const types = (productTypes ?? []).map((t) => String(t).toUpperCase()).filter(Boolean)
+    const pt = String(productType ?? '').toUpperCase()
+    if (!pt && types.length === 0) {
+      return reply.code(400).send({ error: 'productType or productTypes required' })
+    }
+    try {
+      const manifest = types.length > 1
+        ? await flatFileService.generateUnionManifest(marketplace, types)
+        : await flatFileService.generateManifest(marketplace, pt || types[0])
+      const columns = manifest.groups
+        .flatMap((g) => g.columns)
+        .map((c) => ({ id: c.id, labelEn: c.labelEn, labelLocal: c.labelLocal }))
+      const result = suggestFlatFileMapping(headers, columns)
+      return reply.send({
+        ...result,
+        marketplace: manifest.marketplace,
+        productType: manifest.productType,
+        columnCount: columns.length,
+      })
+    } catch (err: any) {
+      request.log.error(err, 'flat-file/suggest-mapping failed')
+      return reply.code(500).send({ error: err?.message ?? 'Mapping failed' })
     }
   })
 
