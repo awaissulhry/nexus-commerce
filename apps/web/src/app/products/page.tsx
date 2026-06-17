@@ -5,11 +5,18 @@
 // actions across channels via /api/listings/bulk-action.
 
 import ProductsWorkspace from './ProductsWorkspace'
+import AiCopilot from './AiCopilot'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 export const fetchCache = 'force-no-store'
 
 export default function ProductsPage() {
-  return <ProductsWorkspace />
+  return (
+    <>
+      <ProductsWorkspace />
+      {/* ACP.2b — read-only products copilot (floating widget) */}
+      <AiCopilot pageContext={{ route: '/products' }} />
+    </>
+  )
 }
