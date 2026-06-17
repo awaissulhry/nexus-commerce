@@ -24,6 +24,7 @@ import {
 import { renderExport } from '../services/export/renderers.js'
 import { parseCsv, parseXlsx, parseJson, detectFileKind, sniffDelimiter } from '../services/import/parsers.js'
 import { suggestFlatFileMapping } from '../services/amazon/flat-file-mapping.js'
+import { aiSuggestColumns } from '../services/amazon/flat-file-mapping-ai.js'
 import { coerceRowsWithAi } from '../services/amazon/flat-file-coerce-ai.js'
 import { planImportMerge, type ImportApplyMode } from '../services/amazon/flat-file-merge.js'
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
@@ -633,6 +634,38 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       request.log.error(err, 'flat-file/suggest-mapping failed')
       return reply.code(500).send({ error: err?.message ?? 'Mapping failed' })
+    }
+  })
+
+  // ── POST /api/amazon/flat-file/suggest-columns-ai ───────────────────
+  // FX.7 — AI tail for the headers FX.3's heuristic couldn't map. Send the
+  // unmatched headers (+ a sample value each); get a constrained best-guess
+  // flat-file column id per header (or null). The wizard applies these as
+  // reviewable "AI" matches.
+  fastify.post<{
+    Body: { headers: string[]; samples?: Record<string, string>; marketplace?: string; productType?: string; productTypes?: string[] }
+  }>('/amazon/flat-file/suggest-columns-ai', async (request, reply) => {
+    const { headers, samples = {}, marketplace = 'IT', productType, productTypes } = request.body
+    if (!Array.isArray(headers) || headers.length === 0) {
+      return reply.code(400).send({ error: 'headers (non-empty array) required' })
+    }
+    const types = (productTypes ?? []).map((t) => String(t).toUpperCase()).filter(Boolean)
+    const pt = String(productType ?? '').toUpperCase()
+    if (!pt && types.length === 0) {
+      return reply.code(400).send({ error: 'productType or productTypes required' })
+    }
+    try {
+      const manifest = types.length > 1
+        ? await flatFileService.generateUnionManifest(marketplace, types)
+        : await flatFileService.generateManifest(marketplace, pt || types[0])
+      const columns = manifest.groups
+        .flatMap((g) => g.columns)
+        .map((c) => ({ id: c.id, labelEn: c.labelEn, labelLocal: c.labelLocal }))
+      const suggestions = await aiSuggestColumns(headers, columns, samples)
+      return reply.send({ suggestions })
+    } catch (err: any) {
+      request.log.error(err, 'flat-file/suggest-columns-ai failed')
+      return reply.code(500).send({ error: err?.message ?? 'AI mapping failed' })
     }
   })
 

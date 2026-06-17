@@ -117,6 +117,9 @@ export function ImportWizardModal({
   const [presets, setPresets] = useState<ImportPreset[]>([])
   const [appliedPreset, setAppliedPreset] = useState<string | null>(null)
   const [validateBySku, setValidateBySku] = useState<Record<string, { errors: number; warnings: number }>>({})
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiMapped, setAiMapped] = useState<Set<string>>(new Set()) // headers mapped by the AI tail
+  const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const typeParam = useMemo(
@@ -129,7 +132,7 @@ export function ImportWizardModal({
       setStep('upload'); setBusy(false); setError(null); setFileName(''); setPasteText('')
       setParsed(null); setSuggest(null); setMapping(new Map()); setCoerced(null)
       setMode('fill-missing'); setPlan(null); setOverrides({}); setExpanded(new Set())
-      setAppliedPreset(null); setValidateBySku({})
+      setAppliedPreset(null); setValidateBySku({}); setAiBusy(false); setAiMapped(new Set())
     } else {
       setPresets(loadPresets())
     }
@@ -192,6 +195,29 @@ export function ImportWizardModal({
     if (!p) return
     setMapping(new Map(Object.entries(p.mapping))); setUseAi(p.useAi); setAppliedPreset(p.name)
   }, [presets])
+
+  // FX.7 — AI-map the headers the heuristic + operator left unmapped.
+  const aiMapRemaining = useCallback(async () => {
+    if (!parsed || !suggest) return
+    const unmapped = suggest.mappings.map((m) => m.header).filter((h) => !mapping.get(h))
+    if (!unmapped.length) return
+    setAiBusy(true); setError(null)
+    try {
+      const samples: Record<string, string> = {}
+      for (const h of unmapped) samples[h] = String(parsed.rows[0]?.[h] ?? '').slice(0, 60)
+      const res = await post('suggest-columns-ai', { headers: unmapped, samples, marketplace, ...typeParam }) as { suggestions: Record<string, { columnId: string; confidence: number } | null> }
+      const next = new Map(mapping)
+      const ai = new Set(aiMapped)
+      for (const [h, s] of Object.entries(res.suggestions ?? {})) {
+        if (s && !next.get(h)) { next.set(h, s.columnId); ai.add(h) }
+      }
+      setMapping(next); setAiMapped(ai)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'AI mapping failed')
+    } finally {
+      setAiBusy(false)
+    }
+  }, [parsed, suggest, mapping, aiMapped, post, marketplace, typeParam])
 
   // ── Step 2 → coerce + plan ────────────────────────────────────────
   const mappedRows = useMemo(() => {
@@ -290,7 +316,8 @@ export function ImportWizardModal({
   return (
     <div className="fixed inset-0 z-[70] flex items-start justify-center bg-black/40 pt-10 px-4"
       onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose() }}>
-      <div className="w-[940px] max-w-full max-h-[88vh] bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+      <div role="dialog" aria-modal="true" aria-label="Smart import"
+        className="w-[940px] max-w-full max-h-[88vh] bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
 
         {/* Header + stepper */}
         <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
@@ -327,9 +354,13 @@ export function ImportWizardModal({
           {step === 'upload' && (
             <div className="space-y-4">
               <button type="button" onClick={() => fileRef.current?.click()}
-                className="w-full border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl py-10 flex flex-col items-center gap-2 hover:border-violet-400 hover:bg-violet-50/40 dark:hover:bg-violet-950/10 transition-colors">
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files?.[0]; if (f) void onFile(f) }}
+                className={cn('w-full border-2 border-dashed rounded-xl py-10 flex flex-col items-center gap-2 transition-colors',
+                  dragOver ? 'border-violet-400 bg-violet-50/60 dark:bg-violet-950/20' : 'border-slate-300 dark:border-slate-700 hover:border-violet-400 hover:bg-violet-50/40 dark:hover:bg-violet-950/10')}>
                 <Upload className="w-7 h-7 text-slate-400" />
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Choose a file</span>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{dragOver ? 'Drop to import' : 'Choose a file or drag it here'}</span>
                 <span className="text-xs text-slate-500">CSV · Excel (.xlsx) · TSV · JSON — supplier columns are auto-mapped next</span>
               </button>
               <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.json" className="hidden"
@@ -375,6 +406,13 @@ export function ImportWizardModal({
                   className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
                   Save as preset
                 </button>
+                {suggest.mappings.length - mappedCount > 0 && (
+                  <button type="button" onClick={() => void aiMapRemaining()} disabled={aiBusy}
+                    className="ml-auto inline-flex items-center gap-1 px-2 py-1 rounded border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30 disabled:opacity-50">
+                    {aiBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    AI-map remaining ({suggest.mappings.length - mappedCount})
+                  </button>
+                )}
               </div>
               <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
                 <table className="w-full text-xs">
@@ -390,14 +428,18 @@ export function ImportWizardModal({
                   <tbody>
                     {suggest.mappings.map((m) => {
                       const sample = String(parsed.rows[0]?.[m.header] ?? '')
-                      const badge = SOURCE_BADGE[(mapping.get(m.header) ? m.source : 'none')]
+                      const badge = SOURCE_BADGE[aiMapped.has(m.header) ? 'ai' : (mapping.get(m.header) ? m.source : 'none')]
                       return (
                         <tr key={m.header} className="border-t border-slate-100 dark:border-slate-800">
                           <td className="px-3 py-1.5 font-medium text-slate-700 dark:text-slate-200 break-all">{m.header}</td>
                           <td className="px-2 py-1.5 text-slate-300"><ArrowRight className="w-3.5 h-3.5" /></td>
                           <td className="px-3 py-1.5">
                             <select value={mapping.get(m.header) ?? ''}
-                              onChange={(e) => setMapping((prev) => new Map(prev).set(m.header, e.target.value || null))}
+                              aria-label={`Map column ${m.header}`}
+                              onChange={(e) => {
+                                setMapping((prev) => new Map(prev).set(m.header, e.target.value || null))
+                                setAiMapped((prev) => { if (!prev.has(m.header)) return prev; const n = new Set(prev); n.delete(m.header); return n })
+                              }}
                               className="w-full max-w-[240px] text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 py-1 focus:outline-none focus:border-violet-400">
                               <option value="">— Skip —</option>
                               {columnIds.map((c) => <option key={c} value={c}>{label(c)}{label(c) !== c ? ` (${c})` : ''}</option>)}
