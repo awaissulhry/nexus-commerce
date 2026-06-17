@@ -22,6 +22,8 @@
  * Usage:
  *   node scripts/p3-token-sweep.mjs            # dry-run: counts only
  *   node scripts/p3-token-sweep.mjs --apply    # write changes
+ *   node scripts/p3-token-sweep.mjs --check    # exit 1 if any remain
+ *                                              # (pre-push regression guard)
  */
 
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs'
@@ -29,6 +31,7 @@ import { join, relative } from 'node:path'
 
 const ROOT = 'apps/web/src'
 const APPLY = process.argv.includes('--apply')
+const CHECK = process.argv.includes('--check')
 
 // (?<!dark:) skips dark-prefixed classes; (?![\w-]) prevents matching a
 // longer class (text-slate-4000) while still allowing the /opacity tail.
@@ -81,12 +84,33 @@ for (const file of files) {
   }
 }
 
+const total = Object.values(counts).reduce((a, b) => a + b, 0)
+
+// ── Regression guard (pre-push) ─────────────────────────────────────
+if (CHECK) {
+  if (total > 0) {
+    console.error(
+      `\n  ✗ P3 guard: ${total} banned raw class(es) in ${changedFiles.length} file(s).` +
+        `\n    Use the P0 tokens instead:` +
+        `\n      text-slate-400   → text-tertiary` +
+        `\n      border-slate-200 → border-default` +
+        `\n      border-slate-100 → border-subtle` +
+        `\n    (dark:-prefixed + flat-file/design are exempt.) Or run:` +
+        `\n      node scripts/p3-token-sweep.mjs --apply\n\n    Offending files:`,
+    )
+    changedFiles.slice(0, 25).forEach((f) => console.error('      ' + relative('.', f)))
+    if (changedFiles.length > 25) console.error(`      …and ${changedFiles.length - 25} more`)
+    process.exit(1)
+  }
+  console.log('  ✓ P3 guard: no banned raw text/border classes (outside dark:/flat-file/design).')
+  process.exit(0)
+}
+
 console.log(`\n  P3 token sweep — ${APPLY ? '\x1b[33mAPPLY\x1b[0m' : 'dry-run'}`)
 console.log(`  scanned ${files.length} files under ${ROOT}\n`)
 for (const m of MAPPINGS) {
   console.log(`    ${counts[m.label].toString().padStart(5)}  ${m.label}`)
 }
-const total = Object.values(counts).reduce((a, b) => a + b, 0)
 console.log(`  ${'─'.repeat(50)}`)
 console.log(`    ${total.toString().padStart(5)}  total in ${changedFiles.length} files\n`)
 

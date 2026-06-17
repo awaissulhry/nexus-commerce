@@ -50,6 +50,16 @@ node scripts/check-link-targets.mjs || {
   exit 1
 }
 
+# P3 — UI legibility guard (UI_REBUILD_STRATEGY.md). Fails the push if
+# raw text-slate-400 / faint slate-100/200 borders are reintroduced
+# outside dark: variants + the exempt flat-file/design dirs. Keeps the
+# app-wide token sweep from regressing back into thin/faint UI.
+echo "→ Checking UI token guard (P3)..."
+node scripts/p3-token-sweep.mjs --check || {
+  echo "❌ UI token guard FAILED — see message above"
+  exit 1
+}
+
 echo "→ Building apps/web..."
 (cd apps/web && rm -rf .next && npx next build > /tmp/web-build.log 2>&1) || {
   echo "❌ apps/web build FAILED"
