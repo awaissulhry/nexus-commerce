@@ -11,6 +11,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import {
   getRealAmazonFeeRates,
   getRealFeeRatesBySku,
+  getFeeImpact,
 } from '../services/amazon-real-fees.service.js'
 
 const clampDays = (raw?: string) =>
@@ -32,6 +33,19 @@ const amazonEconomicsRoutes: FastifyPluginAsync = async (fastify) => {
         ? Math.min(Math.max(parseInt(request.query.limit, 10) || 50, 1), 500)
         : 50,
     }),
+  )
+
+  // R1.4a — read-only before/after: profit-fees at the assumed 15% vs the
+  // real per-SKU rate. Shows the impact before R1.4b flips the live calc.
+  fastify.get<{ Querystring: { days?: string; limit?: string } }>(
+    '/amazon/economics/fee-impact',
+    async (request) =>
+      getFeeImpact(
+        clampDays(request.query?.days),
+        request.query?.limit
+          ? Math.min(Math.max(parseInt(request.query.limit, 10) || 15, 1), 100)
+          : 15,
+      ),
   )
 }
 

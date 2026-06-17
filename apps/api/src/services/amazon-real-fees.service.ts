@@ -249,3 +249,75 @@ export async function getRealFeeRatesBySku(
     skus,
   }
 }
+
+export interface FeeImpactRow {
+  sku: string
+  productId: string | null
+  revenue: number
+  assumedFees: number
+  realFees: number
+  /** realFees − assumedFees = profit the 15% assumption was hiding. */
+  overstatement: number
+  realRatePct: number | null
+}
+
+export interface FeeImpact {
+  periodDays: number
+  assumedPct: number
+  overall: {
+    revenue: number
+    assumedFees: number
+    realFees: number
+    overstatement: number
+    realRatePct: number | null
+    overstatementPctOfRevenue: number | null
+  }
+  topAffected: FeeImpactRow[]
+}
+
+/**
+ * R1.4a — read-only before/after. For each SKU + overall, compares the
+ * fees the profit calc ASSUMES today (revenue × 15%) against the REAL
+ * fees (R1.2). The gap is exactly the profit the 15% assumption has been
+ * hiding. Shows the impact BEFORE we flip the live calc (R1.4b).
+ */
+export async function getFeeImpact(days = 90, limit = 15): Promise<FeeImpact> {
+  const bySku = await getRealFeeRatesBySku(days, {})
+  const pct = ASSUMED_AMAZON_FEE_PCT / 100
+
+  let revenue = 0
+  let assumedFees = 0
+  let realFees = 0
+  const rows: FeeImpactRow[] = bySku.skus.map((s) => {
+    const assumed = round2(s.revenue * pct)
+    revenue += s.revenue
+    assumedFees += assumed
+    realFees += s.fees
+    return {
+      sku: s.sku,
+      productId: s.productId,
+      revenue: s.revenue,
+      assumedFees: assumed,
+      realFees: s.fees,
+      overstatement: round2(s.fees - assumed),
+      realRatePct: s.feeRatePct,
+    }
+  })
+  rows.sort((a, b) => b.overstatement - a.overstatement)
+
+  const overstatement = round2(realFees - assumedFees)
+  return {
+    periodDays: days,
+    assumedPct: ASSUMED_AMAZON_FEE_PCT,
+    overall: {
+      revenue: round2(revenue),
+      assumedFees: round2(assumedFees),
+      realFees: round2(realFees),
+      overstatement,
+      realRatePct: revenue > 0 ? round2((realFees / revenue) * 100) : null,
+      overstatementPctOfRevenue:
+        revenue > 0 ? round2((overstatement / revenue) * 100) : null,
+    },
+    topAffected: rows.slice(0, limit),
+  }
+}
