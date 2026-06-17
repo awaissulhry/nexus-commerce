@@ -31,7 +31,7 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import { Spinner } from '@/components/ui/Spinner'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { Skeleton, SkeletonRow } from '@/components/ui/Skeleton'
-import { PageHeader } from '@/components/ui/PageHeader'
+import PageHeader from '@/components/layout/PageHeader'
 import { DataTable } from '@/components/ui/DataTable'
 import { useToast } from '@/components/ui/Toast'
 

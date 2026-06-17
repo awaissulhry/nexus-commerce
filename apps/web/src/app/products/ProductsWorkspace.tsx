@@ -1310,7 +1310,7 @@ export default function ProductsWorkspace() {
                 reachable by URL; surface it next to the photo upload. */}
             <Link
               href="/products/upload"
-              className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
+              className="h-8 px-3 text-md font-label border border-default rounded-md hover:bg-sunken dark:hover:bg-raised inline-flex items-center gap-1.5 text-primary"
               title="Bulk-create / update products from an Excel/CSV spreadsheet"
             >
               <FileUp size={12} /> Bulk upload
@@ -1337,7 +1337,7 @@ export default function ProductsWorkspace() {
             </Button>
             <Link
               href="/analytics/products"
-              className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
+              className="h-8 px-3 text-md font-label border border-default rounded-md hover:bg-sunken dark:hover:bg-raised inline-flex items-center gap-1.5 text-primary"
               title="Portfolio Intelligence — health scores, stockout risk, ROAS"
             >
               <BarChart2 size={12} /> Portfolio
@@ -1345,7 +1345,7 @@ export default function ProductsWorkspace() {
             {/* OL.H.1 — listing automation rules (price/inventory/health/content) */}
             <Link
               href="/products/automation"
-              className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
+              className="h-8 px-3 text-md font-label border border-default rounded-md hover:bg-sunken dark:hover:bg-raised inline-flex items-center gap-1.5 text-primary"
               title="Listing automation — cross-market price / inventory / health / content rules"
             >
               <Sparkles size={12} /> Automation

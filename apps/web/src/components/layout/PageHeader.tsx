@@ -37,19 +37,19 @@ export default function PageHeader({
   return (
     <div className="mb-5">
       {breadcrumbs && breadcrumbs.length > 0 && (
-        <nav className="flex items-center gap-1.5 mb-2 text-base text-slate-500">
+        <nav className="flex items-center gap-1.5 mb-2 text-base text-tertiary">
           {breadcrumbs.map((crumb, i) => (
             <span key={i} className="flex items-center gap-1.5">
-              {i > 0 && <ChevronRight className="w-3 h-3 text-slate-300" />}
+              {i > 0 && <ChevronRight className="w-3 h-3 text-tertiary" />}
               {crumb.href ? (
                 <Link
                   href={crumb.href}
-                  className="hover:text-slate-700 transition-colors"
+                  className="hover:text-primary transition-colors"
                 >
                   {crumb.label}
                 </Link>
               ) : (
-                <span className="text-slate-700 font-medium">{crumb.label}</span>
+                <span className="text-secondary font-label">{crumb.label}</span>
               )}
             </span>
           ))}
@@ -64,10 +64,10 @@ export default function PageHeader({
           horizontal space is precious. */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-slate-900 break-words sm:truncate">
+          <h1 className="text-2xl font-heading text-primary break-words sm:truncate">
             {title}
           </h1>
-          {desc && <p className="text-md text-slate-500 mt-0.5">{desc}</p>}
+          {desc && <p className="text-md text-secondary mt-0.5">{desc}</p>}
         </div>
         {actions && (
           <div className="flex items-center gap-2 flex-wrap sm:flex-shrink-0 sm:flex-nowrap">
