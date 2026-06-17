@@ -28,7 +28,7 @@ import type {
 
 const DEFAULT_MARKUP_PCT = 10 // when minMargin isn't set.
 
-interface PriceRow {
+export interface PriceRow {
   id: string
   sku: string
   basePrice: unknown
@@ -52,12 +52,12 @@ function effectiveCost(p: PriceRow): number | null {
   return null
 }
 
-interface Anomaly {
+export interface Anomaly {
   proposed: number
   reason: string
 }
 
-function detectAnomaly(p: PriceRow): Anomaly | null {
+export function detectAnomaly(p: PriceRow): Anomaly | null {
   const base = num(p.basePrice)
   if (base == null || base <= 0) return null // unpriced — not our problem
   const minP = num(p.minPrice)
