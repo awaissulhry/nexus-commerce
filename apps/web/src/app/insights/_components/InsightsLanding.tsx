@@ -10,6 +10,7 @@ import {
   BarChart3,
   Bookmark,
   Calculator,
+  Database,
   Download,
   LineChart,
   Megaphone,
@@ -152,6 +153,13 @@ const HUB_LINKS: Array<{
     blurb: 'Annotate dates with operator notes — context layer',
     icon: Bookmark,
     phase: 'IH.15',
+  },
+  {
+    href: '/insights/amazon-reports',
+    title: 'Amazon Reports',
+    blurb: 'Every Amazon feed mirrored in Nexus — source + freshness',
+    icon: Database,
+    phase: 'R0.3',
   },
 ]
 
