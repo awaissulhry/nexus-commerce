@@ -53,6 +53,10 @@ export interface CatalogItem {
   quantity: number;
   title: string;
   status: string;
+  /** Raw GET_MERCHANT_LISTINGS_ALL_DATA fulfillment-channel: 'DEFAULT' (MFN/FBM)
+   *  or 'AMAZON_*' (AFN/FBA); null when the column is absent. Drives FBA→FBM
+   *  drift detection (fba-drift-detector.job). */
+  fulfillmentChannel?: string | null;
 }
 
 /** Image mapped to our Prisma ProductImage shape. */
@@ -456,6 +460,12 @@ export class AmazonService {
         "Variation Theme",
         "variationtheme",
       ];
+      const FULFILLMENT_CHANNEL_COLS = [
+        "fulfillment-channel",
+        "fulfillment_channel",
+        "Fulfillment Channel",
+        "fulfilment-channel",
+      ];
 
       const findCol = (
         row: Record<string, string>,
@@ -486,6 +496,7 @@ export class AmazonService {
             quantity: parseInt(row["quantity"] ?? "0", 10) || 0,
             title: row["item-name"] ?? "",
             status: row["status"] ?? "Unknown",
+            fulfillmentChannel: findCol(row, FULFILLMENT_CHANNEL_COLS),
           };
         });
 
