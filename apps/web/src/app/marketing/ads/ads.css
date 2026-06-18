@@ -1,6 +1,10 @@
 /* New ads console (Helium 10 Ads / Adtomic match) — isolated shell + sidebar. */
-.h10-shell { display: flex; min-height: 100vh; background: #f4f6f9; color: #1c2530; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-.h10-main { flex: 1; min-width: 0; padding: 26px 30px; }
+/* AppShell wraps standalone routes in `h-[100dvh] overflow-hidden`, so the shell
+   must be bounded to the viewport and let .h10-main scroll internally (fixed
+   sidebar + scrolling content = the H10 behavior). min-height here would overflow
+   the clipped parent and kill all scrolling. */
+.h10-shell { display: flex; height: 100dvh; overflow: hidden; background: #f4f6f9; color: #1c2530; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+.h10-main { flex: 1; min-width: 0; min-height: 0; padding: 26px 30px; overflow-y: auto; }
 
 /* left rail */
 .h10-rail { width: 232px; flex-shrink: 0; background: #fff; border-right: 1px solid #e6e9ee; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
