@@ -1387,23 +1387,31 @@ export class AmazonFlatFileService {
           }
           attrs.purchasable_offer = [offer]
         }
-        // fulfillment_availability — FFA.3: include the channel code even with no
-        // quantity (FBA listings), so re-publishing an FBA listing keeps it FBA
-        // instead of dropping the channel. Quantity sent only when present.
+        // fulfillment_availability — FFA.3 + FBA-flip fix. A merchant quantity under
+        // fulfillment_channel_code:DEFAULT is exactly what flips an FBA offer to FBM, so:
+        //   • explicit FBA channel (AMAZON_*/AFN/FBA) → keep the channel, NEVER a
+        //     merchant qty (Amazon owns FBA stock) — re-publish stays FBA;
+        //   • explicit merchant channel (DEFAULT/MFN) → channel (normalised to DEFAULT) + qty;
+        //   • blank/unknown channel → emit NOTHING. The old `faCode || 'DEFAULT'`
+        //     fabricated a merchant claim for unknown-fulfillment rows and flipped them.
         const faCode     = String(row['fulfillment_availability__fulfillment_channel_code'] ?? row['fulfillment_channel_code'] ?? '').toUpperCase()
         const faQtyRaw   = row['fulfillment_availability__quantity'] ?? row.fulfillment_availability ?? row.quantity
         const faQtyNum   = faQtyRaw !== undefined && faQtyRaw !== '' ? parseLocaleInt(faQtyRaw) : null
         const faLeadRaw  = row['fulfillment_availability__lead_time_to_ship_max_days']
         const faLeadNum  = faLeadRaw !== undefined && faLeadRaw !== '' ? parseLocaleInt(faLeadRaw) : null
-        if (faCode || faQtyNum !== null || faLeadNum !== null) {
-          const fa: Record<string, any> = {
-            fulfillment_channel_code: faCode || 'DEFAULT',
-            marketplace_id: marketplaceId,
-          }
+        const isFbaChannel      = faCode.startsWith('AMAZON') || faCode === 'AFN' || faCode === 'FBA'
+        const isMerchantChannel = faCode === 'DEFAULT' || faCode === 'MFN'
+        if (isFbaChannel) {
+          const fa: Record<string, any> = { fulfillment_channel_code: faCode, marketplace_id: marketplaceId }
+          if (faLeadNum !== null && faLeadNum >= 0) fa.lead_time_to_ship_max_days = faLeadNum
+          attrs.fulfillment_availability = [fa]
+        } else if (isMerchantChannel) {
+          const fa: Record<string, any> = { fulfillment_channel_code: 'DEFAULT', marketplace_id: marketplaceId }
           if (faQtyNum !== null && faQtyNum >= 0) fa.quantity = faQtyNum
           if (faLeadNum !== null && faLeadNum >= 0) fa.lead_time_to_ship_max_days = faLeadNum
           attrs.fulfillment_availability = [fa]
         }
+        // blank/unknown faCode → omit fulfillment_availability entirely (fail-closed).
 
         if (String(row.parentage_level).toLowerCase() === 'parent') {
           // HIGH-5 — a parent must declare its parentage_level, not just the

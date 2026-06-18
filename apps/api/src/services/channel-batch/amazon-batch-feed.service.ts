@@ -117,6 +117,11 @@ export function buildJsonListingsFeedBody(
       }
     }
     if (op.type === 'stock') {
+      // FBA-flip fix — this is a MERCHANT (DEFAULT) quantity op; sending it for an
+      // FBA SKU flips the offer to FBM ("Venduto e spedito da …"). Callers MUST gate
+      // FBA out before enqueuing a stock op (see bulk-action.service.ts
+      // processChannelBatch). The DEFAULT channel is intentional: a merchant stock
+      // op only makes sense for a merchant-fulfilled (FBM) listing.
       return {
         messageId,
         operationType: 'Update',

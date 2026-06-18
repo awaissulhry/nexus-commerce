@@ -15,6 +15,7 @@ import type {
 } from '@prisma/client';
 import { logger } from '../utils/logger.js';
 import { publishListingEvent } from './listing-events.service.js';
+import { isFbaListing } from './outbound-sync.service.js';
 import { MasterPriceService } from './master-price.service.js';
 import { MasterStatusService } from './master-status.service.js';
 import { applyStockMovement } from './stock-movement.service.js';
@@ -2395,6 +2396,18 @@ export class BulkActionService {
           operations: [{ type: 'price', sku, currency, value }],
         });
       } else {
+        // FBA-flip fix — a batch stock op emits fulfillment_channel_code:DEFAULT,
+        // which flips an FBA offer to FBM. Never push merchant quantity for an FBA
+        // listing; skip (fail-closed) on any FBA signal incl. FBA stock on hand.
+        const fbaAgg = await this.prisma.stockLevel
+          .aggregate({
+            where: { productId: item.id, location: { code: 'AMAZON-EU-FBA' } },
+            _sum: { quantity: true },
+          })
+          .catch(() => null);
+        if (isFbaListing(listing, item, { fbaStockQty: fbaAgg?._sum.quantity ?? null })) {
+          return { status: 'skipped' };
+        }
         const qty = Number(listing.quantity ?? item.totalStock ?? 0);
         await submitAmazonListingsBatch({
           marketplaceIds,
