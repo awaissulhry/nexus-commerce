@@ -292,3 +292,13 @@
 .h10-am-latest { font-size: 12.5px; color: #5b6573; padding: 2px 2px 4px; }
 .h10-am-latest b { color: #1c2530; font-weight: 700; }
 .h10-am-latest .lk { color: #1f6fde; font-weight: 600; cursor: pointer; }
+
+/* CBN.2e.3 — edit-mode columns (left-aligned controls + cell chrome, H10 match) */
+.h10-am-grid th.ed, .h10-am-grid td.ed { text-align: left; }
+.h10-bidrule { display: inline-flex; align-items: center; gap: 5px; color: #2b3440; font-weight: 600; }
+.h10-rules { display: inline-flex; align-items: center; gap: 5px; color: #8a93a1; }
+.h10-rules b { color: #2b3440; font-weight: 600; }
+.h10-rules svg, .h10-gear { color: #8a93a1; cursor: pointer; }
+.h10-gear:hover { color: #5b6573; }
+.h10-util { display: inline-block; width: 64px; height: 7px; background: #eef1f5; border-radius: 999px; overflow: hidden; vertical-align: middle; }
+.h10-util .uf { display: block; height: 100%; background: #1f6fde; border-radius: 999px; }

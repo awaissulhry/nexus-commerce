@@ -35,7 +35,7 @@ const eur = (v: number) => `€${v.toLocaleString('en-IE', { minimumFractionDigi
 const pct = (v: unknown) => { if (v == null || v === '') return '—'; const n = Number(v); return Number.isFinite(n) ? `${(n <= 1 ? n * 100 : n).toFixed(2)}%` : '—' }
 const fmtDate = (iso?: string | null) => { if (!iso) return '—'; const d = new Date(iso); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }
 
-const EDIT_COLS = ['Target ACoS', 'Bid Automation', 'Min/Max Budget', 'Rules', 'Bidding Strategy', 'Start Date'] as const
+const EDIT_COLS = ['Bid Rule', 'Target ACoS', 'Min/Max Bid', 'Bid Automation', 'Min/Max Budget', 'Rules', 'Bidding Strategy', 'Bid Multiplier', 'Start Date', 'End Date', 'Daily Budget', 'Budget Utilization'] as const
 const STRAT_LABEL: Record<string, string> = { LEGACY_FOR_SALES: 'Down only', AUTO_FOR_SALES: 'Up and Down', MANUAL: 'Fixed' }
 const STRAT_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'LEGACY_FOR_SALES', label: 'Down only' },
@@ -551,18 +551,12 @@ export function CampaignsGrid() {
   const editCell = (c: Camp, col: string): ReactNode => {
     const e = edits[c.id]
     switch (col) {
+      case 'Bid Rule': return <span className="h10-bidrule">🎯 Target ACOS</span>
       case 'Target ACoS': return '30.00%'
+      case 'Min/Max Bid': return 'None'
       case 'Bid Automation': return <span className="h10-toggle off" aria-hidden />
-      case 'Min/Max Budget': {
-        const dirty = e?.dailyBudget != null && e.dailyBudget !== '' && Number(e.dailyBudget) !== num(c.dailyBudget)
-        return (
-          <span className={`h10-bud ${dirty ? 'dirty' : ''}`}>
-            <span className="cur">€</span>
-            <input type="number" min="1" step="1" value={effBudget(c)} onChange={(ev) => setEdit(c.id, { dailyBudget: ev.target.value })} aria-label={`Daily budget for ${c.name}`} />
-          </span>
-        )
-      }
-      case 'Rules': return <span className="h10-rulecount">0 ⚙</span>
+      case 'Min/Max Budget': return 'None - None'
+      case 'Rules': return <span className="h10-rules"><b>0</b> <Settings2 size={12} /></span>
       case 'Bidding Strategy': {
         const dirty = !!e?.biddingStrategy && e.biddingStrategy !== (c.biddingStrategy ?? 'LEGACY_FOR_SALES')
         return (
@@ -571,7 +565,19 @@ export function CampaignsGrid() {
           </select>
         )
       }
+      case 'Bid Multiplier': return <Settings2 size={14} className="h10-gear" aria-label="Bid multiplier" />
       case 'Start Date': return fmtDate(c.startDate)
+      case 'End Date': return c.endDate ? fmtDate(c.endDate) : '-'
+      case 'Daily Budget': {
+        const dirty = e?.dailyBudget != null && e.dailyBudget !== '' && Number(e.dailyBudget) !== num(c.dailyBudget)
+        return (
+          <span className={`h10-bud ${dirty ? 'dirty' : ''}`}>
+            <span className="cur">€</span>
+            <input type="number" min="1" step="1" value={effBudget(c)} onChange={(ev) => setEdit(c.id, { dailyBudget: ev.target.value })} aria-label={`Daily budget for ${c.name}`} />
+          </span>
+        )
+      }
+      case 'Budget Utilization': return <span className="h10-util" aria-hidden><span className="uf" style={{ width: '2%' }} /></span>
       default: return '—'
     }
   }
@@ -728,7 +734,7 @@ export function CampaignsGrid() {
               <th className="ck"><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all" /></th>
               <th className="nm fz">Campaign</th>
               <th className="st">Status</th>
-              {headerCols.map((k) => <th key={k} className="num">{headerLabel(k)}</th>)}
+              {headerCols.map((k) => <th key={k} className={isMetrics ? 'num' : 'ed'}>{headerLabel(k)}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -738,7 +744,7 @@ export function CampaignsGrid() {
                   <td className="ck"><span className="skb" style={{ width: 15 }} /></td>
                   <td className="nm fz"><span className="skb" style={{ width: 160 }} /></td>
                   <td className="st"><span className="skb" style={{ width: 58 }} /></td>
-                  {headerCols.map((k) => <td key={k} className="num"><span className="skb" style={{ width: 52 }} /></td>)}
+                  {headerCols.map((k) => <td key={k} className={isMetrics ? 'num' : 'ed'}><span className="skb" style={{ width: 52 }} /></td>)}
                 </tr>
               ))
             ) : filtered.length === 0 ? (
@@ -756,7 +762,7 @@ export function CampaignsGrid() {
                     {c.marketplace && <span className="mk">{c.marketplace}</span>}
                   </td>
                   <td className="st"><span className={`h10-pill ${sp.cls}`}>{sp.label}</span></td>
-                  {headerCols.map((k) => <td key={k} className="num">{isMetrics ? renderCol(c, k) : editCell(c, k)}</td>)}
+                  {headerCols.map((k) => <td key={k} className={isMetrics ? 'num' : 'ed'}>{isMetrics ? renderCol(c, k) : editCell(c, k)}</td>)}
                 </tr>
               )
             })}
