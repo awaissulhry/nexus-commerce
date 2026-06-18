@@ -448,6 +448,7 @@ export function CampaignsGrid() {
 
       {/* filter bar */}
       <div className="h10-am-fpanel">
+        <div className="h10-am-ftitle">Filters</div>
         <div className="frow">
           <label className="ffield"><span>Status</span><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">All</option><option value="enabled">Enabled</option><option value="paused">Paused</option><option value="archived">Archived</option></select></label>
           <label className="ffield"><span>Bid Automation</span><select defaultValue="All"><option>All</option><option>On</option><option>Off</option></select></label>
