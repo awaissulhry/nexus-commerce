@@ -10,6 +10,7 @@
 
 import { logger } from '../utils/logger.js'
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
+import prisma from '../db.js'
 
 interface LWATokenResponse {
   access_token: string
@@ -469,6 +470,69 @@ export class AmazonSpApiClient {
   }
 
   /**
+   * FBA-flip hard block — last line of defense, independent of every upstream
+   * guard. Scans a Listings PATCH body for the dangerous shape (a
+   * fulfillment_availability with fulfillment_channel_code:'DEFAULT' AND a
+   * quantity) and, if the SKU is actually FBA (FBA stock on hand or
+   * Product.fulfillmentMethod==='FBA'), strips those patches so they never reach
+   * Amazon — that payload is exactly what flips an FBA offer to FBM. Fail-closed:
+   * a lookup error blocks. A genuinely-FBM SKU (no FBA evidence) is left untouched
+   * so its merchant quantity still syncs. Returns the (possibly filtered) payload.
+   */
+  private async guardFbaQtyFlip(
+    sku: string,
+    payload: any,
+  ): Promise<{ payload: any; blocked: boolean }> {
+    const patches = payload?.patches
+    if (!Array.isArray(patches)) return { payload, blocked: false }
+    const isFlip = (p: any): boolean => {
+      if (p?.path !== '/attributes/fulfillment_availability') return false
+      const vals = Array.isArray(p.value) ? p.value : []
+      return vals.some(
+        (v: any) =>
+          String(v?.fulfillment_channel_code ?? '').toUpperCase() === 'DEFAULT' &&
+          v?.quantity != null,
+      )
+    }
+    if (!patches.some(isFlip)) return { payload, blocked: false }
+
+    // Dangerous shape present — is this SKU actually FBA?
+    let isFba = false
+    try {
+      const product = await prisma.product.findUnique({
+        where: { sku },
+        select: { id: true, fulfillmentMethod: true },
+      })
+      if (!product) return { payload, blocked: false } // unknown SKU — upstream guards own it
+      if (String(product.fulfillmentMethod ?? '').toUpperCase() === 'FBA') {
+        isFba = true
+      } else {
+        const agg = await prisma.stockLevel.aggregate({
+          where: { productId: product.id, location: { code: 'AMAZON-EU-FBA' } },
+          _sum: { quantity: true },
+        })
+        if ((agg._sum.quantity ?? 0) > 0) isFba = true
+      }
+    } catch (err) {
+      // Can't determine → fail closed: a missed merchant-qty sync is benign; a
+      // flip to FBM is catastrophic.
+      isFba = true
+      logger.warn('guardFbaQtyFlip: FBA lookup failed — failing closed (blocking)', {
+        sku,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+    if (!isFba) return { payload, blocked: false } // genuine FBM — allow merchant qty
+
+    const safePatches = patches.filter((p: any) => !isFlip(p))
+    logger.error(
+      '🔴 FBA HARD BLOCK — refused a merchant DEFAULT+quantity fulfillment_availability for an FBA SKU (would flip the offer to FBM)',
+      { critical: true, sku, strippedPatches: patches.length - safePatches.length },
+    )
+    return { payload: { ...payload, patches: safePatches }, blocked: true }
+  }
+
+  /**
    * Submit listing payload to Amazon SP-API
    * Listings Items v2021-08-01 endpoint
    */
@@ -480,7 +544,8 @@ export class AmazonSpApiClient {
     rawResponse?: SPAPIResponse
     dryRun?: boolean
   }> {
-    const { sellerId, sku, payload } = options
+    const { sellerId, sku } = options
+    let payload = options.payload
 
     // A1.1 — gate at the client layer so no caller can write when publishing is
     // disabled/dry-run (previously only the caller gated this method).
@@ -488,6 +553,14 @@ export class AmazonSpApiClient {
     if (mode === 'gated' || mode === 'dry-run') {
       logger.info(`SP-API submitListingPayload (mode=${mode}, no HTTP)`, { sku, sellerId })
       return { success: true, sku, status: 'ACCEPTED', dryRun: true }
+    }
+
+    // FBA-flip HARD BLOCK — strip a merchant DEFAULT+quantity fulfillment for an
+    // FBA SKU before it can reach Amazon. If nothing else remains, skip the call.
+    const guarded = await this.guardFbaQtyFlip(sku, payload)
+    payload = guarded.payload
+    if (guarded.blocked && (!Array.isArray(payload?.patches) || payload.patches.length === 0)) {
+      return { success: true, sku, status: 'SKIPPED_FBA_HARD_BLOCK', dryRun: false }
     }
 
     try {
