@@ -15,6 +15,7 @@ import { syncFinancialEvents } from '../services/amazon-financial-events.service
 import { refreshSalesAggregates } from '../services/sales-aggregate.service.js'
 import prisma from '../db.js'
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
+import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import {
   getShadowStats,
   resetShadowBuffer,
@@ -62,6 +63,7 @@ function modelDelegate(key: RecycleBinEntity) {
 const AMZ_MP_ID: Record<string, string> = {
   IT: 'APJ6JRA9NG5V4', DE: 'A1PA6795UKMFR9', FR: 'A13V1IB3VIYZZH', ES: 'A1RKKUPIHCS9HS', UK: 'A1F83G8C2ARO7P',
 }
+const amazonService = new AmazonService()
 
 export async function adminRoutes(app: FastifyInstance) {
   const validationService = new DataValidationService()
@@ -171,6 +173,73 @@ export async function adminRoutes(app: FastifyInstance) {
         offers: (raw.offers ?? []).map((o: any) => ({ offerType: o.offerType, fulfillmentChannel: o.fulfillmentChannelCode ?? o.fulfillmentChannel })),
         issues: (r.issues ?? []).map((i: any) => ({ code: i.code, severity: i.severity, message: i.message })),
       })
+    },
+  )
+
+  /**
+   * GET /admin/amazon/fulfillment-report?marketplace=IT[&skus=A,B]
+   * READ-ONLY authoritative check — pulls Amazon's merchant-listings report
+   * (GET_MERCHANT_LISTINGS_ALL_DATA, the real `fulfillment-channel` column) and
+   * reports the actual FBA/FBM channel for the FBA-stock listings in a market.
+   * The source of truth for "did the offer actually convert" — getListingsItem
+   * under-reports and the PDP text lags. (Report pull takes ~1–5 min.)
+   */
+  app.get<{ Querystring: { marketplace?: string; skus?: string } }>(
+    '/admin/amazon/fulfillment-report',
+    async (request, reply) => {
+      const mkt = String(request.query.marketplace ?? 'IT').toUpperCase()
+      const mpId = AMZ_MP_ID[mkt]
+      if (!mpId) return reply.code(400).send({ error: `unknown marketplace ${mkt}` })
+      const skuFilter = String(request.query.skus ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+
+      // Recovery set in this market: AMAZON listings with FBA stock on hand.
+      const fbaStock = await prisma.stockLevel.findMany({
+        where: { quantity: { gt: 0 }, location: { code: 'AMAZON-EU-FBA' } },
+        select: { productId: true },
+      })
+      const fbaProductIds = [...new Set(fbaStock.map((s) => s.productId))]
+      const listings = await prisma.channelListing.findMany({
+        where: {
+          channel: 'AMAZON',
+          marketplace: mkt,
+          productId: { in: fbaProductIds },
+          ...(skuFilter.length ? { product: { sku: { in: skuFilter } } } : {}),
+        },
+        select: { product: { select: { sku: true } } },
+      })
+      const expected = [...new Set(listings.map((l) => l.product?.sku).filter(Boolean) as string[])]
+      if (expected.length === 0) {
+        return reply.send({ marketplace: mkt, note: 'no FBA-stock Amazon listings for this market', summary: {}, rows: [] })
+      }
+
+      let catalog: Awaited<ReturnType<typeof amazonService.fetchActiveCatalog>>
+      try {
+        catalog = await amazonService.fetchActiveCatalog(mpId)
+      } catch (e) {
+        return reply.code(502).send({ error: `merchant-listings report pull failed: ${e instanceof Error ? e.message : String(e)}` })
+      }
+      const chBySku = new Map(catalog.map((i) => [i.sku, i.fulfillmentChannel ?? null]))
+
+      const rows = expected
+        .map((sku) => {
+          if (!chBySku.has(sku)) return { sku, fulfillmentChannel: null as string | null, verdict: 'NOT_IN_REPORT' }
+          const c = String(chBySku.get(sku) ?? '').toUpperCase()
+          const verdict =
+            c === '' || c === 'DEFAULT' || c === 'MFN'
+              ? 'FBM'
+              : c.startsWith('AMAZON') || c === 'AFN' || c === 'FBA'
+                ? 'FBA'
+                : 'OTHER'
+          return { sku, fulfillmentChannel: chBySku.get(sku) || '(empty)', verdict }
+        })
+        .sort((a, b) => a.sku.localeCompare(b.sku))
+      const summary = {
+        total: rows.length,
+        fba: rows.filter((r) => r.verdict === 'FBA').length,
+        fbm: rows.filter((r) => r.verdict === 'FBM').length,
+        other: rows.filter((r) => r.verdict !== 'FBA' && r.verdict !== 'FBM').length,
+      }
+      return reply.send({ marketplace: mkt, summary, rows })
     },
   )
 
