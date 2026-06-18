@@ -17,6 +17,7 @@ import {
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { getBackendUrl } from '@/lib/backend-url'
+import { AdManagerGraph } from './AdManagerGraph'
 
 interface Camp {
   id: string; name: string; marketplace: string | null; status: string
@@ -403,6 +404,7 @@ export function CampaignsGrid() {
   const [showGraph, setShowGraph] = useState(false)
   const [page, setPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(100)
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null)
 
   const load = useCallback(async (opts?: { sync?: boolean }) => {
     if (opts?.sync) setSyncing(true)
@@ -534,14 +536,6 @@ export function CampaignsGrid() {
     })
   }, [rows, search, statuses, types, portfolio, ranges, market])
 
-  // aggregate totals for the Show-Graph panel (real data, no fake time-series)
-  const totals = useMemo(() => {
-    let spend = 0, sales = 0, clicks = 0, impr = 0
-    for (const c of filtered) { spend += num(c.spend); sales += num(c.sales); clicks += num(c.clicks); impr += num(c.impressions) }
-    const top = [...filtered].sort((a, b) => num(b.spend) - num(a.spend)).slice(0, 8).filter((c) => num(c.spend) > 0)
-    return { spend, sales, clicks, impr, acos: sales ? (spend / sales) * 100 : 0, roas: spend ? sales / spend : 0, top }
-  }, [filtered])
-
   const allSel = filtered.length > 0 && filtered.every((c) => sel.has(c.id))
   const toggleAll = () => setSel(allSel ? new Set() : new Set(filtered.map((c) => c.id)))
   const toggle = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
@@ -586,10 +580,23 @@ export function CampaignsGrid() {
   const headerCols: string[] = isMetrics ? metricCols : [...EDIT_COLS]
   const headerLabel = (k: string) => (isMetrics ? COL_BY_KEY[k]?.label ?? k : k)
 
+  // sortable columns (click a header; metrics keys sort numerically, name/status text)
+  const sorted = useMemo(() => {
+    if (!sort) return filtered
+    const dir = sort.dir === 'asc' ? 1 : -1
+    return [...filtered].sort((a, b) => {
+      if (sort.key === 'name') return a.name.toLowerCase() < b.name.toLowerCase() ? -dir : a.name.toLowerCase() > b.name.toLowerCase() ? dir : 0
+      if (sort.key === 'status') return a.status < b.status ? -dir : a.status > b.status ? dir : 0
+      return (metricVal(a, sort.key) - metricVal(b, sort.key)) * dir
+    })
+  }, [filtered, sort])
+  const onSort = (key: string) => setSort((s) => (s?.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' }))
+  const sortIcon = (key: string) => (sort?.key === key ? (sort.dir === 'asc' ? '↑' : '↓') : '⇅')
+
   // client-side pagination (H10 "Rows per page") + the Latest Report stamp
   const pageCount = Math.max(1, Math.ceil(filtered.length / rowsPerPage))
   const safePage = Math.min(page, pageCount)
-  const paged = filtered.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage)
+  const paged = sorted.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage)
   const viewStart = filtered.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1
   const viewEnd = Math.min(safePage * rowsPerPage, filtered.length)
   const latestReport = (() => {
@@ -612,29 +619,7 @@ export function CampaignsGrid() {
         ]}
       />
 
-      {showGraph && (
-        <div className="h10-am-graph">
-          <div className="kpis">
-            <div className="kpi"><span>Spend</span><b>{eur(totals.spend)}</b></div>
-            <div className="kpi"><span>Sales</span><b>{eur(totals.sales)}</b></div>
-            <div className="kpi"><span>ACoS</span><b>{totals.sales ? `${totals.acos.toFixed(2)}%` : '—'}</b></div>
-            <div className="kpi"><span>ROAS</span><b>{totals.spend ? totals.roas.toFixed(2) : '—'}</b></div>
-            <div className="kpi"><span>Clicks</span><b>{totals.clicks.toLocaleString()}</b></div>
-            <div className="kpi"><span>Impressions</span><b>{totals.impr.toLocaleString()}</b></div>
-          </div>
-          {totals.top.length > 0 ? (
-            <div className="bars">
-              {totals.top.map((c) => (
-                <div className="bar" key={c.id}>
-                  <span className="bn" title={c.name}>{c.name}</span>
-                  <span className="bt"><span className="bf" style={{ width: `${Math.max(3, (num(c.spend) / (num(totals.top[0].spend) || 1)) * 100)}%` }} /></span>
-                  <span className="bv">{eur(num(c.spend))}</span>
-                </div>
-              ))}
-            </div>
-          ) : <div className="gempty">No spend in the selected campaigns yet.</div>}
-        </div>
-      )}
+      {showGraph && <AdManagerGraph market={market} rangePreset={rangePreset} />}
 
       {/* filter bar — Helium 10 Ad Manager match */}
       <div className="h10-am-fpanel">
@@ -732,9 +717,9 @@ export function CampaignsGrid() {
           <thead>
             <tr>
               <th className="ck"><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all" /></th>
-              <th className="nm fz">Campaign</th>
-              <th className="st">Status</th>
-              {headerCols.map((k) => <th key={k} className={isMetrics ? 'num' : 'ed'}>{headerLabel(k)}</th>)}
+              <th className="nm fz"><button type="button" className="sortable" onClick={() => onSort('name')}>Campaign <i>{sortIcon('name')}</i></button></th>
+              <th className="st"><button type="button" className="sortable" onClick={() => onSort('status')}>Status <i>{sortIcon('status')}</i></button></th>
+              {headerCols.map((k) => <th key={k} className={isMetrics ? 'num' : 'ed'}>{isMetrics ? <button type="button" className="sortable" onClick={() => onSort(k)}>{headerLabel(k)} <i>{sortIcon(k)}</i></button> : headerLabel(k)}</th>)}
             </tr>
           </thead>
           <tbody>

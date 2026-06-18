@@ -188,19 +188,41 @@
 .h10-menu button.on { color: #1f6fde; background: #eef5ff; }
 .h10-menu .sub { font-size: 11px; font-weight: 500; color: #aeb6c2; }
 
-/* CBN.2d — Show Graph panel (real aggregates, no fake time-series) */
-.h10-am-graph { background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; padding: 16px 18px; }
-.h10-am-graph .kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 14px; }
-.h10-am-graph .kpi { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; background: #f7f9fb; border-radius: 9px; }
-.h10-am-graph .kpi span { font-size: 11px; font-weight: 600; color: #8a93a1; text-transform: uppercase; letter-spacing: 0.03em; }
-.h10-am-graph .kpi b { font-size: 17px; font-weight: 700; color: #1c2530; }
-.h10-am-graph .bars { display: flex; flex-direction: column; gap: 7px; }
-.h10-am-graph .bar { display: grid; grid-template-columns: 220px 1fr 90px; align-items: center; gap: 12px; font-size: 12px; }
-.h10-am-graph .bar .bn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #2b3440; font-weight: 600; }
-.h10-am-graph .bar .bt { height: 9px; background: #eef1f5; border-radius: 999px; overflow: hidden; }
-.h10-am-graph .bar .bf { display: block; height: 100%; background: #1f6fde; border-radius: 999px; }
-.h10-am-graph .bar .bv { text-align: right; color: #5b6573; font-weight: 600; font-variant-numeric: tabular-nums; }
-.h10-am-graph .gempty { text-align: center; color: #8a93a1; font-size: 13px; padding: 18px; }
+/* CBN.2f — Campaign Performance graph (Helium 10 dual-axis combo chart match) */
+.h10-am-graph { position: relative; background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; padding: 20px 22px 14px; }
+.h10-gresize { position: absolute; top: 3px; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 16px; border: none; background: transparent; color: #cbd2db; cursor: ns-resize; padding: 0; touch-action: none; }
+.h10-gresize:hover { color: #8a93a1; }
+.h10-ghead h3 { font-size: 18px; font-weight: 700; color: #1c2530; margin: 0; letter-spacing: -0.01em; }
+.h10-ghead p { font-size: 12.5px; color: #5b6573; margin: 2px 0 0; }
+.h10-gctrl { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.h10-glegend { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 5px 18px; margin: 10px 0 2px; }
+.h10-gsw { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: #3a4452; white-space: nowrap; }
+.h10-gsw .ln { width: 20px; height: 0; flex-shrink: 0; }
+/* metric picker */
+.h10-gsel { position: relative; }
+.h10-gsel-btn { display: inline-flex; align-items: center; gap: 8px; min-width: 152px; background: #fff; border: 1px solid #d8dde4; border-radius: 8px; padding: 8px 11px; font: inherit; font-size: 13px; color: #1c2530; cursor: pointer; }
+.h10-gsel-btn:hover { background: #f7f9fb; }
+.h10-gsel.open .h10-gsel-btn { border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31, 111, 222, 0.12); }
+.h10-gsel-btn .dot { width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0; }
+.h10-gsel-btn .lb { flex: 1; text-align: left; }
+.h10-gsel-btn svg { color: #8a93a1; flex-shrink: 0; }
+.h10-gsel-pop { position: absolute; top: calc(100% + 5px); left: 0; z-index: 30; min-width: 100%; width: max-content; max-height: 264px; overflow-y: auto; background: #fff; border: 1px solid #e0e4ea; border-radius: 9px; box-shadow: 0 12px 28px rgba(20, 30, 50, 0.14); padding: 5px; }
+.h10-gsel.right .h10-gsel-pop { left: auto; right: 0; }
+.h10-gsel-pop button { display: block; width: 100%; text-align: left; background: none; border: none; font: inherit; font-size: 13px; color: #2b3440; padding: 9px 12px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.h10-gsel-pop button:hover { background: #f1f4f8; }
+.h10-gsel-pop button.sel { background: #eef5ff; color: #1f6fde; font-weight: 600; }
+.h10-gsel-pop button.dis { color: #c0c7d2; cursor: not-allowed; }
+.h10-gsel-pop button.dis:hover { background: none; }
+/* chart + states */
+.h10-gchart { width: 100%; margin-top: 6px; }
+.h10-gmsg { display: flex; align-items: center; justify-content: center; height: 100%; color: #8a93a1; font-size: 13px; }
+/* hover tooltip */
+.h10-gtt { background: #fff; border: 1px solid #e0e4ea; border-radius: 9px; box-shadow: 0 10px 26px rgba(20, 30, 50, 0.16); padding: 10px 12px; min-width: 212px; }
+.h10-gtt-d { font-size: 12.5px; font-weight: 700; color: #1c2530; margin-bottom: 7px; }
+.h10-gtt-r { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 2px 0; font-size: 12.5px; }
+.h10-gtt-r .dot { width: 9px; height: 9px; border-radius: 999px; }
+.h10-gtt-r .nm { color: #5b6573; }
+.h10-gtt-r .v { color: #1c2530; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* CBN.2c.1 — Customize Columns modal */
 .h10-modal-backdrop { position: fixed; inset: 0; background: rgba(20, 28, 38, 0.42); display: flex; align-items: center; justify-content: center; z-index: 60; }
@@ -302,3 +324,9 @@
 .h10-gear:hover { color: #5b6573; }
 .h10-util { display: inline-block; width: 64px; height: 7px; background: #eef1f5; border-radius: 999px; overflow: hidden; vertical-align: middle; }
 .h10-util .uf { display: block; height: 100%; background: #1f6fde; border-radius: 999px; }
+
+/* CBN.2e.2 — sortable column headers (⇅ / ↑ / ↓) */
+.h10-am-grid th .sortable { display: inline-flex; align-items: center; gap: 5px; border: none; background: none; font: inherit; color: inherit; cursor: pointer; padding: 0; }
+.h10-am-grid th .sortable i { font-style: normal; color: #c2c9d3; font-size: 10px; line-height: 1; }
+.h10-am-grid th .sortable:hover { color: #3a4452; }
+.h10-am-grid th .sortable:hover i { color: #8a93a1; }
