@@ -436,6 +436,11 @@ export class AmazonService {
         delimiter: "\t",
         skip_empty_lines: true,
         relax_column_count: true,
+        // Amazon flat-file TSV fields are NOT quote-wrapped — a literal " in a
+        // product description must be treated as data, not a CSV quote. Without
+        // this, ES (and any market with a " in item-description) throws
+        // "Invalid Opening Quote" and the whole report pull fails.
+        quote: false,
       });
 
       // Log all column names from the first row so we can see what Amazon sends
