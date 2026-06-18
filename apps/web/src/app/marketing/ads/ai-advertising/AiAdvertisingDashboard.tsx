@@ -17,14 +17,16 @@ const MARKET_NAME: Record<string, string> = { IT: 'Italy', DE: 'Germany', FR: 'F
 
 const HERO_CHECKS = ['Sponsored Product campaign management', 'Real-time bid optimization', 'Smart budget allocation', 'Keyword discovery and removal']
 
+// KPI dot colors sampled from the reference frames.
 const KPIS: Array<{ key: string; label: string; dot: string; fmt: (v: number) => string }> = [
-  { key: 'spend', label: 'Spend', dot: '#1f6fde', fmt: (v) => `€${v.toFixed(2)}` },
-  { key: 'sales', label: 'Sales', dot: '#16a34a', fmt: (v) => `€${v.toFixed(2)}` },
-  { key: 'acos', label: 'ACoS', dot: '#f59e0b', fmt: (v) => `${v.toFixed(2)}%` },
-  { key: 'orders', label: 'PPC Orders', dot: '#7c3aed', fmt: (v) => `${v}` },
+  { key: 'spend', label: 'Spend', dot: '#138ae7', fmt: (v) => `€${v.toFixed(2)}` },
+  { key: 'sales', label: 'Sales', dot: '#1a9796', fmt: (v) => `€${v.toFixed(2)}` },
+  { key: 'acos', label: 'ACoS', dot: '#f94773', fmt: (v) => `${v.toFixed(2)}%` },
+  { key: 'orders', label: 'PPC Orders', dot: '#5d24b8', fmt: (v) => `${v}` },
 ]
 
-// Goals table columns — order matched to H10 (Start Date is the default sort).
+// Goals table columns — exact H10 order; the table ends at Spend (no columns past it).
+// Start Date is the default sort.
 const COLS: Array<{ key: string; label: string; beta?: boolean; sortable?: boolean; sorted?: boolean }> = [
   { key: 'goal', label: 'Goal' },
   { key: 'aiTarget', label: 'AI Target', beta: true },
@@ -35,9 +37,6 @@ const COLS: Array<{ key: string; label: string; beta?: boolean; sortable?: boole
   { key: 'dailyBudget', label: 'Daily Budget', sortable: true },
   { key: 'budgetUtil', label: 'Budget Utilization(Today)' },
   { key: 'spend', label: 'Spend', sortable: true },
-  { key: 'sales', label: 'Sales', sortable: true },
-  { key: 'acos', label: 'ACoS', sortable: true },
-  { key: 'orders', label: 'Orders', sortable: true },
 ]
 
 function AmazonMark() {

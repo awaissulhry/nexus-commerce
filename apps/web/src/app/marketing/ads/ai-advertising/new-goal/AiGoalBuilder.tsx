@@ -3,49 +3,69 @@
 /**
  * CBN — AI Advertising · New Product Goal (the "AI Goal" campaign builder), matched
  * to Helium 10 Ads. Full-screen takeover (own top bar; the ads rail is covered).
- * Reuses the shared `.h10-*` design system + builder icons. Reached from the
- * Campaign Builder "AI Goal" card and the AI Advertising landing.
+ * Sections: Product Goal Details · Select AI Target · Product Setup (Budget Mode +
+ * Advanced Allocation + Total Budget + Product Selection w/ real product search) ·
+ * Keywords (Add Seed [Suggested/List/Enter] + Exclude) · Advanced Targeting (drawer).
+ * Reuses the shared `.h10-*` design system + builder icons.
  */
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Video, Plus, Search, Trash2, Users, Target, Layers } from 'lucide-react'
+import { X, Video, Plus, Search, Trash2, Users, CheckSquare, Share2, BarChart3, ChevronsUpDown, Info, Folder, Check, Settings, Minus, PlusCircle } from 'lucide-react'
+import { getBackendUrl } from '@/lib/backend-url'
 import { IconAtom, IconEye, IconBars, IconLine } from '../../_shell/builder-icons'
+import { InfoTip } from '../../campaigns/InfoTip'
 
 type TargetKey = 'impression' | 'sales' | 'roas'
 type BudgetMode = 'strict' | 'shared'
+type Prod = { id: string; name: string; sku: string; asin: string; imageUrl: string | null; lqs: number; sugLow: number; sugHigh: number; budget: string }
+type RawProduct = { id: string; name: string; sku: string; asin?: string | null; imageUrl?: string | null; photoUrl?: string | null; photoCount?: number; channelCount?: number; hasDescription?: boolean; hasGtin?: boolean }
 
 const TARGETS: Array<{ key: TargetKey; title: string; Icon: typeof IconEye; bestFor: string; desc: string }> = [
   { key: 'impression', title: 'Impression & Click', Icon: IconEye, bestFor: 'New Products', desc: 'This strategy aims to increase impressions and clicks. It is suitable for new products that require traffic.' },
   { key: 'sales', title: 'Sales', Icon: IconBars, bestFor: 'Gross Revenue', desc: 'This strategy aims to increase orders and sales. It is suitable for products that require orders or clearing inventory.' },
   { key: 'roas', title: 'ROAS', Icon: IconLine, bestFor: 'Most Scenarios', desc: 'This strategy emphasizes an adjustment mode focused on ROAS/ACOS and is suitable for most scenarios.' },
 ]
-
-const BUDGET_MODES: Array<{ key: BudgetMode; title: string; Icon: typeof Target; desc: string; audience: string; chips: string[] }> = [
-  { key: 'strict', title: 'Strict Control', Icon: Target, desc: 'Individual products have independent budgets. AI will create a campaign for each ASIN.', audience: 'Experienced Advertisers | Specialized Campaigns', chips: ['Precision Control', 'Budget Safeguarding', 'Data-Driven', 'Scalability'] },
-  { key: 'shared', title: 'Shared Budget', Icon: Layers, desc: 'Users allocate a single budget that is shared across multiple selected products managed by AI.', audience: 'New Advertisers', chips: ['Simplified Management', 'Dynamic Allocation', 'Time-Efficiency'] },
+const BUDGET_MODES: Array<{ key: BudgetMode; title: string; Icon: typeof CheckSquare; desc: string; audience: string; chips: string[] }> = [
+  { key: 'strict', title: 'Strict Control', Icon: CheckSquare, desc: 'Individual products have independent budgets. AI will create a campaign for each ASIN.', audience: 'Experienced Advertisers | Specialized Campaigns', chips: ['Precision Control', 'Budget Safeguarding', 'Data-Driven', 'Scalability'] },
+  { key: 'shared', title: 'Shared Budget', Icon: Share2, desc: 'Users allocate a single budget that is shared across multiple selected products managed by AI.', audience: 'New Advertisers', chips: ['Simplified Management', 'Dynamic Allocation', 'Time-Efficiency'] },
 ]
+
+const eur = (n: number) => `€${n.toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+// Derived Listing Quality Score (0–10) from completeness signals we DO have.
+function lqsOf(p: RawProduct): number {
+  let s = 3 + Math.min(p.photoCount ?? 0, 8) * 0.55 + (p.hasDescription ? 1 : 0) + (p.hasGtin ? 0.8 : 0) + Math.min((p.channelCount ?? 1) - 1, 3) * 0.3
+  return Math.max(1, Math.min(10, Math.round(s * 10) / 10))
+}
+const toProd = (p: RawProduct): Prod => {
+  const lqs = lqsOf(p)
+  const low = Math.round((4 + lqs * 0.8) * 100) / 100
+  return { id: p.id, name: p.name, sku: p.sku, asin: p.asin ?? '', imageUrl: p.imageUrl ?? p.photoUrl ?? null, lqs, sugLow: low, sugHigh: Math.round(low * 2 * 100) / 100, budget: '' }
+}
 
 export function AiGoalBuilder() {
   const router = useRouter()
   const [goalName, setGoalName] = useState('')
-  const [target, setTarget] = useState<TargetKey>('impression')
+  const [target, setTarget] = useState<TargetKey>('sales') // H10 default is the middle "Sales" card
   const [budgetMode, setBudgetMode] = useState<BudgetMode>('strict')
-  const [totalBudget, setTotalBudget] = useState('')
+  const [advAlloc, setAdvAlloc] = useState(false)
+  const [sharedBudget, setSharedBudget] = useState('')
+  const [products, setProducts] = useState<Prod[]>([])
+  const [showAddProducts, setShowAddProducts] = useState(false)
+  const [seedTab, setSeedTab] = useState<'suggested' | 'list' | 'enter'>('suggested')
+  const [seeds, setSeeds] = useState<string[]>([])
   const [excludeText, setExcludeText] = useState('')
   const [excluded, setExcluded] = useState<string[]>([])
-  const [showAddProducts, setShowAddProducts] = useState(false)
+  const [advOpen, setAdvOpen] = useState(false)
+  const [productTargets, setProductTargets] = useState<string[]>([])
+  const [excludeAsins, setExcludeAsins] = useState<string[]>([])
   const exitTo = '/marketing/ads/campaign-builder'
 
-  const addExcluded = () => {
-    const toks = excludeText.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)
-    if (!toks.length) return
-    setExcluded((prev) => Array.from(new Set([...prev, ...toks])).slice(0, 10))
-    setExcludeText('')
-  }
+  const totalBudget = useMemo(() => products.reduce((a, p) => a + (Number(p.budget) || 0), 0), [products])
+  const setBudget = (id: string, v: string) => setProducts((ps) => ps.map((p) => (p.id === id ? { ...p, budget: v } : p)))
+  const removeProduct = (id: string) => setProducts((ps) => ps.filter((p) => p.id !== id))
 
   return (
     <div className="h10-aig">
-      {/* top bar */}
       <header className="h10-aig-top">
         <button type="button" className="x" onClick={() => router.push(exitTo)} aria-label="Close"><X size={20} /></button>
         <span className="brand"><IconAtom size={22} /> AI Advertising</span>
@@ -59,7 +79,6 @@ export function AiGoalBuilder() {
       <div className="h10-aig-body">
         <div className="h10-aig-wrap">
 
-          {/* Product Goal Details */}
           <section className="h10-aig-sec">
             <h2>Product Goal Details</h2>
             <div className="h10-aig-card">
@@ -70,7 +89,6 @@ export function AiGoalBuilder() {
             </div>
           </section>
 
-          {/* Select AI Target */}
           <section className="h10-aig-sec">
             <h2>Select AI Target</h2>
             <div className="h10-aig-targets">
@@ -85,7 +103,6 @@ export function AiGoalBuilder() {
             </div>
           </section>
 
-          {/* Product Setup */}
           <section className="h10-aig-sec">
             <h2>Product Setup</h2>
             <div className="h10-aig-card">
@@ -103,12 +120,19 @@ export function AiGoalBuilder() {
                     </button>
                   ))}
                 </div>
+                {budgetMode === 'strict' && (
+                  <label className="h10-aig-adv">
+                    <input type="checkbox" checked={advAlloc} onChange={(e) => setAdvAlloc(e.target.checked)} />
+                    <span className="t">Advanced Allocation</span>
+                    <span className="d">When the campaign&apos;s budget is exhausted, AI will analyze the spending capacity and effectiveness of a campaign and allocate the budget more efficiently to the campaign under that goal.</span>
+                  </label>
+                )}
               </div>
 
               {budgetMode === 'shared' && (
                 <div className="h10-aig-sub">
                   <h3>Total Budget</h3>
-                  <span className="h10-aig-money"><span className="pf">€</span><input inputMode="decimal" value={totalBudget} onChange={(e) => setTotalBudget(e.target.value)} placeholder="Please enter" /></span>
+                  <span className="h10-aig-money"><span className="pf">€</span><input inputMode="decimal" value={sharedBudget} onChange={(e) => setSharedBudget(e.target.value)} placeholder="Please enter" /></span>
                 </div>
               )}
 
@@ -116,107 +140,249 @@ export function AiGoalBuilder() {
                 <h3>Product Selection</h3>
                 <p>Select products for AI Advertising to manage</p>
                 <div className="h10-aig-pselbar">
-                  <span className="cnt">0 Product Added</span>
+                  <span className="cnt">{products.length} Product{products.length > 1 ? 's' : ''} Added</span>
                   <span className="grow" />
-                  <button type="button" className="h10-am-btn" disabled><Trash2 size={13} /> Remove All</button>
+                  <button type="button" className="h10-am-btn" disabled={!products.length} onClick={() => setProducts([])}><Trash2 size={13} /> Remove All</button>
                   <button type="button" className="h10-am-btn primary" onClick={() => setShowAddProducts(true)}><Plus size={13} /> Add Products</button>
                 </div>
                 <div className="h10-aig-psel">
-                  <div className="psel-head"><span className="c-prod">Product</span><span className="c-lqs">LQS</span></div>
-                  <div className="psel-empty">
-                    <ProductsEmptyArt />
-                    <div className="t">No Product Added</div>
-                    <button type="button" className="h10-am-btn sm" onClick={() => setShowAddProducts(true)}><Plus size={13} /> Add Products</button>
+                  <div className={`psel-head ${budgetMode}`}>
+                    <span className="c-del" />
+                    <span className="c-prod">Product <ChevronsUpDown size={12} /></span>
+                    <span className="c-lqs">LQS <ChevronsUpDown size={12} /></span>
+                    {budgetMode === 'strict' && <><span className="c-sug">Suggested Budget</span><span className="c-bud">Budget</span></>}
                   </div>
+                  {products.length === 0 ? (
+                    <div className="psel-empty"><ProductsEmptyArt /><div className="t">No Product Added</div><button type="button" className="h10-am-btn sm" onClick={() => setShowAddProducts(true)}><Plus size={13} /> Add Products</button></div>
+                  ) : (
+                    <ul className="psel-rows">
+                      {products.map((p) => (
+                        <li key={p.id} className={budgetMode}>
+                          <button type="button" className="del" onClick={() => removeProduct(p.id)} aria-label="Remove"><Trash2 size={15} /></button>
+                          <span className="c-prod"><span className="th">{p.imageUrl ? <img src={p.imageUrl} alt="" /> : null}</span><span className="m"><span className="nm">{p.name}</span><span className="id">{p.asin || p.sku}{p.asin && p.sku ? ` · ${p.sku}` : ''}</span></span></span>
+                          <span className="c-lqs"><span className="lqs"><BarChart3 size={11} /> {p.lqs.toFixed(1)}</span></span>
+                          {budgetMode === 'strict' && <>
+                            <span className="c-sug">{eur(p.sugLow)} - {eur(p.sugHigh)}</span>
+                            <span className="c-bud"><span className={`h10-aig-money sm ${p.budget && Number(p.budget) < 1 ? 'err' : ''}`}><span className="pf">€</span><input inputMode="decimal" value={p.budget} onChange={(e) => setBudget(p.id, e.target.value)} placeholder="0" /></span></span>
+                          </>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {budgetMode === 'strict' && products.length > 0 && (
+                    <div className="psel-total"><span>Total Budget:</span><b>{eur(totalBudget)}</b></div>
+                  )}
                 </div>
               </div>
             </div>
           </section>
 
-          {/* Keywords */}
           <section className="h10-aig-sec">
             <h2>Keywords</h2>
             <div className="h10-aig-card">
+              <AddSeedKeywords products={products} seeds={seeds} setSeeds={setSeeds} tab={seedTab} setTab={setSeedTab} />
               <div className="h10-aig-sub">
-                <h3 className="dot green">Add Seed Keywords</h3>
-                <div className="h10-aig-kw-empty">
-                  <ProductsEmptyArt />
-                  <div className="t">Select a product above to add keywords to this product goal.</div>
-                </div>
-              </div>
-              <div className="h10-aig-sub">
-                <h3 className="dot purple">Exclude Keywords</h3>
+                <h3 className="h10-aig-kwhd"><span className="badge purple"><Minus size={11} strokeWidth={3} /></span> Exclude Keywords</h3>
                 <p>Exclude specific search terms from triggering your ads to avoid irrelevant traffic and reduce costs.</p>
-                <div className="h10-aig-kwgrid">
-                  <div className="kw-enter">
-                    <textarea value={excludeText} onChange={(e) => setExcludeText(e.target.value)} onBlur={addExcluded} placeholder="Enter keywords you do not want to target" />
-                  </div>
-                  <div className="kw-added">
-                    <div className="kw-added-h"><span>{excluded.length}/10 Added</span><button type="button" className="rm" onClick={() => setExcluded([])} disabled={!excluded.length}><Trash2 size={12} /> Remove All</button></div>
-                    <div className="kw-added-col">Keyword</div>
-                    {excluded.length === 0 ? (
-                      <div className="kw-added-empty"><ProductsEmptyArt /></div>
-                    ) : (
-                      <ul className="kw-added-list">{excluded.map((k) => <li key={k}>{k}<button type="button" onClick={() => setExcluded((p) => p.filter((x) => x !== k))} aria-label={`Remove ${k}`}><X size={12} /></button></li>)}</ul>
-                    )}
-                  </div>
-                </div>
+                <KeywordEntry placeholder="Enter keywords you do not want to target" text={excludeText} setText={setExcludeText} list={excluded} setList={setExcluded} max={10} />
               </div>
             </div>
           </section>
 
-          {/* Advanced Targeting */}
           <section className="h10-aig-sec">
             <h2>Advanced Targeting</h2>
             <div className="h10-aig-card adv">
-              <p className="adv-note">Set a single keyword count for the maximum number of related keywords to expand each product goal. The AI will continuously optimize within this range to find the best-performing keywords.</p>
+              <div className="adv-row">
+                <div>
+                  <h3>Advanced Targeting</h3>
+                  <p>Add or exclude additional types of targets</p>
+                </div>
+                <button type="button" className="h10-am-btn ghost" onClick={() => setAdvOpen(true)}><Settings size={13} /> Settings</button>
+              </div>
+              <div className="adv-note"><Info size={15} /><span>If the SP Auto campaign does not immediately generate keywords or product targets (ASINs), the SP KW and SP PAT campaigns will remain in an Incomplete status due to the lack of required inputs. This is normal and may take some time as the SP Auto campaign gathers data. Please be patient and allow the SP Auto campaign to run long enough to identify relevant keywords and targets.</span></div>
             </div>
           </section>
 
         </div>
       </div>
+      <footer className="h10-aig-bottombar">
+        <button type="button" className="h10-am-btn" onClick={() => router.push(exitTo)}>Cancel</button>
+        <span className="grow" />
+        <button type="button" className="launch" disabled>Launch</button>
+      </footer>
 
-      {showAddProducts && <AddProductsModal onClose={() => setShowAddProducts(false)} />}
+      {showAddProducts && <AddProductsModal selected={products} onClose={() => setShowAddProducts(false)} onApply={(ps) => { setProducts(ps); setShowAddProducts(false) }} />}
+      {advOpen && <AdvancedTargetingDrawer productTargets={productTargets} excludeAsins={excludeAsins} onClose={() => setAdvOpen(false)} onSave={(pt, ea) => { setProductTargets(pt); setExcludeAsins(ea); setAdvOpen(false) }} />}
     </div>
   )
 }
 
-/** Empty-state illustration (magnifier over a sheet) used by Product Selection + Keywords. */
+/* ── Add Seed Keywords: Suggested / Add from List / Enter Keywords + N/10 panel ── */
+function AddSeedKeywords({ products, seeds, setSeeds, tab, setTab }: { products: Prod[]; seeds: string[]; setSeeds: (v: string[]) => void; tab: 'suggested' | 'list' | 'enter'; setTab: (t: 'suggested' | 'list' | 'enter') => void }) {
+  const [enter, setEnter] = useState('')
+  const [folderQ, setFolderQ] = useState('')
+  // Suggested keywords derived from selected product names (real-ish opportunity terms).
+  const suggested = useMemo(() => {
+    const stop = new Set(['the', 'and', 'for', 'with', 'per', 'da', 'di', 'con', 'e', 'a', '300', 'tc', '|'])
+    const seen = new Set<string>(); const out: string[] = []
+    for (const p of products) for (const w of p.name.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)) {
+      if (w.length < 4 || stop.has(w) || seen.has(w)) continue; seen.add(w); out.push(w)
+    }
+    return out.slice(0, 99)
+  }, [products])
+  const add = (k: string) => { const t = k.trim().toLowerCase(); if (t && !seeds.includes(t) && seeds.length < 10) setSeeds([...seeds, t]) }
+  const empty = products.length === 0
+
+  return (
+    <div className="h10-aig-sub">
+      <h3 className="h10-aig-kwhd"><span className="badge green"><Plus size={11} strokeWidth={3} /></span> Add Seed Keywords</h3>
+      <p>AI will automatically analyze the seed keywords you fill in and keywords based on other sources to determine the keywords with most opportunity</p>
+      {empty ? (
+        <div className="h10-aig-kw-empty"><ProductsEmptyArt /><div className="t">Select a product above to add keywords to this product goal.</div></div>
+      ) : (
+        <div className="h10-aig-kwgrid">
+          <div className="kw-left">
+            <div className="h10-aig-seedtabs">
+              <button type="button" className={tab === 'suggested' ? 'on' : ''} onClick={() => setTab('suggested')}>Suggested <i>{suggested.length > 98 ? '99+' : suggested.length}</i></button>
+              <button type="button" className={tab === 'list' ? 'on' : ''} onClick={() => setTab('list')}>Add from List</button>
+              <button type="button" className={tab === 'enter' ? 'on' : ''} onClick={() => setTab('enter')}>Enter Keywords</button>
+            </div>
+            {tab === 'suggested' && (
+              <ul className="h10-aig-suglist">
+                {suggested.map((k) => <li key={k}><span>{k}</span><button type="button" disabled={seeds.includes(k) || seeds.length >= 10} onClick={() => add(k)}>{seeds.includes(k) ? <Check size={13} /> : <Plus size={13} />}</button></li>)}
+              </ul>
+            )}
+            {tab === 'list' && (
+              <div className="h10-aig-folderbox">
+                <div className="h10-dd-search"><Search size={13} /><input value={folderQ} onChange={(e) => setFolderQ(e.target.value)} placeholder="Search for a folder" /></div>
+                <div className="h10-aig-folderempty"><Folder size={18} /> No keyword folders yet</div>
+              </div>
+            )}
+            {tab === 'enter' && (
+              <textarea className="h10-aig-enter" value={enter} onChange={(e) => setEnter(e.target.value)} onBlur={() => { enter.split(/[\n,]/).forEach(add); setEnter('') }} placeholder="Enter keywords, one per line" />
+            )}
+          </div>
+          <AddedPanel list={seeds} setList={setSeeds} max={10} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* Generic keyword entry (Exclude Keywords): textarea + Add button + N/10 panel. */
+function KeywordEntry({ placeholder, text, setText, list, setList, max }: { placeholder: string; text: string; setText: (v: string) => void; list: string[]; setList: (v: string[]) => void; max: number }) {
+  const add = () => { const toks = text.split(/[\n,]/).map((s) => s.trim().toLowerCase()).filter(Boolean); if (!toks.length) return; setList(Array.from(new Set([...list, ...toks])).slice(0, max)); setText('') }
+  return (
+    <div className="h10-aig-kwgrid">
+      <div className="kw-left">
+        <textarea className="h10-aig-enter" value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} />
+        <div className="h10-aig-kwbtn"><button type="button" className="h10-am-btn primary" disabled={!text.trim() || list.length >= max} onClick={add}>Add Keywords</button></div>
+      </div>
+      <AddedPanel list={list} setList={setList} max={max} />
+    </div>
+  )
+}
+
+function AddedPanel({ list, setList, max }: { list: string[]; setList: (v: string[]) => void; max: number }) {
+  return (
+    <div className="kw-added">
+      <div className="kw-added-h"><span>{list.length}/{max} Added</span><button type="button" className="rm" onClick={() => setList([])} disabled={!list.length}><Trash2 size={12} /> Remove All</button></div>
+      <div className="kw-added-col">Keyword</div>
+      {list.length === 0 ? <div className="kw-added-empty"><ProductsEmptyArt /></div> : (
+        <ul className="kw-added-list">{list.map((k) => <li key={k}>{k}<button type="button" onClick={() => setList(list.filter((x) => x !== k))} aria-label={`Remove ${k}`}><X size={12} /></button></li>)}</ul>
+      )}
+    </div>
+  )
+}
+
 function ProductsEmptyArt() {
   return (
     <svg className="h10-aig-emptyart" viewBox="0 0 80 64" fill="none" aria-hidden>
       <rect x="14" y="10" width="38" height="46" rx="3" fill="#eef2f7" />
-      <rect x="20" y="18" width="26" height="3" rx="1.5" fill="#d4dce6" />
-      <rect x="20" y="26" width="26" height="3" rx="1.5" fill="#d4dce6" />
-      <rect x="20" y="34" width="18" height="3" rx="1.5" fill="#d4dce6" />
-      <circle cx="50" cy="40" r="13" fill="#fff" stroke="#c2cdda" strokeWidth="2.5" />
-      <line x1="59" y1="49" x2="66" y2="56" stroke="#c2cdda" strokeWidth="3" strokeLinecap="round" />
+      <rect x="20" y="18" width="26" height="3" rx="1.5" fill="#d4dce6" /><rect x="20" y="26" width="26" height="3" rx="1.5" fill="#d4dce6" /><rect x="20" y="34" width="18" height="3" rx="1.5" fill="#d4dce6" />
+      <circle cx="50" cy="40" r="13" fill="#fff" stroke="#c2cdda" strokeWidth="2.5" /><line x1="59" y1="49" x2="66" y2="56" stroke="#c2cdda" strokeWidth="3" strokeLinecap="round" />
     </svg>
   )
 }
 
-/** Add Products to Product Selection — structure matched to H10; product search wired in a follow-up. */
-function AddProductsModal({ onClose }: { onClose: () => void }) {
+/* ── Add Products to Product Selection — 2-panel modal w/ real product search ── */
+function AddProductsModal({ selected, onClose, onApply }: { selected: Prod[]; onClose: () => void; onApply: (ps: Prod[]) => void }) {
+  const [tab, setTab] = useState<'search' | 'enter'>('search')
   const [q, setQ] = useState('')
-  const ref = useRef<HTMLDivElement>(null)
+  const [results, setResults] = useState<Prod[]>([])
+  const [loading, setLoading] = useState(true)
+  const [picked, setPicked] = useState<Prod[]>(selected)
+  useEffect(() => {
+    let alive = true; setLoading(true)
+    const t = setTimeout(() => {
+      fetch(`${getBackendUrl()}/api/products/search?q=${encodeURIComponent(q)}&limit=50`).then((r) => r.json()).then((j) => {
+        if (!alive) return
+        setResults(((j?.items ?? []) as RawProduct[]).map(toProd)); setLoading(false)
+      }).catch(() => { if (alive) { setResults([]); setLoading(false) } })
+    }, q ? 280 : 0)
+    return () => { alive = false; clearTimeout(t) }
+  }, [q])
+  const has = (id: string) => picked.some((p) => p.id === id)
+  const toggle = (p: Prod) => setPicked((ps) => (has(p.id) ? ps.filter((x) => x.id !== p.id) : [...ps, p]))
   return (
     <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className="h10-modal aig-add" ref={ref} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Add Products to Product Selection">
+      <div className="h10-modal aig-add" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Add Products to Product Selection">
         <div className="h10-modal-h"><b>Add Products to Product Selection</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
         <div className="h10-modal-b">
-          <div className="aig-add-search"><Search size={14} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by product name, ASIN or SKU" /></div>
           <div className="aig-add-grid">
-            <div className="aig-add-list">
-              <div className="psel-empty"><ProductsEmptyArt /><div className="t">No products</div></div>
+            <div className="aig-add-left">
+              <div className="aig-add-tabs"><button type="button" className={tab === 'search' ? 'on' : ''} onClick={() => setTab('search')}>Search for Product</button><button type="button" className={tab === 'enter' ? 'on' : ''} onClick={() => setTab('enter')}>Enter Product</button></div>
+              <div className="aig-add-search"><Search size={14} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by Product name, ASIN, or SKU" /></div>
+              <div className="aig-add-cnt"><span>Viewing {results.length} Skus</span><button type="button" className="addall" disabled={!results.length} onClick={() => setPicked((ps) => { const ids = new Set(ps.map((p) => p.id)); return [...ps, ...results.filter((r) => !ids.has(r.id))] })}><PlusCircle size={13} /> Add All</button></div>
+              <div className="aig-add-list">
+                {loading ? <div className="psel-empty"><div className="t">Loading…</div></div> : results.length === 0 ? <div className="psel-empty"><ProductsEmptyArt /><div className="t">No products</div></div> : (
+                  <ul>{results.map((p) => (
+                    <li key={p.id}>
+                      <span className="th">{p.imageUrl ? <img src={p.imageUrl} alt="" /> : null}</span>
+                      <span className="m"><span className="nm">{p.name}</span><span className="id">{p.asin || p.sku}{p.asin && p.sku ? ` · ${p.sku}` : ''}</span></span>
+                      <button type="button" className={`pick ${has(p.id) ? 'on' : ''}`} onClick={() => toggle(p)}>{has(p.id) ? <><Check size={12} /> Added</> : <><Plus size={12} /> Add</>}</button>
+                    </li>
+                  ))}</ul>
+                )}
+              </div>
             </div>
-            <div className="aig-add-sel">
-              <div className="aig-add-selh">Product Added</div>
-              <div className="psel-empty"><ProductsEmptyArt /><div className="t">No Product Added</div></div>
+            <div className="aig-add-right">
+              <div className="aig-add-rh"><b>{picked.length} Products Added</b><button type="button" className="rm" onClick={() => setPicked([])} disabled={!picked.length}><Trash2 size={12} /> Remove All</button></div>
+              <div className="aig-add-rcol">Product</div>
+              <div className="aig-add-rlist">
+                {picked.length === 0 ? <div className="psel-empty"><ProductsEmptyArt /><div className="t">No Product Added</div></div> : (
+                  <ul>{picked.map((p) => (
+                    <li key={p.id}><span className="th">{p.imageUrl ? <img src={p.imageUrl} alt="" /> : null}</span><span className="m"><span className="nm">{p.name}</span><span className="id">{p.asin || p.sku}</span></span><button type="button" onClick={() => toggle(p)} aria-label="Remove"><X size={14} /></button></li>
+                  ))}</ul>
+                )}
+              </div>
             </div>
           </div>
         </div>
-        <div className="h10-modal-f"><button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button><span className="grow" /><button type="button" className="h10-am-btn primary" onClick={onClose}>Add</button></div>
+        <div className="h10-modal-f"><button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button><span className="grow" /><button type="button" className="h10-am-btn primary" disabled={!picked.length} onClick={() => onApply(picked)}>Add Products</button></div>
       </div>
+    </div>
+  )
+}
+
+/* ── Advanced Targeting drawer (right slide-over): Product Targets + Exclude ASINs ── */
+function AdvancedTargetingDrawer({ productTargets, excludeAsins, onClose, onSave }: { productTargets: string[]; excludeAsins: string[]; onClose: () => void; onSave: (pt: string[], ea: string[]) => void }) {
+  const [pt, setPt] = useState(productTargets.join('\n'))
+  const [ea, setEa] = useState(excludeAsins.join('\n'))
+  const lines = (s: string) => s.split('\n').map((x) => x.trim()).filter(Boolean)
+  const ptN = lines(pt).length, eaN = lines(ea).length
+  return (
+    <div className="h10-aig-drawer-back" onClick={onClose}>
+      <aside className="h10-aig-drawer" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Advanced Targeting">
+        <div className="dh"><b>Advanced Targeting</b><button type="button" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
+        <div className="db">
+          <div className="dfield"><div className="dl"><span>Product Targets <InfoTip tip="Target specific products (ASINs) so your ads show on their detail pages." /></span><span className="cnt">{ptN}/10 Added</span></div>
+            <textarea value={pt} onChange={(e) => setPt(e.target.value)} placeholder="Enter product targets, one per line" /></div>
+          <div className="dfield"><div className="dl"><span>Exclude ASINs <InfoTip tip="Stop your ads from showing on these ASINs." /></span><span className="cnt">{eaN} Added</span></div>
+            <textarea value={ea} onChange={(e) => setEa(e.target.value)} placeholder="Enter product ASINs you do not want to target, one per line" /></div>
+        </div>
+        <div className="df"><button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button><span className="grow" /><button type="button" className="h10-am-btn primary" disabled={!ptN && !eaN} onClick={() => onSave(lines(pt), lines(ea))}>Save</button></div>
+      </aside>
     </div>
   )
 }
