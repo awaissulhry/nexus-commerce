@@ -14,6 +14,7 @@ import { auditSalesDrift } from '../services/revenue/drift-audit.service.js'
 import { syncFinancialEvents } from '../services/amazon-financial-events.service.js'
 import { refreshSalesAggregates } from '../services/sales-aggregate.service.js'
 import prisma from '../db.js'
+import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 import {
   getShadowStats,
   resetShadowBuffer,
@@ -57,9 +58,85 @@ function modelDelegate(key: RecycleBinEntity) {
   }
 }
 
+// Country-code → Amazon marketplace id (EU markets Xavia sells in).
+const AMZ_MP_ID: Record<string, string> = {
+  IT: 'APJ6JRA9NG5V4', DE: 'A1PA6795UKMFR9', FR: 'A13V1IB3VIYZZH', ES: 'A1RKKUPIHCS9HS', UK: 'A1F83G8C2ARO7P',
+}
+
 export async function adminRoutes(app: FastifyInstance) {
   const validationService = new DataValidationService()
   const repairService = new BatchRepairService()
+
+  /**
+   * POST /admin/amazon/restore-fba
+   *
+   * Recovery for the FBA→FBM flip incident. Sends a Listings PATCH that sets
+   * fulfillment_availability back to the FBA channel (AMAZON_EU, NO merchant
+   * quantity) for Amazon listings backed by FBA stock — converting offers that
+   * were flipped to FBM back to Fulfilled-by-Amazon. Inverse of the bug payload.
+   *
+   * SAFETY: dry-run by DEFAULT — only an explicit {"dryRun": false} actually
+   * sends. Scope is AMAZON listings with FBA stock on hand. Optional
+   * {skus, marketplaces, limit} narrow it — use {limit:1, skus:["…"], dryRun:false}
+   * for the one-SKU canary. The SP-API client still honours the publish gate.
+   */
+  app.post<{ Body: { skus?: string[]; marketplaces?: string[]; dryRun?: boolean; limit?: number } }>(
+    '/admin/amazon/restore-fba',
+    async (request, reply) => {
+      const body = request.body ?? {}
+      const dryRun = body.dryRun !== false // default true; only explicit false sends
+      const limit = Number.isFinite(body.limit as number) ? Math.max(1, Number(body.limit)) : undefined
+      const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      if (!sellerId) return reply.code(503).send({ error: 'AMAZON_SELLER_ID not configured' })
+
+      const listings = await prisma.channelListing.findMany({
+        where: {
+          channel: 'AMAZON',
+          ...(body.skus?.length ? { product: { sku: { in: body.skus } } } : {}),
+          ...(body.marketplaces?.length ? { marketplace: { in: body.marketplaces } } : {}),
+        },
+        select: {
+          id: true,
+          marketplace: true,
+          platformAttributes: true,
+          product: { select: { id: true, sku: true, productType: true } },
+        },
+        orderBy: { id: 'asc' },
+      })
+
+      const results: Array<Record<string, unknown>> = []
+      let processed = 0, sent = 0, skippedNoFba = 0
+      for (const cl of listings) {
+        if (limit && processed >= limit) break
+        const sku = cl.product?.sku
+        if (!sku || !cl.product?.id) continue
+        // Only restore listings actually backed by FBA stock (the flipped set).
+        const agg = await prisma.stockLevel
+          .aggregate({ where: { productId: cl.product.id, location: { code: 'AMAZON-EU-FBA' } }, _sum: { quantity: true } })
+          .catch(() => null)
+        if (!(agg?._sum.quantity && agg._sum.quantity > 0)) { skippedNoFba++; continue }
+        processed++
+        const marketplaceId = AMZ_MP_ID[cl.marketplace] ?? AMZ_MP_ID.IT
+        const productType = String((cl.platformAttributes as any)?.productType ?? cl.product?.productType ?? '').toUpperCase()
+        const payload = {
+          productType: productType || 'PRODUCT',
+          patches: [{
+            op: 'replace',
+            path: '/attributes/fulfillment_availability',
+            value: [{ fulfillment_channel_code: 'AMAZON_EU', marketplace_id: marketplaceId }],
+          }],
+        }
+        if (dryRun) {
+          results.push({ sku, marketplace: cl.marketplace, productType: payload.productType, dryRun: true, payload })
+          continue
+        }
+        const r = await amazonSpApiClient.submitListingPayload({ sellerId, sku, payload })
+        sent++
+        results.push({ sku, marketplace: cl.marketplace, productType: payload.productType, ok: r.success, status: r.status, dryRun: r.dryRun ?? false, error: r.error })
+      }
+      return reply.send({ dryRun, processed, sent, skippedNoFba, count: results.length, results })
+    },
+  )
 
   /**
    * GET /admin/validation/report
