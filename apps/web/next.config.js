@@ -1,6 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Local-dev build-dir isolation. When several sessions edit this app at once,
+  // any `git push` runs the pre-push hook's `rm -rf .next && next build`, which
+  // nukes a running `next dev`'s build dir → 500s on the shared preview. Running
+  // dev with NEXT_DEV_ISOLATED=1 puts its artifacts in `.next-dev`, which the
+  // prod build never touches. No-op wherever the env var is unset (prod, Vercel,
+  // the pre-push build) → safe to commit.
+  distDir: process.env.NEXT_DEV_ISOLATED === '1' ? '.next-dev' : '.next',
   // This prevents Turbopack from breaking the Prisma connection
   serverExternalPackages: ["@prisma/client", "pg", "@nexus/database"],
   // PERF — client-side Router Cache. Next 15 defaults staleTimes.dynamic to 0,
