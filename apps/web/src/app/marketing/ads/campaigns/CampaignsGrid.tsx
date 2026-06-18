@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Settings2, Download, Wand2, Plus, GripVertical, X, ChevronDown, Info, Library, Trash2 } from 'lucide-react'
+import { Settings2, Download, Wand2, Plus, GripVertical, X, ChevronDown, Info, Library, Trash2, MapPin } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import {
   DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent,
@@ -27,6 +27,7 @@ interface Camp {
   trueProfitCents?: number | null; trueProfitMarginPct?: number | string | null
   portfolioId?: string | null; startDate?: string | null; endDate?: string | null
   deliveryStatus?: string | null; deliveryReasons?: string[] | null
+  lastSyncedAt?: string | null
 }
 type Mode = 'metrics' | 'edit'
 const num = (v: unknown) => (typeof v === 'number' ? v : Number(v) || 0)
@@ -360,6 +361,16 @@ function BulkActionsModal({ campaigns, onStage, onClose }: { campaigns: Camp[]; 
   )
 }
 
+// Row icon cluster (H10): targeting letter (A=auto / M=manual, inferred from the
+// campaign name) + product badge (SP/SB/SD). Status renders as a coloured pill.
+const productBadge = (c: Camp): string => (c.adProduct === 'SPONSORED_BRANDS' || c.type === 'SB') ? 'SB' : (c.adProduct === 'SPONSORED_DISPLAY' || c.type === 'SD') ? 'SD' : 'SP'
+const targetingLetter = (c: Camp): string => /(^|[^a-z])auto([^a-z]|$)/i.test(c.name) ? 'A' : 'M'
+const STATUS_PILL: Record<string, { label: string; cls: string }> = {
+  ENABLED: { label: 'Enabled', cls: 'ok' },
+  PAUSED: { label: 'Paused', cls: 'warn' },
+  ARCHIVED: { label: 'Archived', cls: 'arch' },
+}
+
 export function CampaignsGrid() {
   const [rows, setRows] = useState<Camp[]>([])
   const [loading, setLoading] = useState(true)
@@ -390,6 +401,8 @@ export function CampaignsGrid() {
   const [rangePreset, setRangePreset] = useState('last7')
   const [syncing, setSyncing] = useState(false)
   const [showGraph, setShowGraph] = useState(false)
+  const [page, setPage] = useState(1)
+  const [rowsPerPage, setRowsPerPage] = useState(100)
 
   const load = useCallback(async (opts?: { sync?: boolean }) => {
     if (opts?.sync) setSyncing(true)
@@ -567,6 +580,18 @@ export function CampaignsGrid() {
   const headerCols: string[] = isMetrics ? metricCols : [...EDIT_COLS]
   const headerLabel = (k: string) => (isMetrics ? COL_BY_KEY[k]?.label ?? k : k)
 
+  // client-side pagination (H10 "Rows per page") + the Latest Report stamp
+  const pageCount = Math.max(1, Math.ceil(filtered.length / rowsPerPage))
+  const safePage = Math.min(page, pageCount)
+  const paged = filtered.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage)
+  const viewStart = filtered.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1
+  const viewEnd = Math.min(safePage * rowsPerPage, filtered.length)
+  const latestReport = (() => {
+    let max = 0
+    for (const r of rows) { const t = r.lastSyncedAt ? Date.parse(r.lastSyncedAt) : 0; if (t > max) max = t }
+    return max ? new Date(max).toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
+  })()
+
   return (
     <div className="h10-am">
       <AdsPageHeader
@@ -679,7 +704,7 @@ export function CampaignsGrid() {
 
       {/* toolbar */}
       <div className="h10-am-toolbar">
-        <span className="cnt">{sel.size > 0 ? <b>Selected {sel.size}</b> : `Viewing 1-${Math.min(filtered.length, 500)} of ${filtered.length} Campaigns`}</span>
+        <span className="cnt">{sel.size > 0 ? <b>Selected {sel.size}</b> : `Viewing ${viewStart}-${viewEnd} of ${filtered.length} Campaigns`}</span>
         <div className="seg">
           <button type="button" className={isMetrics ? 'on' : ''} onClick={() => setMode('metrics')}>Metrics</button>
           <button type="button" className={!isMetrics ? 'on' : ''} onClick={() => setMode('edit')}>Edit Campaigns</button>
@@ -701,30 +726,61 @@ export function CampaignsGrid() {
           <thead>
             <tr>
               <th className="ck"><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all" /></th>
-              <th className="nm">Campaign</th>
+              <th className="nm fz">Campaign</th>
+              <th className="st">Status</th>
               {headerCols.map((k) => <th key={k} className="num">{headerLabel(k)}</th>)}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={headerCols.length + 2} className="empty">Loading campaigns…</td></tr>
+              Array.from({ length: 8 }).map((_, i) => (
+                <tr key={`sk${i}`} className="sk">
+                  <td className="ck"><span className="skb" style={{ width: 15 }} /></td>
+                  <td className="nm fz"><span className="skb" style={{ width: 160 }} /></td>
+                  <td className="st"><span className="skb" style={{ width: 58 }} /></td>
+                  {headerCols.map((k) => <td key={k} className="num"><span className="skb" style={{ width: 52 }} /></td>)}
+                </tr>
+              ))
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={headerCols.length + 2} className="empty">No campaigns.</td></tr>
-            ) : filtered.map((c) => (
-              <tr key={c.id} className={sel.has(c.id) ? 'on' : ''}>
-                <td className="ck"><input type="checkbox" checked={sel.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Select ${c.name}`} /></td>
-                <td className="nm">
-                  <span className={`dot ${c.status === 'ENABLED' ? 'live' : ''}`} />
-                  <span className="badge">{c.adProduct === 'SPONSORED_BRANDS' ? 'SB' : c.adProduct === 'SPONSORED_DISPLAY' ? 'SD' : 'SP'}</span>
-                  <span className="t" title={c.name}>{c.name}</span>
-                  {c.marketplace && <span className="mk">{c.marketplace}</span>}
-                </td>
-                {headerCols.map((k) => <td key={k} className="num">{isMetrics ? renderCol(c, k) : editCell(c, k)}</td>)}
-              </tr>
-            ))}
+              <tr><td colSpan={headerCols.length + 3} className="empty">No campaigns.</td></tr>
+            ) : paged.map((c) => {
+              const sp = STATUS_PILL[c.status] ?? { label: c.status, cls: '' }
+              return (
+                <tr key={c.id} className={sel.has(c.id) ? 'on' : ''}>
+                  <td className="ck"><input type="checkbox" checked={sel.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Select ${c.name}`} /></td>
+                  <td className="nm fz">
+                    <MapPin size={13} className="pin" aria-hidden />
+                    <span className="tg" title={targetingLetter(c) === 'A' ? 'Auto targeting' : 'Manual targeting'}>{targetingLetter(c)}</span>
+                    <span className="pb" data-p={productBadge(c)}>{productBadge(c)}</span>
+                    <span className="t" title={c.name}>{c.name}</span>
+                    {c.marketplace && <span className="mk">{c.marketplace}</span>}
+                  </td>
+                  <td className="st"><span className={`h10-pill ${sp.cls}`}>{sp.label}</span></td>
+                  {headerCols.map((k) => <td key={k} className="num">{isMetrics ? renderCol(c, k) : editCell(c, k)}</td>)}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
+
+      {/* pagination + latest report (H10 footer) */}
+      <div className="h10-am-pager">
+        <span className="grow" />
+        <div className="pg">
+          <button type="button" className="pgbtn" disabled={safePage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} aria-label="Previous page">‹</button>
+          {Array.from({ length: Math.min(pageCount, 9) }).map((_, i) => (
+            <button type="button" key={i} className={`pgbtn ${safePage === i + 1 ? 'on' : ''}`} onClick={() => setPage(i + 1)}>{i + 1}</button>
+          ))}
+          <button type="button" className="pgbtn" disabled={safePage >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))} aria-label="Next page">›</button>
+        </div>
+        <div className="rpp">Rows per page:
+          <select value={rowsPerPage} onChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(1) }} aria-label="Rows per page">
+            <option value={50}>50</option><option value={100}>100</option><option value={200}>200</option><option value={500}>500</option>
+          </select>
+        </div>
+      </div>
+      <div className="h10-am-latest"><b>Latest Report:</b> {latestReport} · Performance data is not real-time. <span className="lk">Learn More</span></div>
 
       {/* CBN.2c.2 — edit-mode Discard/Apply footer */}
       {mode === 'edit' && diffs.length > 0 && (

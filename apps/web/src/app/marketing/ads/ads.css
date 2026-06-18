@@ -258,3 +258,37 @@
 .h10-bulk-field .row { display: flex; gap: 8px; }
 .h10-bulk-field .row select { flex: 1; }
 .h10-bulk-field .row input { width: 110px; text-align: right; }
+
+/* CBN.2e.1 — grid row anatomy (status pill, targeting/product badges, blue link) +
+   pagination + Latest Report footer + loading skeleton (Helium 10 match) */
+.h10-am-grid td.nm { gap: 7px; }
+.h10-am-grid td.nm .pin { color: #b6bdc8; flex-shrink: 0; }
+.h10-am-grid td.nm .tg { font-size: 10px; font-weight: 800; color: #6b7480; background: #eef1f5; border-radius: 4px; padding: 2px 5px; flex-shrink: 0; }
+.h10-am-grid td.nm .pb { font-size: 9px; font-weight: 800; border-radius: 4px; padding: 2px 5px; flex-shrink: 0; }
+.h10-am-grid td.nm .pb[data-p="SP"] { color: #6d28d9; background: #f3e8ff; }
+.h10-am-grid td.nm .pb[data-p="SD"] { color: #0e7490; background: #e0f2fe; }
+.h10-am-grid td.nm .pb[data-p="SB"] { color: #b45309; background: #fef3c7; }
+.h10-am-grid td.nm .t { color: #1f6fde; font-weight: 600; cursor: pointer; }
+.h10-am-grid td.nm .t:hover { text-decoration: underline; }
+.h10-am-grid th.st, .h10-am-grid td.st { text-align: left; white-space: nowrap; }
+.h10-pill { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 5px; padding: 3px 9px; white-space: nowrap; }
+.h10-pill.ok { color: #167a48; background: #e6f6ec; }
+.h10-pill.warn { color: #9a6700; background: #fdf3d3; }
+.h10-pill.arch { color: #6b7480; background: #eef1f5; }
+
+.h10-am-grid tr.sk td { border-bottom: 1px solid #f1f4f8; }
+.h10-am-grid .skb { display: inline-block; height: 11px; border-radius: 6px; background: linear-gradient(90deg, #eef1f5 25%, #e3e8ef 37%, #eef1f5 63%); background-size: 400% 100%; animation: h10sh 1.3s ease infinite; }
+@keyframes h10sh { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+.h10-am-pager { display: flex; align-items: center; gap: 14px; padding: 2px 2px 0; }
+.h10-am-pager .grow { flex: 1; }
+.h10-am-pager .pg { display: inline-flex; align-items: center; gap: 4px; }
+.h10-am-pager .pgbtn { min-width: 30px; height: 30px; border: 1px solid #e6e9ee; background: #fff; border-radius: 7px; font: inherit; font-size: 13px; font-weight: 600; color: #5b6573; cursor: pointer; }
+.h10-am-pager .pgbtn:hover:not(:disabled) { background: #f1f4f8; }
+.h10-am-pager .pgbtn.on { background: #1f6fde; border-color: #1f6fde; color: #fff; }
+.h10-am-pager .pgbtn:disabled { color: #c2c9d3; cursor: default; }
+.h10-am-pager .rpp { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: #5b6573; }
+.h10-am-pager .rpp select { border: 1px solid #d8dde4; border-radius: 7px; padding: 5px 8px; font: inherit; font-size: 12.5px; background: #fff; cursor: pointer; }
+.h10-am-latest { font-size: 12.5px; color: #5b6573; padding: 2px 2px 4px; }
+.h10-am-latest b { color: #1c2530; font-weight: 700; }
+.h10-am-latest .lk { color: #1f6fde; font-weight: 600; cursor: pointer; }
