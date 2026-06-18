@@ -141,26 +141,34 @@ describe('B2 — FBM/FBA-aware quantity push', () => {
   })
 })
 
-describe('B2 — isFbaListing resolution', () => {
+describe('B2 / FBA-flip fix — isFbaListing resolution (fail-closed)', () => {
   it('listing.fulfillmentMethod=FBA → true', () => {
     expect(isFbaListing({ fulfillmentMethod: 'FBA' }, null)).toBe(true)
   })
-  it('listing.fulfillmentMethod=FBM wins over product=FBA → false', () => {
-    expect(isFbaListing({ fulfillmentMethod: 'FBM' }, { fulfillmentMethod: 'FBA' })).toBe(false)
+  it('product=FBA overrides a stale listing FBM → true (the flip bug: must NOT trust a bare FBM)', () => {
+    expect(isFbaListing({ fulfillmentMethod: 'FBM' }, { fulfillmentMethod: 'FBA' })).toBe(true)
   })
   it('persisted AMAZON_EU channel code → true', () => {
     expect(isFbaListing({ platformAttributes: { fulfillment_availability: [{ fulfillment_channel_code: 'AMAZON_EU' }] } }, null)).toBe(true)
   })
-  it('persisted DEFAULT channel code → false', () => {
+  it('persisted DEFAULT channel code, no other FBA signal → false', () => {
     expect(isFbaListing({ platformAttributes: { fulfillment_availability: [{ fulfillment_channel_code: 'DEFAULT' }] } }, null)).toBe(false)
   })
   it('listing method unset → falls back to product method', () => {
     expect(isFbaListing({ fulfillmentMethod: null }, { fulfillmentMethod: 'FBA' })).toBe(true)
     expect(isFbaListing(null, { fulfillmentMethod: 'FBM' })).toBe(false)
   })
-  it('nothing set → false (safe FBM default)', () => {
+  it('FBA stock on hand → true even when both markers say FBM (evidence wins)', () => {
+    expect(isFbaListing({ fulfillmentMethod: 'FBM' }, { fulfillmentMethod: 'FBM' }, { fbaStockQty: 8 })).toBe(true)
+    expect(isFbaListing({ fulfillmentMethod: 'FBM' }, { fulfillmentMethod: 'FBM' }, { fbaStockQty: 0 })).toBe(false)
+  })
+  it('active FBA offer → true', () => {
+    expect(isFbaListing({ fulfillmentMethod: 'FBM' }, null, { hasActiveFbaOffer: true })).toBe(true)
+  })
+  it('genuine FBM with no FBA evidence → false (merchant qty push allowed)', () => {
     expect(isFbaListing(null, null)).toBe(false)
     expect(isFbaListing({}, {})).toBe(false)
+    expect(isFbaListing({ fulfillmentMethod: 'FBM' }, { fulfillmentMethod: 'FBM' }, { fbaStockQty: 0, hasActiveFbaOffer: false })).toBe(false)
   })
 })
 

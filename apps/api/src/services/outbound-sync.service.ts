@@ -156,15 +156,22 @@ export function buildAmazonListingPatch(
 }
 
 /**
- * B2 — is this Amazon listing FBA (Amazon-fulfilled)? The listing's explicit
- * method wins; else a persisted AMAZON_* fulfillment channel code (what was last
- * written to the offer); else — only when the listing method is unset — the
- * product-level method. Default false (safe FBM). Pure + testable; mirrors the
- * flat-file truth (amazon/flat-file.service.ts:1013).
+ * B2 / FBA-flip fix — is this Amazon listing FBA (Amazon-fulfilled)? Returns true
+ * (⇒ caller must NOT push a merchant DEFAULT quantity) on ANY FBA signal:
+ *   • the listing's explicit FBA method, or a persisted AMAZON_* channel code;
+ *   • Product.fulfillmentMethod === 'FBA' — STANDALONE, no longer gated on the
+ *     listing method being null. A stale/wrong listing 'FBM' must not authorize a
+ *     flip: that gate is exactly what let real FBA offers get flipped to FBM;
+ *   • positive FBA evidence the caller resolved (FBA stock on hand / active FBA offer).
+ * Fail-closed: when fulfillment is ambiguous we treat it as FBA and SKIP the qty
+ * push. Cost = a missed merchant-qty sync for a genuinely-FBM listing of an
+ * FBA-default product (benign, recoverable); avoided cost = flipping an FBA offer to
+ * "Venduto e spedito da …" (catastrophic). Pure + testable.
  */
 export function isFbaListing(
   listing: { fulfillmentMethod?: string | null; platformAttributes?: any } | null | undefined,
   product: { fulfillmentMethod?: string | null } | null | undefined,
+  evidence?: { fbaStockQty?: number | null; hasActiveFbaOffer?: boolean | null },
 ): boolean {
   const faChannel = String(
     (listing?.platformAttributes as any)?.fulfillment_availability?.[0]?.fulfillment_channel_code ?? "",
@@ -172,8 +179,9 @@ export function isFbaListing(
   return (
     listing?.fulfillmentMethod === "FBA" ||
     faChannel.startsWith("AMAZON") ||
-    (listing?.fulfillmentMethod == null &&
-      String(product?.fulfillmentMethod ?? "").toUpperCase() === "FBA")
+    String(product?.fulfillmentMethod ?? "").toUpperCase() === "FBA" ||
+    (evidence?.fbaStockQty != null && evidence.fbaStockQty > 0) ||
+    evidence?.hasActiveFbaOffer === true
   );
 }
 
@@ -573,10 +581,34 @@ export class OutboundSyncService {
     if (!productType) productType = String((cl?.platformAttributes as any)?.productType ?? '').toUpperCase();
     if (!productType) productType = String((product as any)?.productType ?? '').toUpperCase();
 
-    // B2 — FBA SKUs must not receive a merchant quantity push (it flips the offer
-    // to FBM). Resolve the listing's fulfillment method (listing → persisted channel
-    // code → product) and let buildAmazonListingPatch drop the qty attribute for FBA.
-    const isFba = isFbaListing(cl, product);
+    // B2 / FBA-flip fix — FBA SKUs must not receive a merchant quantity push (it
+    // flips the offer to FBM). The listing's own fulfillmentMethod marker proved
+    // unreliable (stale 'FBM' on real FBA listings), so for a quantity push we also
+    // resolve positive FBA evidence — FBA stock on hand + an active FBA offer — and
+    // fail closed. buildAmazonListingPatch then drops the qty attribute for FBA.
+    let fbaStockQty: number | null = null;
+    let hasActiveFbaOffer = false;
+    if (payload.quantity !== undefined && product?.id) {
+      const [fbaAgg, fbaOffer] = await Promise.all([
+        prisma.stockLevel
+          .aggregate({
+            where: { productId: product.id, location: { code: "AMAZON-EU-FBA" } },
+            _sum: { quantity: true },
+          })
+          .catch(() => null),
+        queueItem.channelListingId
+          ? prisma.offer
+              .findFirst({
+                where: { channelListingId: queueItem.channelListingId, fulfillmentMethod: "FBA", isActive: true },
+                select: { id: true },
+              })
+              .catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      fbaStockQty = fbaAgg?._sum.quantity ?? null;
+      hasActiveFbaOffer = !!fbaOffer;
+    }
+    const isFba = isFbaListing(cl, product, { fbaStockQty, hasActiveFbaOffer });
     const amazonPayload = buildAmazonListingPatch(payload, marketplaceId, productType, isFba ? "FBA" : "FBM");
 
     // B2 — an FBA quantity-only update yields zero patches (we never touch Amazon's

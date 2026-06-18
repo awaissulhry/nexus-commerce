@@ -1691,15 +1691,23 @@ export class AmazonFlatFileService {
         }
 
         // ── Product hierarchy + type + fulfillment method ──────────
-        const faCode = String(row['fulfillment_availability__fulfillment_channel_code'] ?? row['fulfillment_channel_code'] ?? 'DEFAULT').toUpperCase()
+        // FBA-flip fix — only (re)derive fulfillment from a row that ACTUALLY carries
+        // a fulfillment_channel_code. A BLANK column must NOT be read as 'DEFAULT' →
+        // FBM: that silently re-tagged FBA products as merchant-fulfilled, and the
+        // stale 'FBM' then flipped the live Amazon offer to FBM on the next quantity
+        // push. Blank ⇒ leave Product.fulfillmentMethod untouched.
+        const rawFaCode = row['fulfillment_availability__fulfillment_channel_code'] ?? row['fulfillment_channel_code']
+        const faCode = String(rawFaCode ?? '').toUpperCase()
         // FFA.3 — any AMAZON_* regional FBA channel (AMAZON_EU/AMAZON_NA/AMAZON_FE)
         // + AFN/FBA = Fulfilled by Amazon; only DEFAULT/MFN is merchant (FBM).
-        const derivedMethod = (faCode.startsWith('AMAZON') || faCode === 'AFN' || faCode === 'FBA') ? 'FBA' : 'FBM'
+        const derivedMethod = faCode === ''
+          ? null
+          : (faCode.startsWith('AMAZON') || faCode === 'AFN' || faCode === 'FBA') ? 'FBA' : 'FBM'
         const productUpdates: Record<string, any> = {}
         if (productType && product.productType !== productType) productUpdates.productType = productType
         if (isParentRow && !product.isParent)              productUpdates.isParent = true
         if (isChildRow && parentId && product.parentId !== parentId) productUpdates.parentId = parentId
-        productUpdates.fulfillmentMethod = derivedMethod
+        if (derivedMethod) productUpdates.fulfillmentMethod = derivedMethod
         if (Object.keys(productUpdates).length) {
           await this.prisma.product.update({ where: { id: product.id }, data: productUpdates })
         }
