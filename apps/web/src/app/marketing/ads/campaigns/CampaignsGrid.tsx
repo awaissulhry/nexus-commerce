@@ -7,9 +7,9 @@
  *   CBN.2c.1 = Customize Columns (full catalog incl. NTB + profit/settings, drag-reorder, show/hide, persisted)
  * Edit-mode inline batch (Discard/Apply) + Bulk Actions modal land in CBN.2c.2/c.3.
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Settings2, Download, Wand2, Plus, Search, GripVertical, X } from 'lucide-react'
+import { Settings2, Download, Wand2, Plus, GripVertical, X, ChevronDown, Info, Library, Trash2 } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import {
   DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent,
@@ -130,7 +130,134 @@ function metricVal(c: Camp, key: string): number {
   return 0
 }
 type Range = { min: string; max: string }
-const PRESET_KEY = 'h10-am-filters'
+
+// ── filter metadata (Helium 10 Ad Manager match) ────────────────────────────
+// ⓘ tooltip copy per metric, shown next to the range-field labels.
+const RANGE_TIPS: Record<string, string> = {
+  acos: 'Advertising Cost of Sales — Spend ÷ Sales',
+  roas: 'Return on Ad Spend — Sales ÷ Spend',
+  spend: 'Total advertising spend',
+  sales: 'Total advertised sales',
+  clicks: 'Total ad clicks',
+  ppcOrders: 'Orders attributed to advertising',
+  cpc: 'Cost per click — Spend ÷ Clicks',
+  ctr: 'Click-through rate — Clicks ÷ Impressions',
+  cvr: 'Conversion rate — Orders ÷ Clicks',
+  impressions: 'Total ad impressions',
+  dailyBudget: 'Campaign daily budget',
+}
+const STATUS_OPTS: Array<{ value: string; label: string }> = [
+  { value: 'ENABLED', label: 'Enabled' },
+  { value: 'PAUSED', label: 'Paused' },
+  { value: 'ARCHIVED', label: 'Archived' },
+]
+const TYPE_OPTS: Array<{ value: string; label: string }> = [
+  { value: 'SPONSORED_PRODUCTS', label: 'Sponsored Products' },
+  { value: 'SPONSORED_BRANDS', label: 'Sponsored Brands' },
+  { value: 'SPONSORED_DISPLAY', label: 'Sponsored Display' },
+]
+const typeKey = (c: Camp): string => {
+  const v = (c.adProduct ?? c.type ?? '').toUpperCase()
+  if (v.includes('BRAND') || v === 'SB') return 'SPONSORED_BRANDS'
+  if (v.includes('DISPLAY') || v === 'SD') return 'SPONSORED_DISPLAY'
+  return 'SPONSORED_PRODUCTS'
+}
+type FilterPreset = { name: string; statuses: string[]; types: string[]; portfolio: string; search: string; ranges: Record<string, Range> }
+const LIB_KEY = 'h10-am-preset-lib'
+
+// Dismiss a popover on outside-click (shared by the multi-selects, the campaign
+// combobox, and the Filter Library popover).
+function useClickAway<T extends HTMLElement>(onAway: () => void) {
+  const ref = useRef<T>(null)
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onAway() }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [onAway])
+  return ref
+}
+
+// Checkbox dropdown — renders "All" / "N selected" like H10's Status + Campaign
+// Type filters. `selected` always holds the concrete chosen values.
+function MultiSelect({ options, selected, onChange, ariaLabel }: {
+  options: Array<{ value: string; label: string }>
+  selected: string[]
+  onChange: (v: string[]) => void
+  ariaLabel: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useClickAway<HTMLDivElement>(() => setOpen(false))
+  const allOn = selected.length === options.length
+  const text = allOn ? 'All'
+    : selected.length === 0 ? 'None'
+    : selected.length === 1 ? (options.find((o) => o.value === selected[0])?.label ?? '1 selected')
+    : `${selected.length} selected`
+  const toggle = (v: string) => onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v])
+  return (
+    <div className={`h10-ms ${open ? 'open' : ''}`} ref={ref}>
+      <button type="button" className="h10-ms-btn" onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel}>
+        <span>{text}</span><ChevronDown size={14} />
+      </button>
+      {open && (
+        <div className="h10-ms-pop" role="listbox">
+          <label className="h10-ms-opt all"><input type="checkbox" checked={allOn} onChange={() => onChange(allOn ? [] : options.map((o) => o.value))} /><span>Select all</span></label>
+          {options.map((o) => (
+            <label className="h10-ms-opt" key={o.value}><input type="checkbox" checked={selected.includes(o.value)} onChange={() => toggle(o.value)} /><span>{o.label}</span></label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// H10's "Select a Campaign" — typeahead over campaign names. Drives the same
+// name-search state the grid filters on (type to filter, pick to pin one name).
+function CampaignCombo({ names, value, onChange }: { names: string[]; value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useClickAway<HTMLDivElement>(() => setOpen(false))
+  const q = value.trim().toLowerCase()
+  const matches = (q ? names.filter((n) => n.toLowerCase().includes(q)) : names).slice(0, 60)
+  return (
+    <div className={`h10-combo ${open ? 'open' : ''}`} ref={ref}>
+      <input value={value} placeholder="Select a Campaign" onChange={(e) => { onChange(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)} aria-label="Campaign" />
+      {value
+        ? <button type="button" className="cx" onClick={() => { onChange(''); setOpen(false) }} aria-label="Clear campaign"><X size={13} /></button>
+        : <ChevronDown size={14} />}
+      {open && matches.length > 0 && (
+        <div className="h10-combo-pop" role="listbox">
+          {matches.map((n) => <button type="button" key={n} onClick={() => { onChange(n); setOpen(false) }} title={n}>{n}</button>)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Saved-filter library popover anchored to the "Filter Library" button.
+function FilterLibrary({ library, onApply, onDelete, onClose }: {
+  library: FilterPreset[]
+  onApply: (p: FilterPreset) => void
+  onDelete: (i: number) => void
+  onClose: () => void
+}) {
+  const ref = useClickAway<HTMLDivElement>(onClose)
+  return (
+    <div className="h10-libpop" ref={ref} role="dialog" aria-label="Filter Library">
+      <div className="h10-libpop-h">Saved Filters</div>
+      {library.length === 0 ? (
+        <div className="h10-libpop-empty">No saved filters yet. Set your filters, then “Save Filter Preset”.</div>
+      ) : (
+        <div className="h10-libpop-list">
+          {library.map((p, i) => (
+            <div className="h10-libpop-row" key={i}>
+              <button type="button" className="nm" onClick={() => onApply(p)}>{p.name}</button>
+              <button type="button" className="del" onClick={() => onDelete(i)} aria-label={`Delete ${p.name}`}><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ── Customize Columns modal ─────────────────────────────────────────────────
 function SortableColRow({ id, checked, onToggle }: { id: string; checked: boolean; onToggle: () => void }) {
@@ -239,7 +366,14 @@ export function CampaignsGrid() {
   const [mode, setMode] = useState<Mode>('metrics')
   const [search, setSearch] = useState('')
   const [sel, setSel] = useState<Set<string>>(new Set())
-  const [status, setStatus] = useState('all')
+  // CBN.2b — filter bar (Helium 10 Ad Manager match). `statuses`/`types` hold the
+  // concrete selected values; full-length == "All" (no filter applied).
+  const [statuses, setStatuses] = useState<string[]>(STATUS_OPTS.map((o) => o.value))
+  const [types, setTypes] = useState<string[]>(TYPE_OPTS.map((o) => o.value))
+  const [portfolio, setPortfolio] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(true)
+  const [library, setLibrary] = useState<FilterPreset[]>([])
+  const [showLibrary, setShowLibrary] = useState(false)
   const [ranges, setRanges] = useState<Record<string, Range>>({})
   const [presetMsg, setPresetMsg] = useState('')
   const [colOrder, setColOrder] = useState<string[]>(ALL_KEYS)
@@ -268,7 +402,7 @@ export function CampaignsGrid() {
 
   useEffect(() => {
     void load()
-    try { const s = localStorage.getItem(PRESET_KEY); if (s) { const p = JSON.parse(s); setStatus(p.status ?? 'all'); setRanges(p.ranges ?? {}) } } catch { /* ignore */ }
+    try { const s = localStorage.getItem(LIB_KEY); if (s) { const p = JSON.parse(s); if (Array.isArray(p)) setLibrary(p as FilterPreset[]) } } catch { /* ignore */ }
     try {
       const s = localStorage.getItem(COLS_KEY)
       if (s) {
@@ -283,8 +417,19 @@ export function CampaignsGrid() {
   }, [])
 
   const setRange = (key: string, side: 'min' | 'max', v: string) => setRanges((m) => ({ ...m, [key]: { ...(m[key] ?? { min: '', max: '' }), [side]: v } }))
-  const clearFilters = () => { setStatus('all'); setRanges({}); setSearch('') }
-  const savePreset = () => { try { localStorage.setItem(PRESET_KEY, JSON.stringify({ status, ranges })); setPresetMsg('Saved'); setTimeout(() => setPresetMsg(''), 1500) } catch { /* ignore */ } }
+  const allStatuses = STATUS_OPTS.map((o) => o.value)
+  const allTypes = TYPE_OPTS.map((o) => o.value)
+  const clearFilters = () => { setStatuses(allStatuses); setTypes(allTypes); setPortfolio(''); setRanges({}); setSearch('') }
+  const persistLibrary = (next: FilterPreset[]) => { setLibrary(next); try { localStorage.setItem(LIB_KEY, JSON.stringify(next)) } catch { /* ignore */ } }
+  const savePreset = () => {
+    persistLibrary([...library, { name: `Preset ${library.length + 1}`, statuses, types, portfolio, search, ranges }])
+    setPresetMsg('Saved'); setTimeout(() => setPresetMsg(''), 1500); setShowLibrary(true)
+  }
+  const applyPreset = (p: FilterPreset) => {
+    setStatuses(p.statuses ?? allStatuses); setTypes(p.types ?? allTypes); setPortfolio(p.portfolio ?? '')
+    setSearch(p.search ?? ''); setRanges(p.ranges ?? {}); setShowLibrary(false)
+  }
+  const deletePreset = (i: number) => persistLibrary(library.filter((_, idx) => idx !== i))
   const applyColumns = (order: string[], visible: string[]) => {
     setColOrder(order); setColVisible(visible); setShowCustomize(false)
     try { localStorage.setItem(COLS_KEY, JSON.stringify({ order, visible })) } catch { /* ignore */ }
@@ -343,15 +488,29 @@ export function CampaignsGrid() {
   const metricCols = useMemo(() => colOrder.filter((k) => visKeySet.has(k)), [colOrder, visKeySet])
 
   const markets = useMemo(() => Array.from(new Set(rows.map((r) => r.marketplace).filter(Boolean) as string[])).sort(), [rows])
+  // Portfolio options derived from the data (no portfolio-name endpoint yet, so
+  // labels fall back to a short id). Campaign names back the typeahead combobox.
+  const portfolios = useMemo(() => {
+    const ids = Array.from(new Set(rows.map((r) => r.portfolioId).filter(Boolean) as string[])).sort()
+    return ids.map((id) => ({ id, label: `Portfolio ${id.slice(0, 6)}` }))
+  }, [rows])
+  const campaignNames = useMemo(() => Array.from(new Set(rows.map((r) => r.name))).sort((a, b) => a.localeCompare(b)), [rows])
+
+  const statusAll = statuses.length === STATUS_OPTS.length
+  const typeAll = types.length === TYPE_OPTS.length
+  const hasActiveFilters = !statusAll || !typeAll || !!portfolio || !!search.trim()
+    || Object.values(ranges).some((r) => r && (r.min || r.max))
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
+    const sAll = statuses.length === STATUS_OPTS.length
+    const tAll = types.length === TYPE_OPTS.length
     return rows.filter((c) => {
       if (market !== 'all' && c.marketplace !== market) return false
+      if (portfolio && c.portfolioId !== portfolio) return false
       if (q && !c.name.toLowerCase().includes(q)) return false
-      if (status === 'enabled' && c.status !== 'ENABLED') return false
-      if (status === 'paused' && c.status !== 'PAUSED') return false
-      if (status === 'archived' && c.status !== 'ARCHIVED') return false
+      if (!sAll && !statuses.includes(c.status)) return false
+      if (!tAll && !types.includes(typeKey(c))) return false
       for (const f of RANGE_FIELDS) {
         const r = ranges[f.key]; if (!r || (!r.min && !r.max)) continue
         const v = metricVal(c, f.key)
@@ -360,7 +519,7 @@ export function CampaignsGrid() {
       }
       return true
     })
-  }, [rows, search, status, ranges, market])
+  }, [rows, search, statuses, types, portfolio, ranges, market])
 
   // aggregate totals for the Show-Graph panel (real data, no fake time-series)
   const totals = useMemo(() => {
@@ -446,29 +605,76 @@ export function CampaignsGrid() {
         </div>
       )}
 
-      {/* filter bar */}
+      {/* filter bar — Helium 10 Ad Manager match */}
       <div className="h10-am-fpanel">
-        <div className="h10-am-ftitle">Filters</div>
-        <div className="frow">
-          <label className="ffield"><span>Status</span><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">All</option><option value="enabled">Enabled</option><option value="paused">Paused</option><option value="archived">Archived</option></select></label>
-          <label className="ffield"><span>Bid Automation</span><select defaultValue="All"><option>All</option><option>On</option><option>Off</option></select></label>
-          <label className="ffield"><span>Rule</span><select defaultValue="All campaigns"><option>All campaigns</option><option>Has rules</option><option>No rules</option></select></label>
-          <div className="ffield"><span>Search</span><div className="h10-am-search sm"><Search size={13} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Campaign name…" /></div></div>
-          {RANGE_FIELDS.map((f) => (
-            <div className="ffield" key={f.key}>
-              <span>{f.label}{f.unit ? ` (${f.unit})` : ''}</span>
-              <div className="mm">
-                <input placeholder="Min" value={ranges[f.key]?.min ?? ''} onChange={(e) => setRange(f.key, 'min', e.target.value)} />
-                <input placeholder="Max" value={ranges[f.key]?.max ?? ''} onChange={(e) => setRange(f.key, 'max', e.target.value)} />
+        <div className="fphead">
+          <h3>Filters</h3>
+          <button type="button" className="h10-am-link tog" onClick={() => setFiltersOpen((v) => !v)}>
+            <ChevronDown size={14} className={filtersOpen ? 'up' : ''} />{filtersOpen ? 'Hide Filters' : 'Show Filters'}
+          </button>
+        </div>
+        {filtersOpen && (
+          <>
+            <div className="fppresets">
+              <span className="lbl">Filter Presets:</span>
+              <div className="h10-libwrap">
+                <button type="button" className="h10-am-libbtn" onClick={() => setShowLibrary((v) => !v)} aria-haspopup="dialog" aria-expanded={showLibrary}>
+                  <Library size={14} /> Filter Library{library.length ? ` (${library.length})` : ''}
+                </button>
+                {showLibrary && <FilterLibrary library={library} onApply={applyPreset} onDelete={deletePreset} onClose={() => setShowLibrary(false)} />}
               </div>
             </div>
-          ))}
-        </div>
-        <div className="fft">
-          <span className="grow" />
-          <button type="button" className="h10-am-link" onClick={savePreset}>{presetMsg || 'Save Filter Preset'}</button>
-          <button type="button" className="h10-am-link" onClick={clearFilters}>Clear</button>
-        </div>
+
+            <div className="frow">
+              <div className="ffield wide"><span>Portfolio</span>
+                <div className="h10-fsel">
+                  <select value={portfolio} onChange={(e) => setPortfolio(e.target.value)} aria-label="Portfolio">
+                    <option value="">Select a Portfolio</option>
+                    {portfolios.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                  </select>
+                  <ChevronDown size={14} />
+                </div>
+              </div>
+              <div className="ffield wide"><span>Campaign</span>
+                <CampaignCombo names={campaignNames} value={search} onChange={setSearch} />
+              </div>
+              <div className="ffield wide"><span>Campaign Type</span>
+                <MultiSelect options={TYPE_OPTS} selected={types} onChange={setTypes} ariaLabel="Campaign Type" />
+              </div>
+
+              <div className="ffield"><span>Status</span>
+                <MultiSelect options={STATUS_OPTS} selected={statuses} onChange={setStatuses} ariaLabel="Status" />
+              </div>
+              <div className="ffield"><span>Bid Automation</span>
+                <div className="h10-fsel"><select defaultValue="All" aria-label="Bid Automation"><option>All</option><option>On</option><option>Off</option></select><ChevronDown size={14} /></div>
+              </div>
+              <div className="ffield"><span>Rule</span>
+                <div className="h10-fsel"><select defaultValue="All campaigns" aria-label="Rule"><option>All campaigns</option><option>Has rules</option><option>No rules</option></select><ChevronDown size={14} /></div>
+              </div>
+
+              {RANGE_FIELDS.map((f) => (
+                <div className="ffield" key={f.key}>
+                  <span>{f.label}<span className="info" title={RANGE_TIPS[f.key] ?? ''}><Info size={12} /></span></span>
+                  <div className="mm">
+                    {(['min', 'max'] as const).map((side) => (
+                      <div className={`mmin ${f.unit === '€' ? 'cur' : f.unit === '%' ? 'pct' : ''}`} key={side}>
+                        {f.unit === '€' && <span className="ad">€</span>}
+                        <input inputMode="decimal" placeholder={side === 'min' ? 'Min' : 'Max'} value={ranges[f.key]?.[side] ?? ''} onChange={(e) => setRange(f.key, side, e.target.value)} aria-label={`${f.label} ${side}`} />
+                        {f.unit === '%' && <span className="ad">%</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="fft">
+              <span className="grow" />
+              <button type="button" className="h10-am-link" onClick={savePreset} disabled={!hasActiveFilters}>{presetMsg || 'Save Filter Preset'}</button>
+              <button type="button" className="h10-am-btn sm" onClick={clearFilters}>Clear</button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* toolbar */}
