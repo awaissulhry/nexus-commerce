@@ -169,6 +169,7 @@ import { ensureAmazonNotificationSubscription } from "./services/amazon-notifica
 import { initializeSyncWorker } from "./workers/sync.worker.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startOrphanBulkJobCleanupCron } from "./jobs/bulk-job-orphan-cleanup.job.js";
+import { startFbaFlipGuardCron } from "./jobs/fba-flip-guard.job.js";
 import { startScheduledBulkActionCron } from "./jobs/scheduled-bulk-action.job.js";
 import { startBulkAutomationTickCron } from "./jobs/bulk-automation-tick.job.js";
 import { startScheduledImportCron } from "./jobs/scheduled-import.job.js";
@@ -681,6 +682,11 @@ async function start() {
     // don't grow unbounded. Default-ON; opt out with
     // NEXUS_DISABLE_OBSERVABILITY_RETENTION=1 (e.g. during forensics).
     startObservabilityRetentionCron();
+
+    // FBA-flip guard (every 10 min). Standing detector: alerts if a merchant
+    // QUANTITY_UPDATE ever succeeds for an FBA SKU (the FBA→FBM flip). Pure
+    // detection; opt out with NEXUS_ENABLE_FBA_FLIP_GUARD=0.
+    startFbaFlipGuardCron();
 
     // W1.3 — orphan bulk-job cleanup (hourly). Auto-cancels PENDING /
     // QUEUED BulkActionJob rows that never got POST /:id/process'd
