@@ -330,3 +330,17 @@
 .h10-am-grid th .sortable i { font-style: normal; color: #c2c9d3; font-size: 10px; line-height: 1; }
 .h10-am-grid th .sortable:hover { color: #3a4452; }
 .h10-am-grid th .sortable:hover i { color: #8a93a1; }
+
+/* CBN.2e.4 — Table Customization modal (H10 "Customize") */
+.h10-modal.tc { width: 660px; }
+.h10-tc-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 12px; }
+.h10-tc-head .ti { font-size: 13px; font-weight: 700; color: #1c2530; }
+.h10-tc-all { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: #3a4452; cursor: pointer; }
+.h10-tc-all input { width: 15px; height: 15px; accent-color: #1f6fde; }
+.h10-tc-grp { margin-bottom: 14px; }
+.h10-tc-grp .gt { font-size: 10px; font-weight: 700; color: #aeb6c2; text-transform: uppercase; letter-spacing: 0.03em; margin: 0 4px 7px; }
+.h10-tc-grp .cols { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px 8px; }
+.h10-tc-ck { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: #2b3440; padding: 5px 6px; border-radius: 6px; cursor: pointer; min-width: 0; }
+.h10-tc-ck:hover { background: #f7f9fb; }
+.h10-tc-ck input { width: 15px; height: 15px; accent-color: #1f6fde; flex-shrink: 0; }
+.h10-tc-ck span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

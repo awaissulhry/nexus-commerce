@@ -9,13 +9,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Settings2, Download, Wand2, Plus, GripVertical, X, ChevronDown, Info, Library, Trash2, MapPin } from 'lucide-react'
+import { Settings2, Download, Wand2, Plus, X, ChevronDown, Info, Library, Trash2, MapPin } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
-import {
-  DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent,
-} from '@dnd-kit/core'
-import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdManagerGraph } from './AdManagerGraph'
 
@@ -261,46 +256,40 @@ function FilterLibrary({ library, onApply, onDelete, onClose }: {
   )
 }
 
-// ── Customize Columns modal ─────────────────────────────────────────────────
-function SortableColRow({ id, checked, onToggle }: { id: string; checked: boolean; onToggle: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
-  const def = COL_BY_KEY[id]
-  return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.55 : 1 }} className="h10-colrow">
-      <button type="button" className="h10-colgrip" {...attributes} {...listeners} aria-label="Reorder column"><GripVertical size={14} /></button>
-      <label className="h10-colck"><input type="checkbox" checked={checked} onChange={onToggle} /><span>{def.label}</span></label>
-      <span className="grp">{def.group}</span>
-    </div>
-  )
-}
-function CustomizeModal({ order, visible, onApply, onClose }: { order: string[]; visible: string[]; onApply: (o: string[], v: string[]) => void; onClose: () => void }) {
-  const [ord, setOrd] = useState<string[]>(order)
+// ── Table Customization (H10 "Customize") — grouped show/hide checkbox grid ──
+function CustomizeModal({ visible, onApply, onClose }: { order: string[]; visible: string[]; onApply: (o: string[], v: string[]) => void; onClose: () => void }) {
   const [vis, setVis] = useState<Set<string>>(new Set(visible))
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
-  const onDragEnd = (e: DragEndEvent) => {
-    const { active, over } = e
-    if (over && active.id !== over.id) setOrd((o) => arrayMove(o, o.indexOf(String(active.id)), o.indexOf(String(over.id))))
-  }
-  const visCount = ord.filter((k) => vis.has(k)).length
+  const toggle = (k: string) => setVis((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n })
+  const allChecked = ALL_KEYS.every((k) => vis.has(k))
+  const groups: ColGroup[] = ['Performance', 'New to Brand', 'Campaign Settings']
   return (
     <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className="h10-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Customize Columns">
-        <div className="h10-modal-h"><b>Customize Columns</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-        <div className="h10-modal-sub">{visCount} of {ALL_KEYS.length} columns shown · drag to reorder</div>
+      <div className="h10-modal tc" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Table Customization">
+        <div className="h10-modal-h"><b>Table Customization</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
         <div className="h10-modal-b">
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <SortableContext items={ord} strategy={verticalListSortingStrategy}>
-              {ord.filter((k) => COL_BY_KEY[k]).map((k) => (
-                <SortableColRow key={k} id={k} checked={vis.has(k)} onToggle={() => setVis((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n })} />
-              ))}
-            </SortableContext>
-          </DndContext>
+          <div className="h10-tc-head">
+            <span className="ti">Columns</span>
+            <label className="h10-tc-all"><input type="checkbox" checked={allChecked} onChange={() => setVis(allChecked ? new Set(DEFAULT_VISIBLE) : new Set(ALL_KEYS))} /> Select All</label>
+          </div>
+          {groups.map((g) => (
+            <div className="h10-tc-grp" key={g}>
+              <div className="gt">{g}</div>
+              <div className="cols">
+                {ALL_COLS.filter((c) => c.group === g).map((c) => (
+                  <label className="h10-tc-ck" key={c.key}>
+                    <input type="checkbox" checked={vis.has(c.key)} onChange={() => toggle(c.key)} />
+                    <span>{c.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
         <div className="h10-modal-f">
-          <button type="button" className="h10-am-link" onClick={() => { setOrd([...ALL_KEYS]); setVis(new Set(DEFAULT_VISIBLE)) }}>Reset to default</button>
+          <button type="button" className="h10-am-link" onClick={() => setVis(new Set(DEFAULT_VISIBLE))}>Reset to default</button>
           <span className="grow" />
           <button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button>
-          <button type="button" className="h10-am-btn primary" onClick={() => onApply(ord, [...vis])}>Apply</button>
+          <button type="button" className="h10-am-btn primary" onClick={() => onApply([...ALL_KEYS], [...vis])}>Apply</button>
         </div>
       </div>
     </div>
