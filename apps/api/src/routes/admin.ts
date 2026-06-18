@@ -139,6 +139,42 @@ export async function adminRoutes(app: FastifyInstance) {
   )
 
   /**
+   * GET /admin/amazon/listing-state?sku=…&marketplace=IT
+   * READ-ONLY diagnostic — reads a listing's live fulfillment state from Amazon
+   * (getListingsItem) so we can confirm whether a restore-fba PATCH actually
+   * converted the offer back to FBA. Surfaces fulfillmentAvailability + offers +
+   * any listing issues.
+   */
+  app.get<{ Querystring: { sku?: string; marketplace?: string } }>(
+    '/admin/amazon/listing-state',
+    async (request, reply) => {
+      const sku = String(request.query.sku ?? '').trim()
+      const mkt = String(request.query.marketplace ?? 'IT').toUpperCase()
+      if (!sku) return reply.code(400).send({ error: 'sku query param required' })
+      const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      if (!sellerId) return reply.code(503).send({ error: 'AMAZON_SELLER_ID not configured' })
+      const marketplaceId = AMZ_MP_ID[mkt] ?? AMZ_MP_ID.IT
+      const r = await amazonSpApiClient.getListingsItem({
+        sellerId,
+        sku,
+        marketplaceId,
+        includedData: ['summaries', 'offers', 'fulfillmentAvailability', 'issues'] as any,
+      })
+      const raw = (r.rawResponse ?? {}) as any
+      return reply.send({
+        sku,
+        marketplace: mkt,
+        ok: r.success,
+        status: r.status,
+        asin: r.asin,
+        fulfillmentAvailability: raw.fulfillmentAvailability ?? null,
+        offers: (raw.offers ?? []).map((o: any) => ({ offerType: o.offerType, fulfillmentChannel: o.fulfillmentChannelCode ?? o.fulfillmentChannel })),
+        issues: (r.issues ?? []).map((i: any) => ({ code: i.code, severity: i.severity, message: i.message })),
+      })
+    },
+  )
+
+  /**
    * GET /admin/validation/report
    * Get comprehensive validation report for all products
    */
