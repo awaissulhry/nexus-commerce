@@ -7,9 +7,10 @@
  *   CBN.2c.1 = Customize Columns (full catalog incl. NTB + profit/settings, drag-reorder, show/hide, persisted)
  * Edit-mode inline batch (Discard/Apply) + Bulk Actions modal land in CBN.2c.2/c.3.
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Settings2, Download, Wand2, Plus, Search, GripVertical, X } from 'lucide-react'
+import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import {
   DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent,
 } from '@dnd-kit/core'
@@ -250,13 +251,23 @@ export function CampaignsGrid() {
   const [applying, setApplying] = useState(false)
   const [applyMsg, setApplyMsg] = useState('')
   const [showBulk, setShowBulk] = useState(false)
+  // CBN.2d — header controls
+  const [market, setMarket] = useState('all')
+  const [rangePreset, setRangePreset] = useState('last7')
+  const [syncing, setSyncing] = useState(false)
+  const [showGraph, setShowGraph] = useState(false)
+
+  const load = useCallback(async (opts?: { sync?: boolean }) => {
+    if (opts?.sync) setSyncing(true)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' })
+      const d = await r.json()
+      setRows((d.items ?? []) as Camp[])
+    } catch { /* ignore */ } finally { setLoading(false); setSyncing(false) }
+  }, [])
 
   useEffect(() => {
-    void fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d) => setRows((d.items ?? []) as Camp[]))
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    void load()
     try { const s = localStorage.getItem(PRESET_KEY); if (s) { const p = JSON.parse(s); setStatus(p.status ?? 'all'); setRanges(p.ranges ?? {}) } } catch { /* ignore */ }
     try {
       const s = localStorage.getItem(COLS_KEY)
@@ -331,9 +342,12 @@ export function CampaignsGrid() {
   const visKeySet = useMemo(() => new Set(colVisible), [colVisible])
   const metricCols = useMemo(() => colOrder.filter((k) => visKeySet.has(k)), [colOrder, visKeySet])
 
+  const markets = useMemo(() => Array.from(new Set(rows.map((r) => r.marketplace).filter(Boolean) as string[])).sort(), [rows])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return rows.filter((c) => {
+      if (market !== 'all' && c.marketplace !== market) return false
       if (q && !c.name.toLowerCase().includes(q)) return false
       if (status === 'enabled' && c.status !== 'ENABLED') return false
       if (status === 'paused' && c.status !== 'PAUSED') return false
@@ -346,7 +360,15 @@ export function CampaignsGrid() {
       }
       return true
     })
-  }, [rows, search, status, ranges])
+  }, [rows, search, status, ranges, market])
+
+  // aggregate totals for the Show-Graph panel (real data, no fake time-series)
+  const totals = useMemo(() => {
+    let spend = 0, sales = 0, clicks = 0, impr = 0
+    for (const c of filtered) { spend += num(c.spend); sales += num(c.sales); clicks += num(c.clicks); impr += num(c.impressions) }
+    const top = [...filtered].sort((a, b) => num(b.spend) - num(a.spend)).slice(0, 8).filter((c) => num(c.spend) > 0)
+    return { spend, sales, clicks, impr, acos: sales ? (spend / sales) * 100 : 0, roas: spend ? sales / spend : 0, top }
+  }, [filtered])
 
   const allSel = filtered.length > 0 && filtered.every((c) => sel.has(c.id))
   const toggleAll = () => setSel(allSel ? new Set() : new Set(filtered.map((c) => c.id)))
@@ -388,6 +410,42 @@ export function CampaignsGrid() {
 
   return (
     <div className="h10-am">
+      <AdsPageHeader
+        title="Ad Manager" subtitle="Create and manage your campaigns"
+        markets={markets} market={market} onMarketChange={setMarket}
+        rangePreset={rangePreset} onRangePreset={setRangePreset}
+        onDataSync={() => void load({ sync: true })} syncing={syncing}
+        actions={[
+          { label: 'Create Campaign', href: '/marketing/ads-console/campaign-builder/guided' },
+          { label: 'Create Rule', href: '/marketing/ads/rules-automation' },
+          { label: showGraph ? 'Hide Graph' : 'Show Graph', onClick: () => setShowGraph((v) => !v) },
+        ]}
+      />
+
+      {showGraph && (
+        <div className="h10-am-graph">
+          <div className="kpis">
+            <div className="kpi"><span>Spend</span><b>{eur(totals.spend)}</b></div>
+            <div className="kpi"><span>Sales</span><b>{eur(totals.sales)}</b></div>
+            <div className="kpi"><span>ACoS</span><b>{totals.sales ? `${totals.acos.toFixed(2)}%` : '—'}</b></div>
+            <div className="kpi"><span>ROAS</span><b>{totals.spend ? totals.roas.toFixed(2) : '—'}</b></div>
+            <div className="kpi"><span>Clicks</span><b>{totals.clicks.toLocaleString()}</b></div>
+            <div className="kpi"><span>Impressions</span><b>{totals.impr.toLocaleString()}</b></div>
+          </div>
+          {totals.top.length > 0 ? (
+            <div className="bars">
+              {totals.top.map((c) => (
+                <div className="bar" key={c.id}>
+                  <span className="bn" title={c.name}>{c.name}</span>
+                  <span className="bt"><span className="bf" style={{ width: `${Math.max(3, (num(c.spend) / (num(totals.top[0].spend) || 1)) * 100)}%` }} /></span>
+                  <span className="bv">{eur(num(c.spend))}</span>
+                </div>
+              ))}
+            </div>
+          ) : <div className="gempty">No spend in the selected campaigns yet.</div>}
+        </div>
+      )}
+
       {/* filter bar */}
       <div className="h10-am-fpanel">
         <div className="frow">
