@@ -1266,6 +1266,68 @@ export class AmazonFlatFileService {
     return { enumCodeMap: buildSchemaEnumCodeMap(properties), ...buildSchemaFieldHints(properties) }
   }
 
+  /**
+   * FBA-flip guard for the flat-file submit path. Returns the rows that would
+   * convert an FBA listing to merchant-fulfilled (FBM): a MERCHANT channel
+   * (DEFAULT/MFN) carrying a quantity for a SKU that is actually FBA (FBA stock
+   * on hand or Product.fulfillmentMethod==='FBA'). The /submit route REJECTS when
+   * this is non-empty, so the operator clears the quantity / sets AMAZON_EU, or
+   * deliberately converts in Seller Central — rather than silently flipping the
+   * live offer to FBM.
+   *
+   * NOT violations: blank-channel rows (buildJsonFeedBody already omits
+   * fulfillment for them) and AMAZON_EU rows (it drops the merchant qty). Only an
+   * explicit merchant channel + quantity for an FBA SKU is blocked. ≤2 queries.
+   */
+  async findFbaQtyViolations(
+    rows: any[],
+    _marketplace: string,
+  ): Promise<Array<{ sku: string; channel: string }>> {
+    const candidates = (rows ?? [])
+      .map((r) => {
+        const sku = String(r?.item_sku ?? '').trim()
+        const ch = String(
+          r?.['fulfillment_availability__fulfillment_channel_code'] ?? r?.['fulfillment_channel_code'] ?? '',
+        ).toUpperCase()
+        const qtyRaw = r?.['fulfillment_availability__quantity'] ?? r?.fulfillment_availability ?? r?.quantity
+        const hasQty = qtyRaw !== undefined && String(qtyRaw).trim() !== ''
+        return { sku, ch, hasQty }
+      })
+      .filter((c) => c.sku && c.hasQty && (c.ch === 'DEFAULT' || c.ch === 'MFN'))
+    if (candidates.length === 0) return []
+
+    const skus = [...new Set(candidates.map((c) => c.sku))]
+    const products = await this.prisma.product.findMany({
+      where: { sku: { in: skus } },
+      select: { id: true, sku: true, fulfillmentMethod: true },
+    })
+    const fbaBySku = new Map<string, boolean>()
+    const needStock: Array<{ id: string; sku: string }> = []
+    for (const p of products) {
+      const byMethod = String(p.fulfillmentMethod ?? '').toUpperCase() === 'FBA'
+      fbaBySku.set(p.sku, byMethod)
+      if (!byMethod) needStock.push({ id: p.id, sku: p.sku })
+    }
+    if (needStock.length > 0) {
+      const stock = await this.prisma.stockLevel.findMany({
+        where: { productId: { in: needStock.map((n) => n.id) }, quantity: { gt: 0 }, location: { code: 'AMAZON-EU-FBA' } },
+        select: { productId: true },
+      })
+      const fbaIds = new Set(stock.map((s) => s.productId))
+      for (const n of needStock) if (fbaIds.has(n.id)) fbaBySku.set(n.sku, true)
+    }
+
+    const seen = new Set<string>()
+    const out: Array<{ sku: string; channel: string }> = []
+    for (const c of candidates) {
+      if (fbaBySku.get(c.sku) === true && !seen.has(c.sku)) {
+        seen.add(c.sku)
+        out.push({ sku: c.sku, channel: c.ch })
+      }
+    }
+    return out
+  }
+
   buildJsonFeedBody(
     rows: FlatFileRow[],
     marketplace: string,

@@ -374,6 +374,21 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       }
     }
 
+    // FBA-flip guard — REJECT (never silently override) any row that would convert
+    // an FBA listing to merchant-fulfilled (FBM): a merchant DEFAULT/MFN channel +
+    // a quantity for a SKU that is actually FBA. The operator must clear the
+    // quantity / set AMAZON_EU, or convert the SKU in Seller Central first.
+    const fbaViolations = await flatFileService.findFbaQtyViolations(rows, mp)
+    if (fbaViolations.length > 0) {
+      const skuList = fbaViolations.map((v) => v.sku).join(', ')
+      request.log.warn({ skus: fbaViolations }, 'flat-file/submit: blocked FBA→FBM merchant-quantity rows')
+      return reply.code(400).send({
+        error: `Blocked: ${fbaViolations.length} row(s) would flip an FBA listing to merchant-fulfilled (FBM). For these FBA SKUs, clear the quantity or set the fulfillment channel to AMAZON_EU — or convert them in Seller Central first if you intend FBM. SKUs: ${skuList}`,
+        code: 'FBA_MERCHANT_QUANTITY_BLOCKED',
+        skus: fbaViolations.map((v) => v.sku),
+      })
+    }
+
     const body = flatFileService.buildJsonFeedBody(rows, mp, sellerId, expandedFields, {
       enumCodeMap,
       numericFields,
