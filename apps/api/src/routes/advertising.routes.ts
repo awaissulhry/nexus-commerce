@@ -22,7 +22,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
-import { testConnection, adsMode, type AdsRegion } from '../services/advertising/ads-api-client.js'
+import { testConnection, adsMode, listPortfolios, type AdsRegion } from '../services/advertising/ads-api-client.js'
 import { allocate, microsToCents, toEurCents } from '../services/advertising/ads-metrics-math.js'
 import { detectKeywordConflicts } from '../services/advertising/keyword-conflicts.service.js'
 import { getFxRate } from '../services/fx-rate.service.js'
@@ -126,8 +126,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (q.search) where.name = { contains: q.search, mode: 'insensitive' }
     const limit = Math.min(Number(q.limit) || 200, 500)
 
+    // CBN.2g — date-windowed metrics. When the Ad Manager passes a range
+    // (preset/startDate/endDate/windowDays) the spend/sales/etc. are derived LIVE
+    // from AmazonAdsDailyPerformance for that window (the same authoritative source
+    // the detail page + trends use). With no date params we keep the fast stored
+    // columns, so other callers are unchanged.
+    const qd = q as { preset?: string; startDate?: string; endDate?: string; windowDays?: string }
+    const hasDateParams = !!(qd.preset || qd.startDate || qd.endDate || qd.windowDays)
+    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const range = hasDateParams ? resolveRange(qd) : null
+
     const { cached } = await import('../services/advertising/ads-cache.js')
-    const cacheKey = `campaigns:${q.marketplace ?? ''}:${q.status ?? ''}:${q.search ?? ''}:${limit}`
+    const rangeKey = range ? `${range.sinceStr}:${range.untilStr}` : 'stored'
+    const cacheKey = `campaigns:${q.marketplace ?? ''}:${q.status ?? ''}:${q.search ?? ''}:${limit}:${rangeKey}`
     const result = await cached(cacheKey, 300, async () => {
       const campaigns = await prisma.campaign.findMany({
         where,
@@ -169,17 +180,55 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // Campaign.dynamicBidding.placementBidding so the Ad Manager grid can
       // show them as columns without an extra per-campaign fetch. The heavy
       // dynamicBidding JSON is stripped from the response.
-      const items = campaigns.map((c) => {
+      const base = campaigns.map((c) => {
         const { dynamicBidding, ...rest } = c
-        const db = (dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
+        const db = (dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }>; targetAcos?: number; bidAutomation?: boolean }
         const pb = db.placementBidding ?? []
         const find = (kw: string) => {
           const m = pb.find((p) => p.placement?.toLowerCase().includes(kw))
           return m ? m.percentage : null
         }
-        return { ...rest, placements: { tos: find('top'), pdp: find('product'), ros: find('rest') } }
+        // CBN.2h.6 — surface the Bulk-Actions-managed settings inline (stored in
+        // dynamicBidding alongside placementBidding). targetAcos is a fraction
+        // (0.3 = 30%) — the same shape the bid-optimizer reads.
+        return { ...rest, placements: { tos: find('top'), pdp: find('product'), ros: find('rest') }, targetAcos: db.targetAcos ?? null, bidAutomation: db.bidAutomation ?? false }
       })
-      return { items, count: items.length }
+
+      if (!range) return { items: base, count: base.length, range: null }
+
+      // CBN.2g — override the stored columns with window-aggregated metrics from the
+      // daily-performance table, batched across the whole list (2 groupBys). The
+      // localEntityId match + entityId fallback (rows that never linked locally)
+      // mirrors the detail endpoint's OR-match without double-counting.
+      const ids = campaigns.map((c) => c.id)
+      const extIds = campaigns.map((c) => c.externalCampaignId).filter(Boolean) as string[]
+      const n = (v: bigint | number | null | undefined) => Number(v ?? 0)
+      const m2c = (v: bigint | number | null | undefined) => Math.round(Number(v ?? 0) / 10000)
+      const dateFilter = { gte: range.since, lte: range.until }
+      const _sum = { impressions: true, clicks: true, costMicros: true, sales7dCents: true, sales14dCents: true, orders7d: true } as const
+      const [byLocal, byExt] = await Promise.all([
+        prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId'], where: { entityType: 'CAMPAIGN', localEntityId: { in: ids }, date: dateFilter }, _sum }),
+        prisma.amazonAdsDailyPerformance.groupBy({ by: ['entityId'], where: { entityType: 'CAMPAIGN', entityId: { in: extIds }, localEntityId: null, date: dateFilter }, _sum }),
+      ])
+      const mapL = new Map(byLocal.map((r) => [r.localEntityId, r._sum]))
+      const mapE = new Map(byExt.map((r) => [r.entityId, r._sum]))
+      const items = base.map((it) => {
+        const a = mapL.get(it.id)
+        const b = it.externalCampaignId ? mapE.get(it.externalCampaignId) : undefined
+        const spendCents = m2c(a?.costMicros) + m2c(b?.costMicros)
+        const salesCents = n(a?.sales7dCents) + n(a?.sales14dCents) + n(b?.sales7dCents) + n(b?.sales14dCents)
+        return {
+          ...it,
+          impressions: n(a?.impressions) + n(b?.impressions),
+          clicks: n(a?.clicks) + n(b?.clicks),
+          spend: spendCents / 100,
+          sales: salesCents / 100,
+          acos: salesCents > 0 ? spendCents / salesCents : null,
+          roas: spendCents > 0 ? salesCents / spendCents : null,
+          ppcOrders: n(a?.orders7d) + n(b?.orders7d),
+        }
+      })
+      return { items, count: items.length, range: { startDate: range.sinceStr, endDate: range.untilStr, preset: range.preset } }
     })
     reply.header('Cache-Control', 'private, max-age=60')
     return result
@@ -281,6 +330,37 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // table (same source as the campaign detail + chart). Returns the ad group
   // + its ads (product thumbnail + per-ad metrics), targets, a daily trend
   // and campaign context. Search-terms/negatives/history load lazily.
+  // ── H2: flat ad-groups list for the Rule Builder "Add Ad Group" popover. Returns each
+  //    ad group + its campaign context (name/status/type/marketplace) so the popover can
+  //    render the Ad Groups tab (flat) and the Campaigns tab (grouped by campaign). ──
+  fastify.get('/advertising/ad-groups', async (request) => {
+    const q = request.query as { marketplace?: string; status?: string; campaignStatus?: string; limit?: string }
+    const where: Record<string, unknown> = {}
+    if (q.status) where.status = q.status
+    const campWhere: Record<string, unknown> = {}
+    if (q.marketplace && q.marketplace !== 'all') campWhere.marketplace = q.marketplace
+    if (q.campaignStatus) campWhere.status = q.campaignStatus
+    if (Object.keys(campWhere).length) where.campaign = campWhere
+    const adGroups = await prisma.adGroup.findMany({
+      where,
+      select: {
+        id: true, name: true, status: true, targetingType: true, campaignId: true,
+        campaign: { select: { id: true, name: true, status: true, marketplace: true, type: true, portfolioId: true } },
+      },
+      orderBy: [{ campaign: { name: 'asc' } }, { name: 'asc' }],
+      take: Math.min(Number(q.limit) || 2000, 5000),
+    })
+    return {
+      items: adGroups.map((g) => ({
+        id: g.id, name: g.name, status: g.status, targetingType: g.targetingType,
+        campaignId: g.campaignId, campaignName: g.campaign?.name ?? null,
+        campaignStatus: g.campaign?.status ?? null, marketplace: g.campaign?.marketplace ?? null,
+        adProduct: g.campaign?.type ?? null, portfolioId: g.campaign?.portfolioId ?? null,
+      })),
+      count: adGroups.length,
+    }
+  })
+
   fastify.get('/advertising/ad-groups/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const q = request.query as { windowDays?: string; preset?: string; startDate?: string; endDate?: string }
@@ -665,6 +745,26 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
     await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never } })
     return { ok: true, maxBidChangePct: db.maxBidChangePct ?? null, maxWritesPerDay: db.maxWritesPerDay ?? null }
+  })
+
+  // ── CBN.2h.6: Bid Automation + Target ACoS (Ad Manager Bulk Actions) ────
+  // Local automation settings stored in dynamicBidding (NOT pushed to Amazon —
+  // these drive our own bid-optimizer, which reads dynamicBidding.targetAcos).
+  // targetAcos is a fraction (0.3 = 30%), matching the optimizer's read shape.
+  // Same read-modify-write pattern as /cpc-ceiling and /guardrails.
+  fastify.patch('/advertising/campaigns/:id/automation', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as { bidAutomation?: boolean; targetAcos?: number | null }
+    const c = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } })
+    if (!c) { reply.status(404); return { error: 'campaign not found' } }
+    const db = (c.dynamicBidding ?? {}) as Record<string, unknown>
+    if (b.bidAutomation !== undefined) db.bidAutomation = !!b.bidAutomation
+    if (b.targetAcos !== undefined) {
+      if (b.targetAcos == null) delete db.targetAcos
+      else db.targetAcos = Math.max(0, Math.min(5, Number(b.targetAcos))) // fraction; clamp 0–500%
+    }
+    await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never } })
+    return { ok: true, bidAutomation: db.bidAutomation ?? false, targetAcos: db.targetAcos ?? null }
   })
 
   // ── Apex A.2a: per-campaign live-write allowlist toggle ─────────────────
@@ -3427,13 +3527,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // AdTarget columns when no daily rows in range). Powers the Ads Console
   // Targeting screen. Filterable by kind / match type / campaign / text.
   fastify.get('/advertising/targets', async (request, reply) => {
-    const q = request.query as { windowDays?: string; limit?: string; search?: string; kind?: string; matchType?: string; campaignId?: string; preset?: string; startDate?: string; endDate?: string }
+    const q = request.query as { windowDays?: string; limit?: string; search?: string; kind?: string; matchType?: string; campaignId?: string; preset?: string; startDate?: string; endDate?: string; negative?: string }
     const { resolveRange } = await import('../services/advertising/ads-date-range.js')
     const range = resolveRange(q)
     const limit = Math.max(1, Math.min(2000, Number(q.limit ?? 500)))
     const targets = await prisma.adTarget.findMany({
       where: {
-        isNegative: false,
+        // CBN.3.5 — default lists positive targets; ?negative=1 lists Campaign Negative
+        // Targets (both CAMPAIGN- and AD_GROUP-level; adGroupId is required on every row).
+        isNegative: q.negative === '1' || q.negative === 'true',
         ...(q.kind ? { kind: q.kind } : {}),
         ...(q.matchType ? { expressionType: q.matchType } : {}),
         ...(q.search ? { expressionValue: { contains: q.search, mode: 'insensitive' } } : {}),
@@ -3442,6 +3544,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       select: {
         id: true, externalTargetId: true, kind: true, expressionType: true, expressionValue: true,
         bidCents: true, status: true, impressions: true, clicks: true, spendCents: true, salesCents: true, ordersCount: true,
+        isNegative: true, negativeLevel: true, createdAt: true,
         adGroup: { select: { id: true, name: true, externalAdGroupId: true, campaign: { select: { id: true, name: true, marketplace: true, externalCampaignId: true } } } },
       },
       take: limit,
@@ -3462,6 +3565,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const ord = p ? (p._sum.orders7d ?? 0) : t.ordersCount
       return {
         id: t.id, text: t.expressionValue, kind: t.kind, matchType: t.expressionType, bidCents: t.bidCents, status: t.status,
+        isNegative: t.isNegative, negativeLevel: t.negativeLevel, createdAt: t.createdAt,
         campaignId: t.adGroup.campaign.id, campaignName: t.adGroup.campaign.name, externalCampaignId: t.adGroup.campaign.externalCampaignId,
         marketplace: t.adGroup.campaign.marketplace, adGroupId: t.adGroup.id, externalAdGroupId: t.adGroup.externalAdGroupId, adGroupName: t.adGroup.name,
         impressions: impr, clicks: clk, spendCents: spendC, salesCents: salesC, orders: ord,
@@ -4549,6 +4653,29 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // ── AG.1: AI Advertising product goals (AI Goal builder → dashboard "Goals") ──
+  // DB-only / sandbox: persists the goal config; no live Amazon writes (P8 gate).
+  fastify.post('/advertising/ai-goals', async (request, reply) => {
+    const { createProductGoal, ValidationError } = await import('../services/advertising/ai-product-goal.service.js')
+    try {
+      const goal = await createProductGoal(request.body as never)
+      return { ok: true, goal }
+    } catch (e) {
+      if (e instanceof ValidationError) { reply.status(400); return { ok: false, error: e.message } }
+      reply.status(500); return { ok: false, error: (e as Error)?.message }
+    }
+  })
+  fastify.get('/advertising/ai-goals', async (request) => {
+    const q = request.query as { marketplace?: string }
+    const { listProductGoals } = await import('../services/advertising/ai-product-goal.service.js')
+    return { items: await listProductGoals({ marketplace: q?.marketplace }) }
+  })
+  fastify.post('/advertising/ai-goals/:id/archive', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { archiveProductGoal } = await import('../services/advertising/ai-product-goal.service.js')
+    try { return { ok: true, goal: await archiveProductGoal(id) } } catch (e) { reply.status(500); return { ok: false, error: (e as Error)?.message } }
+  })
+
   // ── AX3.3: Amazon DSP + Performance+/Brand+ ─────────────────────────
   fastify.get('/advertising/dsp/meta', async (_request, reply) => {
     const { DSP_CHANNELS, DSP_OBJECTIVES } = await import('../services/advertising/ads-dsp.service.js')
@@ -5182,9 +5309,48 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // job. Operators can undo within the grace window via DELETE on the
   // returned outboundQueueId.
 
+  // SP portfolios for the Campaign-Details picker. Live list from Amazon (GET /v2/portfolios),
+  // merged across active connections (optionally ?marketplace=), deduped by id. Sandbox →
+  // fixture. Failures per-connection are logged and skipped so one bad profile can't 500.
+  fastify.get('/advertising/portfolios', async (request, reply) => {
+    const q = request.query as { marketplace?: string }
+    const mk = q.marketplace && q.marketplace !== 'all' ? q.marketplace : null
+    try {
+      if (adsMode() === 'sandbox') {
+        const list = await listPortfolios({ profileId: 'SANDBOX-PROFILE-IT-001', region: 'EU' })
+        return { portfolios: list.map((p) => ({ ...p, marketplace: mk ?? 'IT' })) }
+      }
+      const conns = await prisma.amazonAdsConnection.findMany({
+        where: { isActive: true, ...(mk ? { marketplace: mk } : {}) },
+        select: { profileId: true, region: true, marketplace: true },
+      })
+      const seen = new Set<string>()
+      const out: Array<{ portfolioId: string; name: string; state?: string; marketplace: string }> = []
+      for (const c of conns) {
+        const region = (c.region === 'NA' || c.region === 'FE' ? c.region : 'EU') as AdsRegion
+        try {
+          const list = await listPortfolios({ profileId: c.profileId, region })
+          for (const pf of list) {
+            if (seen.has(pf.portfolioId)) continue
+            seen.add(pf.portfolioId)
+            out.push({ ...pf, marketplace: c.marketplace })
+          }
+        } catch (e) {
+          logger.warn('[ADS-PORTFOLIOS] fetch failed', { profileId: c.profileId, error: (e as Error)?.message })
+        }
+      }
+      return { portfolios: out }
+    } catch (e) {
+      reply.status(500)
+      return { error: (e as Error)?.message ?? 'portfolios fetch failed', portfolios: [] }
+    }
+  })
+
   fastify.patch('/advertising/campaigns/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const body = request.body as {
+      name?: string
+      portfolioId?: string | null
       dailyBudget?: number
       dailyBudgetCurrency?: string
       status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'
@@ -5194,6 +5360,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       applyImmediately?: boolean
     }
     const patch: Parameters<typeof updateCampaignWithSync>[0]['patch'] = {}
+    if (typeof body.name === 'string' && body.name.trim()) patch.name = body.name.trim()
+    if (body.portfolioId !== undefined) patch.portfolioId = body.portfolioId
     if (body.dailyBudget != null) patch.dailyBudget = body.dailyBudget
     if (body.dailyBudgetCurrency) patch.dailyBudgetCurrency = body.dailyBudgetCurrency
     if (body.status) patch.status = body.status
@@ -5218,10 +5386,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.patch('/advertising/ad-groups/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const body = request.body as {
+      name?: string
       defaultBidCents?: number
       status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'
       reason?: string
       applyImmediately?: boolean
+    }
+    // CBN.3 G4 — Edit Groups inline rename. Name has no Amazon-sync path here, so it's a
+    // local rename; status/defaultBid still flow through the audited updateAdGroupWithSync.
+    if (typeof body.name === 'string' && body.name.trim()) {
+      const existing = await prisma.adGroup.findUnique({ where: { id }, select: { id: true } })
+      if (!existing) { reply.code(404); return { ok: false, error: 'not_found' } }
+      await prisma.adGroup.update({ where: { id }, data: { name: body.name.trim() } })
+    }
+    // No bid/status change → nothing for the sync service to do (name-only edit returns ok).
+    if (body.defaultBidCents == null && body.status == null) {
+      return { ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: null }
     }
     const result = await updateAdGroupWithSync({
       adGroupId: id,
