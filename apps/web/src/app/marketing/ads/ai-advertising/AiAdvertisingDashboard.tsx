@@ -39,6 +39,12 @@ const COLS: Array<{ key: string; label: string; beta?: boolean; sortable?: boole
   { key: 'spend', label: 'Spend', sortable: true },
 ]
 
+type Goal = { id: string; name: string; aiTarget: string; budgetMode: string; advancedAllocation: boolean; status: string; productCount: number; dailyBudgetCents: number; startDate: string }
+const TARGET_LABEL: Record<string, string> = { IMPRESSION: 'Impression & Click', SALES: 'Sales', ROAS: 'ROAS' }
+const MODE_LABEL: Record<string, string> = { STRICT: 'Strict Control', SHARED: 'Shared Budget' }
+const eur2 = (cents: number) => `€${(cents / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const fmtDay = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }
+
 function AmazonMark() {
   return (
     <svg viewBox="0 0 24 16" width="16" height="11" aria-hidden style={{ display: 'block' }}>
@@ -100,6 +106,12 @@ function EmptyChart() {
 export function AiAdvertisingDashboard() {
   const [dateRange, setDateRange] = useState(() => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 10); return { start: s, end: e } })
   const [tab, setTab] = useState<'ASIN' | 'Campaign'>('Campaign')
+  const [goals, setGoals] = useState<Goal[]>([])
+  useEffect(() => {
+    let alive = true
+    fetch(`${getBackendUrl()}/api/advertising/ai-goals`).then((r) => r.json()).then((j) => { if (alive) setGoals(Array.isArray(j?.items) ? j.items : []) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
   const totals = { spend: 0, sales: 0, acos: 0, orders: 0 }
   const fmtRangeLong = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
@@ -119,7 +131,8 @@ export function AiAdvertisingDashboard() {
         </div>
       </div>
 
-      {/* Get Started hero */}
+      {/* Get Started hero — shown only until the first goal exists (H10) */}
+      {goals.length === 0 && (
       <div className="h10-aiad-hero">
         <div className="hl">
           <h2>Get Started with AI Advertising</h2>
@@ -141,6 +154,7 @@ export function AiAdvertisingDashboard() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Overview */}
       <div className="h10-aiad-ov">
@@ -159,7 +173,7 @@ export function AiAdvertisingDashboard() {
       {/* Goals table */}
       <div className="h10-aiad-tbl">
         <div className="tbar">
-          <span className="cnt">Showing 0 Goals</span>
+          <span className="cnt">Showing {goals.length} Goal{goals.length === 1 ? '' : 's'}</span>
           <button type="button" className="h10-am-btn"><SlidersHorizontal size={13} /> Filters</button>
           <span className="seg">
             <button type="button" className={tab === 'ASIN' ? 'on' : ''} onClick={() => setTab('ASIN')}>ASIN</button>
@@ -182,7 +196,22 @@ export function AiAdvertisingDashboard() {
               </tr>
             </thead>
             <tbody>
-              <tr><td className="empty" colSpan={COLS.length + 1}>There are no products set up with AI Advertising.</td></tr>
+              {goals.length === 0 ? (
+                <tr><td className="empty" colSpan={COLS.length + 1}>There are no products set up with AI Advertising.</td></tr>
+              ) : goals.map((g) => (
+                <tr key={g.id}>
+                  <td className="ck"><input type="checkbox" aria-label={`Select ${g.name}`} /></td>
+                  <td className="gname">{g.name}<span className="sub">{g.productCount} product{g.productCount === 1 ? '' : 's'}</span></td>
+                  <td>{TARGET_LABEL[g.aiTarget] ?? g.aiTarget}</td>
+                  <td><span className={`aictl ${g.advancedAllocation ? 'on' : ''}`}>{g.advancedAllocation ? 'Advanced' : 'Standard'}</span></td>
+                  <td><span className="gstatus">{g.status === 'ACTIVE' ? 'Enabled' : g.status}</span></td>
+                  <td>{fmtDay(g.startDate)}</td>
+                  <td>{MODE_LABEL[g.budgetMode] ?? g.budgetMode}</td>
+                  <td>{eur2(g.dailyBudgetCents)}</td>
+                  <td>0%</td>
+                  <td>{eur2(0)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

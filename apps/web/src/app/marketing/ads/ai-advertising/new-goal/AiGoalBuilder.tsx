@@ -60,9 +60,35 @@ export function AiGoalBuilder() {
   const [excludeAsins, setExcludeAsins] = useState<string[]>([])
   const exitTo = '/marketing/ads/campaign-builder'
 
+  const [launching, setLaunching] = useState(false)
+  const [launchErr, setLaunchErr] = useState('')
   const totalBudget = useMemo(() => products.reduce((a, p) => a + (Number(p.budget) || 0), 0), [products])
   const setBudget = (id: string, v: string) => setProducts((ps) => ps.map((p) => (p.id === id ? { ...p, budget: v } : p)))
   const removeProduct = (id: string) => setProducts((ps) => ps.filter((p) => p.id !== id))
+
+  // Launch enables once the goal is valid: a name, ≥1 product, and a budget per the mode.
+  const valid = goalName.trim().length > 0 && products.length > 0 && (
+    budgetMode === 'shared' ? Number(sharedBudget) >= 1 : products.every((p) => Number(p.budget) >= 1)
+  )
+  const launch = async () => {
+    if (!valid || launching) return
+    setLaunching(true); setLaunchErr('')
+    const payload = {
+      name: goalName.trim(),
+      aiTarget: target.toUpperCase(),
+      budgetMode: budgetMode.toUpperCase(),
+      advancedAllocation: advAlloc,
+      totalBudgetCents: budgetMode === 'shared' ? Math.round((Number(sharedBudget) || 0) * 100) : null,
+      products: products.map((p) => ({ productId: p.id, asin: p.asin, sku: p.sku, name: p.name, imageUrl: p.imageUrl, lqs: p.lqs, budgetCents: Math.round((Number(p.budget) || 0) * 100) })),
+      seedKeywords: seeds, excludeKeywords: excluded, productTargets, excludeAsins,
+    }
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/ai-goals`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Could not create the product goal')
+      router.push('/marketing/ads/ai-advertising')
+    } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
+  }
 
   return (
     <div className="h10-aig">
@@ -73,7 +99,7 @@ export function AiGoalBuilder() {
         <span className="crumb">New Product Goal</span>
         <span className="grow" />
         <button type="button" className="learn"><Video size={15} /> Learn</button>
-        <button type="button" className="launch" disabled>Launch</button>
+        <button type="button" className="launch" disabled={!valid || launching} onClick={launch}>{launching ? 'Launching…' : 'Launch'}</button>
       </header>
 
       <div className="h10-aig-body">
@@ -208,7 +234,8 @@ export function AiGoalBuilder() {
       <footer className="h10-aig-bottombar">
         <button type="button" className="h10-am-btn" onClick={() => router.push(exitTo)}>Cancel</button>
         <span className="grow" />
-        <button type="button" className="launch" disabled>Launch</button>
+        {launchErr && <span className="err">{launchErr}</span>}
+        <button type="button" className="launch" disabled={!valid || launching} onClick={launch}>{launching ? 'Launching…' : 'Launch'}</button>
       </footer>
 
       {showAddProducts && <AddProductsModal selected={products} onClose={() => setShowAddProducts(false)} onApply={(ps) => { setProducts(ps); setShowAddProducts(false) }} />}

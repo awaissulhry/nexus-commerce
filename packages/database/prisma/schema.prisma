@@ -12855,6 +12855,33 @@ model AdBudgetPlan {
   @@index([month, marketplace])
 }
 
+// AG.1 — AI Advertising "Product Goal" (Helium 10-style). One row per goal created
+// in the AI Goal builder; the AI Advertising dashboard "Goals" table lists these.
+// DB-only / sandbox — creating a goal does NOT push to Amazon (P8 write gate).
+// Additive + empty on deploy; non-destructive.
+model AdProductGoal {
+  id                 String   @id @default(cuid())
+  name               String
+  aiTarget           String // IMPRESSION | SALES | ROAS
+  budgetMode         String // STRICT | SHARED
+  advancedAllocation Boolean  @default(false)
+  totalBudgetCents   Int? // shared-budget mode only (per-product budgets live in `products`)
+  // [{ productId, asin, sku, name, imageUrl, lqs, budgetCents }]
+  products           Json     @default("[]")
+  seedKeywords       String[] @default([])
+  excludeKeywords    String[] @default([])
+  productTargets     String[] @default([])
+  excludeAsins       String[] @default([])
+  status             String   @default("ACTIVE") // DRAFT | ACTIVE | ARCHIVED
+  marketplace        String?
+  createdBy          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([marketplace])
+}
+
 // PD.2 — supplier contact persons. Factories often have several contacts
 // (sales, QC, logistics) on different channels (WhatsApp/WeChat). The
 // Supplier scalar contact* fields stay as the "primary on file"; this is
