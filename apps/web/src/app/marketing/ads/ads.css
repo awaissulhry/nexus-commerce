@@ -6,24 +6,76 @@
 .h10-shell { display: flex; height: 100dvh; overflow: hidden; background: #f4f6f9; color: #1c2530; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
 .h10-main { flex: 1; min-width: 0; min-height: 0; padding: 26px 30px; overflow-y: auto; }
 
-/* left rail */
-.h10-rail { width: 232px; flex-shrink: 0; background: #fff; border-right: 1px solid #e6e9ee; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
-.h10-brand { font-size: 18px; font-weight: 700; color: #1c2530; padding: 20px 20px 16px; letter-spacing: -0.01em; }
-.h10-brand .mk { color: #1c2530; }
-.h10-brand b { color: #1f6fde; font-weight: 800; }
-.h10-nav { flex: 1; padding: 4px 10px; display: flex; flex-direction: column; gap: 2px; }
+/* left rail — collapsible icon rail that expands on hover (H10 behavior).
+   Resting = 66px icon-only strip; hovering expands it to 344px and OVERLAYS the
+   page (the 66px footprint is reserved by .h10-shell's padding-left, so content
+   never shifts). Pure CSS :hover — no JS. Dimensions measured pixel-for-pixel off
+   the real Helium 10 Ad Manager rail: 66px collapsed / 344px expanded, #f1f3f5
+   surface, 20px glyphs, 46px rows, 15px labels (17px bold on the active item). */
+/* CBN — legibility: use Inter (the app font, heavier/cleaner than the system
+   stack at UI sizes) and let text render with the default (heavier) smoothing
+   instead of the global `antialiased` that thins it. Fixes "our text is too thin
+   vs H10" at the root so it cascades to the grid, filters, and sidebar. */
+.h10-shell { position: relative; padding-left: 66px; font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: auto; -moz-osx-font-smoothing: auto; }
+.h10-rail {
+  position: absolute; left: 0; top: 0; height: 100%;
+  width: 66px; z-index: 50;
+  background: #f1f3f5; border-right: 1px solid #e3e7ec;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  transition: width .18s ease, box-shadow .18s ease;
+}
+.h10-rail:hover { width: 344px; overflow-y: auto; box-shadow: 8px 0 30px rgba(20, 28, 38, 0.13); }
+
+/* brand: compact "N" mark when collapsed, full "Nexus Ads" wordmark on hover */
+.h10-brand { display: flex; align-items: center; gap: 12px; height: 66px; padding-left: 19px; flex-shrink: 0; }
+.h10-brand .logo { width: 28px; height: 28px; border-radius: 7px; background: #1f6fde; color: #fff; font-weight: 800; font-size: 15px; letter-spacing: -0.02em; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.h10-brand .word { white-space: nowrap; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; opacity: 0; transition: opacity .14s ease; }
+.h10-brand .word .mk { color: #1c2530; }
+.h10-brand .word b { color: #1f6fde; font-weight: 800; }
+.h10-rail:hover .h10-brand .word { opacity: 1; }
+
+.h10-nav { flex: 1; padding: 4px 0; display: flex; flex-direction: column; gap: 2px; }
 .h10-group { display: flex; flex-direction: column; }
-.h10-item { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 8px; font-size: 13.5px; font-weight: 600; color: #5b6573; text-decoration: none; transition: background .12s, color .12s; }
-.h10-item svg { flex-shrink: 0; color: #8a93a1; }
-.h10-item:hover { background: #f1f4f8; color: #1c2530; }
-.h10-item:hover svg { color: #5b6573; }
-.h10-item.on { background: #e9f1fd; color: #1f6fde; }
-.h10-item.on svg { color: #1f6fde; }
-.h10-sub { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 4px 40px; }
-.h10-subitem { font-size: 12.5px; color: #5b6573; text-decoration: none; padding: 6px 10px; border-radius: 6px; }
+/* fixed 50px icon zone centres the 20px glyph in the 66px collapsed rail (8px row
+   margin + 25px to glyph centre = 33px = rail centre) AND left-aligns it expanded */
+.h10-item { display: flex; align-items: center; height: 46px; margin: 1px 8px; border-radius: 10px; font-size: 15px; font-weight: 600; color: #4a5462; text-decoration: none; overflow: hidden; transition: background .12s, color .12s; }
+.h10-item .ico { flex: 0 0 50px; display: flex; align-items: center; justify-content: center; }
+.h10-item .ico svg { color: #8a93a1; transition: color .12s; }
+.h10-item .lbl { white-space: nowrap; margin-left: 10px; opacity: 0; transition: opacity .14s ease; }
+.h10-rail:hover .h10-item .lbl { opacity: 1; }
+.h10-item:hover { background: #e6eaf0; color: #1c2530; }
+.h10-item:hover .ico svg { color: #5b6573; }
+.h10-item.on { background: #1f6fde; color: #fff; }
+.h10-item.on .ico svg { color: #fff; }
+/* the active item is ONLY a blue fill + white text — same font size/weight as every
+   other item (H10 does not enlarge or embolden the selection) */
+/* collapsible parents (AMC, Reporting) are <button> toggles — strip native button
+   chrome so they render byte-identically to the <a>/<Link> rows */
+button.h10-item { appearance: none; -webkit-appearance: none; border: 0; background: transparent; padding: 0; width: auto; font-family: inherit; cursor: pointer; }
+/* trailing glyphs (fade in with the labels): a disclosure chevron pinned to the right
+   edge for collapsible items; an external-link glyph right after the Training label.
+   The chevron rotates 180° only while its submenu is OPEN — it tracks disclosure state,
+   NOT which page is active (matches H10: you can expand AMC while Ad Manager is current). */
+/* BALANCE RULE: the trailing chevron MIRRORS the leading icon zone. The icon glyph
+   centres 25px from the item's left edge (50px ico zone); the 16px chevron box gets
+   margin-right:17px so its centre lands 25px from the right edge (8 + 17 = 25). Both
+   affordances are therefore equidistant from their borders — never eyeball one side. */
+.h10-item .chev { margin-left: auto; margin-right: 17px; flex-shrink: 0; color: #98a2b3; opacity: 0; transition: opacity .14s ease, transform .18s ease; }
+.h10-item .ext { margin-left: 8px; flex-shrink: 0; color: #98a2b3; opacity: 0; transition: opacity .14s ease; }
+.h10-rail:hover .h10-item .chev, .h10-rail:hover .h10-item .ext { opacity: 1; }
+.h10-item:hover .chev, .h10-item:hover .ext { color: #5b6573; }
+.h10-item.on .chev { color: #fff; }
+.h10-item .chev.open { transform: rotate(180deg); }
+
+.h10-sub { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 4px 60px; padding-right: 8px; }
+.h10-rail:not(:hover) .h10-sub { display: none; }
+.h10-subitem { white-space: nowrap; font-size: 12.5px; color: #5b6573; text-decoration: none; padding: 6px 10px; border-radius: 6px; }
 .h10-subitem:hover { background: #f1f4f8; color: #1c2530; }
 .h10-subitem.on { color: #1f6fde; font-weight: 600; }
-.h10-railft { font-size: 10px; color: #aeb6c2; padding: 12px 20px 16px; }
+
+.h10-railft { white-space: nowrap; font-size: 10px; color: #aeb6c2; padding: 12px 16px 16px; opacity: 0; transition: opacity .14s ease; flex-shrink: 0; }
+.h10-rail:hover .h10-railft { opacity: 1; }
 
 /* page stub */
 .h10-stub { max-width: 1100px; }
@@ -50,12 +102,20 @@
 .h10-am-btn:hover { background: #f1f4f8; }
 .h10-am-btn.primary { background: #1f6fde; border-color: #1f6fde; color: #fff; }
 .h10-am-btn.primary:hover { background: #1a60c4; }
-.h10-am-grid { background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; overflow: auto; }
-.h10-am-grid table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.h10-am-grid thead th { position: sticky; top: 0; background: #f7f9fb; border-bottom: 1px solid #e6e9ee; font-size: 11px; font-weight: 700; color: #6b7480; text-align: left; padding: 10px 14px; white-space: nowrap; }
+.h10-am-grid { background: #fff; border: 1px solid #d6dbe2; border-radius: 12px; overflow: auto; }
+/* CBN.3 — unify toolbar + grid + pager into ONE card (H10: the toolbar lives inside the grid
+   rectangle, just above the header). Scoped to .h10-am-card so the standalone .h10-am-grid /
+   .h10-am-toolbar used by CampaignsGrid stay exactly as they are. */
+.h10-am-card { background: #fff; border: 1px solid #d6dbe2; border-radius: 12px; margin-top: 16px; }
+.h10-am-card .h10-am-toolbar { padding: 14px 16px; }
+.h10-am-card .h10-am-grid { border: none; border-radius: 0; background: transparent; }
+.h10-am-card .h10-am-pager { padding: 12px 16px 14px; }
+.h10-am-card + .h10-am-latest { margin-top: 12px; }
+.h10-am-grid table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.h10-am-grid thead th { position: sticky; top: 0; background: #f7f9fb; border-bottom: 1px solid #d6dbe2; font-size: 11.5px; font-weight: 700; color: #475467; text-align: left; padding: 10px 14px; white-space: nowrap; }
 .h10-am-grid th.num, .h10-am-grid td.num { text-align: right; }
 .h10-am-grid th.ck, .h10-am-grid td.ck { width: 40px; text-align: center; }
-.h10-am-grid tbody td { border-bottom: 1px solid #eef1f5; padding: 11px 14px; color: #2b3440; white-space: nowrap; }
+.h10-am-grid tbody td { border-bottom: 1px solid #e2e6eb; padding: 11px 14px; color: #283441; font-weight: 500; white-space: nowrap; }
 .h10-am-grid tbody tr:hover { background: #f7faff; }
 .h10-am-grid tbody tr.on { background: #eef5ff; }
 .h10-am-grid td.nm { display: flex; align-items: center; gap: 8px; max-width: 360px; }
@@ -69,26 +129,45 @@
 .h10-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 999px; background: #fff; }
 .h10-rulecount { color: #8a93a1; }
 /* CBN.2b — filter bar (Helium 10 Ad Manager match) */
-.h10-am-fpanel { background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; padding: 18px 22px 20px; }
-.h10-am-fpanel .fphead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.h10-am-fpanel { background: #fff; border: 1px solid #d6dbe2; border-radius: 12px; padding: 14px 18px 16px; }
+.h10-am-fpanel .fphead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+/* BALANCE RULE: when filters are hidden the header is the panel's ONLY child, so its
+   margin-bottom (a gap meant for the content below) would orphan into uneven padding
+   — 14px above vs 26px below. Collapsed: drop that margin and equalise top/bottom
+   padding so the header sits perfectly centred. Trailing spacers must never outlive
+   the sibling they spaced. */
+.h10-am-fpanel.is-collapsed { padding-top: 14px; padding-bottom: 14px; }
+.h10-am-fpanel.is-collapsed .fphead { margin-bottom: 0; }
 .h10-am-fpanel .fphead h3 { font-size: 18px; font-weight: 700; color: #1c2530; margin: 0; letter-spacing: -0.01em; }
 .h10-am-fpanel .fphead .tog { display: inline-flex; align-items: center; gap: 5px; }
 .h10-am-fpanel .fphead .tog svg { transition: transform .15s; }
 .h10-am-fpanel .fphead .tog svg.up { transform: rotate(180deg); }
-.fppresets { display: flex; align-items: center; gap: 11px; margin-bottom: 18px; }
+.fppresets { display: flex; align-items: center; gap: 11px; margin-bottom: 12px; }
 .fppresets .lbl { font-size: 13px; font-weight: 600; color: #5b6573; }
 .h10-libwrap { position: relative; }
-.h10-am-libbtn { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 12.5px; font-weight: 600; color: #3a4452; background: #fff; border: 1px solid #d8dde4; border-radius: 8px; padding: 7px 12px; cursor: pointer; }
-.h10-am-libbtn:hover { background: #f1f4f8; }
-.h10-am-libbtn svg { color: #5b6573; }
+.h10-am-libbtn { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 12.5px; font-weight: 600; color: #344054; background: #eef1f5; border: 1px solid transparent; border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+.h10-am-libbtn:hover { background: #e3e8ef; }
+.h10-am-libbtn svg { color: #475467; }
 
 /* 6-column grid; the top row (Portfolio / Campaign / Campaign Type) spans 2 each */
-.h10-am-fpanel .frow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px 18px; }
-.h10-am-fpanel .ffield { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.h10-am-fpanel .frow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 11px 14px; }
+.h10-am-fpanel .ffield { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .h10-am-fpanel .ffield.wide { grid-column: span 2; }
 .h10-am-fpanel .ffield > span { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: #2b3440; }
-.h10-am-fpanel .ffield > span .info { display: inline-flex; color: #b6bdc8; cursor: help; }
-.h10-am-fpanel .ffield > span .info:hover { color: #8a93a1; }
+.h10-am-fpanel .ffield > span .info { position: relative; display: inline-flex; color: #73839a; cursor: help; }
+.h10-am-fpanel .ffield > span .info:hover { color: #1f6fde; }
+/* portal-rendered adaptive info tooltip (see InfoTip.tsx) — position:fixed to the
+   viewport and rendered into <body>, so it layers ABOVE the left rail and is never
+   clipped by .h10-main's overflow. Arrow tracks the icon via the --ax offset. */
+.h10-tip {
+  position: fixed; z-index: 1000; width: max-content; max-width: 290px; text-align: left;
+  background: #28313d; color: #fff; font-size: 11.5px; font-weight: 500; line-height: 1.45;
+  padding: 8px 11px; border-radius: 8px; box-shadow: 0 10px 26px rgba(20, 28, 38, 0.3);
+  pointer-events: none; white-space: normal;
+}
+.h10-tip::after { content: ''; position: absolute; left: var(--ax, 50%); transform: translateX(-50%); border: 5px solid transparent; }
+.h10-tip.top::after { top: 100%; border-top-color: #28313d; }
+.h10-tip.bottom::after { bottom: 100%; border-bottom-color: #28313d; }
 @media (max-width: 1320px) {
   .h10-am-fpanel .frow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .h10-am-fpanel .ffield.wide { grid-column: span 1; }
@@ -97,13 +176,33 @@
 
 /* native selects with a custom chevron (matches the H10 control height) */
 .h10-fsel { position: relative; }
-.h10-fsel select { appearance: none; -webkit-appearance: none; width: 100%; border: 1px solid #d8dde4; border-radius: 8px; padding: 9px 30px 9px 11px; font: inherit; font-size: 13px; color: #1c2530; background: #fff; cursor: pointer; }
+.h10-fsel select { appearance: none; -webkit-appearance: none; width: 100%; border: 1px solid #d8dde4; border-radius: 8px; padding: 7px 30px 7px 11px; font: inherit; font-size: 13px; color: #1c2530; background: #fff; cursor: pointer; }
 .h10-fsel select:hover { border-color: #c2c9d3; }
 .h10-fsel svg { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #8a93a1; pointer-events: none; }
 
+/* custom single-select dropdown (Portfolio searchable / Bid Automation / Rule) —
+   replaces the native <select> so it matches the H10 popover, with in-list search */
+.h10-dd { position: relative; }
+.h10-dd-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; border: 1px solid #d8dde4; border-radius: 8px; padding: 7px 11px; font: inherit; font-size: 13px; color: #1c2530; background: #fff; cursor: pointer; text-align: left; }
+.h10-dd-btn:hover { border-color: #c2c9d3; }
+.h10-dd-btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-dd-btn > span.ph { color: #aeb6c2; }
+.h10-dd-btn svg { color: #8a93a1; flex-shrink: 0; }
+.h10-dd.open .h10-dd-btn { border-color: #1f6fde; box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
+.h10-dd-pop { position: absolute; z-index: 40; top: calc(100% + 5px); left: 0; right: 0; min-width: 210px; background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; box-shadow: 0 12px 30px rgba(20, 28, 38, 0.16); padding: 6px; }
+.h10-dd-search { display: flex; align-items: center; gap: 7px; padding: 7px 9px; margin-bottom: 5px; border: 1px solid #e6e9ee; border-radius: 8px; color: #8a93a1; }
+.h10-dd-search svg { flex-shrink: 0; }
+.h10-dd-search input { border: none; outline: none; font: inherit; font-size: 13px; width: 100%; background: transparent; color: #1c2530; }
+.h10-dd-search input::placeholder { color: #aeb6c2; }
+.h10-dd-list { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+.h10-dd-opt { display: block; width: 100%; text-align: left; border: none; background: none; font: inherit; font-size: 13px; color: #2b3440; padding: 8px 9px; border-radius: 7px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h10-dd-opt:hover { background: #f4f7fb; }
+.h10-dd-opt.on { background: #eef5ff; color: #1f6fde; font-weight: 600; }
+.h10-dd-empty { padding: 12px 9px; font-size: 12.5px; color: #8a93a1; text-align: center; }
+
 /* multi-select dropdown (Status, Campaign Type → "All" / "N selected") */
 .h10-ms { position: relative; }
-.h10-ms-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; border: 1px solid #d8dde4; border-radius: 8px; padding: 9px 11px; font: inherit; font-size: 13px; color: #1c2530; background: #fff; cursor: pointer; }
+.h10-ms-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; border: 1px solid #c2c9d3; border-radius: 8px; padding: 7px 11px; font: inherit; font-size: 13px; color: #1c2530; background: #fff; cursor: pointer; }
 .h10-ms-btn:hover { border-color: #c2c9d3; }
 .h10-ms-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-ms-btn svg { color: #8a93a1; flex-shrink: 0; }
@@ -111,12 +210,22 @@
 .h10-ms-pop { position: absolute; z-index: 40; top: calc(100% + 5px); left: 0; right: 0; min-width: 180px; background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; box-shadow: 0 12px 30px rgba(20, 28, 38, 0.16); padding: 5px; max-height: 260px; overflow-y: auto; }
 .h10-ms-opt { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 7px; font-size: 13px; color: #2b3440; cursor: pointer; }
 .h10-ms-opt:hover { background: #f4f7fb; }
+.h10-ms-opt.sel { background: #f0f6ff; }
+.h10-ms-opt.sel:hover { background: #e6f0ff; }
 .h10-ms-opt.all { border-bottom: 1px solid #eef1f5; border-radius: 0; margin-bottom: 3px; font-weight: 600; color: #1c2530; }
 .h10-ms-opt input { width: 15px; height: 15px; accent-color: #1f6fde; }
+.h10-ms-btn.ph span { color: #aeb6c2; }
+/* Campaign searchable multi-select (H10) — reuses the .h10-ms shell + .h10-ms-pop */
+.h10-cms .h10-ms-btn.ph span { color: #aeb6c2; }
+.h10-cms-search { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 7px; margin: 0 0 5px; padding: 6px 9px; background: #fff; border: 1px solid #c2c9d3; border-radius: 7px; color: #8a93a1; }
+.h10-cms-search input { flex: 1; min-width: 0; border: none; outline: none; font: inherit; font-size: 13px; background: transparent; color: #1c2530; }
+.h10-cms-search input::placeholder { color: #aeb6c2; }
+.h10-cms-empty { padding: 14px 9px; text-align: center; font-size: 12.5px; color: #8a93a1; }
+.h10-ms-opt .h10-cms-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* campaign typeahead combobox */
 .h10-combo { position: relative; }
-.h10-combo > input { width: 100%; border: 1px solid #d8dde4; border-radius: 8px; padding: 9px 30px 9px 11px; font: inherit; font-size: 13px; color: #1c2530; background: #fff; }
+.h10-combo > input { width: 100%; border: 1px solid #c2c9d3; border-radius: 8px; padding: 7px 30px 7px 11px; font: inherit; font-size: 13px; color: #1c2530; background: #fff; }
 .h10-combo > input::placeholder { color: #aeb6c2; }
 .h10-combo.open > input, .h10-combo > input:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
 .h10-combo > svg, .h10-combo > .cx { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); color: #8a93a1; }
@@ -128,16 +237,17 @@
 
 /* min/max range inputs with inline unit adornment (€ left, % right) */
 .h10-am-fpanel .mm { display: flex; gap: 8px; }
-.h10-am-fpanel .mmin { display: flex; align-items: center; flex: 1; min-width: 0; border: 1px solid #d8dde4; border-radius: 8px; padding: 0 9px; background: #fff; }
+.h10-am-fpanel .mmin { display: flex; align-items: stretch; flex: 1; min-width: 0; border: 1px solid #c2c9d3; border-radius: 8px; background: #fff; overflow: hidden; }
 .h10-am-fpanel .mmin:focus-within { border-color: #1f6fde; box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
-.h10-am-fpanel .mmin input { flex: 1; min-width: 0; width: 100%; border: none; outline: none; font: inherit; font-size: 13px; color: #1c2530; padding: 9px 0; background: transparent; }
+.h10-am-fpanel .mmin input { flex: 1; min-width: 0; width: 100%; border: none; outline: none; font: inherit; font-size: 13px; color: #1c2530; padding: 7px 10px; background: transparent; }
 .h10-am-fpanel .mmin input::placeholder { color: #aeb6c2; }
-.h10-am-fpanel .mmin .ad { color: #8a93a1; font-size: 13px; flex-shrink: 0; }
-.h10-am-fpanel .mmin.cur .ad { margin-right: 6px; }
-.h10-am-fpanel .mmin.pct .ad { margin-left: 6px; }
+/* shaded unit segment with divider — H10 input-group addon (€ prefix / % suffix) */
+.h10-am-fpanel .mmin .ad { display: flex; align-items: center; color: #667085; font-size: 12.5px; font-weight: 500; flex-shrink: 0; background: #f3f5f8; padding: 0 9px; }
+.h10-am-fpanel .mmin.cur .ad { border-right: 1px solid #dde2e8; }
+.h10-am-fpanel .mmin.pct .ad { border-left: 1px solid #dde2e8; }
 
 /* footer */
-.h10-am-fpanel .fft { display: flex; align-items: center; gap: 8px; margin-top: 18px; }
+.h10-am-fpanel .fft { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
 .h10-am-fpanel .fft .grow { flex: 1; }
 .h10-am-link { background: none; border: none; color: #1f6fde; font-size: 13px; font-weight: 600; cursor: pointer; padding: 6px 8px; }
 .h10-am-link:hover { text-decoration: underline; }
@@ -147,7 +257,10 @@
 /* saved-filter library popover */
 .h10-libpop { position: absolute; z-index: 45; top: calc(100% + 6px); left: 0; width: 280px; background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; box-shadow: 0 14px 34px rgba(20, 28, 38, 0.18); padding: 10px; }
 .h10-libpop-h { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #8a93a1; padding: 4px 6px 8px; }
-.h10-libpop-empty { font-size: 12.5px; color: #8a93a1; padding: 8px 6px 10px; line-height: 1.5; }
+.h10-libpop-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 18px 14px 14px; }
+.h10-libpop-empty .ill { width: 46px; height: 46px; border-radius: 50%; background: #eef5ff; color: #1f6fde; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+.h10-libpop-empty .t { font-size: 13.5px; font-weight: 700; color: #1c2530; margin-bottom: 5px; }
+.h10-libpop-empty .d { font-size: 12px; color: #8a93a1; line-height: 1.5; }
 .h10-libpop-list { display: flex; flex-direction: column; gap: 2px; }
 .h10-libpop-row { display: flex; align-items: center; gap: 6px; }
 .h10-libpop-row .nm { flex: 1; text-align: left; border: none; background: none; font: inherit; font-size: 13px; font-weight: 600; color: #2b3440; padding: 8px 9px; border-radius: 7px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -294,7 +407,7 @@
 .h10-am-grid td.nm .t:hover { text-decoration: underline; }
 .h10-am-grid th.st, .h10-am-grid td.st { text-align: left; white-space: nowrap; }
 .h10-pill { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 5px; padding: 3px 9px; white-space: nowrap; }
-.h10-pill.ok { color: #167a48; background: #e6f6ec; }
+.h10-pill.ok { color: #0a4ba8; background: #d2e6fc; }
 .h10-pill.warn { color: #9a6700; background: #fdf3d3; }
 .h10-pill.arch { color: #6b7480; background: #eef1f5; }
 
@@ -330,6 +443,14 @@
 .h10-am-grid th .sortable i { font-style: normal; color: #c2c9d3; font-size: 10px; line-height: 1; }
 .h10-am-grid th .sortable:hover { color: #3a4452; }
 .h10-am-grid th .sortable:hover i { color: #8a93a1; }
+/* CBN.3 G2 — lucide sort chevron (AdsDataGrid): muted by default, blue when active; the
+   active-sort header label goes blue (H10). Scoped to .sa so CampaignsGrid's <i> is untouched. */
+.h10-am-grid th .sortable .sa { color: #c2c9d3; flex-shrink: 0; }
+.h10-am-grid th .sortable:hover .sa { color: #8a93a1; }
+.h10-am-grid th.sorted .sortable, .h10-am-grid th.sorted .hl { color: #1f6fde; }
+.h10-am-grid th.sorted .sortable .sa, .h10-am-grid th.sorted .sa.on { color: #1f6fde; }
+/* Total row: right-align the "Total" label in the sticky first column (H10) */
+.h10-am-grid tr.h10-am-total td.nm.fz { text-align: right; }
 
 /* CBN.2e.4 — Table Customization modal (H10 "Customize") */
 .h10-modal.tc { width: 660px; }
@@ -344,3 +465,1279 @@
 .h10-tc-ck:hover { background: #f7f9fb; }
 .h10-tc-ck input { width: 15px; height: 15px; accent-color: #1f6fde; flex-shrink: 0; }
 .h10-tc-ck span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* CBN.2f — date range picker (dual-month calendar + preset rail, H10 match) */
+.h10-dp { position: absolute; top: calc(100% + 6px); right: 0; z-index: 50; display: flex; background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; box-shadow: 0 16px 40px rgba(20, 28, 38, 0.2); overflow: hidden; }
+.h10-dp-cal { padding: 14px 16px; }
+.h10-dp-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.h10-dp-nav button { border: none; background: none; color: #5b6573; cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
+.h10-dp-nav button:hover { background: #f1f4f8; }
+.h10-dp-nav .mh { display: flex; flex: 1; justify-content: space-around; font-size: 13px; font-weight: 700; color: #1c2530; }
+.h10-dp-months { display: flex; gap: 22px; }
+.h10-dp-month .dow { display: grid; grid-template-columns: repeat(7, 30px); margin-bottom: 4px; }
+.h10-dp-month .dow span { text-align: center; font-size: 11px; font-weight: 600; color: #aeb6c2; }
+.h10-dp-month .days { display: grid; grid-template-columns: repeat(7, 30px); grid-auto-rows: 30px; }
+.h10-dp-month .day { border: none; background: none; font: inherit; font-size: 12.5px; color: #2b3440; cursor: pointer; border-radius: 7px; }
+.h10-dp-month .day:hover { background: #eef5ff; }
+.h10-dp-month .day.out { color: #c2c9d3; }
+.h10-dp-month .day.in { background: #e9f1fd; border-radius: 0; }
+.h10-dp-month .day.start, .h10-dp-month .day.end { background: #1f6fde; color: #fff; font-weight: 700; }
+.h10-dp-presets { width: 170px; border-left: 1px solid #eef1f5; padding: 12px 10px; max-height: 326px; overflow-y: auto; }
+.h10-dp-presets .ph { font-size: 11px; font-weight: 700; color: #aeb6c2; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 8px 8px; }
+.h10-dp-presets button { display: block; width: 100%; text-align: left; border: none; background: none; font: inherit; font-size: 13px; color: #2b3440; padding: 8px 10px; border-radius: 7px; cursor: pointer; }
+.h10-dp-presets button:hover { background: #f1f4f8; color: #1f6fde; }
+
+/* CBN.2f.1 — disable future dates + mark today with a ring (H10 parity) */
+.h10-dp-month .day.dis { color: #d2d8e0; cursor: default; }
+.h10-dp-month .day:disabled:hover { background: none; }
+.h10-dp-month .day.today { box-shadow: inset 0 0 0 1.5px #1f6fde; }
+
+/* CBN.2h.1 — first column: lightbulb + A/M (blue/purple) + SP/SD (navy) badges,
+   frozen on horizontal scroll (checkbox + Campaign stay pinned left) */
+.h10-am-grid td.nm { display: table-cell; }
+.h10-am-grid td.nm .nmw { display: flex; align-items: center; gap: 7px; max-width: 300px; }
+.h10-am-grid td.nm .nmw .bulb { color: #b6bdc8; flex-shrink: 0; }
+.h10-am-grid td.nm .nmw .tg { font-size: 10px; font-weight: 800; color: #fff; border-radius: 4px; padding: 2px 5px; flex-shrink: 0; line-height: 1.25; }
+.h10-am-grid td.nm .nmw .tg[data-t="A"] { background: #4f46e5; }
+.h10-am-grid td.nm .nmw .tg[data-t="M"] { background: #7c3aed; }
+.h10-am-grid td.nm .nmw .pb { font-size: 9px; font-weight: 800; color: #fff; background: #3a4452; border-radius: 4px; padding: 2px 5px; flex-shrink: 0; line-height: 1.35; }
+.h10-am-grid td.nm .nmw .t { color: #1f6fde; font-weight: 600; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-am-grid td.nm .nmw .t:hover { text-decoration: underline; }
+.h10-am-grid td.nm .nmw a.t { text-decoration: none; } /* ad-group name link → drill into ad group page */
+.h10-am-grid td.nm .nmw .mk { font-size: 10px; color: #8a93a1; border: 1px solid #e6e9ee; border-radius: 4px; padding: 1px 5px; flex-shrink: 0; }
+/* CBN.3 G3 — Ad Groups cell affordances (H10): blue layers icon before the name, Target
+   count + open-icon, ACoS value + health dot. Scoped to AdGroups' own classes. */
+.h10-am-grid td.nm .nmw .agi { color: #1f6fde; flex-shrink: 0; }
+.h10-am-grid td.num .h10-tgt { display: inline-flex; align-items: center; gap: 7px; justify-content: flex-end; }
+.h10-am-grid td.num .h10-tgt .og { color: #3a4452; flex-shrink: 0; cursor: pointer; }
+.h10-am-grid td.num .h10-tgt .og:hover { color: #1f6fde; }
+.h10-am-grid td.num .h10-acos { display: inline-flex; align-items: center; gap: 7px; justify-content: flex-end; }
+.h10-am-grid td.num .h10-acos .dot { width: 8px; height: 8px; border-radius: 50%; background: #9aa6b4; flex-shrink: 0; }
+/* CBN.3 G4 — Edit Groups inline-edit (H10): Discard/Apply toolbar + editable cells */
+.h10-am-toolbar .h10-edit-actions { display: inline-flex; align-items: center; gap: 16px; margin-left: 16px; }
+.h10-am-toolbar .h10-discard { border: none; background: none; padding: 0; font: inherit; font-size: 13px; font-weight: 700; color: #1c2530; cursor: pointer; }
+.h10-am-toolbar .h10-discard:hover { color: #1f6fde; }
+.h10-am-btn.primary:disabled { background: #c3d3ea; color: #fff; cursor: default; }
+/* CBN.3 — bulk-action buttons (H10): appear in the toolbar when rows are selected; blue outline */
+.h10-bulkrow { display: inline-flex; align-items: center; gap: 9px; }
+.h10-am-btn.bulk { border-color: #2f6bff; color: #1f6fde; font-weight: 700; }
+.h10-am-btn.bulk:hover { background: #eef5ff; border-color: #1f6fde; }
+.h10-am-btn.bulk:disabled { border-color: #cdd9ef; color: #9bb4e0; background: #fff; cursor: default; }
+.h10-am-grid td.editing { text-align: left; padding-top: 7px; padding-bottom: 7px; }
+/* editor controls — NOT grid-scoped, so they also style the portaled hover-edit popover */
+.h10-edit-in { width: 100%; border: 1px solid #c2c9d3; border-radius: 7px; padding: 6px 9px; font: inherit; font-size: 13px; color: #1c2530; background: #fff; outline: none; }
+.h10-edit-in:focus { border-color: #1f6fde; box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
+.h10-edit-money { display: inline-flex; align-items: stretch; min-width: 104px; border: 1px solid #c2c9d3; border-radius: 7px; overflow: hidden; background: #fff; }
+.h10-edit-money:focus-within { border-color: #1f6fde; box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
+.h10-edit-money .cur { display: flex; align-items: center; padding: 0 9px; background: #f3f5f8; color: #667085; font-size: 12.5px; border-right: 1px solid #dde2e8; }
+.h10-edit-money input { width: 100%; min-width: 0; border: none; outline: none; font: inherit; font-size: 13px; padding: 6px 9px; text-align: left; color: #1c2530; background: transparent; }
+/* per-cell hover-edit: value + ".h10-editpen" pencil (shown on row hover); popover reuses .h10-editpop */
+.h10-am-grid td .h10-ec { display: inline-flex; align-items: center; gap: 6px; }
+.h10-am-grid td.nm .h10-ec { display: flex; }
+.h10-am-grid td.nm .h10-ec .nmw { flex: 1; min-width: 0; }
+.h10-editpop .h10-edit-in, .h10-editpop .h10-edit-money, .h10-editpop .h10-dd { width: 100%; }
+
+.h10-am-grid th.ck, .h10-am-grid td.ck { position: sticky; left: 0; background: #fff; }
+.h10-am-grid th.nm, .h10-am-grid td.nm { position: sticky; left: 40px; background: #fff; width: 300px; min-width: 300px; box-shadow: 1px 0 0 #e6e9ee; }
+.h10-am-grid tbody td.ck, .h10-am-grid tbody td.nm { z-index: 3; }
+.h10-am-grid thead th { z-index: 4; }
+.h10-am-grid thead th.ck, .h10-am-grid thead th.nm { z-index: 6; background: #f7f9fb; }
+.h10-am-grid tbody tr:hover td.ck, .h10-am-grid tbody tr:hover td.nm { background: #f7faff; }
+.h10-am-grid tbody tr.on td.ck, .h10-am-grid tbody tr.on td.nm { background: #eef5ff; }
+
+/* CBN.2h.2 — single Edit-Campaigns toggle + greyed Bulk Actions dropdown */
+.h10-am-toolbar .h10-bulkwrap { position: relative; }
+.h10-am-btn.on { background: #1f6fde; border-color: #1f6fde; color: #fff; }
+.h10-am-btn.on:hover { background: #1a60c4; }
+.h10-am-btn.on svg { color: #fff; }
+.h10-am-btn:disabled { color: #c2c9d3; background: #fff; cursor: default; }
+.h10-am-btn:disabled:hover { background: #fff; }
+.h10-am-btn:disabled svg { color: #d2d8e0; }
+.h10-am-toolbar .h10-bulkwrap .h10-menu { min-width: 168px; }
+.h10-diffrow .dr-nm .to { font-size: 12px; color: #1f6fde; font-weight: 600; }
+
+/* CBN.2h.3 — H10-faithful sizing (taller rows, bigger checkbox + badges/icon, all
+   consistent) + distinct A/M colours sampled from H10 (A #134DA3 blue, M #7400BC purple) */
+.h10-am-grid table { font-size: 13px; }
+.h10-am-grid thead th { padding: 12px 14px; font-size: 11.5px; }
+.h10-am-grid tbody td { padding: 12px 14px; }
+.h10-am-grid input[type="checkbox"] { width: 17px; height: 17px; accent-color: #1f6fde; cursor: pointer; }
+.h10-am-grid th.ck, .h10-am-grid td.ck { width: 46px; }
+.h10-am-grid th.nm, .h10-am-grid td.nm { left: 46px; }
+.h10-am-grid td.nm .nmw { gap: 8px; }
+.h10-am-grid td.nm .nmw .bulb { width: 17px; height: 17px; }
+.h10-am-grid td.nm .nmw .tg { font-size: 11px; font-weight: 800; padding: 3px 6px; line-height: 1.3; min-width: 20px; text-align: center; border-radius: 5px; }
+.h10-am-grid td.nm .nmw .tg[data-t="A"] { background: #134da3; }
+.h10-am-grid td.nm .nmw .tg[data-t="M"] { background: #7400bc; }
+.h10-am-grid td.nm .nmw .pb { font-size: 10px; font-weight: 800; padding: 3px 6px; line-height: 1.45; border-radius: 5px; background: #2f3a4a; }
+.h10-am-grid td.nm .nmw .t { font-size: 13px; }
+.h10-am-grid td.nm .nmw .mk { font-size: 10.5px; padding: 2px 6px; }
+.h10-pill { font-size: 11.5px; padding: 4px 10px; }
+
+/* CBN.2h.4 — first-column balance: centered checkbox, uniform tight gap, SQUARE
+   A/M badges (flex-centered) + consistent-height SP/SD, all the same visual size */
+.h10-am-grid th.ck, .h10-am-grid td.ck { text-align: center; vertical-align: middle; }
+.h10-am-grid input[type="checkbox"] { width: 17px; height: 17px; margin: 0; vertical-align: middle; accent-color: #1f6fde; cursor: pointer; }
+.h10-am-grid td.nm { vertical-align: middle; }
+.h10-am-grid td.nm .nmw { gap: 6px; align-items: center; }
+.h10-am-grid td.nm .nmw .bulb { width: 16px; height: 16px; }
+.h10-am-grid td.nm .nmw .tg { width: 19px; height: 19px; min-width: 19px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; line-height: 1; border-radius: 5px; }
+.h10-am-grid td.nm .nmw .pb { height: 19px; padding: 0 5px; display: inline-flex; align-items: center; justify-content: center; font-size: 9.5px; line-height: 1; border-radius: 5px; }
+.h10-am-grid td.nm .nmw .mk { height: 19px; display: inline-flex; align-items: center; }
+
+/* CBN.2h.5 — "Open in new tab" button revealed on row hover (H10) */
+.h10-am-grid td.nm .nmw .t { min-width: 0; }
+.h10-am-grid td.nm .nmw .h10-open { display: none; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: #fff; background: #1f6fde; border-radius: 6px; padding: 3px 8px; text-decoration: none; margin-left: 2px; flex-shrink: 0; white-space: nowrap; }
+.h10-am-grid tbody tr:hover .nmw .h10-open { display: inline-flex; }
+.h10-am-grid td.nm .nmw .h10-open:hover { background: #1a60c4; }
+
+/* ── CBN.2h.6 — Bulk Actions (H10 two-step checkbox dialog) + selection toolbar ── */
+.h10-modal.bulk { width: 600px; }
+.h10-modal.bulk .h10-modal-b { padding: 0; }
+.h10-bulk { display: flex; flex-direction: column; }
+.h10-bulk-hd, .h10-bulk-row { display: grid; grid-template-columns: 40px 158px 1fr; align-items: center; column-gap: 10px; padding: 0 18px; }
+.h10-bulk-hd { height: 38px; background: #f6f8fa; border-bottom: 1px solid #eef1f5; font-size: 11.5px; font-weight: 700; color: #8a93a1; }
+.h10-bulk-row { min-height: 52px; padding-top: 9px; padding-bottom: 9px; border-bottom: 1px solid #f1f4f8; }
+.h10-bulk-row:last-child { border-bottom: none; }
+.h10-bulk-row .ck { display: flex; align-items: center; }
+.h10-bulk-row .ck input { width: 17px; height: 17px; margin: 0; accent-color: #1f6fde; cursor: pointer; }
+.h10-bulk-row .it { font-size: 13px; font-weight: 600; color: #1c2530; }
+.h10-bulk-row .ac { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.h10-bulk-row .ac .set { font-size: 12.5px; color: #5b6573; flex-shrink: 0; }
+
+.h10-bulk-sel { font: inherit; font-size: 12.5px; font-weight: 600; color: #3a4452; background: #fff; border: 1px solid #d8dde4; border-radius: 8px; padding: 7px 28px 7px 11px; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a93a1' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>"); background-repeat: no-repeat; background-position: right 9px center; }
+.h10-bulk-sel:disabled { color: #aeb6c2; background-color: #f6f8fa; cursor: default; }
+.h10-bulk-inp { display: inline-flex; align-items: center; border: 1px solid #d8dde4; border-radius: 8px; overflow: hidden; background: #fff; height: 34px; flex-shrink: 0; }
+.h10-bulk-inp .pf { padding: 0 9px; align-self: stretch; display: inline-flex; align-items: center; font-size: 12.5px; color: #8a93a1; background: #f6f8fa; border-right: 1px solid #e6e9ee; }
+.h10-bulk-inp input { border: none; outline: none; font: inherit; font-size: 12.5px; padding: 0 10px; width: 86px; background: transparent; color: #1c2530; }
+.h10-bulk-inp.sf .sfx { padding: 0 9px; font-size: 12.5px; color: #8a93a1; background: #f6f8fa; align-self: stretch; display: inline-flex; align-items: center; border-left: 1px solid #e6e9ee; }
+.h10-bulk-inp.sf input { width: 64px; }
+
+.h10-bktoggle { width: 34px; height: 19px; border-radius: 999px; background: #cbd2db; border: none; position: relative; cursor: pointer; padding: 0; transition: background .15s; }
+.h10-bktoggle span { position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 999px; background: #fff; transition: left .15s; }
+.h10-bktoggle.on { background: #1f6fde; }
+.h10-bktoggle.on span { left: 17px; }
+.h10-bktoggle:disabled { opacity: .55; cursor: default; }
+
+.h10-bulk-review { padding: 14px 18px 4px; }
+.h10-bulk-review .rh { font-size: 12px; font-weight: 700; color: #8a93a1; margin-bottom: 8px; }
+.h10-bulk-review .rr { display: grid; grid-template-columns: 158px 1fr; align-items: center; padding: 9px 0; border-bottom: 1px solid #f1f4f8; }
+.h10-bulk-review .rr:last-child { border-bottom: none; }
+.h10-bulk-review .rr .f { font-size: 13px; color: #5b6573; }
+.h10-bulk-review .rr .v { font-size: 13px; font-weight: 600; color: #1c2530; }
+.h10-rv-pill { display: inline-block; font-size: 11.5px; font-weight: 600; color: #1f6fde; background: #eaf2fe; border-radius: 5px; padding: 3px 10px; }
+.h10-bulk-applyto { padding: 12px 18px 4px; font-size: 12px; color: #8a93a1; }
+.h10-am-link.back { color: #5b6573; }
+.h10-am-link.back:hover { color: #1c2530; }
+
+.h10-menu.adjbud { min-width: 236px; padding: 12px; gap: 5px; }
+.h10-menu.adjbud .abh { font-size: 13px; font-weight: 700; color: #1c2530; margin-bottom: 4px; }
+.h10-menu.adjbud .abr { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 500; color: #3a4452; padding: 4px 2px; cursor: pointer; }
+.h10-menu.adjbud .abr input { accent-color: #1f6fde; margin: 0; }
+.h10-menu.adjbud .abrow { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.h10-menu.adjbud .abrow .h10-bulk-inp { flex: 1; height: 32px; }
+.h10-menu.adjbud .abrow .h10-bulk-inp input { width: 100%; }
+.h10-am-btn.sm { padding: 6px 12px; font-size: 12px; }
+.h10-am-toolbar .cnt { white-space: nowrap; }
+.h10-am-toolbar .h10-am-btn { white-space: nowrap; }
+
+/* grid Bid Automation toggle — ON state (reads Campaign.dynamicBidding.bidAutomation) */
+.h10-toggle.on { background: #1f6fde; }
+.h10-toggle.on::after { left: 15px; }
+
+/* ── CBN.2h.7 — H10Select (portaled dropdown) · HoverCard tooltip · badge consistency ── */
+.h10-dd-btn svg { transition: transform .12s; }
+.h10-dd-btn.open { border-color: #1f6fde; box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
+.h10-dd-btn.open svg { transform: rotate(180deg); }
+.h10-dd-back { position: fixed; inset: 0; z-index: 78; background: transparent; border: none; cursor: default; }
+.h10-dd-pop.fixed { position: fixed; z-index: 79; right: auto; }
+.h10-dd-dirty .h10-dd-btn { border-color: #1f6fde; background: #f3f8ff; box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
+.h10-bulk-row .ac .h10-dd-btn { height: 34px; font-size: 12.5px; font-weight: 600; }
+
+.h10-hc-anchor { display: inline-flex; align-items: center; }
+.h10-hc { position: fixed; background: #fff; border: 1px solid #e6e9ee; border-radius: 9px; box-shadow: 0 10px 28px rgba(20, 28, 38, 0.18); padding: 11px 14px; z-index: 90; font-size: 12.5px; line-height: 1.7; white-space: nowrap; pointer-events: none; }
+.h10-hc.above { transform: translateY(-100%); }
+.h10-hc .r1 { color: #3a4452; font-weight: 500; }
+.h10-hc .r .k { color: #1c2530; font-weight: 700; }
+.h10-hc .r .v { color: #5b6573; font-weight: 400; }
+
+.h10-am-grid td.nm .nmw { gap: 7px; align-items: center; }
+.h10-am-grid td.nm .nmw .h10-hc-anchor { gap: 7px; }
+.h10-am-grid td.nm .nmw .bulb { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; min-width: 20px; padding: 0; background: #aab6c2; border-radius: 5px; flex-shrink: 0; }
+.h10-am-grid td.nm .nmw .bulb svg { color: #fff; width: 12px; height: 12px; }
+.h10-am-grid td.nm .nmw .tg { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; min-width: 20px; padding: 0; font-size: 10.5px; font-weight: 800; line-height: 1; color: #fff; border-radius: 5px; flex-shrink: 0; }
+.h10-am-grid td.nm .nmw .tg[data-t="A"] { background: #134da3; }
+.h10-am-grid td.nm .nmw .tg[data-t="M"] { background: #7400bc; }
+.h10-am-grid td.nm .nmw .pb { display: inline-flex; align-items: center; justify-content: center; height: 20px; min-width: 24px; padding: 0 5px; font-size: 10.5px; font-weight: 800; line-height: 1; color: #6b7585; background: #fff; border: 1px solid #cfd6de; border-radius: 5px; flex-shrink: 0; }
+
+/* ── CBN.2h.8 — bulk modal select-all header checkbox + rows-per-page dropdown ── */
+.h10-bulk-hd .ck { display: flex; align-items: center; }
+.h10-bulk-hd .ck input { width: 17px; height: 17px; margin: 0; accent-color: #1f6fde; cursor: pointer; }
+.h10-am-pager .rpp .h10-dd-btn { height: 30px; padding: 5px 10px; font-size: 12.5px; font-weight: 600; }
+
+/* ── CBN.2h.9 — custom rounded checkboxes (H10), ~19px, grid + bulk modal ── */
+.h10-am-grid input[type="checkbox"], .h10-bulk-row .ck input, .h10-bulk-hd .ck input {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  width: 19px; height: 19px; min-width: 19px; margin: 0; padding: 0;
+  border: 1.5px solid #c2cad4; border-radius: 5px; background: #fff;
+  cursor: pointer; position: relative; box-sizing: border-box; vertical-align: middle;
+}
+.h10-am-grid input[type="checkbox"]:hover, .h10-bulk-row .ck input:hover, .h10-bulk-hd .ck input:hover { border-color: #1f6fde; }
+/* BALANCE RULE: the tick is a CENTRED SVG (background-position:center), not a
+   rotated-border ::after with hand-tuned left/top offsets. Those offsets were cut
+   for a 19px box, broke when it grew to 20px, and never truly centred anyway. A
+   centred background glyph is exact and size-independent — never hand-place a tick. */
+.h10-am-grid input[type="checkbox"]:checked, .h10-bulk-row .ck input:checked, .h10-bulk-hd .ck input:checked,
+.h10-am-grid input[type="checkbox"]:indeterminate, .h10-bulk-hd .ck input:indeterminate {
+  background-color: #1f6fde; border-color: #1f6fde;
+  background-repeat: no-repeat; background-position: center; background-size: 13px 13px;
+}
+.h10-am-grid input[type="checkbox"]:checked, .h10-bulk-row .ck input:checked, .h10-bulk-hd .ck input:checked {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12.5l4.5 4.5L19 7'/></svg>");
+}
+.h10-am-grid input[type="checkbox"]:indeterminate, .h10-bulk-hd .ck input:indeterminate {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round'><path d='M6 12h12'/></svg>");
+}
+
+/* ── CBN.2h.10 — uniform square badges = checkbox size (lightbulb · A/M · SP/SD all 20px squares) ── */
+.h10-am-grid input[type="checkbox"], .h10-bulk-row .ck input, .h10-bulk-hd .ck input { width: 20px; height: 20px; min-width: 20px; }
+.h10-am-grid td.nm .nmw .bulb,
+.h10-am-grid td.nm .nmw .tg,
+.h10-am-grid td.nm .nmw .pb {
+  width: 20px; height: 20px; min-width: 20px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 5px; line-height: 1; flex-shrink: 0; box-sizing: border-box;
+}
+.h10-am-grid td.nm .nmw .tg { font-size: 11px; font-weight: 800; }
+.h10-am-grid td.nm .nmw .pb { font-size: 9px; font-weight: 800; letter-spacing: -0.3px; }
+.h10-am-grid td.nm .nmw .bulb svg { width: 12px; height: 12px; }
+
+/* ── CBN.2c.P1P2 — unified 44-col grid + H10 Table-Customization popover ─────── */
+/* Frozen left columns (checkbox + Campaign) during the horizontal scroll. */
+.h10-am-grid th.ck, .h10-am-grid td.ck { position: sticky; left: 0; z-index: 3; background: #fff; }
+.h10-am-grid thead th.ck { z-index: 6; background: #f7f9fb; }
+.h10-am-grid th.nm.fz, .h10-am-grid td.nm.fz { position: sticky; left: 40px; z-index: 3; background: #fff; border-right: 1px solid #d0d5dd; box-shadow: 4px 0 6px -3px rgba(16, 24, 40, 0.08); }
+.h10-am-grid thead th.nm.fz { z-index: 6; background: #f7f9fb; }
+.h10-am-grid tbody tr:hover td.ck, .h10-am-grid tbody tr:hover td.nm.fz { background: #f7faff; }
+.h10-am-grid tbody tr.on td.ck, .h10-am-grid tbody tr.on td.nm.fz { background: #eef5ff; }
+
+/* Status is now a scrolling settings column: pill + dropdown chevron. */
+.h10-statuscell { display: inline-flex; align-items: center; gap: 5px; }
+.h10-statuscell .ch { color: #8a94a6; flex-shrink: 0; cursor: pointer; }
+
+/* Table Customization popover — flat 4-col, live-apply, anchored under Customize. */
+.h10-am-toolbar .h10-custwrap { position: relative; display: inline-flex; }
+.h10-custpop { position: absolute; top: calc(100% + 7px); right: 0; z-index: 79; width: 884px; max-width: 92vw; max-height: 72vh; overflow-y: auto; background: #fff; border: 1px solid #e3e8ef; border-radius: 12px; box-shadow: 0 14px 38px rgba(16, 24, 40, 0.18); padding: 22px 26px; }
+.h10-custpop-h { font-size: 19px; font-weight: 700; color: #1c2530; margin-bottom: 16px; }
+.h10-custpop-colsh { display: flex; flex-direction: column; align-items: flex-start; gap: 13px; margin-bottom: 15px; }
+.h10-custpop-colsh .ti { font-size: 14px; font-weight: 700; color: #1c2530; }
+.h10-custpop-all { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: #3a4452; cursor: pointer; }
+/* column-major fill (H10: read DOWN col 1 = Campaign → Bid Algorithm → …); 44 items / 4 cols = 11 rows */
+.h10-custpop-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(11, auto); grid-auto-flow: column; gap: 14px 22px; }
+.h10-custpop-ck { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: #3a4452; cursor: pointer; min-width: 0; }
+.h10-custpop-ck span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-custpop-ck.locked { color: #98a2b3; cursor: default; }
+.h10-custpop input[type="checkbox"] { appearance: none; -webkit-appearance: none; width: 17px; height: 17px; min-width: 17px; border: 1.5px solid #c3cad6; border-radius: 5px; background: #fff; cursor: pointer; position: relative; margin: 0; }
+.h10-custpop input[type="checkbox"]:checked { background: #2f6bff; border-color: #2f6bff; }
+.h10-custpop input[type="checkbox"]:checked::after { content: ''; position: absolute; left: 5px; top: 2px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.h10-custpop input[type="checkbox"]:indeterminate { background: #2f6bff; border-color: #2f6bff; }
+.h10-custpop input[type="checkbox"]:indeterminate::after { content: ''; position: absolute; left: 3px; top: 7px; width: 9px; height: 2px; background: #fff; }
+.h10-custpop input[type="checkbox"]:disabled { background: #eef1f5; border-color: #dce1e8; cursor: default; }
+.h10-custpop input[type="checkbox"]:disabled:checked { background: #cdd5e0; border-color: #cdd5e0; }
+
+/* ── CBN.2c.P3 — per-row Bidding Strategy / Bid Multiplier modals + Status menu ── */
+/* Bidding Strategy radio cards */
+.h10-radio-card { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border: 1px solid #e3e8ef; border-radius: 10px; margin-bottom: 12px; cursor: pointer; transition: border-color .12s, background .12s; }
+.h10-radio-card:hover { border-color: #c3cdda; }
+.h10-radio-card.on { border-color: #2f6bff; background: #f5f8ff; }
+.h10-radio-card input[type="radio"] { margin-top: 2px; width: 17px; height: 17px; accent-color: #2f6bff; flex-shrink: 0; }
+.h10-radio-card .rc-b { display: flex; flex-direction: column; gap: 4px; }
+.h10-radio-card .rc-t { font-size: 14px; font-weight: 600; color: #1c2530; }
+.h10-radio-card .rc-d { font-size: 12.5px; color: #5b6573; line-height: 1.45; }
+
+/* Bid Multiplier modal */
+.h10-bm-sec { font-size: 13px; font-weight: 700; color: #1c2530; margin-bottom: 10px; }
+.h10-bm-pl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 4px; }
+.h10-bm-f { display: flex; flex-direction: column; gap: 7px; }
+.h10-bm-f .l { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: #3a4452; }
+.h10-bm-f .h10-bulk-inp { width: 100%; height: 38px; }
+.h10-bm-f .h10-bulk-inp input { flex: 1; width: auto; }
+.h10-bm-boost { border-top: 1px solid #eef1f5; padding: 15px 0 4px; margin-top: 14px; }
+.h10-modal.bm { width: 808px; }
+.h10-bm-boost .bt { display: flex; align-items: center; gap: 5px; font-size: 13.5px; font-weight: 600; color: #1c2530; }
+.h10-bm-boost .bd { font-size: 12px; color: #8a93a1; margin: 4px 0 0; }
+.h10-bm-tog { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; color: #3a4452; cursor: pointer; margin-top: 11px; }
+
+/* Status dropdown menu (Archive / Pause / Enable) */
+.h10-statusmenu { z-index: 79; min-width: 152px; background: #fff; border: 1px solid #e3e8ef; border-radius: 9px; box-shadow: 0 10px 28px rgba(16, 24, 40, 0.16); padding: 5px; }
+.h10-statusmenu button { display: block; width: 100%; text-align: left; padding: 9px 12px; border: none; background: none; font: inherit; font-size: 13px; color: #2b3440; border-radius: 6px; cursor: pointer; }
+.h10-statusmenu button:hover { background: #f2f6ff; }
+
+/* inline cell buttons (Status chevron / Bidding Strategy / Bid Multiplier gear) */
+.h10-statuscell .ch { display: inline-flex; align-items: center; border: none; background: none; padding: 0 2px; color: #8a94a6; cursor: pointer; }
+.h10-statuscell .ch:hover { color: #5b6573; }
+.h10-cellbtn { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; font: inherit; color: #2b3440; font-weight: 500; cursor: pointer; padding: 0; }
+.h10-cellbtn .pen { color: #b6bdc8; }
+.h10-cellbtn:hover .pen { color: #1f6fde; }
+.h10-gearbtn { border: none; background: none; padding: 0; cursor: pointer; display: inline-flex; }
+
+/* ── CBN.2c.P3b — Bid Rule algorithm menu + Campaign Rules modal + Min/Max Bid ── */
+/* Bid Rule + Rules cells are now buttons (reset; keep existing inline-flex look) */
+.h10-bidrule { border: none; background: none; font: inherit; padding: 0; cursor: pointer; }
+.h10-bidrule:hover { color: #1f6fde; }
+.h10-rules { border: none; background: none; font: inherit; padding: 0; cursor: pointer; }
+.h10-rules:hover b { color: #1f6fde; }
+
+/* Bid algorithm dropdown (Max Impressions / Max Orders / Target ACOS + descriptions) */
+.h10-algomenu { z-index: 79; width: 322px; background: #fff; border: 1px solid #e3e8ef; border-radius: 10px; box-shadow: 0 12px 30px rgba(16, 24, 40, 0.18); padding: 6px; }
+.h10-algomenu button { display: block; width: 100%; text-align: left; border: none; background: none; font: inherit; padding: 10px 11px; border-radius: 7px; cursor: pointer; }
+.h10-algomenu button:hover { background: #f5f8ff; }
+.h10-algomenu button.on { background: #eef5ff; }
+.h10-algomenu .t { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #1c2530; }
+.h10-algomenu .t svg { color: #8a93a1; }
+.h10-algomenu .d { display: block; font-size: 11.5px; color: #8a93a1; line-height: 1.4; margin-top: 3px; }
+
+/* Campaign Rules modal */
+.h10-rules-top { display: flex; align-items: center; justify-content: space-between; padding: 6px 2px 14px; }
+.h10-rules-top .cnt { font-size: 13px; font-weight: 700; color: #1c2530; }
+.h10-rules-empty { padding: 26px; text-align: center; color: #8a93a1; font-size: 13px; border: 1px dashed #e3e8ef; border-radius: 10px; }
+
+/* Min/Max Bid popover */
+.h10-mmbid { z-index: 79; width: 252px; background: #fff; border: 1px solid #e3e8ef; border-radius: 10px; box-shadow: 0 12px 30px rgba(16, 24, 40, 0.18); padding: 14px; }
+.h10-mmbid .h { font-size: 13px; font-weight: 700; color: #1c2530; margin-bottom: 10px; }
+.h10-mmbid .r { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #3a4452; padding: 5px 0; cursor: pointer; }
+.h10-mmbid .r input { accent-color: #2f6bff; }
+.h10-mmbid .mmrow { display: flex; gap: 8px; margin: 9px 0 4px; }
+.h10-mmbid .mmrow .h10-bulk-inp { flex: 1; height: 32px; }
+.h10-mmbid .mmrow .h10-bulk-inp input { width: 100%; }
+.h10-mmbid .f { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+
+/* ── CBN.2c.P3c — hover-reveal edit pencils (H10: pencil shows on row hover) ──── */
+.h10-edcell { display: inline-flex; align-items: center; gap: 6px; }
+.h10-editpen { opacity: 0; border: none; background: none; padding: 0; cursor: pointer; color: #b6bdc8; display: inline-flex; align-items: center; transition: opacity .1s, color .1s; }
+.h10-editpen:hover { color: #1f6fde; }
+.h10-am-grid tbody tr:hover .h10-editpen, .h10-editpen:focus-visible { opacity: 1; }
+/* Status chevron is hover-revealed too; gears + toggles stay visible always */
+.h10-statuscell .ch { opacity: 0; transition: opacity .1s, color .1s; }
+.h10-am-grid tbody tr:hover .h10-statuscell .ch, .h10-statuscell .ch:focus-visible { opacity: 1; }
+
+/* single-value edit popover (Target ACoS %, Daily Budget €) */
+.h10-editpop { z-index: 79; width: 210px; background: #fff; border: 1px solid #e3e8ef; border-radius: 10px; box-shadow: 0 12px 30px rgba(16, 24, 40, 0.18); padding: 14px; }
+.h10-editpop .h { font-size: 13px; font-weight: 700; color: #1c2530; margin-bottom: 10px; }
+.h10-editpop .h10-bulk-inp { width: 100%; height: 34px; }
+.h10-editpop .h10-bulk-inp input { flex: 1; width: auto; }
+.h10-editpop .f { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+
+/* ── CBN.2c.P4 — header polish (sort arrows, column highlight, tooltips) + suffix-clip fix ── */
+/* suffix-clip fix: let flex inputs shrink so the % / € suffix is never cropped */
+.h10-bulk-inp input { min-width: 0; }
+/* sort arrows — H10 stacked-chevron icon (grey default, dark when sorted) */
+.h10-am-grid th .sortable .sa { color: #c2c9d3; flex-shrink: 0; }
+.h10-am-grid th .sortable .sa.on { color: #5b6573; }
+.h10-am-grid th .sortable:hover .sa { color: #8a93a1; }
+.h10-am-grid th .sortable .hl { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+/* column hover highlight (hover a header → whole column shades) */
+.h10-am-grid td.colhi { background: #f4f5f7; } /* column body — light grey */
+.h10-am-grid thead th.colhi { background: #e6e8ec; } /* column header — slightly darker grey */
+
+/* ── CBN.2c.P5 — column drag-and-drop reorder ── */
+.h10-dragchip { position: fixed; top: 0; left: 0; z-index: 95; opacity: 0; pointer-events: none; background: #2f6bff; color: #fff; font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 7px; box-shadow: 0 8px 20px rgba(16, 24, 40, 0.28); white-space: nowrap; will-change: transform; }
+.h10-dropline { position: fixed; top: 0; left: 0; width: 2px; z-index: 94; opacity: 0; pointer-events: none; background: #2f6bff; box-shadow: 0 0 0 1px rgba(47, 107, 255, 0.25); will-change: transform; }
+.h10-am-grid thead th[data-item] { cursor: grab; }
+.h10-am-grid thead th[data-item]:active { cursor: grabbing; }
+.h10-am-grid thead th.dragging, .h10-am-grid td.dragging { opacity: 0.4; }
+.h10-am-grid thead th.dragging { box-shadow: inset 0 0 0 2px #2f6bff; }
+
+/* ── CBN.2c.P6 — drop-line marker dot + Customize reset link ── */
+.h10-dropline::before { content: ''; position: absolute; top: -1px; left: -4px; width: 10px; height: 10px; border-radius: 50%; background: #2f6bff; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.3); }
+.h10-custpop-reset { border: none; background: none; padding: 0; font: inherit; font-size: 12.5px; font-weight: 600; color: #1f6fde; cursor: pointer; }
+.h10-custpop-reset:hover { text-decoration: underline; }
+.h10-custpop-h { display: flex; align-items: center; justify-content: space-between; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CBN.3.1 — Campaign Details page (drill-in from the Ad Manager grid). A "Back to
+   Ad Manager" link + targeting-type badge + campaign title, a right-side action
+   cluster (reusing .h10-hbtn / .h10-hsel / .h10-menu), and the H10 tab bar. New
+   .h10-cd-* namespace — never restyles the shared grid classes.
+   ════════════════════════════════════════════════════════════════════════════ */
+.h10-cd { display: flex; flex-direction: column; min-height: 0; }
+
+/* ── header ── */
+.h10-cd-hdr { margin-bottom: 16px; }
+.h10-cd-back { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; color: #1f6fde; text-decoration: none; margin-bottom: 12px; }
+.h10-cd-back:hover { text-decoration: underline; }
+.h10-cd-back svg { stroke-width: 2.4; }
+.h10-cd-titlerow { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.h10-cd-titlecol { min-width: 0; }
+.h10-cd-titlecol .lbl { font-size: 12.5px; color: #6b7585; margin-bottom: 5px; }
+.h10-cd-titlecol h1 { display: flex; align-items: center; gap: 11px; margin: 0; font-size: 25px; font-weight: 700; color: #1b2230; line-height: 1.15; min-width: 0; }
+.h10-cd-titlecol h1 .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-cd-badge { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 7px; background: #0048b0; color: #fff; font-size: 16px; font-weight: 700; line-height: 1; }
+.h10-cd-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+
+/* ── tab bar ── */
+.h10-cd-tabs { display: flex; align-items: stretch; gap: 28px; border-bottom: 1px solid #e3e7ec; margin-bottom: 20px; }
+.h10-cd-tab { appearance: none; -webkit-appearance: none; border: 0; background: transparent; font-family: inherit; font-size: 14.5px; font-weight: 600; color: #3f4754; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; padding: 0 0 11px; margin-bottom: -1px; border-bottom: 2.5px solid transparent; white-space: nowrap; }
+.h10-cd-tab:hover { color: #1b2230; }
+.h10-cd-tab.on { color: #1f6fde; border-bottom-color: #1f6fde; }
+.h10-cd-new { font-size: 9.5px; font-weight: 800; letter-spacing: 0.4px; color: #1f6fde; background: #e7f0fd; border-radius: 5px; padding: 2px 6px; line-height: 1; }
+
+/* ── bodies (3.1 placeholders; replaced by the Details form + shared grid in 3.3–3.6) ── */
+.h10-cd-body { min-height: 340px; }
+.h10-cd-empty { text-align: center; padding: 70px 20px; color: #6b7585; }
+.h10-cd-empty h3 { font-size: 17px; font-weight: 700; color: #1b2230; margin: 0 0 6px; }
+.h10-cd-empty p { font-size: 13.5px; margin: 0; }
+.h10-cd-error { padding: 22px; border: 1px solid #f0d4d4; background: #fdf5f5; border-radius: 10px; color: #9a3434; font-size: 13.5px; }
+.h10-cd-error button { margin-left: 8px; color: #1f6fde; background: none; border: 0; font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; }
+.h10-cd-skel { display: flex; flex-direction: column; gap: 14px; padding: 6px 0; }
+.h10-cd-skel .sk-line, .h10-cd-skel .sk-block { border-radius: 6px; background: linear-gradient(90deg, #eef1f4 25%, #e4e8ee 37%, #eef1f4 63%); background-size: 400% 100%; animation: h10cdsk 1.4s ease infinite; }
+.h10-cd-skel .sk-line { height: 14px; }
+.h10-cd-skel .sk-line.w40 { width: 40%; }
+.h10-cd-skel .sk-line.w70 { width: 70%; }
+.h10-cd-skel .sk-block { height: 260px; border-radius: 12px; }
+@keyframes h10cdsk { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CBN.3.2 — AdsDataGrid shared-grid additions. Only the pinned Total row is new;
+   everything else reuses the existing .h10-am-* grid/toolbar/pager classes so the
+   detail-tab grids are pixel-identical to the Ad Manager. Migrating Ad Manager onto
+   AdsDataGrid (CBN.3.7) needs no further CSS.
+   ════════════════════════════════════════════════════════════════════════════ */
+.h10-am-grid tr.h10-am-total td { background: #f7f9fb; font-weight: 700; color: #1c2530; border-bottom: 1px solid #e6e9ee; }
+.h10-am-grid tr.h10-am-total td.nm.fz { background: #f7f9fb; }
+.h10-am-grid tr.h10-am-total td.num { color: #1c2530; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CBN.3.3 — Details settings tab: left sub-nav + scrolling sections + cards + the
+   sticky Discard/Save footer (H10 match). New .h10-cd-* form namespace.
+   ════════════════════════════════════════════════════════════════════════════ */
+.h10-cd-details { position: relative; padding-bottom: 64px; }
+.h10-cd-cols { display: flex; gap: 34px; align-items: flex-start; }
+.h10-cd-subnav { position: sticky; top: 4px; flex: 0 0 200px; display: flex; flex-direction: column; gap: 2px; }
+.h10-cd-subnav button { appearance: none; border: 0; background: transparent; text-align: left; font: inherit; font-size: 13.5px; font-weight: 600; color: #5b6573; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+.h10-cd-subnav button:hover { background: #f1f4f8; color: #1b2230; }
+.h10-cd-subnav button.on { color: #1f6fde; background: #eef4fd; }
+.h10-cd-form { flex: 1; min-width: 0; max-width: 760px; }
+
+.h10-cd-sec { scroll-margin-top: 16px; margin-bottom: 30px; }
+.h10-cd-sec h2 { font-size: 17px; font-weight: 700; color: #1b2230; margin: 0 0 4px; }
+.h10-cd-sec h2.mt { margin-top: 26px; }
+.h10-cd-sec .sub { font-size: 13px; color: #6b7585; margin: 0 0 14px; }
+
+.h10-cd-card { border: 1px solid #d4dae4; border-radius: 12px; background: #fff; padding: 20px; }
+.h10-cd-card.pad { padding: 4px 20px; }
+.h10-cd-card.mt { margin-top: 14px; }
+
+.h10-cd-field { margin-bottom: 16px; }
+.h10-cd-field:last-child { margin-bottom: 0; }
+.h10-cd-field.s { max-width: 220px; }
+.h10-cd-field > label { display: block; font-size: 12.5px; font-weight: 600; color: #37495b; margin-bottom: 6px; }
+.h10-cd-field > label i { color: #c11208; font-style: normal; }
+.h10-cd-field input[type=text], .h10-cd-field input[type=number], .h10-cd-fakeselect { width: 100%; box-sizing: border-box; height: 38px; border: 1px solid #6d839f; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 14px; color: #1c2530; background: #fff; }
+.h10-cd-field input[readonly] { background: #f6f8fa; color: #5b6573; cursor: default; }
+.h10-cd-fakeselect { display: flex; align-items: center; justify-content: space-between; color: #98a2b3; cursor: not-allowed; }
+
+.h10-cd-money, .h10-cd-pct, .h10-cd-date { display: inline-flex; align-items: center; height: 38px; border: 1px solid #6d839f; border-radius: 8px; background: #fff; overflow: hidden; box-sizing: border-box; }
+.h10-cd-money { max-width: 150px; }
+.h10-cd-money .pf { padding: 0 7px 0 11px; color: #6b7585; font-size: 14px; }
+/* These [type] qualifiers raise specificity to beat `.h10-cd-field input[type=number]`
+   (0,2,1) so the input INSIDE the money/date wrapper never draws its own border —
+   the wrapper draws the single border. Without this the field looked like a box-in-box. */
+.h10-cd-money input[type=text], .h10-cd-money input[type=number], .h10-cd-pct input[type=text], .h10-cd-pct input[type=number], .h10-cd-date input[type=text], .h10-cd-date input[type=number] { border: 0; border-radius: 0; outline: 0; font: inherit; font-size: 14px; width: 100%; min-width: 0; background: transparent; color: #1c2530; }
+.h10-cd-money input { padding: 0 11px 0 0; }
+.h10-cd-pct { max-width: 130px; padding-right: 5px; }
+.h10-cd-pct input { padding: 0 0 0 11px; }
+/* % suffix in a shaded inset box on the right (mirrors the € prefix box). */
+.h10-cd-pct .sf { align-self: center; display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 28px; margin: 0; border-radius: 6px; background: #f1f3f5; color: #5b6573; font-size: 14px; flex-shrink: 0; }
+.h10-cd-date { padding-left: 11px; gap: 7px; max-width: 200px; }
+.h10-cd-date input { padding: 0 11px 0 0; }
+.h10-cd-date svg { color: #98a2b3; flex-shrink: 0; }
+.h10-cd-date.disabled, .h10-cd-money.disabled { background: #f6f8fa; }
+.h10-cd-money.disabled .pf, .h10-cd-money input:disabled, .h10-cd-date input:disabled { color: #b3bcc7; -webkit-text-fill-color: #b3bcc7; }
+.h10-cd-daterow { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.h10-cd-daterow .h10-cd-field { margin-bottom: 0; }
+/* The toggle has no label above it; give it the input's height so its knob centers
+   on the date-input band (the row is bottom-aligned) instead of sitting ~8px low. */
+.h10-cd-daterow .h10-cd-switch { height: 38px; }
+
+/* H10 outlined-pill toggle: OFF = white interior + #6d839f border + #6d839f knob (left);
+   ON = filled bright-blue #316ee0 track + white knob (right). Sampled off the clean PNG. */
+.h10-cd-switch { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; color: #34414f; cursor: pointer; user-select: none; }
+.h10-cd-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+/* Knob is a flow flex-child centered by align-items:center — ONE consistent box model,
+   no percentage/border arithmetic. A magic-number `top` (even `top:50%;translateY(-50%)`)
+   drifts the knob ~0.5px high here because the 1.5px border makes `50%` resolve against a
+   19px base while layout uses 18px — a recurring user-caught defect. Slide kept via translateX. */
+.h10-cd-switch .tk { display: inline-flex; align-items: center; width: 38px; height: 21px; border-radius: 999px; background: #fff; border: 1.5px solid #6d839f; padding-left: 3px; box-sizing: border-box; flex-shrink: 0; transition: background .15s, border-color .15s; }
+.h10-cd-switch .tk::after { content: ''; width: 13px; height: 13px; border-radius: 50%; background: #6d839f; transition: transform .15s, background .15s; }
+.h10-cd-switch input:checked + .tk { background: #316ee0; border-color: #316ee0; }
+.h10-cd-switch input:checked + .tk::after { transform: translateX(16px); background: #fff; }
+.h10-cd-switch input:focus-visible + .tk { box-shadow: 0 0 0 3px rgba(49,110,224,0.3); }
+
+.h10-cd-radio { display: flex; gap: 11px; padding: 14px 0; border-bottom: 1px solid #eef1f4; cursor: pointer; }
+.h10-cd-radio:last-child { border-bottom: 0; }
+.h10-cd-radio input { margin: 2px 0 0; accent-color: #1f6fde; width: 16px; height: 16px; flex-shrink: 0; }
+.h10-cd-radio .rc { display: flex; flex-direction: column; gap: 3px; }
+.h10-cd-radio .rc .t { font-size: 13.5px; font-weight: 600; color: #1c2530; }
+.h10-cd-radio .rc .d { font-size: 12.5px; color: #6b7585; line-height: 1.45; }
+
+.h10-cd-banner { display: flex; align-items: center; gap: 8px; background: #fdf6dd; border: 1px solid #f3e6a8; color: #7a6312; font-size: 12.5px; border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; }
+.h10-cd-banner svg { flex-shrink: 0; }
+
+.h10-cd-pllbl { font-size: 12.5px; font-weight: 600; color: #4a5462; margin: 12px 0 10px; }
+.h10-cd-placements { display: flex; gap: 16px; flex-wrap: wrap; }
+.h10-cd-placements .pl { flex: 1; min-width: 150px; }
+.h10-cd-placements .pl label { display: flex; align-items: center; gap: 4px; font-size: 12.5px; color: #4a5462; margin-bottom: 6px; }
+/* H10 Bid-Multiplier boosts: STACKED (title → subtext → toggle below), no divider lines. */
+.h10-cd-boost { display: block; padding: 22px 0 0; }
+.h10-cd-boost:last-child { padding-bottom: 2px; }
+.h10-cd-boost .bl { display: flex; flex-direction: column; gap: 4px; }
+.h10-cd-boost .bl b { font-size: 14px; font-weight: 700; color: #1c2530; display: inline-flex; align-items: center; gap: 6px; }
+.h10-cd-boost .bl span { font-size: 12.5px; color: #5b6573; }
+.h10-cd-boost .h10-cd-switch { margin-top: 12px; }
+/* Bid Multiplier: one well-padded container; placement inputs are fixed-width (not stretched). */
+#bid-multiplier .h10-cd-card { padding: 22px 24px; }
+#bid-multiplier .h10-cd-pllbl { font-size: 14px; font-weight: 700; color: #1c2530; margin: 0 0 14px; }
+#bid-multiplier .h10-cd-placements { gap: 24px; }
+#bid-multiplier .h10-cd-placements .pl { flex: 0 0 200px; min-width: 0; }
+#bid-multiplier .h10-cd-pct { width: 200px; max-width: 200px; }
+
+.h10-cd-algos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.h10-cd-algo { text-align: left; border: 1.5px solid #e3e7ec; border-radius: 12px; background: #fff; padding: 14px; cursor: pointer; display: flex; flex-direction: column; gap: 7px; font: inherit; }
+.h10-cd-algo:hover { border-color: #cdd5df; }
+.h10-cd-algo.on { border-color: #1f6fde; box-shadow: inset 0 0 0 1px #1f6fde; background: #f7faff; }
+.h10-cd-algo .hd { display: flex; align-items: center; justify-content: space-between; }
+.h10-cd-algo .hd .k { font-size: 11px; font-weight: 700; color: #8a93a1; }
+.h10-cd-algo .hd .ic { color: #98a2b3; }
+.h10-cd-algo.on .hd .ic { color: #1f6fde; }
+.h10-cd-algo .ti { font-size: 14.5px; font-weight: 700; color: #1b2230; }
+.h10-cd-algo .d { font-size: 12px; color: #6b7585; line-height: 1.45; }
+.h10-cd-none { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 12px; border: 1.5px solid #e3e7ec; border-radius: 12px; background: #fff; padding: 13px 14px; font: inherit; font-size: 14px; font-weight: 600; color: #5b6573; cursor: pointer; }
+.h10-cd-none svg { color: #98a2b3; }
+.h10-cd-none.on { border-color: #1f6fde; box-shadow: inset 0 0 0 1px #1f6fde; color: #1f6fde; }
+.h10-cd-none.on svg { color: #1f6fde; }
+/* Bid Strategy: the 4 algorithm cards + None + Min/Max ALL live in ONE container (H10),
+   with Min/Max partitioned off by a divider line. None keeps its bordered box + circled icon. */
+.h10-cd-bidalgo { border: 1px solid #d4dae4; border-radius: 12px; background: #fff; padding: 18px; }
+.h10-cd-bidalgo .h10-cd-none { margin-top: 14px; }
+.h10-cd-none .ic { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: #e9f1fd; color: #2f6fed; flex-shrink: 0; }
+.h10-cd-none .ic svg { color: inherit; }
+.h10-cd-none.on .ic { background: #1f6fde; color: #fff; }
+.h10-cd-bidalgo-sep { height: 1px; background: #e7ebf1; margin: 22px 0; }
+.h10-cd-bidalgo > h2 { margin-top: 0; }
+.h10-cd-bidalgo .h10-cd-acosrev { margin-top: 16px; }
+.h10-cd-minmax { display: flex; gap: 14px; }
+
+.h10-cd-prodcount { font-size: 13px; font-weight: 600; color: #1c2530; padding: 14px 18px; border-bottom: 1px solid #eef1f4; }
+.h10-cd-prodempty, .h10-cd-muted { padding: 18px; color: #8a93a1; font-size: 13px; }
+.h10-cd-products { list-style: none; margin: 0; padding: 0; }
+.h10-cd-products li { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid #f1f3f6; }
+.h10-cd-products li.hd { padding: 8px 18px; background: #f7f9fb; font-size: 11px; font-weight: 700; color: #8a93a1; text-transform: uppercase; letter-spacing: 0.03em; }
+.h10-cd-products li:last-child { border-bottom: 0; }
+.h10-cd-products li img, .h10-cd-products li .ph { width: 38px; height: 38px; border-radius: 6px; object-fit: cover; background: #eef1f4; flex-shrink: 0; border: 1px solid #e6e9ee; }
+.h10-cd-products li .pi { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.h10-cd-products li .pi .t { font-size: 13px; color: #1c2530; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-cd-products li .pi .m { font-size: 11.5px; color: #8a93a1; }
+
+/* right padding clears the persistent "Ask AI" widget (bottom-right), matching the Ad
+   Manager edit-footer fix (commit 7e49af7e) so the Save button never sits under it. */
+.h10-cd-footer { position: sticky; bottom: 0; display: flex; align-items: center; gap: 12px; margin: 0 -30px -26px; padding: 13px 150px 13px 30px; background: #fff; border-top: 1px solid #e3e7ec; box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.06); z-index: 20; }
+.h10-cd-footer .msg { font-size: 12.5px; color: #6b7585; }
+
+/* ── CBN.3.5 — product cell (Ads tab first column): thumb + title + ASIN/SKU ── */
+.h10-pcell { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.h10-pcell img, .h10-pcell .ph { width: 30px; height: 30px; border-radius: 5px; object-fit: cover; flex-shrink: 0; background: #eef1f4; border: 1px solid #e6e9ee; }
+.h10-pcell .x { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.h10-pcell .x .t { color: #1f6fde; font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 360px; }
+.h10-pcell .x .m { color: #8a93a1; font-size: 11px; }
+.h10-cd-modalerr { margin: 8px 6px 2px; padding: 8px 11px; background: #fdf5f5; border: 1px solid #f0d4d4; border-radius: 8px; color: #9a3434; font-size: 12.5px; }
+/* CBN.3 — Search Terms "Add as Keyword/Negative" modal: selected-term chips + success line */
+.h10-st-chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 92px; overflow-y: auto; margin: 0 6px 14px; }
+.h10-st-chips .chip { display: inline-flex; align-items: center; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; color: #344054; background: #eef1f5; border-radius: 6px; padding: 4px 9px; }
+.h10-st-chips .chip.more { color: #8a93a1; background: transparent; }
+.h10-st-ok { margin: 8px 6px 2px; padding: 8px 11px; background: #eaf6ee; border: 1px solid #c9e6d3; border-radius: 8px; color: #167a48; font-size: 12.5px; }
+
+/* CBN.3 — "Add Negative Keywords to Campaign" modal (two-panel staging; H10 match) */
+.h10-modal.neg { width: 1040px; max-width: calc(100vw - 48px); }
+.h10-modal.neg .h10-modal-h { padding: 20px 28px 14px; }
+.h10-modal.neg .h10-modal-h b { font-size: 19px; }
+.h10-modal.neg .h10-modal-b { padding: 18px 28px; }
+.h10-modal.neg .h10-modal-f { padding: 16px 28px; }
+.h10-neg-camp { border: 1px solid #e3e8ef; border-radius: 10px; padding: 12px 16px; margin-bottom: 22px; }
+.h10-neg-camp .lbl { display: block; font-size: 13px; color: #6b7585; margin-bottom: 8px; }
+.h10-neg-camp .val { display: inline-flex; align-items: center; gap: 11px; font-size: 14px; font-weight: 700; color: #1c2530; }
+.h10-neg-camp .val .h10-cd-badge { width: 26px; height: 26px; font-size: 13px; border-radius: 6px; }
+.h10-neg-cols { display: flex; gap: 26px; align-items: flex-start; }
+.h10-neg-left { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.h10-neg-right { flex: 1; min-width: 0; border: 1px solid #e3e8ef; border-radius: 10px; overflow: hidden; }
+.h10-neg-mt { display: flex; align-items: center; gap: 18px; margin-bottom: 12px; }
+.h10-neg-mt .lbl { font-size: 14px; font-weight: 700; color: #1c2530; }
+.h10-neg-mt label { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #3a4452; cursor: pointer; }
+.h10-neg-mt label.on { color: #1c2530; }
+.h10-neg-mt input[type=radio] { width: 16px; height: 16px; accent-color: #1f6fde; cursor: pointer; }
+.h10-neg-ta { width: 100%; box-sizing: border-box; min-height: 300px; resize: vertical; border: 1px solid #c2c9d3; border-radius: 9px; padding: 12px 14px; font: inherit; font-size: 14px; color: #1c2530; outline: none; }
+.h10-neg-ta:focus { border-color: #1f6fde; box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
+.h10-neg-add { align-self: center; margin-top: 16px; border: none; border-radius: 8px; background: #dbe4f1; color: #5b6c84; font: inherit; font-size: 14px; font-weight: 700; padding: 11px 26px; cursor: pointer; }
+.h10-neg-add:not(:disabled):hover { background: #c8d6ea; }
+.h10-neg-add:disabled { background: #eef1f5; color: #b6bdc8; cursor: default; }
+.h10-neg-rh { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; }
+.h10-neg-rh > span { font-size: 15px; color: #1c2530; }
+.h10-neg-rmall { display: inline-flex; align-items: center; gap: 7px; border: none; background: #eef1f5; border-radius: 8px; padding: 8px 13px; font: inherit; font-size: 13px; font-weight: 700; color: #3a4452; cursor: pointer; }
+.h10-neg-rmall:disabled { color: #b6bdc8; cursor: default; }
+.h10-neg-rmall:not(:disabled):hover { background: #e3e8ef; }
+.h10-neg-rmall svg { color: #667085; }
+.h10-neg-lh { display: flex; align-items: center; gap: 6px; padding: 9px 16px; background: #f7f9fb; border-top: 1px solid #eef1f5; border-bottom: 1px solid #eef1f5; font-size: 12.5px; font-weight: 700; color: #475467; }
+.h10-neg-lh svg { color: #c2c9d3; }
+.h10-neg-list { max-height: 320px; min-height: 200px; overflow-y: auto; }
+.h10-neg-empty { display: flex; align-items: center; justify-content: center; height: 200px; color: #8a93a1; font-size: 14px; }
+.h10-neg-row { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-bottom: 1px solid #f1f4f8; font-size: 13px; }
+.h10-neg-row .kw { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #283441; }
+.h10-neg-row .mt { font-size: 11.5px; color: #6b7585; flex-shrink: 0; }
+.h10-neg-row .rm { border: none; background: none; color: #b6bdc8; cursor: pointer; padding: 3px; border-radius: 5px; display: inline-flex; flex-shrink: 0; }
+.h10-neg-row .rm:hover { background: #fdecec; color: #d6453d; }
+
+/* ── Campaign-detail pixel-match pass (ad-manager-campaign-detail.mov) ── */
+
+/* Foundation: the H10 form/cards are ~1010px wide (not 760), with medium-width
+   (~430px) text inputs left-aligned inside, and an editable-looking (white) name. */
+.h10-cd-form { max-width: 1010px; }
+.h10-cd-card .h10-cd-field { max-width: 430px; }
+.h10-cd-card .h10-cd-field.s { max-width: 220px; }
+.h10-cd-field input[readonly] { background: #fff; color: #1c2530; }
+.h10-cd-sec h2 { font-size: 18px; }
+.h10-cd-sec .sub { font-size: 13.5px; color: #5b6573; }
+.h10-cd-card { padding: 22px 24px; }
+
+/* Bid-algorithm cards: Adtomic atom mark on the kind label + the top-right icon circle */
+.h10-cd-algo .hd .k { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: #8a93a1; }
+.h10-cd-algo .hd .k .adt { flex-shrink: 0; display: block; }
+.h10-cd-algo .hd .ic { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: #e9f1fd; color: #2f6fed; flex-shrink: 0; }
+.h10-cd-algo.on .hd .ic { background: #1f6fde; color: #fff; }
+
+/* Target-ACoS info icon sits inline in the label */
+.h10-cd-field > label .info { display: inline-flex; vertical-align: middle; margin-left: 3px; color: #98a2b3; }
+
+/* pct boxes need a definite width so the number input doesn't collapse the
+   "0 - 900" placeholder under inline-flex shrink-wrap (empty placement + reveal) */
+.h10-cd-pct { width: 130px; }
+/* no number spin arrows (H10 inputs are plain — keeps the % / € suffix flush) */
+.h10-cd-pct input::-webkit-outer-spin-button, .h10-cd-pct input::-webkit-inner-spin-button,
+.h10-cd-money input::-webkit-outer-spin-button, .h10-cd-money input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.h10-cd-pct input[type=number], .h10-cd-money input[type=number] { -moz-appearance: textfield; }
+/* Amazon-Business-Bid-Boost reveal % (shown when the toggle is on) */
+.h10-cd-boostrev { padding: 2px 0 12px; }
+.h10-cd-boostrev .h10-cd-pct { width: 150px; max-width: 150px; }
+
+/* Min/Max enable checkbox + boxed currency prefix */
+.h10-cd-minmax { display: flex; gap: 12px; align-items: center; }
+.h10-cd-check { display: inline-flex; align-items: center; cursor: pointer; flex-shrink: 0; }
+.h10-cd-check input { position: absolute; opacity: 0; width: 0; height: 0; }
+.h10-cd-check .bx { width: 20px; height: 20px; border-radius: 5px; border: 1.5px solid #c2cbd6; background: #fff; display: inline-flex; align-items: center; justify-content: center; color: transparent; transition: background .12s, border-color .12s; }
+.h10-cd-check input:checked + .bx { background: #1f6fde; border-color: #1f6fde; color: #fff; }
+.h10-cd-check input:focus-visible + .bx { box-shadow: 0 0 0 3px rgba(31,111,222,.3); }
+/* Boxed currency: an inset rounded square (#f1f3f5) holding the glyph, then the value —
+   matches the calendar icon-box on the date fields (shared affordance). */
+.h10-cd-money.boxed { max-width: 120px; padding-left: 5px; }
+.h10-cd-money.boxed .pf { align-self: center; display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 28px; margin: 0 8px 0 0; padding: 0; border: 0; border-radius: 6px; background: #f1f3f5; color: #5b6573; font-size: 14px; }
+.h10-cd-money.boxed input { padding: 0 12px 0 0; text-align: right; }
+.h10-cd-money.boxed.disabled { background: #eef1f4; }
+.h10-cd-money.boxed.disabled .pf { background: #e1e6ec; color: #b3bcc7; }
+
+/* End-Date trigger (button-styled) + the custom calendar popover */
+.h10-cd-date.btn { width: 200px; max-width: 200px; cursor: pointer; text-align: left; font: inherit; color: inherit; -webkit-appearance: none; appearance: none; }
+.h10-cd-date.btn .v { font-size: 14px; color: #1c2530; }
+.h10-cd-date.btn .ph { font-size: 14px; color: #98a2b3; }
+.h10-cd-date.btn:not(.disabled):hover { border-color: #cdd5df; }
+.h10-cd-date.btn.open { border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.15); }
+/* Never Expire ON → End Date disabled with the same blue-grey fill as Start Date (H10). */
+.h10-cd-date.btn.disabled { background: #dae0e7; border-color: #dae0e7; cursor: not-allowed; }
+.h10-cd-date.btn.disabled .ib { background: #a9b7c7; }
+.h10-cd-date.btn.disabled .ib svg { color: #f1f5f9; }
+.h10-cd-date.btn.disabled .ph, .h10-cd-date.btn.disabled .v { color: #93a0b0; }
+.h10-cd-cal { position: fixed; z-index: 1000; width: 300px; box-sizing: border-box; background: #fff; border: 1px solid #e3e7ec; border-radius: 12px; box-shadow: 0 12px 34px rgba(16,24,40,.17); padding: 14px; }
+.h10-cd-cal .cal-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.h10-cd-cal .cal-t { font-size: 14px; font-weight: 700; color: #28415f; }
+.h10-cd-cal .cal-nav { width: 30px; height: 30px; border-radius: 8px; border: 0; background: transparent; color: #3a5170; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.h10-cd-cal .cal-nav:hover { background: #eef2f7; }
+.h10-cd-cal .cal-wd { display: grid; grid-template-columns: repeat(7, 1fr); margin-bottom: 2px; }
+.h10-cd-cal .cal-wd span { text-align: center; font-size: 12px; color: #8a93a1; padding: 4px 0; }
+.h10-cd-cal .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.h10-cd-cal .cal-d { aspect-ratio: 1 / 1; border: 0; background: transparent; font: inherit; font-size: 13px; font-weight: 700; color: #28415f; border-radius: 8px; cursor: pointer; }
+.h10-cd-cal .cal-d:hover { background: #eef2f7; }
+.h10-cd-cal .cal-d.out { color: #9fb2cb; font-weight: 600; }
+.h10-cd-cal .cal-d.sel { background: #1f6fde; color: #fff; }
+
+/* Audience Bid Modifier picker (two side-by-side cards) */
+.h10-cd-aud { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding-top: 16px; align-items: start; }
+.h10-cd-aud .aud-left { border: 1px solid #e3e7ec; border-radius: 10px; background: #fff; padding: 14px 14px 12px; }
+.h10-cd-aud .aud-tabs { display: flex; gap: 22px; border-bottom: 1px solid #eef1f4; margin-bottom: 12px; }
+.h10-cd-aud .aud-tabs button { border: 0; background: transparent; font: inherit; font-size: 13.5px; font-weight: 600; color: #6b7585; padding: 0 0 10px; cursor: pointer; position: relative; }
+.h10-cd-aud .aud-tabs button.on { color: #1f6fde; }
+.h10-cd-aud .aud-tabs button.on::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: #1f6fde; border-radius: 2px; }
+.h10-cd-aud .aud-search { display: flex; align-items: center; gap: 8px; border: 1px solid #d8dde4; border-radius: 8px; padding: 0 11px; height: 36px; margin-bottom: 6px; }
+.h10-cd-aud .aud-search input { flex: 1; border: 0; outline: 0; font: inherit; font-size: 13px; background: transparent; color: #1c2530; min-width: 0; }
+.h10-cd-aud .aud-search svg { color: #98a2b3; flex-shrink: 0; }
+.h10-cd-aud .aud-list { max-height: 230px; overflow-y: auto; }
+.h10-cd-aud .aud-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f1f3f6; }
+.h10-cd-aud .aud-item:last-child { border-bottom: 0; }
+.h10-cd-aud .aud-item .ai-tx { min-width: 0; }
+.h10-cd-aud .aud-item .ai-tx b { display: block; font-size: 13px; font-weight: 600; color: #1c2530; margin-bottom: 3px; }
+.h10-cd-aud .aud-item .ai-tx span { font-size: 12px; color: #6b7585; line-height: 1.45; }
+.h10-cd-aud .aud-add { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; border: 1px solid #b9d0f3; background: #fff; color: #1f6fde; font: inherit; font-size: 12.5px; font-weight: 600; border-radius: 7px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+.h10-cd-aud .aud-add:hover:not(:disabled) { background: #f3f8ff; }
+.h10-cd-aud .aud-add.added { color: #1f9d57; border-color: #bce6cd; background: #f3fbf6; }
+.h10-cd-aud .aud-add:disabled { cursor: default; }
+.h10-cd-aud .aud-none { padding: 28px 8px; text-align: center; color: #8a93a1; font-size: 12.5px; }
+.h10-cd-aud .aud-pager { display: flex; align-items: center; gap: 8px; padding-top: 12px; }
+.h10-cd-aud .pg-nav { width: 26px; height: 26px; border: 1px solid #e3e7ec; border-radius: 6px; background: #fff; color: #6b7585; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.h10-cd-aud .pg-nav:disabled { color: #c8d0db; cursor: default; }
+.h10-cd-aud .pg-n { width: 26px; height: 26px; border-radius: 6px; background: #28415f; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 600; }
+.h10-cd-aud .pg-rpp { margin-left: auto; font-size: 12.5px; color: #6b7585; display: inline-flex; align-items: center; gap: 7px; }
+.h10-cd-aud .rpp-sel { display: inline-flex; align-items: center; gap: 3px; border: 1px solid #d8dde4; border-radius: 6px; padding: 3px 8px; color: #1c2530; }
+.h10-cd-aud .aud-right { border: 1px solid #e3e7ec; border-radius: 10px; background: #fff; overflow: hidden; }
+.h10-cd-aud .ar-head { padding: 13px 16px; font-size: 13.5px; font-weight: 600; color: #1c2530; }
+.h10-cd-aud .ar-thead, .h10-cd-aud .ar-row { display: grid; grid-template-columns: 1fr 56px 116px 28px; align-items: center; gap: 10px; padding: 0 16px; }
+.h10-cd-aud .ar-thead { background: #f7f9fb; height: 34px; font-size: 11px; font-weight: 700; color: #8a93a1; text-transform: uppercase; letter-spacing: .03em; }
+.h10-cd-aud .ar-row { padding-top: 11px; padding-bottom: 11px; border-bottom: 1px solid #f1f3f6; }
+.h10-cd-aud .ar-rows .ar-row:last-child { border-bottom: 0; }
+.h10-cd-aud .arn { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.h10-cd-aud .arn b { font-size: 12.5px; font-weight: 600; color: #1c2530; }
+.h10-cd-aud .arn span { font-size: 11px; color: #8a93a1; }
+.h10-cd-aud .arsize { font-size: 12.5px; color: #6b7585; }
+.h10-cd-aud .h10-cd-pct.sm { width: 100px; max-width: 100px; height: 32px; }
+.h10-cd-aud .ar-x { border: 0; background: transparent; color: #98a2b3; cursor: pointer; display: inline-flex; padding: 0; }
+.h10-cd-aud .ar-x:hover { color: #d4493f; }
+.h10-cd-aud .ar-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 34px 16px 44px; color: #6b7585; font-size: 13px; }
+.h10-cd-aud .ar-art { display: block; }
+/* From AMC tab: Select-a-Type + search row, then the "No data / create instance" state */
+.h10-cd-aud .aud-amc-row { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
+.h10-cd-aud .aud-type { flex: 0 0 148px; display: inline-flex; align-items: center; justify-content: space-between; gap: 6px; height: 36px; border: 1px solid #d8dde4; border-radius: 8px; background: #fff; padding: 0 11px; font: inherit; font-size: 13px; color: #98a2b3; cursor: pointer; }
+.h10-cd-aud .aud-type svg { color: #98a2b3; flex-shrink: 0; }
+.h10-cd-aud .aud-amc-row .aud-search { flex: 1; margin-bottom: 0; }
+.h10-cd-aud .aud-amc-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; padding: 30px 16px 34px; text-align: center; }
+.h10-cd-aud .aud-amc-empty b { font-size: 13px; font-weight: 700; color: #1c2530; margin-top: 2px; }
+.h10-cd-aud .aud-amc-empty span { font-size: 12px; color: #6b7585; max-width: 300px; line-height: 1.45; }
+.h10-cd-aud .aud-instance { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; background: #1f6fde; color: #fff; border: 0; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; padding: 8px 16px; cursor: pointer; }
+.h10-cd-aud .aud-instance:hover { background: #1a5fc0; }
+
+/* Product Selection: amazon badge on the thumb + ASIN copy affordance */
+.h10-cd-products li .thumb { position: relative; flex-shrink: 0; line-height: 0; }
+.h10-cd-products li .thumb .amz { position: absolute; left: -4px; bottom: -4px; width: 17px; height: 17px; border-radius: 4px; background: #232f3e; color: #fff; font-size: 11px; font-weight: 700; line-height: 17px; text-align: center; border: 1.5px solid #fff; }
+.h10-cd-products li .pi .t { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4; }
+.h10-cd-products li .pi .m { display: inline-flex; align-items: center; gap: 6px; }
+.h10-cd-products li .pi .m .asin { color: #8a93a1; }
+.h10-cd-products li .pi .m .cp { border: 0; background: transparent; color: #9aa4b2; cursor: pointer; display: inline-flex; padding: 1px; border-radius: 4px; }
+
+/* ── CBN.3.3b — Campaign Details section pixel pass (campaign-detail 18.29 recording) ──
+   Sampled at the recording's native 3456×2168. Slate-blue input borders (#5d7798) are
+   applied above. Here: the date fields wrap their calendar glyph in an inset rounded
+   square (#f1f3f5) — the same affordance as the boxed currency prefix — Start Date is a
+   filled read-only field (#d7dee8 / #9aafc1 icon box), and Portfolio reads as an enabled
+   select with a real chevron rather than the ▾ glyph. */
+.h10-cd-date { padding-left: 5px; gap: 0; }
+.h10-cd-date .ib { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; flex-shrink: 0; margin-right: 8px; border-radius: 6px; background: #f1f3f5; }
+.h10-cd-date .ib svg { color: #46627f; }
+.h10-cd-date input { padding: 0; }
+.h10-cd-date.btn { padding-left: 5px; }
+.h10-cd-date.btn .v, .h10-cd-date.btn .ph { font-size: 14px; }
+/* Start Date — read-only filled field (H10 disabled look; no live edit, Amazon-set) */
+.h10-cd-date.ro { background: #dae0e7; border-color: #dae0e7; cursor: default; }
+.h10-cd-date.ro .ib { background: #a9b7c7; }
+.h10-cd-date.ro .ib svg { color: #f1f5f9; }
+.h10-cd-date.ro input { color: #6a7787; -webkit-text-fill-color: #6a7787; background: transparent; }
+/* Portfolio picker — functional select: trigger button (reuses .h10-cd-fakeselect's
+   border/height) + an absolutely-positioned dropdown menu. */
+.h10-cd-pfsel { position: relative; }
+.h10-cd-pfsel > .h10-cd-fakeselect { width: 100%; cursor: pointer; -webkit-appearance: none; appearance: none; font: inherit; font-size: 14px; text-align: left; padding-right: 11px; gap: 8px; }
+.h10-cd-fakeselect .pl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9eaebd; }
+.h10-cd-fakeselect.has .pl { color: #1c2530; }
+.h10-cd-fakeselect .cv { display: inline-flex; align-items: center; color: #26323f; flex-shrink: 0; }
+.h10-cd-pfsel > .h10-cd-fakeselect:hover { border-color: #5d7798; }
+.h10-cd-pfsel.open > .h10-cd-fakeselect { border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+.h10-cd-pfmenu { position: absolute; top: calc(100% + 5px); left: 0; right: 0; z-index: 30; background: #fff; border: 1px solid #d2dae4; border-radius: 9px; box-shadow: 0 12px 30px rgba(16,24,40,.16); padding: 5px; max-height: 264px; overflow-y: auto; }
+.h10-cd-pfmenu .pfopt { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; border: 0; background: transparent; font: inherit; font-size: 13.5px; color: #1c2530; padding: 9px 11px; border-radius: 6px; cursor: pointer; }
+.h10-cd-pfmenu .pfopt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-cd-pfmenu .pfopt:hover { background: #f1f4f8; }
+.h10-cd-pfmenu .pfopt.on { color: #1f6fde; font-weight: 600; }
+.h10-cd-pfmenu .pfopt svg { color: #1f6fde; flex-shrink: 0; }
+.h10-cd-pfmenu .pfmsg { padding: 10px 11px; font-size: 13px; color: #8a93a1; }
+/* Bid Rule combobox (shown when Custom is selected): ~430px field, search box + empty state. */
+.h10-cd-bidrule { max-width: 430px; }
+.h10-cd-pfmenu .h10-cd-pfsearch { display: flex; align-items: center; gap: 8px; padding: 9px 11px; margin: -5px -5px 4px; border-bottom: 1px solid #eef1f4; }
+.h10-cd-pfmenu .h10-cd-pfsearch input { flex: 1; min-width: 0; border: 0; outline: 0; font: inherit; font-size: 13.5px; background: transparent; color: #1c2530; }
+.h10-cd-pfmenu .h10-cd-pfsearch svg { color: #98a2b3; flex-shrink: 0; }
+.h10-cd-pfmenu .h10-cd-pfempty { padding: 16px 11px; text-align: center; font-size: 13.5px; color: #5b6573; }
+
+/* ── "Add Products to Ad Group" modal — 2-pane (search/list | staged-added), on the shared
+   .h10-modal-* shell. Mirrors H10's add-products dialog. ── */
+.h10-modal.apm { max-width: 1000px; width: 94vw; }
+.h10-apm { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
+.h10-apm .apm-left, .h10-apm .apm-right { border: 1px solid #e3e7ec; border-radius: 10px; background: #fff; overflow: hidden; display: flex; flex-direction: column; min-height: 360px; }
+.h10-apm .apm-tabs { display: flex; gap: 22px; border-bottom: 1px solid #eef1f4; padding: 0 14px; }
+.h10-apm .apm-tabs button { border: 0; background: transparent; font: inherit; font-size: 13.5px; font-weight: 600; color: #6b7585; padding: 12px 0 10px; cursor: pointer; position: relative; }
+.h10-apm .apm-tabs button.on { color: #1f6fde; }
+.h10-apm .apm-tabs button.on::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: #1f6fde; border-radius: 2px; }
+.h10-apm .apm-srow { padding: 12px 14px 0; }
+.h10-apm .apm-search { display: flex; align-items: center; gap: 8px; border: 1px solid #d8dde4; border-radius: 8px; padding: 0 11px; height: 36px; }
+.h10-apm .apm-search svg { color: #98a2b3; flex-shrink: 0; }
+.h10-apm .apm-search input { flex: 1; border: 0; outline: 0; font: inherit; font-size: 13px; background: transparent; min-width: 0; color: #1c2530; }
+/* Count line + Add All share one row. Add All is a NEUTRAL slate pill w/ circled-plus — the
+   per-row Add is the blue action (verified vs reference: Add All #3a4452, Add #1f6fde). */
+.h10-apm .apm-count { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; font-size: 12.5px; color: #4a5462; }
+.h10-apm .apm-addall { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e3e7ec; background: #f4f6f8; color: #3a4452; font: inherit; font-size: 12.5px; font-weight: 600; border-radius: 7px; padding: 7px 12px; cursor: pointer; white-space: nowrap; }
+.h10-apm .apm-addall:hover { background: #eef1f4; }
+.h10-apm .apm-addall:disabled { color: #b3bcc7; background: #f7f8fa; cursor: default; }
+.h10-apm .apm-addall svg { color: #6b7585; }
+.h10-apm .apm-list { flex: 1; overflow-y: auto; max-height: 340px; }
+.h10-apm .apm-item, .h10-apm .apm-rrow { display: flex; align-items: center; gap: 11px; padding: 9px 14px; border-top: 1px solid #f1f3f6; }
+.h10-apm .apm-thumb { position: relative; flex-shrink: 0; width: 38px; height: 38px; }
+.h10-apm .apm-thumb img, .h10-apm .apm-thumb .ph { width: 38px; height: 38px; border-radius: 6px; object-fit: cover; background: #eef1f4; border: 1px solid #e6e9ee; display: block; }
+.h10-apm .apm-az { position: absolute; left: -4px; bottom: -4px; width: 16px; height: 16px; border-radius: 5px; background: #232f3e; border: 1.5px solid #fff; display: inline-flex; align-items: center; justify-content: center; }
+.h10-apm .ai { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.h10-apm .ai .t { font-size: 12.5px; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-apm .ai .m { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: #98a2b3; min-width: 0; }
+.h10-apm .ai .m .asin { color: #6b7585; }
+.h10-apm .ai .m .sep { color: #c2c9d3; }
+.h10-apm .ai .m .sku { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-apm .apm-cp { border: 0; background: transparent; color: #aeb6c2; cursor: pointer; display: inline-flex; padding: 1px; border-radius: 4px; flex-shrink: 0; }
+.h10-apm .apm-cp:hover { color: #1f6fde; background: #eef4ff; }
+.h10-apm .apm-add { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: #1f6fde; font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 4px; cursor: pointer; }
+.h10-apm .apm-add:hover { color: #1558b0; }
+.h10-apm .apm-add.added { color: #1f9d57; cursor: default; }
+.h10-apm .apm-none { padding: 40px 14px; text-align: center; color: #8a93a1; font-size: 12.5px; }
+.h10-apm .apm-enter { display: flex; flex-direction: column; gap: 10px; padding: 14px; flex: 1; }
+.h10-apm .apm-enter textarea { flex: 1; min-height: 240px; border: 1px solid #d8dde4; border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 13px; resize: vertical; outline: 0; color: #1c2530; }
+.h10-apm .apm-enter textarea:focus { border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+.h10-apm .apm-enterbtn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid #e3e7ec; background: #f4f6f8; color: #3a4452; font: inherit; font-size: 13px; font-weight: 600; border-radius: 8px; padding: 9px 14px; cursor: pointer; }
+.h10-apm .apm-enterbtn:hover { background: #eef1f4; }
+.h10-apm .apm-enterbtn:disabled { color: #b3bcc7; background: #f7f8fa; cursor: default; }
+.h10-apm .apm-enterbtn svg { color: #8a93a1; }
+.h10-apm .apm-rh { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; font-size: 13.5px; font-weight: 600; color: #1c2530; border-bottom: 1px solid #eef1f4; }
+.h10-apm .apm-removeall { display: inline-flex; align-items: center; gap: 6px; border: 0; background: #f1f3f5; color: #3a4452; font: inherit; font-size: 12.5px; font-weight: 600; border-radius: 7px; padding: 7px 12px; cursor: pointer; }
+.h10-apm .apm-removeall:hover { background: #e7eaee; }
+.h10-apm .apm-removeall:disabled { color: #c8d0db; background: #f6f7f9; cursor: default; }
+.h10-apm .apm-thead { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; background: #f4f6f8; font-size: 11px; font-weight: 700; color: #8a93a1; text-transform: uppercase; letter-spacing: .03em; }
+.h10-apm .apm-thead .sv { display: inline-flex; align-items: center; gap: 7px; text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 700; color: #3a4452; }
+.h10-apm .apm-thead .sv .new { font-size: 10px; font-weight: 700; color: #1f6fde; background: #d8e8fd; border-radius: 999px; padding: 2px 8px; font-style: normal; letter-spacing: 0; }
+.h10-apm .apm-rempty { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 220px; color: #2b3440; font-size: 15px; }
+.h10-apm .apm-rrows { flex: 1; overflow-y: auto; max-height: 340px; }
+.h10-apm .apm-rrow .sv { width: 110px; text-align: center; color: #b3bcc7; font-size: 12px; flex-shrink: 0; }
+.h10-apm .apm-x { border: 0; background: transparent; color: #98a2b3; cursor: pointer; display: inline-flex; padding: 2px; flex-shrink: 0; }
+.h10-apm .apm-x:hover { color: #d4493f; }
+
+/* "Add Negative Target ASINs" reuses .h10-apm: a Campaign|Ad-group context strip atop, a
+   single paste textarea (no search), and an ASIN-column staged list. */
+.h10-modal.apm .apm-ctx { display: flex; gap: 48px; padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid #eef1f4; }
+.h10-modal.apm .apm-ctx-c { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.h10-modal.apm .apm-ctx-c .lbl { font-size: 12.5px; color: #6b7585; }
+.h10-modal.apm .apm-ctx-c .val { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; color: #1c2530; }
+.h10-modal.apm .apm-ctx-c .val svg { color: #1c2530; flex-shrink: 0; }
+.h10-apm .apm-thead .apm-sort { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; font: inherit; font-size: 11px; font-weight: 700; color: #8a93a1; text-transform: uppercase; letter-spacing: .03em; cursor: pointer; padding: 0; }
+.h10-apm .apm-thead .apm-sort svg { color: #c2c9d3; }
+.h10-apm .apm-thead .apm-sort.asc svg, .h10-apm .apm-thead .apm-sort.desc svg { color: #1f6fde; }
+.h10-apm .apm-rrow.asin .ai .t { font-size: 13px; font-weight: 500; color: #1c2530; letter-spacing: .01em; }
+.h10-apm .apm-azc { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; background: #232f3e; flex-shrink: 0; }
+/* "Add Negative Keywords to Ad Group" — match-type selector + per-row match-type label. */
+.h10-apm .apm-mt { display: flex; align-items: center; gap: 16px; padding: 14px 14px 0; flex-wrap: wrap; }
+.h10-apm .apm-mt .lbl { font-size: 12.5px; font-weight: 600; color: #37495b; }
+.h10-apm .apm-mt label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #4a5462; cursor: pointer; }
+.h10-apm .apm-mt label.on { color: #1c2530; font-weight: 600; }
+.h10-apm .apm-mt input[type=radio], .h10-apm .apm-mt input[type=checkbox] { accent-color: #1f6fde; width: 15px; height: 15px; cursor: pointer; margin: 0; }
+.h10-apm .apm-enter.no-pad-top { padding-top: 10px; }
+
+/* "Add Keywords & Targets" — controls row (match types + bid), a bid box, and a shared
+   grid template so the staged header + rows (Target | Match Type | Bid | ✕) align exactly. */
+.h10-apm .apm-ctrl { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 14px 0; flex-wrap: wrap; }
+.h10-apm .apm-ctrl .apm-mt { padding: 0; }
+.h10-apm .apm-bid { display: inline-flex; align-items: center; gap: 8px; }
+.h10-apm .apm-bid .lbl { font-size: 12.5px; font-weight: 600; color: #37495b; }
+.h10-apm .apm-bidbox { display: inline-flex; align-items: stretch; border: 1px solid #d8dde4; border-radius: 7px; height: 32px; overflow: hidden; }
+.h10-apm .apm-bidbox .cur { display: inline-flex; align-items: center; padding: 0 8px; color: #6b7585; font-size: 13px; background: #f1f3f5; border-right: 1px solid #e3e7ec; }
+.h10-apm .apm-bidbox input { width: 64px; border: 0; outline: 0; font: inherit; font-size: 13px; padding: 0 8px; color: #1c2530; }
+.h10-apm .apm-thead.tgt, .h10-apm .apm-rrow.tgt { display: grid; grid-template-columns: 1fr 92px 70px 26px; align-items: center; gap: 10px; }
+.h10-apm .apm-rrow.tgt .ai .t { font-size: 13px; color: #1c2530; }
+.h10-apm .apm-tcol { font-size: 12px; color: #6b7585; white-space: nowrap; }
+.h10-apm .apm-bcol { font-size: 12.5px; color: #1c2530; font-weight: 600; white-space: nowrap; }
+.h10-apm .apm-rrow.kw .ai .t { font-size: 13px; color: #1c2530; }
+.h10-apm .apm-rrow.kw .apm-mtcol { margin-left: auto; flex-shrink: 0; font-size: 12px; color: #6b7585; white-space: nowrap; }
+.h10-cd-products li .pi .m .cp:hover { color: #1f6fde; background: #eef4ff; }
+
+/* ── CBN — Campaign Builder (type chooser), Helium 10 Ads match ─────────────── */
+.h10-cb { max-width: 1600px; }
+.h10-cb-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.h10-cb-h { display: flex; align-items: center; gap: 10px; }
+.h10-cb-h .t { font-size: 26px; font-weight: 800; color: #1c2530; letter-spacing: -0.02em; }
+.h10-cb-h .beta { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: #6b7a8d; background: #e9eef5; border-radius: 10px; padding: 3px 8px; }
+.h10-cb-exit { font-size: 13px; font-weight: 600; color: #3a4452; background: #fff; border: 1px solid #d8dde4; border-radius: 8px; padding: 8px 16px; text-decoration: none; }
+.h10-cb-exit:hover { background: #f1f4f8; }
+.h10-cb-panel { background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; padding: 26px 28px 30px; }
+.h10-cb-sec { margin-bottom: 26px; }
+.h10-cb-sec:last-child { margin-bottom: 0; }
+.h10-cb-sec h3 { font-size: 17px; font-weight: 700; color: #1c2530; margin: 0 0 4px; letter-spacing: -0.01em; }
+.h10-cb-sec > p { font-size: 13px; color: #5b6573; margin: 0 0 14px; }
+.h10-cb-profile { position: relative; display: inline-block; }
+.h10-cb-profile-btn { display: inline-flex; align-items: center; gap: 9px; min-width: 240px; background: #fff; border: 1px solid #d8dde4; border-radius: 8px; padding: 8px 11px; font: inherit; font-size: 13.5px; font-weight: 500; color: #1c2530; cursor: pointer; }
+.h10-cb-profile-btn:hover { border-color: #c2c9d3; }
+.h10-cb-profile.open .h10-cb-profile-btn { border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+.h10-cb-profile-btn .amz { flex-shrink: 0; display: inline-flex; }
+.h10-cb-profile-btn .nm { flex: 1; text-align: left; white-space: nowrap; }
+.h10-cb-profile-btn svg { color: #8a93a1; flex-shrink: 0; }
+.h10-cb-profile-pop { position: absolute; z-index: 40; top: calc(100% + 5px); left: 0; min-width: 100%; background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; box-shadow: 0 12px 30px rgba(20,28,38,.16); padding: 5px; }
+.h10-cb-profile-pop .opt { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; border: none; background: none; font: inherit; font-size: 13.5px; color: #2b3440; padding: 8px 9px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
+.h10-cb-profile-pop .opt:hover { background: #f4f7fb; }
+.h10-cb-profile-pop .opt.on { background: #eef5ff; color: #1f6fde; font-weight: 600; }
+.h10-cb-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.h10-cb-card { display: flex; flex-direction: column; align-items: center; text-align: center; background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; padding: 26px 22px 24px; cursor: pointer; font: inherit; transition: border-color .12s, box-shadow .12s, background .12s; }
+.h10-cb-card:hover { border-color: #1f6fde; background: #f6faff; box-shadow: 0 6px 18px rgba(31,111,222,.10); }
+.h10-cb-ic { width: 64px; height: 64px; border-radius: 50%; background: #e9f4fe; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+.h10-cb-ttl { font-size: 17px; font-weight: 700; color: #1a2330; margin-bottom: 11px; }
+.h10-cb-bf { font-size: 13px; color: #5b6573; margin-bottom: 12px; }
+.h10-cb-bf b { color: #1c2530; font-weight: 700; }
+.h10-cb-desc { font-size: 13px; line-height: 1.5; color: #5b6573; }
+@media (max-width: 1180px) { .h10-cb-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ── CBN — AI Advertising · New Product Goal (AI Goal builder), Helium 10 match ── */
+.h10-aig { position: fixed; inset: 0; z-index: 120; background: #f6f8fa; display: flex; flex-direction: column; font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1c2530; }
+.h10-aig-top { flex-shrink: 0; height: 52px; background: #fff; border-bottom: 1px solid #e6e9ee; display: flex; align-items: center; gap: 12px; padding: 0 16px; }
+.h10-aig-top .x { display: inline-flex; border: none; background: none; color: #5b6573; cursor: pointer; padding: 6px; border-radius: 7px; }
+.h10-aig-top .x:hover { background: #f1f4f8; color: #1c2530; }
+.h10-aig-top .brand { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: #1c2530; }
+.h10-aig-top .sep { width: 1px; height: 22px; background: #e0e4ea; }
+.h10-aig-top .crumb { font-size: 13px; color: #5b6573; }
+.h10-aig-top .grow { flex: 1; }
+.h10-aig-top .learn { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; font: inherit; font-size: 13px; font-weight: 600; color: #3a4452; cursor: pointer; padding: 7px 10px; border-radius: 8px; }
+.h10-aig-top .learn:hover { background: #f1f4f8; }
+.h10-aig-top .learn svg { color: #5b6573; }
+.h10-aig-top .launch { border: none; background: #e7eaee; color: #9aa3af; font: inherit; font-size: 13px; font-weight: 600; padding: 7px 18px; border-radius: 8px; cursor: not-allowed; }
+
+.h10-aig-body { flex: 1; min-height: 0; overflow-y: auto; }
+.h10-aig-wrap { max-width: 1040px; margin: 0 auto; padding: 26px 24px 80px; }
+.h10-aig-sec { margin-bottom: 24px; }
+.h10-aig-sec > h2 { font-size: 17px; font-weight: 700; color: #1c2530; letter-spacing: -0.01em; margin: 0 0 12px; }
+.h10-aig-card { background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; padding: 22px 24px; }
+.h10-aig-sub { margin-bottom: 24px; }
+.h10-aig-sub:last-child { margin-bottom: 0; }
+.h10-aig-sub > h3 { font-size: 14.5px; font-weight: 700; color: #1c2530; margin: 0 0 4px; }
+.h10-aig-sub > p { font-size: 12.5px; color: #5b6573; margin: 0 0 14px; }
+
+/* Goal Name field */
+.h10-aig-field { display: flex; flex-direction: column; gap: 6px; max-width: 430px; }
+.h10-aig-field .lbl { font-size: 13px; font-weight: 600; color: #37495b; }
+.h10-aig-field .req { color: #e0322a; font-style: normal; }
+.h10-aig-field input { border: 1px solid #d8dde4; border-radius: 8px; padding: 9px 12px; font: inherit; font-size: 13.5px; color: #1c2530; }
+.h10-aig-field input::placeholder { color: #9eaebd; }
+.h10-aig-field input:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+
+/* Select AI Target cards */
+.h10-aig-targets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.h10-aig-target { display: flex; flex-direction: column; align-items: center; text-align: center; background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; padding: 22px 20px 20px; cursor: pointer; font: inherit; transition: border-color .12s, box-shadow .12s, background .12s; }
+.h10-aig-target:hover { border-color: #b9d2f7; }
+.h10-aig-target.on { border-color: #1f6fde; background: #f4f8ff; box-shadow: 0 0 0 1px #1f6fde inset; }
+.h10-aig-target .ic { width: 52px; height: 52px; border-radius: 50%; background: #e9f4fe; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+.h10-aig-target .ttl { font-size: 15px; font-weight: 700; color: #1a2330; margin-bottom: 9px; }
+.h10-aig-target .bf { font-size: 12.5px; color: #5b6573; margin-bottom: 11px; }
+.h10-aig-target .bf b { color: #1c2530; font-weight: 700; }
+.h10-aig-target .desc { font-size: 12.5px; line-height: 1.5; color: #5b6573; }
+
+/* Budget Mode cards */
+.h10-aig-budget { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.h10-aig-bcard { display: flex; flex-direction: column; align-items: flex-start; text-align: left; background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; padding: 16px 18px; cursor: pointer; font: inherit; transition: border-color .12s, box-shadow .12s, background .12s; }
+.h10-aig-bcard:hover { border-color: #b9d2f7; }
+.h10-aig-bcard.on { border-color: #1f6fde; background: #f4f8ff; box-shadow: 0 0 0 1px #1f6fde inset; }
+.h10-aig-bcard .bh { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+.h10-aig-bcard .bic { width: 28px; height: 28px; border-radius: 50%; background: #e9f4fe; display: inline-flex; align-items: center; justify-content: center; color: #1f6fde; flex-shrink: 0; }
+.h10-aig-bcard.on .bic { background: #1f6fde; color: #fff; }
+.h10-aig-bcard .bt { font-size: 14.5px; font-weight: 700; color: #1c2530; }
+.h10-aig-bcard .bd { font-size: 12.5px; line-height: 1.5; color: #5b6573; margin-bottom: 12px; }
+.h10-aig-bcard .ba { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #8a93a1; margin-bottom: 12px; }
+.h10-aig-bcard .ba svg { color: #98a2b3; }
+.h10-aig-bcard .bchips { display: flex; flex-wrap: wrap; gap: 8px; }
+.h10-aig-bcard .chip { font-size: 11.5px; font-weight: 600; color: #8a93a1; background: #f1f3f5; border-radius: 12px; padding: 4px 11px; }
+.h10-aig-bcard .chip.on { color: #1f6fde; background: #e7f0fd; }
+
+/* Total Budget */
+.h10-aig-money { display: inline-flex; align-items: stretch; width: 220px; border: 1px solid #d8dde4; border-radius: 8px; overflow: hidden; }
+.h10-aig-money:focus-within { border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+.h10-aig-money .pf { display: flex; align-items: center; padding: 0 11px; background: #f3f5f8; border-right: 1px solid #dde2e8; color: #667085; font-size: 13px; }
+.h10-aig-money input { flex: 1; min-width: 0; border: none; outline: none; padding: 9px 11px; font: inherit; font-size: 13.5px; color: #1c2530; }
+.h10-aig-money input::placeholder { color: #9eaebd; }
+
+/* Product Selection */
+.h10-aig-pselbar { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+.h10-aig-pselbar .cnt { font-size: 13px; font-weight: 600; color: #1c2530; }
+.h10-aig-pselbar .grow { flex: 1; }
+.h10-aig-psel { border: 1px solid #e6e9ee; border-radius: 10px; overflow: hidden; }
+.h10-aig-psel .psel-head { display: flex; align-items: center; background: #f7f9fb; border-bottom: 1px solid #e6e9ee; padding: 10px 16px; font-size: 11.5px; font-weight: 700; color: #475467; }
+.h10-aig-psel .psel-head .c-prod { flex: 1; }
+.h10-aig-psel .psel-head .c-lqs { width: 120px; }
+.psel-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 36px 20px; text-align: center; }
+.psel-empty .t { font-size: 13px; color: #8a93a1; }
+.h10-aig-emptyart { width: 76px; height: 60px; }
+
+/* Keywords */
+.h10-aig-sub > h3.dot { display: flex; align-items: center; gap: 8px; }
+.h10-aig-sub > h3.dot::before { content: ''; width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0; }
+.h10-aig-sub > h3.dot.green::before { background: #16a34a; }
+.h10-aig-sub > h3.dot.purple::before { background: #7c3aed; }
+.h10-aig-kw-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 28px 20px; text-align: center; }
+.h10-aig-kw-empty .t { font-size: 12.5px; color: #8a93a1; max-width: 360px; }
+.h10-aig-kwgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.h10-aig-kwgrid .kw-enter textarea { width: 100%; min-height: 132px; resize: vertical; border: 1px solid #d8dde4; border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 13px; color: #1c2530; }
+.h10-aig-kwgrid .kw-enter textarea::placeholder { color: #9eaebd; }
+.h10-aig-kwgrid .kw-enter textarea:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+.h10-aig-kwgrid .kw-added { border: 1px solid #e6e9ee; border-radius: 8px; display: flex; flex-direction: column; }
+.h10-aig-kwgrid .kw-added-h { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-bottom: 1px solid #eef1f5; font-size: 12.5px; font-weight: 600; color: #1c2530; }
+.h10-aig-kwgrid .kw-added-h .rm { display: inline-flex; align-items: center; gap: 5px; border: none; background: none; color: #1f6fde; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.h10-aig-kwgrid .kw-added-h .rm:disabled { color: #c2c9d3; cursor: default; }
+.h10-aig-kwgrid .kw-added-col { padding: 8px 12px; background: #f7f9fb; border-bottom: 1px solid #eef1f5; font-size: 11.5px; font-weight: 700; color: #475467; }
+.h10-aig-kwgrid .kw-added-empty { display: flex; align-items: center; justify-content: center; padding: 26px; }
+.h10-aig-kwgrid .kw-added-list { list-style: none; margin: 0; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
+.h10-aig-kwgrid .kw-added-list li { display: flex; align-items: center; justify-content: space-between; padding: 7px 9px; border-radius: 6px; font-size: 13px; color: #283441; }
+.h10-aig-kwgrid .kw-added-list li:hover { background: #f7faff; }
+.h10-aig-kwgrid .kw-added-list li button { border: none; background: none; color: #b6bdc8; cursor: pointer; display: inline-flex; padding: 2px; }
+.h10-aig-kwgrid .kw-added-list li button:hover { color: #d4493f; }
+
+/* Advanced Targeting */
+.h10-aig-card.adv .adv-note { font-size: 12.5px; line-height: 1.55; color: #5b6573; margin: 0; }
+
+/* Add Products modal */
+.h10-modal.aig-add { width: 860px; max-width: 94vw; }
+.aig-add-search { display: flex; align-items: center; gap: 8px; border: 1px solid #d8dde4; border-radius: 8px; padding: 8px 11px; color: #8a93a1; margin-bottom: 14px; }
+.aig-add-search input { flex: 1; border: none; outline: none; font: inherit; font-size: 13px; background: transparent; color: #1c2530; }
+.aig-add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.aig-add-list, .aig-add-sel { border: 1px solid #e6e9ee; border-radius: 8px; min-height: 280px; }
+.aig-add-selh { padding: 9px 12px; background: #f7f9fb; border-bottom: 1px solid #eef1f5; font-size: 12.5px; font-weight: 700; color: #475467; }
+
+/* ── CBN — AI Advertising landing (launcher for the AI Goal builder) ─────────── */
+.h10-aia { max-width: 1240px; }
+.h10-aia-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
+.h10-aia-h { display: flex; align-items: center; gap: 14px; }
+.h10-aia-h .ic { width: 48px; height: 48px; border-radius: 12px; background: #e9f4fe; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.h10-aia-h h1 { font-size: 24px; font-weight: 800; color: #1c2530; letter-spacing: -0.02em; margin: 0; }
+.h10-aia-h p { font-size: 13.5px; color: #5b6573; margin: 4px 0 0; }
+.h10-aia-empty { background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; padding: 60px 28px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.h10-aia-empty .ic { width: 84px; height: 84px; border-radius: 50%; background: #e9f4fe; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+.h10-aia-empty h2 { font-size: 20px; font-weight: 700; color: #1c2530; margin: 0 0 10px; }
+.h10-aia-empty p { font-size: 13.5px; line-height: 1.6; color: #5b6573; max-width: 540px; margin: 0 0 22px; }
+
+/* ── CBN — AI Advertising dashboard (get-started), Helium 10 Ads match ───────── */
+.h10-aiad { max-width: 1320px; }
+/* header */
+.h10-aiad-hdr { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 16px; flex-wrap: wrap; }
+.h10-aiad-hdr .l h1 { display: flex; align-items: center; gap: 10px; font-size: 23px; font-weight: 800; color: #1c2530; letter-spacing: -0.02em; margin: 0; }
+.h10-aiad-hdr .l h1 .ic { display: inline-flex; }
+.h10-aiad-hdr .l p { font-size: 13px; color: #5b6573; margin: 5px 0 0; }
+.h10-aiad-hdr .r { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.h10-aiad-acct { position: relative; }
+.h10-aiad-acct .h10-hbtn.acct { gap: 8px; }
+.h10-aiad-acct .chip { font-size: 13px; font-weight: 600; color: #1c2530; }
+
+/* Get Started hero */
+.h10-aiad-hero { display: flex; align-items: stretch; justify-content: space-between; gap: 28px; background: linear-gradient(135deg, #e7f0fc 0%, #eef5fd 45%, #f5f9fe 100%); border: 1px solid #d8e6fb; border-radius: 14px; padding: 30px 34px; margin-bottom: 20px; }
+.h10-aiad-hero .hl { max-width: 560px; }
+.h10-aiad-hero .hl h2 { font-size: 28px; font-weight: 800; color: #1c2530; letter-spacing: -0.02em; margin: 0 0 12px; }
+.h10-aiad-hero .hl > p { font-size: 13.5px; line-height: 1.55; color: #46586c; margin: 0 0 16px; }
+.h10-aiad-hero .checks { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.h10-aiad-hero .checks li { display: flex; align-items: center; gap: 9px; font-size: 13px; color: #2b3440; }
+.h10-aiad-hero .checks .ck { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 50%; background: #d6f3e1; color: #15a34a; flex-shrink: 0; }
+.h10-aiad-hero .cta-lbl { font-size: 13.5px; font-weight: 700; color: #1c2530; margin-bottom: 12px; }
+.h10-aiad-hero .cta { display: flex; gap: 10px; }
+/* video panel */
+.h10-aiad-hero .hr { display: flex; align-items: center; }
+.h10-aiad-hero .vid { position: relative; width: 430px; max-width: 42vw; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: linear-gradient(135deg, #25364b, #18263b); box-shadow: 0 10px 30px rgba(20,30,50,.22); }
+.h10-aiad-hero .vid .brand { position: absolute; top: 16px; left: 18px; display: flex; align-items: center; gap: 9px; color: #fff; }
+.h10-aiad-hero .vid .brand .mk { display: inline-flex; background: #fff; border-radius: 7px; padding: 4px; }
+.h10-aiad-hero .vid .brand b { display: block; font-size: 14px; font-weight: 800; letter-spacing: -0.01em; }
+.h10-aiad-hero .vid .brand span { font-size: 10.5px; color: #b9c6d8; }
+.h10-aiad-hero .vid .play { position: absolute; inset: 0; margin: auto; width: 52px; height: 52px; border-radius: 50%; border: none; background: rgba(31,111,222,.92); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,.3); }
+.h10-aiad-hero .vid .play:hover { background: #1f6fde; }
+.h10-aiad-hero .vid .ctrl { position: absolute; left: 0; right: 0; bottom: 0; height: 26px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: linear-gradient(transparent, rgba(0,0,0,.45)); color: #fff; }
+.h10-aiad-hero .vid .ctrl .bar { flex: 1; height: 3px; border-radius: 3px; background: rgba(255,255,255,.35); }
+.h10-aiad-hero .vid .ctrl .bar span { display: block; width: 4%; height: 100%; border-radius: 3px; background: #ff4d4f; }
+.h10-aiad-hero .vid .ctrl .tt { font-size: 10px; }
+
+/* Overview */
+.h10-aiad-ov { background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; padding: 18px 22px 8px; margin-bottom: 16px; }
+.h10-aiad-ov .ovh { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; }
+.h10-aiad-ov .ovh h3 { font-size: 17px; font-weight: 700; color: #1c2530; margin: 0; }
+.h10-aiad-ov .ovh .sub { font-size: 12.5px; color: #8a93a1; }
+.h10-aiad-ov .kpis { display: flex; gap: 46px; margin-bottom: 8px; }
+.h10-aiad-ov .kpi { display: flex; flex-direction: column; gap: 5px; }
+.h10-aiad-ov .kpi .lb { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: #5b6573; }
+.h10-aiad-ov .kpi .lb .dot { width: 8px; height: 8px; border-radius: 50%; }
+.h10-aiad-ov .kpi .vl { font-size: 19px; font-weight: 700; color: #1c2530; }
+.h10-aiad-chart { position: relative; height: 220px; }
+.h10-aiad-chart svg { width: 100%; height: 100%; }
+.h10-aiad-chart .nodata { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #98a2b3; }
+
+/* Goals table */
+.h10-aiad-tbl { background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; }
+.h10-aiad-tbl .tbar { display: flex; align-items: center; gap: 10px; padding: 14px 16px; }
+.h10-aiad-tbl .tbar .cnt { font-size: 13px; font-weight: 600; color: #344054; }
+.h10-aiad-tbl .tbar .grow { flex: 1; }
+.h10-aiad-tbl .seg { display: inline-flex; background: #eef1f5; border-radius: 999px; padding: 3px; }
+.h10-aiad-tbl .seg button { border: none; background: transparent; font: inherit; font-size: 12.5px; font-weight: 600; color: #5b6573; padding: 6px 22px; border-radius: 999px; cursor: pointer; }
+.h10-aiad-tbl .seg button.on { background: #fff; color: #1c2530; box-shadow: 0 1px 3px rgba(20,28,38,.14); }
+.h10-aiad-tbl .grid { overflow-x: auto; border-top: 1px solid #eef1f5; }
+.h10-aiad-tbl table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.h10-aiad-tbl thead th { background: #f7f9fb; border-bottom: 1px solid #e6e9ee; padding: 11px 16px; text-align: left; white-space: nowrap; }
+.h10-aiad-tbl thead th.ck { width: 44px; text-align: center; }
+.h10-aiad-tbl thead th .h { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #475467; }
+.h10-aiad-tbl thead th.sorted .h { color: #1f6fde; }
+.h10-aiad-tbl thead th .beta { font-style: normal; font-size: 8.5px; font-weight: 800; letter-spacing: .04em; color: #1f6fde; background: #e7f0fd; border-radius: 4px; padding: 1px 4px; }
+.h10-aiad-tbl thead th .srt { color: #b6bdc8; }
+.h10-aiad-tbl thead th.sorted .srt { color: #1f6fde; }
+.h10-aiad-tbl td.empty { text-align: center; color: #8a93a1; padding: 64px 16px; font-size: 13px; }
+.h10-aiad-tbl .pager { display: flex; align-items: center; gap: 6px; padding: 12px 16px; }
+.h10-aiad-tbl .pager .grow { flex: 1; }
+.h10-aiad-tbl .pager .pg { min-width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #e0e4ea; background: #fff; border-radius: 7px; color: #5b6573; font: inherit; font-size: 13px; cursor: pointer; }
+.h10-aiad-tbl .pager .pg.on { background: #eef5ff; border-color: #bcd6fb; color: #1f6fde; font-weight: 700; }
+.h10-aiad-tbl .pager .rpp { font-size: 12.5px; color: #5b6573; margin-left: 8px; }
+.h10-aiad-tbl .pager .rpp b { color: #1c2530; }
+
+/* footer */
+.h10-aiad-foot { display: flex; align-items: center; gap: 18px; padding: 18px 4px 6px; font-size: 12px; color: #8a93a1; }
+.h10-aiad-foot .grow { flex: 1; }
+.h10-aiad-foot span:not(.grow):not(.cp) { cursor: pointer; }
+.h10-aiad-foot span:not(.grow):not(.cp):hover { color: #1f6fde; }
+
+/* ── AI Goal builder — deep config (product table, keywords, drawer, modal) ──── */
+.h10-aig-adv { display: grid; grid-template-columns: 18px 1fr; column-gap: 9px; align-items: start; margin-top: 16px; cursor: pointer; }
+.h10-aig-adv input { width: 16px; height: 16px; margin-top: 1px; accent-color: #1f6fde; }
+.h10-aig-adv .t { font-size: 13.5px; font-weight: 700; color: #1c2530; grid-column: 2; }
+.h10-aig-adv .d { grid-column: 2; font-size: 12px; line-height: 1.5; color: #5b6573; margin-top: 3px; }
+.h10-aig-psel .psel-head { display: grid; align-items: center; background: #f7f9fb; border-bottom: 1px solid #e6e9ee; padding: 10px 14px; font-size: 11.5px; font-weight: 700; color: #475467; }
+.h10-aig-psel .psel-head.strict { grid-template-columns: 34px 1fr 110px 170px 150px; }
+.h10-aig-psel .psel-head.shared { grid-template-columns: 34px 1fr 110px; }
+.h10-aig-psel .psel-head span { display: inline-flex; align-items: center; gap: 5px; }
+.h10-aig-psel .psel-head svg { color: #b6bdc8; }
+.h10-aig-psel .psel-rows { list-style: none; margin: 0; padding: 0; }
+.h10-aig-psel .psel-rows li { display: grid; align-items: center; padding: 12px 14px; border-bottom: 1px solid #eef1f5; }
+.h10-aig-psel .psel-rows li.strict { grid-template-columns: 34px 1fr 110px 170px 150px; }
+.h10-aig-psel .psel-rows li.shared { grid-template-columns: 34px 1fr 110px; }
+.h10-aig-psel .psel-rows li:last-child { border-bottom: none; }
+.h10-aig-psel .del { border: none; background: none; color: #b6bdc8; cursor: pointer; display: inline-flex; padding: 2px; }
+.h10-aig-psel .del:hover { color: #d4493f; }
+.h10-aig-psel .c-prod { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.h10-aig-psel .c-prod .th { width: 40px; height: 40px; border-radius: 6px; background: #f1f4f8; overflow: hidden; flex-shrink: 0; }
+.h10-aig-psel .c-prod .th img { width: 100%; height: 100%; object-fit: cover; }
+.h10-aig-psel .c-prod .m { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.h10-aig-psel .c-prod .nm { font-size: 12.5px; font-weight: 600; color: #1c2530; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.h10-aig-psel .c-prod .id { font-size: 11px; color: #8a93a1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h10-aig-psel .lqs { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 700; color: #15a34a; background: #e7f7ee; border: 1px solid #c7ecd5; border-radius: 999px; padding: 3px 10px; }
+.h10-aig-psel .c-sug { font-size: 12.5px; color: #344054; }
+.h10-aig-psel .psel-total { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 13px 16px; font-size: 13px; color: #5b6573; }
+.h10-aig-psel .psel-total b { color: #1c2530; font-size: 14px; }
+.h10-aig-money.sm { width: 124px; }
+.h10-aig-money.sm input { padding: 7px 9px; }
+.h10-aig-money.err { border-color: #e0322a; }
+.h10-aig-kwhd { display: flex; align-items: center; gap: 9px; font-size: 14.5px; font-weight: 700; color: #1c2530; margin: 0 0 4px; }
+.h10-aig-kwhd .badge { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #fff; flex-shrink: 0; }
+.h10-aig-kwhd .badge.green { background: #2d9d5f; }
+.h10-aig-kwhd .badge.purple { background: #7703b2; }
+.h10-aig-kwgrid .kw-left { min-width: 0; display: flex; flex-direction: column; }
+.h10-aig-seedtabs { display: flex; gap: 4px; border-bottom: 1px solid #e6e9ee; margin-bottom: 12px; }
+.h10-aig-seedtabs button { border: none; background: none; font: inherit; font-size: 13px; font-weight: 600; color: #5b6573; padding: 8px 12px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; align-items: center; gap: 6px; }
+.h10-aig-seedtabs button.on { color: #1f6fde; border-bottom-color: #1f6fde; }
+.h10-aig-seedtabs button i { font-style: normal; font-size: 10px; font-weight: 700; color: #1f6fde; background: #e7f0fd; border-radius: 9px; padding: 1px 6px; }
+.h10-aig-suglist { list-style: none; margin: 0; padding: 0; max-height: 268px; overflow-y: auto; display: flex; flex-direction: column; }
+.h10-aig-suglist li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 4px; font-size: 13px; color: #283441; border-bottom: 1px solid #f3f5f8; }
+.h10-aig-suglist li button { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #bcd6fb; background: #fff; color: #1f6fde; font: inherit; font-size: 12px; font-weight: 600; border-radius: 7px; padding: 4px 10px; cursor: pointer; }
+.h10-aig-suglist li button:disabled { border-color: #e0e4ea; color: #98a2b3; background: #f7f9fb; cursor: default; }
+.h10-aig-enter { width: 100%; min-height: 150px; resize: vertical; border: 1px solid #d8dde4; border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 13px; color: #1c2530; }
+.h10-aig-enter::placeholder { color: #9eaebd; }
+.h10-aig-enter:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+.h10-aig-folderbox { border: 1px solid #e6e9ee; border-radius: 8px; padding: 8px; }
+.h10-aig-folderempty { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 26px; font-size: 12.5px; color: #8a93a1; }
+.h10-aig-kwbtn { margin-top: 10px; }
+.h10-aig-card.adv .adv-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.h10-aig-card.adv .adv-row h3 { font-size: 14.5px; font-weight: 700; color: #1c2530; margin: 0 0 3px; }
+.h10-aig-card.adv .adv-row p { font-size: 12.5px; color: #5b6573; margin: 0; }
+.h10-aig-card.adv .adv-note { display: flex; gap: 10px; background: #eff5ff; border: 1px solid #d6e6fb; border-radius: 8px; padding: 12px 14px; }
+.h10-aig-card.adv .adv-note svg { color: #1f6fde; flex-shrink: 0; margin-top: 1px; }
+.h10-aig-card.adv .adv-note span { font-size: 12.5px; line-height: 1.55; color: #46586c; }
+.h10-am-btn.ghost { background: #fff; border-color: #cfe0fb; color: #1f6fde; }
+.h10-am-btn.ghost:hover { background: #f3f8ff; }
+.h10-am-btn.ghost svg { color: #1f6fde; }
+.h10-aig-bottombar { flex-shrink: 0; display: flex; align-items: center; gap: 10px; background: #fff; border-top: 1px solid #e6e9ee; padding: 12px 24px; }
+.h10-aig-bottombar .grow { flex: 1; }
+.h10-aig-bottombar .launch { border: none; background: #e7eaee; color: #9aa3af; font: inherit; font-size: 13px; font-weight: 600; padding: 9px 26px; border-radius: 8px; cursor: not-allowed; }
+.h10-modal.aig-add { width: 920px; max-width: 95vw; }
+.aig-add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.aig-add-left, .aig-add-right { border: 1px solid #e6e9ee; border-radius: 10px; display: flex; flex-direction: column; min-height: 360px; max-height: 56vh; }
+.aig-add-tabs { display: flex; gap: 4px; border-bottom: 1px solid #e6e9ee; padding: 0 10px; }
+.aig-add-tabs button { border: none; background: none; font: inherit; font-size: 13px; font-weight: 600; color: #5b6573; padding: 11px 10px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.aig-add-tabs button.on { color: #1f6fde; border-bottom-color: #1f6fde; }
+.aig-add-search { display: flex; align-items: center; gap: 8px; border: 1px solid #d8dde4; border-radius: 8px; padding: 8px 11px; color: #8a93a1; margin: 12px 12px 0; }
+.aig-add-search input { flex: 1; border: none; outline: none; font: inherit; font-size: 13px; background: transparent; color: #1c2530; }
+.aig-add-cnt { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 8px; font-size: 12px; color: #8a93a1; }
+.aig-add-cnt .addall { display: inline-flex; align-items: center; gap: 5px; border: none; background: none; color: #1f6fde; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.aig-add-cnt .addall:disabled { color: #bcc4cf; cursor: default; }
+.aig-add-list { flex: 1; overflow-y: auto; }
+.aig-add-list ul, .aig-add-rlist ul { list-style: none; margin: 0; padding: 4px 6px; display: flex; flex-direction: column; }
+.aig-add-list li { display: flex; align-items: center; gap: 11px; padding: 9px 8px; border-bottom: 1px solid #f3f5f8; }
+.aig-add-list .th, .aig-add-rlist .th { width: 40px; height: 40px; border-radius: 6px; background: #f1f4f8; overflow: hidden; flex-shrink: 0; }
+.aig-add-list .th img, .aig-add-rlist .th img { width: 100%; height: 100%; object-fit: cover; }
+.aig-add-list .m, .aig-add-rlist .m { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.aig-add-list .nm, .aig-add-rlist .nm { font-size: 12.5px; font-weight: 600; color: #1c2530; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.aig-add-list .id, .aig-add-rlist .id { font-size: 11px; color: #8a93a1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aig-add-list .pick { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #bcd6fb; background: #fff; color: #1f6fde; font: inherit; font-size: 12px; font-weight: 600; border-radius: 7px; padding: 5px 11px; cursor: pointer; flex-shrink: 0; }
+.aig-add-list .pick.on { border-color: #e0e4ea; color: #98a2b3; background: #f7f9fb; }
+.aig-add-rh { display: flex; align-items: center; justify-content: space-between; padding: 11px 12px; border-bottom: 1px solid #eef1f5; font-size: 13px; color: #1c2530; }
+.aig-add-rh .rm { display: inline-flex; align-items: center; gap: 5px; border: none; background: none; color: #1f6fde; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.aig-add-rh .rm:disabled { color: #bcc4cf; cursor: default; }
+.aig-add-rcol { padding: 8px 12px; background: #f7f9fb; border-bottom: 1px solid #eef1f5; font-size: 11.5px; font-weight: 700; color: #475467; }
+.aig-add-rlist { flex: 1; overflow-y: auto; }
+.aig-add-rlist li { display: flex; align-items: center; gap: 11px; padding: 9px 8px; border-bottom: 1px solid #f3f5f8; }
+.aig-add-rlist li button { border: none; background: none; color: #b6bdc8; cursor: pointer; display: inline-flex; padding: 3px; flex-shrink: 0; }
+.aig-add-rlist li button:hover { color: #d4493f; }
+.h10-aig-drawer-back { position: fixed; inset: 0; z-index: 130; background: rgba(20,28,38,.35); display: flex; justify-content: flex-end; }
+.h10-aig-drawer { width: 440px; max-width: 92vw; background: #fff; height: 100%; display: flex; flex-direction: column; box-shadow: -12px 0 40px rgba(20,28,38,.2); }
+.h10-aig-drawer .dh { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid #e6e9ee; }
+.h10-aig-drawer .dh b { font-size: 17px; font-weight: 700; color: #1c2530; }
+.h10-aig-drawer .dh button { border: none; background: none; color: #8a93a1; cursor: pointer; display: inline-flex; padding: 4px; }
+.h10-aig-drawer .dh button:hover { color: #1c2530; }
+.h10-aig-drawer .db { flex: 1; overflow-y: auto; padding: 20px 22px; display: flex; flex-direction: column; gap: 22px; }
+.h10-aig-drawer .dfield .dl { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+.h10-aig-drawer .dfield .dl > span:first-child { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #37495b; }
+.h10-aig-drawer .dfield .dl .cnt { font-size: 12px; color: #8a93a1; }
+.h10-aig-drawer .dfield textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid #d8dde4; border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 13px; color: #1c2530; }
+.h10-aig-drawer .dfield textarea::placeholder { color: #9eaebd; }
+.h10-aig-drawer .dfield textarea:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+.h10-aig-drawer .df { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 14px 22px; border-top: 1px solid #e6e9ee; }
+.h10-aig-drawer .df .grow { flex: 1; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   R1 — Rules & Automation. Reuses AdsPageHeader + AdsDataGrid + the .h10-cd-tabs
+   underline tab bar; only these small additions are new. No restyle of shared
+   grid/header classes, so the Ad Manager + campaign-detail grids are untouched.
+   ════════════════════════════════════════════════════════════════════════════ */
+.h10-rules-page { display: flex; flex-direction: column; min-height: 0; }
+
+/* 10-tab bar: same underline tabs as Campaign Details, a touch wider + h-scroll on
+   narrow viewports (H10 keeps all 10 on one row). */
+.h10-rules-tabs { gap: 30px; margin-bottom: 16px; overflow-x: auto; scrollbar-width: none; }
+.h10-rules-tabs::-webkit-scrollbar { display: none; }
+
+/* Bid Rule atom glyph (Adtomic mark) + "None" placeholder cells */
+.h10-rr-atom { color: #16a39a; flex-shrink: 0; }
+.h10-rr-none { color: #8a93a1; }
+
+/* hover-pencil popover editors (ride AdsDataGrid's .h10-editpop) */
+.h10-rr-select { height: 34px; border: 1px solid #c7cdd6; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 13px; color: #1c2530; background: #fff; min-width: 190px; }
+.h10-rr-mm { display: flex; gap: 8px; }
+
+/* inline 🔍 search next to the toolbar count (AdsDataGrid `searchable`) */
+.h10-am-searchbtn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: none; background: none; color: #6b7585; border-radius: 7px; cursor: pointer; }
+.h10-am-searchbtn:hover { background: #eef1f5; color: #1f6fde; }
+.h10-am-searchbox { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border: 1px solid #c7cdd6; border-radius: 8px; background: #fff; }
+.h10-am-searchbox svg { color: #8a93a1; flex-shrink: 0; }
+.h10-am-searchbox input { border: none; outline: none; font: inherit; font-size: 13px; color: #1c2530; width: 210px; background: transparent; }
+.h10-am-searchbox .x { display: inline-flex; align-items: center; border: none; background: none; color: #98a2b3; cursor: pointer; padding: 2px; border-radius: 5px; }
+.h10-am-searchbox .x:hover { color: #5b6573; background: #eef1f5; }
+
+/* "coming soon" tab body (9 not-yet-built tabs) */
+.h10-rules-soon { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 7px; padding: 86px 20px; border: 1px solid #e6e9ee; border-radius: 14px; background: #fff; }
+.h10-rules-soon .ic { display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 15px; background: #eef4fd; color: #1f6fde; margin-bottom: 4px; }
+.h10-rules-soon h3 { font-size: 18px; font-weight: 700; color: #1b2230; margin: 0; }
+.h10-rules-soon p { font-size: 13.5px; color: #6b7585; margin: 0 0 12px; max-width: 400px; line-height: 1.5; }

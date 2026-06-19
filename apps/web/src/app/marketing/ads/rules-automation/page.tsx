@@ -1,10 +1,9 @@
+/** Rules & Automation (Helium 10 Ads / Adtomic match) — R1: the Rules-tab campaign
+ *  grid, built on the shared AdsDataGrid + AdsPageHeader. */
+import { RulesAutomationClient } from './RulesAutomationClient'
+
+export const dynamic = 'force-dynamic'
+
 export default function Page() {
-  return (
-    <div className="h10-stub">
-      <div className="crumb">Helium 10 Ads</div>
-      <h1>Rules &amp; Automation</h1>
-      <p>This screen is being rebuilt to match Adtomic — filled in as we work through each page.</p>
-      <div className="panel">Rules &amp; Automation — pixel-match in progress.</div>
-    </div>
-  )
+  return <RulesAutomationClient />
 }
