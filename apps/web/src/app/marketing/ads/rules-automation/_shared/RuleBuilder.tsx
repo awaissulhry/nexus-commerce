@@ -48,6 +48,15 @@ const TRIGGER_BY_SLUG: Record<string, string> = {
   'budget-schedule': 'SCHEDULE',
   placement: 'CAMPAIGN_PERFORMANCE_BUDGET',
 }
+// friendly match-type label for the negative preview (raw API gives EXACT/PHRASE/BROAD or TARGETING_EXPRESSION*)
+const matchLabel = (m?: string): string => {
+  if (!m) return '—'
+  if (m === 'EXACT') return 'Exact'
+  if (m === 'PHRASE') return 'Phrase'
+  if (m === 'BROAD') return 'Broad'
+  if (/TARGETING_EXPRESSION/.test(m)) return 'Auto'
+  return m
+}
 const TIMES = Array.from({ length: 24 }, (_, h) => {
   const hh = String(h).padStart(2, '0')
   const ampm = h === 0 ? '12:00 AM' : h < 12 ? `${h}:00 AM` : h === 12 ? '12:00 PM' : `${h - 12}:00 PM`
@@ -139,6 +148,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const rt = ruleTypeBySlug(slug)
   const steps = STEPS_FOR(slug)
   const setup = setupFor(slug)
+  const isHarvest = slug === 'keyword-harvesting' // harvest-only features (bid · negate-in-source · Preview) gate on this
   const close = useCallback(() => router.push('/marketing/ads/rules-automation'), [router])
 
   const [ruleName, setRuleName] = useState('')
@@ -179,22 +189,35 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const [bidValue, setBidValue] = useState('')
   const [brandExclude, setBrandExclude] = useState('')
   const [competitorOnly, setCompetitorOnly] = useState(false)
-  const [preview, setPreview] = useState<{ open: boolean; loading: boolean; terms: Array<{ term: string; orders?: number; spend?: number }> } | null>(null)
+  // ── N2 negative-targeting best-in-class (negative-only) ──
+  const [protectConverting, setProtectConverting] = useState(true)
+  const [protectDays, setProtectDays] = useState('30')
+  const [negationLevel, setNegationLevel] = useState<'adgroup' | 'campaign' | 'both'>('adgroup')
+  const [preview, setPreview] = useState<{ open: boolean; loading: boolean; terms: Array<{ term: string; orders?: number; spend?: number; clicks?: number; matchType?: string }> } | null>(null)
+  // Live, read-only preview — harvest shows converting terms, negative shows wasting terms.
   const runPreview = useCallback(async () => {
     setPreview({ open: true, loading: true, terms: [] })
     try {
       const lb = groups[0]?.lookback ?? 'Last 60 Days'
       const windowDays = Number((lb.match(/\d+/) ?? ['60'])[0]) || 60
       const all = groups.flatMap((g) => g.conditions)
-      const oc = all.find((c) => c.metric === 'PPC Orders' || c.metric === 'Orders')
-      const minOrders = oc ? Math.max(1, Math.round(Number(oc.value) || 1)) : 1
       const sc = all.find((c) => c.metric === 'Spend')
-      const qs = new URLSearchParams({ windowDays: String(windowDays), minOrders: String(minOrders), ...(sc ? { minSpendCents: String(Math.round((Number(sc.value) || 0) * 100)) } : {}) })
-      const j = await fetch(`${getBackendUrl()}/api/advertising/harvest/preview?${qs}`).then((r) => r.json()).catch(() => ({}))
-      const raw = (j.candidates ?? j.terms ?? j.items ?? (Array.isArray(j) ? j : [])) as Array<Record<string, unknown>>
-      setPreview({ open: true, loading: false, terms: raw.slice(0, 100).map((t) => ({ term: String(t.searchTerm ?? t.term ?? t.query ?? ''), orders: Number(t.orders ?? t.ppcOrders ?? 0) || undefined, spend: t.spendCents != null ? Number(t.spendCents) / 100 : (t.spend != null ? Number(t.spend) : undefined) })).filter((t) => t.term) })
+      if (isHarvest) {
+        const oc = all.find((c) => c.metric === 'PPC Orders' || c.metric === 'Orders')
+        const minOrders = oc ? Math.max(1, Math.round(Number(oc.value) || 1)) : 1
+        const qs = new URLSearchParams({ windowDays: String(windowDays), minOrders: String(minOrders), ...(sc ? { minSpendCents: String(Math.round((Number(sc.value) || 0) * 100)) } : {}) })
+        const j = await fetch(`${getBackendUrl()}/api/advertising/harvest/preview?${qs}`).then((r) => r.json()).catch(() => ({}))
+        const raw = (j.candidates ?? j.terms ?? j.items ?? (Array.isArray(j) ? j : [])) as Array<Record<string, unknown>>
+        setPreview({ open: true, loading: false, terms: raw.slice(0, 100).map((t) => ({ term: String(t.searchTerm ?? t.term ?? t.query ?? ''), orders: Number(t.orders ?? t.ppcOrders ?? 0) || undefined, spend: t.spendCents != null ? Number(t.spendCents) / 100 : (t.spend != null ? Number(t.spend) : undefined) })).filter((t) => t.term) })
+      } else {
+        const minSpend = sc ? Math.max(0, Number(sc.value) || 0) : 0
+        const qs = new URLSearchParams({ lookbackDays: String(windowDays), minSpend: String(minSpend), limit: '100' })
+        const j = await fetch(`${getBackendUrl()}/api/advertising/reports/negative-keyword-candidates?${qs}`).then((r) => r.json()).catch(() => ({}))
+        const raw = (j.candidates ?? j.terms ?? j.items ?? (Array.isArray(j) ? j : [])) as Array<Record<string, unknown>>
+        setPreview({ open: true, loading: false, terms: raw.slice(0, 100).map((t) => ({ term: String(t.query ?? t.searchTerm ?? t.term ?? ''), matchType: t.matchType ? String(t.matchType) : undefined, clicks: Number(t.totalClicks ?? t.clicks ?? 0) || undefined, spend: t.totalCostUnits != null ? Number(t.totalCostUnits) : (t.spendCents != null ? Number(t.spendCents) / 100 : (t.spend != null ? Number(t.spend) : undefined)) })).filter((t) => t.term) })
+      }
     } catch { setPreview({ open: true, loading: false, terms: [] }) }
-  }, [groups])
+  }, [groups, isHarvest])
   // Esc closes the Preview modal
   useEffect(() => {
     if (!preview?.open) return
@@ -256,6 +279,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
         conditions: groups.map((g) => ({ match: 'all', lookback: g.lookback, exclude: g.exclude, conditions: g.conditions })),
         actions: [{
           type: slug, control, dedupe, negateInSource, bid: { mode: bidMode, value: bidValue }, filters: { brandExclude: brandExclude.split(/[\n,]/).map((t) => t.trim()).filter(Boolean), competitorOnly }, searchTerms, schedule: { frequency, everyN, interval, onDay, time, timezone },
+          ...(isHarvest ? {} : { protectConverting, protectDays: Math.max(0, Math.round(Number(protectDays) || 30)), negationLevel }),
           mappings: blocks.map((b) => ({ groups: b.groups.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, campaignName: g.campaignName, status: g.status, adProduct: g.adProduct, portfolioId: g.portfolioId, look: g.look, types: g.types })) })),
         }],
       }
@@ -264,7 +288,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
       const j = await r.json().catch(() => ({}))
       if (r.ok && j?.error == null) router.push('/marketing/ads/rules-automation')
     } finally { setCreating(false) }
-  }, [valid, creating, ruleName, rt, slug, groups, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, searchTerms, frequency, everyN, interval, onDay, time, timezone, blocks, isEdit, ruleId, router])
+  }, [valid, creating, ruleName, rt, slug, groups, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, isHarvest, protectConverting, protectDays, negationLevel, searchTerms, frequency, everyN, interval, onDay, time, timezone, blocks, isEdit, ruleId, router])
 
   // ── edit mode: load an existing rule's stored JSON back into the builder ──
   useEffect(() => {
@@ -281,6 +305,9 @@ export function RuleBuilder({ slug }: { slug: string }) {
         const a = (Array.isArray(rule.actions) ? rule.actions[0] : null) ?? {}
         setControl(a.control === 'automate' ? 'automate' : 'manual')
         setDedupe(a.dedupe !== false)
+        if (typeof a.protectConverting === 'boolean') setProtectConverting(a.protectConverting)
+        if (a.protectDays != null) setProtectDays(String(a.protectDays))
+        if (a.negationLevel) setNegationLevel(a.negationLevel)
         if (Array.isArray(a.searchTerms)) setSearchTerms(a.searchTerms)
         const s = a.schedule ?? {}
         if (s.frequency) setFrequency(s.frequency)
@@ -434,9 +461,9 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 </div>
               </div>
               <div className="h10-rb-brand">
-                <div className="bl"><b>Brand &amp; competitor filters</b><span>Don’t harvest your own brand terms; optionally only harvest competitor ASINs.</span></div>
-                <textarea className="h10-rb-ta brand" value={brandExclude} onChange={(e) => setBrandExclude(e.target.value)} placeholder="Brand terms to never harvest (one per line or comma-separated)" aria-label="Brand terms to exclude" />
-                <label className="h10-rb-compt"><button type="button" className={`h10-bktoggle ${competitorOnly ? 'on' : ''}`} role="switch" aria-checked={competitorOnly} aria-label="Only competitor ASINs" onClick={() => setCompetitorOnly((v) => !v)}><span /></button> Only harvest competitor ASINs (exclude same-brand search terms)</label>
+                <div className="bl"><b>Brand &amp; competitor filters</b><span>{isHarvest ? 'Don’t harvest your own brand terms; optionally only harvest competitor ASINs.' : 'Never negate your own brand terms; optionally only negate competitor ASINs.'}</span></div>
+                <textarea className="h10-rb-ta brand" value={brandExclude} onChange={(e) => setBrandExclude(e.target.value)} placeholder={isHarvest ? 'Brand terms to never harvest (one per line or comma-separated)' : 'Brand terms to never negate (one per line or comma-separated)'} aria-label="Brand terms to protect" />
+                <label className="h10-rb-compt"><button type="button" className={`h10-bktoggle ${competitorOnly ? 'on' : ''}`} role="switch" aria-checked={competitorOnly} aria-label="Only competitor ASINs" onClick={() => setCompetitorOnly((v) => !v)}><span /></button> Only {isHarvest ? 'harvest' : 'negate'} competitor ASINs (exclude same-brand search terms)</label>
               </div>
             </section>
 
@@ -467,6 +494,14 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   <p>Select the timezone for this rule</p>
                   <H10Select width={430} options={TIMEZONES} value={timezone} onChange={setTimezone} ariaLabel="Timezone" />
                 </div>
+                {!isHarvest && (
+                <div className="advblock">
+                  <b>Negation Level</b>
+                  <p>Where to place the negative keyword / product target when this rule fires</p>
+                  <H10Select width={280} options={[{ value: 'adgroup', label: 'Ad Group' }, { value: 'campaign', label: 'Campaign' }, { value: 'both', label: 'Ad Group + Campaign' }]} value={negationLevel} onChange={(v) => setNegationLevel(v as 'adgroup' | 'campaign' | 'both')} ariaLabel="Negation level" />
+                </div>
+                )}
+                {isHarvest && (
                 <div className="advblock">
                   <b>New Target Bid</b>
                   <p>Starting bid for the keywords / product targets this rule creates</p>
@@ -475,6 +510,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                     {bidMode === 'fixed' && <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" placeholder="0.75" value={bidValue} onChange={(e) => setBidValue(e.target.value)} aria-label="Fixed bid amount" /></span>}
                   </div>
                 </div>
+                )}
               </div>
             </section>
 
@@ -487,10 +523,18 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   <button type="button" className={`h10-bktoggle ${dedupe ? 'on' : ''}`} role="switch" aria-checked={dedupe} aria-label="Do not suggest existing search terms" onClick={() => setDedupe((v) => !v)}><span /></button>
                   <span>Select to NOT suggest any search terms that already exist with the same match type in the campaigns from this rule group</span>
                 </div>
+                {!isHarvest && (
+                <div className="h10-rb-dedupe">
+                  <button type="button" className={`h10-bktoggle ${protectConverting ? 'on' : ''}`} role="switch" aria-checked={protectConverting} aria-label="Protect converting search terms" onClick={() => setProtectConverting((v) => !v)}><span /></button>
+                  <span>Never create a negative for a term that <b>converted</b> (≥1 order) in the last <input className="h10-rb-ninline" inputMode="numeric" value={protectDays} onChange={(e) => setProtectDays(e.target.value)} aria-label="Protection window in days" /> days in any campaign — protects proven keywords from being blocked.</span>
+                </div>
+                )}
+                {isHarvest && (
                 <div className="h10-rb-dedupe">
                   <button type="button" className={`h10-bktoggle ${negateInSource ? 'on' : ''}`} role="switch" aria-checked={negateInSource} aria-label="Negate harvested terms in source" onClick={() => setNegateInSource((v) => !v)}><span /></button>
                   <span>Also add each harvested term as a <b>negative</b> in its source ad group — stops the source (Auto/Broad) campaign from competing with the new target.</span>
                 </div>
+                )}
                 <label className={`h10-rb-ctrl ${control === 'manual' ? 'on' : ''}`}>
                   <input type="radio" name="control" checked={control === 'manual'} onChange={() => setControl('manual')} />
                   <span className="b"><span className="t">Manual</span><span className="d">Manually approve rule actions on the Suggestions page</span></span>
@@ -513,13 +557,15 @@ export function RuleBuilder({ slug }: { slug: string }) {
       </div>
       {preview?.open && (
         <div className="h10-rb-prevback" onClick={() => setPreview(null)}>
-          <div className="h10-rb-prev" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Harvest preview">
-            <div className="ph"><b>Preview — converting search terms</b><button type="button" onClick={() => setPreview(null)} aria-label="Close"><X size={18} /></button></div>
-            <div className="psub">Live, read-only: search terms currently meeting your criteria that would be harvested.</div>
+          <div className="h10-rb-prev" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={isHarvest ? 'Harvest preview' : 'Negative targeting preview'}>
+            <div className="ph"><b>{isHarvest ? 'Preview — converting search terms' : 'Preview — wasting search terms'}</b><button type="button" onClick={() => setPreview(null)} aria-label="Close"><X size={18} /></button></div>
+            <div className="psub">{isHarvest ? 'Live, read-only: search terms currently meeting your criteria that would be harvested.' : 'Live, read-only: search terms currently meeting your criteria that would be negated.'}</div>
             <div className="pbody">
               {preview.loading ? <div className="pmsg">Loading…</div>
-                : preview.terms.length === 0 ? <div className="pmsg">No converting search terms match the current criteria yet.</div>
-                : (<div className="ptable"><div className="pthr"><span>Search Term</span><span>Orders</span><span>Spend</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.orders ?? '—'}</span><span>{t.spend != null ? `€${t.spend.toFixed(2)}` : '—'}</span></div>))}</div>)}
+                : preview.terms.length === 0 ? <div className="pmsg">{isHarvest ? 'No converting search terms match the current criteria yet.' : 'No wasting search terms match the current criteria yet.'}</div>
+                : isHarvest
+                  ? (<div className="ptable"><div className="pthr"><span>Search Term</span><span>Orders</span><span>Spend</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.orders ?? '—'}</span><span>{t.spend != null ? `€${t.spend.toFixed(2)}` : '—'}</span></div>))}</div>)
+                  : (<div className="ptable"><div className="pthr"><span>Search Term</span><span>Match</span><span>Clicks</span><span>Spend</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span title={t.matchType}>{matchLabel(t.matchType)}</span><span>{t.clicks ?? '—'}</span><span>{t.spend != null ? `€${t.spend.toFixed(2)}` : '—'}</span></div>))}</div>)}
             </div>
           </div>
         </div>

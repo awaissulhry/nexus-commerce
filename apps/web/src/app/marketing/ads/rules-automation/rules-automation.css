@@ -214,6 +214,9 @@
 .h10-rb-dedupe { display: flex; align-items: flex-start; gap: 12px; padding: 2px 0 14px; margin-bottom: 10px; border-bottom: 1px solid #eef1f5; }
 .h10-rb-dedupe span { font-size: 13px; color: #3a4452; line-height: 1.45; }
 .h10-rb-dedupe .h10-bktoggle { flex-shrink: 0; margin-top: 1px; }
+/* N2: inline day-count inside the "don't negate converting" sentence (negative-targeting only) */
+.h10-rb-ninline { width: 48px; height: 26px; margin: 0 5px; border: 1px solid #d8dde4; border-radius: 6px; padding: 0 6px; font: inherit; font-size: 12.5px; text-align: center; color: #1c2530; vertical-align: middle; }
+.h10-rb-ninline:focus { outline: 0; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.15); }
 
 /* ── R3: Keyword Harvesting "Positive Rule Setup" — heading row + Ad Group Mapping + info banner ── */
 .h10-rb-setuphd { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 6px; }
