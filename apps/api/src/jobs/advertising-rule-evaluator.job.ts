@@ -788,6 +788,85 @@ async function buildRisingStarContexts() {
   } catch (e) { logger.warn('[ads-rule-evaluator] buildRisingStarContexts failed', { error: (e as Error).message }); return [] }
 }
 
+// ── SOV_BID (SK4) — keyword bid adjustment driven by Share-of-Voice. For each positive keyword
+// target, attach the SOV of its matching query (analyzeShareOfVoice, matched by lowercased text)
+// so a rule can e.g. raise the bid where SOV is low. adTarget.id lets bid_apply act on the target.
+async function buildSovBidContexts() {
+  try {
+    const { analyzeShareOfVoice } = await import('../services/advertising/ads-impression-share.service.js')
+    const sov = await analyzeShareOfVoice({ windowDays: 30, limit: 1000 })
+    if (!sov.rows.length) return []
+    const sovByQuery = new Map(sov.rows.map((r) => [r.query.trim().toLowerCase(), r]))
+    const targets = await prisma.adTarget.findMany({
+      where: { kind: 'KEYWORD', isNegative: false },
+      select: { id: true, expressionValue: true, spendCents: true, salesCents: true, ordersCount: true, adGroup: { select: { campaign: { select: { marketplace: true } } } } },
+      take: 3000,
+    })
+    return targets
+      .map((t) => {
+        const key = (t.expressionValue ?? '').trim().toLowerCase()
+        const s = key ? sovByQuery.get(key) : undefined
+        if (!s) return null // no SOV signal for this keyword → skip
+        return {
+          trigger: 'SOV_BID' as const,
+          marketplace: t.adGroup?.campaign?.marketplace ?? null,
+          adTarget: {
+            id: t.id,
+            // sovPct / topSharePct are fractions (0..1); our within-account SOV IS impression share.
+            sovPct: s.sovPct, topSharePct: s.topCampaignSharePct, impressionSharePct: s.sovPct,
+            spendCents: t.spendCents, salesCents: t.salesCents, orders: t.ordersCount,
+            acos: t.salesCents > 0 ? t.spendCents / t.salesCents : 0,
+          },
+        }
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      .slice(0, 1000)
+  } catch (e) { logger.warn('[ads-rule-evaluator] buildSovBidContexts failed', { error: (e as Error).message }); return [] }
+}
+
+// ── KEYWORD_RANK_BID (SK4) — keyword bid adjustment driven by organic/paid rank. For each positive
+// keyword target, attach the latest KeywordRank (matched by lowercased text + marketplace) so a rule
+// can e.g. raise the bid where organic rank is poor. Empty until rank data is ingested (SK3 backend).
+async function buildKeywordRankBidContexts() {
+  try {
+    const ranks = await prisma.keywordRank.findMany({ orderBy: [{ keyword: 'asc' }, { marketplace: 'asc' }, { capturedAt: 'desc' }], take: 8000 })
+    if (!ranks.length) return []
+    // collapse to latest + prior per (keyword, marketplace) — same as GET /advertising/keyword-ranks
+    const latest = new Map<string, { r: typeof ranks[number]; prior?: typeof ranks[number] }>()
+    for (const r of ranks) {
+      const k = `${r.keyword.trim().toLowerCase()} ${r.marketplace}`
+      const e = latest.get(k)
+      if (!e) latest.set(k, { r }); else if (!e.prior) e.prior = r
+    }
+    const targets = await prisma.adTarget.findMany({
+      where: { kind: 'KEYWORD', isNegative: false },
+      select: { id: true, expressionValue: true, spendCents: true, salesCents: true, adGroup: { select: { campaign: { select: { marketplace: true } } } } },
+      take: 3000,
+    })
+    return targets
+      .map((t) => {
+        const kw = (t.expressionValue ?? '').trim().toLowerCase()
+        const mkt = t.adGroup?.campaign?.marketplace ?? ''
+        const e = kw ? latest.get(`${kw} ${mkt}`) : undefined
+        if (!e) return null // no rank snapshot for this keyword → skip
+        const cur = e.r, prior = e.prior
+        return {
+          trigger: 'KEYWORD_RANK_BID' as const,
+          marketplace: mkt || null,
+          adTarget: {
+            id: t.id,
+            organicRank: cur.organicRank, sponsoredRank: cur.sponsoredRank, searchVolume: cur.searchVolume,
+            // +ve delta = rank improved (number went down)
+            rankDelta: prior?.organicRank != null && cur.organicRank != null ? prior.organicRank - cur.organicRank : 0,
+            spendCents: t.spendCents, acos: t.salesCents > 0 ? t.spendCents / t.salesCents : 0,
+          },
+        }
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      .slice(0, 1000)
+  } catch (e) { logger.warn('[ads-rule-evaluator] buildKeywordRankBidContexts failed', { error: (e as Error).message }); return [] }
+}
+
 export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   const startedAt = Date.now()
   // AME.14 — global kill-switch. When set, NO advertising rule auto-applies
@@ -814,7 +893,8 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     zeroImpression, lowCtr, cvrDrop, wastedKeyword, searchTermConverting,
     highAcosKeyword, scaleOpportunity, adGroupUnderperform,
     newToBrandWinner, campaignNoSales,
-    searchTermWasting, campaignRoasDeclining, risingStar] = await Promise.all([
+    searchTermWasting, campaignRoasDeclining, risingStar,
+    sovBid, keywordRankBid] = await Promise.all([
     buildFbaAgeContexts(),
     buildProfitabilityContexts(),
     buildCacSpikeContexts(),
@@ -835,6 +915,9 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     buildSearchTermWastingContexts(),
     buildCampaignRoasDecliningContexts(),
     buildRisingStarContexts(),
+    // ── SK4 — SOV + Keyword Tracker keyword-bid-adjustment rules ────────
+    buildSovBidContexts(),
+    buildKeywordRankBidContexts(),
   ])
 
   // AU.1/AU.2/AU.4 — SCHEDULE trigger: one context per active marketplace each
@@ -875,6 +958,8 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     ['SEARCH_TERM_WASTING', searchTermWasting],
     ['CAMPAIGN_ROAS_DECLINING', campaignRoasDeclining],
     ['KEYWORD_RISING_STAR', risingStar],
+    ['SOV_BID', sovBid],
+    ['KEYWORD_RANK_BID', keywordRankBid],
     ['SCHEDULE', scheduleContexts],
   ]
   for (const [trigger, contexts] of passes) {

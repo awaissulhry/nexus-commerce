@@ -17,7 +17,7 @@
  */
 import { logger } from '../../utils/logger.js'
 
-const BUILDER_SLUGS = new Set(['budget', 'placement', 'bid', 'negative-targeting', 'keyword-harvesting', 'dayparting-schedule'])
+const BUILDER_SLUGS = new Set(['budget', 'placement', 'bid', 'negative-targeting', 'keyword-harvesting', 'dayparting-schedule', 'sov', 'keyword-tracker'])
 
 // metric NAME (builder) → context dot-path + how to convert the builder's value to the context unit.
 // The CAMPAIGN_PERFORMANCE_BUDGET context exposes campaign.{acos,roas,spendCents,salesCents,budgetUtilization}
@@ -49,6 +49,25 @@ const ADTARGET_METRIC: Record<string, { field: string; conv: 'frac' | 'cents' | 
   Spend: { field: 'adTarget.spendCents', conv: 'cents' },
   Sales: { field: 'adTarget.salesCents', conv: 'cents' },
   Orders: { field: 'adTarget.orders', conv: 'plain' },
+}
+// SOV_BID context → the target's Share-of-Voice signal (from analyzeShareOfVoice, matched per keyword)
+// plus the carried-over perf metrics. SOV fields are fractions (0..1).
+const SOV_METRIC: Record<string, { field: string; conv: 'frac' | 'cents' | 'plain' }> = {
+  'Share of Voice': { field: 'adTarget.sovPct', conv: 'frac' },
+  'Top Campaign Share': { field: 'adTarget.topSharePct', conv: 'frac' },
+  'Impression Share': { field: 'adTarget.impressionSharePct', conv: 'frac' },
+  ...ADTARGET_METRIC,
+}
+// KEYWORD_RANK_BID context → the target's organic/paid rank signal (from KeywordRank, latest per
+// keyword) plus a couple perf metrics. Rank/volume are bare counts; lower rank number = better.
+const RANK_METRIC: Record<string, { field: string; conv: 'frac' | 'cents' | 'plain' }> = {
+  'Organic Rank': { field: 'adTarget.organicRank', conv: 'plain' },
+  'Sponsored Rank': { field: 'adTarget.sponsoredRank', conv: 'plain' },
+  'Rank Change': { field: 'adTarget.rankDelta', conv: 'plain' },
+  'Search Volume': { field: 'adTarget.searchVolume', conv: 'plain' },
+  'Share of Voice': { field: 'adTarget.sovPct', conv: 'frac' },
+  ACOS: { field: 'adTarget.acos', conv: 'frac' },
+  Spend: { field: 'adTarget.spendCents', conv: 'cents' },
 }
 const NEG_SCOPE: Record<string, string> = { adgroup: 'AD_GROUP', campaign: 'CAMPAIGN', both: 'CAMPAIGN' }
 
@@ -123,19 +142,24 @@ export function maybeTranslateAdsRule(rule: { id: string; actions?: unknown; con
     }
   }
 
-  if (slug === 'bid') {
+  // Bid · SOV · Keyword Tracker are all keyword-bid-adjustment rules → the bid_apply handler. They
+  // differ only in which signal their criteria gate on (perf vs SOV vs rank) → the metric map.
+  if (slug === 'bid' || slug === 'sov' || slug === 'keyword-tracker') {
     const act = groups[0]?.action ?? {}
+    const map = slug === 'sov' ? SOV_METRIC : slug === 'keyword-tracker' ? RANK_METRIC : ADTARGET_METRIC
+    const label = slug === 'sov' ? 'SOV bid rule' : slug === 'keyword-tracker' ? 'Keyword Tracker bid rule' : 'Bid rule'
     return {
-      conditions: translateConditions(groups, ADTARGET_METRIC, rule.id),
+      conditions: translateConditions(groups, map, rule.id),
       actions: [{
         type: 'bid_apply',
         op: act.op ?? 'set',
         value: num(act.value),
-        // bid guardrails reuse the budget floor/ceiling fields if the builder set them; else 5¢ floor handled in the handler
-        minEur: a0.budgetFloor != null ? num(a0.budgetFloor) : null,
-        maxEur: a0.budgetCeiling != null ? num(a0.budgetCeiling) : null,
+        // SK1 stores bid guardrails as bidFloor/bidCeiling (fall back to the legacy budget* fields); the
+        // handler still enforces a €0.05 floor regardless.
+        minEur: a0.bidFloor != null ? num(a0.bidFloor) : a0.budgetFloor != null ? num(a0.budgetFloor) : null,
+        maxEur: a0.bidCeiling != null ? num(a0.bidCeiling) : a0.budgetCeiling != null ? num(a0.budgetCeiling) : null,
         campaignIds: Array.isArray(a0.campaigns) ? (a0.campaigns as Array<{ id: string }>).map((c) => c.id) : [],
-        reason: `Bid rule ${rule.id}`,
+        reason: `${label} ${rule.id}`,
       }],
     }
   }
