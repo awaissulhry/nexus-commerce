@@ -463,3 +463,14 @@
 .h10-sb-dates .f label { font-size: 12.5px; font-weight: 700; color: #2b3440; }
 .h10-sb-dates .f label i { color: #e5484d; font-style: normal; }
 .h10-sb-toggle { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; color: #3a4452; padding-bottom: 8px; cursor: pointer; }
+
+/* Budget Schedules list tab — Hourly Campaign Performance card (above the schedules grid) */
+.h10-sb-listchart { border: 1px solid #e6e9ee; border-radius: 12px; background: #fff; margin-bottom: 16px; overflow: hidden; }
+.h10-sb-listchart .hd { display: flex; align-items: center; gap: 7px; padding: 16px 18px 4px; }
+.h10-sb-listchart .hd b { font-size: 15px; font-weight: 700; color: #1c2530; }
+.h10-sb-listchart .hd .i { color: #9aa3af; display: inline-flex; cursor: help; }
+.h10-sb-listchart .bd { padding: 8px 18px 18px; }
+.h10-sb-listchart .controls { display: flex; align-items: center; margin-bottom: 14px; }
+.h10-sb-listchart .controls .grow { flex: 1; }
+.h10-sb-eye { border: 0; background: none; color: #8a93a1; cursor: pointer; padding: 6px; border-radius: 7px; display: inline-flex; align-items: center; }
+.h10-sb-eye:hover { background: #f1f4f8; color: #1c2530; }

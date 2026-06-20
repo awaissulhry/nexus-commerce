@@ -13,7 +13,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { X, Video, Plus, Copy, Trash2, Calendar, BarChart3, LayoutGrid, Search } from 'lucide-react'
 import { H10Select, HoverCard } from '../../campaigns/FilterDropdown'
 import { CampaignSection, type SchedCampaign } from './CampaignSection'
-import { scheduleConfigFor, CHART_METRICS, GROUP_BY, DAYS_OF_WEEK_FILTER, WEEKDAYS, TIME_OPTIONS, adjustmentsFor } from './scheduleConfig'
+import { MetricSelect } from './MetricSelect'
+import { scheduleConfigFor, GROUP_BY, DAYS_OF_WEEK_FILTER, WEEKDAYS, TIME_OPTIONS, adjustmentsFor } from './scheduleConfig'
 import { getBackendUrl } from '@/lib/backend-url'
 
 // Adtomic-style atom mark — shared glyph with the rule builder (re-declared to avoid a
@@ -25,16 +26,6 @@ function AtomMark({ size = 20 }: { size?: number }) {
       <g transform="rotate(-45 12 12)"><ellipse cx="12" cy="12" rx="10.4" ry="4.3" stroke="#1f6fde" strokeWidth="1.7" /></g>
       <circle cx="12" cy="12" r="2.5" fill="#0b1f44" />
     </svg>
-  )
-}
-
-// metric picker with the H10 colour dot (Metric 1 navy, Metric 2 blue).
-function MetricSelect({ value, onChange, dot, label }: { value: string; onChange: (v: string) => void; dot: string; label: string }) {
-  return (
-    <span className="h10-sb-metric">
-      <span className="dot" style={{ background: dot }} />
-      <H10Select width={150} options={CHART_METRICS} value={value} onChange={onChange} ariaLabel={label} />
-    </span>
   )
 }
 

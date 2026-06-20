@@ -1,0 +1,31 @@
+/* Dayparting Schedule Criteria — heatmap + chart. Isolated file (concurrent-session safe);
+   the schedule shell + cp-* picker styles live in rules-automation.css. Palette + measurements
+   from rules-and-automation.mov 01:41–02:44 (@2x → CSS px). */
+
+.h10-dp-heat { position: relative; margin-top: 14px; user-select: none; }
+.h10-dp-heat.loading { min-height: 240px; }
+.h10-dp-skel { height: 240px; border-radius: 10px; background: linear-gradient(90deg, #f4f6f9 25%, #eef1f5 50%, #f4f6f9 75%); background-size: 200% 100%; animation: h10dp-sk 1.2s ease infinite; }
+@keyframes h10dp-sk { to { background-position: -200% 0; } }
+
+.h10-dp-grid { position: relative; display: flex; flex-direction: column; gap: 4px; }
+.h10-dp-row { display: flex; align-items: center; gap: 4px; }
+.h10-dp-daylbl { flex: 0 0 42px; font-size: 11.5px; font-weight: 700; color: #5b6573; text-align: right; padding-right: 8px; letter-spacing: .3px; }
+.h10-dp-cell { flex: 1 1 0; min-width: 0; height: 30px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 600; cursor: default; transition: outline .08s; }
+.h10-dp-cell:hover { outline: 2px solid #1f6fde; outline-offset: -1px; position: relative; z-index: 2; }
+
+.h10-dp-tip { position: absolute; transform: translate(-50%, -100%); margin-top: -8px; background: #1c2530; color: #fff; border-radius: 7px; padding: 7px 10px; font-size: 11.5px; white-space: nowrap; pointer-events: none; z-index: 5; box-shadow: 0 6px 18px rgba(20,28,38,.28); display: flex; flex-direction: column; gap: 2px; }
+.h10-dp-tip b { font-weight: 700; }
+.h10-dp-tip span { color: #b9c4d2; }
+
+.h10-dp-hours { display: flex; gap: 4px; margin-top: 7px; }
+.h10-dp-hours .sp { flex: 0 0 42px; }
+.h10-dp-hr { flex: 1 1 0; min-width: 0; text-align: center; font-size: 10px; color: #8a93a1; }
+
+.h10-dp-legend { display: flex; gap: 4px; margin-top: 14px; align-items: center; }
+.h10-dp-legend .sp { flex: 0 0 42px; }
+.h10-dp-legend .bar { flex: 1 1 0; display: flex; height: 10px; border-radius: 5px; overflow: hidden; max-width: 520px; }
+.h10-dp-legend .bar span { flex: 1 1 0; }
+.h10-dp-legend-lbls { display: flex; gap: 4px; margin-top: 5px; }
+.h10-dp-legend-lbls .sp { flex: 0 0 42px; }
+.h10-dp-legend-lbls .lbl { flex: 1 1 0; font-size: 10.5px; color: #5b6573; max-width: 90px; }
+.h10-dp-legend-lbls .lbl:first-of-type { margin-left: -2px; }

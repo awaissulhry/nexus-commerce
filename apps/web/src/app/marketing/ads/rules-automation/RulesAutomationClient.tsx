@@ -21,6 +21,12 @@ import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter, type GridEditMode } from '../campaigns/_grid/AdsDataGrid'
 import { HoverCard } from '../campaigns/FilterDropdown'
 import { getBackendUrl } from '@/lib/backend-url'
+import { RuleTypeModal } from './_shared/RuleTypeModal'
+import { NoDataIllus } from './_shared/NoDataIllus'
+import { RuleListTab } from './tabs/RuleListTab'
+import { TrackerTab } from './tabs/TrackerTab'
+import { BudgetScheduleTab } from './_schedule/BudgetScheduleTab'
+import { TAB_RULES } from './tabs/placeholderSeeds'
 
 // ── data (subset of the Ad Manager campaign shape; same endpoint) ──
 interface Camp {
@@ -64,7 +70,7 @@ const COL_TIPS: Record<string, string> = {
 // ── the 10 tabs (exact H10 order/labels). Only "rules" is built in R1. ──
 interface Tab { key: string; label: string }
 const TABS: Tab[] = [
-  { key: 'rules', label: 'Rules' },
+  { key: 'rules', label: 'Apply Rules' },
   { key: 'bid', label: 'Bid' },
   { key: 'keyword-harvest', label: 'Keyword Harvest' },
   { key: 'negative-targeting', label: 'Negative Targeting' },
@@ -90,6 +96,10 @@ export function RulesAutomationClient() {
   const [tab, setTab] = useState('rules')
   const [market, setMarket] = useState('all')
   const [sel, setSel] = useState<Set<string>>(new Set())
+  const [showRuleType, setShowRuleType] = useState(false)
+  // selection-bar bulk popovers (Automation menu / Target ACoS / Min-Max Bid)
+  const [bulkPop, setBulkPop] = useState<{ kind: 'automation' | 'targetAcos' | 'minMaxBid'; x: number; y: number } | null>(null)
+  const [bulkDraft, setBulkDraft] = useState({ acos: '30', min: '', max: '' })
 
   const load = useCallback(async () => {
     try {
@@ -111,6 +121,26 @@ export function RulesAutomationClient() {
     const next = !c.bidAutomation
     patchLocal(c.id, { bidAutomation: next })
     void patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/automation`, { bidAutomation: next })
+  }
+
+  // ── selection-bar bulk actions (Automation · Assign Rule · Target ACoS · Min/Max Bid) ──
+  const openBulk = (kind: 'automation' | 'targetAcos' | 'minMaxBid', e: { currentTarget: HTMLElement }) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    setBulkPop({ kind, x: r.left, y: r.bottom + 6 })
+  }
+  const applyBulkAutomation = (on: boolean) => {
+    [...sel].forEach((id) => { patchLocal(id, { bidAutomation: on }); void patchJson(`${getBackendUrl()}/api/advertising/campaigns/${id}/automation`, { bidAutomation: on }) })
+    setBulkPop(null)
+  }
+  const applyBulkTargetAcos = () => {
+    const frac = (Number(bulkDraft.acos) || 0) / 100
+    ;[...sel].forEach((id) => { patchLocal(id, { targetAcos: frac }); void patchJson(`${getBackendUrl()}/api/advertising/campaigns/${id}/automation`, { targetAcos: frac }) })
+    setBulkPop(null)
+  }
+  const applyBulkMinMaxBid = () => {
+    const mm = { min: bulkDraft.min.trim() ? Number(bulkDraft.min) : null, max: bulkDraft.max.trim() ? Number(bulkDraft.max) : null }
+    ;[...sel].forEach((id) => patchLocal(id, { minMaxBid: mm }))
+    setBulkPop(null)
   }
 
   // ── grid columns (all left-aligned "settings" cells, like the Ad Manager cluster) ──
@@ -229,7 +259,7 @@ export function RulesAutomationClient() {
         showLearn={false}
         showDataSync={false}
         showDateRange={false}
-        primaryAction={{ label: 'Rule', icon: <Plus size={15} />, href: '/marketing/ads/rules-automation/builder' }}
+        primaryAction={{ label: 'Rule', icon: <Plus size={15} />, onClick: () => setShowRuleType(true) }}
       />
 
       {/* sticky 10-tab bar (reuses the proven .h10-cd-tabs underline styling) */}
@@ -263,6 +293,14 @@ export function RulesAutomationClient() {
           selectable
           selected={sel}
           onSelectedChange={setSel}
+          selectionActions={() => (
+            <span className="h10-rr-selacts">
+              <button type="button" className="h10-rr-selbtn" onClick={(e) => openBulk('automation', e)}>Automation</button>
+              <button type="button" className="h10-rr-selbtn" onClick={() => setShowRuleType(true)}><Plus size={13} /> Assign Rule</button>
+              <button type="button" className="h10-rr-selbtn" onClick={(e) => openBulk('targetAcos', e)}>Target ACoS</button>
+              <button type="button" className="h10-rr-selbtn" onClick={(e) => openBulk('minMaxBid', e)}>Min/Max Bid</button>
+            </span>
+          )}
           customizable={false}
           searchable
           searchPlaceholder="Search campaigns…"
@@ -271,9 +309,59 @@ export function RulesAutomationClient() {
           filtersDefaultOpen={false}
           emptyLabel="No campaigns found."
         />
+      ) : tab === 'share-of-voice' ? (
+        <TrackerTab kind="sov" />
+      ) : tab === 'keyword-tracker' ? (
+        <TrackerTab kind="tracker" />
+      ) : tab === 'budget' ? (
+        <RuleListTab
+          noun="Budget Rule"
+          seed={[]}
+          liveType="budget"
+          editHref={(id) => `/marketing/ads/rules-automation/builder/budget?ruleId=${id}`}
+          onAddRule={() => { window.location.href = '/marketing/ads/rules-automation/builder/budget' }}
+          emptyNode={(
+            <span className="h10-rr-empty">
+              <NoDataIllus size={104} />
+              <b>Create a Budget Rule to generate suggestions for a campaign!</b>
+              <a className="h10-am-btn primary" href="/marketing/ads/rules-automation/builder/budget"><Plus size={13} /> Create Rule</a>
+            </span>
+          )}
+        />
+      ) : tab === 'budget-schedules' ? (
+        <BudgetScheduleTab />
+      ) : TAB_RULES[tab] ? (
+        <RuleListTab noun={TAB_RULES[tab].noun} seed={TAB_RULES[tab].rows} onAddRule={() => setShowRuleType(true)} />
       ) : (
         <ComingSoon label={activeTab.label} />
       )}
+      {showRuleType && <RuleTypeModal onClose={() => setShowRuleType(false)} />}
+      {bulkPop && (<>
+        <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setBulkPop(null)} />
+        <div className="h10-editpop" style={{ position: 'fixed', left: bulkPop.x, top: bulkPop.y, zIndex: 1000 }} role="dialog" aria-label="Bulk action">
+          {bulkPop.kind === 'automation' ? (
+            <div className="h10-rr-bulkmenu">
+              <button type="button" onClick={() => applyBulkAutomation(true)}>Enable Bid Automation</button>
+              <button type="button" onClick={() => applyBulkAutomation(false)}>Disable Bid Automation</button>
+            </div>
+          ) : bulkPop.kind === 'targetAcos' ? (
+            <>
+              <div className="h">Target ACoS</div>
+              <span className="h10-bulk-inp sf"><input inputMode="decimal" value={bulkDraft.acos} onChange={(e) => setBulkDraft((d) => ({ ...d, acos: e.target.value }))} aria-label="Target ACoS" autoFocus /><span className="sfx">%</span></span>
+              <div className="f"><button type="button" className="h10-am-btn sm" onClick={() => setBulkPop(null)}>Cancel</button><button type="button" className="h10-am-btn primary sm" onClick={applyBulkTargetAcos}>Apply</button></div>
+            </>
+          ) : (
+            <>
+              <div className="h">Min/Max Bid</div>
+              <div className="h10-rr-mm">
+                <span className="h10-bulk-inp"><span className="pf">€</span><input inputMode="decimal" placeholder="Min" value={bulkDraft.min} onChange={(e) => setBulkDraft((d) => ({ ...d, min: e.target.value }))} aria-label="Min bid" /></span>
+                <span className="h10-bulk-inp"><span className="pf">€</span><input inputMode="decimal" placeholder="Max" value={bulkDraft.max} onChange={(e) => setBulkDraft((d) => ({ ...d, max: e.target.value }))} aria-label="Max bid" /></span>
+              </div>
+              <div className="f"><button type="button" className="h10-am-btn sm" onClick={() => setBulkPop(null)}>Cancel</button><button type="button" className="h10-am-btn primary sm" onClick={applyBulkMinMaxBid}>Apply</button></div>
+            </>
+          )}
+        </div>
+      </>)}
     </div>
   )
 }
