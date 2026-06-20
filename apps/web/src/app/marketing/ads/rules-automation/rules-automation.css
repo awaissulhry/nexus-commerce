@@ -386,3 +386,80 @@
 .h10-rb-prev .ptr .newb { font-weight: 700; color: #1c2530; }
 .h10-rb-prev .ptr .newb.up { color: #15a34a; }
 .h10-rb-prev .ptr .newb.down { color: #e5484d; }
+
+/* ===================== Schedule builder (Budget Schedule · Dayparting) ===================== */
+/* Reuses the rule-builder shell (h10-rb-top/nav/body/wrap/sec/card) + the cp-* picker styling. */
+
+/* Campaign Section — wider left list, narrower "added" panel + source tabs */
+.h10-sb-camps { grid-template-columns: 1.7fr 1fr; margin-top: 14px; }
+.h10-sb-cptabs { display: flex; gap: 4px; padding: 4px 12px 0; border-bottom: 1px solid #eef1f5; }
+.h10-sb-cptabs button { appearance: none; border: 0; background: none; font: inherit; font-size: 13px; font-weight: 600; color: #5b6573; padding: 10px 12px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.h10-sb-cptabs button:hover { color: #1c2530; }
+.h10-sb-cptabs button.on { color: #1f6fde; border-bottom-color: #1f6fde; }
+/* portfolio groups in the picker list */
+.cp-grp { border-bottom: 1px solid #f1f4f7; }
+.cp-grph { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #f7f9fb; }
+.cp-grph .gn { font-size: 12.5px; font-weight: 700; color: #3a4452; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-grpadd { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #1f6fde; background: #fff; color: #1f6fde; border-radius: 7px; font: inherit; font-size: 12px; font-weight: 600; padding: 4px 10px; cursor: pointer; }
+.cp-grpadd:disabled { color: #aeb6c2; border-color: #e6e9ee; cursor: not-allowed; }
+
+/* schedule-type radios (Campaign Budget / Budget Multiplier) */
+.h10-sb-types { display: flex; flex-direction: column; gap: 14px; margin: 4px 0 22px; }
+.h10-sb-type { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; max-width: 620px; }
+.h10-sb-type input { margin-top: 2px; accent-color: #1f6fde; width: 16px; height: 16px; }
+.h10-sb-type .b { display: flex; flex-direction: column; gap: 2px; }
+.h10-sb-type .b .t { font-size: 14px; font-weight: 700; color: #1c2530; }
+.h10-sb-type .b .d { font-size: 13px; color: #5b6573; }
+
+/* Hourly Campaign Performance — chart card (controls + body) */
+.h10-sb-chart { border: 1px solid #e6e9ee; border-radius: 12px; background: #fff; overflow: hidden; margin-bottom: 22px; }
+.h10-sb-chart-controls { padding: 16px 18px 2px; }
+.h10-sb-chart-controls .row1, .h10-sb-chart-controls .row2 { display: flex; align-items: flex-end; gap: 22px; flex-wrap: wrap; margin-bottom: 14px; }
+.h10-sb-chart-controls .grow { flex: 1; }
+.h10-sb-chart-controls .f { display: flex; flex-direction: column; gap: 6px; }
+.h10-sb-chart-controls .f label { font-size: 12.5px; font-weight: 700; color: #2b3440; display: inline-flex; align-items: center; gap: 5px; }
+.h10-sb-metric { position: relative; display: inline-flex; align-items: center; }
+.h10-sb-metric .dot { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 9px; height: 9px; border-radius: 50%; z-index: 2; pointer-events: none; }
+.h10-sb-metric .h10-dd-btn { padding-left: 28px; }
+.h10-sb-i { color: #9aa3af; font-size: 12px; cursor: help; }
+.h10-sb-date { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #d8dde4; border-radius: 8px; padding: 0 11px; height: 38px; background: #fff; color: #8a93a1; }
+.h10-sb-date input { border: 0; outline: 0; font: inherit; font-size: 13.5px; color: #1c2530; width: 156px; background: none; }
+.h10-sb-date.wide input { width: 188px; }
+.h10-sb-date.disabled, .h10-sb-date input:disabled { background: #f7f9fb; color: #aeb6c2; cursor: not-allowed; }
+.h10-sb-chart-toggle { display: inline-flex; border: 1px solid #d8dde4; border-radius: 8px; overflow: hidden; }
+.h10-sb-chart-toggle button { border: 0; background: #fff; color: #8a93a1; padding: 8px 10px; cursor: pointer; display: inline-flex; }
+.h10-sb-chart-toggle button + button { border-left: 1px solid #d8dde4; }
+.h10-sb-chart-toggle button.on { background: #eaf2fe; color: #1f6fde; }
+.h10-sb-chart-body { padding: 18px; }
+.h10-sb-nodata { background: #f7f9fb; border-radius: 8px; min-height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+.h10-sb-nodata .ill { width: 54px; height: 54px; border-radius: 50%; background: #eef1f5; color: #8a93a1; display: inline-flex; align-items: center; justify-content: center; }
+.h10-sb-nodata .t { font-size: 15px; font-weight: 600; color: #3a4452; }
+
+/* weekly schedule table */
+.h10-sb-week { border: 1px solid #e6e9ee; border-radius: 12px; overflow: hidden; }
+.h10-sb-week-h, .h10-sb-week-r { display: grid; grid-template-columns: 40px 64px minmax(270px, 1fr) minmax(250px, 1.2fr) 104px; align-items: center; gap: 10px; padding: 11px 16px; }
+.h10-sb-week-h { background: #f4f6f9; font-size: 12.5px; font-weight: 700; color: #5b6573; border-bottom: 1px solid #e6e9ee; }
+.h10-sb-week-r { border-bottom: 1px solid #f1f4f7; }
+.h10-sb-week-r:last-child { border-bottom: 0; }
+.h10-sb-week .ck input { accent-color: #1f6fde; }
+.h10-sb-week-r .day { font-size: 13px; font-weight: 700; color: #1c2530; }
+.h10-sb-week-r .time { display: inline-flex; align-items: center; gap: 8px; }
+.h10-sb-week-r .time .dash { color: #8a93a1; }
+.h10-sb-week-r .adj { display: inline-flex; align-items: center; gap: 8px; }
+.h10-sb-adjval { display: inline-flex; border: 1px solid #d8dde4; border-radius: 8px; overflow: hidden; }
+.h10-sb-adjval input { border: 0; outline: 0; padding: 8px 10px; font: inherit; font-size: 13px; width: 64px; color: #1c2530; }
+.h10-sb-week .act { display: inline-flex; gap: 11px; justify-content: flex-end; color: #9aa3b0; }
+.h10-sb-week-r .act button { border: 0; background: none; color: inherit; cursor: pointer; padding: 2px; display: inline-flex; }
+.h10-sb-week-r .act button:hover { color: #1f6fde; }
+.h10-sb-week-r .act button[aria-label="Delete"]:hover { color: #e5484d; }
+
+/* Advanced — schedule start & end date card */
+.h10-sb-adv { padding: 18px; }
+.h10-sb-adv .hd { display: flex; flex-direction: column; gap: 3px; margin-bottom: 16px; }
+.h10-sb-adv .hd b { font-size: 15px; font-weight: 700; color: #1c2530; }
+.h10-sb-adv .hd span { font-size: 13px; color: #5b6573; }
+.h10-sb-dates { display: flex; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+.h10-sb-dates .f { display: flex; flex-direction: column; gap: 6px; }
+.h10-sb-dates .f label { font-size: 12.5px; font-weight: 700; color: #2b3440; }
+.h10-sb-dates .f label i { color: #e5484d; font-style: normal; }
+.h10-sb-toggle { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; color: #3a4452; padding-bottom: 8px; cursor: pointer; }
