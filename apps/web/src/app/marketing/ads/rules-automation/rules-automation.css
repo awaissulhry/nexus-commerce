@@ -75,6 +75,10 @@
 .h10-rb-conds .pill.if { background: #efe7fd; color: #7c3aed; }
 .h10-rb-conds .pill.and { background: #eef1f5; color: #5b6573; }
 .h10-rb-conds .pill.then { background: #e7f0fd; color: #1f6fde; }
+/* B2: budget THEN action row — dashed connector links the IF pill down to THEN through the column */
+.h10-rb-conds:has(.cond.then) { position: relative; }
+.h10-rb-conds:has(.cond.then)::before { content: ''; position: absolute; left: 19px; top: 30px; bottom: 27px; border-left: 1.5px dashed #c8cfd9; }
+.h10-rb-conds .cond.then { margin-top: 2px; }
 .h10-rb-val { display: inline-flex; align-items: stretch; border: 1px solid #d8dde4; border-radius: 8px; overflow: hidden; width: 200px; }
 .h10-rb-val .pf { padding: 0 11px; background: #f4f6f9; color: #5b6573; font-size: 13px; display: flex; align-items: center; border-right: 1px solid #d8dde4; }
 .h10-rb-val input { border: 0; outline: 0; padding: 9px 11px; font: inherit; font-size: 13.5px; width: 100%; color: #1c2530; }
@@ -204,6 +208,78 @@
 .h10-rb-lookback label i { color: #e5484d; font-style: normal; }
 .h10-rb-lookback .lbrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .h10-rb-lookback .exc { font-size: 13px; color: #5b6573; }
+/* Bid: ⓘ affordances on the THEN bid action + the Lookback label (matches the recording) */
+.h10-rb-lbl-i { display: inline-flex; color: #9aa3af; cursor: help; margin-left: 2px; }
+.h10-rb-lbl-i:hover { color: #6b7480; }
+.h10-rb-lookback label .h10-hc-anchor { vertical-align: middle; }
+.h10-rb-theninfo { display: inline-flex; align-items: center; color: #9aa3af; cursor: help; }
+.h10-rb-theninfo:hover { color: #6b7480; }
+/* Budget: Lookback relocated into the Advanced card (reuse the lbrow row) + B0 setup placeholder */
+.h10-rb-card.adv .advblock .lbrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.h10-rb-card.adv .advblock .lbrow .exc { font-size: 13px; color: #5b6573; }
+/* B1: inline campaign picker (Budget Rule Setup) — two-panel, matches the H10 recording */
+.h10-rb-camps { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 14px; align-items: start; }
+.h10-rb-camps .cp-left, .h10-rb-camps .cp-right { border: 1px solid #e6e9ee; border-radius: 12px; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
+.cp-search { position: relative; padding: 12px 12px 4px; }
+.cp-search input { width: 100%; height: 38px; border: 1px solid #d8dde4; border-radius: 8px; padding: 0 36px 0 12px; font: inherit; font-size: 13px; color: #1c2530; }
+.cp-search input:focus { outline: 0; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.13); }
+.cp-search input::placeholder { color: #aeb6c2; }
+.cp-search .ic { position: absolute; right: 24px; top: 21px; color: #8a93a1; pointer-events: none; }
+.cp-statusrow { display: flex; align-items: center; gap: 14px; padding: 8px 12px 12px; flex-wrap: wrap; border-bottom: 1px solid #eef1f5; }
+.cp-statusrow .rads { display: inline-flex; align-items: center; gap: 14px; }
+.cp-statusrow .lbl { font-size: 13px; font-weight: 600; color: #2b3440; }
+.cp-statusrow .rad { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: #3a4452; cursor: pointer; }
+.cp-statusrow .rad input { accent-color: #1f6fde; }
+.cp-addall { margin-left: auto; background: #1f6fde; color: #fff; border: 0; border-radius: 8px; padding: 7px 15px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.cp-addall:hover { background: #1a60c4; }
+.cp-addall:disabled { background: #b9c4d2; cursor: default; }
+.cp-list, .cp-alist { max-height: 322px; overflow-y: auto; }
+.cp-msg { padding: 36px 12px; text-align: center; color: #8a93a1; font-size: 13px; }
+.cp-row, .cp-arow { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid #f1f4f7; }
+.cp-badge { width: 22px; height: 22px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0; }
+.cp-badge.auto { background: #0048ab; }
+.cp-badge.manual { background: #7a00b5; }
+.cp-badge.prod { background: #eef1f5; border: 1px solid #d3dae0; color: #5b6b7b; }
+.cp-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-status { font-size: 12px; font-weight: 600; padding: 3px 11px; border-radius: 20px; flex-shrink: 0; }
+.cp-status.on { background: #d8eafc; color: #2f72d6; }
+.cp-status.off { background: #eceff3; color: #6b7480; }
+.cp-add { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid #1f6fde; color: #1f6fde; border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0; }
+.cp-add:hover { background: #eef4fd; }
+.cp-add.added { background: #f1f4f8; border-color: #dfe4ea; color: #8a93a1; cursor: default; }
+.cp-pager { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid #eef1f5; }
+.cp-pager .pg { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #d8dde4; border-radius: 7px; background: #fff; color: #5b6573; cursor: pointer; }
+.cp-pager .pg:disabled { color: #c2cad4; cursor: default; }
+.cp-pager .pgn { min-width: 28px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #1f6fde; border-radius: 7px; color: #1f6fde; font-size: 13px; font-weight: 600; padding: 0 8px; }
+.cp-pager .pp { margin-left: auto; }
+.cp-rhead { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; }
+.cp-rhead b { font-size: 15px; font-weight: 800; color: #2b3a4f; }
+.cp-removeall { display: inline-flex; align-items: center; gap: 6px; background: #f6f8fa; border: 1px solid #e6e9ee; border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 13px; color: #2b3440; cursor: pointer; }
+.cp-removeall:hover { background: #eef1f5; }
+.cp-removeall:disabled { color: #aeb6c2; cursor: default; }
+.cp-colhdr { padding: 9px 16px; background: #f4f6f9; font-size: 12.5px; font-weight: 700; color: #5b6573; }
+.cp-empty { min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #98a2b0; font-size: 13px; }
+.cp-rm { margin-left: auto; border: 0; background: none; color: #8a93a1; cursor: pointer; display: inline-flex; padding: 3px; border-radius: 6px; flex-shrink: 0; }
+.cp-rm:hover { background: #f1f4f8; color: #e5484d; }
+/* B3: rule templates — Apply Template (Criteria header) + Save Template (footer) + modal */
+.h10-rb-crit-hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.h10-rb-crit-hd .t h2 { margin: 0; }
+.h10-rb-tmpl { display: inline-flex; align-items: center; gap: 7px; background: #fff; border: 1px solid #1f6fde; color: #1f6fde; border-radius: 8px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0; }
+.h10-rb-tmpl:hover { background: #eef4fd; }
+.h10-rb-tmpl-modal { width: 460px; max-width: calc(100vw - 40px); max-height: 80vh; background: #fff; border-radius: 14px; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(20,28,38,.3); overflow: hidden; }
+.h10-rb-tmpl-modal .ph { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 12px; }
+.h10-rb-tmpl-modal .ph b { font-size: 16px; font-weight: 800; color: #1c2530; }
+.h10-rb-tmpl-modal .ph button { border: 0; background: none; color: #8a93a1; cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
+.h10-rb-tmpl-modal .ph button:hover { background: #f1f4f8; color: #1c2530; }
+.h10-rb-tmpl-modal .tmbody { padding: 4px 22px 20px; overflow-y: auto; }
+.h10-rb-tmpl-modal .tmbody label { display: block; font-size: 13px; font-weight: 700; color: #2b3440; margin-bottom: 7px; }
+.h10-rb-tmpl-modal .tmbody .h10-rb-input { width: 100%; }
+.h10-rb-tmpl-modal .tmhint { font-size: 12.5px; color: #6b7480; margin: 9px 0 0; line-height: 1.45; }
+.h10-rb-tmpl-modal .tmfoot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.h10-rb-tmpl-modal .tmempty { padding: 30px 6px; text-align: center; color: #8a93a1; font-size: 13px; line-height: 1.5; }
+.h10-rb-tmpl-modal .tmlist { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
+.h10-rb-tmpl-modal .tmrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid #e6e9ee; border-radius: 9px; }
+.h10-rb-tmpl-modal .tmn { font-size: 13.5px; font-weight: 600; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Advanced → Frequency: Custom · Every N · interval · on <day> · at <time> */
 .h10-rb-card.adv .freqrow { flex-wrap: wrap; row-gap: 10px; }
 .h10-rb-card.adv .freqrow .lbl { font-size: 13px; color: #5b6573; }
@@ -217,6 +293,8 @@
 /* N2: inline day-count inside the "don't negate converting" sentence (negative-targeting only) */
 .h10-rb-ninline { width: 48px; height: 26px; margin: 0 5px; border: 1px solid #d8dde4; border-radius: 6px; padding: 0 6px; font: inherit; font-size: 12.5px; text-align: center; color: #1c2530; vertical-align: middle; }
 .h10-rb-ninline:focus { outline: 0; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.15); }
+/* B5: budget guardrails — floor>ceiling warning */
+.h10-rb-warn { margin-top: 10px; font-size: 12.5px; color: #c2410c; background: #fff5ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 8px 12px; line-height: 1.45; }
 
 /* ── R3: Keyword Harvesting "Positive Rule Setup" — heading row + Ad Group Mapping + info banner ── */
 .h10-rb-setuphd { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 6px; }
@@ -303,3 +381,8 @@
 .h10-rb-prev .ptr { border-bottom: 1px solid #f1f4f8; }
 .h10-rb-prev .pthr span:first-child, .h10-rb-prev .ptr .term { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 12px; color: #1c2530; }
 .h10-rb-prev .pthr span:not(:first-child), .h10-rb-prev .ptr span:not(.term) { flex: 0 0 80px; text-align: right; color: #5b6573; }
+/* B4: budget preview — proposed (new) daily budget, coloured by direction */
+.h10-rb-prev .ptable.bud .pthr span:last-child, .h10-rb-prev .ptable.bud .ptr .newb { flex: 0 0 110px; }
+.h10-rb-prev .ptr .newb { font-weight: 700; color: #1c2530; }
+.h10-rb-prev .ptr .newb.up { color: #15a34a; }
+.h10-rb-prev .ptr .newb.down { color: #e5484d; }
