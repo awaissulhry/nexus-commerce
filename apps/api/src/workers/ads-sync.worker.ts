@@ -143,6 +143,8 @@ async function resolveProfileId(marketplace: string | null): Promise<string | nu
 
 function patchFromChanges(payload: AdMutationPayload): {
   state?: 'enabled' | 'paused' | 'archived'
+  name?: string
+  portfolioId?: string
   dailyBudget?: number
   defaultBid?: number
   bid?: number
@@ -152,6 +154,10 @@ function patchFromChanges(payload: AdMutationPayload): {
     if (!c.newValue) continue
     if (c.field === 'status') {
       out.state = c.newValue.toLowerCase()
+    } else if (c.field === 'name') {
+      out.name = c.newValue
+    } else if (c.field === 'portfolioId') {
+      out.portfolioId = c.newValue
     } else if (c.field === 'dailyBudget') {
       out.dailyBudget = Number(c.newValue)
     } else if (c.field === 'defaultBid') {

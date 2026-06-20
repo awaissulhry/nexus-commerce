@@ -95,6 +95,8 @@ export interface AdsDataGridProps<T> {
   /** footer + empty */
   reportLabel?: string
   emptyLabel?: string
+  /** richer empty-state (CTA button etc.) — overrides emptyLabel when there are no rows */
+  emptyNode?: ReactNode
   /** initial sort (H10 grids default to Spend ↓); the matching header renders blue/active */
   defaultSort?: { key: string; dir: 'asc' | 'desc' }
   /** inline edit mode (H10 "Edit Groups"): editable cells + Discard/Apply toolbar */
@@ -132,7 +134,7 @@ export function AdsDataGrid<T>({
   toolbarLeft, toolbarRight, exportable, onExport, customizable = true, storageKey,
   selectable = true, selected, onSelectedChange,
   showTotal, totalFirst = 'Total',
-  reportLabel, emptyLabel = 'No data.', defaultSort, editMode, selectionActions,
+  reportLabel, emptyLabel = 'No data.', emptyNode, defaultSort, editMode, selectionActions,
   searchable, searchPlaceholder = 'Search…', searchValue, pagerCentered, filtersDefaultOpen = true,
 }: AdsDataGridProps<T>) {
   const [filtersOpen, setFiltersOpen] = useState(filtersDefaultOpen)
@@ -353,15 +355,6 @@ export function AdsDataGrid<T>({
         <span className="cnt">{selectable && sel.size > 0
           ? <b>{`Selected ${sel.size} ${pluralize(noun, sel.size)}`}</b>
           : sorted.length === 0 ? `Showing 0 ${pluralize(noun, 0)}` : `Viewing ${viewStart}-${viewEnd} of ${sorted.length} ${pluralize(noun, sorted.length)}`}</span>
-        {searchable && (searchOpen ? (
-          <span className="h10-am-searchbox">
-            <Search size={14} />
-            <input autoFocus value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} placeholder={searchPlaceholder} aria-label="Search" />
-            <button type="button" className="x" aria-label="Clear search" onMouseDown={(e) => e.preventDefault()} onClick={() => { setSearch(''); setSearchOpen(false) }}><X size={13} /></button>
-          </span>
-        ) : (
-          <button type="button" className="h10-am-searchbtn" aria-label="Search" onClick={() => setSearchOpen(true)}><Search size={15} /></button>
-        ))}
         {editMode && editMode.bulk !== false ? (editing ? (
           <span className="h10-edit-actions">
             <button type="button" className="h10-discard" onClick={discardEdits}>Discard Changes</button>
@@ -371,6 +364,16 @@ export function AdsDataGrid<T>({
           <button type="button" className="h10-am-btn primary" onClick={enterEdit}><Pencil size={13} /> {editMode.label}</button>
         )) : toolbarLeft}
         {selectable && sel.size > 0 && !editing && selectionActions ? selectionActions([...sel], () => setSel(new Set())) : null}
+        {/* inline 🔍 sits after the count + any selection actions (H10 order) */}
+        {searchable && (searchOpen ? (
+          <span className="h10-am-searchbox">
+            <Search size={14} />
+            <input autoFocus value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} placeholder={searchPlaceholder} aria-label="Search" />
+            <button type="button" className="x" aria-label="Clear search" onMouseDown={(e) => e.preventDefault()} onClick={() => { setSearch(''); setSearchOpen(false) }}><X size={13} /></button>
+          </span>
+        ) : (
+          <button type="button" className="h10-am-searchbtn" aria-label="Search" onClick={() => setSearchOpen(true)}><Search size={15} /></button>
+        ))}
         <span className="grow" />
         {toolbarRight}
         {customizable && (
@@ -419,7 +422,7 @@ export function AdsDataGrid<T>({
                 </tr>
               ))
             ) : paged.length === 0 ? (
-              <tr><td colSpan={visibleCols.length + (selectable ? 2 : 1)} className="empty">{emptyLabel}</td></tr>
+              <tr><td colSpan={visibleCols.length + (selectable ? 2 : 1)} className="empty">{emptyNode ?? emptyLabel}</td></tr>
             ) : (
               <>
                 {showTotal && (

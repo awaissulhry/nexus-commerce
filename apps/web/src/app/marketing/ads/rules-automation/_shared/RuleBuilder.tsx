@@ -62,6 +62,21 @@ const BID_ACTIONS: Array<{ value: string; label: string; unit: 'eur' | 'pct' }> 
   { value: 'incAbs', label: 'Increase Bid by(€)', unit: 'eur' },
   { value: 'decAbs', label: 'Decrease Bid by(€)', unit: 'eur' },
 ]
+// Placement rule THEN — set/raise/lower a placement bid modifier (% only).
+const PLACEMENT_ACTIONS: Array<{ value: string; label: string; unit: 'eur' | 'pct' }> = [
+  { value: 'set', label: 'Set to(%)', unit: 'pct' },
+  { value: 'incPct', label: 'Increase by(%)', unit: 'pct' },
+  { value: 'decPct', label: 'Decrease by(%)', unit: 'pct' },
+]
+// SP placement targets (Amazon: Top of Search / Product Pages / Rest of Search).
+const PLACEMENTS = [
+  { value: 'tos', label: 'Top of Search' },
+  { value: 'pdp', label: 'Product Pages' },
+  { value: 'ros', label: 'Rest of Search' },
+]
+// IF placement-scope (which placement's metric to evaluate) — Campaign-wide or a single placement.
+const PLACEMENT_SCOPES = [{ value: 'campaign', label: 'Campaign' }, ...PLACEMENTS]
+const METRICS_PLACEMENT = ['ACOS', 'ROAS', 'Sales', 'Spend', 'Orders', 'CVR', 'CTR', 'CPC', 'Clicks', 'Impressions'].map((m) => ({ value: m, label: m }))
 const actionUnit = (actions: Array<{ value: string; unit: 'eur' | 'pct' }>, op?: string): 'eur' | 'pct' => actions.find((a) => a.value === op)?.unit ?? 'eur'
 // builder slug → backend automation-rule trigger (the create payload)
 const TRIGGER_BY_SLUG: Record<string, string> = {
@@ -98,7 +113,7 @@ const TIMEZONES = [
 // only the hover copy differs (negative vs positive).
 interface MatchType { key: string; product?: boolean; tip: string }
 // a campaign row for the Budget rule's inline picker (B1 fills the panel)
-interface BudgetCampaign { id: string; name: string; marketplace: string | null; status: string; targetingType: string; adProduct: string; dailyBudget: number | null }
+interface BudgetCampaign { id: string; name: string; marketplace: string | null; status: string; targetingType: string; adProduct: string; dailyBudget: number | null; placements?: { tos: number | null; pdp: number | null; ros: number | null } }
 const MATCH_TYPES_NEG: MatchType[] = [
   { key: 'P', tip: 'Negative Phrase' },
   { key: 'E', tip: 'Negative Exact' },
@@ -117,16 +132,16 @@ interface SelGroup extends AdGroupItem { look: boolean; types: { P: boolean; E: 
 interface MapBlock { id: number; groups: SelGroup[] }
 let _bid = 1
 
-interface Condition { metric: string; op: string; value: string }
-interface CriteriaGroup { id: number; conditions: Condition[]; lookback: string; exclude: string; budgetOp?: string; budgetValue?: string }
+interface Condition { metric: string; op: string; value: string; scope?: string } // scope = placement IF-scope (Campaign/ToS/PDP/RoS)
+interface CriteriaGroup { id: number; conditions: Condition[]; lookback: string; exclude: string; budgetOp?: string; budgetValue?: string; placeTarget?: string } // placeTarget = placement THEN target
 let _cid = 1
 // Harvest seeds "PPC Orders ≥ 1" (converting); Negative (+others) seed "Sales = 0" (non-converting).
-const defaultCondition = (slug: string): Condition => (slug === 'keyword-harvesting' ? { metric: 'PPC Orders', op: 'gte', value: '1' } : (slug === 'budget' || slug === 'bid') ? { metric: 'ACOS', op: 'gt', value: '' } : { metric: 'Sales', op: 'eq', value: '0' })
-const newGroup = (slug: string): CriteriaGroup => ({ id: _cid++, conditions: [defaultCondition(slug)], lookback: 'Last 60 Days', exclude: 'Last 3 Days', budgetOp: 'set', budgetValue: '' })
+const defaultCondition = (slug: string): Condition => (slug === 'keyword-harvesting' ? { metric: 'PPC Orders', op: 'gte', value: '1' } : slug === 'placement' ? { metric: 'ACOS', op: 'gt', value: '', scope: 'campaign' } : (slug === 'budget' || slug === 'bid') ? { metric: 'ACOS', op: 'gt', value: '' } : { metric: 'Sales', op: 'eq', value: '0' })
+const newGroup = (slug: string): CriteriaGroup => ({ id: _cid++, conditions: [defaultCondition(slug)], lookback: 'Last 60 Days', exclude: 'Last 3 Days', budgetOp: 'set', budgetValue: '', placeTarget: 'tos' })
 
 // per-type Rule Setup config — Negative vs Positive/Harvest differ in heading, copy,
 // targets-panel title, and whether Harvest's "Ad Group Mapping" button + info banner show.
-const SETUP: Record<string, { nav: string; desc: string; targetsTitle: string; matchTypes: MatchType[]; mapping?: boolean; banner?: string; surface?: 'search-terms' | 'campaign-budget' | 'campaign-bid' }> = {
+const SETUP: Record<string, { nav: string; desc: string; targetsTitle: string; matchTypes: MatchType[]; mapping?: boolean; banner?: string; surface?: 'search-terms' | 'campaign-budget' | 'campaign-bid' | 'campaign-placement' }> = {
   'negative-targeting': {
     nav: 'Negative Rule Setup',
     desc: 'Add related Ad Groups in any order and select which ones you’d like Nexus Ads to use to find non-converting search terms/ASINs. For each Ad Group, you can then decide which type of target you want to create when it finds a non-converting search term/ASIN.',
@@ -155,6 +170,13 @@ const SETUP: Record<string, { nav: string; desc: string; targetsTitle: string; m
     matchTypes: [],
     surface: 'campaign-bid',
   },
+  placement: {
+    nav: 'Placement Rule Setup',
+    desc: 'Select the Campaigns you want to include',
+    targetsTitle: '',
+    matchTypes: [],
+    surface: 'campaign-placement',
+  },
 }
 const setupFor = (slug: string) => SETUP[slug] ?? SETUP['negative-targeting']
 
@@ -181,10 +203,10 @@ const STEPS_FOR = (slug: string): Array<{ id: string; label: string }> => {
     { id: 'advanced', label: 'Advanced Settings' },
     { id: 'control', label: 'Control' },
   ]
-  // Campaign-scoped rules (Budget · Bid) have no Search Terms step — their action is a THEN
-  // clause inside Criteria, applied to the selected campaigns.
+  // Campaign-scoped rules (Budget · Bid · Placement) have no Search Terms step — their action is
+  // a THEN clause inside Criteria, applied to the selected campaigns.
   const sf = SETUP[slug]?.surface
-  if (sf === 'campaign-budget' || sf === 'campaign-bid') return [...head, ...tail]
+  if (sf === 'campaign-budget' || sf === 'campaign-bid' || sf === 'campaign-placement') return [...head, ...tail]
   return [...head, { id: 'search-terms', label: 'Search Terms' }, ...tail]
 }
 
@@ -199,7 +221,9 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const surface = setup.surface ?? 'search-terms'
   const isBudget = surface === 'campaign-budget'
   const isBid = surface === 'campaign-bid' // Bid rule: campaign-picker setup + a "Set/Adjust Bid" THEN action, with lookback per-criteria
-  const isCampaign = isBudget || isBid // both campaign-scoped surfaces share the CampaignPicker + THEN-action + templates
+  const isPlacement = surface === 'campaign-placement' // Placement rule: campaign picker + IF placement-scope + THEN placement-target adjustment (%)
+  const isCampaign = isBudget || isBid || isPlacement // all campaign-scoped surfaces share the CampaignPicker + THEN-action + templates
+  const advLookback = isBudget || isPlacement // Budget + Placement put Lookback in Advanced (one window for the rule); Bid keeps it per-criteria
   const isNegative = slug === 'negative-targeting' // N2 features (Negation Level · protect-converting) are negative-only, NOT "everything that isn't harvest"
   const close = useCallback(() => router.push('/marketing/ads/rules-automation'), [router])
 
@@ -254,6 +278,9 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const [budgetCeiling, setBudgetCeiling] = useState('')
   const [maxAdSpend, setMaxAdSpend] = useState('')
   const [scopeMarket, setScopeMarket] = useState('all')
+  // ── Placement guardrails (P4) — % modifier caps (Amazon allows 0–900%) ──
+  const [placeFloor, setPlaceFloor] = useState('0')
+  const [placeCeiling, setPlaceCeiling] = useState('900')
   // ── B3: rule templates (Budget) ──
   const [templates, setTemplates] = useState<Array<{ id: string; name: string; payload?: unknown }>>([])
   const [tmpl, setTmpl] = useState<{ mode: 'save' | 'apply' } | null>(null)
@@ -314,6 +341,18 @@ export function RuleBuilder({ slug }: { slug: string }) {
       setPreview({ open: true, loading: false, terms: selCampaigns.map((c) => { const cur = c.dailyBudget ?? 0; return { term: c.name, current: cur, proposed: Math.round(clamp(apply(cur)) * 100) / 100 } }) })
       return
     }
+    if (isPlacement) {
+      const g0 = groups[0]
+      const target = g0?.placeTarget ?? 'tos'
+      const op = g0?.budgetOp ?? 'set'
+      const v = Number(g0?.budgetValue ?? '') || 0
+      const apply = (cur: number) => op === 'set' ? v : op === 'incPct' ? cur * (1 + v / 100) : op === 'decPct' ? cur * (1 - v / 100) : cur
+      const floor = Math.max(0, Number(placeFloor) || 0)
+      const ceil = placeCeiling.trim() ? Number(placeCeiling) : 900
+      const clamp = (x: number) => Math.min(ceil, Math.max(floor, x))
+      setPreview({ open: true, loading: false, terms: selCampaigns.map((c) => { const cur = c.placements?.[target as 'tos' | 'pdp' | 'ros'] ?? 0; return { term: c.name, current: cur, proposed: Math.round(clamp(apply(cur))) } }) })
+      return
+    }
     try {
       const lb = groups[0]?.lookback ?? 'Last 60 Days'
       const windowDays = Number((lb.match(/\d+/) ?? ['60'])[0]) || 60
@@ -334,7 +373,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
         setPreview({ open: true, loading: false, terms: raw.slice(0, 100).map((t) => ({ term: String(t.query ?? t.searchTerm ?? t.term ?? ''), matchType: t.matchType ? String(t.matchType) : undefined, clicks: Number(t.totalClicks ?? t.clicks ?? 0) || undefined, spend: t.totalCostUnits != null ? Number(t.totalCostUnits) : (t.spendCents != null ? Number(t.spendCents) / 100 : (t.spend != null ? Number(t.spend) : undefined)) })).filter((t) => t.term) })
       }
     } catch { setPreview({ open: true, loading: false, terms: [] }) }
-  }, [groups, isHarvest, isBudget, selCampaigns, budgetFloor, budgetCeiling])
+  }, [groups, isHarvest, isBudget, isPlacement, selCampaigns, budgetFloor, budgetCeiling, placeFloor, placeCeiling])
   // Esc closes the Preview modal
   useEffect(() => {
     if (!preview?.open) return
@@ -379,7 +418,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const dupGroup = (gid: number) => setGroups((gs) => { const g = gs.find((x) => x.id === gid); return g ? [...gs, { ...g, id: _cid++, conditions: g.conditions.map((c) => ({ ...c })) }] : gs })
   const delGroup = (gid: number) => setGroups((gs) => (gs.length > 1 ? gs.filter((g) => g.id !== gid) : gs))
   const setExclude = (gid: number, v: string) => setGroups((gs) => gs.map((g) => g.id === gid ? { ...g, exclude: v } : g))
-  const setBudgetAct = (gid: number, patch: { budgetOp?: string; budgetValue?: string }) => setGroups((gs) => gs.map((g) => g.id === gid ? { ...g, ...patch } : g))
+  const setBudgetAct = (gid: number, patch: { budgetOp?: string; budgetValue?: string; placeTarget?: string }) => setGroups((gs) => gs.map((g) => g.id === gid ? { ...g, ...patch } : g))
 
   const adGroupCount = blocks.reduce((n, b) => n + b.groups.length, 0)
   const criteriaValid = groups.every((g) => g.conditions.length > 0 && g.conditions.every((c) => c.value.trim() !== '') && (!isCampaign || (g.budgetValue ?? '').trim() !== ''))
@@ -396,12 +435,13 @@ export function RuleBuilder({ slug }: { slug: string }) {
         name: ruleName.trim(),
         description: `${rt?.label ?? 'Rule'} — ${isEdit ? 'edited' : 'created'} in Rule Builder`,
         trigger: TRIGGER_BY_SLUG[slug] ?? 'SCHEDULE',
-        conditions: groups.map((g) => ({ match: 'all', lookback: isBudget ? budgetLookback : g.lookback, exclude: isBudget ? budgetExclude : g.exclude, conditions: g.conditions, ...(isCampaign ? { action: { op: g.budgetOp ?? 'set', value: g.budgetValue ?? '' } } : {}) })),
+        conditions: groups.map((g) => ({ match: 'all', lookback: advLookback ? budgetLookback : g.lookback, exclude: advLookback ? budgetExclude : g.exclude, conditions: g.conditions, ...(isCampaign ? { action: { op: g.budgetOp ?? 'set', value: g.budgetValue ?? '', ...(isPlacement ? { placeTarget: g.placeTarget ?? 'tos' } : {}) } } : {}) })),
         actions: [{
           type: slug, control, dedupe, negateInSource, bid: { mode: bidMode, value: bidValue }, filters: { brandExclude: brandExclude.split(/[\n,]/).map((t) => t.trim()).filter(Boolean), competitorOnly }, searchTerms, schedule: { frequency, everyN, interval, onDay, time, timezone },
           ...(isNegative ? { protectConverting, protectDays: Math.max(0, Math.round(Number(protectDays) || 30)), negationLevel } : {}),
           ...(isCampaign ? { campaigns: selCampaigns.map((c) => ({ id: c.id, name: c.name, marketplace: c.marketplace, adProduct: c.adProduct, targetingType: c.targetingType, dailyBudget: c.dailyBudget })) } : {}),
           ...(isBudget ? { budgetFloor: Math.max(1, Number(budgetFloor) || 1), budgetCeiling: budgetCeiling.trim() ? Number(budgetCeiling) : null } : {}),
+          ...(isPlacement ? { placeFloor: Math.max(0, Number(placeFloor) || 0), placeCeiling: placeCeiling.trim() ? Number(placeCeiling) : 900 } : {}),
           mappings: blocks.map((b) => ({ groups: b.groups.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, campaignName: g.campaignName, status: g.status, adProduct: g.adProduct, portfolioId: g.portfolioId, look: g.look, types: g.types })) })),
         }],
         ...(isBudget ? { maxDailyAdSpendCentsEur: maxAdSpend.trim() ? Math.round(Number(maxAdSpend) * 100) : undefined, scopeMarketplace: scopeMarket === 'all' ? undefined : scopeMarket } : {}),
@@ -411,7 +451,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
       const j = await r.json().catch(() => ({}))
       if (r.ok && j?.error == null) router.push('/marketing/ads/rules-automation')
     } finally { setCreating(false) }
-  }, [valid, creating, ruleName, rt, slug, groups, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, isHarvest, isNegative, isBudget, isBid, isCampaign, selCampaigns, budgetLookback, budgetExclude, budgetFloor, budgetCeiling, maxAdSpend, scopeMarket, protectConverting, protectDays, negationLevel, searchTerms, frequency, everyN, interval, onDay, time, timezone, blocks, isEdit, ruleId, router])
+  }, [valid, creating, ruleName, rt, slug, groups, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, isHarvest, isNegative, isBudget, isBid, isPlacement, isCampaign, advLookback, selCampaigns, budgetLookback, budgetExclude, budgetFloor, budgetCeiling, maxAdSpend, scopeMarket, placeFloor, placeCeiling, protectConverting, protectDays, negationLevel, searchTerms, frequency, everyN, interval, onDay, time, timezone, blocks, isEdit, ruleId, router])
 
   // ── edit mode: load an existing rule's stored JSON back into the builder ──
   useEffect(() => {
@@ -424,8 +464,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
         if (!alive || !rule) return
         setRuleName(rule.name ?? '')
         const conds = Array.isArray(rule.conditions) ? rule.conditions : []
-        if (conds.length) setGroups(conds.map((c: { conditions?: Condition[]; lookback?: string; exclude?: string; action?: { op?: string; value?: string } }) => ({ id: ++_cid, conditions: Array.isArray(c.conditions) && c.conditions.length ? c.conditions : [defaultCondition(slug)], lookback: c.lookback ?? 'Last 60 Days', exclude: c.exclude ?? 'Last 3 Days', budgetOp: c.action?.op ?? 'set', budgetValue: c.action?.value ?? '' })))
-        if (isBudget && conds[0]) { if (conds[0].lookback) setBudgetLookback(conds[0].lookback); if (conds[0].exclude) setBudgetExclude(conds[0].exclude) }
+        if (conds.length) setGroups(conds.map((c: { conditions?: Condition[]; lookback?: string; exclude?: string; action?: { op?: string; value?: string; placeTarget?: string } }) => ({ id: ++_cid, conditions: Array.isArray(c.conditions) && c.conditions.length ? c.conditions : [defaultCondition(slug)], lookback: c.lookback ?? 'Last 60 Days', exclude: c.exclude ?? 'Last 3 Days', budgetOp: c.action?.op ?? 'set', budgetValue: c.action?.value ?? '', placeTarget: c.action?.placeTarget ?? 'tos' })))
+        if (advLookback && conds[0]) { if (conds[0].lookback) setBudgetLookback(conds[0].lookback); if (conds[0].exclude) setBudgetExclude(conds[0].exclude) }
         const a = (Array.isArray(rule.actions) ? rule.actions[0] : null) ?? {}
         setControl(a.control === 'automate' ? 'automate' : 'manual')
         setDedupe(a.dedupe !== false)
@@ -438,6 +478,10 @@ export function RuleBuilder({ slug }: { slug: string }) {
           if (a.budgetCeiling != null) setBudgetCeiling(String(a.budgetCeiling))
           if (rule.maxDailyAdSpendCentsEur != null) setMaxAdSpend(String(rule.maxDailyAdSpendCentsEur / 100))
           if (rule.scopeMarketplace) setScopeMarket(rule.scopeMarketplace)
+        }
+        if (isPlacement) {
+          if (a.placeFloor != null) setPlaceFloor(String(a.placeFloor))
+          if (a.placeCeiling != null) setPlaceCeiling(String(a.placeCeiling))
         }
         if (Array.isArray(a.searchTerms)) setSearchTerms(a.searchTerms)
         const s = a.schedule ?? {}
@@ -541,7 +585,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
                     {g.conditions.map((c, i) => (
                       <div className="cond" key={i}>
                         <span className={`pill ${i === 0 ? 'if' : 'and'}`}>{i === 0 ? 'IF' : 'AND'}</span>
-                        <H10Select width={300} options={isBudget ? METRICS_BUDGET : METRICS} value={c.metric} onChange={(v) => setCond(g.id, i, { metric: v })} ariaLabel="Metric" />
+                        {isPlacement && <H10Select width={190} options={PLACEMENT_SCOPES} value={c.scope ?? 'campaign'} onChange={(v) => setCond(g.id, i, { scope: v })} ariaLabel="Placement scope" />}
+                        <H10Select width={isPlacement ? 220 : 300} options={isPlacement ? METRICS_PLACEMENT : isBudget ? METRICS_BUDGET : METRICS} value={c.metric} onChange={(v) => setCond(g.id, i, { metric: v })} ariaLabel="Metric" />
                         <H10Select width={300} options={OPERATORS} value={c.op} onChange={(v) => setCond(g.id, i, { op: v })} ariaLabel="Operator" />
                         {(() => { const u = METRIC_UNIT[c.metric] ?? ''; return (
                           <span className={`h10-rb-val ${u === 'pct' ? 'hassf' : ''}`}>
@@ -554,16 +599,18 @@ export function RuleBuilder({ slug }: { slug: string }) {
                       </div>
                     ))}
                     <button type="button" className="h10-rb-addand" onClick={() => addCondition(g.id)}><Plus size={13} /> AND</button>
-                    {isCampaign && (() => { const actions = isBid ? BID_ACTIONS : BUDGET_ACTIONS; const u = actionUnit(actions, g.budgetOp); return (
+                    {isCampaign && (() => { const actions = isPlacement ? PLACEMENT_ACTIONS : isBid ? BID_ACTIONS : BUDGET_ACTIONS; const u = actionUnit(actions, g.budgetOp); return (
                       <div className="cond then">
                         <span className="pill then">THEN</span>
-                        <H10Select width={300} options={actions} value={g.budgetOp ?? 'set'} onChange={(v) => setBudgetAct(g.id, { budgetOp: v })} ariaLabel={isBid ? 'Bid action' : 'Budget action'} />
+                        {isPlacement && <H10Select width={190} options={PLACEMENTS} value={g.placeTarget ?? 'tos'} onChange={(v) => setBudgetAct(g.id, { placeTarget: v })} ariaLabel="Placement target" />}
+                        <H10Select width={isPlacement ? 200 : 300} options={actions} value={g.budgetOp ?? 'set'} onChange={(v) => setBudgetAct(g.id, { budgetOp: v })} ariaLabel={isPlacement ? 'Placement action' : isBid ? 'Bid action' : 'Budget action'} />
                         <span className={`h10-rb-val ${u === 'pct' ? 'hassf' : ''}`}>
                           {u === 'eur' && <span className="pf">€</span>}
-                          <input inputMode="decimal" value={g.budgetValue ?? ''} onChange={(e) => setBudgetAct(g.id, { budgetValue: e.target.value })} aria-label={isBid ? 'Bid amount' : 'Budget amount'} />
+                          <input inputMode="decimal" value={g.budgetValue ?? ''} onChange={(e) => setBudgetAct(g.id, { budgetValue: e.target.value })} aria-label={isPlacement ? 'Placement modifier' : isBid ? 'Bid amount' : 'Budget amount'} />
                           {u === 'pct' && <span className="sf">%</span>}
                         </span>
                         {isBid && <HoverCard text="The bid this rule sets — or the amount it raises/lowers the current keyword bid by — when the criteria are met." placement="above"><span className="h10-rb-theninfo" aria-hidden="true"><Info size={15} /></span></HoverCard>}
+                        {isPlacement && <HoverCard text="The placement bid modifier this rule sets (or raises/lowers) for the chosen placement when the criteria are met. Amazon allows 0–900%." placement="above"><span className="h10-rb-theninfo" aria-hidden="true"><Info size={15} /></span></HoverCard>}
                       </div>
                     ) })()}
                   </div>
@@ -623,7 +670,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
             <section id="rb-advanced" className="h10-rb-sec">
               <h2>Advanced Settings</h2>
               <div className="h10-rb-card adv">
-                {isBudget && (
+                {advLookback && (
                 <div className="advblock">
                   <b>Lookback period</b>
                   <p>Set the time range of the data used to trigger this rule</p>
@@ -677,6 +724,19 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   <b>Marketplace</b>
                   <p>Limit this rule to a single marketplace (budgets differ per market)</p>
                   <H10Select width={260} options={MARKETS} value={scopeMarket} onChange={setScopeMarket} ariaLabel="Marketplace scope" />
+                </div>
+                )}
+                {isPlacement && (
+                <div className="advblock">
+                  <b>Placement Guardrails</b>
+                  <p>Hard limits on the placement bid modifier — Amazon allows 0–900%</p>
+                  <div className="freqrow">
+                    <span className="lbl">Min</span>
+                    <span className="h10-rb-val bidv hassf"><input inputMode="decimal" value={placeFloor} onChange={(e) => setPlaceFloor(e.target.value)} aria-label="Min placement modifier" /><span className="sf">%</span></span>
+                    <span className="lbl">Max</span>
+                    <span className="h10-rb-val bidv hassf"><input inputMode="decimal" value={placeCeiling} onChange={(e) => setPlaceCeiling(e.target.value)} aria-label="Max placement modifier" /><span className="sf">%</span></span>
+                  </div>
+                  {placeCeiling.trim() !== '' && (Number(placeFloor) || 0) > (Number(placeCeiling) || 0) && <div className="h10-rb-warn">Min ({placeFloor}%) is above Max ({placeCeiling}%) — increases would be capped at the Max.</div>}
                 </div>
                 )}
                 {isNegative && (
@@ -743,12 +803,14 @@ export function RuleBuilder({ slug }: { slug: string }) {
       </div>
       {preview?.open && (
         <div className="h10-rb-prevback" onClick={() => setPreview(null)}>
-          <div className="h10-rb-prev" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={isBudget ? 'Budget preview' : isHarvest ? 'Harvest preview' : 'Negative targeting preview'}>
-            <div className="ph"><b>{isBudget ? 'Budget Preview — current → proposed' : isHarvest ? 'Preview — converting search terms' : 'Preview — wasting search terms'}</b><button type="button" onClick={() => setPreview(null)} aria-label="Close"><X size={18} /></button></div>
-            <div className="psub">{isBudget ? 'Read-only: the new daily budget each selected campaign would get when this rule fires.' : isHarvest ? 'Live, read-only: search terms currently meeting your criteria that would be harvested.' : 'Live, read-only: search terms currently meeting your criteria that would be negated.'}</div>
+          <div className="h10-rb-prev" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={isPlacement ? 'Placement preview' : isBudget ? 'Budget preview' : isHarvest ? 'Harvest preview' : 'Negative targeting preview'}>
+            <div className="ph"><b>{isPlacement ? 'Placement Preview — current → proposed' : isBudget ? 'Budget Preview — current → proposed' : isHarvest ? 'Preview — converting search terms' : 'Preview — wasting search terms'}</b><button type="button" onClick={() => setPreview(null)} aria-label="Close"><X size={18} /></button></div>
+            <div className="psub">{isPlacement ? `Read-only: the new ${(PLACEMENTS.find((p) => p.value === (groups[0]?.placeTarget ?? 'tos'))?.label ?? 'placement')} bid modifier each selected campaign would get when this rule fires.` : isBudget ? 'Read-only: the new daily budget each selected campaign would get when this rule fires.' : isHarvest ? 'Live, read-only: search terms currently meeting your criteria that would be harvested.' : 'Live, read-only: search terms currently meeting your criteria that would be negated.'}</div>
             <div className="pbody">
               {preview.loading ? <div className="pmsg">Loading…</div>
-                : preview.terms.length === 0 ? <div className="pmsg">{isBudget ? 'Add campaigns above to preview their new budgets.' : isHarvest ? 'No converting search terms match the current criteria yet.' : 'No wasting search terms match the current criteria yet.'}</div>
+                : preview.terms.length === 0 ? <div className="pmsg">{isPlacement ? 'Add campaigns above to preview their new placement modifiers.' : isBudget ? 'Add campaigns above to preview their new budgets.' : isHarvest ? 'No converting search terms match the current criteria yet.' : 'No wasting search terms match the current criteria yet.'}</div>
+                : isPlacement
+                  ? (<div className="ptable bud"><div className="pthr"><span>Campaign</span><span>Current</span><span>New Modifier</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.current != null ? `${t.current}%` : '—'}</span><span className={`newb ${t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `${t.proposed}%` : '—'}</span></div>))}</div>)
                 : isBudget
                   ? (<div className="ptable bud"><div className="pthr"><span>Campaign</span><span>Current</span><span>New Budget</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}</span></div>))}</div>)
                   : isHarvest
@@ -948,6 +1010,7 @@ const toBudgetCampaign = (it: Record<string, unknown>): BudgetCampaign => ({
   targetingType: /auto/i.test(String(it.name ?? '')) ? 'AUTO' : 'MANUAL', // H10 infers Auto/Manual from the name
   adProduct: prodShort(it as { type?: string; adProduct?: string }),
   dailyBudget: it.dailyBudget != null ? Number(it.dailyBudget) : null,
+  placements: (it.placements as BudgetCampaign['placements']) ?? undefined,
 })
 
 function CampaignPicker({ selected, onAdd, onAddMany, onRemove, onClear }: {

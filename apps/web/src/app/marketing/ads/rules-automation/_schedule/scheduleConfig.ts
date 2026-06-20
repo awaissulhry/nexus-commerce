@@ -7,9 +7,11 @@
  * per-row "adjustment type" catalog. Keeping that here means a change propagates to both.
  */
 
-export type ScheduleKind = 'budget' // 'dayparting' is added by the sibling session
+export type ScheduleKind = 'budget' | 'dayparting'
 
 export interface ScheduleConfig {
+  /** payload discriminator + branch key */
+  kind: ScheduleKind
   /** top-bar title + create-button label (verbatim H10 copy) */
   title: string
   createLabel: string
@@ -18,12 +20,16 @@ export interface ScheduleConfig {
   /** Campaign/"Budget" Schedule section heading + blurb */
   sectionTitle: string
   sectionDesc: string
-  /** the two schedule-type radios */
+  /** the schedule-type radios (empty ⇒ no radios, e.g. Dayparting) */
   types: { value: string; label: string; desc: string }[]
+  /** Dayparting adds a dedicated Timezone section + leads with the heatmap (grid) view */
+  hasTimezone?: boolean
+  heatmapDefault?: boolean
 }
 
 export const SCHEDULE_CONFIG: Record<ScheduleKind, ScheduleConfig> = {
   budget: {
+    kind: 'budget',
     title: 'Create Budget Schedule',
     createLabel: 'Create Schedule',
     nav: [
@@ -39,10 +45,39 @@ export const SCHEDULE_CONFIG: Record<ScheduleKind, ScheduleConfig> = {
       { value: 'budget-multiplier', label: 'Budget Multiplier', desc: "Set up a daily schedule to adjust your campaign's budget multiplier" },
     ],
   },
+  dayparting: {
+    kind: 'dayparting',
+    title: 'Create Dayparting Schedule',
+    createLabel: 'Create Schedule',
+    nav: [
+      { id: 'name', label: 'Schedule Name' },
+      { id: 'timezone', label: 'Timezone' },
+      { id: 'campaigns', label: 'Campaign Section' },
+      { id: 'schedule', label: 'Criteria' },
+      { id: 'advanced', label: 'Advanced Settings' },
+    ],
+    sectionTitle: 'Dayparting Schedule Criteria',
+    sectionDesc: 'Setup a schedule for campaign status and define the time periods and criteria when this schedule will be active.',
+    types: [],
+    hasTimezone: true,
+    heatmapDefault: true,
+  },
 }
 
-// slug is reserved so the Dayparting session can branch this to its own config.
-export const scheduleConfigFor = (_slug: string): ScheduleConfig => SCHEDULE_CONFIG.budget
+export const scheduleConfigFor = (slug: string): ScheduleConfig =>
+  slug === 'dayparting-schedule' || slug === 'dayparting' ? SCHEDULE_CONFIG.dayparting : SCHEDULE_CONFIG.budget
+
+// ── Timezone catalog (Dayparting). EU-market-first since Xavia is Amazon IT/EU. ──
+export const TIMEZONES = [
+  { value: 'Europe/Rome', label: 'CET/CEST — Central European (Rome, Milan)' },
+  { value: 'Europe/London', label: 'GMT/BST — UK (London)' },
+  { value: 'Europe/Madrid', label: 'CET/CEST — Spain (Madrid)' },
+  { value: 'Europe/Paris', label: 'CET/CEST — France (Paris)' },
+  { value: 'Europe/Berlin', label: 'CET/CEST — Germany (Berlin)' },
+  { value: 'America/Los_Angeles', label: 'PST/PDT — Pacific (Los Angeles)' },
+  { value: 'America/New_York', label: 'EST/EDT — Eastern (New York)' },
+  { value: 'UTC', label: 'UTC — Coordinated Universal Time' },
+]
 
 // ── chart catalog (order/units mirror the H10 "Hourly Campaign Performance" pickers) ──
 export const CHART_METRICS = ['Spend', 'ACoS', 'Sales', 'Orders', 'Clicks', 'Impressions', 'CPC', 'CTR', 'CVR', 'ROAS', 'CPA'].map((m) => ({ value: m, label: m }))
@@ -81,4 +116,10 @@ export const BUDGET_ADJUSTMENTS = [
 export const MULTIPLIER_ADJUSTMENTS = [
   { value: 'mult', label: 'Apply Multiplier (×)', unit: 'mult' as const },
 ]
-export const adjustmentsFor = (type: string) => (type === 'budget-multiplier' ? MULTIPLIER_ADJUSTMENTS : BUDGET_ADJUSTMENTS)
+// Dayparting turns campaign status on/off per time window — no value input (unit 'none').
+export const DAYPARTING_ADJUSTMENTS = [
+  { value: 'enable', label: 'Enable Campaign', unit: 'none' as const },
+  { value: 'pause', label: 'Pause Campaign', unit: 'none' as const },
+]
+export const adjustmentsFor = (kind: ScheduleKind, type: string) =>
+  kind === 'dayparting' ? DAYPARTING_ADJUSTMENTS : type === 'budget-multiplier' ? MULTIPLIER_ADJUSTMENTS : BUDGET_ADJUSTMENTS

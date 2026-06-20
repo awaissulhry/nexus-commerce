@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { ChevronDown, GripHorizontal } from 'lucide-react'
+import { ChevronDown, Equal } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { rangeBounds } from '../_shell/AdsPageHeader'
 
@@ -74,7 +74,7 @@ const fmtFull = (v: number, u: Unit): string =>
   u === 'eur' ? eurFull(v) : u === 'pct' ? `${v.toFixed(2)}%` : v.toLocaleString('en-IE')
 const fmtAxis = (v: number, u: Unit): string => {
   if (u === 'pct') return `${+v.toFixed(2)}%`
-  if (u === 'eur') return v >= 1000 ? `€${(v / 1000).toFixed(1)}k` : v >= 10 ? `€${v.toFixed(0)}` : `€${v.toFixed(2)}`
+  if (u === 'eur') return v >= 1000 ? `€${(v / 1000).toFixed(1)}k` : Number.isInteger(v) ? `€${v}` : `€${v.toFixed(2)}`
   return v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v}`
 }
 const dayShort = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -229,7 +229,7 @@ export function AdManagerGraph({ market, rangePreset }: { market: string; rangeP
   return (
     <div className="h10-am-graph">
       <button type="button" className="h10-gresize" aria-label="Drag to resize graph" onPointerDown={startResize}>
-        <GripHorizontal size={16} />
+        <Equal size={16} />
       </button>
 
       <div className="h10-ghead">

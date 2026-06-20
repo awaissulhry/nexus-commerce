@@ -21,6 +21,7 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { Prisma } from '@prisma/client'
 import { logger } from '../utils/logger.js'
 import { testConnection, adsMode, listPortfolios, type AdsRegion } from '../services/advertising/ads-api-client.js'
 import { allocate, microsToCents, toEurCents } from '../services/advertising/ads-metrics-math.js'
@@ -2507,6 +2508,53 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     })
     reply.header('Cache-Control', 'private, max-age=300')
     return { windowDays, timezone: 'Europe/Rome', hasData: cells.length > 0, cells }
+  })
+
+  // ── D-INT2: multi-campaign dayparting heatmap. Aggregates AmazonAdsHourlyPerformance
+  //    across a SET of campaigns into dow×hour cells (all metrics) for the Dayparting
+  //    Schedule Criteria heatmap + chart. Same SQL as the single-campaign endpoint, with
+  //    IN-lists (Prisma.join) and a whitelisted timezone. ──
+  fastify.get('/advertising/dayparting/heatmap', async (request, reply) => {
+    const q = request.query as { campaignIds?: string; windowDays?: string; tz?: string }
+    const ids = (q.campaignIds ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+    if (!ids.length) return { windowDays: 0, timezone: 'Europe/Rome', hasData: false, cells: [] }
+    const windowDays = Math.max(7, Math.min(90, Number(q.windowDays ?? 60)))
+    // whitelist the timezone (it's interpolated into AT TIME ZONE) — never trust the raw param
+    const TZ_OK = new Set(['Europe/Rome', 'Europe/London', 'Europe/Madrid', 'Europe/Paris', 'Europe/Berlin', 'America/Los_Angeles', 'America/New_York', 'UTC'])
+    const tz = TZ_OK.has(q.tz ?? '') ? (q.tz as string) : 'Europe/Rome'
+
+    const camps = await prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, externalCampaignId: true } })
+    if (!camps.length) return { windowDays, timezone: tz, hasData: false, cells: [] }
+    const localIds = camps.map((c) => c.id)
+    const extIds = camps.map((c) => c.externalCampaignId).filter(Boolean) as string[]
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
+
+    const rows = await prisma.$queryRaw<Array<{ dow: number; hour: number; cost: bigint | null; orders: bigint | null; sales: bigint | null; impressions: bigint | null; clicks: bigint | null }>>`
+      SELECT EXTRACT(DOW FROM ts_local)::int AS dow,
+             EXTRACT(HOUR FROM ts_local)::int AS hour,
+             SUM("costMicros") AS cost, SUM(COALESCE("orders7d", 0)) AS orders,
+             SUM(COALESCE("sales7dCents", 0)) AS sales, SUM("impressions") AS impressions, SUM("clicks") AS clicks
+      FROM (
+        SELECT (("date" + (("hour")::text || ' hours')::interval) AT TIME ZONE 'UTC' AT TIME ZONE ${tz}) AS ts_local,
+               "costMicros", "orders7d", "sales7dCents", "impressions", "clicks"
+        FROM "AmazonAdsHourlyPerformance"
+        WHERE "entityType" = 'CAMPAIGN' AND "date" >= ${since}
+          AND ("localEntityId" IN (${Prisma.join(localIds)})${extIds.length ? Prisma.sql` OR "entityId" IN (${Prisma.join(extIds)})` : Prisma.empty})
+      ) t
+      GROUP BY dow, hour ORDER BY dow, hour`
+
+    const cells = rows.map((r) => {
+      const costCents = Math.round(Number(r.cost ?? 0n) / 10_000)
+      const salesCents = Number(r.sales ?? 0n)
+      return {
+        dow: r.dow, hour: r.hour, costCents, salesCents,
+        orders: Number(r.orders ?? 0n), impressions: Number(r.impressions ?? 0n), clicks: Number(r.clicks ?? 0n),
+        acos: salesCents > 0 ? Math.round((costCents / salesCents) * 1000) / 10 : null,
+        roas: costCents > 0 ? Math.round((salesCents / costCents) * 100) / 100 : null,
+      }
+    })
+    reply.header('Cache-Control', 'private, max-age=300')
+    return { windowDays, timezone: tz, hasData: cells.some((c) => c.costCents > 0 || c.clicks > 0), cells }
   })
 
   //   - per-adProduct live status from the adapter registry

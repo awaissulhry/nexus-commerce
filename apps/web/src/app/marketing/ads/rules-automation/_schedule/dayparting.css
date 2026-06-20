@@ -29,3 +29,47 @@
 .h10-dp-legend-lbls .sp { flex: 0 0 42px; }
 .h10-dp-legend-lbls .lbl { flex: 1 1 0; font-size: 10.5px; color: #5b6573; max-width: 90px; }
 .h10-dp-legend-lbls .lbl:first-of-type { margin-left: -2px; }
+
+/* chart view */
+.h10-dp-chart { position: relative; margin-top: 14px; }
+.h10-dp-chart svg { width: 100%; height: 240px; display: block; }
+.h10-dp-ctip { position: absolute; top: 8px; right: 8px; background: #1c2530; color: #fff; border-radius: 8px; padding: 9px 12px; font-size: 11.5px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; box-shadow: 0 6px 18px rgba(20,28,38,.28); }
+.h10-dp-ctip b { font-weight: 700; margin-bottom: 1px; }
+.h10-dp-ctip span { display: inline-flex; align-items: center; gap: 6px; color: #cdd5df; }
+.h10-dp-ctip i, .h10-dp-chart-legend i { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; display: inline-block; }
+.h10-dp-chart-legend { display: flex; gap: 18px; justify-content: center; margin-top: 8px; }
+.h10-dp-chart-legend span { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: #5b6573; }
+.h10-dp-chart-legend i.dashed { background: repeating-linear-gradient(90deg, #1f6fde 0 3px, transparent 3px 5px) !important; border-radius: 0; height: 2px; width: 14px; }
+
+/* best-in-class toolbar (AI recommend · preview · bulk) */
+.h10-dp-tools { display: flex; align-items: center; gap: 10px; margin: 18px 0 10px; flex-wrap: wrap; }
+.h10-dp-aibtn { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 13px; font-weight: 600; color: #fff; background: linear-gradient(95deg, #1f6fde, #6b3df0); border: 0; border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+.h10-dp-aibtn:hover { filter: brightness(1.06); }
+.h10-dp-aibtn:disabled { background: #c3d3ea; cursor: default; filter: none; }
+.h10-dp-toolbtn { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 600; color: #1f6fde; background: #fff; border: 1px solid #1f6fde; border-radius: 8px; padding: 8px 13px; cursor: pointer; }
+.h10-dp-toolbtn:hover { background: #eef4fd; }
+.h10-dp-toolbtn[aria-pressed="true"] { background: #eef4fd; }
+.h10-dp-bulk { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; padding: 5px 6px 5px 12px; background: #f4f7fb; border: 1px solid #e0e8f2; border-radius: 9px; font-size: 12.5px; }
+.h10-dp-bulk b { color: #1f6fde; font-weight: 700; }
+.h10-dp-bulk button { font: inherit; font-size: 12.5px; font-weight: 600; color: #2b3440; background: #fff; border: 1px solid #d8dde4; border-radius: 7px; padding: 5px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+.h10-dp-bulk button:hover:not(:disabled) { background: #eef4fd; border-color: #1f6fde; color: #1f6fde; }
+.h10-dp-bulk button:disabled { color: #aeb6c2; cursor: default; }
+.h10-dp-bulk button.x { border: 0; background: none; color: #8a93a1; }
+
+/* overlap warning */
+.h10-dp-warn { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12.5px; color: #c2410c; background: #fff5ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 9px 12px; }
+
+/* active-hours preview */
+.h10-dp-preview { margin-top: 14px; border: 1px solid #e6e9ee; border-radius: 10px; padding: 14px 16px; background: #fbfcfe; }
+.h10-dp-preview .hd { font-size: 13px; font-weight: 700; color: #2b3440; margin-bottom: 10px; }
+.h10-dp-preview .grid { display: flex; flex-direction: column; gap: 3px; }
+.h10-dp-preview .row { display: flex; align-items: center; gap: 3px; }
+.h10-dp-preview .lbl { flex: 0 0 34px; font-size: 10.5px; font-weight: 700; color: #5b6573; text-align: right; padding-right: 6px; }
+.h10-dp-preview .cell { flex: 1 1 0; height: 16px; border-radius: 3px; background: #eef1f5; }
+.h10-dp-preview .cell.enable { background: #34c759; }
+.h10-dp-preview .cell.pause { background: #e5484d; }
+.h10-dp-preview .row.hours .hr { flex: 1 1 0; font-size: 8.5px; color: #8a93a1; text-align: left; }
+.h10-dp-preview .leg { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 11.5px; color: #5b6573; }
+.h10-dp-preview .leg .sw { width: 12px; height: 12px; border-radius: 3px; background: #eef1f5; display: inline-block; margin-left: 8px; }
+.h10-dp-preview .leg .sw.enable { background: #34c759; }
+.h10-dp-preview .leg .sw.pause { background: #e5484d; }

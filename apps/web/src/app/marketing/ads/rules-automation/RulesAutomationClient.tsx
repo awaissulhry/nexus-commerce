@@ -328,6 +328,36 @@ export function RulesAutomationClient() {
             </span>
           )}
         />
+      ) : tab === 'dayparting' ? (
+        <RuleListTab
+          noun="Dayparting Schedule"
+          seed={[]}
+          liveType="dayparting-schedule"
+          editHref={(id) => `/marketing/ads/rules-automation/builder/dayparting-schedule?scheduleId=${id}`}
+          onAddRule={() => { window.location.href = '/marketing/ads/rules-automation/builder/dayparting-schedule' }}
+          emptyNode={(
+            <span className="h10-rr-empty">
+              <NoDataIllus size={104} />
+              <b>Create a Dayparting Schedule to control when your campaigns run!</b>
+              <a className="h10-am-btn primary" href="/marketing/ads/rules-automation/builder/dayparting-schedule"><Plus size={13} /> Create Schedule</a>
+            </span>
+          )}
+        />
+      ) : tab === 'placement' ? (
+        <RuleListTab
+          noun="Placement Rule"
+          seed={[]}
+          liveType="placement"
+          editHref={(id) => `/marketing/ads/rules-automation/builder/placement?ruleId=${id}`}
+          onAddRule={() => { window.location.href = '/marketing/ads/rules-automation/builder/placement' }}
+          emptyNode={(
+            <span className="h10-rr-empty">
+              <NoDataIllus size={104} />
+              <b>Create a Placement Rule to optimize your placement bids!</b>
+              <a className="h10-am-btn primary" href="/marketing/ads/rules-automation/builder/placement"><Plus size={13} /> Create Rule</a>
+            </span>
+          )}
+        />
       ) : tab === 'budget-schedules' ? (
         <BudgetScheduleTab />
       ) : TAB_RULES[tab] ? (

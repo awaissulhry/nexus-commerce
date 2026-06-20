@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 
 // Schedule-type slugs render the dedicated ScheduleBuilder (Hourly Performance chart +
 // weekly schedule table), not the criteria RuleBuilder. (Dayparting joins this set.)
-const SCHEDULE_SLUGS = new Set(['budget-schedule'])
+const SCHEDULE_SLUGS = new Set(['budget-schedule', 'dayparting-schedule'])
 
 export default async function Page({ params }: { params: Promise<{ type: string }> }) {
   const { type } = await params

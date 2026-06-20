@@ -302,6 +302,22 @@ export async function listProfiles(): Promise<AdsProfileDTO[]> {
   })
 }
 
+// SP portfolios (v2 GET /v2/portfolios) — budget-grouping containers. Sandbox returns a
+// small fixture so the picker is demonstrable; live returns the account's real portfolios.
+export interface AdsPortfolioDTO { portfolioId: string; name: string; state?: string }
+export async function listPortfolios(ctx: ClientContext): Promise<AdsPortfolioDTO[]> {
+  if (adsMode() === 'sandbox') {
+    return loadFixture<AdsPortfolioDTO[]>('portfolios', [
+      { portfolioId: 'SB-PF-1', name: 'Brand — Core', state: 'enabled' },
+      { portfolioId: 'SB-PF-2', name: 'Seasonal', state: 'enabled' },
+      { portfolioId: 'SB-PF-3', name: 'Clearance', state: 'enabled' },
+    ])
+  }
+  const resp = await liveCall<Array<Record<string, unknown>>>({ ...ctx, method: 'GET', path: '/v2/portfolios' })
+  if (!Array.isArray(resp)) return []
+  return resp.map((p) => ({ portfolioId: String(p.portfolioId), name: String(p.name ?? ''), state: typeof p.state === 'string' ? p.state : undefined }))
+}
+
 // B — live v3 campaign-settings read. POST /sp/campaigns/list returns each campaign's
 // CURRENT dynamicBidding (strategy + placementBidding %), budget and state — the
 // settings the v1 export omits (placement bids) or only refreshes every 6h. Paginated
@@ -454,6 +470,8 @@ function parseThemeBidRecommendations(
 
 export interface CampaignPatch {
   state?: 'enabled' | 'paused' | 'archived'
+  name?: string
+  portfolioId?: string | null
   dailyBudget?: number
   biddingStrategy?: AdsCampaignDTO['biddingStrategy']
   endDate?: string | null
@@ -500,6 +518,8 @@ export async function updateCampaign(
   // in a campaigns array. v3 state values are uppercase; budget is
   // nested under {budget: {budget, budgetType}}.
   const v3Campaign: Record<string, unknown> = { campaignId: externalCampaignId }
+  if (patch.name) v3Campaign.name = patch.name
+  if (patch.portfolioId !== undefined) v3Campaign.portfolioId = patch.portfolioId
   if (patch.state) v3Campaign.state = patch.state.toUpperCase()
   if (patch.dailyBudget != null) v3Campaign.budget = { budget: patch.dailyBudget, budgetType: 'DAILY' }
   if (patch.biddingStrategy || patch.placementBidding) {

@@ -37,6 +37,8 @@ export type AdSyncType =
   | 'AD_BUDGET_UPDATE'
   | 'AD_ENTITY_STATE_UPDATE'
   | 'AD_BIDDING_STRATEGY_UPDATE'
+  | 'AD_CAMPAIGN_NAME_UPDATE'
+  | 'AD_CAMPAIGN_PORTFOLIO_UPDATE'
 
 export interface FieldChange {
   field: string
@@ -192,6 +194,8 @@ async function enqueueBullMQJob(queueRowId: string, syncType: AdSyncType): Promi
 // ── Update helpers ────────────────────────────────────────────────────
 
 export interface CampaignPatch {
+  name?: string
+  portfolioId?: string | null
   dailyBudget?: number
   dailyBudgetCurrency?: string
   status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'
@@ -210,6 +214,8 @@ export async function updateCampaignWithSync(args: {
     where: { id: args.campaignId },
     select: {
       id: true,
+      name: true,
+      portfolioId: true,
       externalCampaignId: true,
       marketplace: true,
       dailyBudget: true,
@@ -226,6 +232,22 @@ export async function updateCampaignWithSync(args: {
   // Diff: only audit fields the patch actually changes.
   const changes: FieldChange[] = []
   let syncType: AdSyncType = 'AD_BUDGET_UPDATE'
+  if (args.patch.name != null && args.patch.name !== existing.name) {
+    changes.push({
+      field: 'name',
+      oldValue: existing.name,
+      newValue: args.patch.name,
+    })
+    syncType = 'AD_CAMPAIGN_NAME_UPDATE'
+  }
+  if (args.patch.portfolioId !== undefined && (args.patch.portfolioId ?? null) !== (existing.portfolioId ?? null)) {
+    changes.push({
+      field: 'portfolioId',
+      oldValue: existing.portfolioId ?? null,
+      newValue: args.patch.portfolioId ?? null,
+    })
+    syncType = 'AD_CAMPAIGN_PORTFOLIO_UPDATE'
+  }
   if (args.patch.dailyBudget != null && Number(existing.dailyBudget) !== args.patch.dailyBudget) {
     changes.push({
       field: 'dailyBudget',
@@ -270,6 +292,8 @@ export async function updateCampaignWithSync(args: {
 
   // Capture payloadBefore snapshot BEFORE we write to local row.
   const payloadBefore = {
+    name: existing.name,
+    portfolioId: existing.portfolioId,
     dailyBudget: Number(existing.dailyBudget),
     dailyBudgetCurrency: existing.dailyBudgetCurrency,
     status: existing.status,
@@ -279,6 +303,8 @@ export async function updateCampaignWithSync(args: {
 
   // Local write
   const data: Record<string, unknown> = {}
+  if (args.patch.name != null) data.name = args.patch.name
+  if (args.patch.portfolioId !== undefined) data.portfolioId = args.patch.portfolioId
   if (args.patch.dailyBudget != null) data.dailyBudget = args.patch.dailyBudget
   if (args.patch.dailyBudgetCurrency) data.dailyBudgetCurrency = args.patch.dailyBudgetCurrency
   if (args.patch.status) data.status = args.patch.status
@@ -309,6 +335,8 @@ export async function updateCampaignWithSync(args: {
 
   const payloadAfter = {
     ...payloadBefore,
+    ...(args.patch.name != null ? { name: args.patch.name } : {}),
+    ...(args.patch.portfolioId !== undefined ? { portfolioId: args.patch.portfolioId } : {}),
     ...(args.patch.dailyBudget != null ? { dailyBudget: args.patch.dailyBudget } : {}),
     ...(args.patch.dailyBudgetCurrency ? { dailyBudgetCurrency: args.patch.dailyBudgetCurrency } : {}),
     ...(args.patch.status ? { status: args.patch.status } : {}),
