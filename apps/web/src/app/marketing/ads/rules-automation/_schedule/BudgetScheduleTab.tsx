@@ -103,7 +103,7 @@ export function BudgetScheduleTab() {
         searchPlaceholder="Search schedules…"
         searchValue={(r) => r.name}
         pagerCentered
-        defaultSort={{ key: 'startDate', dir: 'asc' }}
+        defaultSort={{ key: 'startDate', dir: 'desc' }}
         emptyLabel="No schedules created"
         toolbarRight={<>
           <button type="button" className="h10-sb-eye" aria-label={chartOpen ? 'Hide hourly chart' : 'Show hourly chart'} aria-pressed={chartOpen} onClick={() => setChartOpen((v) => !v)}>{chartOpen ? <Eye size={17} /> : <EyeOff size={17} />}</button>
