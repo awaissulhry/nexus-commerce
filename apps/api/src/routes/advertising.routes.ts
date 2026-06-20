@@ -3889,6 +3889,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       'SEARCH_TERM_WASTING',
       'CAMPAIGN_ROAS_DECLINING',
       'KEYWORD_RISING_STAR',
+      // SK-series — keyword-bid-adjustment rules driven by Share-of-Voice / keyword-tracker rank data
+      'SOV_BID',
+      'KEYWORD_RANK_BID',
     ])
     if (!ALLOWED_TRIGGERS.has(body.trigger)) {
       reply.code(400)

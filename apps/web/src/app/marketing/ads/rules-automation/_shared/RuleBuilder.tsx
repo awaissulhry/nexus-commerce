@@ -21,6 +21,12 @@ import { getBackendUrl } from '@/lib/backend-url'
 const METRICS = ['Sales', 'ACOS', 'ROAS', 'Clicks', 'Impressions', 'CVR', 'CTR', 'CPC', 'PPC Orders', 'Spend', 'Orders'].map((m) => ({ value: m, label: m }))
 // Budget rules add the campaign-level "Budget Utilization" signal (best-in-class) — the others carry over.
 const METRICS_BUDGET = ['ACOS', 'ROAS', 'Sales', 'Spend', 'Orders', 'PPC Orders', 'CVR', 'CTR', 'CPC', 'Clicks', 'Impressions', 'Budget Utilization'].map((m) => ({ value: m, label: m }))
+// SOV rule criteria — Share-of-Voice signals (from the SOV report) first, then the performance
+// metrics you'd commonly combine them with (e.g. raise the bid only where SOV is low AND ACoS is healthy).
+const METRICS_SOV = ['Share of Voice', 'Top Campaign Share', 'Impression Share', 'Organic Share', 'Sponsored Share', 'ACOS', 'Spend', 'Sales', 'Orders'].map((m) => ({ value: m, label: m }))
+// Keyword Tracker rule criteria — organic / paid rank signals from the keyword tracker, plus a few
+// perf metrics. Lower rank number = better position; "Rank Change" is the period-over-period delta.
+const METRICS_RANK = ['Organic Rank', 'Sponsored Rank', 'Rank Change', 'Search Volume', 'Share of Voice', 'ACOS', 'Spend'].map((m) => ({ value: m, label: m }))
 const OPERATORS = [
   { value: 'eq', label: 'Equal to =' },
   { value: 'ne', label: 'Not equal to ≠' },
@@ -43,6 +49,9 @@ const METRIC_UNIT: Record<string, 'eur' | 'pct' | ''> = {
   ACOS: 'pct', CTR: 'pct', CVR: 'pct',
   ROAS: '', Clicks: '', Impressions: '', 'PPC Orders': '', Orders: '',
   'Budget Utilization': 'pct',
+  // SOV signals are percentages; rank/volume signals are bare counts.
+  'Share of Voice': 'pct', 'Top Campaign Share': 'pct', 'Impression Share': 'pct', 'Organic Share': 'pct', 'Sponsored Share': 'pct',
+  'Organic Rank': '', 'Sponsored Rank': '', 'Rank Change': '', 'Search Volume': '',
 }
 // Campaign-scoped "THEN" actions. Budget rules adjust the daily budget; Bid rules adjust the
 // keyword/target bid. `unit` drives the value input (€ vs %). H10's recording shows "Set Bid
@@ -88,6 +97,10 @@ const TRIGGER_BY_SLUG: Record<string, string> = {
   'dayparting-schedule': 'SCHEDULE',
   'budget-schedule': 'SCHEDULE',
   placement: 'CAMPAIGN_PERFORMANCE_BUDGET',
+  // SOV + Keyword Tracker are keyword-bid-adjustment rules driven by Share-of-Voice / rank data
+  // (their own context-builders); the THEN clause reuses the Bid action + bid_apply handler.
+  sov: 'SOV_BID',
+  'keyword-tracker': 'KEYWORD_RANK_BID',
 }
 // friendly match-type label for the negative preview (raw API gives EXACT/PHRASE/BROAD or TARGETING_EXPRESSION*)
 const matchLabel = (m?: string): string => {
@@ -137,12 +150,12 @@ interface Condition { metric: string; op: string; value: string; scope?: string 
 interface CriteriaGroup { id: number; conditions: Condition[]; lookback: string; exclude: string; budgetOp?: string; budgetValue?: string; placeTarget?: string } // placeTarget = placement THEN target
 let _cid = 1
 // Harvest seeds "PPC Orders ≥ 1" (converting); Negative (+others) seed "Sales = 0" (non-converting).
-const defaultCondition = (slug: string): Condition => (slug === 'keyword-harvesting' ? { metric: 'PPC Orders', op: 'gte', value: '1' } : slug === 'placement' ? { metric: 'ACOS', op: 'gt', value: '', scope: 'campaign' } : (slug === 'budget' || slug === 'bid') ? { metric: 'ACOS', op: 'gt', value: '' } : { metric: 'Sales', op: 'eq', value: '0' })
+const defaultCondition = (slug: string): Condition => (slug === 'keyword-harvesting' ? { metric: 'PPC Orders', op: 'gte', value: '1' } : slug === 'placement' ? { metric: 'ACOS', op: 'gt', value: '', scope: 'campaign' } : slug === 'sov' ? { metric: 'Share of Voice', op: 'lt', value: '' } : slug === 'keyword-tracker' ? { metric: 'Organic Rank', op: 'gt', value: '' } : (slug === 'budget' || slug === 'bid') ? { metric: 'ACOS', op: 'gt', value: '' } : { metric: 'Sales', op: 'eq', value: '0' })
 const newGroup = (slug: string): CriteriaGroup => ({ id: _cid++, conditions: [defaultCondition(slug)], lookback: 'Last 60 Days', exclude: 'Last 3 Days', budgetOp: 'set', budgetValue: '', placeTarget: 'tos' })
 
 // per-type Rule Setup config — Negative vs Positive/Harvest differ in heading, copy,
 // targets-panel title, and whether Harvest's "Ad Group Mapping" button + info banner show.
-const SETUP: Record<string, { nav: string; desc: string; targetsTitle: string; matchTypes: MatchType[]; mapping?: boolean; banner?: string; surface?: 'search-terms' | 'campaign-budget' | 'campaign-bid' | 'campaign-placement'; sectionTitle?: string }> = {
+const SETUP: Record<string, { nav: string; desc: string; targetsTitle: string; matchTypes: MatchType[]; mapping?: boolean; banner?: string; surface?: 'search-terms' | 'campaign-budget' | 'campaign-bid' | 'campaign-placement' | 'campaign-sov' | 'campaign-rank'; sectionTitle?: string }> = {
   'negative-targeting': {
     nav: 'Negative Rule Setup',
     desc: 'Add related Ad Groups in any order and select which ones you’d like Nexus Ads to use to find non-converting search terms/ASINs. For each Ad Group, you can then decide which type of target you want to create when it finds a non-converting search term/ASIN.',
@@ -181,6 +194,24 @@ const SETUP: Record<string, { nav: string; desc: string; targetsTitle: string; m
     surface: 'campaign-placement',
     sectionTitle: 'Campaigns Section', // frame-verified (02:58–03:17) — note: differs from budget's "Campaigns"
   },
+  // SOV + Keyword Tracker — keyword-bid-adjustment rules (Bid-builder pattern) keyed off the SOV
+  // report / keyword-tracker rank data. Same campaign picker + Set/Adjust Bid THEN as the Bid rule.
+  sov: {
+    nav: 'SOV Rule Setup',
+    desc: 'Select the Campaigns whose keyword bids this rule should adjust based on Share-of-Voice data',
+    targetsTitle: '',
+    matchTypes: [],
+    surface: 'campaign-sov',
+    sectionTitle: 'Campaigns',
+  },
+  'keyword-tracker': {
+    nav: 'Keyword Tracker Rule Setup',
+    desc: 'Select the Campaigns whose keyword bids this rule should adjust based on organic & paid rank',
+    targetsTitle: '',
+    matchTypes: [],
+    surface: 'campaign-rank',
+    sectionTitle: 'Campaigns',
+  },
 }
 const setupFor = (slug: string) => SETUP[slug] ?? SETUP['negative-targeting']
 
@@ -210,7 +241,7 @@ const STEPS_FOR = (slug: string): Array<{ id: string; label: string }> => {
   // Campaign-scoped rules (Budget · Bid · Placement) have no Search Terms step — their action is
   // a THEN clause inside Criteria, applied to the selected campaigns.
   const sf = SETUP[slug]?.surface
-  if (sf === 'campaign-budget' || sf === 'campaign-bid' || sf === 'campaign-placement') return [...head, ...tail]
+  if (sf === 'campaign-budget' || sf === 'campaign-bid' || sf === 'campaign-placement' || sf === 'campaign-sov' || sf === 'campaign-rank') return [...head, ...tail]
   return [...head, { id: 'search-terms', label: 'Search Terms' }, ...tail]
 }
 
@@ -225,9 +256,12 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const surface = setup.surface ?? 'search-terms'
   const isBudget = surface === 'campaign-budget'
   const isBid = surface === 'campaign-bid' // Bid rule: campaign-picker setup + a "Set/Adjust Bid" THEN action, with lookback per-criteria
+  const isSov = surface === 'campaign-sov' // SOV rule: keyword bid adjustment driven by Share-of-Voice criteria
+  const isRank = surface === 'campaign-rank' // Keyword Tracker rule: keyword bid adjustment driven by organic/paid rank criteria
+  const isBidLike = isBid || isSov || isRank // Bid · SOV · Keyword Tracker — same campaign picker + per-criteria lookback + Set/Adjust Bid THEN
   const isPlacement = surface === 'campaign-placement' // Placement rule: campaign picker + IF placement-scope + THEN placement-target adjustment (%)
-  const isCampaign = isBudget || isBid || isPlacement // all campaign-scoped surfaces share the CampaignPicker + THEN-action + templates
-  const advLookback = isBudget || isPlacement // Budget + Placement put Lookback in Advanced (one window for the rule); Bid keeps it per-criteria
+  const isCampaign = isBudget || isBidLike || isPlacement // all campaign-scoped surfaces share the CampaignPicker + THEN-action + templates
+  const advLookback = isBudget || isPlacement // Budget + Placement put Lookback in Advanced (one window for the rule); Bid/SOV/Rank keep it per-criteria
   const isNegative = slug === 'negative-targeting' // N2 features (Negation Level · protect-converting) are negative-only, NOT "everything that isn't harvest"
   const close = useCallback(() => router.push('/marketing/ads/rules-automation'), [router])
 
@@ -304,7 +338,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
     return () => { alive = false }
   }, [isCampaign, slug])
   // Bid keeps lookback per-criteria (group[0] is canonical for the template); Budget keeps its global lookback.
-  const tmplPayload = () => ({ conditions: groups.map((g) => ({ conditions: g.conditions, action: { op: g.budgetOp ?? 'set', value: g.budgetValue ?? '' } })), lookback: isBid ? (groups[0]?.lookback ?? 'Last 60 Days') : budgetLookback, exclude: isBid ? (groups[0]?.exclude ?? 'Last 3 Days') : budgetExclude, schedule: { frequency, everyN, interval, onDay, time, timezone } })
+  const tmplPayload = () => ({ conditions: groups.map((g) => ({ conditions: g.conditions, action: { op: g.budgetOp ?? 'set', value: g.budgetValue ?? '' } })), lookback: isBidLike ? (groups[0]?.lookback ?? 'Last 60 Days') : budgetLookback, exclude: isBidLike ? (groups[0]?.exclude ?? 'Last 3 Days') : budgetExclude, schedule: { frequency, everyN, interval, onDay, time, timezone } })
   const saveTemplate = async () => {
     const name = tmplName.trim(); if (!name) return
     try {
@@ -513,7 +547,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
         </div>
         <div className="r">
           <button type="button" className="learn"><Video size={15} /> Learn</button>
-          {!isBid && <button type="button" className="learn" onClick={runPreview}><Eye size={15} /> Preview</button>}
+          {!isBidLike && <button type="button" className="learn" onClick={runPreview}><Eye size={15} /> Preview</button>}
           <button type="button" className="h10-rb-create" disabled={!valid || creating} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
         </div>
       </header>
@@ -590,7 +624,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                       <div className="cond" key={i}>
                         <span className={`pill ${i === 0 ? 'if' : 'and'}`}>{i === 0 ? 'IF' : 'AND'}</span>
                         {isPlacement && <H10Select width={190} options={PLACEMENT_SCOPES} value={c.scope ?? 'campaign'} onChange={(v) => setCond(g.id, i, { scope: v })} ariaLabel="Placement scope" />}
-                        <H10Select width={isPlacement ? 220 : 300} options={isPlacement ? METRICS_PLACEMENT : isBudget ? METRICS_BUDGET : METRICS} value={c.metric} onChange={(v) => setCond(g.id, i, { metric: v })} ariaLabel="Metric" />
+                        <H10Select width={isPlacement ? 220 : 300} options={isPlacement ? METRICS_PLACEMENT : isBudget ? METRICS_BUDGET : isSov ? METRICS_SOV : isRank ? METRICS_RANK : METRICS} value={c.metric} onChange={(v) => setCond(g.id, i, { metric: v })} ariaLabel="Metric" />
                         <H10Select width={300} options={OPERATORS} value={c.op} onChange={(v) => setCond(g.id, i, { op: v })} ariaLabel="Operator" />
                         {(() => { const u = METRIC_UNIT[c.metric] ?? ''; return (
                           <span className={`h10-rb-val ${u === 'pct' ? 'hassf' : ''}`}>
@@ -603,24 +637,24 @@ export function RuleBuilder({ slug }: { slug: string }) {
                       </div>
                     ))}
                     <button type="button" className="h10-rb-addand" onClick={() => addCondition(g.id)}><Plus size={13} /> AND</button>
-                    {isCampaign && (() => { const actions = isPlacement ? PLACEMENT_ACTIONS : isBid ? BID_ACTIONS : BUDGET_ACTIONS; const u = actionUnit(actions, g.budgetOp); return (
+                    {isCampaign && (() => { const actions = isPlacement ? PLACEMENT_ACTIONS : isBidLike ? BID_ACTIONS : BUDGET_ACTIONS; const u = actionUnit(actions, g.budgetOp); return (
                       <div className="cond then">
                         <span className="pill then">THEN</span>
                         {isPlacement && <H10Select width={190} options={PLACEMENTS} value={g.placeTarget ?? 'tos'} onChange={(v) => setBudgetAct(g.id, { placeTarget: v })} ariaLabel="Placement target" />}
-                        <H10Select width={isPlacement ? 200 : 300} options={actions} value={g.budgetOp ?? 'set'} onChange={(v) => setBudgetAct(g.id, { budgetOp: v })} ariaLabel={isPlacement ? 'Placement action' : isBid ? 'Bid action' : 'Budget action'} />
+                        <H10Select width={isPlacement ? 200 : 300} options={actions} value={g.budgetOp ?? 'set'} onChange={(v) => setBudgetAct(g.id, { budgetOp: v })} ariaLabel={isPlacement ? 'Placement action' : isBidLike ? 'Bid action' : 'Budget action'} />
                         <span className={`h10-rb-val ${u === 'pct' ? 'hassf' : ''}`}>
                           {u === 'eur' && <span className="pf">€</span>}
-                          <input inputMode="decimal" value={g.budgetValue ?? ''} onChange={(e) => setBudgetAct(g.id, { budgetValue: e.target.value })} aria-label={isPlacement ? 'Placement modifier' : isBid ? 'Bid amount' : 'Budget amount'} />
+                          <input inputMode="decimal" value={g.budgetValue ?? ''} onChange={(e) => setBudgetAct(g.id, { budgetValue: e.target.value })} aria-label={isPlacement ? 'Placement modifier' : isBidLike ? 'Bid amount' : 'Budget amount'} />
                           {u === 'pct' && <span className="sf">%</span>}
                         </span>
-                        {isBid && <HoverCard text="The bid this rule sets — or the amount it raises/lowers the current keyword bid by — when the criteria are met." placement="above"><span className="h10-rb-theninfo" aria-hidden="true"><Info size={15} /></span></HoverCard>}
+                        {isBidLike && <HoverCard text="The bid this rule sets — or the amount it raises/lowers the current keyword bid by — when the criteria are met." placement="above"><span className="h10-rb-theninfo" aria-hidden="true"><Info size={15} /></span></HoverCard>}
                         {isPlacement && <HoverCard text="The placement bid modifier this rule sets (or raises/lowers) for the chosen placement when the criteria are met. Amazon allows 0–900%." placement="above"><span className="h10-rb-theninfo" aria-hidden="true"><Info size={15} /></span></HoverCard>}
                       </div>
                     ) })()}
                   </div>
-                  {(surface === 'search-terms' || isBid) && (
+                  {(surface === 'search-terms' || isBidLike) && (
                   <div className="h10-rb-lookback">
-                    <label>Lookback period <i>*</i>{isBid && <HoverCard text="The window of performance data this rule evaluates. “Exclude” drops the most-recent days (still settling) from that window." placement="above"><span className="h10-rb-lbl-i" aria-hidden="true"><Info size={14} /></span></HoverCard>}</label>
+                    <label>Lookback period <i>*</i>{isBidLike && <HoverCard text="The window of performance data this rule evaluates. “Exclude” drops the most-recent days (still settling) from that window." placement="above"><span className="h10-rb-lbl-i" aria-hidden="true"><Info size={14} /></span></HoverCard>}</label>
                     <div className="lbrow">
                       <H10Select width={220} options={LOOKBACK} value={g.lookback} onChange={(v) => setLookback(g.id, v)} ariaLabel="Lookback period" />
                       <span className="exc">Exclude</span>
