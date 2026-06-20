@@ -466,6 +466,23 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
     }
   }
 
+  // EA1/EA2 — advertising builder rules store a UI-friendly shape (nested condition groups +
+  // slug action types). Translate to the engine-native shape in-memory so the conditions-tree
+  // + ACTION_HANDLERS below run it unchanged. Domain-gated: replenishment rules are untouched.
+  // EA3 — capture the builder's per-rule control BEFORE translation overwrites the actions:
+  // control='manual' forces propose-only (suggest), never auto-applies, even once graduated live.
+  let adsManualSuggest = false
+  if (rule.domain === 'advertising') {
+    const a0 = (Array.isArray(rule.actions) ? rule.actions[0] : null) as { control?: string } | null
+    adsManualSuggest = a0?.control === 'manual'
+    const { maybeTranslateAdsRule } = await import('./advertising/ads-rule-adapter.service.js')
+    const translated = maybeTranslateAdsRule(rule as { id: string; actions?: unknown; conditions?: unknown })
+    if (translated) {
+      rule.conditions = translated.conditions as never
+      rule.actions = translated.actions as never
+    }
+  }
+
   // W7.3 — accept either the legacy flat-list shape OR a tree node
   // (and / or / not / leaf). evaluateConditions auto-detects and
   // dispatches. Backwards compatible: every existing rule keeps
@@ -532,7 +549,9 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
     }
   }
 
-  const dryRun = rule.dryRun || !!args.forceDryRun
+  // EA3 — Manual-control ads rules are propose-only: force dry-run so they generate suggestions
+  // (audit "would do X" rows) but never auto-apply. Automate rules respect rule.dryRun + autonomy.
+  const dryRun = rule.dryRun || !!args.forceDryRun || adsManualSuggest
   const actions = (rule.actions ?? []) as unknown as Action[]
   const actionResults: ActionResult[] = []
   let valueSpentCentsEur = 0

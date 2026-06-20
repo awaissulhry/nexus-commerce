@@ -728,7 +728,7 @@ async function buildSearchTermWastingContexts() {
       .map(({ t, spend, clicks }) => ({
         trigger: 'SEARCH_TERM_WASTING' as const,
         marketplace: t.marketplace,
-        searchTerm: { query: t.query, externalCampaignId: t.campaignId, externalAdGroupId: t.adGroupId, spendCents: spend, clicks, orders: 0 },
+        searchTerm: { query: t.query, externalCampaignId: t.campaignId, externalAdGroupId: t.adGroupId, spendCents: spend, clicks, orders: 0, salesCents: 0 },
       }))
   } catch (e) { logger.warn('[ads-rule-evaluator] buildSearchTermWastingContexts failed', { error: (e as Error).message }); return [] }
 }

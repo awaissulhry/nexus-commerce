@@ -849,11 +849,16 @@ ACTION_HANDLERS.add_negative_exact = async (action, context, meta): Promise<Acti
   const externalCampaignId = (action.externalCampaignId as string | undefined) ?? (context as any)?.searchTerm?.externalCampaignId ?? (context as any)?.campaign?.externalCampaignId
   if (!keyword) return { type: action.type, ok: false, error: 'No keyword/query to negate' }
   if (!externalCampaignId) return { type: action.type, ok: false, error: 'No externalCampaignId in context' }
-  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, externalCampaignId } }
+  // EA2 — honor the builder's Negation Level: AD_GROUP scopes to the source ad group; CAMPAIGN (default) is broader.
+  const scope = (action.scope as string | undefined) === 'AD_GROUP' ? 'AD_GROUP' : 'CAMPAIGN'
+  const externalAdGroupId = scope === 'AD_GROUP'
+    ? ((action.externalAdGroupId as string | undefined) ?? (context as any)?.searchTerm?.externalAdGroupId)
+    : undefined
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, externalCampaignId, scope } }
   const { createNegative } = await import('./ads-negative-kw.service.js')
   const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace: (context as any).marketplace, isActive: true }, select: { profileId: true } })
-  await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId, keywordText: keyword, matchType: 'NEGATIVE_EXACT', scope: 'CAMPAIGN' } as never)
-  return { type: action.type, ok: true, output: { keyword, externalCampaignId, matchType: 'NEGATIVE_EXACT' } }
+  await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId, externalAdGroupId, keywordText: keyword, matchType: 'NEGATIVE_EXACT', scope } as never)
+  return { type: action.type, ok: true, output: { keyword, externalCampaignId, matchType: 'NEGATIVE_EXACT', scope } }
 }
 
 // ── promote_to_exact ──────────────────────────────────────────────────
@@ -999,8 +1004,131 @@ ACTION_HANDLERS.alert_operator = async (action, context, meta): Promise<ActionRe
   return { type: action.type, ok: true, output: { severity, message, ruleId: meta.ruleId, timestamp: new Date().toISOString() } }
 }
 
+// ── EA1: builder-rule apply handlers ──────────────────────────────────
+// Thin handlers the ads-rule-adapter translates the Budget/Placement BUILDER rules to. They
+// support the builder's full action vocab (set / increase / decrease, % or absolute) + the
+// builder's guardrail clamps, reading CURRENT from the campaign and routing the write through
+// the SAME gated path as adjust_ad_budget. Kept separate from adjust_ad_budget so the seeded
+// AME/AD rules stay byte-identical.
+type BuilderOp = 'set' | 'incPct' | 'decPct' | 'incAbs' | 'decAbs'
+function applyBuilderOp(op: BuilderOp | string, current: number, value: number): number {
+  switch (op) {
+    case 'set': return value
+    case 'incPct': return current * (1 + value / 100)
+    case 'decPct': return current * (1 - value / 100)
+    case 'incAbs': return current + value
+    case 'decAbs': return current - value
+    default: return current
+  }
+}
+const clampRange = (x: number, min: number, max: number | null) => Math.min(max ?? Infinity, Math.max(min, x))
+
+// budget_apply — Set/Increase/Decrease a campaign's daily budget, clamped to [minEur, maxEur].
+ACTION_HANDLERS.budget_apply = async (action, context, meta): Promise<ActionResult> => {
+  const id = ctxCampaignId(action, context)
+  if (!id) return { type: action.type, ok: false, error: 'No campaign.id in context' }
+  const c = await prisma.campaign.findUnique({ where: { id }, select: { dailyBudget: true } })
+  if (!c) return { type: action.type, ok: false, error: 'Campaign not found' }
+  const current = Number(c.dailyBudget)
+  const minEur = Math.max(1, Number(action.minEur ?? 1)) // never below Amazon's €1 floor
+  const maxEur = action.maxEur != null ? Number(action.maxEur) : null
+  const next = Math.round(clampRange(applyBuilderOp(action.op as string, current, Number(action.value) || 0), minEur, maxEur) * 100) / 100
+  const delta = Math.max(0, Math.round((next - current) * 100))
+  if (meta.dryRun) {
+    return { type: action.type, ok: true, estimatedValueCentsEur: delta, output: { dryRun: true, campaignId: id, wouldChange: `€${current.toFixed(2)} → €${next.toFixed(2)}` } }
+  }
+  if (next === current) return { type: action.type, ok: true, estimatedValueCentsEur: 0, output: { campaignId: id, noChange: true } }
+  const cap = await checkDailySpendCap(meta.ruleId, delta)
+  if (!cap.allowed) return { type: action.type, ok: false, error: cap.error, estimatedValueCentsEur: 0 }
+  const res = await updateCampaignWithSync({ campaignId: id, patch: { dailyBudget: next }, actor: RULE_ACTOR(meta.ruleId), reason: (action.reason as string) ?? `budget_apply via rule ${meta.ruleId}` })
+  return { type: action.type, ok: res.ok, error: res.error ?? undefined, estimatedValueCentsEur: delta, output: { campaignId: id, newDailyBudget: next, outboundQueueId: res.outboundQueueId } }
+}
+
+// placement_apply — Set/Increase/Decrease a placement bid modifier (%), clamped to [minPct, maxPct]
+// (Amazon allows 0–900%). Reads CURRENT from dynamicBidding.placementBidding for inc/dec.
+ACTION_HANDLERS.placement_apply = async (action, context, meta): Promise<ActionResult> => {
+  const id = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
+  if (!id) return { type: action.type, ok: false, error: 'No campaign.id in context' }
+  const placement = (action.placement as string | undefined) ?? 'PLACEMENT_TOP'
+  const c = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } })
+  const db = (c?.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
+  const current = db.placementBidding?.find((x) => x.placement === placement)?.percentage ?? 0
+  const minPct = Math.max(0, Number(action.minPct ?? 0))
+  const maxPct = Math.min(900, Number(action.maxPct ?? 900))
+  const next = Math.round(clampRange(applyBuilderOp(action.op as string, current, Number(action.value) || 0), minPct, maxPct))
+  if (meta.dryRun) {
+    return { type: action.type, ok: true, output: { dryRun: true, campaignId: id, placement, wouldChange: `${current}% → ${next}%` } }
+  }
+  if (next === current) return { type: action.type, ok: true, output: { campaignId: id, placement, noChange: true } }
+  const { updatePlacementBidding } = await import('./ads-create.service.js')
+  const others = (db.placementBidding ?? []).filter((x) => x.placement !== placement)
+  const res = await updatePlacementBidding({ campaignId: id, adjustments: [...others, { placement, percentage: next }] })
+  return { type: action.type, ok: res.ok !== false, output: { campaignId: id, placement, percentage: next, mode: res.mode } }
+}
+
+// bid_apply (EA2) — Set/Increase/Decrease a keyword/target bid (adTarget.bidCents), clamped to
+// [minEur,maxEur] with the €0.05 floor. Optional campaignIds allowlist (the Bid builder's picker):
+// skip targets whose campaign isn't selected.
+ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult> => {
+  const id = (action.adTargetId as string | undefined) ?? (getFieldPath(context, 'adTarget.id') as string | undefined)
+  if (!id) return { type: action.type, ok: false, error: 'No adTarget.id in context' }
+  const t = await prisma.adTarget.findUnique({ where: { id }, select: { bidCents: true, adGroup: { select: { campaignId: true } } } })
+  if (!t) return { type: action.type, ok: false, error: 'AdTarget not found' }
+  const allow = Array.isArray(action.campaignIds) ? (action.campaignIds as string[]) : []
+  if (allow.length && t.adGroup?.campaignId && !allow.includes(t.adGroup.campaignId)) {
+    return { type: action.type, ok: true, output: { skipped: 'campaign-not-selected', adTargetId: id } }
+  }
+  const currentEur = (t.bidCents ?? 0) / 100
+  const floorEur = Math.max(0.05, action.minEur != null ? Number(action.minEur) : 0.05)
+  const ceilEur = action.maxEur != null ? Number(action.maxEur) : null
+  const nextEur = Math.round(clampRange(applyBuilderOp(action.op as string, currentEur, Number(action.value) || 0), floorEur, ceilEur) * 100) / 100
+  const nextCents = Math.round(nextEur * 100)
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, adTargetId: id, wouldChange: `${t.bidCents}¢ → ${nextCents}¢` } }
+  if (nextCents === t.bidCents) return { type: action.type, ok: true, output: { adTargetId: id, noChange: true } }
+  const res = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: nextCents }, actor: RULE_ACTOR(meta.ruleId), reason: (action.reason as string) ?? `bid_apply via rule ${meta.ruleId}` })
+  return { type: action.type, ok: res.ok, error: res.error ?? undefined, output: { adTargetId: id, newBidCents: nextCents, outboundQueueId: res.outboundQueueId } }
+}
+
+// dayparting_apply (EA2) — SCHEDULE trigger. At each tick, find the weekly window(s) covering the
+// current hour (in the rule's timezone) and enable/pause the rule's campaigns for THIS marketplace.
+const DOW_NAME: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+function nowInTimezone(tz: string): { dow: number; hour: number } {
+  const now = new Date()
+  let dowName = 'Mon', hourStr = '0'
+  try {
+    dowName = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(now)
+    hourStr = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', hour12: false }).format(now)
+  } catch { /* invalid tz → defaults */ }
+  return { dow: DOW_NAME[dowName] ?? 1, hour: Number(hourStr) % 24 }
+}
+ACTION_HANDLERS.dayparting_apply = async (action, context, meta): Promise<ActionResult> => {
+  const tz = (action.timezone as string) ?? 'Europe/Rome'
+  const windows = (Array.isArray(action.windows) ? action.windows : []) as Array<{ day: number; start: string; end: string; adj: string }>
+  const allow = (Array.isArray(action.campaignIds) ? action.campaignIds : []) as string[]
+  const marketplace = (context as { marketplace?: string }).marketplace ?? null
+  const { dow, hour } = nowInTimezone(tz)
+  const hh = (t: string) => Number(String(t).split(':')[0])
+  // active window for the current day+hour (last one wins if overlapping)
+  const active = windows.filter((w) => w.day === dow && hh(w.start) <= hour && hour < hh(w.end) && (w.adj === 'enable' || w.adj === 'pause')).pop()
+  if (!active) return { type: action.type, ok: true, output: { tz, dow, hour, noActiveWindow: true } }
+  // the rule's campaigns in THIS marketplace
+  const camps = await prisma.campaign.findMany({
+    where: { id: { in: allow.length ? allow : ['__none__'] }, ...(marketplace ? { marketplace } : {}) },
+    select: { id: true, status: true, name: true },
+  })
+  const desired = active.adj === 'enable' ? 'ENABLED' : 'PAUSED'
+  const toChange = camps.filter((c) => c.status !== desired)
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, tz, dow, hour, action: active.adj, wouldChange: toChange.length, sample: toChange.slice(0, 6).map((c) => c.name) } }
+  let changed = 0; const errors: string[] = []
+  for (const c of toChange) {
+    try { const r = await updateCampaignWithSync({ campaignId: c.id, patch: { status: desired as 'ENABLED' | 'PAUSED' }, actor: RULE_ACTOR(meta.ruleId), reason: `dayparting ${active.adj} via rule ${meta.ruleId}` }); if (r.ok) changed++ }
+    catch (e) { errors.push((e as Error).message) }
+  }
+  return { type: action.type, ok: true, output: { tz, dow, hour, action: active.adj, changed, errors: errors.slice(0, 5) } }
+}
+
 logger.debug('[advertising] action handlers registered', {
-  count: 8,
+  count: 13,
   types: [
     'bid_down',
     'bid_up',
@@ -1010,5 +1138,10 @@ logger.debug('[advertising] action handlers registered', {
     'create_amazon_promotion',
     'reroute_marketplace_budget',
     'liquidate_aged_stock',
+    'budget_apply',
+    'placement_apply',
+    'bid_apply',
+    'dayparting_apply',
+    'add_negative_exact(scope)',
   ],
 })
