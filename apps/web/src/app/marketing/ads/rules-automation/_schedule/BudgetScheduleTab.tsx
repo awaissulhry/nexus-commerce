@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Eye, EyeOff, Search, Info, ExternalLink } from 'lucide-react'
+import { Plus, Eye, EyeOff, Search, Info, ExternalLink, Trash2 } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { HoverCard } from '../../campaigns/FilterDropdown'
 import { MetricSelect } from './MetricSelect'
@@ -63,6 +63,11 @@ export function BudgetScheduleTab() {
   )
 
   const newSchedule = () => router.push('/marketing/ads/rules-automation/builder/budget-schedule')
+  const deleteSchedules = async (ids: string[]) => {
+    await Promise.all(ids.map((id) => fetch(`${getBackendUrl()}/api/advertising/budget-schedules/${id}`, { method: 'DELETE' }).catch(() => {})))
+    setRows((rs) => rs.filter((r) => !ids.includes(r.id)))
+    setSel(new Set())
+  }
 
   return (
     <>
@@ -98,6 +103,11 @@ export function BudgetScheduleTab() {
         selectable
         selected={sel}
         onSelectedChange={setSel}
+        selectionActions={(ids) => (
+          <span className="h10-bulkrow">
+            <button type="button" className="h10-am-btn bulk" onClick={() => deleteSchedules(ids)}><Trash2 size={13} /> Delete</button>
+          </span>
+        )}
         customizable={false}
         searchable
         searchPlaceholder="Search schedules…"
