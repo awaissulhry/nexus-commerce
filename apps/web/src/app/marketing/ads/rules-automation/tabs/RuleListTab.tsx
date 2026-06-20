@@ -10,7 +10,7 @@
  * placeholder rules so the page stays whole.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Plus, Trash2, ExternalLink } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, Clock, X } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../campaigns/_grid/AdsDataGrid'
 import { H10Select } from '../../campaigns/FilterDropdown'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -63,6 +63,7 @@ export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNo
     return () => { alive = false }
   }, [liveType])
   const [bulk, setBulk] = useState<{ kind: BulkKind; ids: string[] } | null>(null)
+  const [historyRule, setHistoryRule] = useState<{ id: string; name: string } | null>(null)
   const nounLower = noun.toLowerCase()
 
   const patch = (id: string, p: Partial<RuleRow>) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...p } : r)))
@@ -104,8 +105,11 @@ export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNo
     return (
       <span className="h10-nt-namew">
         {href ? <a className="h10-nt-name" href={href}>{r.name}</a> : <a className="h10-nt-name" href="#" onClick={(e) => e.preventDefault()}>{r.name}</a>}
-        {href ? <a className="h10-nt-open" href={href} onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Open</a>
-          : <a className="h10-nt-open" href="#" onClick={(e) => { e.preventDefault(); e.stopPropagation() }}><ExternalLink size={11} /> Open</a>}
+        <span className="h10-nt-acts">
+          {href ? <a className="h10-nt-open" href={href} onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Open</a>
+            : <a className="h10-nt-open" href="#" onClick={(e) => { e.preventDefault(); e.stopPropagation() }}><ExternalLink size={11} /> Open</a>}
+          {r.live && <button type="button" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); setHistoryRule({ id: r.id, name: r.name }) }}><Clock size={11} /> History</button>}
+        </span>
       </span>
     )
   }
@@ -155,6 +159,7 @@ export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNo
         )}
       />
       {bulk && <BulkModal kind={bulk.kind} count={bulk.ids.length} nounLower={nounLower} onApply={(p) => applyBulk(bulk.kind, bulk.ids, p)} onClose={() => setBulk(null)} />}
+      {historyRule && <HistoryDrawer rule={historyRule} onClose={() => setHistoryRule(null)} />}
     </>
   )
 }
@@ -192,6 +197,48 @@ function BulkModal({ kind, count, nounLower, onApply, onClose }: {
           <button type="button" className="cancel" onClick={onClose}>Cancel</button>
           <span className="grow" />
           <button type="button" className={`apply ${kind === 'delete' ? 'danger' : ''}`} onClick={submit}>{kind === 'delete' ? 'Delete' : 'Apply'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// F3 — per-rule execution history: recent AutomationRuleExecution audit rows for a live rule.
+interface ExecRow { id: string; status: string; dryRun: boolean; startedAt: string; errorMessage: string | null; actionResults: Array<{ type: string; ok?: boolean; output?: { wouldChange?: string; newDailyBudget?: number; skipped?: string }; error?: string }> }
+const STATUS_TONE: Record<string, string> = { SUCCESS: 'ok', DRY_RUN: 'dry', PARTIAL: 'warn', FAILED: 'bad', NO_MATCH: 'muted', CAP_EXCEEDED: 'warn' }
+function HistoryDrawer({ rule, onClose }: { rule: { id: string; name: string }; onClose: () => void }) {
+  const [items, setItems] = useState<ExecRow[]>([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try { const j = await fetch(`${getBackendUrl()}/api/advertising/automation-rule-executions?ruleId=${rule.id}&limit=30`).then((r) => r.json()); if (alive) setItems(Array.isArray(j?.items) ? j.items : []) }
+      catch { if (alive) setItems([]) } finally { if (alive) setLoading(false) }
+    })()
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', k)
+    return () => { alive = false; document.removeEventListener('keydown', k) }
+  }, [rule.id, onClose])
+  const ago = (iso: string) => { const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)}m ago` : s < 86400 ? `${Math.floor(s / 3600)}h ago` : `${Math.floor(s / 86400)}d ago` }
+  const summary = (e: ExecRow) => {
+    const acted = (e.actionResults ?? []).filter((a) => a.ok && a.output && !a.output.skipped)
+    if (!acted.length) return e.status === 'NO_MATCH' ? 'No match' : '—'
+    return acted.map((a) => a.output?.wouldChange ?? (a.output?.newDailyBudget != null ? `→ €${a.output.newDailyBudget}` : a.type)).join(', ')
+  }
+  return (
+    <div className="h10-hist-back" onClick={onClose}>
+      <div className="h10-hist" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`History — ${rule.name}`}>
+        <div className="h10-hist-h"><div><b>Execution history</b><span title={rule.name}>{rule.name}</span></div><button type="button" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
+        <div className="h10-hist-b">
+          {loading ? <div className="h10-hist-msg">Loading…</div>
+            : items.length === 0 ? <div className="h10-hist-msg">No runs yet. This rule produces audit rows once it&rsquo;s enabled and the evaluator ticks.</div>
+            : items.map((e) => (
+              <div className="h10-hist-r" key={e.id}>
+                <span className={`st ${STATUS_TONE[e.status] ?? 'muted'}`}>{e.dryRun && e.status !== 'NO_MATCH' ? 'Proposed' : e.status === 'SUCCESS' ? 'Applied' : e.status.replace('_', ' ').toLowerCase()}</span>
+                <span className="sum" title={e.errorMessage ?? ''}>{e.errorMessage ?? summary(e)}</span>
+                <span className="when">{ago(e.startedAt)}</span>
+              </div>
+            ))}
         </div>
       </div>
     </div>
