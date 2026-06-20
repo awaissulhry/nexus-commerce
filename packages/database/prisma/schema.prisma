@@ -11387,6 +11387,21 @@ model AutomationRule {
   @@index([trigger])
 }
 
+// B3 (Budget rule builder): reusable rule templates — saved criteria + THEN action,
+// reapplied to new rules. Additive; independent of AutomationRule.
+model AutomationRuleTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  domain    String   @default("advertising")
+  type      String // rule-type slug: 'budget' (later 'bid', etc.)
+  payload   Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@index([domain, type])
+}
+
 model AutomationRuleExecution {
   id     String         @id @default(cuid())
   ruleId String
@@ -12686,6 +12701,38 @@ model AdSchedule {
 
   @@index([campaignId])
   @@index([enabled])
+}
+
+// BS — Budget Schedule (Helium 10 "Budget Schedules" tab). An hourly/daily schedule that
+// adjusts the daily budget (CAMPAIGN_BUDGET) or a budget multiplier (BUDGET_MULTIPLIER) of the
+// selected campaigns. `kind` is reserved so the sibling Dayparting builder can share this table.
+model BudgetSchedule {
+  id              String    @id @default(cuid())
+  name            String
+  kind            String    @default("BUDGET") // BUDGET | DAYPARTING (future)
+  type            String    @default("CAMPAIGN_BUDGET") // CAMPAIGN_BUDGET (hourly €) | BUDGET_MULTIPLIER (daily ×)
+  // Campaigns this schedule applies to: [{ id, name, marketplace?, adProduct?, dailyBudget? }]
+  campaigns       Json      @default("[]")
+  // Per-day windows + adjustment: [{ day:0-6, start:"HH:MM", end:"HH:MM", adj, value }]
+  windows         Json      @default("[]")
+  timezone        String    @default("Europe/Rome")
+  // Chart prefs: { metric1, metric2, groupBy, daysFilter }
+  chartPrefs      Json      @default("{}")
+  startDate       DateTime?
+  endDate         DateTime?
+  neverExpire     Boolean   @default(true)
+  excludeDates    Json      @default("[]") // [{ start, end }] blackout ranges
+  autoRefill      Boolean   @default(false)
+  enabled         Boolean   @default(true)
+  // Apply-engine churn guard: { [campaignId]: { budgetCents | multiplier, at } }
+  lastApplied     Json?
+  lastEvaluatedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdBy       String?
+
+  @@index([enabled])
+  @@index([kind])
 }
 
 // RS.1 — a named, reusable rank GOAL ("Own Top of Search", "Defend", "Rest of

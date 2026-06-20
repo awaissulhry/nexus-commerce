@@ -3914,6 +3914,41 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true }
   })
 
+  // ── B3 (Budget rule builder): reusable rule templates — save a rule's criteria +
+  //    THEN action, reapply to a new rule. Additive AutomationRuleTemplate table. ──
+  fastify.get('/advertising/rule-templates', async (request) => {
+    const q = request.query as { type?: string }
+    const items = await prisma.automationRuleTemplate.findMany({
+      where: { domain: 'advertising', ...(q.type ? { type: q.type } : {}) },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    })
+    return { items }
+  })
+
+  fastify.post('/advertising/rule-templates', async (request, reply) => {
+    const b = request.body as { name?: string; type?: string; payload?: unknown }
+    if (!b?.name || !b?.type) {
+      reply.code(400)
+      return { error: 'name + type required' }
+    }
+    const template = await prisma.automationRuleTemplate.create({
+      data: { name: b.name, type: b.type, domain: 'advertising', payload: (b.payload ?? {}) as object, createdBy: 'user' },
+    })
+    return { template }
+  })
+
+  fastify.delete('/advertising/rule-templates/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      await prisma.automationRuleTemplate.delete({ where: { id } })
+      return { ok: true }
+    } catch {
+      reply.code(404)
+      return { error: 'not_found' }
+    }
+  })
+
   // Test a rule against a synthetic context — used by the rule-builder
   // UI to preview which actions would fire. Always forces dryRun=true,
   // never writes side-effects regardless of rule.dryRun.
@@ -4826,6 +4861,95 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       } catch { /* best-effort resume */ }
     }
     try { await prisma.adSchedule.delete({ where: { id } }); return { ok: true } } catch { reply.status(404); return { error: 'not found' } }
+  })
+
+  // ── BS — Budget Schedules (Helium 10 "Budget Schedules" tab) ──────────
+  // A weekly hourly/daily schedule that adjusts campaign budget (CAMPAIGN_BUDGET) or a budget
+  // multiplier (BUDGET_MULTIPLIER). Applied by the ad-budget-schedule cron (sandbox-safe).
+  const BS_DOW_SHORT = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+  const bsScheduleDays = (windows: unknown): string => {
+    const ws = Array.isArray(windows) ? windows as Array<{ day?: number }> : []
+    const days = [...new Set(ws.map((w) => Number(w.day)).filter((d) => d >= 0 && d <= 6))].sort((a, b) => a - b)
+    if (days.length === 0) return '—'
+    if (days.length === 7) return 'All Days'
+    return days.map((d) => BS_DOW_SHORT[d]).join(', ')
+  }
+  const bsFmtDate = (d: Date | null): string | null => (d ? d.toISOString().slice(0, 10) : null)
+
+  fastify.get('/advertising/budget-schedules', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=15')
+    const items = await prisma.budgetSchedule.findMany({ where: { kind: 'BUDGET' }, orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }] })
+    const shaped = items.map((s) => ({
+      id: s.id, name: s.name, type: s.type, enabled: s.enabled, autoRefill: s.autoRefill,
+      days: bsScheduleDays(s.windows),
+      startDate: bsFmtDate(s.startDate), endDate: s.neverExpire ? null : bsFmtDate(s.endDate),
+      excludeStart: null as string | null, excludeEnd: null as string | null,
+    }))
+    return { items: shaped, count: shaped.length }
+  })
+
+  fastify.get('/advertising/budget-schedules/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const schedule = await prisma.budgetSchedule.findUnique({ where: { id } })
+    if (!schedule) { reply.status(404); return { error: 'not found' } }
+    return { schedule }
+  })
+
+  fastify.post('/advertising/budget-schedules', async (request, reply) => {
+    const b = (request.body ?? {}) as Record<string, unknown>
+    if (!b.name) { reply.status(400); return { error: 'name required' } }
+    const schedule = await prisma.budgetSchedule.create({ data: {
+      name: String(b.name), kind: 'BUDGET', type: (b.type as string) ?? 'CAMPAIGN_BUDGET',
+      campaigns: (b.campaigns as object) ?? [], windows: (b.windows as object) ?? [],
+      timezone: (b.timezone as string) ?? 'Europe/Rome', chartPrefs: (b.chartPrefs as object) ?? {},
+      startDate: b.startDate ? new Date(String(b.startDate)) : null,
+      endDate: b.endDate ? new Date(String(b.endDate)) : null,
+      neverExpire: b.neverExpire !== false, excludeDates: (b.excludeDates as object) ?? [],
+      autoRefill: b.autoRefill === true,
+    } })
+    return { schedule }
+  })
+
+  fastify.patch('/advertising/budget-schedules/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = (request.body ?? {}) as Record<string, unknown>
+    const data: Record<string, unknown> = {}
+    for (const k of ['name', 'type', 'campaigns', 'windows', 'timezone', 'chartPrefs', 'neverExpire', 'excludeDates', 'autoRefill', 'enabled']) if (b[k] !== undefined) data[k] = b[k]
+    if (b.startDate !== undefined) data.startDate = b.startDate ? new Date(String(b.startDate)) : null
+    if (b.endDate !== undefined) data.endDate = b.endDate ? new Date(String(b.endDate)) : null
+    try { const schedule = await prisma.budgetSchedule.update({ where: { id }, data }); return { schedule } } catch { reply.status(404); return { error: 'not found' } }
+  })
+
+  fastify.delete('/advertising/budget-schedules/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try { await prisma.budgetSchedule.delete({ where: { id } }); return { ok: true } } catch { reply.status(404); return { error: 'not found' } }
+  })
+
+  // BS chart — "Hourly Campaign Performance" aggregated by hour-of-day (Rome), from the AMS
+  // hourly store. Empty (hasData:false) until Marketing Stream is provisioned for the market.
+  fastify.get('/advertising/budget-schedules/hourly-performance', async (request, reply) => {
+    const q = request.query as { start?: string; end?: string; marketplace?: string }
+    const since = q.start ? new Date(q.start) : (() => { const d = new Date(); d.setUTCDate(d.getUTCDate() - 60); d.setUTCHours(0, 0, 0, 0); return d })()
+    const until = q.end ? new Date(q.end) : new Date()
+    const rows = await prisma.$queryRaw<Array<{ hour: number; cost: bigint | null; sales: bigint | null; orders: bigint | null; clicks: bigint | null; impressions: bigint | null }>>`
+      SELECT EXTRACT(HOUR FROM ts_rome)::int AS hour,
+             SUM("costMicros") AS cost, SUM(COALESCE("sales7dCents",0)) AS sales,
+             SUM(COALESCE("orders7d",0)) AS orders, SUM("clicks") AS clicks, SUM("impressions") AS impressions
+      FROM (
+        SELECT (("date" + (("hour")::text || ' hours')::interval) AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome') AS ts_rome,
+               "costMicros", "sales7dCents", "orders7d", "clicks", "impressions"
+        FROM "AmazonAdsHourlyPerformance"
+        WHERE "date" >= ${since} AND "date" <= ${until}
+      ) t
+      GROUP BY hour ORDER BY hour`
+    const series = Array.from({ length: 24 }, (_, h) => {
+      const r = rows.find((x) => Number(x.hour) === h)
+      const spend = r ? Number(r.cost ?? 0n) / 1e6 : 0
+      const sales = r ? Number(r.sales ?? 0n) / 100 : 0
+      return { hour: h, spend: Math.round(spend * 100) / 100, sales: Math.round(sales * 100) / 100, orders: r ? Number(r.orders ?? 0n) : 0, clicks: r ? Number(r.clicks ?? 0n) : 0, impressions: r ? Number(r.impressions ?? 0n) : 0, acos: sales > 0 ? Math.round((spend / sales) * 1000) / 10 : null }
+    })
+    reply.header('Cache-Control', 'private, max-age=300')
+    return { groupBy: 'hour', timezone: 'Europe/Rome', hasData: rows.length > 0, series }
   })
 
   // ── RS.1 — Rank Targets (reusable rank GOALS for the schedule + baseline) ──
