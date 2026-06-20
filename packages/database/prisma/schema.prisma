@@ -11428,6 +11428,37 @@ model AutomationRuleExecution {
   @@index([status, startedAt(sort: Desc)])
 }
 
+// ES1 — Manual-control ads rules are propose-only: when one matches in dry-run it writes a
+// suggestion here for the operator to Approve (apply live) or Dismiss on the Suggestions page.
+// Dedup key (ruleId + entityId + proposedKey) keeps one pending row per rule×entity×change.
+model AdsRuleSuggestion {
+  id          String  @id @default(cuid())
+  ruleId      String
+  ruleName    String?
+  executionId String?
+  trigger     String?
+  marketplace String?
+
+  entityType String // CAMPAIGN | AD_TARGET | SEARCH_TERM
+  entityId   String
+  entityName String?
+
+  // The proposed change: { type, op?, value?, wouldChange?, placement?, ... } (the *_apply output).
+  proposedAction Json
+  // Stable dedup key for the change kind (e.g. 'budget_apply:decPct:20') — one pending row per.
+  proposedKey String
+
+  status     String    @default("pending") // pending | applied | dismissed
+  createdAt  DateTime  @default(now())
+  decidedAt  DateTime?
+  decidedBy  String?
+  appliedResult Json?
+
+  @@unique([ruleId, entityId, proposedKey], map: "AdsRuleSuggestion_dedupe_key")
+  @@index([status, createdAt(sort: Desc)])
+  @@index([ruleId, createdAt(sort: Desc)])
+}
+
 // W5.1 — Scenario + ScenarioRun for what-if planning.
 //
 // Scenario captures a hypothesis the operator wants to plan against:

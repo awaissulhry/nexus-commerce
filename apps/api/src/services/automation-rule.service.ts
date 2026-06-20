@@ -635,6 +635,17 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
     },
   })
 
+  // ES1 — Manual-control ads rules are propose-only: record each proposed action as a Suggestion
+  // for operator Approve/Dismiss (deduped per rule×entity×change). Fire-and-forget; never throws.
+  if (adsManualSuggest) {
+    void import('./advertising/ads-suggestions.service.js').then((m) =>
+      m.generateSuggestionsFromExecution({
+        ruleId: rule.id, ruleName: rule.name, trigger: rule.trigger, executionId: exec.id,
+        context: args.context, actions: actions as unknown as Array<Record<string, unknown>>, actionResults,
+      }),
+    ).catch(() => {})
+  }
+
   // Phase 2 — publish to SSE activity feed (fire-and-forget; never throws).
   void import('./ads-execution-events.service.js').then(m => {
     const ctx = extractExecutionContext(args.context)

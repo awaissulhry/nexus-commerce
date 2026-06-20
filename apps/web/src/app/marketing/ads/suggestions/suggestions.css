@@ -1,0 +1,33 @@
+/* ES2 — Suggestions page (Manual-rule approval queue). Isolated; palette matches the ads console. */
+.h10-sug { padding: 0 24px 40px; }
+.h10-sug-bar { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 14px; }
+.h10-sug-bar .cnt { font-size: 13px; font-weight: 600; color: #5b6573; }
+.h10-sug-refresh { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 600; color: #3a4452; background: #f1f4f8; border: 1px solid transparent; border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+.h10-sug-refresh:hover { background: #e6ebf2; }
+.h10-sug-msg { padding: 60px; text-align: center; color: #8a93a1; font-size: 13.5px; }
+
+.h10-sug-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 80px 16px; text-align: center; }
+.h10-sug-empty .ic { width: 64px; height: 64px; border-radius: 16px; background: #eef4fd; color: #5b8ad6; display: inline-flex; align-items: center; justify-content: center; }
+.h10-sug-empty b { font-size: 16px; font-weight: 700; color: #1c2530; }
+.h10-sug-empty p { font-size: 13.5px; color: #6b7480; max-width: 420px; line-height: 1.5; margin: 0; }
+.h10-sug-empty em { font-style: normal; font-weight: 600; color: #1f6fde; }
+
+.h10-sug-table { border: 1px solid #e6e9ee; border-radius: 12px; overflow: hidden; background: #fff; }
+.h10-sug-h, .h10-sug-r { display: grid; grid-template-columns: 1.4fr 1.6fr 1.8fr 0.7fr 220px; align-items: center; gap: 14px; padding: 12px 18px; }
+.h10-sug-h { background: #f4f6f9; font-size: 12px; font-weight: 700; color: #5b6573; text-transform: uppercase; letter-spacing: .3px; }
+.h10-sug-r { border-top: 1px solid #eef1f5; font-size: 13px; }
+.h10-sug-r:hover { background: #fafbfd; }
+.h10-sug-r .rule b { display: block; font-weight: 600; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-sug-r .rule .mkt { display: inline-block; margin-top: 3px; font-size: 11px; font-weight: 700; color: #5b6573; background: #eef1f5; border-radius: 5px; padding: 1px 7px; }
+.h10-sug-r .ent .et { display: block; font-size: 11px; color: #8a93a1; }
+.h10-sug-r .ent .en { display: block; font-weight: 600; color: #2b3440; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-sug-r .prop b { font-weight: 700; color: #1c2530; }
+.h10-sug-r .prop .wc { color: #1f6fde; font-weight: 600; }
+.h10-sug-r .when { color: #8a93a1; font-size: 12.5px; }
+.h10-sug-r .act { display: inline-flex; gap: 8px; }
+.h10-sug-r .act button { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12.5px; font-weight: 600; border-radius: 8px; padding: 6px 12px; cursor: pointer; border: 1px solid; }
+.h10-sug-r .act .approve { color: #fff; background: #15a34a; border-color: #15a34a; }
+.h10-sug-r .act .approve:hover:not(:disabled) { background: #128a3f; }
+.h10-sug-r .act .dismiss { color: #5b6573; background: #fff; border-color: #d8dde4; }
+.h10-sug-r .act .dismiss:hover:not(:disabled) { background: #f1f4f8; }
+.h10-sug-r .act button:disabled { opacity: .5; cursor: default; }

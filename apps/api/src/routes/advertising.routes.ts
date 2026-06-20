@@ -3997,6 +3997,51 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── ES1: Manual-rule Suggestions — list / approve(apply-live) / dismiss ──
+  fastify.get('/advertising/suggestions', async (request) => {
+    const q = request.query as { status?: string; limit?: string }
+    const status = q.status ?? 'pending'
+    const items = await prisma.adsRuleSuggestion.findMany({
+      where: { status },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Number(q.limit) || 100, 300),
+    })
+    return { items, count: items.length }
+  })
+
+  // Approve → re-run the proposed action LIVE against the frozen execution context (respects the
+  // automation halt + the handlers' own spend caps). The operator already approved, so we apply
+  // the action directly rather than re-evaluating conditions.
+  fastify.post('/advertising/suggestions/:id/apply', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const sug = await prisma.adsRuleSuggestion.findUnique({ where: { id } })
+    if (!sug) { reply.code(404); return { error: 'not_found' } }
+    if (sug.status !== 'pending') { reply.code(409); return { error: `already ${sug.status}` } }
+    const { isAutomationHalted } = await import('../services/advertising/ads-automation-state.service.js')
+    if (await isAutomationHalted()) { reply.code(423); return { error: 'automation_halted' } }
+    if (!sug.executionId) { reply.code(422); return { error: 'no_execution_context' } }
+    const exec = await prisma.automationRuleExecution.findUnique({ where: { id: sug.executionId }, select: { triggerData: true } })
+    if (!exec) { reply.code(422); return { error: 'execution_context_gone' } }
+    await import('../services/advertising/automation-action-handlers.js') // ensure handlers registered
+    const { ACTION_HANDLERS } = await import('../services/automation-rule.service.js')
+    const action = sug.proposedAction as Record<string, unknown>
+    const handler = ACTION_HANDLERS[String(action.type)]
+    if (!handler) { reply.code(422); return { error: `no handler for ${action.type}` } }
+    const result = await handler(action as never, exec.triggerData, { dryRun: false, ruleId: sug.ruleId })
+    await prisma.adsRuleSuggestion.update({
+      where: { id }, data: { status: 'applied', decidedAt: new Date(), decidedBy: 'operator', appliedResult: result as object },
+    })
+    return { ok: result.ok !== false, result }
+  })
+
+  fastify.post('/advertising/suggestions/:id/dismiss', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      await prisma.adsRuleSuggestion.update({ where: { id }, data: { status: 'dismissed', decidedAt: new Date(), decidedBy: 'operator' } })
+      return { ok: true }
+    } catch { reply.code(404); return { error: 'not_found' } }
+  })
+
   // Test a rule against a synthetic context — used by the rule-builder
   // UI to preview which actions would fire. Always forces dryRun=true,
   // never writes side-effects regardless of rule.dryRun.
