@@ -24,7 +24,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { RuleTypeModal } from './_shared/RuleTypeModal'
 import { NoDataIllus } from './_shared/NoDataIllus'
 import { RuleListTab } from './tabs/RuleListTab'
-import { TrackerTab } from './tabs/TrackerTab'
+import { SovTrackerTab } from './tabs/SovTrackerTab'
 import { BudgetScheduleTab } from './_schedule/BudgetScheduleTab'
 import { TAB_RULES } from './tabs/placeholderSeeds'
 
@@ -310,9 +310,9 @@ export function RulesAutomationClient() {
           emptyLabel="No campaigns found."
         />
       ) : tab === 'share-of-voice' ? (
-        <TrackerTab kind="sov" />
+        <SovTrackerTab kind="sov" />
       ) : tab === 'keyword-tracker' ? (
-        <TrackerTab kind="tracker" />
+        <SovTrackerTab kind="tracker" />
       ) : tab === 'budget' ? (
         <RuleListTab
           noun="Budget Rule"

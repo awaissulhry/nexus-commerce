@@ -319,6 +319,10 @@ export function RuleBuilder({ slug }: { slug: string }) {
   // ── Placement guardrails (P4) — % modifier caps (Amazon allows 0–900%) ──
   const [placeFloor, setPlaceFloor] = useState('0')
   const [placeCeiling, setPlaceCeiling] = useState('900')
+  // ── Bid guardrails (SK1) — hard €min/max on the keyword bid (Bid · SOV · Keyword Tracker).
+  //    Floor defaults to the bid_apply execution floor (€0.05); Amazon's hard minimum is €0.02. ──
+  const [bidFloor, setBidFloor] = useState('0.05')
+  const [bidCeiling, setBidCeiling] = useState('')
   // ── B3: rule templates (Budget) ──
   const [templates, setTemplates] = useState<Array<{ id: string; name: string; payload?: unknown }>>([])
   const [tmpl, setTmpl] = useState<{ mode: 'save' | 'apply' } | null>(null)
@@ -391,6 +395,28 @@ export function RuleBuilder({ slug }: { slug: string }) {
       setPreview({ open: true, loading: false, terms: selCampaigns.map((c) => { const cur = c.placements?.[target as 'tos' | 'pdp' | 'ros'] ?? 0; return { term: c.name, current: cur, proposed: Math.round(clamp(apply(cur))) } }) })
       return
     }
+    if (isBidLike) {
+      // Real keyword-level preview: pull the positive targets in the selected campaigns and show
+      // the new bid each would get when the rule fires (THEN op + guardrail clamp). Read-only.
+      const g0 = groups[0]
+      const op = g0?.budgetOp ?? 'set'
+      const v = Number(g0?.budgetValue ?? '') || 0
+      const apply = (cur: number) => op === 'set' ? v : op === 'incPct' ? cur * (1 + v / 100) : op === 'decPct' ? cur * (1 - v / 100) : op === 'incAbs' ? cur + v : op === 'decAbs' ? cur - v : cur
+      const floor = Math.max(0.02, Number(bidFloor) || 0.05) // never below Amazon's €0.02 hard minimum
+      const ceil = bidCeiling.trim() ? Number(bidCeiling) : Infinity
+      const clamp = (x: number) => Math.min(ceil, Math.max(floor, x))
+      try {
+        const selIds = new Set(selCampaigns.map((c) => c.id))
+        const j = await fetch(`${getBackendUrl()}/api/advertising/targets?limit=1500`).then((r) => r.json()).catch(() => ({}))
+        const raw = (Array.isArray(j?.rows) ? j.rows : []) as Array<Record<string, unknown>>
+        const mine = raw.filter((t) => selIds.has(String(t.campaignId)))
+        // Auto-targeting rows carry no keyword text but still have a bid the rule adjusts — label by
+        // match type / kind so they're not silently dropped.
+        const label = (t: Record<string, unknown>) => String(t.text ?? '').trim() || String(t.matchType ?? '').trim() || (t.kind ? `${String(t.kind)} target` : 'Target')
+        setPreview({ open: true, loading: false, terms: mine.slice(0, 100).map((t) => { const cur = Number(t.bidCents ?? 0) / 100; return { term: label(t), matchType: t.matchType ? String(t.matchType) : undefined, current: cur, proposed: Math.round(clamp(apply(cur)) * 100) / 100 } }) })
+      } catch { setPreview({ open: true, loading: false, terms: [] }) }
+      return
+    }
     try {
       const lb = groups[0]?.lookback ?? 'Last 60 Days'
       const windowDays = Number((lb.match(/\d+/) ?? ['60'])[0]) || 60
@@ -411,7 +437,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
         setPreview({ open: true, loading: false, terms: raw.slice(0, 100).map((t) => ({ term: String(t.query ?? t.searchTerm ?? t.term ?? ''), matchType: t.matchType ? String(t.matchType) : undefined, clicks: Number(t.totalClicks ?? t.clicks ?? 0) || undefined, spend: t.totalCostUnits != null ? Number(t.totalCostUnits) : (t.spendCents != null ? Number(t.spendCents) / 100 : (t.spend != null ? Number(t.spend) : undefined)) })).filter((t) => t.term) })
       }
     } catch { setPreview({ open: true, loading: false, terms: [] }) }
-  }, [groups, isHarvest, isBudget, isPlacement, selCampaigns, budgetFloor, budgetCeiling, placeFloor, placeCeiling])
+  }, [groups, isHarvest, isBudget, isPlacement, isBidLike, selCampaigns, budgetFloor, budgetCeiling, placeFloor, placeCeiling, bidFloor, bidCeiling])
   // Esc closes the Preview modal
   useEffect(() => {
     if (!preview?.open) return
@@ -463,6 +489,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const targetsValid = isCampaign ? selCampaigns.length > 0 : adGroupCount > 0
   const valid = ruleName.trim().length > 0 && targetsValid && criteriaValid
   const floorOverCeiling = isBudget && budgetCeiling.trim() !== '' && (Number(budgetFloor) || 0) > (Number(budgetCeiling) || 0)
+  const bidFloorOverCeiling = isBidLike && bidCeiling.trim() !== '' && (Number(bidFloor) || 0) > (Number(bidCeiling) || 0)
 
   // ── create the rule (POST /advertising/automation-rules — starts disabled + dry-run) ──
   const submit = useCallback(async () => {
@@ -480,6 +507,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
           ...(isCampaign ? { campaigns: selCampaigns.map((c) => ({ id: c.id, name: c.name, marketplace: c.marketplace, adProduct: c.adProduct, targetingType: c.targetingType, dailyBudget: c.dailyBudget })) } : {}),
           ...(isBudget ? { budgetFloor: Math.max(1, Number(budgetFloor) || 1), budgetCeiling: budgetCeiling.trim() ? Number(budgetCeiling) : null } : {}),
           ...(isPlacement ? { placeFloor: Math.max(0, Number(placeFloor) || 0), placeCeiling: placeCeiling.trim() ? Number(placeCeiling) : 900 } : {}),
+          ...(isBidLike ? { bidFloor: Math.max(0.02, Number(bidFloor) || 0.05), bidCeiling: bidCeiling.trim() ? Number(bidCeiling) : null } : {}),
           mappings: blocks.map((b) => ({ groups: b.groups.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, campaignName: g.campaignName, status: g.status, adProduct: g.adProduct, portfolioId: g.portfolioId, look: g.look, types: g.types })) })),
         }],
         ...(isBudget ? { maxDailyAdSpendCentsEur: maxAdSpend.trim() ? Math.round(Number(maxAdSpend) * 100) : undefined, scopeMarketplace: scopeMarket === 'all' ? undefined : scopeMarket } : {}),
@@ -489,7 +517,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
       const j = await r.json().catch(() => ({}))
       if (r.ok && j?.error == null) router.push('/marketing/ads/rules-automation')
     } finally { setCreating(false) }
-  }, [valid, creating, ruleName, rt, slug, groups, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, isHarvest, isNegative, isBudget, isBid, isPlacement, isCampaign, advLookback, selCampaigns, budgetLookback, budgetExclude, budgetFloor, budgetCeiling, maxAdSpend, scopeMarket, placeFloor, placeCeiling, protectConverting, protectDays, negationLevel, searchTerms, frequency, everyN, interval, onDay, time, timezone, blocks, isEdit, ruleId, router])
+  }, [valid, creating, ruleName, rt, slug, groups, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, isHarvest, isNegative, isBudget, isBid, isBidLike, isPlacement, isCampaign, advLookback, selCampaigns, budgetLookback, budgetExclude, budgetFloor, budgetCeiling, maxAdSpend, scopeMarket, placeFloor, placeCeiling, bidFloor, bidCeiling, protectConverting, protectDays, negationLevel, searchTerms, frequency, everyN, interval, onDay, time, timezone, blocks, isEdit, ruleId, router])
 
   // ── edit mode: load an existing rule's stored JSON back into the builder ──
   useEffect(() => {
@@ -521,6 +549,10 @@ export function RuleBuilder({ slug }: { slug: string }) {
           if (a.placeFloor != null) setPlaceFloor(String(a.placeFloor))
           if (a.placeCeiling != null) setPlaceCeiling(String(a.placeCeiling))
         }
+        if (isBidLike) {
+          if (a.bidFloor != null) setBidFloor(String(a.bidFloor))
+          if (a.bidCeiling != null) setBidCeiling(String(a.bidCeiling))
+        }
         if (Array.isArray(a.searchTerms)) setSearchTerms(a.searchTerms)
         const s = a.schedule ?? {}
         if (s.frequency) setFrequency(s.frequency)
@@ -534,7 +566,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
       } catch { /* ignore */ }
     })()
     return () => { alive = false }
-  }, [ruleId, slug, isBudget, isCampaign])
+  }, [ruleId, slug, isBudget, isBidLike, isPlacement, isCampaign])
 
   return (
     <div className="h10-rb">
@@ -547,7 +579,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
         </div>
         <div className="r">
           <button type="button" className="learn"><Video size={15} /> Learn</button>
-          {!isBidLike && <button type="button" className="learn" onClick={runPreview}><Eye size={15} /> Preview</button>}
+          <button type="button" className="learn" onClick={runPreview}><Eye size={15} /> Preview</button>
           <button type="button" className="h10-rb-create" disabled={!valid || creating} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
         </div>
       </header>
@@ -777,6 +809,19 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   {placeCeiling.trim() !== '' && (Number(placeFloor) || 0) > (Number(placeCeiling) || 0) && <div className="h10-rb-warn">Min ({placeFloor}%) is above Max ({placeCeiling}%) — increases would be capped at the Max.</div>}
                 </div>
                 )}
+                {isBidLike && (
+                <div className="advblock">
+                  <b>Bid Guardrails</b>
+                  <p>Hard limits on the keyword bid so automation can never run a bid away — Amazon’s minimum is €0.02</p>
+                  <div className="freqrow">
+                    <span className="lbl">Min</span>
+                    <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" value={bidFloor} onChange={(e) => setBidFloor(e.target.value)} aria-label="Min bid" /></span>
+                    <span className="lbl">Max</span>
+                    <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" placeholder="No cap" value={bidCeiling} onChange={(e) => setBidCeiling(e.target.value)} aria-label="Max bid" /></span>
+                  </div>
+                  {bidFloorOverCeiling && <div className="h10-rb-warn">Min bid (€{bidFloor}) is above Max (€{bidCeiling}) — increases would be capped at the Max.</div>}
+                </div>
+                )}
                 {isNegative && (
                 <div className="advblock">
                   <b>Negation Level</b>
@@ -841,12 +886,14 @@ export function RuleBuilder({ slug }: { slug: string }) {
       </div>
       {preview?.open && (
         <div className="h10-rb-prevback" onClick={() => setPreview(null)}>
-          <div className="h10-rb-prev" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={isPlacement ? 'Placement preview' : isBudget ? 'Budget preview' : isHarvest ? 'Harvest preview' : 'Negative targeting preview'}>
-            <div className="ph"><b>{isPlacement ? 'Placement Preview — current → proposed' : isBudget ? 'Budget Preview — current → proposed' : isHarvest ? 'Preview — converting search terms' : 'Preview — wasting search terms'}</b><button type="button" onClick={() => setPreview(null)} aria-label="Close"><X size={18} /></button></div>
-            <div className="psub">{isPlacement ? `Read-only: the new ${(PLACEMENTS.find((p) => p.value === (groups[0]?.placeTarget ?? 'tos'))?.label ?? 'placement')} bid modifier each selected campaign would get when this rule fires.` : isBudget ? 'Read-only: the new daily budget each selected campaign would get when this rule fires.' : isHarvest ? 'Live, read-only: search terms currently meeting your criteria that would be harvested.' : 'Live, read-only: search terms currently meeting your criteria that would be negated.'}</div>
+          <div className="h10-rb-prev" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={isBidLike ? 'Bid preview' : isPlacement ? 'Placement preview' : isBudget ? 'Budget preview' : isHarvest ? 'Harvest preview' : 'Negative targeting preview'}>
+            <div className="ph"><b>{isBidLike ? 'Bid Preview — current → proposed' : isPlacement ? 'Placement Preview — current → proposed' : isBudget ? 'Budget Preview — current → proposed' : isHarvest ? 'Preview — converting search terms' : 'Preview — wasting search terms'}</b><button type="button" onClick={() => setPreview(null)} aria-label="Close"><X size={18} /></button></div>
+            <div className="psub">{isBidLike ? 'Read-only: the new bid each keyword/target in your selected campaigns would get when this rule fires.' : isPlacement ? `Read-only: the new ${(PLACEMENTS.find((p) => p.value === (groups[0]?.placeTarget ?? 'tos'))?.label ?? 'placement')} bid modifier each selected campaign would get when this rule fires.` : isBudget ? 'Read-only: the new daily budget each selected campaign would get when this rule fires.' : isHarvest ? 'Live, read-only: search terms currently meeting your criteria that would be harvested.' : 'Live, read-only: search terms currently meeting your criteria that would be negated.'}</div>
             <div className="pbody">
               {preview.loading ? <div className="pmsg">Loading…</div>
-                : preview.terms.length === 0 ? <div className="pmsg">{isPlacement ? 'Add campaigns above to preview their new placement modifiers.' : isBudget ? 'Add campaigns above to preview their new budgets.' : isHarvest ? 'No converting search terms match the current criteria yet.' : 'No wasting search terms match the current criteria yet.'}</div>
+                : preview.terms.length === 0 ? <div className="pmsg">{isBidLike ? 'Add campaigns above to preview their keyword bids.' : isPlacement ? 'Add campaigns above to preview their new placement modifiers.' : isBudget ? 'Add campaigns above to preview their new budgets.' : isHarvest ? 'No converting search terms match the current criteria yet.' : 'No wasting search terms match the current criteria yet.'}</div>
+                : isBidLike
+                  ? (<div className="ptable bud"><div className="pthr"><span>Keyword / Target</span><span>Current</span><span>New Bid</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}</span></div>))}</div>)
                 : isPlacement
                   ? (<div className="ptable bud"><div className="pthr"><span>Campaign</span><span>Current</span><span>New Modifier</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.current != null ? `${t.current}%` : '—'}</span><span className={`newb ${t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `${t.proposed}%` : '—'}</span></div>))}</div>)
                 : isBudget
