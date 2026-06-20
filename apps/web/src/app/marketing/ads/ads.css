@@ -39,7 +39,10 @@
 .h10-group { display: flex; flex-direction: column; }
 /* fixed 50px icon zone centres the 20px glyph in the 66px collapsed rail (8px row
    margin + 25px to glyph centre = 33px = rail centre) AND left-aligns it expanded */
-.h10-item { display: flex; align-items: center; height: 46px; margin: 1px 8px; border-radius: 10px; font-size: 15px; font-weight: 600; color: #4a5462; text-decoration: none; overflow: hidden; transition: background .12s, color .12s; }
+.h10-item { position: relative; display: flex; align-items: center; height: 46px; margin: 1px 8px; border-radius: 10px; font-size: 15px; font-weight: 600; color: #4a5462; text-decoration: none; overflow: hidden; transition: background .12s, color .12s; }
+/* F1 — pending-suggestions count badge (over the icon top-right; visible collapsed + expanded) */
+.h10-nav-badge { position: absolute; left: 31px; top: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #e5484d; color: #fff; font-size: 10px; font-weight: 800; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px #f4f6f9; z-index: 1; }
+.h10-item.on .h10-nav-badge { box-shadow: 0 0 0 2px #1f6fde; }
 .h10-item .ico { flex: 0 0 50px; display: flex; align-items: center; justify-content: center; }
 .h10-item .ico svg { color: #8a93a1; transition: color .12s; }
 .h10-item .lbl { white-space: nowrap; margin-left: 10px; opacity: 0; transition: opacity .14s ease; }

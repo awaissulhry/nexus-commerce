@@ -2,12 +2,24 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronDown, ExternalLink } from 'lucide-react'
 import { ADS_NAV, ADS_BASE } from './nav'
+import { getBackendUrl } from '@/lib/backend-url'
 
 export function AdsSidebar() {
   const pathname = usePathname() || ''
+  // F1 — pending-suggestions count badge on the Suggestions nav item.
+  const [pendingSuggestions, setPendingSuggestions] = useState(0)
+  useEffect(() => {
+    let alive = true
+    const poll = async () => {
+      try { const j = await fetch(`${getBackendUrl()}/api/advertising/suggestions/count`).then((r) => r.json()); if (alive) setPendingSuggestions(Number(j?.pending) || 0) } catch { /* ignore */ }
+    }
+    void poll()
+    const t = setInterval(poll, 60_000) // refresh hourly-ish; cheap count query
+    return () => { alive = false; clearInterval(t) }
+  }, [])
   const isActive = (route: string) => {
     const href = `${ADS_BASE}/${route}`
     return pathname === href || pathname.startsWith(`${href}/`)
@@ -41,6 +53,7 @@ export function AdsSidebar() {
             <>
               <span className="ico"><it.Icon size={20} /></span>
               <span className="lbl">{it.label}</span>
+              {it.route === 'suggestions' && pendingSuggestions > 0 && <span className="h10-nav-badge" aria-label={`${pendingSuggestions} pending suggestions`}>{pendingSuggestions > 99 ? '99+' : pendingSuggestions}</span>}
               {hasChildren && <ChevronDown className={`chev ${isOpen ? 'open' : ''}`} size={16} aria-hidden />}
               {it.external && <ExternalLink className="ext" size={14} aria-hidden />}
             </>

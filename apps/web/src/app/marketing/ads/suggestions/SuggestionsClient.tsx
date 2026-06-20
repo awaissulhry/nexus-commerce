@@ -5,8 +5,8 @@
  * as an AdsRuleSuggestion the operator can Approve (apply live) or Dismiss. Reads/writes the
  * ES1 endpoints (GET /advertising/suggestions · POST /suggestions/:id/apply · /dismiss).
  */
-import { useCallback, useEffect, useState } from 'react'
-import { Check, X, RefreshCw, Sparkles } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Check, X, RefreshCw, Sparkles, Wifi } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { getBackendUrl } from '@/lib/backend-url'
 import './suggestions.css'
@@ -26,6 +26,7 @@ export function SuggestionsClient() {
   const [items, setItems] = useState<Suggestion[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<Record<string, boolean>>({})
+  const [live, setLive] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -34,6 +35,22 @@ export function SuggestionsClient() {
     } catch { setItems([]) } finally { setLoading(false) }
   }, [])
   useEffect(() => { void load() }, [load])
+
+  // F2 — live-refresh: when a rule fires (a Manual rule may add a suggestion), reload (debounced).
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    let es: EventSource | null = null
+    try {
+      es = new EventSource(`${getBackendUrl()}/api/advertising/execution-events`)
+      es.addEventListener('ping', () => setLive(true))
+      es.addEventListener('automation.rule.fired', () => {
+        if (debounce.current) clearTimeout(debounce.current)
+        debounce.current = setTimeout(() => void load(), 1200)
+      })
+      es.onerror = () => setLive(false)
+    } catch { /* SSE unavailable → polling/refresh still works */ }
+    return () => { es?.close(); if (debounce.current) clearTimeout(debounce.current) }
+  }, [load])
 
   const act = async (id: string, kind: 'apply' | 'dismiss') => {
     setBusy((b) => ({ ...b, [id]: true }))
@@ -54,7 +71,7 @@ export function SuggestionsClient() {
     <div className="h10-sug">
       <AdsPageHeader title="Suggestions" subtitle="Review and approve the actions your Manual rules propose." showDateRange={false} markets={[]} market="all" onMarketChange={() => {}} />
       <div className="h10-sug-bar">
-        <span className="cnt">{loading ? '' : `${items.length} pending`}</span>
+        <span className="cnt">{loading ? '' : `${items.length} pending`}{live && <span className="live"><Wifi size={12} /> Live</span>}</span>
         <button type="button" className="h10-sug-refresh" onClick={() => { setLoading(true); void load() }}><RefreshCw size={14} /> Refresh</button>
       </div>
 

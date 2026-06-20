@@ -3998,6 +3998,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── ES1: Manual-rule Suggestions — list / approve(apply-live) / dismiss ──
+  // F1 — lightweight pending count for the nav badge (no row payload).
+  fastify.get('/advertising/suggestions/count', async () => {
+    const pending = await prisma.adsRuleSuggestion.count({ where: { status: 'pending' } })
+    return { pending }
+  })
+
   fastify.get('/advertising/suggestions', async (request) => {
     const q = request.query as { status?: string; limit?: string }
     const status = q.status ?? 'pending'
