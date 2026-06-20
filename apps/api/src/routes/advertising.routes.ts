@@ -4647,6 +4647,57 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return analyzeShareOfVoice({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, marketplace: q.marketplace, limit: q.limit ? Number(q.limit) : undefined })
   })
 
+  // ── SK3: Keyword Tracker rank backend ───────────────────────────────
+  // GET — the latest rank snapshot per (keyword, marketplace), plus the delta vs the prior snapshot
+  // (positive delta = improved = moved toward #1). Feeds the Keyword Tracker report + KEYWORD_RANK_BID.
+  fastify.get('/advertising/keyword-ranks', async (request, reply) => {
+    const q = request.query as { marketplace?: string; asin?: string; limit?: string }
+    const limit = Math.max(1, Math.min(2000, Number(q.limit ?? 500)))
+    const rows = await prisma.keywordRank.findMany({
+      where: { ...(q.marketplace ? { marketplace: q.marketplace } : {}), ...(q.asin ? { asin: q.asin } : {}) },
+      orderBy: [{ keyword: 'asc' }, { marketplace: 'asc' }, { capturedAt: 'desc' }],
+      take: 8000, // gather enough history to derive latest + prior per keyword (deduped below)
+    })
+    // collapse to latest + prior per (keyword, marketplace)
+    const byKey = new Map<string, { latest: typeof rows[number]; prior?: typeof rows[number] }>()
+    for (const r of rows) {
+      const k = `${r.keyword} ${r.marketplace}`
+      const e = byKey.get(k)
+      if (!e) byKey.set(k, { latest: r })
+      else if (!e.prior) e.prior = r
+    }
+    const items = [...byKey.values()].slice(0, limit).map(({ latest, prior }) => ({
+      id: latest.id, keyword: latest.keyword, marketplace: latest.marketplace, asin: latest.asin,
+      organicRank: latest.organicRank, sponsoredRank: latest.sponsoredRank, searchVolume: latest.searchVolume,
+      capturedAt: latest.capturedAt, source: latest.source,
+      // delta: prior - latest (rank improving means the number went DOWN, so a +ve delta = better)
+      rankDelta: prior?.organicRank != null && latest.organicRank != null ? prior.organicRank - latest.organicRank : 0,
+    }))
+    reply.header('Cache-Control', 'private, max-age=60')
+    return { count: items.length, items }
+  })
+  // POST — ingest rank snapshots (pluggable source: manual import now, a collector later). Each row is
+  // a point-in-time observation; we append (never overwrite) so the time-series + deltas stay intact.
+  fastify.post('/advertising/keyword-ranks', async (request, reply) => {
+    const b = request.body as { ranks?: Array<{ keyword?: string; marketplace?: string; asin?: string; organicRank?: number; sponsoredRank?: number; searchVolume?: number; capturedAt?: string; source?: string }> }
+    const list = Array.isArray(b?.ranks) ? b.ranks : []
+    const clean = list
+      .filter((r) => r && typeof r.keyword === 'string' && r.keyword.trim() && typeof r.marketplace === 'string' && r.marketplace.trim())
+      .map((r) => ({
+        keyword: r.keyword!.trim(),
+        marketplace: r.marketplace!.trim().toUpperCase(),
+        asin: r.asin?.trim() || null,
+        organicRank: r.organicRank != null && Number.isFinite(Number(r.organicRank)) ? Math.max(1, Math.round(Number(r.organicRank))) : null,
+        sponsoredRank: r.sponsoredRank != null && Number.isFinite(Number(r.sponsoredRank)) ? Math.max(1, Math.round(Number(r.sponsoredRank))) : null,
+        searchVolume: r.searchVolume != null && Number.isFinite(Number(r.searchVolume)) ? Math.max(0, Math.round(Number(r.searchVolume))) : null,
+        capturedAt: r.capturedAt ? new Date(r.capturedAt) : new Date(),
+        source: (r.source?.trim() || 'manual').slice(0, 64),
+      }))
+    if (!clean.length) { reply.status(400); return { error: 'ranks[] required (each needs keyword + marketplace)' } }
+    const res = await prisma.keywordRank.createMany({ data: clean })
+    return { ingested: res.count }
+  })
+
   // ── AX3.14: Advertising Events log ──────────────────────────────────
   fastify.get('/advertising/events', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>

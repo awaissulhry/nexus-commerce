@@ -11459,6 +11459,28 @@ model AdsRuleSuggestion {
   @@index([ruleId, createdAt(sort: Desc)])
 }
 
+// SK3 — keyword rank tracker. A time-series of organic / paid (sponsored) rank snapshots per
+// keyword × marketplace, feeding the Keyword Tracker report + the KEYWORD_RANK_BID rule. Amazon's
+// SP-API does NOT expose organic rank, so rows arrive via ingestion (manual / import / a future
+// collector); `source` records provenance. The latest snapshot per (keyword, marketplace) is the
+// authoritative current rank; the prior snapshot gives the rank delta.
+model KeywordRank {
+  id            String   @id @default(cuid())
+  keyword       String
+  marketplace   String // EU market code (DE, IT, FR, …)
+  asin          String? // the product whose rank this tracks (optional)
+  organicRank   Int? // 1-based organic SERP position; null = outside tracked depth / unknown
+  sponsoredRank Int? // 1-based sponsored position; null = not running / unknown
+  searchVolume  Int? // est. monthly search volume from the source
+  capturedAt    DateTime @default(now()) // when this rank was observed
+  source        String   @default("manual") // manual | import | <collector-id>
+  createdAt     DateTime @default(now())
+
+  @@index([keyword, marketplace, capturedAt(sort: Desc)])
+  @@index([marketplace, capturedAt(sort: Desc)])
+  @@index([asin])
+}
+
 // W5.1 — Scenario + ScenarioRun for what-if planning.
 //
 // Scenario captures a hypothesis the operator wants to plan against:
