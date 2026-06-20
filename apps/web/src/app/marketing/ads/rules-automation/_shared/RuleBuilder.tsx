@@ -62,11 +62,12 @@ const BID_ACTIONS: Array<{ value: string; label: string; unit: 'eur' | 'pct' }> 
   { value: 'incAbs', label: 'Increase Bid by(€)', unit: 'eur' },
   { value: 'decAbs', label: 'Decrease Bid by(€)', unit: 'eur' },
 ]
-// Placement rule THEN — set/raise/lower a placement bid modifier (% only).
+// Placement rule THEN — set/raise/lower a placement bid modifier (% only). H10 labels are bare
+// ("Set to", not "Set to(%)") — the % is shown as the value-field suffix (frame 02:58–03:17).
 const PLACEMENT_ACTIONS: Array<{ value: string; label: string; unit: 'eur' | 'pct' }> = [
-  { value: 'set', label: 'Set to(%)', unit: 'pct' },
-  { value: 'incPct', label: 'Increase by(%)', unit: 'pct' },
-  { value: 'decPct', label: 'Decrease by(%)', unit: 'pct' },
+  { value: 'set', label: 'Set to', unit: 'pct' },
+  { value: 'incPct', label: 'Increase by', unit: 'pct' },
+  { value: 'decPct', label: 'Decrease by', unit: 'pct' },
 ]
 // SP placement targets (Amazon: Top of Search / Product Pages / Rest of Search).
 const PLACEMENTS = [
@@ -141,7 +142,7 @@ const newGroup = (slug: string): CriteriaGroup => ({ id: _cid++, conditions: [de
 
 // per-type Rule Setup config — Negative vs Positive/Harvest differ in heading, copy,
 // targets-panel title, and whether Harvest's "Ad Group Mapping" button + info banner show.
-const SETUP: Record<string, { nav: string; desc: string; targetsTitle: string; matchTypes: MatchType[]; mapping?: boolean; banner?: string; surface?: 'search-terms' | 'campaign-budget' | 'campaign-bid' | 'campaign-placement' }> = {
+const SETUP: Record<string, { nav: string; desc: string; targetsTitle: string; matchTypes: MatchType[]; mapping?: boolean; banner?: string; surface?: 'search-terms' | 'campaign-budget' | 'campaign-bid' | 'campaign-placement'; sectionTitle?: string }> = {
   'negative-targeting': {
     nav: 'Negative Rule Setup',
     desc: 'Add related Ad Groups in any order and select which ones you’d like Nexus Ads to use to find non-converting search terms/ASINs. For each Ad Group, you can then decide which type of target you want to create when it finds a non-converting search term/ASIN.',
@@ -162,6 +163,7 @@ const SETUP: Record<string, { nav: string; desc: string; targetsTitle: string; m
     targetsTitle: '',
     matchTypes: [],
     surface: 'campaign-budget',
+    sectionTitle: 'Campaigns', // H10 section heading (≠ left-nav label) — frame-verified
   },
   bid: {
     nav: 'Bid Rule Setup',
@@ -169,6 +171,7 @@ const SETUP: Record<string, { nav: string; desc: string; targetsTitle: string; m
     targetsTitle: '',
     matchTypes: [],
     surface: 'campaign-bid',
+    sectionTitle: 'Campaigns',
   },
   placement: {
     nav: 'Placement Rule Setup',
@@ -176,6 +179,7 @@ const SETUP: Record<string, { nav: string; desc: string; targetsTitle: string; m
     targetsTitle: '',
     matchTypes: [],
     surface: 'campaign-placement',
+    sectionTitle: 'Campaigns Section', // frame-verified (02:58–03:17) — note: differs from budget's "Campaigns"
   },
 }
 const setupFor = (slug: string) => SETUP[slug] ?? SETUP['negative-targeting']
@@ -534,7 +538,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
             {/* ── Negative Rule Setup ── */}
             <section id="rb-setup" className="h10-rb-sec">
               <div className="h10-rb-setuphd">
-                <h2>{steps[1].label}</h2>
+                <h2>{setup.sectionTitle ?? steps[1].label}</h2>
                 {setup.mapping && <div className="maprow">
                   <button type="button" className="h10-rb-btn primary" onClick={addBlock}><Plus size={14} /> Ad Group Mapping</button>
                   <button type="button" className="chevbtn" aria-label={setupCollapsed ? 'Expand' : 'Collapse'} aria-expanded={!setupCollapsed} onClick={() => setSetupCollapsed((v) => !v)}><ChevronDown size={18} className={`chev ${setupCollapsed ? 'up' : ''}`} /></button>
