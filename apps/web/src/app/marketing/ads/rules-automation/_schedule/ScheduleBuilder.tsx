@@ -8,7 +8,7 @@
  *   Advanced Settings (start/end/exclude dates).
  * Reuses the rule-builder shell CSS (h10-rb-*) + the campaign-picker styling (cp-*).
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X, Video, Plus, Copy, Trash2, Calendar, BarChart3, LayoutGrid, Search, Sparkles, Eye, AlertTriangle, CopyPlus } from 'lucide-react'
 import { H10Select, HoverCard } from '../../campaigns/FilterDropdown'
@@ -105,7 +105,7 @@ const todayStr = () => {
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`
 }
 
-export function ScheduleBuilder({ slug }: { slug: string }) {
+export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle?: ReactNode }) {
   const router = useRouter()
   const scheduleId = useSearchParams().get('scheduleId')
   const isEdit = !!scheduleId
@@ -322,6 +322,7 @@ export function ScheduleBuilder({ slug }: { slug: string }) {
           <button type="button" className="x" aria-label="Close" onClick={close}><X size={19} /></button>
           <AtomMark size={20} />
           <b>{isEdit ? cfg.title.replace('Create', 'Edit') : cfg.title}</b>
+          {modeToggle}
         </div>
         <div className="r">
           <button type="button" className="learn"><Video size={15} /> Learn</button>
