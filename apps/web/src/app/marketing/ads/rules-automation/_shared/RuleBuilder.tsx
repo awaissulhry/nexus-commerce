@@ -369,7 +369,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
     document.addEventListener('keydown', k)
     return () => document.removeEventListener('keydown', k)
   }, [tmpl])
-  const [preview, setPreview] = useState<{ open: boolean; loading: boolean; terms: Array<{ term: string; orders?: number; spend?: number; clicks?: number; matchType?: string; current?: number; proposed?: number }> } | null>(null)
+  const [preview, setPreview] = useState<{ open: boolean; loading: boolean; terms: Array<{ term: string; orders?: number; spend?: number; clicks?: number; matchType?: string; current?: number; proposed?: number; organicRank?: number | null; sponsoredRank?: number | null }> } | null>(null)
   // Live, read-only preview — budget shows current→proposed daily budgets, harvest converting terms, negative wasting terms.
   const runPreview = useCallback(async () => {
     setPreview({ open: true, loading: true, terms: [] })
@@ -407,13 +407,26 @@ export function RuleBuilder({ slug }: { slug: string }) {
       const clamp = (x: number) => Math.min(ceil, Math.max(floor, x))
       try {
         const selIds = new Set(selCampaigns.map((c) => c.id))
-        const j = await fetch(`${getBackendUrl()}/api/advertising/targets?limit=1500`).then((r) => r.json()).catch(() => ({}))
-        const raw = (Array.isArray(j?.rows) ? j.rows : []) as Array<Record<string, unknown>>
+        // Keyword Tracker also shows each keyword's current organic/paid rank beside the bid — pull
+        // the latest ranks (KeywordRank backend) in parallel and match by keyword text + marketplace.
+        const [targetsJson, ranksJson] = await Promise.all([
+          fetch(`${getBackendUrl()}/api/advertising/targets?limit=1500`).then((r) => r.json()).catch(() => ({})),
+          isRank ? fetch(`${getBackendUrl()}/api/advertising/keyword-ranks?limit=2000`).then((r) => r.json()).catch(() => ({})) : Promise.resolve({}),
+        ])
+        const raw = (Array.isArray(targetsJson?.rows) ? targetsJson.rows : []) as Array<Record<string, unknown>>
         const mine = raw.filter((t) => selIds.has(String(t.campaignId)))
+        const rankMap = new Map<string, { organicRank: number | null; sponsoredRank: number | null }>()
+        if (isRank) for (const it of (Array.isArray(ranksJson?.items) ? ranksJson.items : []) as Array<Record<string, unknown>>) {
+          rankMap.set(`${String(it.keyword ?? '').trim().toLowerCase()}|${String(it.marketplace ?? '')}`, { organicRank: it.organicRank != null ? Number(it.organicRank) : null, sponsoredRank: it.sponsoredRank != null ? Number(it.sponsoredRank) : null })
+        }
         // Auto-targeting rows carry no keyword text but still have a bid the rule adjusts — label by
         // match type / kind so they're not silently dropped.
         const label = (t: Record<string, unknown>) => String(t.text ?? '').trim() || String(t.matchType ?? '').trim() || (t.kind ? `${String(t.kind)} target` : 'Target')
-        setPreview({ open: true, loading: false, terms: mine.slice(0, 100).map((t) => { const cur = Number(t.bidCents ?? 0) / 100; return { term: label(t), matchType: t.matchType ? String(t.matchType) : undefined, current: cur, proposed: Math.round(clamp(apply(cur)) * 100) / 100 } }) })
+        setPreview({ open: true, loading: false, terms: mine.slice(0, 100).map((t) => {
+          const cur = Number(t.bidCents ?? 0) / 100
+          const rk = isRank ? rankMap.get(`${String(t.text ?? '').trim().toLowerCase()}|${String(t.marketplace ?? '')}`) : undefined
+          return { term: label(t), matchType: t.matchType ? String(t.matchType) : undefined, current: cur, proposed: Math.round(clamp(apply(cur)) * 100) / 100, organicRank: rk?.organicRank ?? null, sponsoredRank: rk?.sponsoredRank ?? null }
+        }) })
       } catch { setPreview({ open: true, loading: false, terms: [] }) }
       return
     }
@@ -437,7 +450,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
         setPreview({ open: true, loading: false, terms: raw.slice(0, 100).map((t) => ({ term: String(t.query ?? t.searchTerm ?? t.term ?? ''), matchType: t.matchType ? String(t.matchType) : undefined, clicks: Number(t.totalClicks ?? t.clicks ?? 0) || undefined, spend: t.totalCostUnits != null ? Number(t.totalCostUnits) : (t.spendCents != null ? Number(t.spendCents) / 100 : (t.spend != null ? Number(t.spend) : undefined)) })).filter((t) => t.term) })
       }
     } catch { setPreview({ open: true, loading: false, terms: [] }) }
-  }, [groups, isHarvest, isBudget, isPlacement, isBidLike, selCampaigns, budgetFloor, budgetCeiling, placeFloor, placeCeiling, bidFloor, bidCeiling])
+  }, [groups, isHarvest, isBudget, isPlacement, isBidLike, isRank, selCampaigns, budgetFloor, budgetCeiling, placeFloor, placeCeiling, bidFloor, bidCeiling])
   // Esc closes the Preview modal
   useEffect(() => {
     if (!preview?.open) return
@@ -888,10 +901,12 @@ export function RuleBuilder({ slug }: { slug: string }) {
         <div className="h10-rb-prevback" onClick={() => setPreview(null)}>
           <div className="h10-rb-prev" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={isBidLike ? 'Bid preview' : isPlacement ? 'Placement preview' : isBudget ? 'Budget preview' : isHarvest ? 'Harvest preview' : 'Negative targeting preview'}>
             <div className="ph"><b>{isBidLike ? 'Bid Preview — current → proposed' : isPlacement ? 'Placement Preview — current → proposed' : isBudget ? 'Budget Preview — current → proposed' : isHarvest ? 'Preview — converting search terms' : 'Preview — wasting search terms'}</b><button type="button" onClick={() => setPreview(null)} aria-label="Close"><X size={18} /></button></div>
-            <div className="psub">{isBidLike ? 'Read-only: the new bid each keyword/target in your selected campaigns would get when this rule fires.' : isPlacement ? `Read-only: the new ${(PLACEMENTS.find((p) => p.value === (groups[0]?.placeTarget ?? 'tos'))?.label ?? 'placement')} bid modifier each selected campaign would get when this rule fires.` : isBudget ? 'Read-only: the new daily budget each selected campaign would get when this rule fires.' : isHarvest ? 'Live, read-only: search terms currently meeting your criteria that would be harvested.' : 'Live, read-only: search terms currently meeting your criteria that would be negated.'}</div>
+            <div className="psub">{isRank ? 'Read-only: each keyword’s current organic / paid rank and the new bid it would get when this rule fires.' : isBidLike ? 'Read-only: the new bid each keyword/target in your selected campaigns would get when this rule fires.' : isPlacement ? `Read-only: the new ${(PLACEMENTS.find((p) => p.value === (groups[0]?.placeTarget ?? 'tos'))?.label ?? 'placement')} bid modifier each selected campaign would get when this rule fires.` : isBudget ? 'Read-only: the new daily budget each selected campaign would get when this rule fires.' : isHarvest ? 'Live, read-only: search terms currently meeting your criteria that would be harvested.' : 'Live, read-only: search terms currently meeting your criteria that would be negated.'}</div>
             <div className="pbody">
               {preview.loading ? <div className="pmsg">Loading…</div>
                 : preview.terms.length === 0 ? <div className="pmsg">{isBidLike ? 'Add campaigns above to preview their keyword bids.' : isPlacement ? 'Add campaigns above to preview their new placement modifiers.' : isBudget ? 'Add campaigns above to preview their new budgets.' : isHarvest ? 'No converting search terms match the current criteria yet.' : 'No wasting search terms match the current criteria yet.'}</div>
+                : isRank
+                  ? (<div className="ptable bud"><div className="pthr"><span>Keyword / Target</span><span>Organic</span><span>Sponsored</span><span>Current</span><span>New Bid</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.organicRank != null ? `#${t.organicRank}` : '—'}</span><span>{t.sponsoredRank != null ? `#${t.sponsoredRank}` : '—'}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}</span></div>))}</div>)
                 : isBidLike
                   ? (<div className="ptable bud"><div className="pthr"><span>Keyword / Target</span><span>Current</span><span>New Bid</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}</span></div>))}</div>)
                 : isPlacement
