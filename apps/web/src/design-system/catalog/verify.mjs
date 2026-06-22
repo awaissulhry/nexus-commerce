@@ -55,6 +55,8 @@ const grid = page.locator('[data-cat="datagrid"]')
 if (await grid.count()) { await grid.screenshot({ path: `${OUT}/datagrid.png` }); console.log('ok datagrid') }
 const patterns = page.locator('[data-cat="patterns"]')
 if (await patterns.count()) { await patterns.screenshot({ path: `${OUT}/patterns.png` }); console.log('ok patterns') }
+const filters = page.locator('[data-cat="filters"]')
+if (await filters.count()) { await filters.screenshot({ path: `${OUT}/filters.png` }); console.log('ok filters') }
 
 // overlays — open each, screenshot the portaled element, close
 const shotOverlay = async (btnName, sel, name) => {

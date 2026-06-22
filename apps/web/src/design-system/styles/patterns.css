@@ -226,3 +226,158 @@
   color: var(--h10-text);
   letter-spacing: -0.01em;
 }
+
+/* ── FilterPanel ─────────────────────────────────────────────────── */
+.h10-ds-fpanel {
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border);
+  border-radius: var(--h10-radius-2xl);
+  padding: 14px 18px 16px;
+}
+.h10-ds-fpanel.collapsed {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+.h10-ds-fpanel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+/* balance: when collapsed the header is the only child — drop the orphan margin */
+.h10-ds-fpanel.collapsed .h10-ds-fpanel-head {
+  margin-bottom: 0;
+}
+.h10-ds-fpanel-head h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--h10-text);
+  letter-spacing: -0.01em;
+}
+.h10-ds-fpanel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--h10-text-2);
+  cursor: pointer;
+}
+.h10-ds-fpanel-toggle svg {
+  transition: transform 0.15s ease;
+}
+.h10-ds-fpanel-toggle.open svg {
+  transform: rotate(180deg);
+}
+.h10-ds-fpanel-presets {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.h10-ds-fpanel-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 11px 14px;
+}
+.h10-ds-fpanel-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.h10-ds-fpanel-field.wide {
+  grid-column: span 2;
+}
+.h10-ds-fpanel-field > .flbl {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--h10-text-strong);
+}
+/* make DS controls fill their field cell */
+.h10-ds-fpanel-field > .h10-ds-ms,
+.h10-ds-fpanel-field > .h10-ds-combo,
+.h10-ds-fpanel-field > .h10-ds-select,
+.h10-ds-fpanel-field > .h10-ds-field {
+  display: flex;
+  width: 100%;
+}
+.h10-ds-fpanel-field .h10-ds-ms-btn,
+.h10-ds-fpanel-field .h10-ds-combo-in,
+.h10-ds-fpanel-field .h10-ds-select select {
+  width: 100%;
+  min-width: 0;
+}
+.h10-ds-fpanel-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.h10-ds-fpanel-foot .grow {
+  flex: 1;
+}
+@media (max-width: 1320px) {
+  .h10-ds-fpanel-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .h10-ds-fpanel-field.wide {
+    grid-column: span 1;
+  }
+}
+@media (max-width: 760px) {
+  .h10-ds-fpanel-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ── Sticky action bar (BulkActionBar / EditModeBar) ─────────────── */
+.h10-ds-actionbar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border);
+  border-radius: var(--h10-radius-xl);
+  padding: 11px 16px;
+  box-shadow: var(--h10-shadow-card);
+}
+.h10-ds-actionbar .lbl {
+  font-size: 13px;
+  color: var(--h10-text-strong);
+}
+.h10-ds-actionbar .lbl b {
+  color: var(--h10-text);
+  font-weight: 700;
+}
+.h10-ds-actionbar .grow {
+  flex: 1;
+}
+.h10-ds-actionbar .acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.h10-ds-actionbar-clear {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--h10-text-2);
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: var(--h10-radius-md);
+}
+.h10-ds-actionbar-clear:hover {
+  background: var(--h10-surface-hover);
+  color: var(--h10-text);
+}

@@ -67,7 +67,7 @@ import {
   ToastProvider,
   useToast,
 } from '@/design-system/components'
-import { AppShell, PageHeader, DetailHeader } from '@/design-system/patterns'
+import { AppShell, PageHeader, DetailHeader, FilterPanel, FilterField, BulkActionBar, EditModeBar } from '@/design-system/patterns'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -640,6 +640,79 @@ export function TokenCatalog() {
             <div style={{ fontSize: 13, color: 'var(--h10-text-2)' }}>Main content scrolls independently of the rail.</div>
           </AppShell>
         </div>
+      </section>
+
+      <section data-cat="filters" style={{ marginBottom: 40 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
+          Filters &amp; action bars <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--h10-text-3)' }}>· Phase 5 · Wave 2</span>
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>
+          The grid-adjacent patterns — a collapsible filter panel and the sticky selection / edit bars.
+        </p>
+
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>FilterPanel</div>
+        <FilterPanel
+          presets={
+            <>
+              <Button size="sm">All</Button>
+              <Button size="sm">Active</Button>
+              <Button size="sm">Paused</Button>
+            </>
+          }
+          onReset={() => {}}
+          onApply={() => {}}
+          footerExtra={<Button>Save to library</Button>}
+        >
+          <FilterField label="Campaign type">
+            <MultiSelect
+              options={[
+                { value: 'sp', label: 'Sponsored Products' },
+                { value: 'sb', label: 'Sponsored Brands' },
+                { value: 'sd', label: 'Sponsored Display' },
+              ]}
+              value={msVal}
+              onChange={setMsVal}
+            />
+          </FilterField>
+          <FilterField label="Marketplace">
+            <Combobox
+              options={[
+                { value: 'it', label: 'Amazon Italy' },
+                { value: 'de', label: 'Amazon Germany' },
+                { value: 'fr', label: 'Amazon France' },
+                { value: 'es', label: 'Amazon Spain' },
+              ]}
+              value={comboVal}
+              onChange={setComboVal}
+              placeholder="Search…"
+            />
+          </FilterField>
+          <FilterField label="Status">
+            <Select defaultValue="all">
+              <option value="all">All</option>
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+            </Select>
+          </FilterField>
+          <FilterField label="Min spend">
+            <Input prefix="€" placeholder="0" />
+          </FilterField>
+          <FilterField label="Max ACOS">
+            <Input suffix="%" placeholder="100" />
+          </FilterField>
+        </FilterPanel>
+
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>BulkActionBar</div>
+        <BulkActionBar count={3} onClear={() => {}}>
+          <Button size="sm">Set status</Button>
+          <Button size="sm">Adjust bids</Button>
+          <Button size="sm" variant="primary">
+            Apply to 3
+          </Button>
+        </BulkActionBar>
+
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>EditModeBar</div>
+        <EditModeBar count={2} onDiscard={() => {}} onApply={() => {}} />
       </section>
 
       <Section title="Typography" desc="Inter via --font-sans, rendered with H10's heavier (auto) smoothing.">

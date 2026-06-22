@@ -10,8 +10,7 @@ spine of the rule/goal builders), `FilterPanel`, `BulkActionBar`,
 The actively-changing ads builders (`_rank/`, the B-series budget builder) are
 folded in only after that WIP is committed.
 
-> **Wave 1 shipped:** `AppShell`, `PageHeader`, `DetailHeader`
-> (+ `../styles/patterns.css`). Remaining: `FilterPanel`, `BulkActionBar`,
-> `EditModeBar`, `ColumnCustomizer`, and the `Builder` framework (full-screen
-> wizard + scroll-spy). The live-WIP ads builders (`_rank`, budget) fold in once
-> committed.
+> **Waves 1–2 shipped:** `AppShell`, `PageHeader`, `DetailHeader`, `FilterPanel`
+> (+ `FilterField`), `BulkActionBar`, `EditModeBar` (+ `../styles/patterns.css`).
+> Remaining: `ColumnCustomizer` and the `Builder` framework (full-screen wizard +
+> scroll-spy). The live-WIP ads builders (`_rank`, budget) fold in once committed.

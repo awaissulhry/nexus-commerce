@@ -4,6 +4,17 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P5.2] — 2026-06-22 — Patterns wave 2: FilterPanel · BulkActionBar · EditModeBar
+
+- `FilterPanel` (`.h10-am-fpanel`: collapsible, presets row, responsive 6→3→2
+  col field grid via `FilterField`, reset/apply footer; DS controls fill their
+  cells; orphan-margin balanced when collapsed). `BulkActionBar` (sticky
+  "N selected" + actions + Clear; renders nothing at 0). `EditModeBar` (sticky
+  discard/apply for unsaved edits). Shared `.h10-ds-actionbar`.
+- Catalog Filters section dog-foods them (FilterPanel with MultiSelect / Combobox
+  / Select / €-% inputs). `tsc` clean; @2x self-verify on the next clean window.
+- Remaining Phase 5: the Builder framework + ColumnCustomizer.
+
 ## [P5.1] — 2026-06-22 — Patterns wave 1: AppShell · PageHeader · DetailHeader
 
 - First organisms in `patterns/` (+ `styles/patterns.css`): `AppShell` (H10 rail
