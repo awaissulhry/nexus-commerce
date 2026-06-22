@@ -4,6 +4,17 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P4.3] — 2026-06-22 — Components wave 3 (Toast · MultiSelect · Combobox)
+
+- `Toast` system: `ToastProvider` + `useToast()` + a portaled bottom-center
+  viewport (info/success/error, auto-dismiss). `MultiSelect` (`.h10-ms` checkbox
+  dropdown — All / N-selected + Select-all with indeterminate). `Combobox`
+  (`.h10-combo` typeahead — filter + pick). Shared `useClickAway` hook (promoted
+  out of FilterDropdown).
+- Catalog dog-foods them (MultiSelect + Combobox + a self-contained Toast demo);
+  harness opens + captures each popover and the toast.
+- `tsc` clean. @2x self-verify on the next clean dev-server window.
+
 ## [P4.2] — 2026-06-22 — Components wave 2: overlays (Modal · Drawer · Menu)
 
 - Portal-based overlays tokenized to H10: `Modal` (`.h10-modal` — title/subtitle/X,

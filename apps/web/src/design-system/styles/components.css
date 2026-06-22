@@ -355,3 +355,199 @@
 .h10-ds-menu button:disabled:hover {
   background: none;
 }
+
+/* ── Toast ───────────────────────────────────────────────────────── */
+.h10-ds-toasts {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.h10-ds-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--h10-grey-900);
+  color: var(--h10-text-inverse);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 11px 16px;
+  border-radius: var(--h10-radius-xl);
+  box-shadow: var(--h10-shadow-modal);
+  animation: h10-ds-toastin 0.2s ease;
+}
+.h10-ds-toast .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--h10-info);
+  flex-shrink: 0;
+}
+.h10-ds-toast.success .dot {
+  background: var(--h10-live);
+}
+.h10-ds-toast.error .dot {
+  background: var(--h10-danger);
+}
+@keyframes h10-ds-toastin {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── MultiSelect (checkbox dropdown) ─────────────────────────────── */
+.h10-ds-ms {
+  position: relative;
+  display: inline-flex;
+}
+.h10-ds-ms-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 160px;
+  border: 1px solid var(--h10-border);
+  border-radius: var(--h10-radius-lg);
+  padding: 7px 11px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--h10-text);
+  background: var(--h10-surface);
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-ms-btn:hover {
+  border-color: var(--h10-border-strong);
+}
+.h10-ds-ms-btn .ph {
+  color: var(--h10-text-disabled);
+}
+.h10-ds-ms-btn svg {
+  color: var(--h10-text-3);
+  flex-shrink: 0;
+}
+.h10-ds-ms-pop {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  z-index: 40;
+  min-width: 200px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border-subtle);
+  border-radius: var(--h10-radius-xl);
+  box-shadow: var(--h10-shadow-menu);
+  padding: 5px;
+}
+.h10-ds-ms-opt {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border-radius: var(--h10-radius-md);
+  font-size: 13px;
+  color: var(--h10-text-strong);
+  cursor: pointer;
+}
+.h10-ds-ms-opt:hover {
+  background: var(--h10-surface-hover);
+}
+.h10-ds-ms-opt.sel {
+  background: var(--h10-wash-primary);
+}
+.h10-ds-ms-opt.all {
+  border-bottom: 1px solid var(--h10-border-subtle);
+  border-radius: 0;
+  margin-bottom: 3px;
+  font-weight: 600;
+}
+.h10-ds-ms-opt input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--h10-primary);
+}
+
+/* ── Combobox (typeahead) ────────────────────────────────────────── */
+.h10-ds-combo {
+  position: relative;
+  display: inline-flex;
+}
+.h10-ds-combo-in {
+  width: 100%;
+  min-width: 200px;
+  border: 1px solid var(--h10-border);
+  border-radius: var(--h10-radius-lg);
+  padding: 7px 30px 7px 11px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--h10-text);
+  background: var(--h10-surface);
+}
+.h10-ds-combo-in:focus {
+  outline: none;
+  border-color: var(--h10-primary);
+  box-shadow: var(--h10-focus-ring);
+}
+.h10-ds-combo-in::placeholder {
+  color: var(--h10-text-disabled);
+}
+.h10-ds-combo .chev {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--h10-text-3);
+  pointer-events: none;
+}
+.h10-ds-combo-pop {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border-subtle);
+  border-radius: var(--h10-radius-xl);
+  box-shadow: var(--h10-shadow-menu);
+  padding: 5px;
+}
+.h10-ds-combo-pop button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--h10-text-strong);
+  padding: 8px 9px;
+  border-radius: var(--h10-radius-md);
+  cursor: pointer;
+}
+.h10-ds-combo-pop button:hover {
+  background: var(--h10-surface-hover);
+}
+.h10-ds-combo-pop button.on {
+  background: var(--h10-wash-primary);
+  color: var(--h10-primary);
+  font-weight: 600;
+}
+.h10-ds-combo-empty {
+  padding: 12px 9px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--h10-text-3);
+}

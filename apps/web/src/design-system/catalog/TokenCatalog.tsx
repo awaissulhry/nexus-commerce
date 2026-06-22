@@ -44,7 +44,20 @@ import {
   Kbd,
   Divider,
 } from '@/design-system/primitives'
-import { Card as DSCard, EmptyState, Tabs, Pagination, ProgressBar, Modal, Drawer, Menu } from '@/design-system/components'
+import {
+  Card as DSCard,
+  EmptyState,
+  Tabs,
+  Pagination,
+  ProgressBar,
+  Modal,
+  Drawer,
+  Menu,
+  MultiSelect,
+  Combobox,
+  ToastProvider,
+  useToast,
+} from '@/design-system/components'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -105,12 +118,28 @@ function SwatchGrid({ children }: { children: ReactNode }) {
   return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(108px, 1fr))', gap: 12 }}>{children}</div>
 }
 
+function ToastButton() {
+  const { toast } = useToast()
+  return <Button onClick={() => toast('Changes saved', 'success')}>Show toast</Button>
+}
+
+// Self-contained demo: a local provider so the catalog needn't wrap its root.
+function ToastDemo() {
+  return (
+    <ToastProvider>
+      <ToastButton />
+    </ToastProvider>
+  )
+}
+
 export function TokenCatalog() {
   const [dark, setDark] = useState(false)
   const [tab, setTab] = useState('overview')
   const [pg, setPg] = useState(2)
   const [modalOpen, setModalOpen] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [msVal, setMsVal] = useState<string[]>(['sp', 'sd'])
+  const [comboVal, setComboVal] = useState('it')
   return (
     <div
       className={dark ? 'dark' : undefined}
@@ -357,6 +386,35 @@ export function TokenCatalog() {
               ]}
             />
           </div>
+        </DSCard>
+
+        <DSCard padded elevated>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Multi-select</div>
+          <MultiSelect
+            options={[
+              { value: 'sp', label: 'Sponsored Products' },
+              { value: 'sb', label: 'Sponsored Brands' },
+              { value: 'sd', label: 'Sponsored Display' },
+            ]}
+            value={msVal}
+            onChange={setMsVal}
+          />
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Combobox</div>
+          <Combobox
+            options={[
+              { value: 'it', label: 'Amazon Italy' },
+              { value: 'de', label: 'Amazon Germany' },
+              { value: 'fr', label: 'Amazon France' },
+              { value: 'es', label: 'Amazon Spain' },
+            ]}
+            value={comboVal}
+            onChange={setComboVal}
+            placeholder="Search marketplace…"
+          />
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Toast</div>
+          <ToastDemo />
         </DSCard>
 
         <Modal

@@ -69,6 +69,28 @@ if (await menuBtn.count()) {
   await menuBtn.first().click(); await page.waitForTimeout(150)
 }
 
+// dropdowns
+const msb = page.locator('.h10-ds-ms-btn').first()
+if (await msb.count()) {
+  await msb.click(); await page.waitForTimeout(200)
+  const pop = page.locator('.h10-ds-ms-pop').first()
+  if (await pop.count()) { await pop.screenshot({ path: `${OUT}/multiselect.png` }); console.log('ok multiselect') }
+}
+const cin = page.locator('.h10-ds-combo-in').first()
+if (await cin.count()) {
+  await cin.click(); await page.waitForTimeout(200)
+  const cp = page.locator('.h10-ds-combo-pop').first()
+  if (await cp.count()) { await cp.screenshot({ path: `${OUT}/combobox.png` }); console.log('ok combobox') }
+  await page.keyboard.press('Escape')
+}
+// toast
+const tb = page.getByRole('button', { name: 'Show toast' })
+if (await tb.count()) {
+  await tb.first().click(); await page.waitForTimeout(300)
+  const toastEl = page.locator('.h10-ds-toast').first()
+  if (await toastEl.count()) { await toastEl.screenshot({ path: `${OUT}/toast.png` }); console.log('ok toast') }
+}
+
 const darkBtn = page.getByRole('button', { name: /Dark/ })
 if (await darkBtn.count()) {
   await darkBtn.click()
