@@ -27,7 +27,7 @@ export function Combobox({ options, value, onChange, placeholder = 'Search…' }
   const filtered = options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()))
 
   return (
-    <div className="h10-ds-combo" ref={ref}>
+    <div className="h10-ds-combo" ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
       <input
         className="h10-ds-combo-in"
         value={open ? query : selected?.label ?? ''}

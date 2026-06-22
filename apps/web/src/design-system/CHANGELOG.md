@@ -4,6 +4,22 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P6] — 2026-06-22 — A11y · i18n · content & data standards (Phase 6 complete)
+
+- **A11y:** `styles/a11y.css` (prefers-reduced-motion neutralizes DS animations +
+  transitions; focus-visible baseline). Esc-to-close added to `MultiSelect` +
+  `Combobox`. `docs/ACCESSIBILITY.md` documents focus / keyboard / ARIA / motion /
+  contrast (ARIA roles + states were already applied across components).
+- **Contrast:** `studies/02-contrast-audit.md` — WCAG AA ratios for the key token
+  pairs; `--h10-text-3` (~3.2:1) flagged secondary/large-only (body uses
+  `--h10-text-2`, 5.9:1); primary passes AA (~4.8:1). H10 values kept; usage rule
+  documented for the Phase 7 lint.
+- **Content/data:** canonical formatters in `lib/format.ts` (cents-based money,
+  fraction `pct`, fixed `en-IE`/`en-GB` locales → no hydration drift),
+  consolidating the duplicated ads `format.ts`. `docs/CONTENT.md` (English-UI /
+  Italian-content stance, iconography, voice).
+- `tsc` clean. Next: Phase 7 (governance lint + visual-regression CI).
+
 ## [P5.3] — 2026-06-22 — Builder framework + ColumnCustomizer (Phase 5 complete)
 
 - `Builder` (full-screen wizard: top bar close + title + primary action, scroll-spy

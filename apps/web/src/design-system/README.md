@@ -97,4 +97,6 @@ variables, both noted where used.
 - `docs/NAMING.md` — class prefix policy, token + component naming
 - `docs/TOKENS.md` — the token model (values land in Phase 1)
 - `docs/TOKEN-RECONCILIATION.md` — how H10 values map onto the semantic structure
+- `docs/ACCESSIBILITY.md` — focus, keyboard, ARIA, motion, contrast standards
+- `docs/CONTENT.md` — language (English UI), formatters, iconography, voice
 - `studies/00-ads-inventory.md` — the authoritative `/marketing/ads` inventory

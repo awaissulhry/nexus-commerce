@@ -29,7 +29,7 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All' }: M
   const toggleAll = () => onChange(allChecked ? [] : options.map((o) => o.value))
 
   return (
-    <div className="h10-ds-ms" ref={ref}>
+    <div className="h10-ds-ms" ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
       <button type="button" className="h10-ds-ms-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <span className={value.length === 0 ? 'ph' : ''}>{label}</span>
         <ChevronDown size={15} aria-hidden />
