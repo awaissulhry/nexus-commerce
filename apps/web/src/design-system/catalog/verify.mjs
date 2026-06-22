@@ -49,6 +49,8 @@ const prim = page.locator('[data-cat="primitives"]')
 if (await prim.count()) { await prim.screenshot({ path: `${OUT}/primitives.png` }); console.log('ok primitives') }
 const comp = page.locator('[data-cat="components"]')
 if (await comp.count()) { await comp.screenshot({ path: `${OUT}/components.png` }); console.log('ok components') }
+const charts = page.locator('[data-cat="charts"]')
+if (await charts.count()) { await page.waitForTimeout(500); await charts.screenshot({ path: `${OUT}/charts.png` }); console.log('ok charts') }
 
 // overlays — open each, screenshot the portaled element, close
 const shotOverlay = async (btnName, sel, name) => {

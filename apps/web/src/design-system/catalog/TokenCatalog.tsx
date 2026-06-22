@@ -58,6 +58,8 @@ import {
   MetricStrip,
   HoverCard,
   DateRangePicker,
+  PerformanceGraph,
+  Heatmap,
   ToastProvider,
   useToast,
 } from '@/design-system/components'
@@ -134,6 +136,21 @@ function ToastDemo() {
     </ToastProvider>
   )
 }
+
+// Deterministic sample data (Math.sin, no random) so SSR + client match.
+const CHART_DATA = Array.from({ length: 14 }, (_, i) => ({
+  day: `Jun ${i + 1}`,
+  spend: 60 + Math.round(40 * Math.sin(i / 2) + i * 3),
+  sales: 320 + Math.round(180 * Math.sin(i / 2 + 1) + i * 14),
+}))
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const HOURS = Array.from({ length: 24 }, (_, h) => (h % 6 === 0 ? `${h}` : ''))
+const HEAT_DATA = DAYS.map((_, d) =>
+  Array.from({ length: 24 }, (_, h) => {
+    const peak = Math.max(0, Math.sin(((h - 6) / 24) * Math.PI))
+    return Math.round(peak * 100 * (0.55 + d * 0.07))
+  }),
+)
 
 export function TokenCatalog() {
   const [dark, setDark] = useState(false)
@@ -477,6 +494,30 @@ export function TokenCatalog() {
         >
           Drawer body — a right-side slide-over for details, filters, or editing.
         </Drawer>
+      </section>
+
+      <section data-cat="charts" style={{ marginBottom: 40 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
+          Charts <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--h10-text-3)' }}>· Phase 4 · Wave 5</span>
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>
+          Recharts dual-axis graph + intensity heatmap, tokenized.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <DSCard padded elevated>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Performance · dual-axis</div>
+            <PerformanceGraph
+              data={CHART_DATA}
+              xKey="day"
+              left={{ key: 'spend', label: 'Spend', color: palette.blue[900], axis: 'left', format: (v) => `€${v}` }}
+              right={{ key: 'sales', label: 'Sales', color: palette.blue[600], axis: 'right', format: (v) => `€${v}` }}
+            />
+          </DSCard>
+          <DSCard padded elevated>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Heatmap · dayparting</div>
+            <Heatmap data={HEAT_DATA} rowLabels={DAYS} colLabels={HOURS} format={(v) => `${v}`} />
+          </DSCard>
+        </div>
       </section>
 
       <Section title="Typography" desc="Inter via --font-sans, rendered with H10's heavier (auto) smoothing.">

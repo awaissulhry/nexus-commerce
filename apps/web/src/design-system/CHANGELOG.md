@@ -4,6 +4,17 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P4.5] — 2026-06-22 — Components wave 5: charts (PerformanceGraph · Heatmap)
+
+- `PerformanceGraph` (Recharts `ComposedChart` — dual independent left/right
+  axes, two line series, tokenized grid/axes via the TS token values, custom
+  tooltip + legend). `Heatmap` (7×24 intensity grid, cell opacity scales with
+  value/max; column labels).
+- Catalog Charts section uses **deterministic** sample data (Math.sin, no random)
+  so SSR matches the client; harness captures `[data-cat="charts"]`.
+- Self-verified @2x: dual-axis lines + scaling, heatmap evening-peak gradient.
+  `tsc` clean. Only the `DataGrid` remains in Phase 4.
+
 ## [P4.4] — 2026-06-22 — Components wave 4 (DateRangePicker · MetricStrip · HoverCard)
 
 - `DateRangePicker` (`.h10-dp` — dual-month calendar + preset rail; two-click

@@ -740,3 +740,89 @@
 .h10-ds-dp-day.empty {
   visibility: hidden;
 }
+
+/* ── PerformanceGraph (Recharts) ─────────────────────────────────── */
+.h10-ds-chart-legend {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--h10-text-2);
+}
+.h10-ds-chart-legend .sw {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.h10-ds-chart-legend .ln {
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+}
+.h10-ds-chart-tt {
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border-subtle);
+  border-radius: var(--h10-radius-lg);
+  box-shadow: var(--h10-shadow-menu);
+  padding: 8px 11px;
+  font-size: 12px;
+  min-width: 180px;
+}
+.h10-ds-chart-tt .d {
+  font-weight: 700;
+  color: var(--h10-text);
+  margin-bottom: 6px;
+}
+.h10-ds-chart-tt .r {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 1px 0;
+}
+.h10-ds-chart-tt .r .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+/* ── Heatmap ─────────────────────────────────────────────────────── */
+.h10-ds-heat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.h10-ds-heat-cols {
+  display: flex;
+  gap: 2px;
+  padding-left: 38px;
+}
+.h10-ds-heat-col {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--h10-text-3);
+}
+.h10-ds-heat-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.h10-ds-heat-lbl {
+  width: 36px;
+  flex-shrink: 0;
+  padding-right: 6px;
+  text-align: right;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--h10-text-3);
+}
+.h10-ds-heat-cell {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  border-radius: 3px;
+}
