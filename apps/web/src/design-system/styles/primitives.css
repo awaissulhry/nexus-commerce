@@ -1,0 +1,131 @@
+/**
+ * DS primitive component styles — tokenized, self-contained (depends only on
+ * tokens.css). Sub-namespaced `.h10-ds-*` so it never collides with the
+ * route-scoped `.h10-*` utility classes in ads.css. See ../docs/NAMING.md.
+ *
+ * Values match the H10 spec sampled from ads.css (button = .h10-am-btn,
+ * pill = .h10-pill, program badge = .pb[data-p], targeting = .tg[data-t]).
+ */
+
+/* ── Button ──────────────────────────────────────────────────────── */
+.h10-ds-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--h10-text-strong);
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border);
+  border-radius: var(--h10-radius-lg);
+  padding: 7px 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-btn:hover {
+  background: var(--h10-surface-hover);
+}
+.h10-ds-btn:focus-visible {
+  outline: none;
+  border-color: var(--h10-primary);
+  box-shadow: var(--h10-focus-ring);
+}
+.h10-ds-btn:disabled {
+  color: var(--h10-text-disabled);
+  background: var(--h10-surface);
+  border-color: var(--h10-border-subtle);
+  cursor: default;
+}
+.h10-ds-btn svg {
+  flex-shrink: 0;
+}
+
+.h10-ds-btn.primary {
+  background: var(--h10-primary);
+  border-color: var(--h10-primary);
+  color: var(--h10-text-inverse);
+}
+.h10-ds-btn.primary:hover {
+  background: var(--h10-primary-hover);
+  border-color: var(--h10-primary-hover);
+}
+.h10-ds-btn.primary:disabled {
+  background: var(--h10-primary);
+  border-color: var(--h10-primary);
+  opacity: 0.5;
+}
+
+.h10-ds-btn.ghost {
+  background: var(--h10-surface);
+  border-color: var(--h10-primary-ghost-border);
+  color: var(--h10-primary);
+}
+.h10-ds-btn.ghost:hover {
+  background: var(--h10-wash-primary);
+}
+
+.h10-ds-btn.sm {
+  padding: 6px 11px;
+  font-size: 12.5px;
+}
+
+/* ── Status pill (.h10-pill parity) ──────────────────────────────── */
+.h10-ds-pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: var(--h10-radius-pill);
+  padding: 3px 9px;
+  white-space: nowrap;
+}
+.h10-ds-pill.ok {
+  color: var(--h10-pill-ok-fg);
+  background: var(--h10-pill-ok-bg);
+}
+.h10-ds-pill.warn {
+  color: var(--h10-pill-warn-fg);
+  background: var(--h10-pill-warn-bg);
+}
+.h10-ds-pill.arch {
+  color: var(--h10-pill-arch-fg);
+  background: var(--h10-pill-arch-bg);
+}
+
+/* ── Program / targeting badge ───────────────────────────────────── */
+.h10-ds-badge {
+  display: inline-block;
+  font-weight: 800;
+  border-radius: var(--h10-radius-pill);
+  padding: 2px 5px;
+  white-space: nowrap;
+}
+.h10-ds-badge.sp {
+  font-size: 9px;
+  color: var(--h10-badge-sp-fg);
+  background: var(--h10-badge-sp-bg);
+}
+.h10-ds-badge.sd {
+  font-size: 9px;
+  color: var(--h10-badge-sd-fg);
+  background: var(--h10-badge-sd-bg);
+}
+.h10-ds-badge.sb {
+  font-size: 9px;
+  color: var(--h10-badge-sb-fg);
+  background: var(--h10-badge-sb-bg);
+}
+.h10-ds-badge.auto {
+  font-size: 10px;
+  color: var(--h10-text-inverse);
+  background: var(--h10-targeting-auto);
+}
+.h10-ds-badge.manual {
+  font-size: 10px;
+  color: var(--h10-text-inverse);
+  background: var(--h10-targeting-manual);
+}

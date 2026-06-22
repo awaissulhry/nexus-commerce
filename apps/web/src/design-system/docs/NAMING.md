@@ -14,6 +14,11 @@ across `styles/` + all consumers, in one reviewed sweep. Until then, treat
 Do **not** introduce new prefixes. New classes use `.h10-` to stay consistent
 until the rename.
 
+**Component sub-namespace.** DS primitive/component styles use `.h10-ds-*`
+(e.g. `.h10-ds-btn`, `.h10-ds-pill`, `.h10-ds-badge`) so they never collide with
+the route-scoped `.h10-*` utility classes in `ads.css`. Still under the `h10`
+umbrella; both are renamed together in Phase 9.
+
 ## Token naming
 
 `--<tier>-<role>[-<variant>][-<state>]`, lower-kebab.

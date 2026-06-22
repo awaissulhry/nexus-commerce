@@ -87,6 +87,7 @@ export const color = {
   text: palette.grey[900],
   text2: palette.grey[600],
   text3: palette.grey[500],
+  textStrong: palette.grey[700], // control labels / button text (#3a4452)
   textDisabled: palette.grey[400],
   textInverse: palette.white,
   textLink: palette.blue[600],
@@ -96,6 +97,7 @@ export const color = {
   surface: palette.white,
   surfaceRaised: palette.grey[25],
   surfaceSunken: palette.grey[100],
+  surfaceHover: palette.grey[75], // control hover fill (#f1f4f8)
   washPrimary: palette.blue[50],
   railBg: palette.railBg,
 

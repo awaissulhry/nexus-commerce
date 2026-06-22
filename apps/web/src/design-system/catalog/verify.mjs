@@ -45,6 +45,9 @@ await page.waitForTimeout(600)
 await page.screenshot({ path: `${OUT}/catalog-light.png`, fullPage: true })
 console.log('ok catalog-light')
 
+const prim = page.locator('[data-cat="primitives"]')
+if (await prim.count()) { await prim.screenshot({ path: `${OUT}/primitives.png` }); console.log('ok primitives') }
+
 const darkBtn = page.getByRole('button', { name: /Dark/ })
 if (await darkBtn.count()) {
   await darkBtn.click()

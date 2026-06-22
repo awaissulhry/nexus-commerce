@@ -7,6 +7,7 @@
  * design — this is the H10 system's surface.
  */
 import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
 import { TokenCatalog } from '@/design-system/catalog'
 
 export const metadata = { title: 'Nexus Design System — Token Catalog' }

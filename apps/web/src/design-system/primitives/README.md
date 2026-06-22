@@ -10,4 +10,7 @@ Planned (Phase 3): `Button`, `IconButton`, `Input` (+ money input), `Select`,
 The existing `apps/web/src/components/ui/*` primitives are **aliased** to these
 during migration (Phase 9) — not duplicated.
 
-> Empty until **Phase 3**. Sources are mapped in `../studies/00-ads-inventory.md`.
+> **Wave 1 shipped:** `Button`, `Pill`, `Badge` (+ `../styles/primitives.css`,
+> `.h10-ds-*`). Remaining waves: Input/Select/MultiSelect · Checkbox/Radio/Toggle
+> · Tooltip/Spinner/Skeleton/Kbd/Divider · icons. Sources are mapped in
+> `../studies/00-ads-inventory.md`.

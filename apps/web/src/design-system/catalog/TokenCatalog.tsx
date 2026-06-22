@@ -15,8 +15,6 @@ import { useState, type ReactNode } from 'react'
 import {
   palette,
   color,
-  pill,
-  badge,
   fontSize,
   fontWeight,
   letterSpacing,
@@ -29,6 +27,7 @@ import {
   zIndex,
   breakpoint,
 } from '@/design-system/tokens'
+import { Button, Pill, Badge } from '@/design-system/primitives'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -162,24 +161,42 @@ export function TokenCatalog() {
         </Card>
       </Section>
 
-      <Section title="Status pills & program chips">
+      <section data-cat="primitives" style={{ marginBottom: 40 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
+          Primitives <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--h10-text-3)' }}>· Phase 3 · Wave 1</span>
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>
+          Real components from <code style={{ fontFamily: mono }}>@/design-system/primitives</code>, tokenized to the H10 spec.
+        </p>
         <Card>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Button</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-            {(['ok', 'warn', 'arch'] as const).map((k) => (
-              <span key={k} style={{ fontSize: 11, fontWeight: 600, borderRadius: 5, padding: '3px 9px', color: pill[k].fg, background: pill[k].bg }}>
-                {k}
-              </span>
-            ))}
-            {(['sp', 'sd', 'sb'] as const).map((k) => (
-              <span key={k} style={{ fontSize: 9, fontWeight: 800, borderRadius: 4, padding: '2px 5px', color: badge[k].fg, background: badge[k].bg }}>
-                {k.toUpperCase()}
-              </span>
-            ))}
-            <span style={{ fontSize: 10, fontWeight: 800, borderRadius: 4, padding: '2px 5px', color: '#fff', background: badge.targetingAuto }}>A</span>
-            <span style={{ fontSize: 10, fontWeight: 800, borderRadius: 4, padding: '2px 5px', color: '#fff', background: badge.targetingManual }}>M</span>
+            <Button variant="primary">Primary</Button>
+            <Button variant="secondary">Secondary</Button>
+            <Button variant="ghost">Ghost</Button>
+            <Button variant="primary" size="sm">Small</Button>
+            <Button variant="secondary" size="sm">Small</Button>
+            <Button variant="primary" disabled>Disabled</Button>
+            <Button variant="secondary" disabled>Disabled</Button>
+          </div>
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Status pill</div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <Pill status="ok">Active</Pill>
+            <Pill status="warn">Paused</Pill>
+            <Pill status="arch">Archived</Pill>
+          </div>
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Program / targeting badge</div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <Badge tone="sp">SP</Badge>
+            <Badge tone="sd">SD</Badge>
+            <Badge tone="sb">SB</Badge>
+            <Badge tone="auto">A</Badge>
+            <Badge tone="manual">M</Badge>
           </div>
         </Card>
-      </Section>
+      </section>
 
       <Section title="Typography" desc="Inter via --font-sans, rendered with H10's heavier (auto) smoothing.">
         <Card>

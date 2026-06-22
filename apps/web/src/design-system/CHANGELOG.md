@@ -4,6 +4,22 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P3.1] — 2026-06-22 — Primitives wave 1 (Button · Pill · Badge)
+
+- First primitives in `primitives/`, tokenized to the H10 spec: `Button`
+  (primary/secondary/ghost × md/sm + disabled, matches `.h10-am-btn`), `Pill`
+  (ok/warn/arch, matches `.h10-pill`), `Badge` (SP/SD/SB program + A/M targeting).
+- Self-contained `styles/primitives.css` under the `.h10-ds-*` sub-namespace
+  (collision-proof vs ads.css's route-scoped `.h10-*`; documented in NAMING).
+  Added `--h10-text-strong` + `--h10-surface-hover` semantic tokens.
+- Catalog now **dog-foods** the components (Primitives section); the verify
+  harness gained a per-section `[data-cat]` capture.
+- Verified @2x: light, dark, and a focused primitives shot — all match the H10
+  look. Committed locally; push deferred behind a concurrent session's
+  non-buildable tree.
+- Remaining primitive waves: Input/Select/MultiSelect, Checkbox/Radio/Toggle,
+  Tooltip/Spinner/Skeleton/Kbd/Divider, icons.
+
 ## [P2] — 2026-06-22 — Living catalog + verify harness
 
 - New route `/design-system` (`app/design-system/page.tsx`) renders the full
