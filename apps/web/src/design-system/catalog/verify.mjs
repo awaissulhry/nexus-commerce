@@ -55,6 +55,13 @@ const grid = page.locator('[data-cat="datagrid"]')
 if (await grid.count()) { await grid.screenshot({ path: `${OUT}/datagrid.png` }); console.log('ok datagrid') }
 const patterns = page.locator('[data-cat="patterns"]')
 if (await patterns.count()) { await patterns.screenshot({ path: `${OUT}/patterns.png` }); console.log('ok patterns') }
+// AppShell rail expanded (hover) — shows brand wordmark, labels, the open group
+const rail = page.locator('.h10-ds-rail').first()
+if (await rail.count()) {
+  await rail.hover(); await page.waitForTimeout(300)
+  const shell = page.locator('.h10-ds-shell').first()
+  if (await shell.count()) { await shell.screenshot({ path: `${OUT}/appshell-expanded.png` }); console.log('ok appshell-expanded') }
+}
 const filters = page.locator('[data-cat="filters"]')
 if (await filters.count()) { await filters.screenshot({ path: `${OUT}/filters.png` }); console.log('ok filters') }
 // builder (full-screen) + column customizer (modal)

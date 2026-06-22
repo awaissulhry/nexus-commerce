@@ -4,6 +4,17 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P5.1a] — 2026-06-22 — AppShell: collapsible nav groups
+
+- `AppShell` gains collapsible nav **groups** (`ShellNavGroup` — icon + label +
+  sub-items + chevron; auto-opens if a child is active or `defaultOpen`),
+  matching the H10 `AdsSidebar`'s AMC / Reporting expandable sections. Flat items
+  and groups coexist; sub-items hide when the rail is collapsed; the active
+  sub-item gets the primary treatment.
+- Catalog demos a "Reporting" group (Overview / Brand metrics [active] / AMC
+  audiences). Self-verified @2x (rail expanded). The sidebar now fully matches
+  the ads rail. (Follow-up enhancement to the Phase 5 AppShell.)
+
 ## [P8] — 2026-06-22 — Studies hub (Phase 8 complete)
 
 - The research hub is established: framework (`studies/README` + `_TEMPLATE`) +

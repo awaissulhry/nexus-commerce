@@ -134,6 +134,56 @@
   text-align: center;
   box-shadow: 0 0 0 2px var(--h10-rail-bg);
 }
+.h10-ds-group {
+  display: flex;
+  flex-direction: column;
+}
+.h10-ds-navitem .chev {
+  margin-left: auto;
+  margin-right: 16px;
+  flex-shrink: 0;
+  color: var(--h10-text-3);
+  opacity: 0;
+  transition: opacity 0.14s ease, transform 0.18s ease;
+}
+.h10-ds-rail:hover .h10-ds-navitem .chev {
+  opacity: 1;
+}
+.h10-ds-navitem .chev.open {
+  transform: rotate(180deg);
+}
+.h10-ds-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 2px 0 4px 58px;
+  padding-right: 8px;
+}
+.h10-ds-rail:not(:hover) .h10-ds-sub {
+  display: none;
+}
+.h10-ds-subitem {
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--h10-text-2);
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: var(--h10-radius-sm);
+  cursor: pointer;
+}
+.h10-ds-subitem:hover {
+  background: var(--h10-surface-hover);
+  color: var(--h10-text);
+}
+.h10-ds-subitem.on {
+  color: var(--h10-primary);
+  font-weight: 600;
+}
+
 .h10-ds-railft {
   white-space: nowrap;
   padding: 12px 16px;

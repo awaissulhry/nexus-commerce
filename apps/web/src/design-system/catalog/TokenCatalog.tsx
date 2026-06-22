@@ -646,7 +646,17 @@ export function TokenCatalog() {
             nav={[
               { id: 'home', label: 'Dashboard', icon: <Home size={20} />, active: true },
               { id: 'camp', label: 'Campaigns', icon: <Megaphone size={20} />, badge: 3 },
-              { id: 'rep', label: 'Reporting', icon: <BarChart3 size={20} /> },
+              {
+                id: 'rep',
+                label: 'Reporting',
+                icon: <BarChart3 size={20} />,
+                defaultOpen: true,
+                items: [
+                  { id: 'rep-overview', label: 'Overview' },
+                  { id: 'rep-brand', label: 'Brand metrics', active: true },
+                  { id: 'rep-amc', label: 'AMC audiences' },
+                ],
+              },
               { id: 'set', label: 'Settings', icon: <Settings size={20} /> },
             ]}
             footer="v2.0 · Nexus DS"

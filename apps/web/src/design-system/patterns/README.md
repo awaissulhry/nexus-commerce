@@ -14,4 +14,5 @@ folded in only after that WIP is committed.
 > `DetailHeader`, `FilterPanel` (+ `FilterField`), `BulkActionBar`, `EditModeBar`,
 > `Builder` (full-screen wizard + scroll-spy), `ColumnCustomizer`
 > (+ `../styles/patterns.css`). The live-WIP ads builders (`_rank`, budget) fold
-> in during the migration once committed.
+> in during the migration once committed. `AppShell` ships the full H10 rail —
+> flat items **and** collapsible nav groups (sub-items, auto-open on active).
