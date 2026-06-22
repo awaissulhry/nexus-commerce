@@ -11,7 +11,7 @@
 import { useEffect, useState } from 'react'
 import { X, Trash2, ChevronsUpDown } from 'lucide-react'
 import { ProductSelection, type SpwProduct } from './ProductSelection'
-import type { SpwCampaign, NegKeyword, NegMatch } from './CampaignSetup'
+import { AUTO_GROUP_META, type SpwCampaign, type NegKeyword, type NegMatch, type AutoGroup } from './CampaignSetup'
 
 function KeywordEditor({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   const [text, setText] = useState('')
@@ -105,16 +105,42 @@ function NegKeywordEditor({ manual, auto, onChange }: { manual: NegKeyword[]; au
   )
 }
 
-export function TargetingModal({ campaign, mode, autoNegate, onClose, onSave }: {
+/** AT.1 — Auto-campaign targeting = the 4 Amazon auto groups, each with an on/off
+ *  switch + its own bid (seeded by AT.2's intent-based smart defaults). */
+function AutoTargetingEditor({ groups, currency, onChange }: { groups: AutoGroup[]; currency: string; onChange: (v: AutoGroup[]) => void }) {
+  const toggle = (key: string) => onChange(groups.map((g) => (g.key === key ? { ...g, enabled: !g.enabled } : g)))
+  const setBid = (key: string, bid: string) => onChange(groups.map((g) => (g.key === key ? { ...g, bid } : g)))
+  return (
+    <div className="h10-spw-auto-ed">
+      {groups.map((g) => {
+        const meta = AUTO_GROUP_META.find((m) => m.key === g.key)!
+        return (
+          <div className={`row ${g.enabled ? '' : 'off'}`} key={g.key}>
+            <input type="checkbox" className="h10-spw-sw" checked={g.enabled} onChange={() => toggle(g.key)} aria-label={`Enable ${meta.label}`} />
+            <div className="nm"><span className="t">{meta.label}</span><span className="d">{meta.desc}</span></div>
+            <div className="bid">
+              <div className="money"><span className="pf">{currency}</span><input inputMode="decimal" value={g.bid} disabled={!g.enabled} onChange={(e) => setBid(g.key, e.target.value)} aria-label={`${meta.label} bid`} /></div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+export function TargetingModal({ campaign, mode, autoNegate, currency = '€', onClose, onSave }: {
   campaign: SpwCampaign
   mode: 'targeting' | 'negative'
   autoNegate?: boolean
+  currency?: string
   onClose: () => void
   onSave: (patch: Partial<SpwCampaign>) => void
 }) {
   const isNeg = mode === 'negative'
+  const isAutoTgt = !isNeg && campaign.kind === 'auto' // Auto's positive "targeting" = the 4 auto groups
   const [kw, setKw] = useState<string[]>(campaign.keywords)
   const [negKw, setNegKw] = useState<NegKeyword[]>(campaign.negKeywords.filter((n) => !n.auto))
+  const [autoGroups, setAutoGroups] = useState<AutoGroup[]>(campaign.autoGroups)
   const autoNegs = campaign.negKeywords.filter((n) => n.auto)
   const [prods, setProds] = useState<SpwProduct[]>(isNeg ? campaign.negProducts : campaign.productTargets)
   const showTabs = isNeg && campaign.kind === 'auto' // Auto negatives = keywords + products
@@ -131,12 +157,13 @@ export function TargetingModal({ campaign, mode, autoNegate, onClose, onSave }: 
 
   const save = () => {
     if (isNeg) onSave({ negKeywords: negKw, negProducts: prods })
+    else if (isAutoTgt) onSave({ autoGroups })
     else if (productOnly) onSave({ productTargets: prods })
     else onSave({ keywords: kw })
     onClose()
   }
 
-  const title = isNeg ? 'Set Negative Targeting' : 'Set Targeting'
+  const title = isNeg ? 'Set Negative Targeting' : isAutoTgt ? 'Set Auto Targeting' : 'Set Targeting'
   return (
     <div className="h10-modal-backdrop" onClick={onClose}>
       <div className={`h10-modal ${hasProduct ? 'wide' : 'neg'}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
@@ -151,8 +178,11 @@ export function TargetingModal({ campaign, mode, autoNegate, onClose, onSave }: 
               <button type="button" role="tab" aria-selected={tab === 'prod'} className={tab === 'prod' ? 'on' : ''} onClick={() => setTab('prod')}>Negative Products</button>
             </div>
           )}
+          {isAutoTgt && <p className="h10-neg-autonote">Amazon splits Auto targeting into 4 groups — toggle each on/off and bid it separately. Bids are pre-set by intent (Close &amp; Substitutes higher, Loose &amp; Complements lower); adjust as you like.</p>}
           {active === 'prod' ? (
             <ProductSelection products={prods} setProducts={setProds} />
+          ) : isAutoTgt ? (
+            <AutoTargetingEditor groups={autoGroups} currency={currency} onChange={setAutoGroups} />
           ) : isNeg ? (
             <NegKeywordEditor manual={negKw} auto={autoNegs} onChange={setNegKw} />
           ) : (

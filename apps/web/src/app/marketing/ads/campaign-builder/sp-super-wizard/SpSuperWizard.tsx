@@ -85,6 +85,7 @@ export function SpSuperWizard() {
           name: c.name, adGroupName: c.adGroupName, kind: c.kind, matchType: c.matchType,
           bidEur: Number(c.bid) || 0.75, budgetEur: Number(c.budget) || 10,
           keywords: c.keywords, productTargets: c.productTargets.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined })),
+          autoGroups: c.kind === 'auto' ? c.autoGroups.map((g) => ({ key: g.key, enabled: g.enabled, bidEur: Number(g.bid) || Number(c.bid) || 0.75 })) : undefined,
           negKeywords: c.negKeywords.map((n) => ({ text: n.text, matchType: n.matchType })), negProducts: c.negProducts.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined })),
         })),
         placementBids: { tos: bidMult.tos, pdp: bidMult.pdp, ros: bidMult.ros },
@@ -229,7 +230,7 @@ export function SpSuperWizard() {
       {editTgt && (() => {
         const c = campaigns.find((x) => x.id === editTgt.id)
         if (!c) return null
-        return <TargetingModal campaign={c} mode={editTgt.mode} autoNegate={autoNegate} onClose={() => setEditTgt(null)} onSave={(patch) => setCampaigns((cs) => applyAutoNegatives(cs.map((x) => (x.id === c.id ? { ...x, ...patch } : x)), autoNegate))} />
+        return <TargetingModal campaign={c} mode={editTgt.mode} autoNegate={autoNegate} currency="€" onClose={() => setEditTgt(null)} onSave={(patch) => setCampaigns((cs) => applyAutoNegatives(cs.map((x) => (x.id === c.id ? { ...x, ...patch } : x)), autoNegate))} />
       })()}
     </div>
   )

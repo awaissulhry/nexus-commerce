@@ -1115,6 +1115,19 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-neg-auto { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: #8a93a3; background: #eef1f5; padding: 2px 6px; border-radius: 5px; flex-shrink: 0; cursor: default; }
 .h10-neg-autonote { font-size: 12.5px; line-height: 1.5; color: #4a5462; background: #f4f8ff; border: 1px solid #dce8fb; border-radius: 8px; padding: 9px 13px; margin: 0 0 14px; }
 .h10-neg-autonote b { color: #1f5fb8; }
+/* AT.1 — Auto-targeting groups editor (Close / Loose / Substitutes / Complements) */
+.h10-spw-auto-ed { display: flex; flex-direction: column; }
+.h10-spw-auto-ed .row { display: flex; align-items: center; gap: 14px; padding: 15px 4px; border-bottom: 1px solid #f1f4f8; }
+.h10-spw-auto-ed .row:last-child { border-bottom: none; }
+.h10-spw-auto-ed .row.off { opacity: .5; }
+.h10-spw-auto-ed .row .nm { flex: 1; min-width: 0; }
+.h10-spw-auto-ed .row .nm .t { display: block; font-size: 14px; font-weight: 700; color: #1c2530; }
+.h10-spw-auto-ed .row .nm .d { display: block; font-size: 12px; color: #6b7585; margin-top: 3px; line-height: 1.4; }
+.h10-spw-auto-ed .row .bid .money { display: inline-flex; align-items: center; border: 1px solid #d4dce6; border-radius: 7px; overflow: hidden; background: #fff; width: 116px; }
+.h10-spw-auto-ed .row .bid .money .pf { padding: 0 3px 0 11px; color: #6b7585; font-size: 13px; }
+.h10-spw-auto-ed .row .bid .money input { border: none; outline: none; padding: 9px 11px 9px 2px; width: 100%; font-size: 13.5px; color: #1c2530; background: transparent; }
+.h10-spw-auto-ed .row .bid .money input:disabled { color: #aeb6c1; }
+.h10-spw-auto-ed .row.off .bid .money { background: #f6f7fb; }
 
 /* ── Campaign-detail pixel-match pass (ad-manager-campaign-detail.mov) ── */
 

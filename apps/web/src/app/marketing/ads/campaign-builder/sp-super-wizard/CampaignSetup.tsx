@@ -14,6 +14,22 @@ import { standardRows, advancedRows } from './StructureSelection'
 import type { SpwProduct } from './ProductSelection'
 import type { CustomKeywordType, TargetingKind, MatchTypeKey } from './CustomScheme'
 
+// AT.1 — Amazon SP Auto-targeting groups. Each is independently enable/disable-able
+// and separately biddable (Amazon defaults all four on at the campaign bid).
+export type AutoGroupKey = 'CLOSE_MATCH' | 'LOOSE_MATCH' | 'SUBSTITUTES' | 'COMPLEMENTS'
+export type AutoGroup = { key: AutoGroupKey; enabled: boolean; bid: string }
+export const AUTO_GROUP_META: Array<{ key: AutoGroupKey; label: string; desc: string }> = [
+  { key: 'CLOSE_MATCH', label: 'Close match', desc: 'Shoppers using search terms closely related to your product.' },
+  { key: 'LOOSE_MATCH', label: 'Loose match', desc: 'Shoppers using search terms loosely related to your product.' },
+  { key: 'SUBSTITUTES', label: 'Substitutes', desc: 'Shoppers viewing detail pages of products similar to yours.' },
+  { key: 'COMPLEMENTS', label: 'Complements', desc: 'Shoppers viewing detail pages of products that complement yours.' },
+]
+// AT.2 — intent-based smart default bids (× the campaign default): Close & Substitutes
+// lean higher (buy intent / conquesting), Loose & Complements lower (discovery / cross-sell).
+const AUTO_GROUP_MULT: Record<AutoGroupKey, number> = { CLOSE_MATCH: 1.0, SUBSTITUTES: 1.1, LOOSE_MATCH: 0.65, COMPLEMENTS: 0.6 }
+export const defaultAutoGroups = (defaultBid: number): AutoGroup[] =>
+  AUTO_GROUP_META.map((g) => ({ key: g.key, enabled: true, bid: (defaultBid * AUTO_GROUP_MULT[g.key]).toFixed(2) }))
+
 export type NegMatch = 'EXACT' | 'PHRASE'
 /** A negative keyword carries its own match type (Amazon SP only supports
  *  negative-exact / negative-phrase). `auto` marks ones the funnel created — they
@@ -25,6 +41,7 @@ export type SpwCampaign = {
   matchType: string; keywordType: string; kind: 'auto' | 'keyword' | 'pat'
   bid: string; budget: string; sugBid: number; sugBudget: number
   keywords: string[]; productTargets: SpwProduct[]; negKeywords: NegKeyword[]; negProducts: SpwProduct[]
+  autoGroups: AutoGroup[]
 }
 
 const SUG_LOW = 0.727, SUG_HIGH = 1.273
@@ -80,6 +97,7 @@ export function generateCampaigns(grp: string, mode: 'standard' | 'advanced' | '
       matchType: r.m, keywordType: r.k, kind,
       bid: DEFAULT_BID.toFixed(2), budget: DEFAULT_BUDGET.toFixed(2), sugBid: DEFAULT_BID, sugBudget: DEFAULT_BUDGET,
       keywords: r.keywords ?? [], productTargets: [], negKeywords: [], negProducts: [],
+      autoGroups: kind === 'auto' ? defaultAutoGroups(DEFAULT_BID) : [],
     }
   })
 }
@@ -160,7 +178,7 @@ export function CampaignSetup({ campaigns, setCampaigns, currency, onRestore, on
   const upd = (id: string, patch: Partial<SpwCampaign>) => setCampaigns((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)))
   const del = (id: string) => setCampaigns((cs) => cs.filter((c) => c.id !== id))
 
-  const tgtLabel = (c: SpwCampaign) => (c.kind === 'auto' ? null : c.kind === 'pat' ? `Product : ${c.productTargets.length}` : `Keyword : ${c.keywords.length}`)
+  const tgtLabel = (c: SpwCampaign) => (c.kind === 'auto' ? `Auto : ${c.autoGroups.filter((g) => g.enabled).length}/4` : c.kind === 'pat' ? `Product : ${c.productTargets.length}` : `Keyword : ${c.keywords.length}`)
   const negLabels = (c: SpwCampaign) => (c.kind === 'pat' ? [`Product : ${c.negProducts.length}`] : c.kind === 'auto' ? [`Keyword : ${c.negKeywords.length}`, `Product : ${c.negProducts.length}`] : [`Keyword : ${c.negKeywords.length}`])
 
   return (

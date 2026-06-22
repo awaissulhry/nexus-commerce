@@ -862,7 +862,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as {
       market?: string; productGroupName?: string
       products?: PRef[]
-      campaigns?: Array<{ name: string; adGroupName?: string; kind: 'auto' | 'keyword' | 'pat'; matchType?: string; bidEur?: number; budgetEur?: number; keywords?: string[]; productTargets?: PRef[]; negKeywords?: Array<string | { text?: string; matchType?: 'EXACT' | 'PHRASE' }>; negProducts?: PRef[] }>
+      campaigns?: Array<{ name: string; adGroupName?: string; kind: 'auto' | 'keyword' | 'pat'; matchType?: string; bidEur?: number; budgetEur?: number; keywords?: string[]; productTargets?: PRef[]; negKeywords?: Array<string | { text?: string; matchType?: 'EXACT' | 'PHRASE' }>; negProducts?: PRef[]; autoGroups?: Array<{ key: string; enabled?: boolean; bidEur?: number }> }>
       placementBids?: { tos?: string; pdp?: string; ros?: string }
       dryRun?: boolean
     }
@@ -897,6 +897,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           for (const kw of c.keywords ?? []) for (const mt of matchTypesFor(c.matchType)) { try { await createKeywordLocal({ adGroupId: ag.id, keywordText: kw, matchType: mt, bidEur, userId }) } catch (e) { logger.warn('[SPW-launch] keyword failed', { kw, error: (e as Error).message }) } }
         } else if (c.kind === 'pat') {
           for (const pt of c.productTargets ?? []) { const asin = pt.asin || pt.sku; if (!asin) continue; try { await createTargetLocal({ adGroupId: ag.id, kind: 'PRODUCT', value: asin, bidEur, userId }) } catch (e) { logger.warn('[SPW-launch] product target failed', { error: (e as Error).message }) } }
+        } else if (c.kind === 'auto') {
+          // AT.1 — the 4 Amazon auto-targeting groups, each with its own bid + state.
+          for (const g of c.autoGroups ?? []) { if (!g?.key) continue; try { await createTargetLocal({ adGroupId: ag.id, kind: 'AUTO', value: g.key, bidEur: Number(g.bidEur) || bidEur, state: g.enabled === false ? 'paused' : 'enabled', userId }) } catch (e) { logger.warn('[SPW-launch] auto group failed', { key: g.key, error: (e as Error).message }) } }
         }
         for (const nk of c.negKeywords ?? []) { const text = (typeof nk === 'string' ? nk : nk?.text ?? '').trim(); if (!text) continue; const mt: 'EXACT' | 'PHRASE' = (typeof nk === 'object' && nk?.matchType === 'PHRASE') ? 'PHRASE' : 'EXACT'; try { await createNegativeKeywordLocal({ adGroupId: ag.id, keywordText: text, matchType: mt, userId }) } catch (e) { logger.warn('[SPW-launch] neg keyword failed', { error: (e as Error).message }) } }
         for (const np of c.negProducts ?? []) { const asin = np.asin || np.sku; if (!asin) continue; try { await createNegativeProductTargetLocal({ adGroupId: ag.id, asin, userId }) } catch (e) { logger.warn('[SPW-launch] neg product failed', { error: (e as Error).message }) } }
