@@ -288,3 +288,163 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* ── Radio + RadioCard ───────────────────────────────────────────── */
+.h10-ds-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--h10-text-strong);
+  cursor: pointer;
+}
+.h10-ds-radio input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--h10-primary);
+  cursor: pointer;
+}
+.h10-ds-radio.disabled {
+  color: var(--h10-text-disabled);
+  cursor: default;
+}
+
+.h10-ds-radiocard {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--h10-border);
+  border-radius: var(--h10-radius-xl);
+  padding: 12px 14px;
+  background: var(--h10-surface);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-radiocard:hover {
+  border-color: var(--h10-border-strong);
+}
+.h10-ds-radiocard.on {
+  border-color: var(--h10-primary);
+  background: var(--h10-wash-primary);
+}
+.h10-ds-radiocard input {
+  margin-top: 1px;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--h10-primary);
+}
+.h10-ds-radiocard .rc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.h10-ds-radiocard .rc-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--h10-text);
+}
+.h10-ds-radiocard .rc-desc {
+  font-size: 12px;
+  color: var(--h10-text-3);
+}
+
+/* ── Tooltip (CSS hover/focus) ───────────────────────────────────── */
+.h10-ds-tooltip {
+  position: relative;
+  display: inline-flex;
+}
+.h10-ds-tooltip > .tip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  width: max-content;
+  max-width: 260px;
+  background: var(--h10-grey-900);
+  color: var(--h10-text-inverse);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  padding: 8px 11px;
+  border-radius: var(--h10-radius-lg);
+  box-shadow: var(--h10-shadow-tip);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.h10-ds-tooltip > .tip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--h10-grey-900);
+}
+.h10-ds-tooltip:hover > .tip,
+.h10-ds-tooltip:focus-within > .tip {
+  opacity: 1;
+}
+
+/* ── Spinner ─────────────────────────────────────────────────────── */
+.h10-ds-spinner {
+  display: inline-block;
+  border-radius: 999px;
+  border: 2px solid var(--h10-border);
+  border-top-color: var(--h10-primary);
+  animation: h10-ds-spin 0.7s linear infinite;
+}
+@keyframes h10-ds-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Skeleton (shimmer) ──────────────────────────────────────────── */
+.h10-ds-skeleton {
+  display: block;
+  border-radius: var(--h10-radius-sm);
+  background: linear-gradient(90deg, var(--h10-grey-100) 25%, var(--h10-grey-150) 37%, var(--h10-grey-100) 63%);
+  background-size: 400% 100%;
+  animation: h10-ds-shimmer 1.3s ease infinite;
+}
+@keyframes h10-ds-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+/* ── Kbd ─────────────────────────────────────────────────────────── */
+.h10-ds-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--h10-text-2);
+  background: var(--h10-surface-sunken);
+  border: 1px solid var(--h10-border);
+  border-radius: var(--h10-radius-sm);
+}
+
+/* ── Divider ─────────────────────────────────────────────────────── */
+.h10-ds-divider {
+  border: none;
+  border-top: 1px solid var(--h10-border-subtle);
+  margin: 0;
+}
+.h10-ds-divider.vertical {
+  border-top: none;
+  border-left: 1px solid var(--h10-border-subtle);
+  align-self: stretch;
+  width: 0;
+  height: auto;
+}

@@ -4,6 +4,19 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P3.3] — 2026-06-22 — Primitives wave 3 + Phase 3 complete
+
+- Final primitives, tokenized to the H10 spec: `Radio` (accent native),
+  `RadioCard` (`.h10-radio-card`; selected = primary border + wash), `Tooltip`
+  (CSS hover, `.h10-tip` dark bubble + arrow), `Spinner` (`h10spin` ring),
+  `Skeleton` (`.skb` shimmer), `Kbd`, `Divider`. Appended to `primitives.css`;
+  `primitives/icons/README` documents the Lucide convention.
+- **Phase 3 complete: 14 primitives** — Button · Pill · Badge · Input · Select ·
+  Checkbox · Toggle · Radio · RadioCard · Tooltip · Spinner · Skeleton · Kbd ·
+  Divider. All self-verified @2x vs the H10 look in the catalog.
+- Deferred to Phase 4 (composite): searchable/portal MultiSelect + Combobox, the
+  adaptive InfoTip; custom builder-icons lift to the migration.
+
 ## [P3.2] — 2026-06-22 — Primitives wave 2 (Input · Select · Checkbox · Toggle)
 
 - Form controls tokenized to the H10 spec: `Input` (plain / leading-icon /

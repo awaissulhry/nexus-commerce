@@ -10,8 +10,9 @@ Planned (Phase 3): `Button`, `IconButton`, `Input` (+ money input), `Select`,
 The existing `apps/web/src/components/ui/*` primitives are **aliased** to these
 during migration (Phase 9) — not duplicated.
 
-> **Waves 1–2 shipped:** `Button`, `Pill`, `Badge`, `Input`, `Select`,
-> `Checkbox`, `Toggle` (+ `../styles/primitives.css`, `.h10-ds-*`). Remaining:
-> Radio/RadioCard · Tooltip/Spinner/Skeleton/Kbd/Divider · icons (MultiSelect +
-> Combobox are composite → Phase 4). Sources are mapped in
-> `../studies/00-ads-inventory.md`.
+> **Phase 3 complete — all 14 primitives shipped:** `Button`, `Pill`, `Badge`,
+> `Input`, `Select`, `Checkbox`, `Toggle`, `Radio`, `RadioCard`, `Tooltip`,
+> `Spinner`, `Skeleton`, `Kbd`, `Divider` (+ `../styles/primitives.css`,
+> `.h10-ds-*`). Lucide is the icon standard (see `icons/`). The searchable/portal
+> dropdowns (MultiSelect/Combobox), the adaptive InfoTip, and the custom
+> builder-icons land in Phase 4 / the migration.

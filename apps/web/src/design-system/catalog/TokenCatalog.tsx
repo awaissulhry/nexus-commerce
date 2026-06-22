@@ -28,7 +28,22 @@ import {
   zIndex,
   breakpoint,
 } from '@/design-system/tokens'
-import { Button, Pill, Badge, Input, Select, Checkbox, Toggle } from '@/design-system/primitives'
+import {
+  Button,
+  Pill,
+  Badge,
+  Input,
+  Select,
+  Checkbox,
+  Toggle,
+  Radio,
+  RadioCard,
+  Tooltip,
+  Spinner,
+  Skeleton,
+  Kbd,
+  Divider,
+} from '@/design-system/primitives'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -227,6 +242,47 @@ export function TokenCatalog() {
             <Toggle checked={false} />
             <Toggle checked={false} disabled />
           </div>
+        </Card>
+
+        <Card>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Radio</div>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <Radio name="opt" defaultChecked label="Option A" />
+            <Radio name="opt" label="Option B" />
+            <Radio name="opt" disabled label="Disabled" />
+          </div>
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Radio card</div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <RadioCard name="tgt" defaultChecked selected title="Automatic" description="Amazon targets relevant searches" />
+            <RadioCard name="tgt" title="Manual" description="You choose keywords & products" />
+          </div>
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Tooltip</div>
+          <Tooltip label="Helpful hint shown on hover">
+            <Button size="sm">Hover me</Button>
+          </Tooltip>
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Spinner</div>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <Spinner />
+            <Spinner size={22} />
+          </div>
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Skeleton</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 240 }}>
+            <Skeleton width={200} height={12} />
+            <Skeleton width={140} height={12} />
+          </div>
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Kbd</div>
+          <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+            <Kbd>⌘</Kbd>
+            <Kbd>K</Kbd>
+          </div>
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Divider</div>
+          <Divider />
         </Card>
       </section>
 
