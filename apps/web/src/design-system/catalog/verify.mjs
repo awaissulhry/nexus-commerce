@@ -75,13 +75,14 @@ if (await msb.count()) {
   await msb.click(); await page.waitForTimeout(200)
   const pop = page.locator('.h10-ds-ms-pop').first()
   if (await pop.count()) { await pop.screenshot({ path: `${OUT}/multiselect.png` }); console.log('ok multiselect') }
+  await msb.click(); await page.waitForTimeout(150) // close before next interaction
 }
 const cin = page.locator('.h10-ds-combo-in').first()
 if (await cin.count()) {
   await cin.click(); await page.waitForTimeout(200)
   const cp = page.locator('.h10-ds-combo-pop').first()
   if (await cp.count()) { await cp.screenshot({ path: `${OUT}/combobox.png` }); console.log('ok combobox') }
-  await page.keyboard.press('Escape')
+  await page.mouse.click(5, 5); await page.waitForTimeout(150) // outside-click to close
 }
 // toast
 const tb = page.getByRole('button', { name: 'Show toast' })

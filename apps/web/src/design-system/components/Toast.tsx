@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 export type ToastVariant = 'info' | 'success' | 'error'
@@ -22,6 +22,10 @@ let nextId = 1
 /** Wrap the app (or a subtree) once; renders a bottom-center toast viewport. */
 export function ToastProvider({ children, duration = 4000 }: { children: ReactNode; duration?: number }) {
   const [items, setItems] = useState<ToastItem[]>([])
+  // render the portal only after mount so the first client render matches the
+  // server (empty) — avoids a hydration mismatch on the always-present viewport.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const toast = useCallback(
     (message: ReactNode, variant: ToastVariant = 'info') => {
@@ -35,7 +39,7 @@ export function ToastProvider({ children, duration = 4000 }: { children: ReactNo
   return (
     <ToastCtx.Provider value={{ toast }}>
       {children}
-      {typeof document !== 'undefined' &&
+      {mounted &&
         createPortal(
           <div className="h10-ds-toasts">
             {items.map((t) => (

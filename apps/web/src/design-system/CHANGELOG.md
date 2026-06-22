@@ -13,7 +13,9 @@ props, are called out explicitly with a migration note.
   out of FilterDropdown).
 - Catalog dog-foods them (MultiSelect + Combobox + a self-contained Toast demo);
   harness opens + captures each popover and the toast.
-- `tsc` clean. @2x self-verify on the next clean dev-server window.
+- `tsc` clean; self-verified @2x (MultiSelect indeterminate / Combobox / Toast).
+  Fixed a `Toast` SSR hydration mismatch — the always-present viewport is now
+  mounted-guarded so the first client render matches the server.
 
 ## [P4.2] — 2026-06-22 — Components wave 2: overlays (Modal · Drawer · Menu)
 
