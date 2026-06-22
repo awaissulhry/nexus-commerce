@@ -91,7 +91,8 @@ export function CampaignBuilder() {
   const router = useRouter()
   const pick = (key: string) => {
     if (key === 'ai-goal') router.push('/marketing/ads/ai-advertising/new-goal')
-    // Quick · Guided · SP Super Wizard · Single Campaign land in later phases.
+    else if (key === 'sp-super-wizard') router.push('/marketing/ads/campaign-builder/sp-super-wizard')
+    // Quick · Guided · Single Campaign land in later phases.
   }
   return (
     <div className="h10-cb">

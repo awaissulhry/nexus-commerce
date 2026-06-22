@@ -851,6 +851,63 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, created, mode, plan }
   })
 
+  // ── SPW.7: SP Super Wizard launch ───────────────────────────────────────
+  // Creates the wizard's generated campaigns + ad groups + product ads +
+  // keyword/product targeting + negatives + placement bid multiplier, all via
+  // the local-first create service — nothing hits Amazon unless a per-campaign
+  // live-write gate is open (gated create, no live push). The UI redirects to
+  // the Ad Manager grid on success. dryRun returns the plan without writing.
+  fastify.post('/advertising/campaign-builder/sp-super-wizard/launch', async (request, reply) => {
+    type PRef = { asin?: string; sku?: string; productId?: string }
+    const b = request.body as {
+      market?: string; productGroupName?: string
+      products?: PRef[]
+      campaigns?: Array<{ name: string; adGroupName?: string; kind: 'auto' | 'keyword' | 'pat'; matchType?: string; bidEur?: number; budgetEur?: number; keywords?: string[]; productTargets?: PRef[]; negKeywords?: string[]; negProducts?: PRef[] }>
+      placementBids?: { tos?: string; pdp?: string; ros?: string }
+      dryRun?: boolean
+    }
+    const market = b.market || 'IT'
+    const products = (b.products ?? []).filter((p) => p && (p.asin || p.sku || p.productId))
+    const campaigns = (b.campaigns ?? []).filter((c) => c && c.name)
+    if (!campaigns.length) { reply.status(400); return { error: 'no campaigns to create' } }
+    if (b.dryRun) return { ok: true, dryRun: true, plan: { market, totalCampaigns: campaigns.length, totalProductAds: products.length * campaigns.length } }
+
+    const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal, createTargetLocal, createNegativeProductTargetLocal, updatePlacementBidding } = await import('../services/advertising/ads-create.service.js')
+    const userId = actorFromHeaders(request.headers as Record<string, unknown>)
+    const matchTypesFor = (m?: string): Array<'BROAD' | 'PHRASE' | 'EXACT'> => {
+      const u = (m || '').toLowerCase()
+      if (u.includes('&')) return ['BROAD', 'PHRASE', 'EXACT']
+      if (u.includes('phrase')) return ['PHRASE']
+      if (u.includes('exact')) return ['EXACT']
+      return ['BROAD']
+    }
+    const pb = b.placementBids ?? {}
+    const adjustments = ([['PLACEMENT_TOP', pb.tos], ['PLACEMENT_PRODUCT_PAGE', pb.pdp], ['PLACEMENT_REST_OF_SEARCH', pb.ros]] as Array<[string, string | undefined]>)
+      .flatMap(([placement, v]) => { const n = Number(v); return v && Number.isFinite(n) && n > 0 ? [{ placement, percentage: n }] : [] })
+
+    const created: Array<{ name: string; campaignId: string; externalCampaignId: string | null; mode: string }> = []
+    for (const c of campaigns) {
+      try {
+        const bidEur = Number(c.bidEur) || 0.75
+        const budgetEur = Number(c.budgetEur) || 10
+        const camp = await createCampaignLocal({ name: c.name, type: 'SP', marketplace: market, targetingType: c.kind === 'auto' ? 'AUTO' : 'MANUAL', dailyBudgetEur: budgetEur, biddingStrategy: 'legacyForSales', userId })
+        const ag = await createAdGroupLocal({ campaignId: camp.id, name: c.adGroupName || `${c.name} Ad Group`, defaultBidEur: bidEur, userId })
+        for (const p of products) { try { await createProductAdLocal({ adGroupId: ag.id, asin: p.asin, sku: p.sku, productId: p.productId, userId }) } catch (e) { logger.warn('[SPW-launch] product ad failed', { error: (e as Error).message }) } }
+        if (c.kind === 'keyword') {
+          for (const kw of c.keywords ?? []) for (const mt of matchTypesFor(c.matchType)) { try { await createKeywordLocal({ adGroupId: ag.id, keywordText: kw, matchType: mt, bidEur, userId }) } catch (e) { logger.warn('[SPW-launch] keyword failed', { kw, error: (e as Error).message }) } }
+        } else if (c.kind === 'pat') {
+          for (const pt of c.productTargets ?? []) { const asin = pt.asin || pt.sku; if (!asin) continue; try { await createTargetLocal({ adGroupId: ag.id, kind: 'PRODUCT', value: asin, bidEur, userId }) } catch (e) { logger.warn('[SPW-launch] product target failed', { error: (e as Error).message }) } }
+        }
+        for (const nk of c.negKeywords ?? []) { try { await prisma.adTarget.create({ data: { adGroupId: ag.id, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: nk, bidCents: 0, status: 'ENABLED', isNegative: true, negativeLevel: 'AD_GROUP' } }) } catch (e) { logger.warn('[SPW-launch] neg keyword failed', { error: (e as Error).message }) } }
+        for (const np of c.negProducts ?? []) { const asin = np.asin || np.sku; if (!asin) continue; try { await createNegativeProductTargetLocal({ adGroupId: ag.id, asin, userId }) } catch (e) { logger.warn('[SPW-launch] neg product failed', { error: (e as Error).message }) } }
+        if (adjustments.length) { try { await updatePlacementBidding({ campaignId: camp.id, adjustments, userId }) } catch (e) { logger.warn('[SPW-launch] placement failed', { error: (e as Error).message }) } }
+        created.push({ name: c.name, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, mode: camp.mode })
+      } catch (e) { logger.error('[SPW-launch] campaign create failed', { name: c.name, market, error: (e as Error).message }) }
+    }
+    logger.warn('[SPW-launch] SP Super Wizard created campaigns', { market, grp: (b.productGroupName || '').trim(), count: created.length, actor: userId })
+    return { ok: true, created, totalCampaigns: created.length }
+  })
+
   // ── Apex A.2a: preview pending live writes for a campaign ───────────────
   // Shows exactly what would hit Amazon before the grace window expires: each
   // queued mutation's resolved external id + field changes + a request sketch,
