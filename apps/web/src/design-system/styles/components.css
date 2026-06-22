@@ -1,0 +1,173 @@
+/**
+ * DS composite-component styles — tokenized, `.h10-ds-*` namespace (see
+ * ../docs/NAMING.md). Depends only on tokens.css. Phase 4.
+ */
+
+/* ── Card ────────────────────────────────────────────────────────── */
+.h10-ds-card {
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border-subtle);
+  border-radius: var(--h10-radius-2xl);
+}
+.h10-ds-card.pad {
+  padding: 18px;
+}
+.h10-ds-card.shadow {
+  box-shadow: var(--h10-shadow-card);
+}
+.h10-ds-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--h10-border-subtle);
+}
+.h10-ds-card-head .t {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--h10-text);
+}
+.h10-ds-card-body {
+  padding: 16px;
+}
+
+/* ── EmptyState ──────────────────────────────────────────────────── */
+.h10-ds-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 32px 24px;
+}
+.h10-ds-empty .ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--h10-wash-primary);
+  color: var(--h10-primary);
+  margin-bottom: 14px;
+}
+.h10-ds-empty .t {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--h10-text);
+  margin-bottom: 5px;
+}
+.h10-ds-empty .d {
+  font-size: 12.5px;
+  color: var(--h10-text-3);
+  line-height: 1.5;
+  max-width: 320px;
+}
+.h10-ds-empty .act {
+  margin-top: 14px;
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────── */
+.h10-ds-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--h10-border-subtle);
+}
+.h10-ds-tab {
+  position: relative;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--h10-text-2);
+  padding: 9px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.12s ease;
+}
+.h10-ds-tab:hover {
+  color: var(--h10-text);
+}
+.h10-ds-tab.on {
+  color: var(--h10-primary);
+}
+.h10-ds-tab.on::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -1px;
+  height: 2px;
+  background: var(--h10-primary);
+  border-radius: 2px;
+}
+
+/* ── Pagination ──────────────────────────────────────────────────── */
+.h10-ds-pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.h10-ds-pgbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--h10-border-subtle);
+  background: var(--h10-surface);
+  border-radius: var(--h10-radius-md);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--h10-text-2);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.h10-ds-pgbtn:hover:not(:disabled) {
+  background: var(--h10-surface-hover);
+}
+.h10-ds-pgbtn.on {
+  background: var(--h10-primary);
+  border-color: var(--h10-primary);
+  color: var(--h10-text-inverse);
+}
+.h10-ds-pgbtn:disabled {
+  color: var(--h10-text-disabled);
+  cursor: default;
+}
+.h10-ds-pgell {
+  padding: 0 4px;
+  color: var(--h10-text-3);
+}
+
+/* ── ProgressBar ─────────────────────────────────────────────────── */
+.h10-ds-progress {
+  display: block;
+  width: 100%;
+  background: var(--h10-surface-sunken);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.h10-ds-progress > .bar {
+  display: block;
+  height: 100%;
+  background: var(--h10-primary);
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+.h10-ds-progress.indet > .bar {
+  width: 35%;
+  animation: h10-ds-indet 1.1s ease infinite;
+}
+@keyframes h10-ds-indet {
+  0% {
+    margin-left: -35%;
+  }
+  100% {
+    margin-left: 100%;
+  }
+}

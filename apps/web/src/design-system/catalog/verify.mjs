@@ -47,6 +47,8 @@ console.log('ok catalog-light')
 
 const prim = page.locator('[data-cat="primitives"]')
 if (await prim.count()) { await prim.screenshot({ path: `${OUT}/primitives.png` }); console.log('ok primitives') }
+const comp = page.locator('[data-cat="components"]')
+if (await comp.count()) { await comp.screenshot({ path: `${OUT}/components.png` }); console.log('ok components') }
 
 const darkBtn = page.getByRole('button', { name: /Dark/ })
 if (await darkBtn.count()) {

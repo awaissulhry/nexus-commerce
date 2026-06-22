@@ -8,6 +8,7 @@
  */
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
 import { TokenCatalog } from '@/design-system/catalog'
 
 export const metadata = { title: 'Nexus Design System — Token Catalog' }

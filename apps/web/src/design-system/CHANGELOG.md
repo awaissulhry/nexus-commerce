@@ -4,6 +4,18 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P4.1] — 2026-06-22 — Components wave 1 (Card · EmptyState · Tabs · Pagination · ProgressBar)
+
+- First composite components in `components/` + `styles/components.css`
+  (`.h10-ds-*`): `Card` (panel + optional header/action slot), `EmptyState`
+  (icon + title + description + CTA), `Tabs` (underline indicator, controlled),
+  `Pagination` (windowed page list with ellipses + prev/next), `ProgressBar`
+  (determinate + indeterminate).
+- Catalog gains a Components section that dog-foods them (interactive Tabs +
+  Pagination); harness captures `[data-cat="components"]`.
+- `tsc` clean. @2x visual capture pending a clean dev-server window (a concurrent
+  session was wedging it at commit time).
+
 ## [P3.3] — 2026-06-22 — Primitives wave 3 + Phase 3 complete
 
 - Final primitives, tokenized to the H10 spec: `Radio` (accent native),

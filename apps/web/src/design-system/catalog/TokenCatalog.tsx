@@ -12,7 +12,7 @@
  */
 
 import { useState, type ReactNode } from 'react'
-import { Search } from 'lucide-react'
+import { Search, Inbox } from 'lucide-react'
 import {
   palette,
   color,
@@ -44,6 +44,7 @@ import {
   Kbd,
   Divider,
 } from '@/design-system/primitives'
+import { Card as DSCard, EmptyState, Tabs, Pagination, ProgressBar } from '@/design-system/components'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -106,6 +107,8 @@ function SwatchGrid({ children }: { children: ReactNode }) {
 
 export function TokenCatalog() {
   const [dark, setDark] = useState(false)
+  const [tab, setTab] = useState('overview')
+  const [pg, setPg] = useState(2)
   return (
     <div
       className={dark ? 'dark' : undefined}
@@ -284,6 +287,57 @@ export function TokenCatalog() {
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Divider</div>
           <Divider />
         </Card>
+      </section>
+
+      <section data-cat="components" style={{ marginBottom: 40 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
+          Components <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--h10-text-3)' }}>· Phase 4 · Wave 1</span>
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>
+          Composite components from <code style={{ fontFamily: mono }}>@/design-system/components</code>.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, marginBottom: 14 }}>
+          <DSCard header="Card with header" headerAction={<Button size="sm">Action</Button>}>
+            <div style={{ fontSize: 13, color: 'var(--h10-text-2)' }}>Bordered surface with a header row and a padded body.</div>
+          </DSCard>
+          <DSCard padded elevated>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Padded + elevated</div>
+            <div style={{ fontSize: 13, color: 'var(--h10-text-2)' }}>A plain padded card with the resting shadow.</div>
+          </DSCard>
+          <DSCard>
+            <EmptyState
+              icon={<Inbox size={20} />}
+              title="No campaigns yet"
+              description="Create your first campaign to start advertising."
+              action={
+                <Button variant="primary" size="sm">
+                  New campaign
+                </Button>
+              }
+            />
+          </DSCard>
+        </div>
+        <DSCard padded elevated>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Tabs</div>
+          <Tabs
+            tabs={[
+              { id: 'overview', label: 'Overview' },
+              { id: 'targeting', label: 'Targeting' },
+              { id: 'history', label: 'History' },
+            ]}
+            active={tab}
+            onChange={setTab}
+          />
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Pagination</div>
+          <Pagination page={pg} pageCount={12} onPage={setPg} />
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Progress</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 320 }}>
+            <ProgressBar value={64} />
+            <ProgressBar indeterminate />
+          </div>
+        </DSCard>
       </section>
 
       <Section title="Typography" desc="Inter via --font-sans, rendered with H10's heavier (auto) smoothing.">
