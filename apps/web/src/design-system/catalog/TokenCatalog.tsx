@@ -55,6 +55,9 @@ import {
   Menu,
   MultiSelect,
   Combobox,
+  MetricStrip,
+  HoverCard,
+  DateRangePicker,
   ToastProvider,
   useToast,
 } from '@/design-system/components'
@@ -140,6 +143,7 @@ export function TokenCatalog() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [msVal, setMsVal] = useState<string[]>(['sp', 'sd'])
   const [comboVal, setComboVal] = useState('it')
+  const [dateRange, setDateRange] = useState(() => ({ start: new Date(2026, 5, 1), end: new Date(2026, 5, 22) }))
   return (
     <div
       className={dark ? 'dark' : undefined}
@@ -415,6 +419,33 @@ export function TokenCatalog() {
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Toast</div>
           <ToastDemo />
+        </DSCard>
+
+        <DSCard padded elevated>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Metric strip</div>
+          <MetricStrip
+            metrics={[
+              { label: 'Spend', value: '€1,284', delta: { value: '▲ 12%', positive: true } },
+              { label: 'Sales', value: '€8,640', delta: { value: '▲ 9%', positive: true } },
+              { label: 'ACOS', value: '14.9%', delta: { value: '▼ 1.3pt', positive: true } },
+              { label: 'Orders', value: '212', delta: { value: '▼ 3%', positive: false } },
+            ]}
+          />
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Date range</div>
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Hover card</div>
+          <HoverCard
+            card={
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>Sponsored Products · Auto</div>
+                <div style={{ fontSize: 12, color: 'var(--h10-text-3)' }}>Created 12 Mar 2026 · 3 ad groups · €1,284 spend</div>
+              </div>
+            }
+          >
+            <span style={{ color: 'var(--h10-primary)', fontWeight: 600, borderBottom: '1px dashed var(--h10-primary-ghost-border)' }}>Hover for details</span>
+          </HoverCard>
         </DSCard>
 
         <Modal

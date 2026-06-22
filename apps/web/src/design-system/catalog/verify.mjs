@@ -91,6 +91,21 @@ if (await tb.count()) {
   const toastEl = page.locator('.h10-ds-toast').first()
   if (await toastEl.count()) { await toastEl.screenshot({ path: `${OUT}/toast.png` }); console.log('ok toast') }
 }
+// date range picker
+const dp = page.locator('.h10-ds-dp button').first()
+if (await dp.count()) {
+  await dp.click(); await page.waitForTimeout(250)
+  const pop = page.locator('.h10-ds-dp-pop').first()
+  if (await pop.count()) { await pop.screenshot({ path: `${OUT}/daterange.png` }); console.log('ok daterange') }
+  await page.mouse.click(5, 5); await page.waitForTimeout(150)
+}
+// hover card
+const hc = page.locator('.h10-ds-hovercard').first()
+if (await hc.count()) {
+  await hc.hover(); await page.waitForTimeout(250)
+  const card = page.locator('.h10-ds-hovercard .hc').first()
+  if (await card.count()) { await card.screenshot({ path: `${OUT}/hovercard.png` }); console.log('ok hovercard') }
+}
 
 const darkBtn = page.getByRole('button', { name: /Dark/ })
 if (await darkBtn.count()) {

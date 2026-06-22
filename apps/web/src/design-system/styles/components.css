@@ -551,3 +551,192 @@
   font-size: 12.5px;
   color: var(--h10-text-3);
 }
+
+/* ── MetricStrip (KPI tiles) ─────────────────────────────────────── */
+.h10-ds-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.h10-ds-metric {
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border-subtle);
+  border-radius: var(--h10-radius-2xl);
+  padding: 14px 16px;
+}
+.h10-ds-metric .lbl {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--h10-text-3);
+  margin-bottom: 6px;
+}
+.h10-ds-metric .val {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--h10-text);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.h10-ds-metric .dlt {
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+.h10-ds-metric .dlt.up {
+  color: var(--h10-success-strong);
+}
+.h10-ds-metric .dlt.down {
+  color: var(--h10-danger-strong);
+}
+
+/* ── HoverCard (rich hover panel) ────────────────────────────────── */
+.h10-ds-hovercard {
+  position: relative;
+  display: inline-flex;
+}
+.h10-ds-hovercard > .hc {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  width: max-content;
+  max-width: 280px;
+  background: var(--h10-surface);
+  color: var(--h10-text);
+  border: 1px solid var(--h10-border-subtle);
+  border-radius: var(--h10-radius-xl);
+  box-shadow: var(--h10-shadow-pop);
+  padding: 12px 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.h10-ds-hovercard:hover > .hc,
+.h10-ds-hovercard:focus-within > .hc {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── DateRangePicker ─────────────────────────────────────────────── */
+.h10-ds-dp {
+  position: relative;
+  display: inline-flex;
+}
+.h10-ds-dp-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border-subtle);
+  border-radius: var(--h10-radius-2xl);
+  box-shadow: var(--h10-shadow-pop);
+  overflow: hidden;
+}
+.h10-ds-dp-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border-right: 1px solid var(--h10-border-subtle);
+  min-width: 132px;
+}
+.h10-ds-dp-preset {
+  text-align: left;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--h10-text-2);
+  padding: 7px 10px;
+  border-radius: var(--h10-radius-md);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.h10-ds-dp-preset:hover {
+  background: var(--h10-surface-hover);
+  color: var(--h10-text);
+}
+.h10-ds-dp-cal {
+  padding: 14px 16px;
+}
+.h10-ds-dp-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.h10-ds-dp-nav button {
+  border: none;
+  background: none;
+  color: var(--h10-text-2);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--h10-radius-sm);
+  display: inline-flex;
+}
+.h10-ds-dp-nav button:hover {
+  background: var(--h10-surface-hover);
+}
+.h10-ds-dp-months {
+  display: flex;
+  gap: 22px;
+}
+.h10-ds-dp-mh {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--h10-text);
+  margin-bottom: 8px;
+}
+.h10-ds-dp-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 30px);
+  gap: 2px;
+}
+.h10-ds-dp-wd {
+  height: 22px;
+  line-height: 22px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--h10-text-3);
+}
+.h10-ds-dp-day {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--h10-text);
+  border-radius: var(--h10-radius-md);
+  cursor: pointer;
+}
+.h10-ds-dp-day:hover {
+  background: var(--h10-surface-hover);
+}
+.h10-ds-dp-day.in {
+  background: var(--h10-wash-primary);
+  border-radius: 0;
+}
+.h10-ds-dp-day.start,
+.h10-ds-dp-day.end {
+  background: var(--h10-primary);
+  color: var(--h10-text-inverse);
+}
+.h10-ds-dp-day.today {
+  box-shadow: inset 0 0 0 1px var(--h10-border-strong);
+}
+.h10-ds-dp-day.dis {
+  color: var(--h10-text-disabled);
+  cursor: default;
+}
+.h10-ds-dp-day.dis:hover {
+  background: none;
+}
+.h10-ds-dp-day.empty {
+  visibility: hidden;
+}

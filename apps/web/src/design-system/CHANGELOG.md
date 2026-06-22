@@ -4,6 +4,15 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P4.4] — 2026-06-22 — Components wave 4 (DateRangePicker · MetricStrip · HoverCard)
+
+- `DateRangePicker` (`.h10-dp` — dual-month calendar + preset rail; two-click
+  range select, future-disabled, today ring, en-GB format). `MetricStrip` (KPI
+  tiles, auto-fit grid, up/down delta). `HoverCard` (rich hover panel on a light
+  surface). All reuse `useClickAway` / token styles.
+- Catalog dog-foods them; harness opens the date popover + hovers the card.
+- `tsc` clean. @2x self-verify on the next clean dev-server window.
+
 ## [P4.3] — 2026-06-22 — Components wave 3 (Toast · MultiSelect · Combobox)
 
 - `Toast` system: `ToastProvider` + `useToast()` + a portaled bottom-center
