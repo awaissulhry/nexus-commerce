@@ -67,7 +67,18 @@ import {
   ToastProvider,
   useToast,
 } from '@/design-system/components'
-import { AppShell, PageHeader, DetailHeader, FilterPanel, FilterField, BulkActionBar, EditModeBar } from '@/design-system/patterns'
+import {
+  AppShell,
+  PageHeader,
+  DetailHeader,
+  FilterPanel,
+  FilterField,
+  BulkActionBar,
+  EditModeBar,
+  Builder,
+  ColumnCustomizer,
+  type CustomizableColumn,
+} from '@/design-system/patterns'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -205,6 +216,15 @@ export function TokenCatalog() {
   const [comboVal, setComboVal] = useState('it')
   const [dateRange, setDateRange] = useState(() => ({ start: new Date(2026, 5, 1), end: new Date(2026, 5, 22) }))
   const [gridSel, setGridSel] = useState<Set<string>>(() => new Set(['1']))
+  const [builderOpen, setBuilderOpen] = useState(false)
+  const [colCustOpen, setColCustOpen] = useState(false)
+  const [colCustCols, setColCustCols] = useState<CustomizableColumn[]>([
+    { key: 'name', label: 'Campaign', visible: true, locked: true },
+    { key: 'status', label: 'Status', visible: true },
+    { key: 'spend', label: 'Spend', visible: true },
+    { key: 'sales', label: 'Sales', visible: true },
+    { key: 'acos', label: 'ACOS', visible: false },
+  ])
   return (
     <div
       className={dark ? 'dark' : undefined}
@@ -713,6 +733,49 @@ export function TokenCatalog() {
 
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>EditModeBar</div>
         <EditModeBar count={2} onDiscard={() => {}} onApply={() => {}} />
+      </section>
+
+      <section data-cat="builders" style={{ marginBottom: 40 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
+          Builder &amp; ColumnCustomizer <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--h10-text-3)' }}>· Phase 5 · finale</span>
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>
+          Full-screen wizard with a scroll-spy nav, and the column visibility/reorder modal.
+        </p>
+        <DSCard padded elevated>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Button variant="primary" onClick={() => setBuilderOpen(true)}>
+              Open builder
+            </Button>
+            <Button onClick={() => setColCustOpen(true)}>Customize columns</Button>
+          </div>
+        </DSCard>
+
+        <Builder
+          open={builderOpen}
+          onClose={() => setBuilderOpen(false)}
+          title="Create rule"
+          primaryLabel="Create rule"
+          onPrimary={() => setBuilderOpen(false)}
+          sections={[
+            { id: 'name', label: 'Rule name', title: 'Rule name', content: <Input placeholder="e.g. Pause high-ACOS keywords" /> },
+            {
+              id: 'setup',
+              label: 'Setup',
+              title: 'Setup',
+              content: (
+                <Select defaultValue="sp">
+                  <option value="sp">Sponsored Products</option>
+                  <option value="sb">Sponsored Brands</option>
+                </Select>
+              ),
+            },
+            { id: 'criteria', label: 'Criteria', title: 'Criteria', content: <div style={{ fontSize: 13, color: 'var(--h10-text-2)' }}>IF ACOS &gt; 30% over the last 14 days…</div> },
+            { id: 'action', label: 'Action', title: 'Action', content: <div style={{ fontSize: 13, color: 'var(--h10-text-2)' }}>THEN lower the bid by 15%.</div> },
+            { id: 'review', label: 'Review', title: 'Review', content: <div style={{ fontSize: 13, color: 'var(--h10-text-2)' }}>Confirm and create the rule.</div> },
+          ]}
+        />
+        <ColumnCustomizer open={colCustOpen} onClose={() => setColCustOpen(false)} columns={colCustCols} onApply={setColCustCols} />
       </section>
 
       <Section title="Typography" desc="Inter via --font-sans, rendered with H10's heavier (auto) smoothing.">

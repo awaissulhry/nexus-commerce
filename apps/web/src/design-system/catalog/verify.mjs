@@ -57,6 +57,21 @@ const patterns = page.locator('[data-cat="patterns"]')
 if (await patterns.count()) { await patterns.screenshot({ path: `${OUT}/patterns.png` }); console.log('ok patterns') }
 const filters = page.locator('[data-cat="filters"]')
 if (await filters.count()) { await filters.screenshot({ path: `${OUT}/filters.png` }); console.log('ok filters') }
+// builder (full-screen) + column customizer (modal)
+const ob = page.getByRole('button', { name: 'Open builder' })
+if (await ob.count()) {
+  await ob.first().click(); await page.waitForTimeout(350)
+  const b = page.locator('.h10-ds-builder').first()
+  if (await b.count()) { await b.screenshot({ path: `${OUT}/builder.png` }); console.log('ok builder') }
+  await page.keyboard.press('Escape'); await page.waitForTimeout(200)
+}
+const cc = page.getByRole('button', { name: 'Customize columns' })
+if (await cc.count()) {
+  await cc.first().click(); await page.waitForTimeout(300)
+  const m = page.locator('.h10-ds-modal').first()
+  if (await m.count()) { await m.screenshot({ path: `${OUT}/colcust.png` }); console.log('ok colcust') }
+  await page.keyboard.press('Escape'); await page.waitForTimeout(200)
+}
 
 // overlays — open each, screenshot the portaled element, close
 const shotOverlay = async (btnName, sel, name) => {

@@ -4,6 +4,17 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P5.3] — 2026-06-22 — Builder framework + ColumnCustomizer (Phase 5 complete)
+
+- `Builder` (full-screen wizard: top bar close + title + primary action, scroll-spy
+  left nav, scrolling sections; portal + Esc) — the spine for rule/goal/campaign
+  builders. `ColumnCustomizer` (column visibility + up/down reorder inside a
+  Modal; locked columns; draft-then-Apply).
+- **Phase 5 COMPLETE — 8 patterns:** AppShell, PageHeader, DetailHeader,
+  FilterPanel, BulkActionBar, EditModeBar, Builder, ColumnCustomizer. All
+  self-verified @2x. The live-WIP ads builders (`_rank`, budget) fold in during
+  the migration once committed. Next: Phase 6 (a11y / i18n).
+
 ## [P5.2] — 2026-06-22 — Patterns wave 2: FilterPanel · BulkActionBar · EditModeBar
 
 - `FilterPanel` (`.h10-am-fpanel`: collapsible, presets row, responsive 6→3→2
@@ -12,8 +23,7 @@ props, are called out explicitly with a migration note.
   "N selected" + actions + Clear; renders nothing at 0). `EditModeBar` (sticky
   discard/apply for unsaved edits). Shared `.h10-ds-actionbar`.
 - Catalog Filters section dog-foods them (FilterPanel with MultiSelect / Combobox
-  / Select / €-% inputs). `tsc` clean; @2x self-verify on the next clean window.
-- Remaining Phase 5: the Builder framework + ColumnCustomizer.
+  / Select / €-% inputs). `tsc` clean; self-verified @2x (fields fill cells; sticky bars).
 
 ## [P5.1] — 2026-06-22 — Patterns wave 1: AppShell · PageHeader · DetailHeader
 

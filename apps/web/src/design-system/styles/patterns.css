@@ -381,3 +381,135 @@
   background: var(--h10-surface-hover);
   color: var(--h10-text);
 }
+
+/* ── Builder (full-screen wizard + scroll-spy) ───────────────────── */
+.h10-ds-builder {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  background: var(--h10-bg);
+  color: var(--h10-text);
+}
+.h10-ds-builder-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 56px;
+  padding: 0 18px;
+  flex-shrink: 0;
+  background: var(--h10-surface);
+  border-bottom: 1px solid var(--h10-border);
+}
+.h10-ds-builder-top .x {
+  display: inline-flex;
+  border: none;
+  background: none;
+  color: var(--h10-text-3);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--h10-radius-sm);
+}
+.h10-ds-builder-top .x:hover {
+  background: var(--h10-surface-hover);
+  color: var(--h10-text);
+}
+.h10-ds-builder-top .ttl {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--h10-text);
+}
+.h10-ds-builder-top .grow {
+  flex: 1;
+}
+.h10-ds-builder-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.h10-ds-builder-nav {
+  width: 220px;
+  flex-shrink: 0;
+  padding: 20px 12px;
+  overflow-y: auto;
+  border-right: 1px solid var(--h10-border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.h10-ds-builder-navitem {
+  text-align: left;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--h10-text-2);
+  padding: 9px 12px;
+  border-radius: var(--h10-radius-md);
+  cursor: pointer;
+}
+.h10-ds-builder-navitem:hover {
+  background: var(--h10-surface-hover);
+  color: var(--h10-text);
+}
+.h10-ds-builder-navitem.on {
+  background: var(--h10-wash-primary);
+  color: var(--h10-primary);
+}
+.h10-ds-builder-content {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 24px 32px 120px;
+}
+.h10-ds-builder-section {
+  max-width: 720px;
+  margin-bottom: 40px;
+}
+.h10-ds-builder-section h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--h10-text);
+  letter-spacing: -0.01em;
+}
+
+/* ── ColumnCustomizer (rows inside a Modal) ──────────────────────── */
+.h10-ds-colcust {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.h10-ds-colcust-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  border-radius: var(--h10-radius-md);
+}
+.h10-ds-colcust-row:hover {
+  background: var(--h10-surface-hover);
+}
+.h10-ds-colcust-row .grip {
+  display: inline-flex;
+  flex-direction: column;
+}
+.h10-ds-colcust-row .grip button {
+  display: inline-flex;
+  border: none;
+  background: none;
+  color: var(--h10-text-3);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.h10-ds-colcust-row .grip button:hover:not(:disabled) {
+  color: var(--h10-text);
+}
+.h10-ds-colcust-row .grip button:disabled {
+  color: var(--h10-text-disabled);
+  cursor: default;
+}
