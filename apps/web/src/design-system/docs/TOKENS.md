@@ -1,9 +1,10 @@
 # Tokens
 
-> Token **values** are extracted and finalized in **Phase 1**. This document
-> defines the *model* and the categories; the value tables land alongside
-> `tokens/*.ts` and `styles/tokens.css` when Phase 1 ships. See
-> `TOKEN-RECONCILIATION.md` for how H10's hardcoded values map in.
+> **Phase 1 shipped the values.** The canonical palette lives in `../tokens/*.ts`
+> (TS, for JS consumers) and `../styles/tokens.css` (the `--h10-*` CSS vars). This
+> document defines the *model*; the values are in those files, and the 251→~70
+> canonicalization is documented in `../studies/01-color-drift.md`. See
+> `TOKEN-RECONCILIATION.md` for how H10's values map onto the platform's names.
 
 ## The three tiers
 

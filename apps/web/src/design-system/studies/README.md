@@ -22,7 +22,8 @@ Copy `_TEMPLATE.md` → `NN-<feature>.md`, fill it in, add a row below.
 | # | Study | Status |
 |---|---|---|
 | 00 | `00-ads-inventory.md` — authoritative `/marketing/ads` UI inventory | ✅ Phase 0 |
-| 01 | ads / campaigns feature dossier (exemplar) | ⏳ Phase 8 |
+| 01 | `01-color-drift.md` — 251 → ~70 color canonicalization worklist | ✅ Phase 1 |
+| 02 | ads / campaigns feature dossier (exemplar) | ⏳ Phase 8 |
 
 > Naming: `00-*` is reserved for the foundational inventory. Feature dossiers
 > start at `01`.
