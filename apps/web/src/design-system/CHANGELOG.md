@@ -11,7 +11,9 @@ props, are called out explicitly with a migration note.
   tiles, auto-fit grid, up/down delta). `HoverCard` (rich hover panel on a light
   surface). All reuse `useClickAway` / token styles.
 - Catalog dog-foods them; harness opens the date popover + hovers the card.
-- `tsc` clean. @2x self-verify on the next clean dev-server window.
+- `tsc` clean; self-verified @2x — calendar range highlight + today ring,
+  MetricStrip deltas, HoverCard. Date popover opens left-aligned so a mid-content
+  trigger doesn't clip (a top-right header can add right-align later).
 
 ## [P4.3] — 2026-06-22 — Components wave 3 (Toast · MultiSelect · Combobox)
 

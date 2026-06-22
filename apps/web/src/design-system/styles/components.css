@@ -626,7 +626,7 @@
 .h10-ds-dp-pop {
   position: absolute;
   top: calc(100% + 6px);
-  right: 0;
+  left: 0;
   z-index: 40;
   display: flex;
   background: var(--h10-surface);
