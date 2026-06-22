@@ -50,6 +50,25 @@ if (await prim.count()) { await prim.screenshot({ path: `${OUT}/primitives.png` 
 const comp = page.locator('[data-cat="components"]')
 if (await comp.count()) { await comp.screenshot({ path: `${OUT}/components.png` }); console.log('ok components') }
 
+// overlays — open each, screenshot the portaled element, close
+const shotOverlay = async (btnName, sel, name) => {
+  const btn = page.getByRole('button', { name: btnName })
+  if (!(await btn.count())) return
+  await btn.first().click(); await page.waitForTimeout(300)
+  const el = page.locator(sel).first()
+  if (await el.count()) { await el.screenshot({ path: `${OUT}/${name}.png` }); console.log('ok ' + name) }
+  await page.keyboard.press('Escape'); await page.waitForTimeout(200)
+}
+await shotOverlay('Open modal', '.h10-ds-modal', 'modal')
+await shotOverlay('Open drawer', '.h10-ds-drawer', 'drawer')
+const menuBtn = page.getByRole('button', { name: 'Actions' })
+if (await menuBtn.count()) {
+  await menuBtn.first().click(); await page.waitForTimeout(200)
+  const menu = page.locator('.h10-ds-menu').first()
+  if (await menu.count()) { await menu.screenshot({ path: `${OUT}/menu.png` }); console.log('ok menu') }
+  await menuBtn.first().click(); await page.waitForTimeout(150)
+}
+
 const darkBtn = page.getByRole('button', { name: /Dark/ })
 if (await darkBtn.count()) {
   await darkBtn.click()

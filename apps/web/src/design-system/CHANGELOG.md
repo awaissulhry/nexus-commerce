@@ -4,6 +4,16 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P4.2] — 2026-06-22 — Components wave 2: overlays (Modal · Drawer · Menu)
+
+- Portal-based overlays tokenized to H10: `Modal` (`.h10-modal` — title/subtitle/X,
+  bordered scroll body, right-aligned footer; sizes sm/md/lg; Esc + backdrop
+  close), `Drawer` (right slide-over; Esc + backdrop close), `Menu` (`.h10-menu`
+  anchored dropdown; outside-click close; disabled items).
+- Catalog dog-foods them (interactive open buttons + a Menu); the harness opens
+  each and screenshots the portaled element.
+- Self-verified @2x: Modal, Drawer, Menu all match the H10 look. `tsc` clean.
+
 ## [P4.1] — 2026-06-22 — Components wave 1 (Card · EmptyState · Tabs · Pagination · ProgressBar)
 
 - First composite components in `components/` + `styles/components.css`
@@ -13,8 +23,7 @@ props, are called out explicitly with a migration note.
   (determinate + indeterminate).
 - Catalog gains a Components section that dog-foods them (interactive Tabs +
   Pagination); harness captures `[data-cat="components"]`.
-- `tsc` clean. @2x visual capture pending a clean dev-server window (a concurrent
-  session was wedging it at commit time).
+- `tsc` clean. Self-verified @2x (Card / EmptyState / Tabs / Pagination / Progress).
 
 ## [P3.3] — 2026-06-22 — Primitives wave 3 + Phase 3 complete
 

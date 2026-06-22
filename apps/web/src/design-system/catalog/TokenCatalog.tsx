@@ -44,7 +44,7 @@ import {
   Kbd,
   Divider,
 } from '@/design-system/primitives'
-import { Card as DSCard, EmptyState, Tabs, Pagination, ProgressBar } from '@/design-system/components'
+import { Card as DSCard, EmptyState, Tabs, Pagination, ProgressBar, Modal, Drawer, Menu } from '@/design-system/components'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -109,6 +109,8 @@ export function TokenCatalog() {
   const [dark, setDark] = useState(false)
   const [tab, setTab] = useState('overview')
   const [pg, setPg] = useState(2)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   return (
     <div
       className={dark ? 'dark' : undefined}
@@ -338,6 +340,54 @@ export function TokenCatalog() {
             <ProgressBar indeterminate />
           </div>
         </DSCard>
+
+        <DSCard padded elevated>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Overlays</div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Button variant="primary" onClick={() => setModalOpen(true)}>
+              Open modal
+            </Button>
+            <Button onClick={() => setDrawerOpen(true)}>Open drawer</Button>
+            <Menu
+              label="Actions ▾"
+              items={[
+                { id: 'edit', label: 'Edit' },
+                { id: 'dup', label: 'Duplicate' },
+                { id: 'arch', label: 'Archive', disabled: true },
+              ]}
+            />
+          </div>
+        </DSCard>
+
+        <Modal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          title="Create ad group"
+          subtitle="Name it and set a default bid."
+          footer={
+            <>
+              <Button onClick={() => setModalOpen(false)}>Cancel</Button>
+              <Button variant="primary" onClick={() => setModalOpen(false)}>
+                Create
+              </Button>
+            </>
+          }
+        >
+          Modal body — forms, settings, confirmations. Esc or the backdrop closes it.
+        </Modal>
+
+        <Drawer
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          title="Campaign details"
+          footer={
+            <Button variant="primary" onClick={() => setDrawerOpen(false)}>
+              Done
+            </Button>
+          }
+        >
+          Drawer body — a right-side slide-over for details, filters, or editing.
+        </Drawer>
       </section>
 
       <Section title="Typography" desc="Inter via --font-sans, rendered with H10's heavier (auto) smoothing.">

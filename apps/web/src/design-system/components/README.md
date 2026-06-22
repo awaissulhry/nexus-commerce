@@ -11,7 +11,8 @@ charts (`PerformanceGraph`, `Heatmap`), `MetricStrip`/KPI tiles.
 `/marketing/ads` imports these back (or via a thin shim) and must render
 identically afterward.
 
-> **Wave 1 shipped:** `Card`, `EmptyState`, `Tabs`, `Pagination`, `ProgressBar`
-> (+ `../styles/components.css`). Remaining waves: overlays (Modal/Drawer/Popover/
-> Menu/Toast), searchable dropdowns (MultiSelect/Combobox/HoverCard), DateRange,
-> charts, MetricStrip, and the `DataGrid` centerpiece.
+> **Waves 1–2 shipped:** `Card`, `EmptyState`, `Tabs`, `Pagination`,
+> `ProgressBar`, `Modal`, `Drawer`, `Menu` (+ `../styles/components.css`).
+> Remaining waves: `Toast` (provider), searchable dropdowns (MultiSelect/
+> Combobox/HoverCard), `DateRangePicker`, charts (`PerformanceGraph`/`Heatmap`),
+> `MetricStrip`, and the `DataGrid` centerpiece.
