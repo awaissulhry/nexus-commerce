@@ -4,6 +4,17 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P7] — 2026-06-22 — Governance hardening + guardrails (Phase 7 complete)
+
+- `tools/token-guard.mjs` — drift guard: fails on raw hex in shipped DS code
+  (primitives/components/patterns/styles; `tokens.css` excepted). **Passes today**
+  — the whole system is tokenized. `tools/README.md` documents it + the
+  visual-regression process (`catalog/verify.mjs` + baseline diff).
+- `docs/GOVERNANCE.md` gains a **Guardrails** section (token-guard, visual
+  regression, the contrast rule). CODEOWNERS deferred for a solo operator.
+- Additive (scripts + docs); committed locally — push still queued behind the
+  concurrent `SpSuperWizard.tsx` error. Next: Phase 8 (studies hub), 9 (migration).
+
 ## [P6] — 2026-06-22 — A11y · i18n · content & data standards (Phase 6 complete)
 
 - **A11y:** `styles/a11y.css` (prefers-reduced-motion neutralizes DS animations +

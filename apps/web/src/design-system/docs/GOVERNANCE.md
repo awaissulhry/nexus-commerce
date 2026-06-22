@@ -81,3 +81,15 @@ concurrent sessions.
   (standing rule) — they converge via shared tokens only, never direct edits.
 - **Defer live WIP**: the actively-changing ads builders (`_rank/`, the B-series
   budget builder) are folded in only after that work is committed.
+
+## Guardrails (automated, Phase 7)
+
+- **Token drift** — `tools/token-guard.mjs` fails on any raw hex in shipped DS
+  code (everything must be a token; `tokens.css` excepted). Passes today. Wire
+  into `.githooks/pre-push` to enforce.
+- **Visual regression** — `catalog/verify.mjs` @2x-captures the catalog + every
+  overlay; commit baselines and diff in CI to automate the screenshot-diff rule.
+- **Contrast** — body text uses `--h10-text` / `--h10-text-2`; `--h10-text-3` is
+  secondary/large-only (see `studies/02-contrast-audit.md`).
+- **CODEOWNERS** — deferred for a solo operator (a self-review request adds
+  friction with no second reviewer); add when a team forms.
