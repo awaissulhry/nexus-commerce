@@ -15,7 +15,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { X, Video } from 'lucide-react'
 import { ScheduleBuilder } from '../_schedule/ScheduleBuilder'
 import { CampaignSection, type SchedCampaign } from '../_schedule/CampaignSection'
-import { RankPlanBody } from './RankPlanBody'
+import { RankPlanBody, type RankPlanHandle, type RankPlanStatus } from './RankPlanBody'
 
 // Adtomic-style atom mark — same glyph the other builders use in the top bar.
 function AtomMark({ size = 20 }: { size?: number }) {
@@ -42,6 +42,7 @@ const STEPS = [
   { id: 'name', label: 'Schedule Name' },
   { id: 'campaigns', label: 'Campaigns' },
   { id: 'plan', label: 'Rank goal & schedule' },
+  { id: 'control', label: 'Control' },
 ]
 
 export function RankGoalBuilder() {
@@ -67,6 +68,14 @@ export function RankGoalBuilder() {
   const addCampaigns = (cs: SchedCampaign[]) => setSelCampaigns((cur) => { const have = new Set(cur.map((x) => x.id)); return [...cur, ...cs.filter((c) => !have.has(c.id))] })
   const removeCampaign = (id: string) => setSelCampaigns((cur) => cur.filter((c) => c.id !== id))
   const clearCampaigns = () => setSelCampaigns([])
+
+  // RGD.7 — the builder owns ONE action + a Manual/Automate Control section, matching every other
+  // rule type. The rank plan body exposes save(enabled) via a ref + reports its status up.
+  const [control, setControl] = useState<'manual' | 'automate'>('manual')
+  const [planStatus, setPlanStatus] = useState<RankPlanStatus>({ valid: false, busy: false, dirty: false, saved: false })
+  const planRef = useRef<RankPlanHandle>(null)
+  const create = useCallback(async () => { await planRef.current?.save(control === 'automate') }, [control])
+  const createLabel = planStatus.busy ? 'Saving…' : planStatus.saved ? 'Save Changes' : 'Create Schedule'
 
   // scroll-spy step nav (mirrors the other builders)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -99,7 +108,7 @@ export function RankGoalBuilder() {
         </div>
         <div className="r">
           <button type="button" className="learn"><Video size={15} /> Learn</button>
-          {/* The rank plan owns its own Save / Publish / Discard (in the §3 plan header below). */}
+          <button type="button" className="h10-rb-create" disabled={!planStatus.valid || planStatus.busy} onClick={() => void create()}>{createLabel}</button>
         </div>
       </header>
 
@@ -125,9 +134,30 @@ export function RankGoalBuilder() {
 
             <section id="rgd-plan" className="h10-rb-sec">
               <h2>Your rank goal &amp; schedule</h2>
-              <p className="h10-rb-desc">Hold this rank, on this schedule — Save, Publish, or Discard.</p>
-              <RankPlanBody campaigns={selCampaigns} name={name} />
+              <p className="h10-rb-desc">Hold this rank, on this schedule.</p>
+              <RankPlanBody ref={planRef} campaigns={selCampaigns} name={name} onStatus={setPlanStatus} />
             </section>
+
+            <section id="rgd-control" className="h10-rb-sec">
+              <h2>Control</h2>
+              <p className="h10-rb-desc">Choose how this rank plan runs once you create it.</p>
+              <div className="h10-rb-card control">
+                <label className={`h10-rb-ctrl ${control === 'manual' ? 'on' : ''}`}>
+                  <input type="radio" name="rgdcontrol" checked={control === 'manual'} onChange={() => setControl('manual')} />
+                  <span className="b"><span className="t">Manual</span><span className="d">Save the plan but don&apos;t run it — nothing changes on Amazon until you switch it to Automate.</span></span>
+                </label>
+                <label className={`h10-rb-ctrl ${control === 'automate' ? 'on' : ''}`}>
+                  <input type="radio" name="rgdcontrol" checked={control === 'automate'} onChange={() => setControl('automate')} />
+                  <span className="b"><span className="t">Automate</span><span className="d">Have the engine hold this rank automatically on its cadence (real Amazon pushes still honour each campaign&apos;s write-gate).</span></span>
+                </label>
+              </div>
+            </section>
+
+            <div className="h10-rb-foot">
+              <button type="button" className="h10-rb-btn ghost" onClick={close}>Cancel</button>
+              <span className="grow" />
+              <button type="button" className="h10-rb-create" disabled={!planStatus.valid || planStatus.busy} onClick={() => void create()}>{createLabel}</button>
+            </div>
           </div>
         </main>
       </div>

@@ -3,14 +3,16 @@
 /**
  * RGD.1 — Rank Plan body (the §2 "Your rank goal & schedule" cockpit), re-skinned to H10 and made
  * MULTI-CAMPAIGN. Author ONE plan — a baseline rank ("for the rest of the week, hold Y") + time
- * windows ("Mon–Fri 18–22 → Own Top") — and Save / Publish / Discard it across every selected
- * campaign at once (fan-out: one /schedules row per campaign). Live defend preview + delivery truth
- * are shown per campaign. Save persists to Nexus; Publish runs the defend loop now (gated — sandbox
- * stays local). Grid painter (RGD.2), demand heatmap (RGD.3), target editor (RGD.4) and templates
- * (RGD.5) land in later phases.
+ * windows ("Mon–Fri 18–22 → Own Top") — applied across every selected campaign at once (fan-out:
+ * one /schedules row per campaign). Live defend preview + delivery truth are shown per campaign.
+ *
+ * RGD.7 — the action model follows the rules-automation convention: there's no Save/Publish/Discard
+ * trio here. The parent builder owns ONE "Create Schedule" action + a Manual/Automate Control section
+ * and calls our exposed save(enabled) via a ref; we report {valid,busy,dirty} up via onStatus.
+ * Manual → enabled:false (saved but off); Automate → enabled:true (held on cadence, write-gated).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Crosshair, Plus, Trash2, Save, UploadCloud, Undo2, Sparkles, Power, Wand2 } from 'lucide-react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import { Crosshair, Plus, Trash2, Sparkles, Wand2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { SchedCampaign } from '../_schedule/CampaignSection'
 import { DeliveryChip } from './DeliveryChip'
@@ -18,6 +20,9 @@ import { RankTimeGrid } from './RankTimeGrid'
 import { DemandReadout, type DemandCell, type DemandProfile } from './DemandReadout'
 import { RankTargetEditor, type OvMap } from './RankTargetEditor'
 import { RankTemplateModal } from './RankTemplateModal'
+
+export interface RankPlanHandle { save: (enabled: boolean) => Promise<void> }
+export interface RankPlanStatus { valid: boolean; busy: boolean; dirty: boolean; saved: boolean }
 
 interface DemandData { grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[]; hasData: boolean; familyOrders: number; timezone?: string; metric?: 'revenue' | 'orders' }
 interface RecData { windows: Win[]; baselineTargetKey: string; peakHours: number[] }
@@ -31,7 +36,7 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
 const api = (p: string) => `${getBackendUrl()}/api/advertising${p}`
 
-export function RankPlanBody({ campaigns, name }: { campaigns: SchedCampaign[]; name: string }) {
+export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaign[]; name: string; onStatus?: (s: RankPlanStatus) => void }>(function RankPlanBody({ campaigns, name, onStatus }, ref) {
   const campKey = useMemo(() => campaigns.map(c => c.id).sort().join(','), [campaigns])
   const [targets, setTargets] = useState<RankTarget[]>([])
   const [scheds, setScheds] = useState<Record<string, Sched | null>>({}) // per-campaign existing schedule
@@ -40,7 +45,7 @@ export function RankPlanBody({ campaigns, name }: { campaigns: SchedCampaign[]; 
   const [serverBaseline, setServerBaseline] = useState('')
   const [serverWindows, setServerWindows] = useState<Win[]>([])
   const [loaded, setLoaded] = useState(false)
-  const [busy, setBusy] = useState<'' | 'save' | 'publish'>('')
+  const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [decisions, setDecisions] = useState<Decision[]>([])
   const [deliverySignal, setDeliverySignal] = useState(0)
@@ -106,18 +111,20 @@ export function RankPlanBody({ campaigns, name }: { campaigns: SchedCampaign[]; 
   const activeDemand = smooth && smoothed ? smoothed : demand
 
   const dirty = baseline !== serverBaseline || JSON.stringify(windows) !== JSON.stringify(serverWindows)
-  const anySched = Object.values(scheds).some(Boolean)
-  const allEnabled = campaigns.length > 0 && campaigns.every(c => scheds[c.id]?.enabled)
+  const saved = Object.values(scheds).some(Boolean)
   const hasGoal = !!baseline || windows.length > 0
+  // Report state up so the parent builder can drive its single "Create Schedule" action.
+  useEffect(() => { onStatus?.({ valid: campaigns.length > 0 && hasGoal, busy, dirty, saved }) }, [campaigns.length, hasGoal, busy, dirty, saved, onStatus])
 
   const addWindow = () => setWindows(w => [...w, { days: [1, 2, 3, 4, 5], startHour: 18, endHour: 22, targetKey: targets[0]?.key }])
   const setWin = (i: number, patch: Partial<Win>) => setWindows(w => w.map((x, j) => j === i ? { ...x, ...patch } : x))
   const removeWin = (i: number) => setWindows(w => w.filter((_, j) => j !== i))
   const toggleDay = (i: number, d: number) => setWindows(w => w.map((x, j) => j === i ? { ...x, days: x.days.includes(d) ? x.days.filter(y => y !== d) : [...x.days, d].sort() } : x))
 
-  // fan-out persist: upsert each selected campaign's schedule with the SAME authored plan
-  const persistAll = async (): Promise<Record<string, Sched | null>> => {
-    const body = { defaultTargetKey: baseline || null, windows }
+  // Fan-out persist: upsert each selected campaign's schedule with the SAME plan + arm state.
+  // enabled comes from the parent's Control choice (Manual=false / Automate=true).
+  const persistAll = async (enabled: boolean): Promise<Record<string, Sched | null>> => {
+    const body = { defaultTargetKey: baseline || null, windows, enabled }
     const next: Record<string, Sched | null> = { ...scheds }
     await Promise.all(campaigns.map(async c => {
       const existing = scheds[c.id]
@@ -126,9 +133,7 @@ export function RankPlanBody({ campaigns, name }: { campaigns: SchedCampaign[]; 
           const r = await fetch(api(`/schedules/${existing.id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(x => x.json())
           if (r?.id) next[c.id] = r
         } else {
-          // Safety: the builder creates plans DISABLED (auto-defend OFF). Save only STORES the plan;
-          // arming the live defend loop is a deliberate act — flip Auto-defend on, or Publish.
-          const r = await fetch(api('/schedules'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campaignId: c.id, name: (name.trim() || `Rank plan — ${c.name}`), timezone: 'Europe/Rome', enabled: false, ...body }) }).then(x => x.json())
+          const r = await fetch(api('/schedules'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campaignId: c.id, name: (name.trim() || `Rank plan — ${c.name}`), timezone: 'Europe/Rome', ...body }) }).then(x => x.json())
           if (r?.id) next[c.id] = r
         }
       } catch { /* per-campaign failure leaves its prior entry */ }
@@ -138,39 +143,21 @@ export function RankPlanBody({ campaigns, name }: { campaigns: SchedCampaign[]; 
   }
   const markSaved = () => { setServerBaseline(baseline); setServerWindows(windows.map(w => ({ ...w }))) }
 
-  const save = async () => {
-    if (!campaigns.length) return
-    setBusy('save'); setMsg('')
-    try { const r = await persistAll(); const ok = Object.values(r).filter(Boolean).length; markSaved(); setMsg(`Saved — your rank plan is stored for ${ok} campaign${ok === 1 ? '' : 's'} (not armed). Turn on Auto-defend to hold it automatically, or Publish to run it once. Live pushes honour each campaign's write-gate.`) }
-    finally { setBusy('') }
-  }
-  const publish = async () => {
-    if (!campaigns.length) return
-    setBusy('publish'); setMsg('')
+  // The ONE action, invoked by the parent's "Create Schedule" with the Control choice's enabled flag.
+  const doSave = async (enabled: boolean) => {
+    if (!campaigns.length || busy) return
+    setBusy(true); setMsg('')
     try {
-      if (dirty) { await persistAll(); markSaved() }
-      const r = await fetch(api('/rank-defend/run-now'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(x => x.json()).catch(() => null)
-      const ids = new Set(campaigns.map(c => c.id))
-      setDecisions((r?.decisions ?? []).filter((x: Decision) => ids.has(x.campaignId)))
-      setDeliverySignal(n => n + 1)
-      setMsg(r ? `Published — defend loop ran (${r.applied ?? 0} change${r.applied === 1 ? '' : 's'} applied; live pushes honour the write-gate).` : 'Publish ran.')
-    } finally { setBusy('') }
+      const r = await persistAll(enabled); markSaved(); setDeliverySignal(n => n + 1)
+      const ok = Object.values(r).filter(Boolean).length
+      setMsg(enabled
+        ? `Saved + armed for ${ok} campaign${ok === 1 ? '' : 's'} — the engine holds this rank on its cadence (real Amazon pushes honour each campaign's write-gate; sandbox stays local).`
+        : `Saved for ${ok} campaign${ok === 1 ? '' : 's'} — Manual, so nothing runs yet. Set Control to Automate to hold it automatically.`)
+    } finally { setBusy(false) }
   }
-  const discard = () => { setBaseline(serverBaseline); setWindows(serverWindows.map(w => ({ ...w }))); setMsg('') }
-
-  // Auto-defend across all selected campaigns' schedules (only meaningful once saved)
-  const toggleDefend = async () => {
-    if (!anySched) return
-    const next = !allEnabled
-    setMsg('')
-    const updated: Record<string, Sched | null> = { ...scheds }
-    await Promise.all(campaigns.map(async c => {
-      const s = scheds[c.id]; if (!s) return
-      try { const r = await fetch(api(`/schedules/${s.id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: next }) }).then(x => x.json()); if (r?.id) updated[c.id] = r } catch { /* best-effort */ }
-    }))
-    setScheds(updated)
-    setMsg(next ? 'Auto-defend ON — the engine holds this plan on its cadence (live pushes still need the write-gate).' : 'Auto-defend OFF — plan saved but not auto-held.')
-  }
+  // Expose a STABLE save() that always runs the latest closure (avoids dependency churn on the ref).
+  const saveRef = useRef(doSave); saveRef.current = doSave
+  useImperativeHandle(ref, () => ({ save: (enabled: boolean) => saveRef.current(enabled) }), [])
 
   // RGD.4 — the "Edit targets" modal edits GLOBAL swatches (shared across all selected campaigns) +
   // per-campaign OVERRIDES scoped to the active demand-campaign (only once it has a saved schedule).
@@ -187,16 +174,6 @@ export function RankPlanBody({ campaigns, name }: { campaigns: SchedCampaign[]; 
 
   return (
     <div className="h10-rp">
-      <div className="h10-rp-head">
-        <span className="t"><Crosshair size={15} /> Rank plan{name.trim() ? <span className="sub"> · {name.trim()}</span> : ''} <span className="sub">· {campaigns.length} campaign{campaigns.length === 1 ? '' : 's'}</span></span>
-        {anySched && <button type="button" className={`h10-rp-defend ${allEnabled ? 'on' : ''}`} onClick={() => void toggleDefend()} title="When ON, the engine continuously holds this plan on its cadence"><Power size={12} /> Auto-defend {allEnabled ? 'ON' : 'OFF'}</button>}
-        <span className="grow" />
-        {dirty && <span className="h10-rp-dirty">Unsaved</span>}
-        <button type="button" className="h10-rp-btn" disabled={!dirty || busy !== ''} onClick={discard}><Undo2 size={13} /> Discard</button>
-        <button type="button" className="h10-rp-btn" disabled={!dirty || busy !== ''} onClick={() => void save()}><Save size={13} /> {busy === 'save' ? 'Saving…' : 'Save'}</button>
-        <button type="button" className="h10-rp-btn dark" disabled={busy !== '' || !hasGoal} onClick={() => void publish()}><UploadCloud size={13} /> {busy === 'publish' ? 'Publishing…' : 'Publish'}</button>
-      </div>
-
       {!loaded ? <div className="h10-rp-load">Loading rank plan…</div> : <>
         {/* Baseline — "for the rest, hold Y" */}
         <div className="h10-rp-sec">
@@ -276,7 +253,7 @@ export function RankPlanBody({ campaigns, name }: { campaigns: SchedCampaign[]; 
         )}
 
         {msg && <div className="h10-rp-msg">{msg}</div>}
-        <div className="h10-rp-note">Save stores the plan (disabled) for every selected campaign — nothing changes on Amazon yet. Turn on <b>Auto-defend</b> to have the engine hold it automatically, or <b>Publish</b> to run the loop once. Either way, real Amazon pushes still honour each campaign&apos;s write-gate (sandbox stays local).</div>
+        <div className="h10-rp-note">Choose <b>Manual</b> or <b>Automate</b> in Control below, then <b>Create Schedule</b>. Manual stores the plan for every selected campaign but runs nothing; Automate has the engine hold this rank on its cadence. Either way, real Amazon pushes honour each campaign&apos;s write-gate (sandbox stays local).</div>
       </>}
 
       <RankTargetEditor
@@ -297,4 +274,4 @@ export function RankPlanBody({ campaigns, name }: { campaigns: SchedCampaign[]; 
       />
     </div>
   )
-}
+})
