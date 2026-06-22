@@ -43,6 +43,8 @@ import {
   Skeleton,
   Kbd,
   Divider,
+  type BadgeTone,
+  type PillStatus,
 } from '@/design-system/primitives'
 import {
   Card as DSCard,
@@ -60,6 +62,8 @@ import {
   DateRangePicker,
   PerformanceGraph,
   Heatmap,
+  DataGrid,
+  type Column,
   ToastProvider,
   useToast,
 } from '@/design-system/components'
@@ -152,6 +156,44 @@ const HEAT_DATA = DAYS.map((_, d) =>
   }),
 )
 
+interface GridRow {
+  id: string
+  name: string
+  status: PillStatus
+  program: BadgeTone
+  spend: number
+  sales: number
+  acos: number
+}
+const GRID_ROWS: GridRow[] = [
+  { id: '1', name: 'Helmets · Auto', status: 'ok', program: 'sp', spend: 1284, sales: 8640, acos: 14.9 },
+  { id: '2', name: 'Brand Defense', status: 'ok', program: 'sb', spend: 642, sales: 3120, acos: 20.6 },
+  { id: '3', name: 'Retargeting', status: 'warn', program: 'sd', spend: 318, sales: 1090, acos: 29.2 },
+  { id: '4', name: 'Gloves · Manual', status: 'arch', program: 'sp', spend: 96, sales: 410, acos: 23.4 },
+]
+const gridSum = (k: 'spend' | 'sales') => GRID_ROWS.reduce((s, r) => s + r[k], 0)
+const STATUS_LABEL: Record<PillStatus, string> = { ok: 'Active', warn: 'Paused', arch: 'Archived' }
+const GRID_COLS: Column<GridRow>[] = [
+  {
+    key: 'name',
+    label: 'Campaign',
+    sticky: true,
+    width: 220,
+    sortable: true,
+    sortValue: (r) => r.name,
+    render: (r) => (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+        <Badge tone={r.program}>{r.program.toUpperCase()}</Badge>
+        <span style={{ fontWeight: 600 }}>{r.name}</span>
+      </span>
+    ),
+  },
+  { key: 'status', label: 'Status', render: (r) => <Pill status={r.status}>{STATUS_LABEL[r.status]}</Pill> },
+  { key: 'spend', label: 'Spend', align: 'right', sortable: true, sortValue: (r) => r.spend, render: (r) => `€${r.spend.toLocaleString('en-IE')}`, total: `€${gridSum('spend').toLocaleString('en-IE')}` },
+  { key: 'sales', label: 'Sales', align: 'right', sortable: true, sortValue: (r) => r.sales, render: (r) => `€${r.sales.toLocaleString('en-IE')}`, total: `€${gridSum('sales').toLocaleString('en-IE')}` },
+  { key: 'acos', label: 'ACOS', align: 'right', sortable: true, sortValue: (r) => r.acos, render: (r) => `${r.acos}%` },
+]
+
 export function TokenCatalog() {
   const [dark, setDark] = useState(false)
   const [tab, setTab] = useState('overview')
@@ -161,6 +203,7 @@ export function TokenCatalog() {
   const [msVal, setMsVal] = useState<string[]>(['sp', 'sd'])
   const [comboVal, setComboVal] = useState('it')
   const [dateRange, setDateRange] = useState(() => ({ start: new Date(2026, 5, 1), end: new Date(2026, 5, 22) }))
+  const [gridSel, setGridSel] = useState<Set<string>>(() => new Set(['1']))
   return (
     <div
       className={dark ? 'dark' : undefined}
@@ -518,6 +561,25 @@ export function TokenCatalog() {
             <Heatmap data={HEAT_DATA} rowLabels={DAYS} colLabels={HOURS} format={(v) => `${v}`} />
           </DSCard>
         </div>
+      </section>
+
+      <section data-cat="datagrid" style={{ marginBottom: 40 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
+          DataGrid <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--h10-text-3)' }}>· Phase 4 · finale</span>
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>
+          The universal grid — sortable headers, row selection, a pinned Campaign column, and a sticky totals row.
+        </p>
+        <DataGrid
+          columns={GRID_COLS}
+          rows={GRID_ROWS}
+          rowKey={(r) => r.id}
+          selectable
+          selected={gridSel}
+          onSelectedChange={setGridSel}
+          showTotals
+          initialSort={{ key: 'spend', dir: 'desc' }}
+        />
       </section>
 
       <Section title="Typography" desc="Inter via --font-sans, rendered with H10's heavier (auto) smoothing.">

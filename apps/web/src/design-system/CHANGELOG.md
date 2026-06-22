@@ -4,6 +4,16 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P4.6] — 2026-06-22 — DataGrid + Phase 4 complete
+
+- `DataGrid<T>` (`.h10-am-grid`): generic columns (render / align / sortable /
+  sortValue / sticky / width / total), click-to-sort headers with arrows, row
+  selection + select-all (indeterminate), sticky header, pinned left columns
+  (accumulated offsets), a sticky totals row, and an empty state. Catalog
+  dog-foods it (Badge/Pill cells, sortable metrics, totals, selection).
+- **Phase 4 COMPLETE — 17 composites + `useClickAway`.** `tsc` clean;
+  self-verified @2x. Next: Phase 5 (patterns — AppShell / PageHeader / Builder).
+
 ## [P4.5] — 2026-06-22 — Components wave 5: charts (PerformanceGraph · Heatmap)
 
 - `PerformanceGraph` (Recharts `ComposedChart` — dual independent left/right
