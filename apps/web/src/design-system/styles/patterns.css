@@ -1,0 +1,228 @@
+/**
+ * DS pattern (organism) styles — tokenized, `.h10-ds-*` namespace (see
+ * ../docs/NAMING.md). Depends only on tokens.css. Phase 5.
+ */
+
+/* ── AppShell ────────────────────────────────────────────────────── */
+.h10-ds-shell {
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+  padding-left: 66px;
+  background: var(--h10-bg);
+  color: var(--h10-text);
+}
+.h10-ds-rail {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 66px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--h10-rail-bg);
+  border-right: 1px solid var(--h10-rail-border);
+  transition: width 0.18s ease, box-shadow 0.18s ease;
+}
+.h10-ds-rail:hover {
+  width: 248px;
+  overflow-y: auto;
+  box-shadow: var(--h10-shadow-rail);
+}
+.h10-ds-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+  padding-left: 17px;
+  flex-shrink: 0;
+}
+.h10-ds-brand .mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--h10-primary);
+  color: var(--h10-text-inverse);
+  font-weight: 800;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+.h10-ds-brand .name {
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+.h10-ds-rail:hover .h10-ds-brand .name {
+  opacity: 1;
+}
+.h10-ds-nav {
+  flex: 1;
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.h10-ds-navitem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  margin: 1px 8px;
+  border: none;
+  background: none;
+  border-radius: var(--h10-radius-xl);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--h10-text-2);
+  text-decoration: none;
+  cursor: pointer;
+  overflow: hidden;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.h10-ds-navitem .ico {
+  flex: 0 0 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--h10-text-3);
+}
+.h10-ds-navitem .lbl {
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+.h10-ds-rail:hover .h10-ds-navitem .lbl {
+  opacity: 1;
+}
+.h10-ds-navitem:hover {
+  background: var(--h10-grey-150);
+  color: var(--h10-text);
+}
+.h10-ds-navitem:hover .ico {
+  color: var(--h10-text-2);
+}
+.h10-ds-navitem.on {
+  background: var(--h10-primary);
+  color: var(--h10-text-inverse);
+}
+.h10-ds-navitem.on .ico {
+  color: var(--h10-text-inverse);
+}
+.h10-ds-navbadge {
+  position: absolute;
+  left: 31px;
+  top: 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--h10-danger);
+  color: var(--h10-text-inverse);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--h10-rail-bg);
+}
+.h10-ds-railft {
+  white-space: nowrap;
+  padding: 12px 16px;
+  font-size: 10px;
+  color: var(--h10-text-disabled);
+  opacity: 0;
+  transition: opacity 0.14s ease;
+  flex-shrink: 0;
+}
+.h10-ds-rail:hover .h10-ds-railft {
+  opacity: 1;
+}
+.h10-ds-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 26px 30px;
+  overflow-y: auto;
+}
+
+/* ── PageHeader ──────────────────────────────────────────────────── */
+.h10-ds-pagehdr {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.h10-ds-pagehdr .eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--h10-text-3);
+  margin-bottom: 2px;
+}
+.h10-ds-pagehdr h1 {
+  margin: 0;
+  font-size: 27px;
+  font-weight: 800;
+  color: var(--h10-text);
+  letter-spacing: -0.02em;
+}
+.h10-ds-pagehdr .sub {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  color: var(--h10-text-2);
+}
+.h10-ds-pagehdr-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── DetailHeader ────────────────────────────────────────────────── */
+.h10-ds-detailhdr {
+  margin-bottom: 18px;
+}
+.h10-ds-detailhdr .back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--h10-primary);
+  cursor: pointer;
+}
+.h10-ds-detailhdr-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.h10-ds-detailhdr-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.h10-ds-detailhdr-title h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--h10-text);
+  letter-spacing: -0.01em;
+}

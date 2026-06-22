@@ -4,6 +4,18 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P5.1] — 2026-06-22 — Patterns wave 1: AppShell · PageHeader · DetailHeader
+
+- First organisms in `patterns/` (+ `styles/patterns.css`): `AppShell` (H10 rail
+  — 66px icon rail hover-expands to 248px; brand, nav items with active state +
+  count badge, footer; fills its parent so the app layout supplies the height),
+  `PageHeader` (eyebrow + title + subtitle + actions), `DetailHeader` (back link
+  + badge + title + actions). The shell composes the headers + primitives.
+- Catalog Patterns section: headers inline + AppShell in a contained 360px
+  preview. Self-verified @2x. `tsc` clean.
+- Remaining Phase 5: FilterPanel, BulkActionBar, EditModeBar, ColumnCustomizer,
+  the Builder framework (full-screen wizard + scroll-spy).
+
 ## [P4.6] — 2026-06-22 — DataGrid + Phase 4 complete
 
 - `DataGrid<T>` (`.h10-am-grid`): generic columns (render / align / sortable /

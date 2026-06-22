@@ -12,7 +12,7 @@
  */
 
 import { useState, type ReactNode } from 'react'
-import { Search, Inbox } from 'lucide-react'
+import { Search, Inbox, Home, Megaphone, BarChart3, Settings } from 'lucide-react'
 import {
   palette,
   color,
@@ -67,6 +67,7 @@ import {
   ToastProvider,
   useToast,
 } from '@/design-system/components'
+import { AppShell, PageHeader, DetailHeader } from '@/design-system/patterns'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -580,6 +581,65 @@ export function TokenCatalog() {
           showTotals
           initialSort={{ key: 'spend', dir: 'desc' }}
         />
+      </section>
+
+      <section data-cat="patterns" style={{ marginBottom: 40 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
+          Patterns <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--h10-text-3)' }}>· Phase 5 · Wave 1</span>
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>
+          Page-level organisms — the app shell + headers that every section adopts.
+        </p>
+
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>PageHeader</div>
+        <DSCard padded elevated>
+          <PageHeader
+            eyebrow="Campaigns"
+            title="Ad Manager"
+            subtitle="212 active campaigns across 4 marketplaces"
+            actions={
+              <>
+                <Button>Export</Button>
+                <Button variant="primary">New campaign</Button>
+              </>
+            }
+          />
+        </DSCard>
+
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>DetailHeader</div>
+        <DSCard padded elevated>
+          <DetailHeader
+            backLabel="Back to Ad Manager"
+            onBack={() => {}}
+            badge={<Badge tone="auto">A</Badge>}
+            title="Helmets · Auto"
+            actions={<Button variant="primary">Edit</Button>}
+          />
+        </DSCard>
+
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>
+          AppShell <span style={{ textTransform: 'none', fontWeight: 500 }}>· hover the rail to expand</span>
+        </div>
+        <div style={{ height: 360, border: '1px solid var(--h10-border)', borderRadius: 12, overflow: 'hidden', position: 'relative' }}>
+          <AppShell
+            brand={{ mark: 'N', name: 'Nexus Ads' }}
+            nav={[
+              { id: 'home', label: 'Dashboard', icon: <Home size={20} />, active: true },
+              { id: 'camp', label: 'Campaigns', icon: <Megaphone size={20} />, badge: 3 },
+              { id: 'rep', label: 'Reporting', icon: <BarChart3 size={20} /> },
+              { id: 'set', label: 'Settings', icon: <Settings size={20} /> },
+            ]}
+            footer="v2.0 · Nexus DS"
+          >
+            <PageHeader
+              eyebrow="Campaigns"
+              title="Ad Manager"
+              subtitle="The rail collapses to icons; hover to expand it."
+              actions={<Button variant="primary" size="sm">New</Button>}
+            />
+            <div style={{ fontSize: 13, color: 'var(--h10-text-2)' }}>Main content scrolls independently of the rail.</div>
+          </AppShell>
+        </div>
       </section>
 
       <Section title="Typography" desc="Inter via --font-sans, rendered with H10's heavier (auto) smoothing.">

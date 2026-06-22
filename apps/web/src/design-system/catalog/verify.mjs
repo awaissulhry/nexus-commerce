@@ -53,6 +53,8 @@ const charts = page.locator('[data-cat="charts"]')
 if (await charts.count()) { await page.waitForTimeout(500); await charts.screenshot({ path: `${OUT}/charts.png` }); console.log('ok charts') }
 const grid = page.locator('[data-cat="datagrid"]')
 if (await grid.count()) { await grid.screenshot({ path: `${OUT}/datagrid.png` }); console.log('ok datagrid') }
+const patterns = page.locator('[data-cat="patterns"]')
+if (await patterns.count()) { await patterns.screenshot({ path: `${OUT}/patterns.png` }); console.log('ok patterns') }
 
 // overlays — open each, screenshot the portaled element, close
 const shotOverlay = async (btnName, sel, name) => {
