@@ -4,6 +4,18 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P8] — 2026-06-22 — Studies hub (Phase 8 complete)
+
+- The research hub is established: framework (`studies/README` + `_TEMPLATE`) +
+  the foundational studies (`00-ads-inventory`, `01-color-drift`,
+  `02-contrast-audit`) + the **exemplar feature dossier `03-ads-campaigns`** —
+  which maps the ads cockpit onto the DS (that mapping *is* the Phase-9 migration
+  checklist for `/marketing/ads`) and sketches cross-platform parity + the
+  automation roadmap. Copy `_TEMPLATE.md` for each next feature.
+- Additive docs; committed locally. Next: **Phase 9 — migration** (the gated
+  `ads.css`→token rewrite + `.h10-*`→neutral rename + rollout) — needs the
+  unblocked tree + healthy dev server + the screenshot harness.
+
 ## [P7] — 2026-06-22 — Governance hardening + guardrails (Phase 7 complete)
 
 - `tools/token-guard.mjs` — drift guard: fails on raw hex in shipped DS code
