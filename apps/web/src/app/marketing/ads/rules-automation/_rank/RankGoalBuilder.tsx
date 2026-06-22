@@ -12,9 +12,10 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { X, Video, Crosshair } from 'lucide-react'
+import { X, Video } from 'lucide-react'
 import { ScheduleBuilder } from '../_schedule/ScheduleBuilder'
 import { CampaignSection, type SchedCampaign } from '../_schedule/CampaignSection'
+import { RankPlanBody } from './RankPlanBody'
 
 // Adtomic-style atom mark — same glyph the other builders use in the top bar.
 function AtomMark({ size = 20 }: { size?: number }) {
@@ -98,8 +99,7 @@ export function RankGoalBuilder() {
         </div>
         <div className="r">
           <button type="button" className="learn"><Video size={15} /> Learn</button>
-          {/* Save/Publish/Discard land in RGD.1 with the RankPlanPanel. */}
-          <button type="button" className="h10-rb-create" disabled title="Author your rank plan below (coming in the next phase)">Create Schedule</button>
+          {/* The rank plan owns its own Save / Publish / Discard (in the §3 plan header below). */}
         </div>
       </header>
 
@@ -126,11 +126,7 @@ export function RankGoalBuilder() {
             <section id="rgd-plan" className="h10-rb-sec">
               <h2>Your rank goal &amp; schedule</h2>
               <p className="h10-rb-desc">Hold this rank, on this schedule — Save, Publish, or Discard.</p>
-              <div className="h10-rgd-stub">
-                <Crosshair size={26} />
-                <b>Rank plan authoring lands next</b>
-                <span>{selCampaigns.length > 0 ? `${selCampaigns.length} campaign${selCampaigns.length === 1 ? '' : 's'} selected — set a baseline rank + time windows here.` : 'Add campaigns above, then set a baseline rank + time windows here.'}</span>
-              </div>
+              <RankPlanBody campaigns={selCampaigns} name={name} />
             </section>
           </div>
         </main>
