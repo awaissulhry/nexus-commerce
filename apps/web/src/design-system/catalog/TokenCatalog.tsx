@@ -12,6 +12,7 @@
  */
 
 import { useState, type ReactNode } from 'react'
+import { Search } from 'lucide-react'
 import {
   palette,
   color,
@@ -27,7 +28,7 @@ import {
   zIndex,
   breakpoint,
 } from '@/design-system/tokens'
-import { Button, Pill, Badge } from '@/design-system/primitives'
+import { Button, Pill, Badge, Input, Select, Checkbox, Toggle } from '@/design-system/primitives'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -194,6 +195,37 @@ export function TokenCatalog() {
             <Badge tone="sb">SB</Badge>
             <Badge tone="auto">A</Badge>
             <Badge tone="manual">M</Badge>
+          </div>
+        </Card>
+
+        <Card>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Input</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+            <Input placeholder="Plain input" />
+            <Input leadingIcon={<Search size={15} />} placeholder="Search campaigns" />
+            <Input prefix="€" placeholder="0.00" size={6} />
+            <Input suffix="%" placeholder="0" size={4} />
+          </div>
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Select</div>
+          <Select defaultValue="all">
+            <option value="all">All campaigns</option>
+            <option value="sp">Sponsored Products</option>
+            <option value="sb">Sponsored Brands</option>
+          </Select>
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Checkbox</div>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <Checkbox defaultChecked label="Checked" />
+            <Checkbox label="Unchecked" />
+            <Checkbox disabled label="Disabled" />
+          </div>
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Toggle</div>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <Toggle checked />
+            <Toggle checked={false} />
+            <Toggle checked={false} disabled />
           </div>
         </Card>
       </section>

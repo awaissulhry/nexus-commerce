@@ -129,3 +129,162 @@
   color: var(--h10-text-inverse);
   background: var(--h10-targeting-manual);
 }
+
+/* ── Text field (Input: plain / search / € / %) ──────────────────── */
+.h10-ds-field {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--h10-border);
+  border-radius: var(--h10-radius-lg);
+  background: var(--h10-surface);
+  overflow: hidden;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-field:hover {
+  border-color: var(--h10-border-strong);
+}
+.h10-ds-field:focus-within {
+  border-color: var(--h10-primary);
+  box-shadow: var(--h10-focus-ring);
+}
+.h10-ds-field.disabled {
+  background: var(--h10-surface-sunken);
+}
+.h10-ds-field > input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--h10-text);
+  padding: 7px 11px;
+}
+.h10-ds-field > input::placeholder {
+  color: var(--h10-text-disabled);
+}
+.h10-ds-field .lead {
+  display: inline-flex;
+  align-items: center;
+  padding-left: 11px;
+  color: var(--h10-text-3);
+}
+.h10-ds-field .lead + input {
+  padding-left: 6px;
+}
+/* shaded unit adornment (€ prefix / % suffix) */
+.h10-ds-field .ad {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+  background: var(--h10-surface-sunken);
+  color: var(--h10-text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.h10-ds-field .ad.pre {
+  border-right: 1px solid var(--h10-border-subtle);
+}
+.h10-ds-field .ad.suf {
+  border-left: 1px solid var(--h10-border-subtle);
+}
+
+/* ── Select (native, styled) ─────────────────────────────────────── */
+.h10-ds-select {
+  position: relative;
+  display: inline-flex;
+}
+.h10-ds-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  border: 1px solid var(--h10-border);
+  border-radius: var(--h10-radius-lg);
+  padding: 7px 30px 7px 11px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--h10-text);
+  background: var(--h10-surface);
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-select select:hover {
+  border-color: var(--h10-border-strong);
+}
+.h10-ds-select select:focus-visible {
+  outline: none;
+  border-color: var(--h10-primary);
+  box-shadow: var(--h10-focus-ring);
+}
+.h10-ds-select .chev {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--h10-text-3);
+  pointer-events: none;
+  display: inline-flex;
+}
+
+/* ── Checkbox (native, accent-tinted) ────────────────────────────── */
+.h10-ds-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--h10-text-strong);
+  cursor: pointer;
+}
+.h10-ds-check input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--h10-primary);
+  cursor: pointer;
+}
+.h10-ds-check.disabled {
+  color: var(--h10-text-disabled);
+  cursor: default;
+}
+
+/* ── Toggle (switch) ─────────────────────────────────────────────── */
+.h10-ds-toggle {
+  display: inline-block;
+  position: relative;
+  width: 30px;
+  height: 17px;
+  border-radius: 999px;
+  background: var(--h10-grey-300);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  vertical-align: middle;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+.h10-ds-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: var(--h10-white);
+  box-shadow: 0 1px 2px rgb(var(--h10-shadow-rgb) / 0.2);
+  transition: transform 0.15s ease;
+}
+.h10-ds-toggle.on {
+  background: var(--h10-primary);
+}
+.h10-ds-toggle.on::after {
+  transform: translateX(13px);
+}
+.h10-ds-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--h10-focus-ring);
+}
+.h10-ds-toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

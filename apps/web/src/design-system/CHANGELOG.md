@@ -4,6 +4,19 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P3.2] — 2026-06-22 — Primitives wave 2 (Input · Select · Checkbox · Toggle)
+
+- Form controls tokenized to the H10 spec: `Input` (plain / leading-icon /
+  `€`-prefix / `%`-suffix via the `.h10-am-search` + `.mmin` field pattern),
+  `Select` (styled native + chevron, `.h10-fsel`), `Checkbox` (accent-tinted
+  native), `Toggle` (`role="switch"`, `.h10-toggle` 30×17 with sliding knob).
+- Appended `.h10-ds-field/select/check/toggle` to `styles/primitives.css`;
+  catalog dog-foods them in a second Primitives card.
+- `tsc` clean; identical pattern to the visually-verified wave 1. The @2x visual
+  capture + push were deferred at commit time — a concurrent session was actively
+  re-breaking the shared tree (dev 500 / non-buildable); both run on a clean window.
+- Note: the searchable/portal MultiSelect + Combobox move to Phase 4 (composite).
+
 ## [P3.1] — 2026-06-22 — Primitives wave 1 (Button · Pill · Badge)
 
 - First primitives in `primitives/`, tokenized to the H10 spec: `Button`
