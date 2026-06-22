@@ -18,9 +18,10 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { ProductSelection, type SpwProduct } from './ProductSelection'
 import { StructureSelection, type StructureMode, type AutomationMode } from './StructureSelection'
 import { PlacementBidMultiplier, type PlacementBids, emptyPlacementBids } from '../../_shared/PlacementBidMultiplier'
-import { CampaignSetup, generateCampaigns, campaignsMissingTargeting, type SpwCampaign } from './CampaignSetup'
+import { CampaignSetup, generateCampaigns, campaignsMissingTargeting, applyAutoNegatives, type SpwCampaign } from './CampaignSetup'
 import { TargetingModal } from './TargetingModal'
 import { LaunchStep } from './LaunchStep'
+import { defaultCustomKeywordTypes, defaultCustomTargeting, type CustomKeywordType, type TargetingKind } from './CustomScheme'
 
 type StepN = 1 | 2 | 3
 const STEPS: Array<{ n: StepN; label: string }> = [
@@ -48,12 +49,15 @@ export function SpSuperWizard() {
   const [bidMult, setBidMult] = useState<PlacementBids>(emptyPlacementBids())
   const [structureMode, setStructureMode] = useState<StructureMode>('standard')
   const [automationMode, setAutomationMode] = useState<AutomationMode>('rule')
-  const [customKeywordTypes, setCustomKeywordTypes] = useState<string[]>(['Brand', 'Competitor', 'Category', 'Other'])
+  const [customKeywordTypes, setCustomKeywordTypes] = useState<CustomKeywordType[]>(defaultCustomKeywordTypes())
+  const [customTargetingTypes, setCustomTargetingTypes] = useState<TargetingKind[]>(defaultCustomTargeting())
   const [customNameTokens, setCustomNameTokens] = useState<string[]>(['campaignType', 'targetingType', 'matchType', 'keywordType'])
   const [rememberSettings, setRememberSettings] = useState(true)
+  const [autoNegate, setAutoNegate] = useState(true)
 
   // Step 2 campaigns are generated from the step-1 structure; Restore Default re-generates.
-  const baseCampaigns = useMemo(() => generateCampaigns(productGroupName, structureMode, customKeywordTypes), [productGroupName, structureMode, customKeywordTypes])
+  // applyAutoNegatives layers the negative-keyword funnel + Auto-isolation on top (NT.1).
+  const baseCampaigns = useMemo(() => applyAutoNegatives(generateCampaigns(productGroupName, structureMode, customKeywordTypes, customTargetingTypes, customNameTokens, products[0]?.asin || products[0]?.sku || ''), autoNegate), [productGroupName, structureMode, customKeywordTypes, customTargetingTypes, customNameTokens, products, autoNegate])
   const [campaigns, setCampaigns] = useState<SpwCampaign[]>(baseCampaigns)
   useEffect(() => { setCampaigns(baseCampaigns) }, [baseCampaigns])
   const [guardOpen, setGuardOpen] = useState(false)
@@ -81,7 +85,7 @@ export function SpSuperWizard() {
           name: c.name, adGroupName: c.adGroupName, kind: c.kind, matchType: c.matchType,
           bidEur: Number(c.bid) || 0.75, budgetEur: Number(c.budget) || 10,
           keywords: c.keywords, productTargets: c.productTargets.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined })),
-          negKeywords: c.negKeywords, negProducts: c.negProducts.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined })),
+          negKeywords: c.negKeywords.map((n) => ({ text: n.text, matchType: n.matchType })), negProducts: c.negProducts.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined })),
         })),
         placementBids: { tos: bidMult.tos, pdp: bidMult.pdp, ros: bidMult.ros },
       }
@@ -184,7 +188,7 @@ export function SpSuperWizard() {
               <section id="spw-structure" className="h10-spw-sec">
                 <h2>Structure selection</h2>
                 <p className="h10-spw-desc">Select the structure of campaigns and their naming rule.</p>
-                <StructureSelection mode={structureMode} setMode={setStructureMode} automationMode={automationMode} setAutomationMode={setAutomationMode} asinImage={products[0]?.imageUrl ?? null} customKeywordTypes={customKeywordTypes} setCustomKeywordTypes={setCustomKeywordTypes} customNameTokens={customNameTokens} setCustomNameTokens={setCustomNameTokens} remember={rememberSettings} setRemember={setRememberSettings} />
+                <StructureSelection mode={structureMode} setMode={setStructureMode} automationMode={automationMode} setAutomationMode={setAutomationMode} asinImage={products[0]?.imageUrl ?? null} customKeywordTypes={customKeywordTypes} setCustomKeywordTypes={setCustomKeywordTypes} customTargetingTypes={customTargetingTypes} setCustomTargetingTypes={setCustomTargetingTypes} customNameTokens={customNameTokens} setCustomNameTokens={setCustomNameTokens} previewNames={baseCampaigns.map((c) => c.name)} remember={rememberSettings} setRemember={setRememberSettings} autoNegate={autoNegate} setAutoNegate={setAutoNegate} />
               </section>
             </div>
           </div>
@@ -225,7 +229,7 @@ export function SpSuperWizard() {
       {editTgt && (() => {
         const c = campaigns.find((x) => x.id === editTgt.id)
         if (!c) return null
-        return <TargetingModal campaign={c} mode={editTgt.mode} onClose={() => setEditTgt(null)} onSave={(patch) => setCampaigns((cs) => cs.map((x) => (x.id === c.id ? { ...x, ...patch } : x)))} />
+        return <TargetingModal campaign={c} mode={editTgt.mode} autoNegate={autoNegate} onClose={() => setEditTgt(null)} onSave={(patch) => setCampaigns((cs) => applyAutoNegatives(cs.map((x) => (x.id === c.id ? { ...x, ...patch } : x)), autoNegate))} />
       })()}
     </div>
   )

@@ -16,7 +16,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import {
   createCampaign, createAdGroup, createKeyword, createProductAd,
-  createTarget, createNegativeProductTarget, createSdTarget, createSbAd, updateCampaign,
+  createTarget, createNegativeProductTarget, createNegativeKeyword, createSdTarget, createSbAd, updateCampaign,
   type AdsRegion,
 } from './ads-api-client.js'
 import { checkAdsWriteGate } from './ads-write-gate.js'
@@ -265,5 +265,23 @@ export async function createNegativeProductTargetLocal(input: NewNegativeProduct
   }
   const t = await prisma.adTarget.create({ data: { adGroupId: input.adGroupId, kind: 'PRODUCT', expressionType: 'ASIN', expressionValue: input.asin, bidCents: 0, status: 'ENABLED', externalTargetId: externalId, isNegative: true, negativeLevel: 'AD_GROUP' } })
   await audit('create_negative_product_target', 'AD_TARGET', t.id, { asin: input.asin, externalId, mode }, input.userId)
+  return { id: t.id, externalTargetId: externalId, mode }
+}
+
+// NT.4 — ad-group-level negative keyword (the funnel + Auto-isolation writes), match-typed.
+export interface NewNegativeKeyword { adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE'; userId?: string }
+export async function createNegativeKeywordLocal(input: NewNegativeKeyword): Promise<{ id: string; externalTargetId: string | null; mode: string }> {
+  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true } } } })
+  if (!ag) throw new Error('ad group not found')
+  let externalId: string | null = null, mode = 'local'
+  if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
+    const ctx = await resolveCtx(ag.campaign.marketplace)
+    if (ctx) {
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0 })
+      if (gate.allowed) { const r = await createNegativeKeyword(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, keywordText: input.keywordText, matchType: input.matchType, state: 'enabled' }); externalId = r.externalId; mode = r.mode }
+    }
+  }
+  const t = await prisma.adTarget.create({ data: { adGroupId: input.adGroupId, kind: 'KEYWORD', expressionType: input.matchType, expressionValue: input.keywordText, bidCents: 0, status: 'ENABLED', externalTargetId: externalId, isNegative: true, negativeLevel: 'AD_GROUP' } })
+  await audit('create_negative_keyword', 'AD_TARGET', t.id, { keywordText: input.keywordText, matchType: input.matchType, externalId, mode }, input.userId)
   return { id: t.id, externalTargetId: externalId, mode }
 }

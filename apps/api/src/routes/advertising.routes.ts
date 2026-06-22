@@ -862,7 +862,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as {
       market?: string; productGroupName?: string
       products?: PRef[]
-      campaigns?: Array<{ name: string; adGroupName?: string; kind: 'auto' | 'keyword' | 'pat'; matchType?: string; bidEur?: number; budgetEur?: number; keywords?: string[]; productTargets?: PRef[]; negKeywords?: string[]; negProducts?: PRef[] }>
+      campaigns?: Array<{ name: string; adGroupName?: string; kind: 'auto' | 'keyword' | 'pat'; matchType?: string; bidEur?: number; budgetEur?: number; keywords?: string[]; productTargets?: PRef[]; negKeywords?: Array<string | { text?: string; matchType?: 'EXACT' | 'PHRASE' }>; negProducts?: PRef[] }>
       placementBids?: { tos?: string; pdp?: string; ros?: string }
       dryRun?: boolean
     }
@@ -872,7 +872,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!campaigns.length) { reply.status(400); return { error: 'no campaigns to create' } }
     if (b.dryRun) return { ok: true, dryRun: true, plan: { market, totalCampaigns: campaigns.length, totalProductAds: products.length * campaigns.length } }
 
-    const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal, createTargetLocal, createNegativeProductTargetLocal, updatePlacementBidding } = await import('../services/advertising/ads-create.service.js')
+    const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal, createTargetLocal, createNegativeProductTargetLocal, createNegativeKeywordLocal, updatePlacementBidding } = await import('../services/advertising/ads-create.service.js')
     const userId = actorFromHeaders(request.headers as Record<string, unknown>)
     const matchTypesFor = (m?: string): Array<'BROAD' | 'PHRASE' | 'EXACT'> => {
       const u = (m || '').toLowerCase()
@@ -898,7 +898,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         } else if (c.kind === 'pat') {
           for (const pt of c.productTargets ?? []) { const asin = pt.asin || pt.sku; if (!asin) continue; try { await createTargetLocal({ adGroupId: ag.id, kind: 'PRODUCT', value: asin, bidEur, userId }) } catch (e) { logger.warn('[SPW-launch] product target failed', { error: (e as Error).message }) } }
         }
-        for (const nk of c.negKeywords ?? []) { try { await prisma.adTarget.create({ data: { adGroupId: ag.id, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: nk, bidCents: 0, status: 'ENABLED', isNegative: true, negativeLevel: 'AD_GROUP' } }) } catch (e) { logger.warn('[SPW-launch] neg keyword failed', { error: (e as Error).message }) } }
+        for (const nk of c.negKeywords ?? []) { const text = (typeof nk === 'string' ? nk : nk?.text ?? '').trim(); if (!text) continue; const mt: 'EXACT' | 'PHRASE' = (typeof nk === 'object' && nk?.matchType === 'PHRASE') ? 'PHRASE' : 'EXACT'; try { await createNegativeKeywordLocal({ adGroupId: ag.id, keywordText: text, matchType: mt, userId }) } catch (e) { logger.warn('[SPW-launch] neg keyword failed', { error: (e as Error).message }) } }
         for (const np of c.negProducts ?? []) { const asin = np.asin || np.sku; if (!asin) continue; try { await createNegativeProductTargetLocal({ adGroupId: ag.id, asin, userId }) } catch (e) { logger.warn('[SPW-launch] neg product failed', { error: (e as Error).message }) } }
         if (adjustments.length) { try { await updatePlacementBidding({ campaignId: camp.id, adjustments, userId }) } catch (e) { logger.warn('[SPW-launch] placement failed', { error: (e as Error).message }) } }
         created.push({ name: c.name, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, mode: camp.mode })

@@ -2,22 +2,22 @@
 
 /**
  * SPW.1 — Product Selection (inline two-panel, Helium 10 match). Left: Search /
- * Enter tabs over a paginated product list with per-row Add; right: the running
- * "N Products Added" list with per-row remove. Hits the real /api/products/search.
- * (H10 records an Amazon ASIN per row; our catalogue keys on SKU, so ASIN renders
- * only when present and we fall back to SKU.)
+ * Enter tabs over a product list with expandable parents — each variation family
+ * (e.g. GALE-JACKET → 18 colour/size children) shows a chevron that lazy-loads its
+ * variations via ?parentId=; you Add the whole family or individual variations.
+ * Right: the running "N Products Added" list. Selection is a flat list of the
+ * advertisable child/standalone SKUs (one product ad per child ASIN at launch).
  */
-import { type Dispatch, type SetStateAction, useEffect, useState } from 'react'
-import { Search, Plus, Check, Trash2, Copy, ChevronsUpDown, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { type Dispatch, type SetStateAction, Fragment, useCallback, useEffect, useState } from 'react'
+import { Search, Plus, Check, Trash2, Copy, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronDown, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
-export type SpwProduct = { id: string; name: string; sku: string; asin: string; imageUrl: string | null }
-type Raw = { id: string; name: string; sku: string; asin?: string | null; imageUrl?: string | null; photoUrl?: string | null }
-const toProd = (p: Raw): SpwProduct => ({ id: p.id, name: p.name, sku: p.sku, asin: p.asin ?? '', imageUrl: p.imageUrl ?? p.photoUrl ?? null })
+export type SpwProduct = { id: string; name: string; sku: string; asin: string; imageUrl: string | null; parentId: string | null; childCount: number }
+type Raw = { id: string; name: string; sku: string; asin?: string | null; imageUrl?: string | null; photoUrl?: string | null; parentId?: string | null; childCount?: number }
+const toProd = (p: Raw): SpwProduct => ({ id: p.id, name: p.name, sku: p.sku, asin: p.asin ?? '', imageUrl: p.imageUrl ?? p.photoUrl ?? null, parentId: p.parentId ?? null, childCount: p.childCount ?? 0 })
 
 const PAGE = 10
 
-/** Amazon smile mark used in the product id line + thumbnail tag. */
 function AmazonBadge({ size = 15 }: { size?: number }) {
   return (
     <span className="h10-spw-amz" style={{ width: size, height: size }} aria-hidden>
@@ -64,6 +64,9 @@ export function ProductSelection({ products, setProducts }: { products: SpwProdu
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [enterText, setEnterText] = useState('')
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [childCache, setChildCache] = useState<Record<string, SpwProduct[]>>({})
+  const [loadingKids, setLoadingKids] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     let alive = true
@@ -77,6 +80,24 @@ export function ProductSelection({ products, setProducts }: { products: SpwProdu
     return () => { alive = false; clearTimeout(t) }
   }, [q])
 
+  const fetchChildren = useCallback(async (parentId: string): Promise<SpwProduct[]> => {
+    if (childCache[parentId]) return childCache[parentId]
+    setLoadingKids((s) => new Set(s).add(parentId))
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/products/search?parentId=${parentId}&limit=500`)
+      const j = await r.json()
+      const kids = ((j?.items ?? []) as Raw[]).map(toProd)
+      setChildCache((c) => ({ ...c, [parentId]: kids }))
+      return kids
+    } catch { return [] } finally { setLoadingKids((s) => { const n = new Set(s); n.delete(parentId); return n }) }
+  }, [childCache])
+
+  const toggleExpand = (parent: SpwProduct) => {
+    const willOpen = !expanded.has(parent.id)
+    setExpanded((s) => { const n = new Set(s); if (n.has(parent.id)) n.delete(parent.id); else n.add(parent.id); return n })
+    if (willOpen && !childCache[parent.id]) void fetchChildren(parent.id)
+  }
+
   const total = all.length
   const pages = Math.max(1, Math.ceil(total / PAGE))
   const start = (page - 1) * PAGE
@@ -84,11 +105,18 @@ export function ProductSelection({ products, setProducts }: { products: SpwProdu
   const has = (id: string) => products.some((p) => p.id === id)
   const add = (p: SpwProduct) => setProducts((cur) => (cur.some((x) => x.id === p.id) ? cur : [...cur, p]))
   const remove = (id: string) => setProducts((cur) => cur.filter((p) => p.id !== id))
-  const addAll = () => setProducts((cur) => { const ids = new Set(cur.map((p) => p.id)); return [...cur, ...all.filter((p) => !ids.has(p.id))] })
+  const selOfParent = (parent: SpwProduct) => products.filter((p) => p.parentId === parent.id).length
+  const addAllChildren = async (parent: SpwProduct) => {
+    const kids = childCache[parent.id] ?? (await fetchChildren(parent.id))
+    setProducts((cur) => { const ids = new Set(cur.map((p) => p.id)); return [...cur, ...kids.filter((k) => !ids.has(k.id))] })
+  }
+  const removeAllChildren = (parent: SpwProduct) => setProducts((cur) => cur.filter((p) => p.parentId !== parent.id))
+  const addAll = async () => { for (const p of view) { if (p.childCount > 0) await addAllChildren(p); else add(p) } }
   const addEntered = () => {
     const toks = enterText.split(/[\n,]/).map((s) => s.trim().toLowerCase()).filter(Boolean)
     if (!toks.length) return
-    const match = all.filter((p) => toks.some((t) => p.sku.toLowerCase() === t || p.asin.toLowerCase() === t || p.name.toLowerCase().includes(t)))
+    const pool = [...all, ...Object.values(childCache).flat()]
+    const match = pool.filter((p) => toks.some((t) => p.sku.toLowerCase() === t || p.asin.toLowerCase() === t || p.name.toLowerCase().includes(t)))
     setProducts((cur) => { const ids = new Set(cur.map((p) => p.id)); return [...cur, ...match.filter((p) => !ids.has(p.id))] })
     setEnterText('')
   }
@@ -109,7 +137,7 @@ export function ProductSelection({ products, setProducts }: { products: SpwProdu
             </div>
             <div className="h10-spw-ps-cnt">
               <span>Viewing {total === 0 ? 0 : start + 1}-{Math.min(start + PAGE, total)} of {total} Products</span>
-              <button type="button" className="addall" disabled={!view.length} onClick={addAll}><Plus size={13} /> Add All</button>
+              <button type="button" className="addall" disabled={!view.length} onClick={() => void addAll()}><Plus size={13} /> Add All</button>
             </div>
             <div className="h10-spw-ps-list">
               {loading ? (
@@ -117,15 +145,41 @@ export function ProductSelection({ products, setProducts }: { products: SpwProdu
               ) : view.length === 0 ? (
                 <div className="h10-spw-ps-empty">No products match your search.</div>
               ) : (
-                view.map((p) => (
-                  <div key={p.id} className="row">
-                    <Thumb p={p} />
-                    <ProductMeta p={p} copyable />
-                    <button type="button" className={`addbtn ${has(p.id) ? 'on' : ''}`} onClick={() => (has(p.id) ? remove(p.id) : add(p))}>
-                      {has(p.id) ? <><Check size={13} /> Added</> : <><Plus size={13} /> Add</>}
-                    </button>
-                  </div>
-                ))
+                view.map((p) => {
+                  const isFamily = p.childCount > 0
+                  const sel = isFamily ? selOfParent(p) : 0
+                  const allSel = isFamily && sel >= p.childCount
+                  const open = expanded.has(p.id)
+                  return (
+                    <Fragment key={p.id}>
+                      <div className="row">
+                        {isFamily
+                          ? <button type="button" className="exp" onClick={() => toggleExpand(p)} aria-label={open ? 'Collapse variations' : 'Expand variations'} aria-expanded={open}>{open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
+                          : <span className="exp-sp" />}
+                        <Thumb p={p} />
+                        <span className="m">
+                          <span className="nm" title={p.name}>{p.name}</span>
+                          <span className="id">
+                            <AmazonBadge size={14} /><span className="code">{p.asin || p.sku}</span>
+                            {isFamily ? <span className="varc">· {p.childCount} variation{p.childCount === 1 ? '' : 's'}</span> : null}
+                          </span>
+                        </span>
+                        {isFamily
+                          ? <button type="button" className={`addbtn ${allSel ? 'on' : ''}`} onClick={() => (allSel ? removeAllChildren(p) : void addAllChildren(p))}>{allSel ? <><Check size={13} /> Added</> : sel > 0 ? <>{sel}/{p.childCount}</> : <><Plus size={13} /> Add all</>}</button>
+                          : <button type="button" className={`addbtn ${has(p.id) ? 'on' : ''}`} onClick={() => (has(p.id) ? remove(p.id) : add(p))}>{has(p.id) ? <><Check size={13} /> Added</> : <><Plus size={13} /> Add</>}</button>}
+                      </div>
+                      {open && (loadingKids.has(p.id) ? (
+                        <div className="h10-spw-ps-kidload">Loading variations…</div>
+                      ) : (childCache[p.id] ?? []).map((kid) => (
+                        <div className="row kid" key={kid.id}>
+                          <Thumb p={kid} />
+                          <ProductMeta p={kid} />
+                          <button type="button" className={`addbtn ${has(kid.id) ? 'on' : ''}`} onClick={() => (has(kid.id) ? remove(kid.id) : add(kid))}>{has(kid.id) ? <><Check size={13} /> Added</> : <><Plus size={13} /> Add</>}</button>
+                        </div>
+                      )))}
+                    </Fragment>
+                  )
+                })
               )}
             </div>
             {pages > 1 && (

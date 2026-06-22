@@ -755,6 +755,20 @@ export async function createNegativeProductTarget(ctx: ClientContext, input: Cre
   return { ok: true, mode: 'live', externalId: response?.negativeTargetingClauses?.success?.[0]?.targetId ?? null, rawResponse: response }
 }
 
+// NT.4 — negative KEYWORDS at ad-group level (the funnel + Auto-isolation writes).
+// Amazon SP only supports NEGATIVE_EXACT / NEGATIVE_PHRASE (there is no neg-broad).
+export interface CreateNegativeKeywordInput { externalCampaignId: string; externalAdGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE'; state?: 'enabled' | 'paused' }
+export async function createNegativeKeyword(ctx: ClientContext, input: CreateNegativeKeywordInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-nkw-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createNegativeKeyword', { input, externalId })
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+  }
+  const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, keywordText: input.keywordText, matchType: `NEGATIVE_${input.matchType}`, state: (input.state ?? 'enabled').toUpperCase() }
+  const response = await liveCall<{ negativeKeywords?: { success?: Array<{ keywordId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/negativeKeywords', body: { negativeKeywords: [v3] }, contentType: 'application/vnd.spNegativeKeyword.v3+json', acceptHeader: 'application/vnd.spNegativeKeyword.v3+json' })
+  return { ok: true, mode: 'live', externalId: response?.negativeKeywords?.success?.[0]?.keywordId ?? null, rawResponse: response }
+}
+
 // ── Sponsored Display audience / contextual targeting (AX2.3) ───────────
 // SD /sd/targets. Audience targeting expressions: remarketing on
 // views/purchases, plus Amazon-built audiences (in-market / lifestyle /

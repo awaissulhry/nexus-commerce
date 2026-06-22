@@ -9,7 +9,8 @@
  */
 import { type Dispatch, type SetStateAction, Fragment } from 'react'
 import { Atom } from 'lucide-react'
-import { CustomScheme } from './CustomScheme'
+import { CustomScheme, type CustomKeywordType, type TargetingKind } from './CustomScheme'
+import { InfoTip } from '../../campaigns/InfoTip'
 
 export type StructureMode = 'standard' | 'advanced' | 'custom'
 export type AutomationMode = 'rule' | 'ai'
@@ -100,18 +101,23 @@ function StructureDiagram({ rows, asinImage, automationMode, setAutomationMode, 
   )
 }
 
-export function StructureSelection({ mode, setMode, automationMode, setAutomationMode, asinImage, customKeywordTypes, setCustomKeywordTypes, customNameTokens, setCustomNameTokens, remember, setRemember }: {
+export function StructureSelection({ mode, setMode, automationMode, setAutomationMode, asinImage, customKeywordTypes, setCustomKeywordTypes, customTargetingTypes, setCustomTargetingTypes, customNameTokens, setCustomNameTokens, previewNames, remember, setRemember, autoNegate, setAutoNegate }: {
   mode: StructureMode
   setMode: (m: StructureMode) => void
   automationMode: AutomationMode
   setAutomationMode: (m: AutomationMode) => void
   asinImage: string | null
-  customKeywordTypes: string[]
-  setCustomKeywordTypes: Dispatch<SetStateAction<string[]>>
+  customKeywordTypes: CustomKeywordType[]
+  setCustomKeywordTypes: Dispatch<SetStateAction<CustomKeywordType[]>>
+  customTargetingTypes: TargetingKind[]
+  setCustomTargetingTypes: Dispatch<SetStateAction<TargetingKind[]>>
   customNameTokens: string[]
   setCustomNameTokens: Dispatch<SetStateAction<string[]>>
+  previewNames: string[]
   remember: boolean
   setRemember: (v: boolean) => void
+  autoNegate: boolean
+  setAutoNegate: (v: boolean) => void
 }) {
   const TABS: Array<{ key: StructureMode; label: string }> = [
     { key: 'standard', label: 'Standard' },
@@ -126,13 +132,24 @@ export function StructureSelection({ mode, setMode, automationMode, setAutomatio
         ))}
       </div>
       {mode === 'custom' ? (
-        <CustomScheme keywordTypes={customKeywordTypes} setKeywordTypes={setCustomKeywordTypes} nameTokens={customNameTokens} setNameTokens={setCustomNameTokens} remember={remember} setRemember={setRemember} />
+        <CustomScheme keywordTypes={customKeywordTypes} setKeywordTypes={setCustomKeywordTypes} targetingTypes={customTargetingTypes} setTargetingTypes={setCustomTargetingTypes} nameTokens={customNameTokens} setNameTokens={setCustomNameTokens} previewNames={previewNames} remember={remember} setRemember={setRemember} />
       ) : (
         <div className="h10-spw-st-panel">
           <div className="h10-spw-st-title">Structure</div>
           <StructureDiagram rows={mode === 'advanced' ? advancedRows() : standardRows()} asinImage={asinImage} automationMode={automationMode} setAutomationMode={setAutomationMode} />
         </div>
       )}
+
+      <div className="h10-spw-st-auto">
+        <label className="sw">
+          <input type="checkbox" className="h10-spw-sw" checked={autoNegate} onChange={(e) => setAutoNegate(e.target.checked)} aria-label="Auto-negate to isolate campaigns" />
+          <span className="t">Auto-negate to isolate campaigns</span>
+          <InfoTip tip="Adds ad-group-level negatives so each search term serves from one campaign — Exact gets none, Phrase neg-exacts its keywords, Broad neg-exacts + neg-phrases them, and the Auto campaign neg-exacts every keyword so it only finds new terms. All editable per campaign in Step 2." />
+        </label>
+        <span className="h">{mode === 'standard'
+          ? 'Standard combines match types, so this only isolates the Auto campaign from your keywords.'
+          : 'Each search term serves from exactly one campaign — no self-competition, cleaner data.'}</span>
+      </div>
     </div>
   )
 }
