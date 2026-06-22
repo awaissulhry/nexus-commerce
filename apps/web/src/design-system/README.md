@@ -99,4 +99,5 @@ variables, both noted where used.
 - `docs/TOKEN-RECONCILIATION.md` — how H10 values map onto the semantic structure
 - `docs/ACCESSIBILITY.md` — focus, keyboard, ARIA, motion, contrast standards
 - `docs/CONTENT.md` — language (English UI), formatters, iconography, voice
+- `docs/MIGRATION.md` — Phase 9 plan: rolling the system onto the app (proposal)
 - `studies/00-ads-inventory.md` — the authoritative `/marketing/ads` inventory
