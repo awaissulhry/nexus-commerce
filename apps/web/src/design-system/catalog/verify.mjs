@@ -26,9 +26,22 @@ const errs = []
 page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()) })
 page.on('pageerror', (e) => errs.push('PAGEERROR ' + e.message))
 
-await page.goto(`${WEB}/design-system`, { waitUntil: 'networkidle' })
-await page.waitForSelector('h1', { timeout: 20000 })
-await page.waitForTimeout(400)
+// dev mode keeps HMR/SSE sockets open, so 'networkidle' never fires — wait for
+// the DOM + the catalog heading. Retry through transient dev-server errors (a
+// parallel session's broken file can flap the whole server 500↔200).
+let ready = false
+for (let i = 0; i < 10 && !ready; i++) {
+  try {
+    await page.goto(`${WEB}/design-system`, { waitUntil: 'domcontentloaded', timeout: 60000 })
+    await page.waitForSelector('h1', { timeout: 6000 })
+    const heading = await page.locator('h1').first().textContent()
+    if (heading && heading.includes('Token Catalog')) { ready = true; break }
+  } catch { /* fall through to retry */ }
+  console.log(`  …catalog not ready yet (attempt ${i + 1}), dev server may be flapping`)
+  await page.waitForTimeout(2500)
+}
+if (!ready) { console.log('catalog never rendered cleanly — aborting'); await browser.close(); process.exit(1) }
+await page.waitForTimeout(600)
 await page.screenshot({ path: `${OUT}/catalog-light.png`, fullPage: true })
 console.log('ok catalog-light')
 
