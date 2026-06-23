@@ -14,6 +14,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Info } from 'lucide-react'
+import { Modal } from '@/design-system/components'
+import { Button } from '@/design-system/primitives'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ProductSelection, type SpwProduct } from './ProductSelection'
 import { StructureSelection, type StructureMode, type AutomationMode } from './StructureSelection'
@@ -99,13 +104,6 @@ export function SpSuperWizard() {
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
   }, [launching, productGroupName, products, campaigns, bidMult, rules, router])
 
-  // Esc closes the "Targeting not set yet" guard (a11y).
-  useEffect(() => {
-    if (!guardOpen) return
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setGuardOpen(false) }
-    document.addEventListener('keydown', k)
-    return () => document.removeEventListener('keydown', k)
-  }, [guardOpen])
 
   // Scroll-spy for the step-1 sub-nav. The scroll container is the .h10-main
   // ancestor, but sections still travel through the viewport as it scrolls, so a
@@ -216,18 +214,15 @@ export function SpSuperWizard() {
         </button>
       </footer>
 
-      {guardOpen && (
-        <div className="h10-spw-guard-back" role="dialog" aria-modal="true" aria-label="Targeting not set yet" onClick={() => setGuardOpen(false)}>
-          <div className="h10-spw-guard" onClick={(e) => e.stopPropagation()}>
-            <div className="gh">Targeting not set yet</div>
-            <p>{campaignsMissingTargeting(campaigns)} Campaigns don&apos;t have any targeting, which will prevent them from running properly.</p>
-            <div className="gf">
-              <button type="button" className="h10-spw-back" onClick={() => setGuardOpen(false)}>Cancel</button>
-              <button type="button" className="h10-spw-next" onClick={() => { setGuardOpen(false); setStep(3) }}>Continue</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={guardOpen}
+        onClose={() => setGuardOpen(false)}
+        size="sm"
+        title="Targeting not set yet"
+        footer={<><Button onClick={() => setGuardOpen(false)}>Cancel</Button><Button variant="primary" onClick={() => { setGuardOpen(false); setStep(3) }}>Continue</Button></>}
+      >
+        <p className="h10-spw-guard-body">{campaignsMissingTargeting(campaigns)} campaigns don&apos;t have any targeting, which will prevent them from running properly.</p>
+      </Modal>
 
       {editTgt && (() => {
         const c = campaigns.find((x) => x.id === editTgt.id)

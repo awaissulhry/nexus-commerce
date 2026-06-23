@@ -11,8 +11,8 @@ export interface ModalProps {
   subtitle?: ReactNode
   /** footer slot, right-aligned (e.g. Cancel / Save buttons) */
   footer?: ReactNode
-  /** 440 / 560 / 660 px (H10 modal widths) */
-  size?: 'sm' | 'md' | 'lg'
+  /** 440 / 560 / 660 / 920 px (H10 modal widths) */
+  size?: 'sm' | 'md' | 'lg' | 'xl'
   children?: ReactNode
 }
 
@@ -35,7 +35,7 @@ export function Modal({ open, onClose, title, subtitle, footer, size = 'sm', chi
   return createPortal(
     <div className="h10-ds-backdrop" onClick={onClose}>
       <div
-        className={['h10-ds-modal', size === 'md' ? 'md' : size === 'lg' ? 'lg' : ''].filter(Boolean).join(' ')}
+        className={['h10-ds-modal', size === 'md' ? 'md' : size === 'lg' ? 'lg' : size === 'xl' ? 'xl' : ''].filter(Boolean).join(' ')}
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}

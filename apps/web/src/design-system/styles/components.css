@@ -200,6 +200,9 @@
 .h10-ds-modal.lg {
   width: 660px;
 }
+.h10-ds-modal.xl {
+  width: 920px;
+}
 .h10-ds-modal-h {
   display: flex;
   align-items: flex-start;

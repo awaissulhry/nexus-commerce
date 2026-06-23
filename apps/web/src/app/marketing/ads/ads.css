@@ -2001,11 +2001,8 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-cset-row .tgt .edit:hover { text-decoration: underline; }
 
 /* Step 2 — "Targeting not set yet" guard modal */
-.h10-spw-guard-back { position: fixed; inset: 0; z-index: 200; background: rgba(20,28,38,.4); display: flex; align-items: center; justify-content: center; }
-.h10-spw-guard { width: min(420px, 92vw); background: #fff; border-radius: 12px; box-shadow: 0 20px 50px rgba(20,28,38,.25); padding: 22px 24px 18px; }
-.h10-spw-guard .gh { font-size: 17px; font-weight: 700; color: #1c2530; margin-bottom: 8px; }
-.h10-spw-guard p { font-size: 13.5px; color: #5b6573; margin: 0 0 18px; line-height: 1.5; }
-.h10-spw-guard .gf { display: flex; justify-content: flex-end; gap: 10px; }
+/* Guard dialog now uses the DS <Modal>; only the body copy needs styling. */
+.h10-spw-guard-body { margin: 0; font-size: 13.5px; line-height: 1.55; color: #4a5462; }
 
 /* Targeting modal — Auto-negative keyword/product tabs */
 .h10-spw-tgt-tabs { display: flex; gap: 20px; border-bottom: 1px solid #e6e9ee; margin-bottom: 14px; }

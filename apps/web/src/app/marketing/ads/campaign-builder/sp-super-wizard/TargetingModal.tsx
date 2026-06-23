@@ -8,8 +8,13 @@
  * funnel added automatically (NT.1) so the operator sees the full isolation picture.
  * Reuses the established h10-neg-* staging pattern + the wizard's ProductSelection.
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { X, Trash2, ChevronsUpDown } from 'lucide-react'
+import { Modal } from '@/design-system/components'
+import { Button } from '@/design-system/primitives'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
 import { ProductSelection, type SpwProduct } from './ProductSelection'
 import { AUTO_GROUP_META, type SpwCampaign, type NegKeyword, type NegMatch, type AutoGroup } from './CampaignSetup'
 
@@ -146,14 +151,7 @@ export function TargetingModal({ campaign, mode, autoNegate, currency = '€', o
   const showTabs = isNeg && campaign.kind === 'auto' // Auto negatives = keywords + products
   const productOnly = campaign.kind === 'pat'
   const [tab, setTab] = useState<'kw' | 'prod'>(productOnly ? 'prod' : 'kw')
-  const hasProduct = productOnly || showTabs
   const active: 'kw' | 'prod' = showTabs ? tab : productOnly ? 'prod' : 'kw'
-
-  useEffect(() => {
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', k)
-    return () => document.removeEventListener('keydown', k)
-  }, [onClose])
 
   const save = () => {
     if (isNeg) onSave({ negKeywords: negKw, negProducts: prods })
@@ -164,37 +162,30 @@ export function TargetingModal({ campaign, mode, autoNegate, currency = '€', o
   }
 
   const title = isNeg ? 'Set Negative Targeting' : isAutoTgt ? 'Set Auto Targeting' : 'Set Targeting'
+  // Auto-group editor is compact; ProductSelection needs room; the two-column
+  // keyword/negative editor is widest → use the DS Modal's xl (920px).
+  const size: 'md' | 'lg' | 'xl' = isAutoTgt ? 'md' : productOnly ? 'lg' : 'xl'
   return (
-    <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className={`h10-modal ${hasProduct ? 'wide' : 'neg'}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
-        <div className="h10-modal-h"><b>{title} — {campaign.name}</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
-        <div className="h10-modal-b">
-          {isNeg && autoNegate && autoNegs.length > 0 && active === 'kw' && (
-            <p className="h10-neg-autonote">{autoNegs.length} negative{autoNegs.length === 1 ? '' : 's'} added automatically by the funnel (badged <b>auto</b> below). Add your own on top — turn the funnel off in Structure to drop the auto ones.</p>
-          )}
-          {showTabs && (
-            <div className="h10-spw-tgt-tabs" role="tablist">
-              <button type="button" role="tab" aria-selected={tab === 'kw'} className={tab === 'kw' ? 'on' : ''} onClick={() => setTab('kw')}>Negative Keywords</button>
-              <button type="button" role="tab" aria-selected={tab === 'prod'} className={tab === 'prod' ? 'on' : ''} onClick={() => setTab('prod')}>Negative Products</button>
-            </div>
-          )}
-          {isAutoTgt && <p className="h10-neg-autonote">Amazon splits Auto targeting into 4 groups — toggle each on/off and bid it separately. Bids are pre-set by intent (Close &amp; Substitutes higher, Loose &amp; Complements lower); adjust as you like.</p>}
-          {active === 'prod' ? (
-            <ProductSelection products={prods} setProducts={setProds} />
-          ) : isAutoTgt ? (
-            <AutoTargetingEditor groups={autoGroups} currency={currency} onChange={setAutoGroups} />
-          ) : isNeg ? (
-            <NegKeywordEditor manual={negKw} auto={autoNegs} onChange={setNegKw} />
-          ) : (
-            <KeywordEditor value={kw} onChange={setKw} />
-          )}
+    <Modal open onClose={onClose} size={size} title={`${title} — ${campaign.name}`} footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={save}>Save</Button></>}>
+      {isNeg && autoNegate && autoNegs.length > 0 && active === 'kw' && (
+        <p className="h10-neg-autonote">{autoNegs.length} negative{autoNegs.length === 1 ? '' : 's'} added automatically by the funnel (badged <b>auto</b> below). Add your own on top — turn the funnel off in Structure to drop the auto ones.</p>
+      )}
+      {showTabs && (
+        <div className="h10-spw-tgt-tabs" role="tablist">
+          <button type="button" role="tab" aria-selected={tab === 'kw'} className={tab === 'kw' ? 'on' : ''} onClick={() => setTab('kw')}>Negative Keywords</button>
+          <button type="button" role="tab" aria-selected={tab === 'prod'} className={tab === 'prod' ? 'on' : ''} onClick={() => setTab('prod')}>Negative Products</button>
         </div>
-        <div className="h10-modal-f">
-          <button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button>
-          <span className="grow" />
-          <button type="button" className="h10-am-btn primary" onClick={save}>Save</button>
-        </div>
-      </div>
-    </div>
+      )}
+      {isAutoTgt && <p className="h10-neg-autonote">Amazon splits Auto targeting into 4 groups — toggle each on/off and bid it separately. Bids are pre-set by intent (Close &amp; Substitutes higher, Loose &amp; Complements lower); adjust as you like.</p>}
+      {active === 'prod' ? (
+        <ProductSelection products={prods} setProducts={setProds} />
+      ) : isAutoTgt ? (
+        <AutoTargetingEditor groups={autoGroups} currency={currency} onChange={setAutoGroups} />
+      ) : isNeg ? (
+        <NegKeywordEditor manual={negKw} auto={autoNegs} onChange={setNegKw} />
+      ) : (
+        <KeywordEditor value={kw} onChange={setKw} />
+      )}
+    </Modal>
   )
 }
