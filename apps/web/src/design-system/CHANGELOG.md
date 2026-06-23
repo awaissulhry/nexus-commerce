@@ -4,6 +4,16 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P5.1] — 2026-06-23 — Tag primitive (neutral / semantic chip)
+
+- **`Tag`** (`primitives/Tag.tsx` + `.h10-ds-tag` in `styles/primitives.css`) — the
+  generic inline label chip the console was missing. `Pill` encodes entity *status*
+  (Active/Paused/Archived/Error) and `Badge` encodes the ad *program* (SP/SD/SB/Auto/
+  Manual); `Tag` covers everything else you label inline. Five tones — `neutral` ·
+  `info` · `positive` · `warning` · `danger` — all from existing tokens. First
+  consumer: the rebuilt Suggestions page (entity type, marketplace, proposed-action
+  sentiment); reused by the upcoming triage filters/metrics. Additive — no other changes.
+
 ## [P4.1] — 2026-06-23 — ImageUpload component
 
 - **`ImageUpload`** (`components/ImageUpload.tsx` + `.h10-ds-imgup-*` in

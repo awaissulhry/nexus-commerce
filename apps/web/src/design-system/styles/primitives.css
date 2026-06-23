@@ -134,6 +134,22 @@
   background: var(--h10-targeting-manual);
 }
 
+/* ── Tag (neutral / semantic metadata chip) ──────────────────────── */
+.h10-ds-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  border-radius: var(--h10-radius-pill);
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.h10-ds-tag.neutral { color: var(--h10-grey-700); background: var(--h10-grey-100); }
+.h10-ds-tag.info { color: var(--h10-blue-700); background: var(--h10-blue-100); }
+.h10-ds-tag.positive { color: var(--h10-green-700); background: var(--h10-green-soft); }
+.h10-ds-tag.warning { color: var(--h10-amber-text); background: var(--h10-amber-soft); }
+.h10-ds-tag.danger { color: var(--h10-red-700); background: var(--h10-red-soft); }
+
 /* ── Text field (Input: plain / search / € / %) ──────────────────── */
 .h10-ds-field {
   display: inline-flex;
