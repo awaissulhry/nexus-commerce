@@ -120,6 +120,11 @@ export interface AdsDataGridProps<T> {
   /** optional row click (e.g. open a detail drawer). Clicks landing on an interactive
    *  child (checkbox / link / button / select) are ignored so they keep their own behavior. */
   onRowClick?: (row: T) => void
+  /** opt in to keyboard navigation: j/↓ + k/↑ move a focused row, Enter/o fires onRowClick,
+   *  any other key is forwarded to onRowKey (e.g. a = approve, e = dismiss). Ignored while a
+   *  field is focused. Only enable on ONE grid at a time (a document-level listener). */
+  keyboardNav?: boolean
+  onRowKey?: (row: T, key: string) => void
 }
 
 function useClickAway<T extends HTMLElement>(onAway: () => void) {
@@ -143,7 +148,7 @@ export function AdsDataGrid<T>({
   showTotal, totalFirst = 'Total',
   reportLabel, emptyLabel = 'No data.', emptyNode, defaultSort, editMode, selectionActions,
   searchable, searchPlaceholder = 'Search…', searchValue, pagerCentered, filtersDefaultOpen = true,
-  groupBy, onRowClick,
+  groupBy, onRowClick, keyboardNav, onRowKey,
 }: AdsDataGridProps<T>) {
   const [filtersOpen, setFiltersOpen] = useState(filtersDefaultOpen)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -262,6 +267,36 @@ export function AdsDataGrid<T>({
   const paged = sorted.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage)
   const viewStart = sorted.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1
   const viewEnd = Math.min(safePage * rowsPerPage, sorted.length)
+
+  // ── keyboard navigation (opt-in via keyboardNav) ──
+  const [focusIdx, setFocusIdx] = useState(-1)
+  const focusRef = useRef(-1); focusRef.current = focusIdx
+  const pagedRef = useRef(paged); pagedRef.current = paged
+  useEffect(() => { setFocusIdx((i) => (i >= paged.length ? paged.length - 1 : i)) }, [paged.length])
+  useEffect(() => {
+    if (!keyboardNav) return
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+      const rows = pagedRef.current, n = rows.length
+      if (n === 0) return
+      const k = e.key.toLowerCase()
+      if (k === 'j' || e.key === 'ArrowDown') { e.preventDefault(); setFocusIdx((i) => Math.min(n - 1, i + 1)) }
+      else if (k === 'k' || e.key === 'ArrowUp') { e.preventDefault(); setFocusIdx((i) => Math.max(0, (i < 0 ? 0 : i) - 1)) }
+      else {
+        const i = focusRef.current
+        if (i < 0 || i >= n) return
+        if (k === 'o' || e.key === 'Enter') { e.preventDefault(); onRowClick?.(rows[i]) }
+        else onRowKey?.(rows[i], k)
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [keyboardNav, onRowClick, onRowKey])
+  useEffect(() => {
+    if (focusIdx < 0) return
+    document.querySelector('.h10-am-grid tr.kbd-focus')?.scrollIntoView({ block: 'nearest' })
+  }, [focusIdx])
 
   const onSort = (key: string) => setSort((s) => (s?.key === key ? (s.dir === 'asc' ? { key, dir: 'desc' } : null) : { key, dir: 'asc' }))
   const sortIcon = (key: string) => (sort?.key === key
@@ -466,7 +501,7 @@ export function AdsDataGrid<T>({
                         <tr className="h10-am-grp"><td colSpan={visibleCols.length + (selectable ? 2 : 1)}><span className="gl">{grp.label}</span><span className="gc">{groupCounts?.get(grp.key) ?? 0} {pluralize(noun, groupCounts?.get(grp.key) ?? 0)}</span></td></tr>
                       )}
                       <tr
-                        className={`${sel.has(id) ? 'on' : ''}${onRowClick ? ' clickable' : ''}`}
+                        className={`${sel.has(id) ? 'on' : ''}${onRowClick ? ' clickable' : ''}${keyboardNav && idx === focusIdx ? ' kbd-focus' : ''}`}
                         onClick={onRowClick ? (e) => { if (!(e.target as HTMLElement).closest('button, a, input, label, select')) onRowClick(row) } : undefined}
                       >
                         {selectable && <td className="ck"><input type="checkbox" checked={sel.has(id)} onChange={() => toggle(id)} aria-label="Select row" /></td>}

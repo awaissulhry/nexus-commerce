@@ -926,6 +926,10 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 /* row click-to-detail (AdsDataGrid onRowClick) */
 .h10-am-grid tbody tr.clickable { cursor: pointer; }
 
+/* keyboard-focused row (AdsDataGrid keyboardNav: j/k) */
+.h10-am-grid tbody tr.kbd-focus td { background: #eff5ff; }
+.h10-am-grid tbody tr.kbd-focus td.nm.fz { background: #eff5ff; box-shadow: inset 3px 0 0 #1f6fde, 4px 0 6px -3px rgba(16, 24, 40, 0.08); }
+
 /* ════════════════════════════════════════════════════════════════════════════
    CBN.3.3 — Details settings tab: left sub-nav + scrolling sections + cards + the
    sticky Discard/Save footer (H10 match). New .h10-cd-* form namespace.

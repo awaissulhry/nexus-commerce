@@ -13,16 +13,18 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Check, X, RefreshCw, Sparkles, Wifi, ChevronRight, ExternalLink } from 'lucide-react'
+import { Check, X, RefreshCw, Sparkles, Wifi, ChevronRight, ExternalLink, RotateCcw } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../campaigns/_grid/AdsDataGrid'
 import { Button } from '@/design-system/primitives/Button'
 import { Tag, type TagTone } from '@/design-system/primitives/Tag'
 import { Select } from '@/design-system/primitives/Select'
 import { Input } from '@/design-system/primitives/Input'
+import { Kbd } from '@/design-system/primitives/Kbd'
 import { EmptyState } from '@/design-system/components/EmptyState'
 import { Drawer } from '@/design-system/components/Drawer'
 import { MetricStrip, type Metric } from '@/design-system/components/MetricStrip'
+import { Tabs } from '@/design-system/components/Tabs'
 import { ToastProvider, useToast } from '@/design-system/components/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import '@/design-system/styles/tokens.css'
@@ -196,10 +198,11 @@ function SuggestionDrawer({ suggestion, busy, onClose, onAct }: {
   suggestion: Suggestion
   busy: boolean
   onClose: () => void
-  onAct: (id: string, kind: 'apply' | 'dismiss', overrideValue?: number) => Promise<void>
+  onAct: (id: string, kind: 'apply' | 'dismiss' | 'restore', overrideValue?: number) => Promise<void>
 }) {
   const a = suggestion.proposedAction ?? {}
   const src = srcOf(suggestion)
+  const st = suggestion.status
   const editable = isEditable(suggestion)
   const [edit, setEdit] = useState<string>(editable && a.value != null ? String(a.value) : '')
   const editNum = edit.trim() === '' ? null : Number(edit)
@@ -211,6 +214,7 @@ function SuggestionDrawer({ suggestion, busy, onClose, onAct }: {
 
   const doApply = () => { void onAct(suggestion.id, 'apply', overridden && editNum != null ? editNum : undefined).then(onClose) }
   const doDismiss = () => { void onAct(suggestion.id, 'dismiss').then(onClose) }
+  const doRestore = () => { void onAct(suggestion.id, 'restore').then(onClose) }
 
   return (
     <Drawer
@@ -221,8 +225,13 @@ function SuggestionDrawer({ suggestion, busy, onClose, onAct }: {
         <div className="h10-sug-dfoot">
           {src.href && <Link href={src.href} className="open"><ExternalLink size={14} /> Open source</Link>}
           <span className="grow" />
-          <Button variant="secondary" size="sm" disabled={busy} onClick={doDismiss}><X size={14} /> Dismiss</Button>
-          <Button variant="primary" size="sm" disabled={busy} onClick={doApply}><Check size={14} /> {overridden ? 'Approve edit' : 'Approve'}</Button>
+          {st === 'pending' && (
+            <>
+              <Button variant="secondary" size="sm" disabled={busy} onClick={doDismiss}><X size={14} /> Dismiss</Button>
+              <Button variant="primary" size="sm" disabled={busy} onClick={doApply}><Check size={14} /> {overridden ? 'Approve edit' : 'Approve'}</Button>
+            </>
+          )}
+          {st === 'dismissed' && <Button variant="primary" size="sm" disabled={busy} onClick={doRestore}><RotateCcw size={14} /> Restore</Button>}
         </div>
       }
     >
@@ -236,7 +245,7 @@ function SuggestionDrawer({ suggestion, busy, onClose, onAct }: {
         </div>
 
         {/* Edit-before-apply — adjust the magnitude; the rule's own min/max still clamp on the server */}
-        {editable && (
+        {st === 'pending' && editable && (
           <div className="h10-sug-edit">
             <h4>Adjust before applying</h4>
             <label className="fld">
@@ -271,14 +280,15 @@ function SuggestionsInner() {
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkProg, setBulkProg] = useState<{ done: number; total: number } | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
+  const [status, setStatus] = useState<'pending' | 'applied' | 'dismissed'>('pending')
   const { toast } = useToast()
 
   const load = useCallback(async () => {
     try {
-      const j = await fetch(`${getBackendUrl()}/api/advertising/suggestions?status=pending`).then((r) => r.json())
+      const j = await fetch(`${getBackendUrl()}/api/advertising/suggestions?status=${status}`).then((r) => r.json())
       setItems(Array.isArray(j?.items) ? j.items : [])
     } catch { setItems([]) } finally { setLoading(false) }
-  }, [])
+  }, [status])
   useEffect(() => { void load() }, [load])
 
   // F2 — live-refresh: when a rule fires (a Manual rule may add a suggestion), reload (debounced).
@@ -308,20 +318,21 @@ function SuggestionsInner() {
     void load()
   }, [post, load])
 
-  const act = useCallback(async (id: string, kind: 'apply' | 'dismiss', overrideValue?: number) => {
+  const act = useCallback(async (id: string, kind: 'apply' | 'dismiss' | 'restore', overrideValue?: number) => {
     setBusy((b) => ({ ...b, [id]: true }))
     try {
       const body = kind === 'apply' && overrideValue != null ? { value: overrideValue } : undefined
       if (await post(id, kind, body)) {
         setItems((cur) => cur.filter((s) => s.id !== id))
         if (kind === 'dismiss') toast(<>Suggestion dismissed · <button type="button" className="h10-sug-undo" onClick={() => void restore([id])}>Undo</button></>, 'info')
+        else if (kind === 'restore') toast('Restored to pending', 'success')
         else toast(overrideValue != null ? 'Approved with your edit' : 'Suggestion approved', 'success')
       }
     } finally { setBusy((b) => { const n = { ...b }; delete n[id]; return n }) }
   }, [post, toast, restore])
 
   // Bulk Approve / Dismiss — limited concurrency, live progress, per-row success/fail tally.
-  const runBulk = useCallback(async (ids: string[], kind: 'apply' | 'dismiss', clear: () => void) => {
+  const runBulk = useCallback(async (ids: string[], kind: 'apply' | 'dismiss' | 'restore', clear: () => void) => {
     if (!ids.length || bulkBusy) return
     setBulkBusy(true); setBulkProg({ done: 0, total: ids.length })
     const okIds: string[] = []; let fail = 0; let i = 0
@@ -335,7 +346,7 @@ function SuggestionsInner() {
     await Promise.all([worker(), worker(), worker()])
     setItems((cur) => cur.filter((s) => !okIds.includes(s.id)))
     clear(); setBulkBusy(false); setBulkProg(null)
-    const verb = kind === 'apply' ? 'Approved' : 'Dismissed'
+    const verb = kind === 'apply' ? 'Approved' : kind === 'restore' ? 'Restored' : 'Dismissed'
     const base = `${verb} ${okIds.length} ${okIds.length === 1 ? 'suggestion' : 'suggestions'}${fail ? ` · ${fail} failed` : ''}`
     if (kind === 'dismiss' && okIds.length) toast(<>{base} · <button type="button" className="h10-sug-undo" onClick={() => void restore(okIds)}>Undo</button></>, fail ? 'error' : 'info')
     else toast(base, fail ? 'error' : 'success')
@@ -384,7 +395,11 @@ function SuggestionsInner() {
     { key: 'when', label: 'When', metric: false, sortable: true, sortValue: (s) => new Date(s.createdAt).getTime(), render: (s) => <span className="h10-sug-when">{ago(s.createdAt)}</span> },
     {
       key: 'act', label: 'Actions', metric: false, sortable: false,
-      render: (s) => (
+      render: (s) => status === 'applied' ? (
+        <span className="h10-sug-applied"><Check size={13} /> Applied</span>
+      ) : status === 'dismissed' ? (
+        <span className="h10-sug-acts"><Button variant="secondary" size="sm" disabled={!!busy[s.id]} onClick={() => act(s.id, 'restore')}><RotateCcw size={13} /> Restore</Button></span>
+      ) : (
         <span className="h10-sug-acts">
           <Button variant="primary" size="sm" disabled={!!busy[s.id]} onClick={() => act(s.id, 'apply')}><Check size={13} /> Approve</Button>
           <Button variant="secondary" size="sm" disabled={!!busy[s.id]} onClick={() => act(s.id, 'dismiss')}><X size={13} /> Dismiss</Button>
@@ -398,7 +413,16 @@ function SuggestionsInner() {
   return (
     <div className="h10-sug">
       <AdsPageHeader title="Suggestions" subtitle="Review and approve the actions your Manual rules propose." showDateRange={false} markets={[]} market="all" onMarketChange={() => {}} />
-      {!loading && items.length > 0 && <MetricStrip metrics={metrics} />}
+      <Tabs
+        className="h10-sug-tabs"
+        tabs={[{ id: 'pending', label: 'Pending' }, { id: 'applied', label: 'Applied' }, { id: 'dismissed', label: 'Dismissed' }]}
+        active={status}
+        onChange={(id) => { setStatus(id as 'pending' | 'applied' | 'dismissed'); setLoading(true); setDetailId(null) }}
+      />
+      {status === 'pending' && !loading && items.length > 0 && <MetricStrip metrics={metrics} />}
+      {status !== 'applied' && !loading && items.length > 0 && (
+        <p className="h10-sug-kbd"><Kbd>j</Kbd><Kbd>k</Kbd> move · {status === 'pending' ? <><Kbd>a</Kbd> approve · <Kbd>e</Kbd> dismiss</> : <><Kbd>r</Kbd> restore</>} · <Kbd>o</Kbd> open</p>
+      )}
       <AdsDataGrid<Suggestion>
         rows={items}
         loading={loading}
@@ -417,10 +441,21 @@ function SuggestionsInner() {
         customizable={false}
         defaultSort={{ key: 'when', dir: 'desc' }}
         onRowClick={(s) => setDetailId(s.id)}
-        selectionActions={(ids, clear) => (
+        keyboardNav={!detail}
+        onRowKey={(s, k) => {
+          if (status === 'pending') { if (k === 'a') void act(s.id, 'apply'); else if (k === 'e') void act(s.id, 'dismiss') }
+          else if (status === 'dismissed' && k === 'r') void act(s.id, 'restore')
+        }}
+        selectionActions={status === 'applied' ? undefined : (ids, clear) => (
           <span className="h10-bulkrow">
-            <Button variant="primary" size="sm" disabled={bulkBusy} onClick={() => void runBulk(ids, 'apply', clear)}><Check size={13} /> Approve {ids.length}</Button>
-            <Button variant="secondary" size="sm" disabled={bulkBusy} onClick={() => void runBulk(ids, 'dismiss', clear)}><X size={13} /> Dismiss {ids.length}</Button>
+            {status === 'dismissed' ? (
+              <Button variant="primary" size="sm" disabled={bulkBusy} onClick={() => void runBulk(ids, 'restore', clear)}><RotateCcw size={13} /> Restore {ids.length}</Button>
+            ) : (
+              <>
+                <Button variant="primary" size="sm" disabled={bulkBusy} onClick={() => void runBulk(ids, 'apply', clear)}><Check size={13} /> Approve {ids.length}</Button>
+                <Button variant="secondary" size="sm" disabled={bulkBusy} onClick={() => void runBulk(ids, 'dismiss', clear)}><X size={13} /> Dismiss {ids.length}</Button>
+              </>
+            )}
             {bulkProg && <span className="h10-sug-prog">{bulkProg.done}/{bulkProg.total}</span>}
           </span>
         )}
@@ -444,8 +479,10 @@ function SuggestionsInner() {
         emptyNode={
           <EmptyState
             icon={<Sparkles size={26} />}
-            title="No suggestions right now"
-            description={<>When a rule set to <em>Manual</em> finds something to do, its proposed change appears here for you to approve.</>}
+            title={status === 'applied' ? 'No applied suggestions yet' : status === 'dismissed' ? 'Nothing dismissed' : 'No suggestions right now'}
+            description={status === 'pending'
+              ? <>When a rule set to <em>Manual</em> finds something to do, its proposed change appears here for you to approve.</>
+              : status === 'applied' ? 'Suggestions you approve will be listed here.' : 'Suggestions you dismiss will be listed here — you can restore them.'}
           />
         }
       />
