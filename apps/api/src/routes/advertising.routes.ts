@@ -866,6 +866,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       campaigns?: Array<{ id?: string; name: string; adGroupName?: string; kind: 'auto' | 'keyword' | 'pat'; matchType?: string; bidEur?: number; budgetEur?: number; keywords?: string[]; productTargets?: PRef[]; negKeywords?: Array<string | { text?: string; matchType?: 'EXACT' | 'PHRASE' }>; negProducts?: PRef[]; autoGroups?: Array<{ key: string; enabled?: boolean; bidEur?: number }> }>
       placementBids?: { tos?: string; pdp?: string; ros?: string }
       rules?: { harvest?: SpwRule; negative?: SpwRule }
+      automationMode?: 'rule' | 'ai'
+      bidConfig?: { strategy?: string; targetAcos?: string; minBid?: string; maxBid?: string }
       dryRun?: boolean
     }
     const market = b.market || 'IT'
@@ -956,6 +958,32 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (e) { logger.error('[SPW-launch] rule create failed', { kind, error: (e as Error).message }) }
     }
     if (created.length && b.rules) { await buildRule(b.rules.harvest, 'harvest'); await buildRule(b.rules.negative, 'negative') }
+
+    // S3.5 — persist the chosen bid strategy as a bid-management rule scoped to the
+    // new campaigns (Target ACoS → the bid_to_target_acos action; others stored
+    // forward-looking). Gated dryRun. Skipped under AI Control / strategy None.
+    if (created.length && b.automationMode === 'rule' && b.bidConfig?.strategy && b.bidConfig.strategy !== 'none') {
+      try {
+        const bc = b.bidConfig
+        const minBidEur = Number(bc.minBid) || undefined
+        const maxBidEur = Number(bc.maxBid) || undefined
+        const campaignIds = created.map((c) => c.campaignId)
+        const action = bc.strategy === 'targetAcos'
+          ? { type: 'bid_to_target_acos', targetAcos: Number(bc.targetAcos) || 30, minBidEur, maxBidEur, campaignIds }
+          : { type: 'set_bid_strategy', strategy: bc.strategy, minBidEur, maxBidEur, campaignIds }
+        const label = bc.strategy === 'targetAcos' ? 'Target ACoS' : bc.strategy === 'maxImpressions' ? 'Max Impressions' : bc.strategy === 'maxOrders' ? 'Max Orders' : 'Custom'
+        const rule = await prisma.automationRule.create({
+          data: {
+            name: `${(b.productGroupName || 'Campaign').trim()} — ${label} bidding`.slice(0, 120),
+            description: 'Bid strategy from SP Super Wizard', domain: 'advertising', trigger: 'SCHEDULE',
+            conditions: [] as never, actions: [action] as never,
+            enabled: true, dryRun: true, maxExecutionsPerDay: 4, createdBy: userId ?? null,
+          },
+        })
+        rulesCreated.push({ id: rule.id, name: rule.name })
+        logger.warn('[SPW-launch] created bid-strategy rule', { ruleId: rule.id, strategy: bc.strategy })
+      } catch (e) { logger.error('[SPW-launch] bid rule create failed', { error: (e as Error).message }) }
+    }
 
     logger.warn('[SPW-launch] SP Super Wizard created campaigns', { market, grp: (b.productGroupName || '').trim(), count: created.length, rules: rulesCreated.length, actor: userId })
     return { ok: true, created, totalCampaigns: created.length, rules: rulesCreated }

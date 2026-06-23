@@ -100,13 +100,15 @@ export function SpSuperWizard() {
           harvest: rulesConfigured(rules.harvest) ? { ruleName: rules.harvest.ruleName, automate: rules.harvest.automate, perf: rules.harvest.perf, rows: rules.harvest.sel } : undefined,
           negative: rulesConfigured(rules.negative) ? { ruleName: rules.negative.ruleName, automate: rules.negative.automate, perf: rules.negative.perf, rows: rules.negative.sel } : undefined,
         },
+        automationMode,
+        bidConfig: automationMode === 'rule' && bidConfig.strategy !== 'none' ? bidConfig : undefined,
       }
       const r = await fetch(`${getBackendUrl()}/api/advertising/campaign-builder/sp-super-wizard/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json().catch(() => ({}))
       if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Launch failed')
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, productGroupName, products, campaigns, bidMult, rules, router])
+  }, [launching, productGroupName, products, campaigns, bidMult, rules, automationMode, bidConfig, router])
 
 
   // Scroll-spy for the step-1 sub-nav. The scroll container is the .h10-main
