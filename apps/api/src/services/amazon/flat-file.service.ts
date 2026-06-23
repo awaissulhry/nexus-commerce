@@ -832,6 +832,134 @@ export function flatFileExportColumns(
     .map((c) => ({ id: c.id, label: c.labelEn || c.id }))
 }
 
+// ── FFC — flat-file product creation helpers (pure, testable) ──────────
+
+function ffcFirstNonEmpty(...vals: unknown[]): string | null {
+  for (const v of vals) { const s = String(v ?? '').trim(); if (s) return s }
+  return null
+}
+
+/** Bullet points from bullet_point / bullet_point_1..5 (same logic the sync uses). */
+export function ffcCollectBullets(row: Record<string, any>): string[] {
+  const bullets: string[] = []
+  for (let i = 1; i <= 5; i++) {
+    const key = i === 1 && !row['bullet_point_1'] ? 'bullet_point' : `bullet_point_${i}`
+    const b = String(row[key] ?? '').trim()
+    if (b) bullets.push(b)
+  }
+  const bare = String(row.bullet_point ?? '').trim()
+  if (bare && !bullets.includes(bare)) bullets.unshift(bare)
+  return bullets
+}
+
+/** Variant child axis values → variantAttributes. Covers the dominant
+ *  Color × Size apparel/gear themes; extend as new axis columns appear. */
+export function ffcExtractVariantAxes(row: Record<string, any>): Record<string, string> {
+  const out: Record<string, string> = {}
+  const color = String(row.color ?? '').trim()
+  if (color) out.Color = color
+  const size = String(
+    row.size ?? row.apparel_size ?? row.shirt_size ?? row.shoe_size ?? row.size_name ?? '',
+  ).trim()
+  if (size) out.Size = size
+  return out
+}
+
+/** Amazon variation_theme (e.g. "SIZE_COLOR", "Color/Size") → axis names. */
+export function ffcParseThemeAxes(theme: string | null | undefined): string[] {
+  if (!theme) return []
+  return theme
+    .split(/[_/\s,]+/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .map((t) => {
+      const lc = t.toLowerCase()
+      if (lc.includes('colour') || lc.includes('color')) return 'Color'
+      if (lc.includes('size')) return 'Size'
+      return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase()
+    })
+}
+
+/**
+ * FFC — map a NEW flat-file row to a Prisma Product.create `data` object. Pure +
+ * deterministic (no DB, no Date). The caller resolves `parentId` (parents are
+ * created first) and stamps `importedAt`. Produces a FULL master record so every
+ * product-edit tab renders accurately: identifiers, content, localizedContent
+ * seeded from the market language, parent `variationAxes`, and — for child rows
+ * — `variantAttributes` mirrored into `categoryAttributes.variations` for the
+ * legacy variant/image readers.
+ */
+export function buildProductCreateInput(
+  row: Record<string, any>,
+  opts: { languageTag?: string; parentId?: string | null } = {},
+): Record<string, any> {
+  const sku = String(row.item_sku ?? '').trim()
+  const name = String(row.item_name ?? '').trim() || sku
+
+  const priceRaw = row['purchasable_offer__our_price'] ?? row.purchasable_offer ?? row.standard_price
+  const priceParsed = priceRaw !== undefined && priceRaw !== '' ? parseLocaleNumber(priceRaw) : null
+  const basePrice = priceParsed !== null && priceParsed >= 0 ? priceParsed : 0
+
+  const qtyRaw = row['fulfillment_availability__quantity'] ?? row.fulfillment_availability ?? row.quantity
+  const qtyParsed = qtyRaw !== undefined && qtyRaw !== '' ? parseLocaleInt(qtyRaw) : null
+  const totalStock = qtyParsed !== null && qtyParsed >= 0 ? qtyParsed : 0
+
+  const parentage = String(row.parentage_level ?? '').toLowerCase()
+  const isParent = parentage === 'parent'
+  const isChild = parentage === 'child'
+
+  const productType = String(row.product_type ?? '').toUpperCase() || null
+  const variationTheme = String(row.variation_theme ?? '').trim() || null
+  const brand = ffcFirstNonEmpty(row.brand)
+  const manufacturer = ffcFirstNonEmpty(row.manufacturer)
+  const description = ffcFirstNonEmpty(row.product_description)
+  const bullets = ffcCollectBullets(row)
+  const gtin = ffcFirstNonEmpty(row.gtin, row.externally_assigned_product_identifier, row.barcode)
+  const ean = ffcFirstNonEmpty(row.ean)
+  const upc = ffcFirstNonEmpty(row.upc)
+
+  const lang = String(opts.languageTag ?? 'it_IT').split(/[-_]/)[0] || 'it'
+  const localeBlock: Record<string, any> = { name }
+  if (description) localeBlock.description = description
+  if (bullets.length) localeBlock.bulletPoints = bullets
+
+  const data: Record<string, any> = {
+    sku,
+    name,
+    basePrice,
+    totalStock,
+    status: 'ACTIVE',
+    syncChannels: ['AMAZON'],
+    importSource: 'FLAT_FILE',
+    localizedContent: { en: {}, it: {}, [lang]: localeBlock },
+  }
+  if (productType) data.productType = productType
+  if (brand) data.brand = brand
+  if (manufacturer) data.manufacturer = manufacturer
+  if (description) data.description = description
+  if (bullets.length) data.bulletPoints = bullets
+  if (gtin) data.gtin = gtin
+  if (ean) data.ean = ean
+  if (upc) data.upc = upc
+  if (variationTheme) data.variationTheme = variationTheme
+
+  if (isParent) {
+    data.isParent = true
+    const axes = ffcParseThemeAxes(variationTheme)
+    if (axes.length) data.variationAxes = axes
+  } else if (isChild) {
+    data.isParent = false
+    data.isMasterProduct = false
+    if (opts.parentId) data.parentId = opts.parentId
+    const axes = ffcExtractVariantAxes(row)
+    if (Object.keys(axes).length) {
+      data.variantAttributes = axes
+      data.categoryAttributes = { variations: axes } // legacy variant/image reader mirror
+    }
+  }
+  return data
+}
+
 export class AmazonFlatFileService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -1648,6 +1776,30 @@ export class AmazonFlatFileService {
    * (isPublished = true). Non-blocking on the client — errors are reported
    * but never throw.
    */
+  /** FFC — create ProductImage rows for a new product from the flat-file image
+   *  columns (main + other_product_image_locator_1..8). Without this, a row's
+   *  image URLs only live in platformAttributes and the Images tab gallery is
+   *  empty for a flat-file-created product. */
+  private async createProductImagesFromRow(productId: string, row: Record<string, any>): Promise<void> {
+    const urls: string[] = []
+    const main = String(row.main_product_image_locator ?? '').trim()
+    if (main) urls.push(main)
+    for (let i = 1; i <= 8; i++) {
+      const u = String(row[`other_product_image_locator_${i}`] ?? '').trim()
+      if (u && !urls.includes(u)) urls.push(u)
+    }
+    if (!urls.length) return
+    await this.prisma.productImage.createMany({
+      data: urls.map((url, idx) => ({
+        productId,
+        url,
+        type: idx === 0 ? 'MAIN' : 'ALT',
+        isPrimary: idx === 0,
+        sortOrder: idx,
+      })),
+    })
+  }
+
   async syncRowsToPlatform(
     rows: FlatFileRow[],
     marketplace: string,
@@ -1693,6 +1845,45 @@ export class AmazonFlatFileService {
       where: { type: 'WAREHOUSE', isActive: true },
       orderBy: { createdAt: 'asc' },
     })
+
+    // FFC — create missing products for _isNew rows BEFORE the sync pass, parents
+    // first so a child's parent_sku resolves to a same-batch parent. New products
+    // land in productBySku/parentIdBySku so the per-row sync below writes their
+    // ChannelListing + StockLevel exactly like an existing product. A non-_isNew
+    // unknown SKU is NOT created (it falls through to the "Product not found" error
+    // below — catching a typo rather than silently spawning a product).
+    const toCreate = validRows.filter(
+      (r) => r._isNew === true && !productBySku.has(String(r.item_sku).trim()),
+    )
+    const parentageRank = (r: FlatFileRow) => {
+      const p = String(r.parentage_level ?? '').toLowerCase()
+      return p === 'parent' ? 0 : p === 'child' ? 2 : 1
+    }
+    toCreate.sort((a, b) => parentageRank(a) - parentageRank(b))
+    for (const row of toCreate) {
+      const sku = String(row.item_sku).trim()
+      if (!String(row.item_name ?? '').trim()) {
+        result.errors.push({ sku, error: 'New product needs a Title (item_name) before it can be created.' })
+        continue
+      }
+      try {
+        const parentSku = String(row.parent_sku ?? '').trim()
+        const parentId =
+          String(row.parentage_level ?? '').toLowerCase() === 'child' && parentSku
+            ? (parentIdBySku.get(parentSku) ?? null)
+            : null
+        const created = await this.prisma.product.create({
+          data: { ...buildProductCreateInput(row, { languageTag, parentId }), importedAt: new Date() } as any,
+          select: { id: true, sku: true, isParent: true, parentId: true, productType: true },
+        })
+        productBySku.set(sku, created)
+        if (String(row.parentage_level ?? '').toLowerCase() === 'parent') parentIdBySku.set(sku, created.id)
+        await this.createProductImagesFromRow(created.id, row)
+        result.created++
+      } catch (err) {
+        result.errors.push({ sku, error: `Create failed: ${err instanceof Error ? err.message : String(err)}` })
+      }
+    }
 
     await Promise.allSettled(validRows.map(async (row) => {
       const sku = String(row.item_sku).trim()
