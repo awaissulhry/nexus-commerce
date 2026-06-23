@@ -10,7 +10,6 @@
 import { Megaphone, Target, Scale, ShoppingCart, Trophy, Sparkles } from 'lucide-react'
 import { RadioCard } from '@/design-system/primitives'
 import { InfoTip } from '../../campaigns/InfoTip'
-import { AutopilotCanvas } from '../../autopilot/AutopilotCanvas'
 import './ai-control.css'
 
 export type AiGoal = 'LAUNCH' | 'PROFIT' | 'BALANCED' | 'LIQUIDATE' | 'DEFEND_RANK'
@@ -114,11 +113,6 @@ export function AiControlPanel({ value, onChange }: { value: AiControlConfig; on
         </div>
       </div>
 
-      <div className="h10-spw-card">
-        <h3>Control preview</h3>
-        <p className="h10-spw-desc">How the AI will run this set: Signals → Goal → modules → Guardrails → Actions. You get the full drag-and-drop control room on the Autopilot page after launch.</p>
-        <AutopilotCanvas config={{ goal: value.goal, modules: { ...value.modules } }} readOnly compact />
-      </div>
     </>
   )
 }
