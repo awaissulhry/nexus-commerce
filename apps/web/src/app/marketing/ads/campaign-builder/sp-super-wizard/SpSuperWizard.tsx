@@ -25,7 +25,7 @@ import { StructureSelection, type StructureMode, type AutomationMode } from './S
 import { PlacementBidMultiplier, type PlacementBids, emptyPlacementBids } from '../../_shared/PlacementBidMultiplier'
 import { CampaignSetup, generateCampaigns, campaignsMissingTargeting, applyAutoNegatives, type SpwCampaign } from './CampaignSetup'
 import { TargetingModal } from './TargetingModal'
-import { LaunchStep, defaultRulesConfig, rulesConfigured, type RulesConfig } from './LaunchStep'
+import { LaunchStep, defaultRulesConfig, rulesConfigured, defaultBidConfig, type RulesConfig, type BidConfig } from './LaunchStep'
 import { defaultCustomKeywordTypes, defaultCustomTargeting, type CustomKeywordType, type TargetingKind } from './CustomScheme'
 
 type StepN = 1 | 2 | 3
@@ -60,6 +60,7 @@ export function SpSuperWizard() {
   const [rememberSettings, setRememberSettings] = useState(true)
   const [autoNegate, setAutoNegate] = useState(true)
   const [rules, setRules] = useState<RulesConfig>(defaultRulesConfig())
+  const [bidConfig, setBidConfig] = useState<BidConfig>(defaultBidConfig())
 
   // Step 2 campaigns are generated from the step-1 structure; Restore Default re-generates.
   // applyAutoNegatives layers the negative-keyword funnel + Auto-isolation on top (NT.1).
@@ -202,7 +203,7 @@ export function SpSuperWizard() {
           </div>
         )}
 
-        {step === 3 && <LaunchStep campaigns={campaigns} productGroupName={productGroupName} productCount={products.length} currency="€" rules={rules} setRules={setRules} />}
+        {step === 3 && <LaunchStep campaigns={campaigns} productGroupName={productGroupName} productCount={products.length} currency="€" automationMode={automationMode} setAutomationMode={setAutomationMode} bidConfig={bidConfig} setBidConfig={setBidConfig} rules={rules} setRules={setRules} />}
       </div>
 
       <footer className="h10-spw-foot">

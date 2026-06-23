@@ -2012,7 +2012,33 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 
 /* ── Step 3 — Automation & Launch ─────────────────────────────────────────── */
 .h10-spw-launch { display: flex; flex-direction: column; gap: 22px; }
-.h10-spw-pgd h3, .h10-spw-sum h3, .h10-spw-rules h3 { font-size: 17px; font-weight: 700; color: #1c2530; margin: 0 0 16px; }
+.h10-spw-pgd h3, .h10-spw-sum h3, .h10-spw-rules h3, .h10-spw-card > h3 { font-size: 17px; font-weight: 700; color: #1c2530; margin: 0 0 6px; }
+.h10-spw-card > h3 + .h10-spw-desc { margin-top: 0; margin-bottom: 16px; }
+
+/* S3 — Automation mode (Rule Setting / AI Control) — DS RadioCards, radio on the right */
+.h10-spw-autom { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.h10-spw-autom .h10-ds-radiocard { flex-direction: row-reverse; justify-content: space-between; align-items: center; padding: 16px 18px; }
+.h10-spw-autom .h10-ds-radiocard .rc-body { flex: 1; }
+.h10-spw-autom .h10-ds-radiocard .rc-title { font-size: 14px; }
+/* AI Control note (when AI mode is selected) */
+.h10-spw-ainote { display: flex; align-items: flex-start; gap: 11px; font-size: 13.5px; line-height: 1.55; color: #3a4452; background: #f4f8ff; border-color: #dce8fb; }
+.h10-spw-ainote svg { color: #1f6fde; flex-shrink: 0; margin-top: 1px; }
+.h10-spw-ainote b { color: #1c2530; }
+/* S3 — Bid Strategy cards (DS RadioCard with the radio visually hidden + icon/badge) */
+.h10-spw-bidstrat { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+.h10-spw-bidcard { position: relative; }
+.h10-spw-bidcard > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.h10-spw-bc-t { display: flex; flex-direction: column; gap: 8px; }
+.h10-spw-bc-t .rec { align-self: flex-start; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: #1f6fde; background: #eaf1fc; border-radius: 5px; padding: 2px 7px; }
+.h10-spw-bc-t .ic { display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; border-radius: 8px; background: #eef3fb; color: #1f6fde; }
+.h10-spw-bc-t .ic.none { background: #f1f3f6; color: #8a93a1; }
+.h10-spw-bc-t .lbl { font-size: 14px; font-weight: 700; color: #1c2530; }
+.h10-spw-bidcard .rc-desc { margin-top: 8px; }
+/* S3 — Target ACoS / Min-Max bid inputs */
+.h10-spw-bidrow { display: flex; gap: 18px; flex-wrap: wrap; }
+.h10-spw-bidfield { display: flex; flex-direction: column; gap: 7px; }
+.h10-spw-bidfield .l { font-size: 13px; font-weight: 600; color: #3a4452; }
+.h10-spw-bidnum { width: 150px; }
 
 /* Product Group Details */
 .h10-spw-pgd .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
