@@ -4345,9 +4345,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (sug.status !== 'pending') { reply.code(409); return { error: `already ${sug.status}` } }
     const { isAutomationHalted } = await import('../services/advertising/ads-automation-state.service.js')
     if (await isAutomationHalted()) { reply.code(423); return { error: 'automation_halted' } }
-    if (!sug.executionId) { reply.code(422); return { error: 'no_execution_context' } }
-    const exec = await prisma.automationRuleExecution.findUnique({ where: { id: sug.executionId }, select: { triggerData: true } })
-    if (!exec) { reply.code(422); return { error: 'execution_context_gone' } }
+    // The frozen execution context is pruned after a few days. Don't hard-fail a stale
+    // suggestion: budget/bid/placement actions are self-contained (they carry campaignId + op +
+    // value and read current values live from the DB), so they re-apply correctly against an
+    // empty context. Context-dependent actions (e.g. search-term harvest) fail CLOSED inside the
+    // handler ("No campaign.id in context") — never a blind write.
+    const exec = sug.executionId
+      ? await prisma.automationRuleExecution.findUnique({ where: { id: sug.executionId }, select: { triggerData: true } })
+      : null
+    const triggerData = exec?.triggerData ?? {}
     await import('../services/advertising/automation-action-handlers.js') // ensure handlers registered
     const { ACTION_HANDLERS } = await import('../services/automation-rule.service.js')
     // S.5 — optional edit-before-apply: the operator may override the action's magnitude
@@ -4359,7 +4365,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (overridden) action.value = body.value
     const handler = ACTION_HANDLERS[String(action.type)]
     if (!handler) { reply.code(422); return { error: `no handler for ${action.type}` } }
-    const result = await handler(action as never, exec.triggerData, { dryRun: false, ruleId: sug.ruleId })
+    const result = await handler(action as never, triggerData, { dryRun: false, ruleId: sug.ruleId })
     await prisma.adsRuleSuggestion.update({
       where: { id }, data: { status: 'applied', decidedAt: new Date(), decidedBy: 'operator', appliedResult: { ...(result as object), ...(overridden ? { override: { value: body.value } } : {}) } as object },
     })
