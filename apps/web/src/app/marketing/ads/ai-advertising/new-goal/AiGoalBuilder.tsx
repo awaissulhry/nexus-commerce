@@ -8,12 +8,15 @@
  * Keywords (Add Seed [Suggested/List/Enter] + Exclude) · Advanced Targeting (drawer).
  * Reuses the shared `.h10-*` design system + builder icons.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Video, Plus, Search, Trash2, Users, CheckSquare, Share2, BarChart3, ChevronsUpDown, Info, Folder, Check, Settings, Minus, PlusCircle } from 'lucide-react'
+import { X, Video, Plus, Search, Trash2, Users, CheckSquare, Share2, BarChart3, ChevronsUpDown, Info, Folder, Check, Settings, Minus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { IconAtom, IconEye, IconBars, IconLine } from '../../_shell/builder-icons'
 import { InfoTip } from '../../campaigns/InfoTip'
+// Share — reuse SP Super Wizard's product picker (Search/Enter tabs + variation expansion + N-Added)
+// so improvements propagate. Imported as-is; AI Goal maps its output to its own budget-bearing Prod.
+import { ProductSelection, type SpwProduct } from '../../campaign-builder/sp-super-wizard/ProductSelection'
 
 type TargetKey = 'impression' | 'sales' | 'roas'
 type BudgetMode = 'strict' | 'shared'
@@ -36,11 +39,16 @@ function lqsOf(p: RawProduct): number {
   let s = 3 + Math.min(p.photoCount ?? 0, 8) * 0.55 + (p.hasDescription ? 1 : 0) + (p.hasGtin ? 0.8 : 0) + Math.min((p.channelCount ?? 1) - 1, 3) * 0.3
   return Math.max(1, Math.min(10, Math.round(s * 10) / 10))
 }
-const toProd = (p: RawProduct): Prod => {
-  const lqs = lqsOf(p)
+// ── Bridge the shared SPW picker (SpwProduct) ↔ AI Goal's budget-bearing Prod ──
+// New pick → derive LQS from the completeness signals the picker carries (image + identifiers); an
+// already-added product keeps its real LQS + budget. Authoritative LQS is recomputed server-side at launch.
+const spwToProd = (s: SpwProduct, prev?: Prod): Prod => {
+  if (prev) return prev
+  const lqs = lqsOf({ id: s.id, name: s.name, sku: s.sku, photoCount: s.imageUrl ? 4 : 0, hasDescription: true, hasGtin: !!s.asin, channelCount: 1 })
   const low = Math.round((4 + lqs * 0.8) * 100) / 100
-  return { id: p.id, name: p.name, sku: p.sku, asin: p.asin ?? '', imageUrl: p.imageUrl ?? p.photoUrl ?? null, lqs, sugLow: low, sugHigh: Math.round(low * 2 * 100) / 100, budget: '' }
+  return { id: s.id, name: s.name, sku: s.sku, asin: s.asin ?? '', imageUrl: s.imageUrl ?? null, lqs, sugLow: low, sugHigh: Math.round(low * 2 * 100) / 100, budget: '' }
 }
+const prodToSpw = (p: Prod): SpwProduct => ({ id: p.id, name: p.name, sku: p.sku, asin: p.asin, imageUrl: p.imageUrl, parentId: null, childCount: 0 })
 
 export function AiGoalBuilder() {
   const router = useRouter()
@@ -332,61 +340,22 @@ function ProductsEmptyArt() {
   )
 }
 
-/* ── Add Products to Product Selection — 2-panel modal w/ real product search ── */
+/* ── Add Products — reuses the shared SP Super Wizard ProductSelection (Search/Enter tabs +
+   parent→child variation expansion + N-Added panel), mapped to AI Goal's budget-bearing Prod. ── */
 function AddProductsModal({ selected, onClose, onApply }: { selected: Prod[]; onClose: () => void; onApply: (ps: Prod[]) => void }) {
-  const [tab, setTab] = useState<'search' | 'enter'>('search')
-  const [q, setQ] = useState('')
-  const [results, setResults] = useState<Prod[]>([])
-  const [loading, setLoading] = useState(true)
-  const [picked, setPicked] = useState<Prod[]>(selected)
-  useEffect(() => {
-    let alive = true; setLoading(true)
-    const t = setTimeout(() => {
-      fetch(`${getBackendUrl()}/api/products/search?q=${encodeURIComponent(q)}&limit=50`).then((r) => r.json()).then((j) => {
-        if (!alive) return
-        setResults(((j?.items ?? []) as RawProduct[]).map(toProd)); setLoading(false)
-      }).catch(() => { if (alive) { setResults([]); setLoading(false) } })
-    }, q ? 280 : 0)
-    return () => { alive = false; clearTimeout(t) }
-  }, [q])
-  const has = (id: string) => picked.some((p) => p.id === id)
-  const toggle = (p: Prod) => setPicked((ps) => (has(p.id) ? ps.filter((x) => x.id !== p.id) : [...ps, p]))
+  const [picked, setPicked] = useState<SpwProduct[]>(selected.map(prodToSpw))
+  const apply = () => {
+    const prevById = new Map(selected.map((p) => [p.id, p]))
+    onApply(picked.map((s) => spwToProd(s, prevById.get(s.id))))
+  }
   return (
     <div className="h10-modal-backdrop" onClick={onClose}>
       <div className="h10-modal aig-add" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Add Products to Product Selection">
         <div className="h10-modal-h"><b>Add Products to Product Selection</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
         <div className="h10-modal-b">
-          <div className="aig-add-grid">
-            <div className="aig-add-left">
-              <div className="aig-add-tabs"><button type="button" className={tab === 'search' ? 'on' : ''} onClick={() => setTab('search')}>Search for Product</button><button type="button" className={tab === 'enter' ? 'on' : ''} onClick={() => setTab('enter')}>Enter Product</button></div>
-              <div className="aig-add-search"><Search size={14} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by Product name, ASIN, or SKU" /></div>
-              <div className="aig-add-cnt"><span>Viewing {results.length} Skus</span><button type="button" className="addall" disabled={!results.length} onClick={() => setPicked((ps) => { const ids = new Set(ps.map((p) => p.id)); return [...ps, ...results.filter((r) => !ids.has(r.id))] })}><PlusCircle size={13} /> Add All</button></div>
-              <div className="aig-add-list">
-                {loading ? <div className="psel-empty"><div className="t">Loading…</div></div> : results.length === 0 ? <div className="psel-empty"><ProductsEmptyArt /><div className="t">No products</div></div> : (
-                  <ul>{results.map((p) => (
-                    <li key={p.id}>
-                      <span className="th">{p.imageUrl ? <img src={p.imageUrl} alt="" /> : null}</span>
-                      <span className="m"><span className="nm">{p.name}</span><span className="id">{p.asin || p.sku}{p.asin && p.sku ? ` · ${p.sku}` : ''}</span></span>
-                      <button type="button" className={`pick ${has(p.id) ? 'on' : ''}`} onClick={() => toggle(p)}>{has(p.id) ? <><Check size={12} /> Added</> : <><Plus size={12} /> Add</>}</button>
-                    </li>
-                  ))}</ul>
-                )}
-              </div>
-            </div>
-            <div className="aig-add-right">
-              <div className="aig-add-rh"><b>{picked.length} Products Added</b><button type="button" className="rm" onClick={() => setPicked([])} disabled={!picked.length}><Trash2 size={12} /> Remove All</button></div>
-              <div className="aig-add-rcol">Product</div>
-              <div className="aig-add-rlist">
-                {picked.length === 0 ? <div className="psel-empty"><ProductsEmptyArt /><div className="t">No Product Added</div></div> : (
-                  <ul>{picked.map((p) => (
-                    <li key={p.id}><span className="th">{p.imageUrl ? <img src={p.imageUrl} alt="" /> : null}</span><span className="m"><span className="nm">{p.name}</span><span className="id">{p.asin || p.sku}</span></span><button type="button" onClick={() => toggle(p)} aria-label="Remove"><X size={14} /></button></li>
-                  ))}</ul>
-                )}
-              </div>
-            </div>
-          </div>
+          <ProductSelection products={picked} setProducts={setPicked} />
         </div>
-        <div className="h10-modal-f"><button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button><span className="grow" /><button type="button" className="h10-am-btn primary" disabled={!picked.length} onClick={() => onApply(picked)}>Add Products</button></div>
+        <div className="h10-modal-f"><button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button><span className="grow" /><button type="button" className="h10-am-btn primary" disabled={!picked.length} onClick={apply}>Add Products</button></div>
       </div>
     </div>
   )
