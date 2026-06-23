@@ -989,6 +989,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, created, totalCampaigns: created.length, rules: rulesCreated }
   })
 
+  // ── AT.3 — suggested bid per Auto-targeting group (READ; works pre-launch + while
+  // writes are gated). Anchored to the account's OWN median CPC (data-grounded, via
+  // ads-bid-suggest), scaled by the same intent multipliers as the smart defaults. ──
+  fastify.get('/advertising/campaign-builder/auto-bid-suggestions', async (request) => {
+    const market = (request.query as { market?: string })?.market || 'IT'
+    const { suggestBids } = await import('../services/advertising/ads-bid-suggest.service.js')
+    const base = await suggestBids({ keywords: [], marketplace: market })
+    const baseCents = base.defaultBidCents
+    const MULT: Record<string, number> = { CLOSE_MATCH: 1.0, SUBSTITUTES: 1.1, LOOSE_MATCH: 0.65, COMPLEMENTS: 0.6 }
+    const groups = Object.fromEntries(Object.entries(MULT).map(([k, m]) => [k, Math.max(5, Math.round(baseCents * m))]))
+    return { ok: true, baseCents, accountMedianCpcCents: base.accountMedianCpcCents, groups }
+  })
+
   // ── Apex A.2a: preview pending live writes for a campaign ───────────────
   // Shows exactly what would hit Amazon before the grace window expires: each
   // queued mutation's resolved external id + field changes + a request sketch,

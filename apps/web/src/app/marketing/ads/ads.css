@@ -1123,7 +1123,12 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-auto-ed .row .nm { flex: 1; min-width: 0; }
 .h10-spw-auto-ed .row .nm .t { display: block; font-size: 14px; font-weight: 700; color: #1c2530; }
 .h10-spw-auto-ed .row .nm .d { display: block; font-size: 12px; color: #6b7585; margin-top: 3px; line-height: 1.4; }
+.h10-spw-auto-ed .row .bid { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
 .h10-spw-auto-ed .row .bid .money { display: inline-flex; align-items: center; border: 1px solid #d4dce6; border-radius: 7px; overflow: hidden; background: #fff; width: 116px; }
+/* AT.3 — data-grounded suggested-bid link under each auto-group bid */
+.h10-spw-auto-sug { font: inherit; font-size: 11px; font-weight: 600; color: #1f6fde; background: none; border: none; cursor: pointer; padding: 0; white-space: nowrap; }
+.h10-spw-auto-sug:hover:not(:disabled) { text-decoration: underline; }
+.h10-spw-auto-sug:disabled { color: #aeb6c1; cursor: default; }
 .h10-spw-auto-ed .row .bid .money .pf { padding: 0 3px 0 11px; color: #6b7585; font-size: 13px; }
 .h10-spw-auto-ed .row .bid .money input { border: none; outline: none; padding: 9px 11px 9px 2px; width: 100%; font-size: 13.5px; color: #1c2530; background: transparent; }
 .h10-spw-auto-ed .row .bid .money input:disabled { color: #aeb6c1; }

@@ -8,10 +8,11 @@
  * funnel added automatically (NT.1) so the operator sees the full isolation picture.
  * Reuses the established h10-neg-* staging pattern + the wizard's ProductSelection.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X, Trash2, ChevronsUpDown } from 'lucide-react'
 import { Modal } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
+import { getBackendUrl } from '@/lib/backend-url'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -115,16 +116,26 @@ function NegKeywordEditor({ manual, auto, onChange }: { manual: NegKeyword[]; au
 function AutoTargetingEditor({ groups, currency, onChange }: { groups: AutoGroup[]; currency: string; onChange: (v: AutoGroup[]) => void }) {
   const toggle = (key: string) => onChange(groups.map((g) => (g.key === key ? { ...g, enabled: !g.enabled } : g)))
   const setBid = (key: string, bid: string) => onChange(groups.map((g) => (g.key === key ? { ...g, bid } : g)))
+  // AT.3 — data-grounded suggested bid per group (account median CPC × intent), read-only.
+  const [suggested, setSuggested] = useState<Record<string, number> | null>(null)
+  useEffect(() => {
+    let alive = true
+    fetch(`${getBackendUrl()}/api/advertising/campaign-builder/auto-bid-suggestions?market=IT`)
+      .then((r) => (r.ok ? r.json() : null)).then((j) => { if (alive && j?.groups) setSuggested(j.groups as Record<string, number>) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
   return (
     <div className="h10-spw-auto-ed">
       {groups.map((g) => {
         const meta = AUTO_GROUP_META.find((m) => m.key === g.key)!
+        const sugCents = suggested?.[g.key]
         return (
           <div className={`row ${g.enabled ? '' : 'off'}`} key={g.key}>
             <input type="checkbox" className="h10-spw-sw" checked={g.enabled} onChange={() => toggle(g.key)} aria-label={`Enable ${meta.label}`} />
             <div className="nm"><span className="t">{meta.label}</span><span className="d">{meta.desc}</span></div>
             <div className="bid">
               <div className="money"><span className="pf">{currency}</span><input inputMode="decimal" value={g.bid} disabled={!g.enabled} onChange={(e) => setBid(g.key, e.target.value)} aria-label={`${meta.label} bid`} /></div>
+              {sugCents != null && <button type="button" className="h10-spw-auto-sug" disabled={!g.enabled} title="Use Helium 10's data-grounded suggested bid (your median CPC, by intent)" onClick={() => setBid(g.key, (sugCents / 100).toFixed(2))}>Suggested: {currency}{(sugCents / 100).toFixed(2)} · Use</button>}
             </div>
           </div>
         )
