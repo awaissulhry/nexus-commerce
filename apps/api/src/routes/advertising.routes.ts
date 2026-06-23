@@ -5189,43 +5189,62 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // (budget | limit | suppress | restore) through the gated + audited path.
   // ?dryRun=1 (or body.dryRun) validates without writing. Writes still honour
   // the ads-mutation sandbox/live gate + 5-min grace-window undo.
+  // CP P1.1 — ontology children (lazy drill-down for the control-plane canvas).
+  fastify.get('/advertising/ontology/children', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const parentType = q.parentType as 'market' | 'campaign' | 'adgroup'
+    if (!q.parentId || !['market', 'campaign', 'adgroup'].includes(parentType)) { reply.status(400); return { error: 'parentType (market|campaign|adgroup) + parentId required' } }
+    const { getOntologyChildren } = await import('../services/advertising/ads-ontology.service.js')
+    reply.header('Cache-Control', 'private, max-age=20')
+    return getOntologyChildren({ parentType, parentId: q.parentId })
+  })
+  // CP.1 + P1.1 — Control Plane scenario commit: apply a batch of staged changes
+  // through the gated + audited path, dispatched by entity type. ?dryRun=1 validates.
   fastify.post('/advertising/budget-manager/scenario/commit', async (request, reply) => {
-    const b = request.body as { month?: string; dryRun?: boolean; changes?: Array<{ campaignId: string; marketplace?: string; kind: 'budget' | 'limit' | 'suppress' | 'restore'; budgetCents?: number; minCents?: number | null; maxCents?: number | null }> }
+    const b = request.body as { month?: string; dryRun?: boolean; changes?: Array<{ entityType?: 'campaign' | 'adgroup' | 'target'; entityId?: string; campaignId?: string; marketplace?: string; kind: string; budgetCents?: number; minCents?: number | null; maxCents?: number | null; bidCents?: number; status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED' }> }
     if (!Array.isArray(b?.changes) || b.changes.length === 0) { reply.status(400); return { error: 'changes[] required' } }
     const q = request.query as Record<string, string | undefined>
     const dryRun = !!b.dryRun || q.dryRun === '1'
     const { currentMonth, setCampaignLimit } = await import('../services/advertising/ads-budget-manager.service.js')
-    const { updateCampaignWithSync } = await import('../services/advertising/ads-mutation.service.js')
+    const { updateCampaignWithSync, updateAdGroupWithSync, updateAdTargetWithSync } = await import('../services/advertising/ads-mutation.service.js')
     const { suppressCampaignBids, restoreCampaignBids } = await import('../services/advertising/ads-bid-suppression.service.js')
     const month = b.month || currentMonth()
     const actor = 'user:budget-manager' as const
-    const results: Array<{ campaignId: string; kind: string; ok: boolean; error?: string; detail?: string }> = []
+    const results: Array<{ entityId: string; kind: string; ok: boolean; error?: string; detail?: string }> = []
     for (const c of b.changes) {
-      if (!c?.campaignId || !c?.kind) { results.push({ campaignId: c?.campaignId ?? '?', kind: c?.kind ?? '?', ok: false, error: 'invalid change' }); continue }
+      const id = c?.entityId || c?.campaignId
+      if (!id || !c?.kind) { results.push({ entityId: id ?? '?', kind: c?.kind ?? '?', ok: false, error: 'invalid change' }); continue }
       if (dryRun) {
-        const exists = await prisma.campaign.findUnique({ where: { id: c.campaignId }, select: { id: true } })
-        results.push({ campaignId: c.campaignId, kind: c.kind, ok: !!exists, error: exists ? undefined : 'campaign not found' })
+        const et = c.entityType ?? 'campaign'
+        const exists = et === 'adgroup' ? await prisma.adGroup.findUnique({ where: { id }, select: { id: true } })
+          : et === 'target' ? await prisma.adTarget.findUnique({ where: { id }, select: { id: true } })
+            : await prisma.campaign.findUnique({ where: { id }, select: { id: true } })
+        results.push({ entityId: id, kind: c.kind, ok: !!exists, error: exists ? undefined : `${et} not found` })
         continue
       }
       try {
-        if (c.kind === 'budget') {
-          if (c.budgetCents == null) { results.push({ campaignId: c.campaignId, kind: c.kind, ok: false, error: 'budgetCents required' }); continue }
-          const r = await updateCampaignWithSync({ campaignId: c.campaignId, patch: { dailyBudget: Math.max(100, c.budgetCents) / 100 }, actor, reason: `control plane: daily budget → €${(c.budgetCents / 100).toFixed(2)}` })
-          results.push({ campaignId: c.campaignId, kind: c.kind, ok: r.ok, error: r.ok ? undefined : (r.error ?? 'failed'), detail: r.outboundQueueId ?? undefined })
-        } else if (c.kind === 'limit') {
-          if (!c.marketplace) { results.push({ campaignId: c.campaignId, kind: c.kind, ok: false, error: 'marketplace required' }); continue }
-          const r = await setCampaignLimit({ marketplace: c.marketplace, month, campaignId: c.campaignId, minCents: c.minCents ?? null, maxCents: c.maxCents ?? null })
-          results.push({ campaignId: c.campaignId, kind: c.kind, ok: !!r.ok })
-        } else if (c.kind === 'suppress') {
-          const n = await suppressCampaignBids(c.campaignId, { actor, reason: 'control plane: stop over spend (bid floor, no pause)' })
-          results.push({ campaignId: c.campaignId, kind: c.kind, ok: true, detail: `${n} entities floored` })
-        } else if (c.kind === 'restore') {
-          const n = await restoreCampaignBids(c.campaignId, { actor, reason: 'control plane: restore prior bids' })
-          results.push({ campaignId: c.campaignId, kind: c.kind, ok: true, detail: `${n} entities restored` })
-        } else {
-          results.push({ campaignId: c.campaignId, kind: c.kind, ok: false, error: 'unknown kind' })
+        let ok = false; let error: string | undefined; let detail: string | undefined
+        switch (c.kind) {
+          case 'budget': {
+            if (c.budgetCents == null) { error = 'budgetCents required'; break }
+            const r = await updateCampaignWithSync({ campaignId: id, patch: { dailyBudget: Math.max(100, c.budgetCents) / 100 }, actor, reason: `control plane: daily budget → €${(c.budgetCents / 100).toFixed(2)}` })
+            ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; break
+          }
+          case 'limit': {
+            if (!c.marketplace) { error = 'marketplace required'; break }
+            const r = await setCampaignLimit({ marketplace: c.marketplace, month, campaignId: id, minCents: c.minCents ?? null, maxCents: c.maxCents ?? null }); ok = !!r.ok; break
+          }
+          case 'suppress': { const n = await suppressCampaignBids(id, { actor, reason: 'control plane: stop over spend (bid floor, no pause)' }); ok = true; detail = `${n} entities floored`; break }
+          case 'restore': { const n = await restoreCampaignBids(id, { actor, reason: 'control plane: restore prior bids' }); ok = true; detail = `${n} entities restored`; break }
+          case 'campaignStatus': { if (!c.status) { error = 'status required'; break } const r = await updateCampaignWithSync({ campaignId: id, patch: { status: c.status }, actor, reason: `control plane: status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
+          case 'adgroupBid': { if (c.bidCents == null) { error = 'bidCents required'; break } const r = await updateAdGroupWithSync({ adGroupId: id, patch: { defaultBidCents: Math.max(2, Math.round(c.bidCents)) }, actor, reason: `control plane: ad-group bid → €${(c.bidCents / 100).toFixed(2)}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; break }
+          case 'adgroupStatus': { if (!c.status) { error = 'status required'; break } const r = await updateAdGroupWithSync({ adGroupId: id, patch: { status: c.status }, actor, reason: `control plane: ad-group status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
+          case 'targetBid': { if (c.bidCents == null) { error = 'bidCents required'; break } const r = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: Math.max(2, Math.round(c.bidCents)) }, actor, reason: `control plane: target bid → €${(c.bidCents / 100).toFixed(2)}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; break }
+          case 'targetStatus': { if (!c.status) { error = 'status required'; break } const r = await updateAdTargetWithSync({ adTargetId: id, patch: { status: c.status }, actor, reason: `control plane: target status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
+          default: error = 'unknown kind'
         }
-      } catch (e) { results.push({ campaignId: c.campaignId, kind: c.kind, ok: false, error: (e as Error)?.message }) }
+        results.push({ entityId: id, kind: c.kind, ok, error, detail })
+      } catch (e) { results.push({ entityId: id, kind: c.kind, ok: false, error: (e as Error)?.message }) }
     }
     const applied = results.filter((r) => r.ok).length
     return { ok: results.length - applied === 0, dryRun, month, applied, failed: results.length - applied, results }
