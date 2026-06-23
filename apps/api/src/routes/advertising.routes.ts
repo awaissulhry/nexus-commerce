@@ -863,7 +863,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as {
       market?: string; productGroupName?: string
       products?: PRef[]
-      campaigns?: Array<{ id?: string; name: string; adGroupName?: string; kind: 'auto' | 'keyword' | 'pat'; adProduct?: 'SP' | 'SB' | 'SD'; matchType?: string; bidEur?: number; budgetEur?: number; keywords?: string[]; productTargets?: PRef[]; negKeywords?: Array<string | { text?: string; matchType?: 'EXACT' | 'PHRASE' }>; negProducts?: PRef[]; autoGroups?: Array<{ key: string; enabled?: boolean; bidEur?: number }> }>
+      campaigns?: Array<{ id?: string; name: string; adGroupName?: string; kind: 'auto' | 'keyword' | 'pat'; adProduct?: 'SP' | 'SB' | 'SD'; matchType?: string; bidEur?: number; budgetEur?: number; keywords?: string[]; productTargets?: PRef[]; negKeywords?: Array<string | { text?: string; matchType?: 'EXACT' | 'PHRASE' }>; negProducts?: PRef[]; autoGroups?: Array<{ key: string; enabled?: boolean; bidEur?: number }>; creative?: Record<string, unknown> }>
       placementBids?: { tos?: string; pdp?: string; ros?: string }
       rules?: { harvest?: SpwRule; negative?: SpwRule }
       automationMode?: 'rule' | 'ai'
@@ -897,6 +897,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         const bidEur = Number(c.bidEur) || 0.75
         const budgetEur = Number(c.budgetEur) || 10
         const camp = await createCampaignLocal({ name: c.name, type: c.adProduct ?? 'SP', marketplace: market, targetingType: c.kind === 'auto' ? 'AUTO' : 'MANUAL', dailyBudgetEur: budgetEur, biddingStrategy: 'legacyForSales', portfolioId: b.portfolioId, userId })
+        // SB creative (brand · ad type · landing page · ASINs · headline · logo/custom image) → Campaign.creativeAssetJson (gated; pushed to Amazon when the SB write gate opens).
+        if (c.creative && c.adProduct === 'SB') { try { await prisma.campaign.update({ where: { id: camp.id }, data: { creativeAssetJson: c.creative as never } }) } catch (e) { logger.warn('[SPW-launch] SB creative store failed', { error: (e as Error).message }) } }
         const ag = await createAdGroupLocal({ campaignId: camp.id, name: c.adGroupName || `${c.name} Ad Group`, defaultBidEur: bidEur, userId })
         if (c.id) idMap[c.id] = { campaignId: camp.id, adGroupId: ag.id }
         for (const p of products) { try { await createProductAdLocal({ adGroupId: ag.id, asin: p.asin, sku: p.sku, productId: p.productId, userId }) } catch (e) { logger.warn('[SPW-launch] product ad failed', { error: (e as Error).message }) } }

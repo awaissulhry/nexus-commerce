@@ -36,6 +36,7 @@ import { BidStrategyCardGrid, BID_STRATEGIES, defaultBidConfig, type BidConfig }
 import { CampaignTypeSelect, AD_PRODUCT_META, type AdProduct } from '../../_shared/CampaignTypeSelect'
 import { KeywordTargetingPanel, deriveKeywordSuggestions, type KwBid, type NegKw } from '../../_shared/KeywordTargetingPanel'
 import { HarvestRules } from '../../_shared/HarvestRules'
+import { SponsoredBrandSettings, defaultSbCreative, type SbCreative } from '../../_shared/SponsoredBrandSettings'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -53,6 +54,9 @@ const EXIT_TO = '/marketing/ads/campaign-builder'
 const CURRENCY = '€'
 const SUG_LOW = 0.73, SUG_HIGH = 1.27
 const FALLBACK_BID = 0.75, BUDGET_MULT = 50
+// Registered brand(s) for the Sponsored Brand creative. (Single-brand account — Xavia; a
+// multi-brand account would fetch these from the SB registered-brands endpoint.)
+const SB_BRANDS = ['Xavia']
 
 type Role = 'Auto' | 'Research' | 'Performance' | 'Product Target'
 type GuidedCampaign = SpwCampaign & { adProduct: AdProduct; role: Role }
@@ -91,6 +95,7 @@ export function GuidedBuilder() {
   const [products, setProducts] = useState<SpwProduct[]>([])
   const [types, setTypes] = useState<AdProduct[]>(['SP'])
   const [includePT, setIncludePT] = useState(true) // SP "Include Product Target Campaign"
+  const [sbCreative, setSbCreative] = useState<SbCreative>(defaultSbCreative(SB_BRANDS[0]))
   const [namingOpen, setNamingOpen] = useState(false)
   const [keywords, setKeywords] = useState<KwBid[]>([])
   const [negKeywords, setNegKeywords] = useState<NegKw[]>([])
@@ -205,6 +210,7 @@ export function GuidedBuilder() {
           autoGroups: c.kind === 'auto' ? c.autoGroups.map((g) => ({ key: g.key, enabled: g.enabled, bidEur: Number(g.bid) || Number(c.bid) || sugBid })) : undefined,
           negKeywords: c.role === 'Research' ? negKeywords.map((n) => ({ text: n.text, matchType: n.matchType })) : [],
           negProducts: [],
+          creative: c.adProduct === 'SB' ? sbCreative : undefined,
         })),
         rules: {
           harvest: { ruleName: rules.harvest.ruleName || `${grp} — Auto Harvest`, automate: rules.harvest.automate, perf: rules.harvest.perf, rows: rules.harvest.sel },
@@ -218,7 +224,7 @@ export function GuidedBuilder() {
       if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Launch failed')
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, productGroupName, products, campaigns, keywords, negKeywords, rules, bidConfig, sugBid, sugBudget, router])
+  }, [launching, productGroupName, products, campaigns, keywords, negKeywords, rules, bidConfig, sbCreative, sugBid, sugBudget, router])
 
   const typeCampaigns = (t: AdProduct) => campaigns.filter((c) => c.adProduct === t)
 
@@ -312,8 +318,8 @@ export function GuidedBuilder() {
               <h2>Select Campaign Types</h2>
               <p className="h10-spw-desc">Select the campaign types you want to launch. You can add multiple campaign types.</p>
               <CampaignTypeSelect value={types} onChange={setTypes} />
-              {(types.includes('SB') || types.includes('SD')) && (
-                <p className="h10-gcb-note">Sponsored {types.includes('SB') ? 'Brand' : 'Display'} launches as a managed campaign shell for now — full creative &amp; landing-page configuration arrives in the next update.</p>
+              {types.includes('SD') && (
+                <p className="h10-gcb-note">Sponsored Display launches as a Product Targeting campaign — configure its bids &amp; budget in the next step.</p>
               )}
             </section>
           </div>
@@ -328,6 +334,11 @@ export function GuidedBuilder() {
                     <input type="checkbox" checked={includePT} onChange={(e) => setIncludePT(e.target.checked)} />
                     <span>Include Product Target Campaign <InfoTip tip="Adds a Product Targeting campaign that targets competitor / complementary ASINs." /></span>
                   </label>
+                )}
+                {t === 'SB' && (
+                  <div className="h10-spw-card h10-gcb-sb">
+                    <SponsoredBrandSettings value={sbCreative} onChange={(patch) => setSbCreative((v) => ({ ...v, ...patch }))} products={products} brands={SB_BRANDS} />
+                  </div>
                 )}
                 <div className="h10-spw-card h10-gcb-set">
                   <div className="h10-gcb-set-head"><span>Ad Group</span><span>Default Bid</span><span>Budget</span><span>Bid Algorithm</span></div>

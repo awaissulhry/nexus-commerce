@@ -4,6 +4,17 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [P4.1] — 2026-06-23 — ImageUpload component
+
+- **`ImageUpload`** (`components/ImageUpload.tsx` + `.h10-ds-imgup-*` in
+  `styles/components.css`) — a reusable image dropzone: drag-drop + click, live
+  preview with remove, a criteria panel, and client-side format / size / minimum-
+  dimension validation. Platform-agnostic — the caller passes `onUpload(file) =>
+  Promise<url>` (wire to any asset/DAM endpoint) plus optional `onSelectFromAssets`
+  for a DAM browse. First consumer: the Guided builder's Sponsored Brand creative
+  (logo + custom image, wired to `/api/assets/upload`); reusable for product
+  images, A+ modules, etc. Additive — no token/primitive changes.
+
 ## [ADS-CB] — 2026-06-23 — Campaign-builder shared blocks (Guided)
 
 - New shared ads-builder components in `marketing/ads/_shared/`, recorded in the

@@ -15,4 +15,5 @@ export { DateRangePicker, type DateRangePickerProps, type DateRange } from './Da
 export { PerformanceGraph, type PerformanceGraphProps, type ChartSeries } from './PerformanceGraph'
 export { Heatmap, type HeatmapProps } from './Heatmap'
 export { DataGrid, type DataGridProps, type Column } from './DataGrid'
+export { ImageUpload, type ImageUploadProps, type ImageUploadCriterion } from './ImageUpload'
 export { useClickAway } from './useClickAway'

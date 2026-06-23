@@ -1,0 +1,19 @@
+/* Sponsored Brand creative settings — self-contained styles (travel with the component).
+   Reuses the shared `.h10-spw-field` label/input chrome; adds the SB-specific sections. */
+.h10-sbs { display: flex; flex-direction: column; gap: 26px; }
+.h10-sbs-sec { display: flex; flex-direction: column; gap: 12px; }
+.h10-sbs-sec h3 { font-size: 15px; font-weight: 700; color: #1c2530; margin: 0; }
+
+.h10-sbs-radios { display: flex; flex-direction: column; gap: 14px; }
+.h10-sbs-radio { display: grid; grid-template-columns: 16px 1fr; gap: 11px; cursor: pointer; align-items: start; }
+.h10-sbs-radio input { margin: 2px 0 0; width: 15px; height: 15px; accent-color: #1f6fde; cursor: pointer; }
+.h10-sbs-radio .rb { display: flex; flex-direction: column; gap: 3px; }
+.h10-sbs-radio .rb b { font-size: 13.5px; font-weight: 600; color: #1c2530; }
+.h10-sbs-radio .rb .d { font-size: 12.5px; color: #5b6573; line-height: 1.45; }
+.h10-sbs-radio.on .rb b { color: #1f6fde; }
+
+.h10-sbs-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; max-width: 720px; }
+.h10-sbs-creative { display: flex; flex-direction: column; gap: 20px; max-width: 720px; }
+.h10-sbs-creative .h10-spw-field input { max-width: 480px; }
+
+@media (max-width: 760px) { .h10-sbs-grid2 { grid-template-columns: 1fr; } }
