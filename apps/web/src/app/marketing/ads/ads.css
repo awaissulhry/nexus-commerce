@@ -1927,12 +1927,49 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 
 /* Step 2 — Campaign Setup table */
 .h10-spw-cset-card { border: 1px solid #e6e9ee; border-radius: 12px; background: #fff; overflow: hidden; }
-.h10-spw-cset-top { display: flex; align-items: center; padding: 16px 18px; }
+.h10-spw-cset-top { display: flex; align-items: center; gap: 10px; padding: 16px 18px; }
+.h10-spw-cset-top.bulk { background: #f3f8ff; border-bottom: 1px solid #e0ebfb; }
 .h10-spw-cset-top .cnt { font-size: 14px; font-weight: 600; color: #1c2530; }
+.h10-spw-cset-top .cnt.sel { color: #1f6fde; }
 .h10-spw-cset-top .grow { flex: 1; }
 .h10-spw-cset-restore { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 600; color: #fff; background: #1f6fde; border: 1px solid #1f6fde; border-radius: 8px; padding: 8px 14px; cursor: pointer; }
 .h10-spw-cset-restore:hover { background: #1b63c6; }
-.h10-spw-cset-head, .h10-spw-cset-row { display: grid; grid-template-columns: minmax(300px, 1.6fr) 92px 112px minmax(190px, 0.9fr) minmax(190px, 0.9fr) minmax(120px, 0.55fr) minmax(140px, 0.62fr); gap: 14px; padding: 0 18px; }
+/* BA.1 — smart-select dropdown */
+.h10-spw-cset-select { position: relative; }
+.h10-spw-cset-select > button { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 13px; font-weight: 600; color: #3a4452; background: #fff; border: 1px solid #d8dde4; border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+.h10-spw-cset-select > button:hover { border-color: #b9c2cf; }
+.h10-spw-cset-select .menu { position: absolute; top: calc(100% + 5px); left: 0; z-index: 30; min-width: 200px; background: #fff; border: 1px solid #e2e6ec; border-radius: 10px; box-shadow: 0 12px 32px rgba(20,30,45,.16); padding: 6px; }
+.h10-spw-cset-select .menu button { display: block; width: 100%; text-align: left; font: inherit; font-size: 13px; color: #283441; background: none; border: none; border-radius: 6px; padding: 8px 10px; cursor: pointer; }
+.h10-spw-cset-select .menu button:hover { background: #f1f6fe; color: #1f6fde; }
+.h10-spw-cset-select .menu .sep { height: 1px; background: #eef1f5; margin: 5px 4px; }
+/* BA.1 — sticky bulk-action bar */
+.h10-spw-bulk-btn { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 13px; font-weight: 600; color: #1c2530; background: #fff; border: 1px solid #cdd6e2; border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+.h10-spw-bulk-btn:hover:not(:disabled) { border-color: #1f6fde; color: #1f6fde; }
+.h10-spw-bulk-btn:disabled { opacity: .42; cursor: not-allowed; }
+.h10-spw-bulk-btn.danger { color: #c5372b; border-color: #ecc9c4; }
+.h10-spw-bulk-btn.danger:hover { background: #fdeceb; border-color: #d6453d; color: #c5372b; }
+.h10-spw-bulk-clear { font: inherit; font-size: 13px; font-weight: 600; color: #5b6573; background: none; border: none; cursor: pointer; padding: 6px 4px; }
+.h10-spw-bulk-clear:hover { color: #1c2530; text-decoration: underline; }
+/* BA.2/3/4 — bulk modals */
+.h10-modal.bulk { width: 560px; max-width: 92vw; }
+.h10-modal.bulk.sm { width: 360px; }
+.h10-spw-bulk-note { font-size: 13px; color: #4a5462; margin: 0 0 14px; }
+.h10-spw-bulk-note b { color: #1c2530; }
+.h10-spw-bulk-ta { width: 100%; min-height: 200px; resize: vertical; border: 1px solid #d8dde4; border-radius: 9px; padding: 11px 13px; font: inherit; font-size: 13.5px; color: #1c2530; outline: none; }
+.h10-spw-bulk-ta:focus { border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+.h10-spw-bulk-val { display: flex; flex-direction: column; gap: 8px; }
+.h10-spw-bulk-val > span { font-size: 13px; font-weight: 600; color: #3a4452; }
+.h10-spw-bulk-val .money { display: flex; align-items: stretch; border: 1px solid #d8dde4; border-radius: 8px; overflow: hidden; background: #fff; max-width: 180px; }
+.h10-spw-bulk-val .money:focus-within { border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+.h10-spw-bulk-val .money .pf { padding: 0 9px; color: #8a93a1; font-size: 13.5px; border-right: 1px solid #eef1f5; display: flex; align-items: center; background: #fafbfc; }
+.h10-spw-bulk-val .money input { flex: 1; min-width: 0; border: none; outline: none; font: inherit; font-size: 14px; color: #1c2530; padding: 9px 11px; }
+.h10-spw-cset-head, .h10-spw-cset-row { display: grid; grid-template-columns: 30px minmax(280px, 1.6fr) 92px 112px minmax(190px, 0.9fr) minmax(190px, 0.9fr) minmax(120px, 0.55fr) minmax(140px, 0.62fr); gap: 14px; padding: 0 18px; }
+/* BA.1 — selection checkbox column */
+.h10-spw-cset-head .ck, .h10-spw-cset-row .ck { display: flex; align-items: center; justify-content: center; }
+.h10-spw-cset-head .ck { align-self: center; }
+.h10-spw-cset-row .ck { padding-top: 11px; align-self: start; }
+.h10-spw-cset-head .ck input, .h10-spw-cset-row .ck input { width: 15px; height: 15px; accent-color: #1f6fde; cursor: pointer; margin: 0; }
+.h10-spw-cset-row.sel { background: #f3f8ff; }
 .h10-spw-cset-head { background: #f6f7fb; border-top: 1px solid #e6e9ee; border-bottom: 1px solid #e6e9ee; padding-top: 11px; padding-bottom: 11px; align-items: center; }
 .h10-spw-cset-head span { font-size: 12px; font-weight: 600; color: #5b6573; }
 .h10-spw-cset-row { padding-top: 14px; padding-bottom: 14px; border-bottom: 1px solid #eef1f5; align-items: start; }

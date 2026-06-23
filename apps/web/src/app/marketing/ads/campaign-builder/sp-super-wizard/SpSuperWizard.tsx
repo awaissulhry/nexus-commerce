@@ -200,7 +200,7 @@ export function SpSuperWizard() {
         {step === 2 && (
           <div className="h10-spw-stub-step">
             <h2>Sponsored Product Campaigns</h2>
-            <CampaignSetup campaigns={campaigns} setCampaigns={setCampaigns} currency="€" onRestore={() => setCampaigns(baseCampaigns)} onEditTargeting={(id) => setEditTgt({ id, mode: 'targeting' })} onEditNegative={(id) => setEditTgt({ id, mode: 'negative' })} />
+            <CampaignSetup campaigns={campaigns} setCampaigns={setCampaigns} currency="€" autoNegate={autoNegate} onRestore={() => setCampaigns(baseCampaigns)} onEditTargeting={(id) => setEditTgt({ id, mode: 'targeting' })} onEditNegative={(id) => setEditTgt({ id, mode: 'negative' })} />
           </div>
         )}
 
