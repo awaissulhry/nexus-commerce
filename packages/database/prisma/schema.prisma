@@ -12788,6 +12788,61 @@ model BudgetSchedule {
   @@index([kind])
 }
 
+// AC — AI Control / Autopilot. One plan governs a set of campaigns from a single GOAL +
+// guardrails; the Conductor (ad-autopilot.job) drives the existing control arsenal (bid,
+// budget, placement, rank, dayparting) within those guardrails, and COORDINATES the parallel
+// Rule-Setting session's harvest/negate engine (configures + reads it, never reimplements).
+// See docs/ai-control-autopilot-spec.md.
+model AutopilotPlan {
+  id               String    @id @default(cuid())
+  name             String
+  marketplace      String
+  productGroupName String?            // ties back to the SP Super Wizard launch
+  campaignIds      Json      @default("[]")  // local Campaign.id[] under control
+  goal             String    @default("BALANCED") // LAUNCH | PROFIT | BALANCED | LIQUIDATE | DEFEND_RANK
+  autonomy         String    @default("SUGGEST")  // OFF | SUGGEST | AUTO
+  // {targetAcosPct,bidMinCents,bidMaxCents,budgetMinCents,budgetMaxCents,maxDailySpendCents,rampPct,neverPause}
+  guardrails       Json      @default("{}")
+  // per-module {on, params}: bid/budget/dayparting/rank/placement (ours) + harvest/negate (delegated)
+  modules          Json      @default("{}")
+  graph            Json      @default("{}")  // React Flow {nodes,edges} canvas persistence
+  // links to the Rule-Setting session's harvest/negate AutomationRule ids we provisioned
+  linkedRuleIds    Json      @default("[]")
+  stage            String    @default("launch") // life-stage for auto-transitions
+  enabled          Boolean   @default(true)
+  lastEvaluatedAt  DateTime?
+  lastDecisionAt   DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  createdBy        String?
+
+  decisions        AutopilotDecision[]
+
+  @@index([enabled])
+  @@index([marketplace])
+}
+
+// One row per conductor decision — the live (SSE) feed AND the reversible audit trail.
+model AutopilotDecision {
+  id          String   @id @default(cuid())
+  planId      String
+  plan        AutopilotPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  at          DateTime @default(now())
+  cycle       String              // fast | slow | event | backtest
+  module      String              // bid|budget|dayparting|rank|placement|harvest|negate|safety
+  campaignId  String?
+  action      String              // BID_RAISE|BID_LOWER|BUDGET_UP|BUDGET_DOWN|PLACEMENT|RANK|HARVEST|NEGATE|SUPPRESS|RESUME|NOOP
+  before      Json?
+  after       Json?
+  reason      String
+  status      String   @default("PROPOSED") // PROPOSED|APPLIED|SKIPPED|DENIED|ROLLED_BACK
+  executionId String?             // → existing audit/sync row for one-click rollback
+  source      String   @default("autopilot") // autopilot | rule-setting (coordinated/linked)
+
+  @@index([planId, at])
+  @@index([status])
+}
+
 // RS.1 — a named, reusable rank GOAL ("Own Top of Search", "Defend", "Rest of
 // Search", "Pause"). Dropped onto AdSchedule windows (by key) and used as a
 // schedule baseline. "Rank" on Amazon = a Top-of-Search impression-share target
