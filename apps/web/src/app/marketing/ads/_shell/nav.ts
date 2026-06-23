@@ -7,7 +7,7 @@
  * and Rules (H10's wand-with-stars = WandSparkles, not in 0.263 → Wand2, near-identical).
  */
 import {
-  LayoutGrid, Gauge, BadgeDollarSign, Atom, ListChecks, BarChart3, Table, Wand2, Users, PieChart, History, HelpCircle, Settings,
+  LayoutGrid, Gauge, BadgeDollarSign, Atom, Sparkles, ListChecks, BarChart3, Table, Wand2, Users, PieChart, History, HelpCircle, Settings,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -27,6 +27,7 @@ export const ADS_NAV: NavItem[] = [
   { label: 'Dashboard', route: 'dashboard', Icon: Gauge },
   { label: 'Budget Manager', route: 'budget-manager', Icon: BadgeDollarSign },
   { label: 'AI Advertising', route: 'ai-advertising', Icon: Atom },
+  { label: 'AI Control', route: 'autopilot', Icon: Sparkles },
   { label: 'Suggestions', route: 'suggestions', Icon: ListChecks },
   { label: 'Analytics', route: 'analytics', Icon: BarChart3 },
   { label: 'Ad Manager', route: 'campaigns', Icon: Table },
