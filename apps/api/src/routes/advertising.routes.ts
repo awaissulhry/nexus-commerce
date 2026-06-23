@@ -61,6 +61,7 @@ import {
 } from '../jobs/advertising-rule-evaluator.job.js'
 import { evaluateRule } from '../services/automation-rule.service.js'
 import { rollbackByExecutionId } from '../services/advertising/rollback.service.js'
+import { attachSourceLinks } from '../services/advertising/ads-suggestions.service.js'
 import {
   rebalanceAndAudit,
   computeRebalance,
@@ -4323,11 +4324,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/advertising/suggestions', async (request) => {
     const q = request.query as { status?: string; limit?: string }
     const status = q.status ?? 'pending'
-    const items = await prisma.adsRuleSuggestion.findMany({
+    const rows = await prisma.adsRuleSuggestion.findMany({
       where: { status },
       orderBy: { createdAt: 'desc' },
       take: Math.min(Number(q.limit) || 100, 300),
     })
+    // S.1 — attach a resolved deep-link (`source`) per row so the page can navigate
+    // straight to the campaign / ad-group / search-term the suggestion came from.
+    const items = await attachSourceLinks(rows)
     return { items, count: items.length }
   })
 
