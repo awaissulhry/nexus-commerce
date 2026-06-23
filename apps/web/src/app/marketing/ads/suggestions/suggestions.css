@@ -44,3 +44,39 @@
 /* When + Actions */
 .h10-sug-when { color: var(--h10-text-2); font-size: 12.5px; }
 .h10-sug-acts { display: inline-flex; gap: 8px; justify-content: flex-end; }
+
+/* ── Detail drawer (S.5) ─────────────────────────────────────────── */
+.h10-sug-dh { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.h10-sug-dbody { display: flex; flex-direction: column; gap: 22px; }
+.h10-sug-dfoot { display: flex; align-items: center; gap: 10px; width: 100%; }
+.h10-sug-dfoot .grow { flex: 1; }
+.h10-sug-dfoot .open { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--h10-text-link); text-decoration: none; }
+.h10-sug-dfoot .open:hover { text-decoration: underline; }
+
+/* Provenance flow (vertical: Signal → Rule → Action → Target) */
+.h10-sug-flow { display: flex; flex-direction: column; align-items: stretch; }
+.h10-sug-fnode { border: 1px solid var(--h10-border); border-radius: 10px; padding: 10px 12px; background: var(--h10-surface); display: flex; flex-direction: column; gap: 2px; }
+.h10-sug-fnode .ey { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--h10-text-3); }
+.h10-sug-fnode .ti { font-size: 14px; font-weight: 600; color: var(--h10-text); }
+.h10-sug-fnode .sub { font-size: 12.5px; color: var(--h10-text-2); }
+.h10-sug-fnode .lk { display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: inherit; position: relative; }
+.h10-sug-fnode .lk:hover .ti { color: var(--h10-text-link); text-decoration: underline; }
+.h10-sug-fnode .lk .ext { position: absolute; top: 2px; right: 0; color: var(--h10-text-3); }
+.h10-sug-fnode.t-positive { border-left: 3px solid var(--h10-success); }
+.h10-sug-fnode.t-warning { border-left: 3px solid var(--h10-warning); }
+.h10-sug-fnode.t-info { border-left: 3px solid var(--h10-info); }
+.h10-sug-fconn { width: 2px; height: 15px; margin: 2px 0 2px 19px; background: var(--h10-border-strong); }
+
+/* Edit-before-apply */
+.h10-sug-edit { border: 1px solid var(--h10-border-subtle); border-radius: 10px; padding: 14px; background: var(--h10-surface-sunken); }
+.h10-sug-edit h4 { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: var(--h10-text); }
+.h10-sug-edit .fld { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.h10-sug-edit .fld > span { color: var(--h10-text-2); font-weight: 600; white-space: nowrap; }
+.h10-sug-edit .hint { margin: 9px 0 0; font-size: 12.5px; color: var(--h10-text-2); line-height: 1.45; }
+.h10-sug-edit .hint b { color: var(--h10-text); }
+
+/* Meta */
+.h10-sug-meta { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.h10-sug-meta > div { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; }
+.h10-sug-meta dt { color: var(--h10-text-3); }
+.h10-sug-meta dd { margin: 0; color: var(--h10-text); font-weight: 500; text-align: right; word-break: break-word; }

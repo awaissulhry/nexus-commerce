@@ -13,13 +13,15 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Check, X, RefreshCw, Sparkles, Wifi, ChevronRight } from 'lucide-react'
+import { Check, X, RefreshCw, Sparkles, Wifi, ChevronRight, ExternalLink } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../campaigns/_grid/AdsDataGrid'
 import { Button } from '@/design-system/primitives/Button'
 import { Tag, type TagTone } from '@/design-system/primitives/Tag'
 import { Select } from '@/design-system/primitives/Select'
+import { Input } from '@/design-system/primitives/Input'
 import { EmptyState } from '@/design-system/components/EmptyState'
+import { Drawer } from '@/design-system/components/Drawer'
 import { MetricStrip, type Metric } from '@/design-system/components/MetricStrip'
 import { ToastProvider, useToast } from '@/design-system/components/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -86,6 +88,35 @@ const impactScore = (s: Suggestion): number => {
   return typeof s.proposedAction?.value === 'number' ? s.proposedAction.value : 0
 }
 
+// Friendly trigger names for the provenance "signal" — fall back to a prettified raw value.
+const TRIGGER_LABEL: Record<string, string> = {
+  CAMPAIGN_PERFORMANCE_BUDGET: 'Budget performance', CAC_SPIKE: 'CAC spike', AD_SPEND_PROFITABILITY_BREACH: 'Ad-spend over profit',
+  SEARCH_TERM_CONVERTING: 'Converting search term', SEARCH_TERM_WASTING: 'Wasted search term',
+  KEYWORD_HIGH_ACOS: 'High ACoS keyword', KEYWORD_SCALE_OPPORTUNITY: 'Scale opportunity', KEYWORD_LOW_CTR: 'Low-CTR keyword',
+  KEYWORD_ZERO_IMPRESSIONS: 'Zero impressions', KEYWORD_WASTED_SPEND: 'Wasted keyword spend', KEYWORD_RISING_STAR: 'Rising-star keyword',
+  AD_TARGET_UNDERPERFORMING: 'Underperforming target', AD_GROUP_UNDERPERFORMING: 'Underperforming ad group',
+  CAMPAIGN_NO_SALES: 'No-sales campaign', CVR_DROP: 'Conversion-rate drop', NEW_TO_BRAND_WINNER: 'New-to-brand winner',
+}
+const prettyTrigger = (t: string | null): string => t ? (TRIGGER_LABEL[t] ?? t.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())) : 'Rule match'
+
+// Edit-before-apply preview: the budget/bid base (first € in wouldChange) + the projected result for a new magnitude.
+const baseEur = (s: Suggestion): number | null => {
+  const wc = s.proposedAction?.wouldChange
+  if (!wc) return null
+  const nums = [...wc.matchAll(/€\s*([\d.,]+)/g)].map((m) => parseEur(m[1]))
+  return nums.length ? nums[0] : null
+}
+const projectAfter = (s: Suggestion, value: number): number | null => {
+  const base = baseEur(s); const op = s.proposedAction?.op
+  if (op === 'setValue') return value
+  if (base == null) return null
+  if (op === 'incPct') return base * (1 + value / 100)
+  if (op === 'decPct') return base * (1 - value / 100)
+  return null
+}
+/** Does this action expose an editable numeric magnitude (budget/bid % or absolute set)? */
+const isEditable = (s: Suggestion): boolean => typeof s.proposedAction?.value === 'number' && ['incPct', 'decPct', 'setValue'].includes(s.proposedAction?.op ?? '')
+
 /** Source cell — entity-type Tag + a breadcrumb (campaign ▸ ad group ▸ keyword) that deep-links to the exact sub-page. */
 function SourceCell({ s }: { s: Suggestion }) {
   const src = srcOf(s)
@@ -146,6 +177,91 @@ function RuleCell({ s }: { s: Suggestion }) {
   )
 }
 
+/** One node in the vertical provenance flow: eyebrow + title + sub, optional deep link. */
+function FlowNode({ eyebrow, title, sub, tone, href, last }: { eyebrow: string; title: ReactNode; sub?: ReactNode; tone?: TagTone; href?: string | null; last?: boolean }) {
+  const body = <><span className="ey">{eyebrow}</span><b className="ti">{title}</b>{sub ? <span className="sub">{sub}</span> : null}</>
+  return (
+    <>
+      <div className={`h10-sug-fnode${tone ? ` t-${tone}` : ''}`}>
+        {href ? <Link href={href} className="lk">{body}<ExternalLink size={13} className="ext" /></Link> : body}
+      </div>
+      {!last && <span className="h10-sug-fconn" aria-hidden />}
+    </>
+  )
+}
+
+/** Detail drawer — provenance flow (Signal → Rule → Action → Target, the target a deep link),
+ *  optional edit-before-apply for budget/bid magnitudes, and the approve/dismiss actions. */
+function SuggestionDrawer({ suggestion, busy, onClose, onAct }: {
+  suggestion: Suggestion
+  busy: boolean
+  onClose: () => void
+  onAct: (id: string, kind: 'apply' | 'dismiss', overrideValue?: number) => Promise<void>
+}) {
+  const a = suggestion.proposedAction ?? {}
+  const src = srcOf(suggestion)
+  const editable = isEditable(suggestion)
+  const [edit, setEdit] = useState<string>(editable && a.value != null ? String(a.value) : '')
+  const editNum = edit.trim() === '' ? null : Number(edit)
+  const overridden = editable && editNum != null && Number.isFinite(editNum) && editNum !== a.value
+  const projected = overridden && editNum != null ? projectAfter(suggestion, editNum) : null
+  const base = baseEur(suggestion)
+  const unit = a.op === 'incPct' || a.op === 'decPct' ? '%' : a.op === 'setValue' ? '€' : ''
+  const kindLabel = ACTION_LABEL[a.type ?? ''] ?? a.type ?? '—'
+
+  const doApply = () => { void onAct(suggestion.id, 'apply', overridden && editNum != null ? editNum : undefined).then(onClose) }
+  const doDismiss = () => { void onAct(suggestion.id, 'dismiss').then(onClose) }
+
+  return (
+    <Drawer
+      open
+      onClose={onClose}
+      title={<span className="h10-sug-dh"><Tag tone={ENTITY_TONE[suggestion.entityType] ?? 'neutral'}>{ENTITY_LABEL[suggestion.entityType] ?? suggestion.entityType}</Tag> {src.label}</span>}
+      footer={
+        <div className="h10-sug-dfoot">
+          {src.href && <Link href={src.href} className="open"><ExternalLink size={14} /> Open source</Link>}
+          <span className="grow" />
+          <Button variant="secondary" size="sm" disabled={busy} onClick={doDismiss}><X size={14} /> Dismiss</Button>
+          <Button variant="primary" size="sm" disabled={busy} onClick={doApply}><Check size={14} /> {overridden ? 'Approve edit' : 'Approve'}</Button>
+        </div>
+      }
+    >
+      <div className="h10-sug-dbody">
+        {/* Provenance — why it surfaced, what it changes, where it lands */}
+        <div className="h10-sug-flow">
+          <FlowNode eyebrow="Signal" title={prettyTrigger(suggestion.trigger)} sub={suggestion.marketplace ? `Marketplace ${suggestion.marketplace}` : undefined} />
+          <FlowNode eyebrow="Rule" title={suggestion.ruleName ?? 'Manual rule'} sub="Manual control · propose-only" />
+          <FlowNode eyebrow="Proposed action" title={kindLabel} sub={a.type === 'harvest_and_negate' ? `promote ${a.wouldGraduate ?? 0} · negate ${a.wouldNegate ?? 0}` : a.wouldChange} tone={ACTION_TONE[a.type ?? '']} />
+          <FlowNode eyebrow="Applies to" title={src.label} sub={ENTITY_LABEL[suggestion.entityType] ?? suggestion.entityType} href={src.href} last />
+        </div>
+
+        {/* Edit-before-apply — adjust the magnitude; the rule's own min/max still clamp on the server */}
+        {editable && (
+          <div className="h10-sug-edit">
+            <h4>Adjust before applying</h4>
+            <label className="fld">
+              <span>{a.op === 'decPct' ? 'Decrease by' : a.op === 'incPct' ? 'Increase by' : 'Set to'}</span>
+              <Input inputMode="decimal" value={edit} onChange={(e) => setEdit(e.target.value)} suffix={unit === '%' ? '%' : undefined} prefix={unit === '€' ? '€' : undefined} aria-label="Override value" />
+            </label>
+            <p className="hint">
+              {projected != null
+                ? <>New result: <b>€{projected.toFixed(2)}</b>{base != null ? <> (from €{base.toFixed(2)})</> : null}</>
+                : <>Proposed: {a.wouldChange ?? `${a.value ?? ''}${unit}`}. Edit to override — the rule’s min/max still apply.</>}
+            </p>
+          </div>
+        )}
+
+        {/* Meta */}
+        <dl className="h10-sug-meta">
+          <div><dt>Created</dt><dd>{ago(suggestion.createdAt)}</dd></div>
+          {suggestion.trigger ? <div><dt>Trigger</dt><dd>{suggestion.trigger}</dd></div> : null}
+          <div><dt>Status</dt><dd>{suggestion.status}</dd></div>
+        </dl>
+      </div>
+    </Drawer>
+  )
+}
+
 function SuggestionsInner() {
   const [items, setItems] = useState<Suggestion[]>([])
   const [loading, setLoading] = useState(true)
@@ -154,6 +270,7 @@ function SuggestionsInner() {
   const [group, setGroup] = useState<GroupKey>('none')
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkProg, setBulkProg] = useState<{ done: number; total: number } | null>(null)
+  const [detailId, setDetailId] = useState<string | null>(null)
   const { toast } = useToast()
 
   const load = useCallback(async () => {
@@ -180,8 +297,10 @@ function SuggestionsInner() {
     return () => { es?.close(); if (debounce.current) clearTimeout(debounce.current) }
   }, [load])
 
-  const post = useCallback((id: string, kind: 'apply' | 'dismiss' | 'restore') =>
-    fetch(`${getBackendUrl()}/api/advertising/suggestions/${id}/${kind}`, { method: 'POST' }).then((r) => r.ok).catch(() => false), [])
+  const post = useCallback((id: string, kind: 'apply' | 'dismiss' | 'restore', body?: Record<string, unknown>) =>
+    fetch(`${getBackendUrl()}/api/advertising/suggestions/${id}/${kind}`, body
+      ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
+      : { method: 'POST' }).then((r) => r.ok).catch(() => false), [])
 
   // Undo a dismiss (single or bulk): restore the rows to pending, then reload to show them again.
   const restore = useCallback(async (ids: string[]) => {
@@ -189,13 +308,14 @@ function SuggestionsInner() {
     void load()
   }, [post, load])
 
-  const act = useCallback(async (id: string, kind: 'apply' | 'dismiss') => {
+  const act = useCallback(async (id: string, kind: 'apply' | 'dismiss', overrideValue?: number) => {
     setBusy((b) => ({ ...b, [id]: true }))
     try {
-      if (await post(id, kind)) {
+      const body = kind === 'apply' && overrideValue != null ? { value: overrideValue } : undefined
+      if (await post(id, kind, body)) {
         setItems((cur) => cur.filter((s) => s.id !== id))
         if (kind === 'dismiss') toast(<>Suggestion dismissed · <button type="button" className="h10-sug-undo" onClick={() => void restore([id])}>Undo</button></>, 'info')
-        else toast('Suggestion approved', 'success')
+        else toast(overrideValue != null ? 'Approved with your edit' : 'Suggestion approved', 'success')
       }
     } finally { setBusy((b) => { const n = { ...b }; delete n[id]; return n }) }
   }, [post, toast, restore])
@@ -273,6 +393,8 @@ function SuggestionsInner() {
     },
   ]
 
+  const detail = detailId ? items.find((s) => s.id === detailId) ?? null : null
+
   return (
     <div className="h10-sug">
       <AdsPageHeader title="Suggestions" subtitle="Review and approve the actions your Manual rules propose." showDateRange={false} markets={[]} market="all" onMarketChange={() => {}} />
@@ -294,6 +416,7 @@ function SuggestionsInner() {
         selectable
         customizable={false}
         defaultSort={{ key: 'when', dir: 'desc' }}
+        onRowClick={(s) => setDetailId(s.id)}
         selectionActions={(ids, clear) => (
           <span className="h10-bulkrow">
             <Button variant="primary" size="sm" disabled={bulkBusy} onClick={() => void runBulk(ids, 'apply', clear)}><Check size={13} /> Approve {ids.length}</Button>
@@ -326,6 +449,7 @@ function SuggestionsInner() {
           />
         }
       />
+      {detail && <SuggestionDrawer suggestion={detail} busy={!!busy[detail.id]} onClose={() => setDetailId(null)} onAct={act} />}
     </div>
   )
 }

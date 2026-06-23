@@ -117,6 +117,9 @@ export interface AdsDataGridProps<T> {
    *  clusters same-group rows (groups ordered by label) and renders a header row before
    *  each group. Additive — consumers that omit it are unaffected. */
   groupBy?: (row: T) => { key: string; label: string }
+  /** optional row click (e.g. open a detail drawer). Clicks landing on an interactive
+   *  child (checkbox / link / button / select) are ignored so they keep their own behavior. */
+  onRowClick?: (row: T) => void
 }
 
 function useClickAway<T extends HTMLElement>(onAway: () => void) {
@@ -140,7 +143,7 @@ export function AdsDataGrid<T>({
   showTotal, totalFirst = 'Total',
   reportLabel, emptyLabel = 'No data.', emptyNode, defaultSort, editMode, selectionActions,
   searchable, searchPlaceholder = 'Search…', searchValue, pagerCentered, filtersDefaultOpen = true,
-  groupBy,
+  groupBy, onRowClick,
 }: AdsDataGridProps<T>) {
   const [filtersOpen, setFiltersOpen] = useState(filtersDefaultOpen)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -462,7 +465,10 @@ export function AdsDataGrid<T>({
                       {showGrp && grp && (
                         <tr className="h10-am-grp"><td colSpan={visibleCols.length + (selectable ? 2 : 1)}><span className="gl">{grp.label}</span><span className="gc">{groupCounts?.get(grp.key) ?? 0} {pluralize(noun, groupCounts?.get(grp.key) ?? 0)}</span></td></tr>
                       )}
-                      <tr className={sel.has(id) ? 'on' : ''}>
+                      <tr
+                        className={`${sel.has(id) ? 'on' : ''}${onRowClick ? ' clickable' : ''}`}
+                        onClick={onRowClick ? (e) => { if (!(e.target as HTMLElement).closest('button, a, input, label, select')) onRowClick(row) } : undefined}
+                      >
                         {selectable && <td className="ck"><input type="checkbox" checked={sel.has(id)} onChange={() => toggle(id)} aria-label="Select row" /></td>}
                         <td className={`nm fz${ef ? ' editing' : ''}`}>{ef ? ef.render(editVal(row, ef), (v) => setDraft(id, '__first', v), row) : cellWithPencil(row, '__first', renderFirst(row))}</td>
                         {visibleCols.map((c) => {

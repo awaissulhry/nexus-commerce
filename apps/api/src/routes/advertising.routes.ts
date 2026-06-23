@@ -4350,12 +4350,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!exec) { reply.code(422); return { error: 'execution_context_gone' } }
     await import('../services/advertising/automation-action-handlers.js') // ensure handlers registered
     const { ACTION_HANDLERS } = await import('../services/automation-rule.service.js')
-    const action = sug.proposedAction as Record<string, unknown>
+    // S.5 — optional edit-before-apply: the operator may override the action's magnitude
+    // (`value`) from the detail drawer. The handler still clamps to the action's own min/max
+    // bounds (e.g. minEur/maxEur), so an override can't escape the rule's guardrails.
+    const body = (request.body ?? {}) as { value?: number }
+    const action = { ...(sug.proposedAction as Record<string, unknown>) }
+    const overridden = typeof body.value === 'number' && Number.isFinite(body.value) && body.value !== action.value
+    if (overridden) action.value = body.value
     const handler = ACTION_HANDLERS[String(action.type)]
     if (!handler) { reply.code(422); return { error: `no handler for ${action.type}` } }
     const result = await handler(action as never, exec.triggerData, { dryRun: false, ruleId: sug.ruleId })
     await prisma.adsRuleSuggestion.update({
-      where: { id }, data: { status: 'applied', decidedAt: new Date(), decidedBy: 'operator', appliedResult: result as object },
+      where: { id }, data: { status: 'applied', decidedAt: new Date(), decidedBy: 'operator', appliedResult: { ...(result as object), ...(overridden ? { override: { value: body.value } } : {}) } as object },
     })
     return { ok: result.ok !== false, result }
   })
