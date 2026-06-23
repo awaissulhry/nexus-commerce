@@ -1008,6 +1008,79 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, created, totalCampaigns: created.length, rules: rulesCreated }
   })
 
+  // SB.7 — Single Campaign builder launch. Creates ONE SP campaign with PER-KEYWORD match
+  // types + bids (richer than the SP Super Wizard's uniform model), the placement multiplier,
+  // an optional Target-ACoS / strategy bid rule, and an optional inline Negative-Targeting
+  // rule. Same gated local-first create path (no Amazon push unless the write gate is open).
+  fastify.post('/advertising/campaign-builder/single/launch', async (request, reply) => {
+    type PRef = { asin?: string; sku?: string; productId?: string }
+    const b = request.body as {
+      market?: string; name?: string; adGroupName?: string; portfolioId?: string
+      biddingStrategy?: 'down' | 'updown' | 'fixed'; sites?: 'amazon' | 'business'
+      placementBids?: { tos?: string; pdp?: string; ros?: string }
+      products?: PRef[]; budgetEur?: number; defaultBidEur?: number
+      bidConfig?: { strategy?: string; targetAcos?: string; minBid?: string; maxBid?: string }
+      targetMode?: 'keyword' | 'product'
+      keywords?: Array<{ text?: string; matchType?: 'BROAD' | 'PHRASE' | 'EXACT'; bidEur?: number }>
+      negKeywords?: Array<{ text?: string; matchType?: 'EXACT' | 'PHRASE' }>
+      productTargets?: PRef[]; negProducts?: PRef[]
+      addNegativeRule?: boolean; attachRuleIds?: string[]; autoBidAdjust?: boolean; dryRun?: boolean
+    }
+    const market = b.market || 'IT'
+    const name = (b.name || '').trim()
+    if (!name) { reply.status(400); return { ok: false, error: 'campaign name required' } }
+    const products = (b.products ?? []).filter((p) => p && (p.asin || p.sku || p.productId))
+    const defaultBidEur = Number(b.defaultBidEur) || 0.75
+    const budgetEur = Number(b.budgetEur) || 10
+    if (b.dryRun) return { ok: true, dryRun: true, plan: { market, name, products: products.length, keywords: (b.keywords ?? []).length } }
+
+    const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal, createTargetLocal, createNegativeProductTargetLocal, createNegativeKeywordLocal, updatePlacementBidding } = await import('../services/advertising/ads-create.service.js')
+    const userId = actorFromHeaders(request.headers as Record<string, unknown>)
+    const biddingStrategy: 'legacyForSales' | 'autoForSales' | 'manual' = b.biddingStrategy === 'updown' ? 'autoForSales' : b.biddingStrategy === 'fixed' ? 'manual' : 'legacyForSales'
+    const rulesCreated: Array<{ id: string; name: string }> = []
+    try {
+      const camp = await createCampaignLocal({ name, type: 'SP', marketplace: market, targetingType: 'MANUAL', dailyBudgetEur: budgetEur, biddingStrategy, portfolioId: b.portfolioId, userId })
+      const ag = await createAdGroupLocal({ campaignId: camp.id, name: (b.adGroupName || '').trim() || `${name} Ad Group`, defaultBidEur, userId })
+      for (const p of products) { try { await createProductAdLocal({ adGroupId: ag.id, asin: p.asin, sku: p.sku, productId: p.productId, userId }) } catch (e) { logger.warn('[single-launch] product ad failed', { error: (e as Error).message }) } }
+      if ((b.targetMode ?? 'keyword') === 'product') {
+        for (const pt of b.productTargets ?? []) { const asin = pt.asin || pt.sku; if (!asin) continue; try { await createTargetLocal({ adGroupId: ag.id, kind: 'PRODUCT', value: asin, bidEur: defaultBidEur, userId }) } catch (e) { logger.warn('[single-launch] product target failed', { error: (e as Error).message }) } }
+      } else {
+        for (const kw of b.keywords ?? []) { const text = (kw?.text || '').trim(); if (!text) continue; const mt: 'BROAD' | 'PHRASE' | 'EXACT' = kw.matchType === 'PHRASE' ? 'PHRASE' : kw.matchType === 'EXACT' ? 'EXACT' : 'BROAD'; try { await createKeywordLocal({ adGroupId: ag.id, keywordText: text, matchType: mt, bidEur: Number(kw.bidEur) || defaultBidEur, userId }) } catch (e) { logger.warn('[single-launch] keyword failed', { error: (e as Error).message }) } }
+      }
+      for (const nk of b.negKeywords ?? []) { const text = (nk?.text || '').trim(); if (!text) continue; const mt: 'EXACT' | 'PHRASE' = nk.matchType === 'PHRASE' ? 'PHRASE' : 'EXACT'; try { await createNegativeKeywordLocal({ adGroupId: ag.id, keywordText: text, matchType: mt, userId }) } catch (e) { logger.warn('[single-launch] neg keyword failed', { error: (e as Error).message }) } }
+      for (const np of b.negProducts ?? []) { const asin = np.asin || np.sku; if (!asin) continue; try { await createNegativeProductTargetLocal({ adGroupId: ag.id, asin, userId }) } catch (e) { logger.warn('[single-launch] neg product failed', { error: (e as Error).message }) } }
+      const pb = b.placementBids ?? {}
+      const adjustments = ([['PLACEMENT_TOP', pb.tos], ['PLACEMENT_PRODUCT_PAGE', pb.pdp], ['PLACEMENT_REST_OF_SEARCH', pb.ros]] as Array<[string, string | undefined]>)
+        .flatMap(([placement, v]) => { const n = Number(v); return v && Number.isFinite(n) && n > 0 ? [{ placement, percentage: n }] : [] })
+      if (adjustments.length) { try { await updatePlacementBidding({ campaignId: camp.id, adjustments, userId }) } catch (e) { logger.warn('[single-launch] placement failed', { error: (e as Error).message }) } }
+
+      if (b.bidConfig?.strategy && b.bidConfig.strategy !== 'none') {
+        try {
+          const bc = b.bidConfig
+          const minBidEur = Number(bc.minBid) || undefined
+          const maxBidEur = Number(bc.maxBid) || undefined
+          const action = bc.strategy === 'targetAcos'
+            ? { type: 'bid_to_target_acos', targetAcos: Number(bc.targetAcos) || 30, minBidEur, maxBidEur, campaignIds: [camp.id] }
+            : { type: 'set_bid_strategy', strategy: bc.strategy, minBidEur, maxBidEur, campaignIds: [camp.id] }
+          const label = bc.strategy === 'targetAcos' ? 'Target ACoS' : bc.strategy === 'maxImpressions' ? 'Max Impressions' : bc.strategy === 'maxOrders' ? 'Max Orders' : 'Custom'
+          const rule = await prisma.automationRule.create({ data: { name: `${name} — ${label} bidding`.slice(0, 120), description: 'Bid strategy from Single Campaign builder', domain: 'advertising', trigger: 'SCHEDULE', conditions: [] as never, actions: [action] as never, enabled: !!b.autoBidAdjust, dryRun: true, maxExecutionsPerDay: 4, createdBy: userId ?? null } })
+          rulesCreated.push({ id: rule.id, name: rule.name })
+        } catch (e) { logger.error('[single-launch] bid rule failed', { error: (e as Error).message }) }
+      }
+      if (b.addNegativeRule) {
+        try {
+          const rule = await prisma.automationRule.create({ data: { name: `${name} — Negative Targeting`.slice(0, 120), description: 'Negative rule from Single Campaign builder', domain: 'advertising', trigger: 'SCHEDULE', conditions: [] as never, actions: [{ type: 'harvest_and_negate', control: 'manual', mode: 'negative', windowDays: 60, minSpendCents: 1000, minOrders: 0, sources: [{ adGroupId: ag.id, campaignId: camp.id, harvestFrom: true, graduate: [], negate: ['EXACT'] }], destinations: {} }] as never, enabled: true, dryRun: true, maxExecutionsPerDay: 3, createdBy: userId ?? null } })
+          rulesCreated.push({ id: rule.id, name: rule.name })
+        } catch (e) { logger.error('[single-launch] negative rule failed', { error: (e as Error).message }) }
+      }
+      logger.warn('[single-launch] created campaign', { market, name, campaignId: camp.id, rules: rulesCreated.length, actor: userId })
+      return { ok: true, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, rules: rulesCreated }
+    } catch (e) {
+      logger.error('[single-launch] failed', { name, market, error: (e as Error).message })
+      reply.status(500); return { ok: false, error: (e as Error).message }
+    }
+  })
+
   // ── AT.3 — suggested bid per Auto-targeting group (READ; works pre-launch + while
   // writes are gated). Anchored to the account's OWN median CPC (data-grounded, via
   // ads-bid-suggest), scaled by the same intent multipliers as the smart defaults. ──

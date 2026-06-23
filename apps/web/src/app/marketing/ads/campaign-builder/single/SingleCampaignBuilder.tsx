@@ -14,8 +14,9 @@
  * + shared Bid Strategy) · SB.4 (products + budget) · SB.5 (targeting) · SB.6 (rules +
  * automation) · SB.7 (review + launch).
  */
-import { Fragment, useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { ChevronDown, Pencil, Trash2, CheckCircle2 } from 'lucide-react'
 import { Input } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { InfoTip } from '../../campaigns/InfoTip'
@@ -23,6 +24,7 @@ import { PortfolioPicker } from '../sp-super-wizard/PortfolioPicker'
 import { ProductSelection, type SpwProduct } from '../sp-super-wizard/ProductSelection'
 import { PlacementBidMultiplier, type PlacementBids, emptyPlacementBids } from '../../_shared/PlacementBidMultiplier'
 import { BidStrategyCardGrid, defaultBidConfig, type BidConfig } from '../../_shared/BidStrategy'
+import { KeywordTargetingPanel, deriveKeywordSuggestions, type KwBid, type NegKw } from '../../_shared/KeywordTargetingPanel'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -41,6 +43,19 @@ const SITES: Array<{ key: SitesOpt; label: string; desc: string }> = [
   { key: 'amazon', label: 'Amazon and beyond', desc: 'Ads appear on Amazon—including both Amazon retail and Amazon Business—as well as select sites and apps off Amazon.' },
   { key: 'business', label: 'Amazon Business', desc: 'Use a B2B strategy to increase sales and exclusively reach business shoppers on Amazon Business.' },
 ]
+
+// SB.6 — a rule attached to this campaign: either an existing Rules & Automation rule, or a
+// new "Guided campaign Negative" added inline. Persisted at launch (SB.7) via the Rules engine.
+interface CampaignRule { id: string; name: string; type: string; ruleId?: string }
+const ruleTypeLabel = (r: { trigger?: string | null; name?: string | null }): string => {
+  const s = `${r.trigger ?? ''} ${r.name ?? ''}`.toLowerCase()
+  if (s.includes('negativ')) return 'Negative Targeting'
+  if (s.includes('harvest')) return 'Keyword Harvesting'
+  if (s.includes('budget')) return 'Budget'
+  if (s.includes('daypart')) return 'Dayparting'
+  if (s.includes('bid')) return 'Bid'
+  return 'Automation Rule'
+}
 
 type StepN = 1 | 2
 const STEPS: Array<{ n: StepN; label: string }> = [
@@ -97,6 +112,68 @@ export function SingleCampaignBuilder() {
   const sug = (base: number) => ({ val: base.toFixed(2), lo: (base * 0.73).toFixed(2), hi: (base * 1.27).toFixed(2) })
   const sugBid = sugBidEur ? sug(sugBidEur) : null
   const sugBudget = sugBidEur ? sug(sugBidEur * 50) : null
+  // SB.5 — Targeting (keyword / product). Suggested keywords derive from the selected products.
+  const [targetMode, setTargetMode] = useState<'keyword' | 'product'>('keyword')
+  const [keywords, setKeywords] = useState<KwBid[]>([])
+  const [negKeywords, setNegKeywords] = useState<NegKw[]>([])
+  const [productTargets, setProductTargets] = useState<SpwProduct[]>([])
+  const kwSuggestions = useMemo(() => deriveKeywordSuggestions(products.map((p) => p.name)), [products])
+  // SB.6 — Campaign Rules (attach existing / add negative — via the Rules engine) + automation
+  const [campaignRules, setCampaignRules] = useState<CampaignRule[]>([])
+  const [existingRules, setExistingRules] = useState<Array<{ id: string; name: string; type: string }>>([])
+  const [addRuleOpen, setAddRuleOpen] = useState(false)
+  const [pickMode, setPickMode] = useState(false)
+  const [autoBidAdjust, setAutoBidAdjust] = useState(true)
+  const [ruleToast, setRuleToast] = useState(false)
+  const addRuleRef = useRef<HTMLDivElement>(null)
+  const ruleSeq = useRef(0)
+  useEffect(() => {
+    let alive = true
+    fetch(`${getBackendUrl()}/api/advertising/automation-rules`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (alive && Array.isArray(j?.items)) setExistingRules(j.items.map((it: { id: string; name: string; trigger?: string }) => ({ id: it.id, name: it.name, type: ruleTypeLabel(it) }))) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (addRuleRef.current && !addRuleRef.current.contains(e.target as Node)) { setAddRuleOpen(false); setPickMode(false) } }
+    document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h)
+  }, [])
+  const flashToast = () => { setRuleToast(true); window.setTimeout(() => setRuleToast(false), 2500) }
+  const addNegativeRule = () => { ruleSeq.current += 1; setCampaignRules((rs) => [...rs, { id: `neg-${ruleSeq.current}`, name: 'Guided campaign Negative', type: 'Negative Targeting' }]); setAddRuleOpen(false); setPickMode(false); flashToast() }
+  const attachRule = (r: { id: string; name: string; type: string }) => { setCampaignRules((rs) => (rs.some((x) => x.ruleId === r.id) ? rs : [...rs, { id: `att-${r.id}`, name: r.name, type: r.type, ruleId: r.id }])); setAddRuleOpen(false); setPickMode(false); flashToast() }
+  const removeRule = (id: string) => setCampaignRules((rs) => rs.filter((r) => r.id !== id))
+  // SB.7 — Review & Launch
+  const [launching, setLaunching] = useState(false)
+  const [launchErr, setLaunchErr] = useState('')
+  const launch = useCallback(async () => {
+    if (launching) return
+    if (!name.trim()) { setLaunchErr('Enter a campaign name (Campaign Details) before launching.'); return }
+    setLaunching(true); setLaunchErr('')
+    try {
+      const payload = {
+        market: 'IT', name: name.trim(), adGroupName: adGroup.trim() || undefined, portfolioId: portfolioId || undefined,
+        biddingStrategy, sites,
+        placementBids: { tos: bidMult.tos, pdp: bidMult.pdp, ros: bidMult.ros },
+        products: products.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined, productId: p.id })),
+        budgetEur: Number(budget) || undefined, defaultBidEur: Number(defaultBid) || undefined,
+        bidConfig: bidConfig.strategy !== 'none' ? bidConfig : undefined,
+        targetMode,
+        keywords: targetMode === 'keyword' ? keywords.map((k) => ({ text: k.text, matchType: k.matchType, bidEur: Number(k.bidEur) || undefined })) : undefined,
+        negKeywords: negKeywords.map((n) => ({ text: n.text, matchType: n.matchType })),
+        productTargets: targetMode === 'product' ? productTargets.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined })) : undefined,
+        addNegativeRule: campaignRules.some((r) => r.type === 'Negative Targeting'),
+        attachRuleIds: campaignRules.filter((r) => r.ruleId).map((r) => r.ruleId as string),
+        autoBidAdjust,
+      }
+      const r = await fetch(`${getBackendUrl()}/api/advertising/campaign-builder/single/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Launch failed')
+      router.push('/marketing/ads/campaigns')
+    } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
+  }, [launching, name, adGroup, portfolioId, biddingStrategy, sites, bidMult, products, budget, defaultBid, bidConfig, targetMode, keywords, negKeywords, productTargets, campaignRules, autoBidAdjust, router])
+  const bidLabel = bidConfig.strategy === 'none' ? 'None' : (({ maxImpressions: 'Max Impressions', targetAcos: 'Target ACoS', maxOrders: 'Max Orders', custom: 'Custom' } as Record<string, string>)[bidConfig.strategy] ?? '—')
+  const placementParts = [bidMult.tos && `ToS ${bidMult.tos}%`, bidMult.pdp && `PDP ${bidMult.pdp}%`, bidMult.ros && `RoS ${bidMult.ros}%`].filter(Boolean)
 
   const goNext = useCallback(() => setStep((s) => (s < 2 ? ((s + 1) as StepN) : s)), [])
   const goBack = useCallback(() => setStep((s) => (s > 1 ? ((s - 1) as StepN) : s)), [])
@@ -274,16 +351,110 @@ export function SingleCampaignBuilder() {
               </section>
               <section id="scb-targeting" className="h10-spw-sec">
                 <h2>Targeting</h2>
-                <div className="h10-spw-card"><p className="h10-scb-todo">Keyword / Product targeting — SB.5</p></div>
+                <div className="h10-scb-radios h10-scb-tgtmode">
+                  <label className={`h10-scb-radio ${targetMode === 'keyword' ? 'on' : ''}`}>
+                    <input type="radio" name="scb-tgtmode" checked={targetMode === 'keyword'} onChange={() => setTargetMode('keyword')} />
+                    <span className="rb"><b>Keyword Targeting</b></span>
+                  </label>
+                  <label className={`h10-scb-radio ${targetMode === 'product' ? 'on' : ''}`}>
+                    <input type="radio" name="scb-tgtmode" checked={targetMode === 'product'} onChange={() => setTargetMode('product')} />
+                    <span className="rb"><b>Product Targeting</b></span>
+                  </label>
+                </div>
+                {targetMode === 'keyword' ? (
+                  <>
+                    <h3 className="h10-scb-subhead">Add Keywords</h3>
+                    <KeywordTargetingPanel keywords={keywords} setKeywords={setKeywords} negKeywords={negKeywords} setNegKeywords={setNegKeywords} suggestions={kwSuggestions} defaultBid={defaultBid} />
+                  </>
+                ) : (
+                  <>
+                    <h3 className="h10-scb-subhead">Add Products to Target</h3>
+                    <ProductSelection products={productTargets} setProducts={setProductTargets} />
+                  </>
+                )}
+              </section>
+
+              <section className="h10-spw-sec">
+                <h2>Campaign Rules</h2>
+                <p className="h10-spw-desc">Click on rules to edit or view details. Suggestions generated by rules will appear on the Suggestions Page.</p>
+                <div className="h10-spw-card h10-scb-rules">
+                  <div className="rh">
+                    <span className="cnt">{campaignRules.length} Rule{campaignRules.length === 1 ? '' : 's'}</span>
+                    <div className="addwrap" ref={addRuleRef}>
+                      <button type="button" className="addbtn" aria-haspopup="menu" aria-expanded={addRuleOpen} onClick={() => { setAddRuleOpen((o) => !o); setPickMode(false) }}><ChevronDown size={15} /> Add Rule</button>
+                      {addRuleOpen && (
+                        <div className="menu" role="menu">
+                          {!pickMode ? (
+                            <>
+                              <button type="button" role="menuitem" onClick={() => setPickMode(true)}>Add Campaign to Rule</button>
+                              <button type="button" role="menuitem" onClick={addNegativeRule}>Add Negative Rule</button>
+                            </>
+                          ) : (
+                            <div className="picklist">
+                              <div className="ph">Attach to an existing rule</div>
+                              {existingRules.length === 0 ? (
+                                <div className="pe">No rules yet. Create one in Rules &amp; Automation.</div>
+                              ) : existingRules.map((r) => (
+                                <button type="button" key={r.id} role="menuitem" onClick={() => attachRule(r)}><span className="n">{r.name}</span><span className="t">{r.type}</span></button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="tbl">
+                    <div className="thd"><span>Rule</span><span>Rule Type</span></div>
+                    {campaignRules.length === 0 ? (
+                      <div className="nodata">No data</div>
+                    ) : campaignRules.map((r) => (
+                      <div className="trow" key={r.id}>
+                        <span className="rname">
+                          <button type="button" className="ic" aria-label={`Edit ${r.name}`}><Pencil size={13} /></button>
+                          <button type="button" className="ic del" onClick={() => removeRule(r.id)} aria-label={`Delete ${r.name}`}><Trash2 size={13} /></button>
+                          {r.name}
+                        </span>
+                        <span className="rtype">{r.type}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              <section className="h10-spw-sec">
+                <h2>Keyword and Bid Suggestion Automation</h2>
+                <p className="h10-spw-desc">Automation makes bid adjustments automatically. You can adjust automation for launched campaigns in Rules &amp; Automation.</p>
+                <label className="h10-scb-autotoggle">
+                  <button type="button" className={`h10-scb-sw ${autoBidAdjust ? 'on' : ''}`} role="switch" aria-checked={autoBidAdjust} aria-label="Automatic Bid Adjustment" onClick={() => setAutoBidAdjust((v) => !v)}><span /></button>
+                  Automatic Bid Adjustment
+                </label>
               </section>
             </div>
           </div>
         )}
 
         {step === 2 && (
-          <div className="h10-spw-stub-step">
+          <div className="h10-spw-stub-step h10-scb-review">
             <h2>Review and Launch</h2>
-            <div className="h10-spw-card"><p className="h10-scb-todo">Campaign recap + launch — SB.7</p></div>
+            <p className="h10-spw-desc">Review your campaign before launching. Go Back to make changes.</p>
+            <div className="h10-spw-card h10-scb-review-card">
+              <h3>{name.trim() || 'Untitled campaign'}</h3>
+              <div className="grid">
+                <div className="f"><span className="l">Ad Group</span><span className="v">{adGroup.trim() || `${name.trim() || 'Campaign'} Ad Group`}</span></div>
+                <div className="f"><span className="l">Portfolio</span><span className="v">{portfolioId ? 'Selected' : 'None'}</span></div>
+                <div className="f"><span className="l">Bidding Strategy</span><span className="v">{BIDDING.find((x) => x.key === biddingStrategy)?.label ?? '—'}</span></div>
+                <div className="f"><span className="l">Sites</span><span className="v">{SITES.find((x) => x.key === sites)?.label ?? '—'}</span></div>
+                <div className="f"><span className="l">Daily Budget</span><span className="v">{budget ? `€${budget}` : '—'}</span></div>
+                <div className="f"><span className="l">Default Bid</span><span className="v">{defaultBid ? `€${defaultBid}` : '—'}</span></div>
+                <div className="f"><span className="l">Bid Strategy</span><span className="v">{bidLabel}{bidConfig.strategy === 'targetAcos' && bidConfig.targetAcos ? ` · ${bidConfig.targetAcos}% ACoS` : ''}</span></div>
+                <div className="f"><span className="l">Placement</span><span className="v">{placementParts.length ? placementParts.join(' · ') : 'No adjustments'}</span></div>
+                <div className="f"><span className="l">Products</span><span className="v">{products.length}</span></div>
+                <div className="f"><span className="l">Targeting</span><span className="v">{targetMode === 'keyword' ? `${keywords.length} keyword${keywords.length === 1 ? '' : 's'}` : `${productTargets.length} product target${productTargets.length === 1 ? '' : 's'}`}{negKeywords.length ? ` · ${negKeywords.length} negative` : ''}</span></div>
+                <div className="f"><span className="l">Campaign Rules</span><span className="v">{campaignRules.length}</span></div>
+                <div className="f"><span className="l">Auto Bid Adjustment</span><span className="v">{autoBidAdjust ? 'On' : 'Off'}</span></div>
+              </div>
+            </div>
+            {launchErr && <div className="h10-scb-launcherr">{launchErr}</div>}
           </div>
         )}
       </div>
@@ -291,10 +462,12 @@ export function SingleCampaignBuilder() {
       <footer className="h10-spw-foot">
         {step > 1 && <button type="button" className="h10-spw-back" onClick={goBack}>Back</button>}
         <span className="grow" />
-        <button type="button" className="h10-spw-next" onClick={() => (step < 2 ? goNext() : undefined)}>
-          {step < 2 ? 'Continue' : 'Launch Campaign'}
+        <button type="button" className="h10-spw-next" onClick={() => (step < 2 ? goNext() : void launch())} disabled={launching}>
+          {step < 2 ? 'Continue' : launching ? 'Launching…' : 'Launch Campaign'}
         </button>
       </footer>
+
+      {ruleToast && <div className="h10-scb-toast" role="status"><CheckCircle2 size={16} /> Rule Added!</div>}
     </div>
   )
 }
