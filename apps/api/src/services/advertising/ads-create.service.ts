@@ -35,7 +35,7 @@ async function audit(actionType: string, entityType: string, entityId: string, p
 export interface NewCampaign {
   name: string; type: 'SP' | 'SB' | 'SD'; marketplace: string
   targetingType?: 'MANUAL' | 'AUTO'; dailyBudgetEur: number
-  biddingStrategy?: 'legacyForSales' | 'autoForSales' | 'manual'; userId?: string
+  biddingStrategy?: 'legacyForSales' | 'autoForSales' | 'manual'; portfolioId?: string; userId?: string
 }
 export async function createCampaignLocal(input: NewCampaign): Promise<{ id: string; externalCampaignId: string | null; mode: string }> {
   const ctx = await resolveCtx(input.marketplace)
@@ -52,6 +52,7 @@ export async function createCampaignLocal(input: NewCampaign): Promise<{ id: str
     data: {
       name: input.name, type: input.type, adProduct, status: 'ENABLED', marketplace: input.marketplace,
       externalCampaignId: externalId, dailyBudget: input.dailyBudgetEur, biddingStrategy: (input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES'),
+      portfolioId: input.portfolioId || null,
       startDate: new Date(), lastSyncStatus: externalId ? 'SUCCESS' : 'PENDING',
     },
   })

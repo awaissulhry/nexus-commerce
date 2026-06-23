@@ -16,6 +16,7 @@ import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import { InfoTip } from '../../campaigns/InfoTip'
 import { PerformanceCriteria, pcDefaultGroup, type CriteriaGroup } from '../../rules-automation/_shared/PerformanceCriteria'
+import { PortfolioPicker } from './PortfolioPicker'
 import type { SpwCampaign } from './CampaignSetup'
 
 const money = (cur: string, n: number) => `${cur}${n.toFixed(2)}`
@@ -59,7 +60,7 @@ const BID_STRATEGIES: Array<{ key: Exclude<BidStrategy, 'none'>; label: string; 
   { key: 'custom', label: 'Custom', desc: 'Create a custom rule that adjusts a target’s bid based on your set performance criteria.', stage: 'Custom', Icon: SlidersHorizontal },
 ]
 
-export function LaunchStep({ campaigns, productGroupName, productCount, currency, automationMode, setAutomationMode, bidConfig, setBidConfig, rules, setRules }: {
+export function LaunchStep({ campaigns, productGroupName, productCount, currency, automationMode, setAutomationMode, bidConfig, setBidConfig, rules, setRules, portfolioId, setPortfolioId }: {
   campaigns: SpwCampaign[]
   productGroupName: string
   productCount: number
@@ -70,6 +71,8 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
   setBidConfig: Dispatch<SetStateAction<BidConfig>>
   rules: { harvest: RulesConfig; negative: RulesConfig }
   setRules: Dispatch<SetStateAction<{ harvest: RulesConfig; negative: RulesConfig }>>
+  portfolioId: string
+  setPortfolioId: (id: string) => void
 }) {
   const [portfolioOpen, setPortfolioOpen] = useState(false)
   const [tab, setTab] = useState<'harvest' | 'negative'>('harvest')
@@ -153,7 +156,7 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
           <div className="f"><span className="l">Bid Algorithm</span><span className="v">{algoLabel}</span></div>
         </div>
         <button type="button" className="h10-spw-pgd-port" onClick={() => setPortfolioOpen((o) => !o)}><ChevronDown size={15} className={portfolioOpen ? 'up' : ''} /> Portfolio Association (Optional)</button>
-        {portfolioOpen && <div className="h10-spw-pgd-portbody">No portfolio selected.</div>}
+        {portfolioOpen && <div className="h10-spw-pgd-portbody"><PortfolioPicker value={portfolioId} onChange={setPortfolioId} /></div>}
       </div>
 
       {/* Sponsored Campaign Set */}

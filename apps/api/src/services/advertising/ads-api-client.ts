@@ -317,6 +317,17 @@ export async function listPortfolios(ctx: ClientContext): Promise<AdsPortfolioDT
   if (!Array.isArray(resp)) return []
   return resp.map((p) => ({ portfolioId: String(p.portfolioId), name: String(p.name ?? ''), state: typeof p.state === 'string' ? p.state : undefined }))
 }
+// PA.2 — create a portfolio (v2 POST /v2/portfolios). Sandbox returns a generated id.
+export async function createPortfolio(ctx: ClientContext, input: { name: string; state?: 'enabled' | 'paused' }): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null }> {
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-pf-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createPortfolio', { input, externalId })
+    return { ok: true, mode: 'sandbox', externalId }
+  }
+  const resp = await liveCall<Array<{ portfolioId?: string | number }>>({ ...ctx, method: 'POST', path: '/v2/portfolios', body: [{ name: input.name, state: input.state ?? 'enabled' }] })
+  const id = Array.isArray(resp) ? resp[0]?.portfolioId : undefined
+  return { ok: true, mode: 'live', externalId: id != null ? String(id) : null }
+}
 
 // B — live v3 campaign-settings read. POST /sp/campaigns/list returns each campaign's
 // CURRENT dynamicBidding (strategy + placementBidding %), budget and state — the

@@ -2055,6 +2055,10 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-pgd-port svg { transition: transform .15s; }
 .h10-spw-pgd-port svg.up { transform: rotate(180deg); }
 .h10-spw-pgd-portbody { margin-top: 12px; font-size: 13px; color: #8a93a1; }
+/* PA — portfolio picker (select existing + create) */
+.h10-spw-pf { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.h10-spw-pf-new { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12.5px; font-weight: 600; color: #1f6fde; background: none; border: none; cursor: pointer; padding: 2px 0; }
+.h10-spw-pf-new:hover { text-decoration: underline; }
 
 /* Sponsored Campaign Set summary */
 .h10-spw-sum-tbl { border: 1px solid #e6e9ee; border-radius: 10px; overflow: hidden; }

@@ -61,6 +61,7 @@ export function SpSuperWizard() {
   const [autoNegate, setAutoNegate] = useState(true)
   const [rules, setRules] = useState<{ harvest: RulesConfig; negative: RulesConfig }>({ harvest: defaultRulesConfig('keyword-harvesting'), negative: defaultRulesConfig('negative-targeting') })
   const [bidConfig, setBidConfig] = useState<BidConfig>(defaultBidConfig())
+  const [portfolioId, setPortfolioId] = useState('')
 
   // Step 2 campaigns are generated from the step-1 structure; Restore Default re-generates.
   // applyAutoNegatives layers the negative-keyword funnel + Auto-isolation on top (NT.1).
@@ -102,13 +103,14 @@ export function SpSuperWizard() {
         },
         automationMode,
         bidConfig: automationMode === 'rule' && bidConfig.strategy !== 'none' ? bidConfig : undefined,
+        portfolioId: portfolioId || undefined,
       }
       const r = await fetch(`${getBackendUrl()}/api/advertising/campaign-builder/sp-super-wizard/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json().catch(() => ({}))
       if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Launch failed')
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, productGroupName, products, campaigns, bidMult, rules, automationMode, bidConfig, router])
+  }, [launching, productGroupName, products, campaigns, bidMult, rules, automationMode, bidConfig, portfolioId, router])
 
 
   // Scroll-spy for the step-1 sub-nav. The scroll container is the .h10-main
@@ -208,7 +210,7 @@ export function SpSuperWizard() {
           </div>
         )}
 
-        {step === 3 && <LaunchStep campaigns={campaigns} productGroupName={productGroupName} productCount={products.length} currency="€" automationMode={automationMode} setAutomationMode={setAutomationMode} bidConfig={bidConfig} setBidConfig={setBidConfig} rules={rules} setRules={setRules} />}
+        {step === 3 && <LaunchStep campaigns={campaigns} productGroupName={productGroupName} productCount={products.length} currency="€" automationMode={automationMode} setAutomationMode={setAutomationMode} bidConfig={bidConfig} setBidConfig={setBidConfig} rules={rules} setRules={setRules} portfolioId={portfolioId} setPortfolioId={setPortfolioId} />}
       </div>
 
       <footer className="h10-spw-foot">

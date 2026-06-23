@@ -23,7 +23,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { Prisma } from '@prisma/client'
 import { logger } from '../utils/logger.js'
-import { testConnection, adsMode, listPortfolios, type AdsRegion } from '../services/advertising/ads-api-client.js'
+import { testConnection, adsMode, listPortfolios, createPortfolio, type AdsRegion } from '../services/advertising/ads-api-client.js'
 import { allocate, microsToCents, toEurCents } from '../services/advertising/ads-metrics-math.js'
 import { detectKeywordConflicts } from '../services/advertising/keyword-conflicts.service.js'
 import { getFxRate } from '../services/fx-rate.service.js'
@@ -868,6 +868,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       rules?: { harvest?: SpwRule; negative?: SpwRule }
       automationMode?: 'rule' | 'ai'
       bidConfig?: { strategy?: string; targetAcos?: string; minBid?: string; maxBid?: string }
+      portfolioId?: string
       dryRun?: boolean
     }
     const market = b.market || 'IT'
@@ -895,7 +896,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const bidEur = Number(c.bidEur) || 0.75
         const budgetEur = Number(c.budgetEur) || 10
-        const camp = await createCampaignLocal({ name: c.name, type: 'SP', marketplace: market, targetingType: c.kind === 'auto' ? 'AUTO' : 'MANUAL', dailyBudgetEur: budgetEur, biddingStrategy: 'legacyForSales', userId })
+        const camp = await createCampaignLocal({ name: c.name, type: 'SP', marketplace: market, targetingType: c.kind === 'auto' ? 'AUTO' : 'MANUAL', dailyBudgetEur: budgetEur, biddingStrategy: 'legacyForSales', portfolioId: b.portfolioId, userId })
         const ag = await createAdGroupLocal({ campaignId: camp.id, name: c.adGroupName || `${c.name} Ad Group`, defaultBidEur: bidEur, userId })
         if (c.id) idMap[c.id] = { campaignId: camp.id, adGroupId: ag.id }
         for (const p of products) { try { await createProductAdLocal({ adGroupId: ag.id, asin: p.asin, sku: p.sku, productId: p.productId, userId }) } catch (e) { logger.warn('[SPW-launch] product ad failed', { error: (e as Error).message }) } }
@@ -5746,34 +5747,63 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const q = request.query as { marketplace?: string }
     const mk = q.marketplace && q.marketplace !== 'all' ? q.marketplace : null
     try {
-      if (adsMode() === 'sandbox') {
-        const list = await listPortfolios({ profileId: 'SANDBOX-PROFILE-IT-001', region: 'EU' })
-        return { portfolios: list.map((p) => ({ ...p, marketplace: mk ?? 'IT' })) }
-      }
-      const conns = await prisma.amazonAdsConnection.findMany({
-        where: { isActive: true, ...(mk ? { marketplace: mk } : {}) },
-        select: { profileId: true, region: true, marketplace: true },
-      })
       const seen = new Set<string>()
       const out: Array<{ portfolioId: string; name: string; state?: string; marketplace: string }> = []
-      for (const c of conns) {
-        const region = (c.region === 'NA' || c.region === 'FE' ? c.region : 'EU') as AdsRegion
-        try {
-          const list = await listPortfolios({ profileId: c.profileId, region })
-          for (const pf of list) {
-            if (seen.has(pf.portfolioId)) continue
-            seen.add(pf.portfolioId)
-            out.push({ ...pf, marketplace: c.marketplace })
+      if (adsMode() === 'sandbox') {
+        const list = await listPortfolios({ profileId: 'SANDBOX-PROFILE-IT-001', region: 'EU' })
+        for (const pf of list) { seen.add(pf.portfolioId); out.push({ ...pf, marketplace: mk ?? 'IT' }) }
+      } else {
+        const conns = await prisma.amazonAdsConnection.findMany({
+          where: { isActive: true, ...(mk ? { marketplace: mk } : {}) },
+          select: { profileId: true, region: true, marketplace: true },
+        })
+        for (const c of conns) {
+          const region = (c.region === 'NA' || c.region === 'FE' ? c.region : 'EU') as AdsRegion
+          try {
+            const list = await listPortfolios({ profileId: c.profileId, region })
+            for (const pf of list) { if (seen.has(pf.portfolioId)) continue; seen.add(pf.portfolioId); out.push({ ...pf, marketplace: c.marketplace }) }
+          } catch (e) {
+            logger.warn('[ADS-PORTFOLIOS] fetch failed', { profileId: c.profileId, error: (e as Error)?.message })
           }
-        } catch (e) {
-          logger.warn('[ADS-PORTFOLIOS] fetch failed', { profileId: c.profileId, error: (e as Error)?.message })
         }
       }
+      // PA — include locally-created portfolios (gated; not yet on Amazon's live list).
+      try {
+        const local = await prisma.amazonAdsPortfolio.findMany({ select: { externalPortfolioId: true, name: true } })
+        for (const lp of local) { if (!seen.has(lp.externalPortfolioId)) { seen.add(lp.externalPortfolioId); out.push({ portfolioId: lp.externalPortfolioId, name: lp.name, marketplace: mk ?? 'IT' }) } }
+      } catch { /* local merge best-effort */ }
       return { portfolios: out }
     } catch (e) {
       reply.status(500)
       return { error: (e as Error)?.message ?? 'portfolios fetch failed', portfolios: [] }
     }
+  })
+
+  // PA.2 — create a portfolio (gated-local: stored as an AmazonAdsPortfolio row; pushed to
+  // Amazon only when the write gate is open). Returns the new portfolio for the picker.
+  fastify.post('/advertising/portfolios', async (request, reply) => {
+    const body = request.body as { name?: string; marketplace?: string }
+    const name = (body.name ?? '').trim()
+    if (!name) { reply.status(400); return { error: 'name required' } }
+    const marketplace = body.marketplace || 'IT'
+    let externalId: string | null = null, mode = 'local', profileId = `local-${marketplace}`
+    try {
+      const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true, region: true } })
+      if (conn) {
+        profileId = conn.profileId
+        const region = (conn.region === 'NA' || conn.region === 'FE' ? conn.region : 'EU') as AdsRegion
+        const { checkAdsWriteGate } = await import('../services/advertising/ads-write-gate.js')
+        const gate = await checkAdsWriteGate({ marketplace, payloadValueCents: 0 })
+        if (gate.allowed) { const r = await createPortfolio({ profileId, region }, { name, state: 'enabled' }); externalId = r.externalId; mode = r.mode }
+      }
+      if (!externalId) externalId = `local-pf-${profileId}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24)}`
+      const pf = await prisma.amazonAdsPortfolio.upsert({
+        where: { profileId_externalPortfolioId: { profileId, externalPortfolioId: externalId } },
+        update: { name }, create: { profileId, externalPortfolioId: externalId, name, state: 'ENABLED' },
+      })
+      logger.warn('[ADS-PORTFOLIOS] created portfolio', { externalId, name, mode })
+      return { ok: true, portfolio: { portfolioId: pf.externalPortfolioId, name: pf.name }, mode }
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message ?? 'create failed' } }
   })
 
   fastify.patch('/advertising/campaigns/:id', async (request, reply) => {
