@@ -925,6 +925,105 @@ export class AmazonSpApiClient {
   }
 
   /**
+   * ALA Phase 3 — VALIDATION_PREVIEW pre-check.
+   *
+   * Runs Amazon's OWN validation against a listing payload WITHOUT committing it
+   * to the catalog (Listings Items mode=VALIDATION_PREVIEW). This is the
+   * authoritative "what's wrong with the feed" gate — it returns the issues array
+   * (errors + warnings, each with attributeNames), so we catch problems BEFORE
+   * the feed round-trip rather than after a rejection.
+   *
+   * Mirrors the real operation so it never raises a FALSE-POSITIVE "missing
+   * required" on a partial edit:
+   *   - patches  → PATCH (PARTIAL_UPDATE; only the changed attributes are
+   *     validated — an unchanged required attr we aren't touching is not flagged).
+   *   - attributes → PUT (full UPDATE; validates the whole required set, correct
+   *     for a brand-new listing).
+   *
+   * NON-MUTATING: VALIDATION_PREVIEW never creates or changes a listing, so —
+   * unlike the write paths (putListingsItem/submitListingPayload) — it is NOT
+   * short-circuited by the publish gate. A pre-check is useful precisely when
+   * publishing is gated/dry-run. When SP-API credentials are unavailable it
+   * returns { available:false } so the caller surfaces "couldn't validate"
+   * instead of a false pass/fail. A transport error is also reported as
+   * unavailable — our inability to reach Amazon must not hard-block a publish.
+   */
+  async validateListing(options: {
+    sellerId: string
+    sku: string
+    marketplaceId: string
+    productType: string
+    /** Full attribute set — triggers a PUT (full-update) validation. */
+    attributes?: Record<string, unknown>
+    /** JSON Patch (RFC 6902) ops — triggers a PATCH (partial-update) validation. */
+    patches?: Array<{ op: string; path: string; value?: unknown }>
+    requirements?: string
+  }): Promise<{
+    /** true when Amazon returned no ERROR-severity issues. */
+    ok: boolean
+    /** false when we couldn't run the preview (no creds / transport error). */
+    available: boolean
+    status?: string
+    errors: string | null
+    warnings: Array<{ code: string; message: string; severity: 'WARNING' | 'INFO'; attributeNames?: string[] }>
+    issues?: SPAPIResponse['issues']
+    rawResponse?: SPAPIResponse
+  }> {
+    const { sellerId, sku, marketplaceId, productType, attributes, patches, requirements = 'LISTING' } = options
+    const usePatch = Array.isArray(patches) && patches.length > 0
+
+    let accessToken: string
+    try {
+      accessToken = await this.getAccessToken()
+    } catch (err) {
+      logger.warn('validateListing: SP-API credentials unavailable, skipping preview', {
+        sku, error: err instanceof Error ? err.message : String(err),
+      })
+      return { ok: false, available: false, errors: null, warnings: [] }
+    }
+
+    try {
+      // VALIDATION_PREVIEW must hit the PRODUCTION host — the sandbox returns
+      // canned responses, not a real validation of our payload.
+      const url = new URL(
+        `https://sellingpartnerapi-${this.region}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(sku)}`,
+      )
+      url.searchParams.set('marketplaceIds', marketplaceId)
+      url.searchParams.set('mode', 'VALIDATION_PREVIEW')
+
+      const body = usePatch
+        ? { productType, patches }
+        : { productType, requirements, attributes: attributes ?? {} }
+
+      const response = await this.fetchWithRetry(
+        url.toString(),
+        {
+          method: usePatch ? 'PATCH' : 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-amzn-requestid': `nexus-vp-${Date.now()}`,
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(body),
+        },
+        `validateListing(${sku})`,
+      )
+
+      const data = (await response.json()) as SPAPIResponse
+      const errors = this.parseErrors(data)
+      const warnings = this.parseWarnings(data)
+      logger.info('validateListing (VALIDATION_PREVIEW) complete', {
+        sku, mode: usePatch ? 'PATCH' : 'PUT', ok: errors == null, warningCount: warnings.length,
+      })
+      return { ok: errors == null, available: true, status: data.status, errors, warnings, issues: data.issues, rawResponse: data }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      logger.error('validateListing failed', { sku, error: message })
+      return { ok: false, available: false, errors: message, warnings: [] }
+    }
+  }
+
+  /**
    * W5.49 — deleteListingsItem.
    *
    * Listings Items v2021-08-01 DELETE endpoint. Removes the seller's offer

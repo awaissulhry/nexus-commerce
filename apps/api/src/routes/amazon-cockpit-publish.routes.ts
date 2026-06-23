@@ -35,6 +35,7 @@ import {
 } from '../services/amazon/flat-file.service.js'
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
 import { checkLengthLimits, type LengthColumn } from '../services/listing-preflight.service.js'
+import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 
 const amazon = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazon)
@@ -72,6 +73,10 @@ interface SubmissionResult {
   messageCount: number
   dryRun: boolean
   error: string | null
+  /** ALA Phase 3 — Amazon VALIDATION_PREVIEW issues array (when the pre-check ran). */
+  issues?: unknown
+  /** Non-blocking VALIDATION_PREVIEW warnings worth surfacing to the operator. */
+  warnings?: Array<{ code: string; message: string; severity: 'WARNING' | 'INFO'; attributeNames?: string[] }>
 }
 
 // Bullets are the only multi-instance columns buildRow emits — map bullet_point_N
@@ -363,6 +368,48 @@ export default async function amazonCockpitPublishRoutes(
           continue
         }
 
+        // ALA Phase 3 — VALIDATION_PREVIEW pre-check. Ask Amazon's OWN validation
+        // what's wrong with this payload BEFORE the feed round-trip. Mirror the
+        // feed's operationType (PATCH for a partial edit, PUT for a new listing)
+        // so an unchanged required attr isn't falsely flagged. Non-mutating; it
+        // blocks the submit only on Amazon-confirmed ERROR issues. A pre-check
+        // that can't run (no creds / transport error) never blocks — we proceed.
+        let previewWarnings: SubmissionResult['warnings'] = undefined
+        try {
+          const feedObj = JSON.parse(feedBody) as {
+            messages?: Array<{ operationType?: string; productType?: string; attributes?: Record<string, unknown> }>
+          }
+          const msg = feedObj.messages?.[0]
+          const attrs = (msg?.attributes ?? {}) as Record<string, unknown>
+          const opType = String(msg?.operationType ?? '')
+          const pt = String(msg?.productType ?? row.product_type ?? '')
+          if (opType !== 'DELETE' && Object.keys(attrs).length > 0) {
+            const preview = opType === 'UPDATE'
+              ? await amazonSpApiClient.validateListing({
+                  sellerId, sku: String(product.sku), marketplaceId, productType: pt, attributes: attrs,
+                })
+              : await amazonSpApiClient.validateListing({
+                  sellerId, sku: String(product.sku), marketplaceId, productType: pt,
+                  patches: Object.entries(attrs).map(([k, v]) => ({ op: 'replace', path: `/attributes/${k}`, value: v })),
+                })
+            if (preview.available) {
+              previewWarnings = preview.warnings.length > 0 ? preview.warnings : undefined
+              if (!preview.ok) {
+                result.error = `Amazon validation failed (pre-check) — ${preview.errors}`
+                result.issues = preview.issues
+                result.warnings = previewWarnings
+                submissions.push(result)
+                continue
+              }
+            }
+          }
+        } catch (vErr: any) {
+          request.log.warn(
+            { err: vErr?.message, marketplace: mp },
+            'cockpit publish: VALIDATION_PREVIEW pre-check errored, proceeding to submit',
+          )
+        }
+
         // Step 1: create feed document.
         const docRes: any = await sp.callAPI({
           operation: 'createFeedDocument',
@@ -399,6 +446,7 @@ export default async function amazonCockpitPublishRoutes(
           feedId: feedRes.feedId,
           feedDocumentId: docRes.feedDocumentId,
           messageCount: 1,
+          warnings: previewWarnings,
         })
       } catch (err: any) {
         result.error = err?.message ?? String(err)
