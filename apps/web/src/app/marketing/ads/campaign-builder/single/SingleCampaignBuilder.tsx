@@ -155,7 +155,9 @@ export function SingleCampaignBuilder() {
         market: 'IT', name: name.trim(), adGroupName: adGroup.trim() || undefined, portfolioId: portfolioId || undefined,
         biddingStrategy, sites,
         placementBids: { tos: bidMult.tos, pdp: bidMult.pdp, ros: bidMult.ros },
+        bidBoosts: { video: bidMult.videoBoost, amazonBusiness: bidMult.abBoost, amazonBusinessPct: bidMult.abBoostPct, audience: bidMult.audienceMod },
         products: products.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined, productId: p.id })),
+        sponsoredVideoAsins: products.filter((p) => svEnabled.has(p.id)).map((p) => p.asin || p.sku).filter(Boolean),
         budgetEur: Number(budget) || undefined, defaultBidEur: Number(defaultBid) || undefined,
         bidConfig: bidConfig.strategy !== 'none' ? bidConfig : undefined,
         targetMode,
@@ -171,7 +173,7 @@ export function SingleCampaignBuilder() {
       if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Launch failed')
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, name, adGroup, portfolioId, biddingStrategy, sites, bidMult, products, budget, defaultBid, bidConfig, targetMode, keywords, negKeywords, productTargets, campaignRules, autoBidAdjust, router])
+  }, [launching, name, adGroup, portfolioId, biddingStrategy, sites, bidMult, products, svEnabled, budget, defaultBid, bidConfig, targetMode, keywords, negKeywords, productTargets, campaignRules, autoBidAdjust, router])
   const bidLabel = bidConfig.strategy === 'none' ? 'None' : (({ maxImpressions: 'Max Impressions', targetAcos: 'Target ACoS', maxOrders: 'Max Orders', custom: 'Custom' } as Record<string, string>)[bidConfig.strategy] ?? '—')
   const placementParts = [bidMult.tos && `ToS ${bidMult.tos}%`, bidMult.pdp && `PDP ${bidMult.pdp}%`, bidMult.ros && `RoS ${bidMult.ros}%`].filter(Boolean)
 

@@ -1018,7 +1018,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       market?: string; name?: string; adGroupName?: string; portfolioId?: string
       biddingStrategy?: 'down' | 'updown' | 'fixed'; sites?: 'amazon' | 'business'
       placementBids?: { tos?: string; pdp?: string; ros?: string }
-      products?: PRef[]; budgetEur?: number; defaultBidEur?: number
+      bidBoosts?: { video?: boolean; amazonBusiness?: boolean; amazonBusinessPct?: string; audience?: boolean }
+      products?: PRef[]; sponsoredVideoAsins?: string[]; budgetEur?: number; defaultBidEur?: number
       bidConfig?: { strategy?: string; targetAcos?: string; minBid?: string; maxBid?: string }
       targetMode?: 'keyword' | 'product'
       keywords?: Array<{ text?: string; matchType?: 'BROAD' | 'PHRASE' | 'EXACT'; bidEur?: number }>
@@ -1054,6 +1055,42 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         .flatMap(([placement, v]) => { const n = Number(v); return v && Number.isFinite(n) && n > 0 ? [{ placement, percentage: n }] : [] })
       if (adjustments.length) { try { await updatePlacementBidding({ campaignId: camp.id, adjustments, userId }) } catch (e) { logger.warn('[single-launch] placement failed', { error: (e as Error).message }) } }
 
+      // #1/#3/#4 — persist Sponsored-Video opt-ins, Sites reach, and the video/AB/audience bid
+      // boosts onto the campaign's dynamicBidding config (preserves the placementBidding just
+      // written). Forward-looking: applied to Amazon when the v3 boost write-path opens (same gate).
+      const svAsins = (b.sponsoredVideoAsins ?? []).filter(Boolean)
+      const boosts = b.bidBoosts ?? {}
+      const wantBoost = !!(boosts.video || boosts.amazonBusiness || boosts.audience)
+      if (svAsins.length || b.sites === 'business' || wantBoost) {
+        try {
+          const cur = await prisma.campaign.findUnique({ where: { id: camp.id }, select: { dynamicBidding: true } })
+          const dyn = (cur?.dynamicBidding && typeof cur.dynamicBidding === 'object' ? cur.dynamicBidding : {}) as Record<string, unknown>
+          await prisma.campaign.update({ where: { id: camp.id }, data: { dynamicBidding: {
+            ...dyn,
+            ...(b.sites ? { sites: b.sites } : {}),
+            ...(svAsins.length ? { sponsoredVideoAsins: svAsins } : {}),
+            ...(wantBoost ? { bidBoosts: { video: !!boosts.video, amazonBusiness: !!boosts.amazonBusiness, amazonBusinessPct: Number(boosts.amazonBusinessPct) || undefined, audience: !!boosts.audience } } : {}),
+          } as never } })
+        } catch (e) { logger.warn('[single-launch] config merge failed', { error: (e as Error).message }) }
+      }
+
+      // #2 — attach this campaign to existing rules: append its id to each rule action's
+      // campaignIds / sources so the Rules engine evaluates it too (read+extend, never rebuild).
+      let attachedCount = 0
+      for (const ruleId of (b.attachRuleIds ?? [])) {
+        try {
+          const rule = await prisma.automationRule.findUnique({ where: { id: ruleId }, select: { id: true, actions: true, domain: true } })
+          if (!rule || rule.domain !== 'advertising') continue
+          const actions = (Array.isArray(rule.actions) ? rule.actions : []) as Array<Record<string, unknown>>
+          let touched = false
+          for (const a of actions) {
+            if (Array.isArray(a.campaignIds) && !(a.campaignIds as string[]).includes(camp.id)) { (a.campaignIds as string[]).push(camp.id); touched = true }
+            if (Array.isArray(a.sources) && !(a.sources as Array<{ campaignId?: string }>).some((s) => s?.campaignId === camp.id)) { (a.sources as unknown[]).push({ adGroupId: ag.id, campaignId: camp.id, harvestFrom: true, graduate: [], negate: [] }); touched = true }
+          }
+          if (touched) { await prisma.automationRule.update({ where: { id: ruleId }, data: { actions: actions as never } }); attachedCount++ }
+        } catch (e) { logger.warn('[single-launch] attach rule failed', { ruleId, error: (e as Error).message }) }
+      }
+
       if (b.bidConfig?.strategy && b.bidConfig.strategy !== 'none') {
         try {
           const bc = b.bidConfig
@@ -1073,8 +1110,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           rulesCreated.push({ id: rule.id, name: rule.name })
         } catch (e) { logger.error('[single-launch] negative rule failed', { error: (e as Error).message }) }
       }
-      logger.warn('[single-launch] created campaign', { market, name, campaignId: camp.id, rules: rulesCreated.length, actor: userId })
-      return { ok: true, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, rules: rulesCreated }
+      logger.warn('[single-launch] created campaign', { market, name, campaignId: camp.id, rules: rulesCreated.length, attached: attachedCount, actor: userId })
+      return { ok: true, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, rules: rulesCreated, attached: attachedCount }
     } catch (e) {
       logger.error('[single-launch] failed', { name, market, error: (e as Error).message })
       reply.status(500); return { ok: false, error: (e as Error).message }
