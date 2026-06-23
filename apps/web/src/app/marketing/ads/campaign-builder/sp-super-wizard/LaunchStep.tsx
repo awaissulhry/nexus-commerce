@@ -67,8 +67,8 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
   setAutomationMode: (m: 'rule' | 'ai') => void
   bidConfig: BidConfig
   setBidConfig: Dispatch<SetStateAction<BidConfig>>
-  rules: RulesConfig
-  setRules: Dispatch<SetStateAction<RulesConfig>>
+  rules: { harvest: RulesConfig; negative: RulesConfig }
+  setRules: Dispatch<SetStateAction<{ harvest: RulesConfig; negative: RulesConfig }>>
 }) {
   const [portfolioOpen, setPortfolioOpen] = useState(false)
   const [tab, setTab] = useState<'harvest' | 'negative'>('harvest')
@@ -76,12 +76,17 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
   const ai = automationMode === 'ai'
   const setBid = (patch: Partial<BidConfig>) => setBidConfig((b) => ({ ...b, ...patch }))
 
-  const { ruleName, automate, sel, perf } = rules
-  const setRuleName = (v: string) => setRules((r) => ({ ...r, ruleName: v }))
-  const setAutomate = (v: boolean) => setRules((r) => ({ ...r, automate: v }))
+  // Each tab is its OWN rule (Keyword Harvesting vs Negative Targeting) — own name,
+  // Automate, matrix and Performance Criteria; the Negative tab shows negative columns only.
+  const isNeg = tab === 'negative'
+  const active = rules[tab]
+  const { ruleName, automate, sel, perf } = active
+  const setActive = (patch: Partial<RulesConfig>) => setRules((r) => ({ ...r, [tab]: { ...r[tab], ...patch } }))
+  const setRuleName = (v: string) => setActive({ ruleName: v })
+  const setAutomate = (v: boolean) => setActive({ automate: v })
   const rowSel = (id: string) => sel[id] ?? emptyRuleRow()
-  const setRow = (id: string, patch: Partial<RuleRowSel>) => setRules((r) => ({ ...r, sel: { ...r.sel, [id]: { ...(r.sel[id] ?? emptyRuleRow()), ...patch } } }))
-  const setPerf = (patch: Partial<RulesConfig['perf']>) => setRules((r) => ({ ...r, perf: { ...r.perf, ...patch } }))
+  const setRow = (id: string, patch: Partial<RuleRowSel>) => setActive({ sel: { ...sel, [id]: { ...(sel[id] ?? emptyRuleRow()), ...patch } } })
+  const setPerf = (patch: Partial<RulesConfig['perf']>) => setActive({ perf: { ...perf, ...patch } })
   const tEnabled = (k: SpwCampaign['kind']) => ({ B: k === 'keyword', P: k === 'keyword', E: k === 'keyword', box: k === 'pat' })
   const nEnabled = (k: SpwCampaign['kind']) => ({ P: k !== 'pat', E: k !== 'pat', box: k !== 'keyword' })
 
@@ -196,22 +201,22 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
             <span>Automate</span>
           </label>
 
-          <div className="h10-spw-mx">
+          <div className={`h10-spw-mx ${isNeg ? 'neg' : ''}`}>
             <div className="h10-spw-mx-grid grp">
               <span className="ql">What Ad Groups would you like included in this rule?</span>
-              <span className="qr">What targets would you like created? <InfoTip tip="New keyword/product targets created from harvested search terms." /></span>
+              <span className="qr">What {isNeg ? 'negative targets' : 'targets'} would you like created? <InfoTip tip={isNeg ? 'Negative keyword / product targets to add from these search terms.' : 'New keyword/product targets created from harvested search terms.'} /></span>
             </div>
             <div className="h10-spw-mx-grid sub">
               <span className="c-ag">Ad Group</span>
               <span className="c-st">Look for Search Terms in These Ad Groups <InfoTip tip="Harvest converting search terms from these ad groups." /></span>
-              <span className="c-t">Create New Targets <InfoTip tip="Match types of new positive targets to create." /></span>
+              {!isNeg && <span className="c-t">Create New Targets <InfoTip tip="Match types of new positive targets to create." /></span>}
               <span className="c-n">Create New Negative Targets</span>
             </div>
             <div className="h10-spw-mx-grid badges">
-              <span className="b3"><MBadge tone="green" letter="B" /></span>
+              {!isNeg && <><span className="b3"><MBadge tone="green" letter="B" /></span>
               <span className="b4"><MBadge tone="slate" letter="P" /></span>
               <span className="b5"><MBadge tone="navy" letter="E" /></span>
-              <span className="b6"><MBadge tone="blue" /></span>
+              <span className="b6"><MBadge tone="blue" /></span></>}
               <span className="b8"><MBadge tone="maroon" letter="P" /></span>
               <span className="b9"><MBadge tone="maroon" letter="E" /></span>
               <span className="b10"><MBadge tone="maroon" /></span>
@@ -222,10 +227,12 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
                 <div className="h10-spw-mx-grid row" key={c.id}>
                   <div className="c-ag id"><KindBadge kind={c.kind} /><div className="nm"><span className="t">{c.name}</span><span className="ag"><Layers size={12} /> {c.adGroupName}</span></div></div>
                   <div className="c-st"><Check on={r.st} onChange={() => setRow(c.id, { st: !r.st })} label={`Look for search terms in ${c.name}`} /></div>
-                  <div className="b3"><Check on={r.tB} disabled={!te.B} onChange={() => setRow(c.id, { tB: !r.tB })} label={`Create Broad target for ${c.name}`} /></div>
-                  <div className="b4"><Check on={r.tP} disabled={!te.P} onChange={() => setRow(c.id, { tP: !r.tP })} label={`Create Phrase target for ${c.name}`} /></div>
-                  <div className="b5"><Check on={r.tE} disabled={!te.E} onChange={() => setRow(c.id, { tE: !r.tE })} label={`Create Exact target for ${c.name}`} /></div>
-                  <div className="b6"><Check on={r.tBox} disabled={!te.box} onChange={() => setRow(c.id, { tBox: !r.tBox })} label={`Create product target for ${c.name}`} /></div>
+                  {!isNeg && <>
+                    <div className="b3"><Check on={r.tB} disabled={!te.B} onChange={() => setRow(c.id, { tB: !r.tB })} label={`Create Broad target for ${c.name}`} /></div>
+                    <div className="b4"><Check on={r.tP} disabled={!te.P} onChange={() => setRow(c.id, { tP: !r.tP })} label={`Create Phrase target for ${c.name}`} /></div>
+                    <div className="b5"><Check on={r.tE} disabled={!te.E} onChange={() => setRow(c.id, { tE: !r.tE })} label={`Create Exact target for ${c.name}`} /></div>
+                    <div className="b6"><Check on={r.tBox} disabled={!te.box} onChange={() => setRow(c.id, { tBox: !r.tBox })} label={`Create product target for ${c.name}`} /></div>
+                  </>}
                   <div className="b8"><Check on={r.nP} disabled={!ne.P} onChange={() => setRow(c.id, { nP: !r.nP })} label={`Create negative Phrase for ${c.name}`} /></div>
                   <div className="b9"><Check on={r.nE} disabled={!ne.E} onChange={() => setRow(c.id, { nE: !r.nE })} label={`Create negative Exact for ${c.name}`} /></div>
                   <div className="b10"><Check on={r.nBox} disabled={!ne.box} onChange={() => setRow(c.id, { nBox: !r.nBox })} label={`Create negative product for ${c.name}`} /></div>

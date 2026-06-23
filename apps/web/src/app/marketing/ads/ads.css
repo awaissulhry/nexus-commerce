@@ -2100,6 +2100,13 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-mx .c-st { grid-column: 2; }
 .h10-spw-mx .b3 { grid-column: 3; } .h10-spw-mx .b4 { grid-column: 4; } .h10-spw-mx .b5 { grid-column: 5; } .h10-spw-mx .b6 { grid-column: 6; }
 .h10-spw-mx .b8 { grid-column: 8; } .h10-spw-mx .b9 { grid-column: 9; } .h10-spw-mx .b10 { grid-column: 10; }
+/* S3.4 — Negative Targeting tab drops the Create-New-Targets columns (narrower grid) */
+.h10-spw-mx.neg .h10-spw-mx-grid { grid-template-columns: minmax(260px, 1fr) 200px 44px 44px 44px; }
+.h10-spw-mx.neg .sub .c-n { grid-column: 3 / 6; border-left: 1px solid #e6e9ee; padding: 10px 0 4px; text-align: center; }
+.h10-spw-mx.neg .b8 { grid-column: 3; }
+.h10-spw-mx.neg .b9 { grid-column: 4; }
+.h10-spw-mx.neg .b10 { grid-column: 5; }
+.h10-spw-mx.neg .badges .b8, .h10-spw-mx.neg .row .b8 { border-left: 1px solid #eef1f5; }
 .h10-spw-mx .grp { background: #eef1f5; border-bottom: 1px solid #e6e9ee; align-items: center; }
 .h10-spw-mx .grp .ql { grid-column: 1 / 3; text-align: center; font-size: 13px; font-weight: 600; color: #3a4452; padding: 11px; }
 .h10-spw-mx .grp .qr { grid-column: 3 / 11; text-align: center; font-size: 13px; font-weight: 600; color: #3a4452; padding: 11px; border-left: 1px solid #dce1e8; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }

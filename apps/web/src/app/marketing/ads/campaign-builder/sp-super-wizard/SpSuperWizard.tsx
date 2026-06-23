@@ -59,7 +59,7 @@ export function SpSuperWizard() {
   const [customNameTokens, setCustomNameTokens] = useState<string[]>(['campaignType', 'targetingType', 'matchType', 'keywordType'])
   const [rememberSettings, setRememberSettings] = useState(true)
   const [autoNegate, setAutoNegate] = useState(true)
-  const [rules, setRules] = useState<RulesConfig>(defaultRulesConfig())
+  const [rules, setRules] = useState<{ harvest: RulesConfig; negative: RulesConfig }>({ harvest: defaultRulesConfig(), negative: defaultRulesConfig() })
   const [bidConfig, setBidConfig] = useState<BidConfig>(defaultBidConfig())
 
   // Step 2 campaigns are generated from the step-1 structure; Restore Default re-generates.
@@ -96,7 +96,10 @@ export function SpSuperWizard() {
           negKeywords: c.negKeywords.map((n) => ({ text: n.text, matchType: n.matchType })), negProducts: c.negProducts.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined })),
         })),
         placementBids: { tos: bidMult.tos, pdp: bidMult.pdp, ros: bidMult.ros },
-        rules: rulesConfigured(rules) ? { ruleName: rules.ruleName, automate: rules.automate, perf: rules.perf, rows: rules.sel } : undefined,
+        rules: {
+          harvest: rulesConfigured(rules.harvest) ? { ruleName: rules.harvest.ruleName, automate: rules.harvest.automate, perf: rules.harvest.perf, rows: rules.harvest.sel } : undefined,
+          negative: rulesConfigured(rules.negative) ? { ruleName: rules.negative.ruleName, automate: rules.negative.automate, perf: rules.negative.perf, rows: rules.negative.sel } : undefined,
+        },
       }
       const r = await fetch(`${getBackendUrl()}/api/advertising/campaign-builder/sp-super-wizard/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json().catch(() => ({}))
