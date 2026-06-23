@@ -7,6 +7,7 @@
  * (Config lifted verbatim from RuleBuilder.tsx; the THEN-action lives with each caller.)
  */
 import { X, Plus } from 'lucide-react'
+import { H10Select } from '../../campaigns/FilterDropdown'
 
 export interface Condition { metric: string; op: string; value: string; scope?: string }
 export interface CriteriaGroup { conditions: Condition[]; lookback: string; exclude: string }
@@ -62,8 +63,8 @@ export function PerformanceCriteria({ value, onChange, slug = 'keyword-harvestin
         return (
           <div className="h10-pc-row" key={i}>
             <span className="h10-pc-join">{i === 0 ? 'IF' : 'AND'}</span>
-            <select className="h10-pc-sel" value={c.metric} onChange={(e) => setCond(i, { metric: e.target.value })} aria-label="Metric">{metrics.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</select>
-            <select className="h10-pc-sel op" value={c.op} onChange={(e) => setCond(i, { op: e.target.value })} aria-label="Operator">{PC_OPERATORS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+            <H10Select width={260} options={metrics} value={c.metric} onChange={(v) => setCond(i, { metric: v })} ariaLabel="Metric" />
+            <H10Select width={300} options={PC_OPERATORS} value={c.op} onChange={(v) => setCond(i, { op: v })} ariaLabel="Operator" />
             <div className={`h10-pc-val ${unit}`}>{unit === 'eur' && <span className="u">€</span>}<input inputMode="decimal" value={c.value} onChange={(e) => setCond(i, { value: e.target.value })} placeholder="Value" aria-label="Value" />{unit === 'pct' && <span className="u">%</span>}</div>
             {value.conditions.length > 1 && <button type="button" className="h10-pc-rm" onClick={() => rmCond(i)} aria-label="Remove condition"><X size={14} /></button>}
           </div>
@@ -71,8 +72,8 @@ export function PerformanceCriteria({ value, onChange, slug = 'keyword-harvestin
       })}
       <button type="button" className="h10-pc-add" onClick={addCond}><Plus size={13} /> Add condition</button>
       <div className="h10-pc-windows">
-        <label className="h10-pc-win"><span>Lookback period</span><select className="h10-pc-sel" value={value.lookback} onChange={(e) => onChange({ ...value, lookback: e.target.value })} aria-label="Lookback period">{PC_LOOKBACK.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}</select></label>
-        <label className="h10-pc-win"><span>Exclude</span><select className="h10-pc-sel" value={value.exclude} onChange={(e) => onChange({ ...value, exclude: e.target.value })} aria-label="Exclude window">{PC_EXCLUDE.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}</select></label>
+        <label className="h10-pc-win"><span>Lookback period</span><H10Select width={190} options={PC_LOOKBACK} value={value.lookback} onChange={(v) => onChange({ ...value, lookback: v })} ariaLabel="Lookback period" /></label>
+        <label className="h10-pc-win"><span>Exclude</span><H10Select width={190} options={PC_EXCLUDE} value={value.exclude} onChange={(v) => onChange({ ...value, exclude: v })} ariaLabel="Exclude window" /></label>
       </div>
     </div>
   )
