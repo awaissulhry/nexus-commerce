@@ -27,12 +27,13 @@ import { buildRow, COCKPIT_EXPANDED_FIELDS } from '../../routes/amazon-cockpit-p
 import { checkLengthLimits, findMissingRequired, type LengthColumn, type RequiredColumn } from '../listing-preflight.service.js'
 import { conditionalRequirementIssues } from '../listing-wizard/conditional-requirements.js'
 import { mirrorListingIssues } from '../listing-issues.service.js'
+import { validatePayloadValues, type SchemaPayloadHints } from './payload-schema-validator.js'
 
 const amazonService = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazonService)
 const flatFileService = new AmazonFlatFileService(prisma, schemaService)
 
-export type PreflightSource = 'byte-length' | 'required' | 'conditional' | 'mirrored' | 'validation-preview'
+export type PreflightSource = 'byte-length' | 'required' | 'conditional' | 'schema' | 'mirrored' | 'validation-preview'
 
 export interface PreflightIssueItem {
   source: PreflightSource
@@ -70,6 +71,7 @@ export function collectLocalIssues(
     byteLimits: Record<string, number>
     requiredCols: RequiredColumn[]
     schemaDef: any
+    payloadHints: SchemaPayloadHints
     labelOf: (id: string) => string
   },
 ): PreflightIssueItem[] {
@@ -96,6 +98,11 @@ export function collectLocalIssues(
   // conditional (allOf) required-but-empty → advisory warnings
   for (const i of conditionalRequirementIssues(ctx.schemaDef, row as Record<string, any>, ctx.labelOf)) {
     out.push({ source: 'conditional', field: i.field, severity: 'warning', message: i.message })
+  }
+
+  // schema type/enum violations on the composed values (local; no SP-API)
+  for (const i of validatePayloadValues(row, ctx.payloadHints, ctx.labelOf)) {
+    out.push({ source: 'schema', field: i.field, severity: 'error', message: i.message })
   }
 
   return out
@@ -164,6 +171,12 @@ export async function buildPreflightReport(
         byteLimits: hints.byteLimits,
         requiredCols,
         schemaDef: (schema as any).schemaDefinition ?? {},
+        payloadHints: {
+          enumCodeMap: hints.enumCodeMap,
+          numericFields: hints.numericFields,
+          booleanFields: hints.booleanFields,
+          expandedFields: COCKPIT_EXPANDED_FIELDS,
+        },
         labelOf,
       }))
     } catch (err) {

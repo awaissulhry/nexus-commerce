@@ -21,6 +21,7 @@ describe('collectLocalIssues — unions every local detector with its source', (
       byteLimits: { item_name: 3 },
       requiredCols: [{ id: 'brand', label: 'Brand' }],
       schemaDef,
+      payloadHints: { enumCodeMap: {}, numericFields: new Set<string>(), booleanFields: new Set<string>() },
       labelOf: (id) => id,
     },
   )
@@ -37,7 +38,7 @@ describe('collectLocalIssues — unions every local detector with its source', (
   it('a clean row produces no local issues', () => {
     const clean = collectLocalIssues(
       { item_name: 'OK', brand: 'Xavia', parentage_level: 'standalone', variation_theme: 'SIZE' },
-      { byteLimits: { item_name: 100 }, requiredCols: [{ id: 'brand', label: 'Brand' }], schemaDef: {}, labelOf: (id) => id },
+      { byteLimits: { item_name: 100 }, requiredCols: [{ id: 'brand', label: 'Brand' }], schemaDef: {}, payloadHints: { enumCodeMap: {}, numericFields: new Set<string>(), booleanFields: new Set<string>() }, labelOf: (id) => id },
     )
     expect(clean).toEqual([])
   })

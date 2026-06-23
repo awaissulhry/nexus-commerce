@@ -5,6 +5,7 @@ export type PreflightSource =
   | 'byte-length'
   | 'required'
   | 'conditional'
+  | 'schema'
   | 'mirrored'
   | 'validation-preview'
 
@@ -46,6 +47,7 @@ export const SOURCE_LABEL: Record<PreflightSource, string> = {
   'byte-length': 'Length',
   required: 'Required',
   conditional: 'Conditional',
+  schema: 'Schema',
   mirrored: 'Live issue',
   'validation-preview': 'Amazon',
 }
