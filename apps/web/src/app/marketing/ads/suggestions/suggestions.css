@@ -27,6 +27,16 @@
 .h10-sug-rule { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .h10-sug-rule b { font-weight: 600; color: var(--h10-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Impact cell (€ delta / target count) */
+.h10-sug-impact { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--h10-text); }
+.h10-sug-impact.up { color: var(--h10-success-strong); }
+.h10-sug-impact.down { color: var(--h10-danger-strong); }
+.h10-sug-impact.muted { color: var(--h10-text-3); font-weight: 500; }
+
+/* Group-by control (grid toolbarLeft) */
+.h10-sug-group { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--h10-text-2); }
+.h10-sug-group > span { font-weight: 600; }
+
 /* When + Actions */
 .h10-sug-when { color: var(--h10-text-2); font-size: 12.5px; }
 .h10-sug-acts { display: inline-flex; gap: 8px; justify-content: flex-end; }

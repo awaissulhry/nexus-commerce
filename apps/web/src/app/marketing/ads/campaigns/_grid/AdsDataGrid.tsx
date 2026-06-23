@@ -12,7 +12,7 @@
  * ./FilterDropdown (FilterDropdown · H10Select · HoverCard) and ./InfoTip. No restyling of
  * the shared CSS — only a small CBN.3.2 block adds the Total-row + Customize-popover bits.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown, ChevronUp, ChevronsUpDown, Settings2, Download, Pencil, Search, X } from 'lucide-react'
 import { FilterDropdown, H10Select, HoverCard, MultiSelect } from '../FilterDropdown'
@@ -113,6 +113,10 @@ export interface AdsDataGridProps<T> {
   pagerCentered?: boolean
   /** initial filters-panel open state (H10 rules grid loads collapsed). */
   filtersDefaultOpen?: boolean
+  /** optional row grouping: returns the group key + label for a row. When set, the grid
+   *  clusters same-group rows (groups ordered by label) and renders a header row before
+   *  each group. Additive — consumers that omit it are unaffected. */
+  groupBy?: (row: T) => { key: string; label: string }
 }
 
 function useClickAway<T extends HTMLElement>(onAway: () => void) {
@@ -136,6 +140,7 @@ export function AdsDataGrid<T>({
   showTotal, totalFirst = 'Total',
   reportLabel, emptyLabel = 'No data.', emptyNode, defaultSort, editMode, selectionActions,
   searchable, searchPlaceholder = 'Search…', searchValue, pagerCentered, filtersDefaultOpen = true,
+  groupBy,
 }: AdsDataGridProps<T>) {
   const [filtersOpen, setFiltersOpen] = useState(filtersDefaultOpen)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -220,19 +225,34 @@ export function AdsDataGrid<T>({
 
   // ── sorting ──
   const sorted = useMemo(() => {
-    if (!sort) return searched
-    const col = columns.find((c) => c.key === sort.key)
-    const getVal = sort.key === '__first'
+    if (!sort && !groupBy) return searched
+    const col = sort ? columns.find((c) => c.key === sort.key) : null
+    const getVal = !sort ? null : (sort.key === '__first'
       ? (firstSortValue ?? (() => ''))
-      : (col?.sortValue ?? (() => 0))
+      : (col?.sortValue ?? (() => 0)))
     const arr = [...searched]
     arr.sort((a, b) => {
+      // groupBy clusters same-group rows (groups ordered by label); the active column
+      // sort then orders rows *within* each group.
+      if (groupBy) {
+        const ga = groupBy(a), gb = groupBy(b)
+        if (ga.key !== gb.key) return ga.label.localeCompare(gb.label)
+      }
+      if (!getVal || !sort) return 0
       const va = getVal(a) as number | string, vb = getVal(b) as number | string
       const cmp = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb))
       return sort.dir === 'asc' ? cmp : -cmp
     })
     return arr
-  }, [searched, sort, columns, firstSortValue])
+  }, [searched, sort, columns, firstSortValue, groupBy])
+
+  // group row counts (for the group-header labels), computed over the full sorted set
+  const groupCounts = useMemo(() => {
+    if (!groupBy) return null
+    const m = new Map<string, number>()
+    for (const r of sorted) { const k = groupBy(r).key; m.set(k, (m.get(k) ?? 0) + 1) }
+    return m
+  }, [sorted, groupBy])
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / rowsPerPage))
   const safePage = Math.min(page, pageCount)
@@ -432,18 +452,25 @@ export function AdsDataGrid<T>({
                     {visibleCols.map((c) => <td key={c.key} className={c.metric === false ? 'ed' : 'num'}>{c.total ?? ''}</td>)}
                   </tr>
                 )}
-                {paged.map((row) => {
+                {paged.map((row, idx) => {
                   const id = rowId(row)
                   const ef = editing ? editByKey.get('__first') : undefined
+                  const grp = groupBy ? groupBy(row) : null
+                  const showGrp = grp != null && (idx === 0 || groupBy?.(paged[idx - 1])?.key !== grp.key)
                   return (
-                    <tr key={id} className={sel.has(id) ? 'on' : ''}>
-                      {selectable && <td className="ck"><input type="checkbox" checked={sel.has(id)} onChange={() => toggle(id)} aria-label="Select row" /></td>}
-                      <td className={`nm fz${ef ? ' editing' : ''}`}>{ef ? ef.render(editVal(row, ef), (v) => setDraft(id, '__first', v), row) : cellWithPencil(row, '__first', renderFirst(row))}</td>
-                      {visibleCols.map((c) => {
-                        const cf = editing ? editByKey.get(c.key) : undefined
-                        return <td key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${cf ? ' editing' : ''}`}>{cf ? cf.render(editVal(row, cf), (v) => setDraft(id, c.key, v), row) : cellWithPencil(row, c.key, c.render(row))}</td>
-                      })}
-                    </tr>
+                    <Fragment key={id}>
+                      {showGrp && grp && (
+                        <tr className="h10-am-grp"><td colSpan={visibleCols.length + (selectable ? 2 : 1)}><span className="gl">{grp.label}</span><span className="gc">{groupCounts?.get(grp.key) ?? 0} {pluralize(noun, groupCounts?.get(grp.key) ?? 0)}</span></td></tr>
+                      )}
+                      <tr className={sel.has(id) ? 'on' : ''}>
+                        {selectable && <td className="ck"><input type="checkbox" checked={sel.has(id)} onChange={() => toggle(id)} aria-label="Select row" /></td>}
+                        <td className={`nm fz${ef ? ' editing' : ''}`}>{ef ? ef.render(editVal(row, ef), (v) => setDraft(id, '__first', v), row) : cellWithPencil(row, '__first', renderFirst(row))}</td>
+                        {visibleCols.map((c) => {
+                          const cf = editing ? editByKey.get(c.key) : undefined
+                          return <td key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${cf ? ' editing' : ''}`}>{cf ? cf.render(editVal(row, cf), (v) => setDraft(id, c.key, v), row) : cellWithPencil(row, c.key, c.render(row))}</td>
+                        })}
+                      </tr>
+                    </Fragment>
                   )
                 })}
               </>

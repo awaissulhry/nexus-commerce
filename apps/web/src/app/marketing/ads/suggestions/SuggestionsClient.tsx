@@ -1,22 +1,26 @@
 'use client'
 
 /**
- * ES2 / S.2 — Suggestions page. Manual-control rules are propose-only: each proposed action
- * lands here as an AdsRuleSuggestion the operator can Approve (apply live) or Dismiss.
+ * ES2 / S.2 / S.3 — Suggestions page. Manual-control rules are propose-only: each proposed
+ * action lands here as an AdsRuleSuggestion the operator can Approve (apply live) or Dismiss.
  *
  * Rendered through the shared AdsDataGrid (the one H10 console grid) on the design system
- * (Button · Tag · EmptyState). Every Source cell deep-links to the campaign / ad-group /
- * search-term the suggestion came from — resolved server-side (S.1) into `suggestion.source`.
- * Reads/writes the ES1 endpoints (GET /advertising/suggestions · POST /suggestions/:id/apply · /dismiss).
+ * (Button · Tag · EmptyState · MetricStrip · Select). Every Source cell deep-links to the
+ * campaign / ad-group / search-term the suggestion came from (S.1 `source`). S.3 adds a
+ * summary MetricStrip, Type/Marketplace/Rule filters, Group-by (Rule/Campaign/Type), and an
+ * Impact column you can sort by. Reads/writes the ES1 endpoints (GET /advertising/suggestions ·
+ * POST /suggestions/:id/apply · /dismiss).
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Check, X, RefreshCw, Sparkles, Wifi, ChevronRight } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
-import { AdsDataGrid, type GridColumn } from '../campaigns/_grid/AdsDataGrid'
+import { AdsDataGrid, type GridColumn, type GridFilter } from '../campaigns/_grid/AdsDataGrid'
 import { Button } from '@/design-system/primitives/Button'
 import { Tag, type TagTone } from '@/design-system/primitives/Tag'
+import { Select } from '@/design-system/primitives/Select'
 import { EmptyState } from '@/design-system/components/EmptyState'
+import { MetricStrip, type Metric } from '@/design-system/components/MetricStrip'
 import { getBackendUrl } from '@/lib/backend-url'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -44,6 +48,8 @@ interface Suggestion {
   source?: SuggestionSource
 }
 
+type GroupKey = 'none' | 'rule' | 'campaign' | 'type'
+
 const ENTITY_LABEL: Record<string, string> = { CAMPAIGN: 'Campaign', AD_TARGET: 'Keyword/Target', SEARCH_TERM: 'Search term', MARKETPLACE: 'Marketplace' }
 const ENTITY_TONE: Record<string, TagTone> = { CAMPAIGN: 'info', AD_TARGET: 'neutral', SEARCH_TERM: 'neutral', MARKETPLACE: 'neutral' }
 const ACTION_LABEL: Record<string, string> = { budget_apply: 'Budget', placement_apply: 'Placement', bid_apply: 'Bid', dayparting_apply: 'Dayparting', add_negative_exact: 'Add negative', promote_to_exact: 'Promote to exact', harvest_and_negate: 'Harvest & negate' }
@@ -52,6 +58,32 @@ const ACTION_TONE: Record<string, TagTone> = { promote_to_exact: 'positive', har
 const ago = (iso: string) => { const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)}m ago` : s < 86400 ? `${Math.floor(s / 3600)}h ago` : `${Math.floor(s / 86400)}d ago` }
 
 const srcOf = (s: Suggestion): SuggestionSource => s.source ?? { href: null, label: s.entityName ?? s.entityId, marketplace: s.marketplace }
+
+// Impact — the € delta parsed from the proposed change ("€10.00 → €12.00" ⇒ +2.00). Lets the
+// operator sort the biggest-money moves to the top. Harvest cards have no €, so they score on count.
+const parseEur = (raw: string): number => {
+  let s = raw.trim()
+  if (s.includes('.') && s.includes(',')) s = s.replace(/\./g, '').replace(',', '.') // 1.234,56 → 1234.56
+  else if (s.includes(',')) s = s.replace(',', '.')
+  return Number(s) || 0
+}
+const eurDelta = (s: Suggestion): number | null => {
+  const wc = s.proposedAction?.wouldChange
+  if (!wc) return null
+  const nums = [...wc.matchAll(/€\s*([\d.,]+)/g)].map((m) => parseEur(m[1]))
+  return nums.length >= 2 ? nums[nums.length - 1] - nums[0] : null
+}
+const harvestCount = (s: Suggestion): number => {
+  const a = s.proposedAction ?? {}
+  return a.type === 'harvest_and_negate' ? (a.wouldGraduate ?? 0) + (a.wouldNegate ?? 0) : 0
+}
+const impactScore = (s: Suggestion): number => {
+  const d = eurDelta(s)
+  if (d != null) return Math.abs(d)
+  const h = harvestCount(s)
+  if (h) return h
+  return typeof s.proposedAction?.value === 'number' ? s.proposedAction.value : 0
+}
 
 /** Source cell — entity-type Tag + a breadcrumb (campaign ▸ ad group ▸ keyword) that deep-links to the exact sub-page. */
 function SourceCell({ s }: { s: Suggestion }) {
@@ -92,6 +124,18 @@ function ProposedCell({ s }: { s: Suggestion }) {
   return <span className="h10-sug-prop"><Tag tone={tone}>{kind}</Tag>{detail}</span>
 }
 
+function ImpactCell({ s }: { s: Suggestion }) {
+  const d = eurDelta(s)
+  if (d != null) {
+    const dir = d > 0 ? 'up' : d < 0 ? 'down' : ''
+    const sign = d > 0 ? '+' : d < 0 ? '−' : ''
+    return <span className={`h10-sug-impact ${dir}`}>{sign}€{Math.abs(d).toFixed(2)}</span>
+  }
+  const h = harvestCount(s)
+  if (h) return <span className="h10-sug-impact">{h} targets</span>
+  return <span className="h10-sug-impact muted">—</span>
+}
+
 function RuleCell({ s }: { s: Suggestion }) {
   return (
     <span className="h10-sug-rule">
@@ -106,6 +150,7 @@ export function SuggestionsClient() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<Record<string, boolean>>({})
   const [live, setLive] = useState(false)
+  const [group, setGroup] = useState<GroupKey>('none')
 
   const load = useCallback(async () => {
     try {
@@ -139,8 +184,45 @@ export function SuggestionsClient() {
     } finally { setBusy((b) => { const n = { ...b }; delete n[id]; return n }) }
   }, [])
 
+  // Summary tiles — addressable impact at a glance.
+  const metrics = useMemo<Metric[]>(() => {
+    const campaigns = new Set(items.map((s) => srcOf(s).campaignId).filter(Boolean))
+    const netDelta = items.reduce((sum, s) => sum + (eurDelta(s) ?? 0), 0)
+    const harvest = items.reduce((sum, s) => sum + harvestCount(s), 0)
+    const tiles: Metric[] = [
+      { label: 'Pending', value: items.length },
+      { label: 'Campaigns affected', value: campaigns.size },
+    ]
+    if (Math.abs(netDelta) >= 0.005) tiles.push({ label: 'Net daily Δ', value: `${netDelta >= 0 ? '+' : '−'}€${Math.abs(netDelta).toFixed(2)}`, delta: { value: netDelta >= 0 ? 'increase' : 'decrease', positive: netDelta >= 0 } })
+    if (harvest > 0) tiles.push({ label: 'Keywords to harvest', value: harvest })
+    return tiles
+  }, [items])
+
+  // Filters — populated from the data in view.
+  const filters = useMemo<GridFilter[]>(() => {
+    const uniq = (xs: Array<string | null | undefined>) => [...new Set(xs.filter(Boolean) as string[])]
+    const types = uniq(items.map((s) => s.proposedAction?.type))
+    const mkts = uniq(items.map((s) => s.marketplace))
+    const rules = uniq(items.map((s) => s.ruleName))
+    return [
+      { key: 'type', label: 'Type', kind: 'select', options: types.map((t) => ({ value: t, label: ACTION_LABEL[t] ?? t })), placeholder: 'All types', value: (r) => (r as Suggestion).proposedAction?.type ?? '' },
+      { key: 'mkt', label: 'Marketplace', kind: 'select', options: mkts.map((m) => ({ value: m, label: m })), placeholder: 'All markets', value: (r) => (r as Suggestion).marketplace ?? '' },
+      { key: 'rule', label: 'Rule', kind: 'select', options: rules.map((r) => ({ value: r, label: r })), placeholder: 'All rules', wide: true, searchable: true, value: (r) => (r as Suggestion).ruleName ?? '' },
+    ]
+  }, [items])
+
+  const groupBy = useMemo(() => {
+    if (group === 'none') return undefined
+    return (s: Suggestion): { key: string; label: string } => {
+      if (group === 'rule') return { key: s.ruleId, label: s.ruleName ?? 'Rule' }
+      if (group === 'campaign') { const src = srcOf(s); return { key: src.campaignId ?? s.entityId, label: src.campaignName ?? src.label } }
+      return { key: s.proposedAction?.type ?? 'other', label: ACTION_LABEL[s.proposedAction?.type ?? ''] ?? 'Other' }
+    }
+  }, [group])
+
   const columns: GridColumn<Suggestion>[] = [
     { key: 'proposed', label: 'Proposed change', metric: false, sortable: true, sortValue: (s) => s.proposedAction?.type ?? '', render: (s) => <ProposedCell s={s} /> },
+    { key: 'impact', label: 'Impact', metric: true, sortable: true, tip: 'Daily € change (or keywords affected). Sort to triage the biggest moves first.', sortValue: impactScore, render: (s) => <ImpactCell s={s} /> },
     { key: 'rule', label: 'Rule', metric: false, sortable: true, sortValue: (s) => s.ruleName ?? '', render: (s) => <RuleCell s={s} /> },
     { key: 'when', label: 'When', metric: false, sortable: true, sortValue: (s) => new Date(s.createdAt).getTime(), render: (s) => <span className="h10-sug-when">{ago(s.createdAt)}</span> },
     {
@@ -157,6 +239,7 @@ export function SuggestionsClient() {
   return (
     <div className="h10-sug">
       <AdsPageHeader title="Suggestions" subtitle="Review and approve the actions your Manual rules propose." showDateRange={false} markets={[]} market="all" onMarketChange={() => {}} />
+      {!loading && items.length > 0 && <MetricStrip metrics={metrics} />}
       <AdsDataGrid<Suggestion>
         rows={items}
         loading={loading}
@@ -166,11 +249,25 @@ export function SuggestionsClient() {
         renderFirst={(s) => <SourceCell s={s} />}
         firstSortValue={(s) => srcOf(s).label}
         columns={columns}
+        filters={filters}
+        filtersDefaultOpen={false}
+        groupBy={groupBy}
         // The shared grid's frozen first column assumes the 40px checkbox gutter — keep selection
         // on (matches every console grid + sets up S.4 bulk). Bulk-action wiring lands in S.4.
         selectable
         customizable={false}
         defaultSort={{ key: 'when', dir: 'desc' }}
+        toolbarLeft={
+          <label className="h10-sug-group">
+            <span>Group by</span>
+            <Select value={group} onChange={(e) => setGroup(e.target.value as GroupKey)} aria-label="Group suggestions by">
+              <option value="none">None</option>
+              <option value="rule">Rule</option>
+              <option value="campaign">Campaign</option>
+              <option value="type">Type</option>
+            </Select>
+          </label>
+        }
         toolbarRight={
           <span className="h10-sug-toolbar">
             {live && <span className="h10-sug-live"><Wifi size={12} /> Live</span>}
