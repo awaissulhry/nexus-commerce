@@ -17,6 +17,7 @@ import { InfoTip } from '../../campaigns/InfoTip'
 // Share — reuse SP Super Wizard's product picker (Search/Enter tabs + variation expansion + N-Added)
 // so improvements propagate. Imported as-is; AI Goal maps its output to its own budget-bearing Prod.
 import { ProductSelection, type SpwProduct } from '../../campaign-builder/sp-super-wizard/ProductSelection'
+import { PortfolioPicker } from '../../campaign-builder/sp-super-wizard/PortfolioPicker'
 import { AiGoalPreview } from './AiGoalPreview'
 
 type TargetKey = 'impression' | 'sales' | 'roas'
@@ -67,6 +68,7 @@ export function AiGoalBuilder() {
   const [advOpen, setAdvOpen] = useState(false)
   const [productTargets, setProductTargets] = useState<string[]>([])
   const [excludeAsins, setExcludeAsins] = useState<string[]>([])
+  const [portfolioId, setPortfolioId] = useState('')
   const exitTo = '/marketing/ads/campaign-builder'
 
   const [launching, setLaunching] = useState(false)
@@ -90,6 +92,7 @@ export function AiGoalBuilder() {
       totalBudgetCents: budgetMode === 'shared' ? Math.round((Number(sharedBudget) || 0) * 100) : null,
       products: products.map((p) => ({ productId: p.id, asin: p.asin, sku: p.sku, name: p.name, imageUrl: p.imageUrl, lqs: p.lqs, budgetCents: Math.round((Number(p.budget) || 0) * 100) })),
       seedKeywords: seeds, excludeKeywords: excluded, productTargets, excludeAsins,
+      portfolioId: portfolioId || null,
     }
     try {
       const r = await fetch(`${getBackendUrl()}/api/advertising/ai-goals`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -121,6 +124,10 @@ export function AiGoalBuilder() {
                 <span className="lbl">Goal Name <i className="req">*</i></span>
                 <input value={goalName} onChange={(e) => setGoalName(e.target.value)} placeholder="Enter a goal name" />
               </label>
+              <div className="h10-aig-field">
+                <span className="lbl">Portfolio (Optional)</span>
+                <PortfolioPicker value={portfolioId} onChange={setPortfolioId} />
+              </div>
             </div>
           </section>
 

@@ -30,6 +30,7 @@ export interface ProductGoalInput {
   productTargets?: string[]
   excludeAsins?: string[]
   marketplace?: string | null
+  portfolioId?: string | null
 }
 
 // Amazon's minimum daily budget is ~1 unit of the account currency.
@@ -77,6 +78,7 @@ export async function createProductGoal(input: ProductGoalInput) {
       excludeAsins: clean(input.excludeAsins),
       status: 'ACTIVE',
       marketplace: input.marketplace ?? null,
+      portfolioId: (input.portfolioId ?? '').trim() || null,
     },
   })
 }

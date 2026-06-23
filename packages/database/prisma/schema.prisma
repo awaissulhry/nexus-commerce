@@ -13029,6 +13029,7 @@ model AdProductGoal {
   excludeAsins       String[] @default([])
   status             String   @default("ACTIVE") // DRAFT | ACTIVE | ARCHIVED
   marketplace        String?
+  portfolioId        String? // CBU — Amazon Ads portfolio to associate; applied when campaigns materialize
   createdBy          String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
