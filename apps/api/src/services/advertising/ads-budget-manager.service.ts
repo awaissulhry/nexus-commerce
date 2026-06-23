@@ -242,12 +242,19 @@ export async function setCampaignLimit(opts: { marketplace: string; month: strin
 
 export interface UpsertBudgetPlan { id?: string; marketplace: string; tag?: string | null; month: string; monthlyBudgetCents?: number; autoPacing?: boolean; stopOverSpend?: boolean; calendar?: Array<{ day: number; pct: number }>; campaignLimits?: CampaignLimit[]; createdBy?: string }
 export async function upsertBudgetPlan(input: UpsertBudgetPlan) {
-  if (input.id) {
+  // Resolve the target row: explicit id, else the existing (marketplace, month, tag)
+  // plan — so toggles / next-month edits stay idempotent instead of duplicating.
+  let id = input.id
+  if (!id) {
+    const existing = await prisma.adBudgetPlan.findFirst({ where: { marketplace: input.marketplace, month: input.month, tag: input.tag ?? null } })
+    id = existing?.id
+  }
+  if (id) {
     const data: Record<string, unknown> = {}
     for (const k of ['monthlyBudgetCents', 'autoPacing', 'stopOverSpend'] as const) if (input[k] !== undefined) data[k] = input[k]
     if (input.calendar !== undefined) data.calendar = input.calendar as never
     if (input.campaignLimits !== undefined) data.campaignLimits = input.campaignLimits as never
-    return prisma.adBudgetPlan.update({ where: { id: input.id }, data })
+    return prisma.adBudgetPlan.update({ where: { id }, data })
   }
   const plan = await prisma.adBudgetPlan.create({
     data: { marketplace: input.marketplace, tag: input.tag ?? null, month: input.month, monthlyBudgetCents: input.monthlyBudgetCents ?? 0, autoPacing: input.autoPacing ?? false, stopOverSpend: input.stopOverSpend ?? false, calendar: (input.calendar ?? []) as never, campaignLimits: (input.campaignLimits ?? []) as never, createdBy: input.createdBy ?? null },
