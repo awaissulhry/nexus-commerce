@@ -645,6 +645,24 @@ export default function AmazonFlatFileClient({
   const [polling, setPolling] = useState(false)
   const { toast } = useToast() // FFS.7 — submit summary + feed-completion notices
   const [submitPanelOpen, setSubmitPanelOpen] = useState(false)
+  // FFC — pre-publish Review & Confirm gate. A Promise-based modal so Submit can
+  // `await` the operator's decision in place of the old crude confirm().
+  type ReviewData = {
+    markets: string[]
+    totalRows: number
+    newCount: number
+    updateCount: number
+    errors: Array<{ mp: string; sku: string; message: string }>
+    warnings: Array<{ mp: string; sku: string; message: string }>
+  }
+  const [reviewModal, setReviewModal] = useState<{ data: ReviewData; resolve: (ok: boolean) => void } | null>(null)
+  const [reviewAck, setReviewAck] = useState(false)
+  const openReviewModal = useCallback((data: ReviewData) => {
+    setReviewAck(false)
+    return new Promise<boolean>((resolve) => {
+      setReviewModal({ data, resolve: (ok) => { setReviewModal(null); resolve(ok) } })
+    })
+  }, [])
   const [submissionHistory, setSubmissionHistory] = useState<SubmissionRecord[]>([])
   // FFS.6/#1 — authoritative submission count from the server (the Submissions
   // panel's source). Falls back to the local count until it loads, so the badge
@@ -2367,18 +2385,30 @@ export default function AmazonFlatFileClient({
           return { mp, flagged: (data.preflight ?? []) as PreflightFlag[] }
         } catch { return { mp, flagged: [] as PreflightFlag[] } }
       }))
-      const withIssues = checks.filter((c) => c.flagged.length > 0)
-      if (withIssues.length) {
-        const total = withIssues.reduce((n, c) => n + c.flagged.length, 0)
-        const preview = withIssues
-          .flatMap((c) => c.flagged.map((p) => `• ${c.mp} · ${p.sku || '(no SKU)'}: ${p.issues.map((i) => i.message).join('; ')}`))
-          .slice(0, 8)
-        const more = total > preview.length ? `\n…and ${total - preview.length} more row(s)` : ''
-        const proceed = confirm(
-          `Pre-flight flagged ${total} row(s) before submitting:\n\n${preview.join('\n')}${more}\n\nAmazon may reject these. Submit anyway?`,
-        )
-        if (!proceed) return
+      // FFC — always show the Review & Publish gate (not only on issues), block on
+      // errors, acknowledge warnings. Replaces the old warn-only confirm().
+      const allErrors: ReviewData['errors'] = []
+      const allWarnings: ReviewData['warnings'] = []
+      for (const c of checks) {
+        for (const p of c.flagged) {
+          for (const i of p.issues) {
+            const entry = { mp: c.mp, sku: p.sku || '(no SKU)', message: i.message }
+            ;(String(i.severity).toLowerCase() === 'error' ? allErrors : allWarnings).push(entry)
+          }
+        }
       }
+      const totalRows = toCheck.reduce((n, m) => n + m.rows.length, 0)
+      const newCount = toCheck.reduce((n, m) => n + m.rows.filter((r) => r._isNew).length, 0)
+      setSubmitPanelOpen(false)
+      const proceed = await openReviewModal({
+        markets: toCheck.map((m) => m.mp),
+        totalRows,
+        newCount,
+        updateCount: Math.max(0, totalRows - newCount),
+        errors: allErrors,
+        warnings: allWarnings,
+      })
+      if (!proceed) return
     } catch {
       // Pre-flight is advisory — never block a deliberate submit on a check failure.
     }
@@ -2509,7 +2539,7 @@ export default function AmazonFlatFileClient({
       ))
     }
     setSubmitting(false)
-  }, [rows, marketplace, productType, manifest, saveSubmissionRecord, createVersion, toast])
+  }, [rows, marketplace, productType, manifest, saveSubmissionRecord, createVersion, toast, openReviewModal])
 
   // ── Platform sync ──────────────────────────────────────────────────
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle')
@@ -3262,6 +3292,92 @@ export default function AmazonFlatFileClient({
                 onSubmit={handleSubmitToMarkets} onClose={() => setSubmitPanelOpen(false)} />
             )}
           </div>
+
+          {/* FFC — pre-publish Review & Confirm gate (replaces the old confirm()). */}
+          {reviewModal && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+              onMouseDown={(e) => { if (e.target === e.currentTarget) reviewModal.resolve(false) }}
+            >
+              <div className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl">
+                <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-subtle dark:border-slate-800">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Review &amp; Publish</div>
+                    <div className="text-[11px] text-tertiary">
+                      {reviewModal.data.markets.join(', ')} · {reviewModal.data.totalRows} row{reviewModal.data.totalRows === 1 ? '' : 's'}
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => reviewModal.resolve(false)} className="p-1 rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Cancel">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="px-4 py-3 overflow-y-auto space-y-3">
+                  <div className="flex items-center gap-3 text-[12px] flex-wrap">
+                    {reviewModal.data.newCount > 0 && (
+                      <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                        <Plus className="w-3.5 h-3.5" />{reviewModal.data.newCount} new product{reviewModal.data.newCount === 1 ? '' : 's'} will be created
+                      </span>
+                    )}
+                    <span className="text-slate-600 dark:text-slate-300">{reviewModal.data.updateCount} updated</span>
+                  </div>
+                  {reviewModal.data.errors.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-400">
+                        <AlertCircle className="w-3.5 h-3.5" />{reviewModal.data.errors.length} error{reviewModal.data.errors.length === 1 ? '' : 's'}
+                      </div>
+                      <ul className="space-y-1">
+                        {reviewModal.data.errors.slice(0, 40).map((e, i) => (
+                          <li key={`e${i}`} className="text-[11.5px] text-slate-800 dark:text-slate-200 leading-snug">
+                            <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400">{e.mp}·{e.sku}</span> {e.message}
+                          </li>
+                        ))}
+                        {reviewModal.data.errors.length > 40 && <li className="text-[10.5px] text-tertiary">…and {reviewModal.data.errors.length - 40} more</li>}
+                      </ul>
+                    </div>
+                  )}
+                  {reviewModal.data.warnings.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                        <AlertTriangle className="w-3.5 h-3.5" />{reviewModal.data.warnings.length} warning{reviewModal.data.warnings.length === 1 ? '' : 's'}
+                      </div>
+                      <ul className="space-y-1">
+                        {reviewModal.data.warnings.slice(0, 40).map((w, i) => (
+                          <li key={`w${i}`} className="text-[11.5px] text-slate-700 dark:text-slate-300 leading-snug">
+                            <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400">{w.mp}·{w.sku}</span> {w.message}
+                          </li>
+                        ))}
+                        {reviewModal.data.warnings.length > 40 && <li className="text-[10.5px] text-tertiary">…and {reviewModal.data.warnings.length - 40} more</li>}
+                      </ul>
+                    </div>
+                  )}
+                  {reviewModal.data.errors.length === 0 && reviewModal.data.warnings.length === 0 && (
+                    <div className="text-[12px] text-emerald-700 dark:text-emerald-400 inline-flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4" />No issues — ready to publish.
+                    </div>
+                  )}
+                  {reviewModal.data.errors.length > 0 && (
+                    <div className="text-[11.5px] text-rose-700 dark:text-rose-400 inline-flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5" />Fix {reviewModal.data.errors.length} error{reviewModal.data.errors.length === 1 ? '' : 's'} before publishing.
+                    </div>
+                  )}
+                  {reviewModal.data.errors.length === 0 && reviewModal.data.warnings.length > 0 && (
+                    <label className="flex items-center gap-2 text-[11.5px] text-slate-700 dark:text-slate-300 cursor-pointer">
+                      <input type="checkbox" checked={reviewAck} onChange={(e) => setReviewAck(e.target.checked)} className="w-3.5 h-3.5" />
+                      I&apos;ve reviewed the {reviewModal.data.warnings.length} warning{reviewModal.data.warnings.length === 1 ? '' : 's'} and want to publish.
+                    </label>
+                  )}
+                </div>
+                <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-subtle dark:border-slate-800">
+                  <button type="button" onClick={() => reviewModal.resolve(false)} className="inline-flex items-center h-7 px-3 rounded text-[12px] border border-default dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+                  <button type="button" onClick={() => reviewModal.resolve(true)}
+                    disabled={reviewModal.data.errors.length > 0 || (reviewModal.data.warnings.length > 0 && !reviewAck)}
+                    className="inline-flex items-center gap-1.5 h-7 px-3 rounded text-[12px] font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <Send className="w-3.5 h-3.5" />Publish to {reviewModal.data.markets.join(', ')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {((serverFeedCount ?? 0) > 0 || submissionHistory.length > 0) && (
             <button
               type="button"

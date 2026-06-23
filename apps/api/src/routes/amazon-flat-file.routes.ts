@@ -501,8 +501,25 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     try {
       const union = await flatFileService.generateUnionManifest(mp, batchTypes)
       const { requiredByType, lengthByType } = buildPerTypeValidation(union)
+      // FFC — FBA rows that carry a quantity (Amazon manages FBA stock, so it must
+      // not be sent). Merchant-channel+qty = error (would flip FBA→FBM, also hard-
+      // blocked at /submit); other channels = warning (qty ignored — clear it).
+      const fbaFlags = await flatFileService.findFbaQtyRows(rows)
+      const fbaBySku = new Map(fbaFlags.map((f) => [f.sku, f]))
       const preflight = rows
-        .map((r: any) => ({ sku: String(r?.item_sku ?? ''), issues: preflightRow(r, requiredByType.get(rowType(r)) ?? [], lengthByType.get(rowType(r)) ?? []) }))
+        .map((r: any) => {
+          const sku = String(r?.item_sku ?? '')
+          const issues = preflightRow(r, requiredByType.get(rowType(r)) ?? [], lengthByType.get(rowType(r)) ?? [])
+          const fba = fbaBySku.get(sku)
+          if (fba) {
+            issues.push(
+              fba.severity === 'block'
+                ? { field: 'fulfillment_availability__quantity', severity: 'error', message: 'FBA product — clear the quantity (a merchant quantity would flip this FBA listing to FBM)' }
+                : { field: 'fulfillment_availability__quantity', severity: 'warning', message: 'FBA product — quantity is ignored (Amazon manages FBA stock); clear it to be safe' },
+            )
+          }
+          return { sku, issues }
+        })
         .filter((p) => p.issues.length > 0)
       return reply.send({ preflight, checkedRows: rows.length, productTypes: batchTypes })
     } catch (err: any) {
