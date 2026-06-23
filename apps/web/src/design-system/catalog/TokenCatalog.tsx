@@ -184,7 +184,7 @@ const GRID_ROWS: GridRow[] = [
   { id: '4', name: 'Gloves · Manual', status: 'arch', program: 'sp', spend: 96, sales: 410, acos: 23.4 },
 ]
 const gridSum = (k: 'spend' | 'sales') => GRID_ROWS.reduce((s, r) => s + r[k], 0)
-const STATUS_LABEL: Record<PillStatus, string> = { ok: 'Active', warn: 'Paused', arch: 'Archived' }
+const STATUS_LABEL: Record<PillStatus, string> = { ok: 'Active', warn: 'Paused', arch: 'Archived', err: 'Error' }
 const GRID_COLS: Column<GridRow>[] = [
   {
     key: 'name',

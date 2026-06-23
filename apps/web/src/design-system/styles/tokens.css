@@ -113,6 +113,8 @@
   --h10-pill-warn-bg: var(--h10-amber-soft);
   --h10-pill-arch-fg: #6b7480;
   --h10-pill-arch-bg: var(--h10-grey-100);
+  --h10-pill-err-fg: var(--h10-danger-strong);
+  --h10-pill-err-bg: var(--h10-danger-soft);
 
   /* ── Tier 3: program / targeting chips ─────────────────────────── */
   --h10-badge-sp-fg: var(--h10-purple-700);

@@ -95,6 +95,10 @@
   color: var(--h10-pill-arch-fg);
   background: var(--h10-pill-arch-bg);
 }
+.h10-ds-pill.err {
+  color: var(--h10-pill-err-fg);
+  background: var(--h10-pill-err-bg);
+}
 
 /* ── Program / targeting badge ───────────────────────────────────── */
 .h10-ds-badge {

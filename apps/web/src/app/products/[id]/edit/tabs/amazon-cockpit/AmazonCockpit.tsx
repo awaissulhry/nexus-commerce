@@ -59,6 +59,7 @@ import ComplianceCard from './compliance/ComplianceCard'
 import FitCompatibilityCard from './fit/FitCompatibilityCard'
 import AutoFillCard from './autofill/AutoFillCard'
 import PublishCard from './publish/PublishCard'
+import PreflightPanel from './preflight/PreflightPanel'
 import { useCockpitShortcuts } from './useCockpitShortcuts'
 import { LiveRegion } from '../../_shared/announce/useAnnounce'
 import { postCockpitEvent } from '../../_shared/telemetry/cockpit-telemetry'
@@ -603,6 +604,9 @@ export default function AmazonCockpit(props: Props) {
           />
         }
       />
+
+      {/* ── ALA P8 — Pre-Flight Check (what's wrong + diff + Review/Confirm) ── */}
+      <PreflightPanel productId={product.id} marketplace={marketInfo.code} />
 
       {/* ── AC.12 — Publish flow (full-width, top of cards zone) ──── */}
       <PublishCard
