@@ -38,5 +38,22 @@
 .h10-scb-bidcfg .mm > input[type="checkbox"] { width: 15px; height: 15px; accent-color: #1f6fde; cursor: pointer; flex-shrink: 0; }
 .h10-scb-bidcfg .mm-fields { display: flex; gap: 12px; }
 
+/* SB.4 — Product Selection "Sponsored Videos" column (shared ProductSelection right panel). */
+.h10-spw-ps-rcol.sv { display: flex; justify-content: space-between; }
+.h10-spw-ps-rcol.sv .svcol { display: inline-flex; align-items: center; gap: 5px; }
+.h10-spw-ps-rcol.sv .newtag { background: #e7f0ff; color: #1f6fde; font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 4px; text-transform: uppercase; letter-spacing: .3px; }
+.h10-spw-ps-right .row .h10-spw-ps-sv { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 116px; }
+.h10-spw-ps-right .row .h10-spw-ps-sv input { width: 15px; height: 15px; accent-color: #1f6fde; cursor: pointer; }
+
+/* SB.4 — Budget & Default Bid */
+.h10-scb-budget { display: flex; gap: 40px; flex-wrap: wrap; }
+.h10-scb-budget .fld { display: flex; flex-direction: column; gap: 7px; }
+.h10-scb-budget .fld .lbl { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; color: #3a4452; }
+.h10-scb-budget .fld .lbl .req { color: #e0392b; font-style: normal; }
+.h10-scb-money { width: 200px; }
+.h10-scb-budget .sug { align-self: flex-start; background: none; border: none; padding: 2px 0 0; font: inherit; font-size: 12px; font-weight: 600; color: #1f6fde; cursor: pointer; }
+.h10-scb-budget .sug:hover { text-decoration: underline; }
+.h10-scb-budget .sug .rg { color: #8a93a1; font-weight: 500; }
+
 /* Scaffolding placeholder (removed as each section is wired). */
 .h10-scb-todo { color: #8a93a1; font-size: 13px; padding: 6px 2px; margin: 0; }

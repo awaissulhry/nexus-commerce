@@ -17,8 +17,10 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Input } from '@/design-system/primitives'
+import { getBackendUrl } from '@/lib/backend-url'
 import { InfoTip } from '../../campaigns/InfoTip'
 import { PortfolioPicker } from '../sp-super-wizard/PortfolioPicker'
+import { ProductSelection, type SpwProduct } from '../sp-super-wizard/ProductSelection'
 import { PlacementBidMultiplier, type PlacementBids, emptyPlacementBids } from '../../_shared/PlacementBidMultiplier'
 import { BidStrategyCardGrid, defaultBidConfig, type BidConfig } from '../../_shared/BidStrategy'
 import '@/design-system/styles/tokens.css'
@@ -76,6 +78,25 @@ export function SingleCampaignBuilder() {
   const [bidConfig, setBidConfig] = useState<BidConfig>(defaultBidConfig())
   const [minMaxOn, setMinMaxOn] = useState(false)
   const setBid = (patch: Partial<BidConfig>) => setBidConfig((b) => ({ ...b, ...patch }))
+  // SB.4 — Product Selection + Budget & Default Bid
+  const [products, setProducts] = useState<SpwProduct[]>([])
+  const [svEnabled, setSvEnabled] = useState<Set<string>>(new Set())
+  const toggleSv = (id: string) => setSvEnabled((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const [budget, setBudget] = useState('')
+  const [defaultBid, setDefaultBid] = useState('')
+  // Data-grounded suggested default bid (account median CPC by intent); budget heuristic ≈ 50× bid.
+  const [sugBidEur, setSugBidEur] = useState<number | null>(null)
+  useEffect(() => {
+    let alive = true
+    fetch(`${getBackendUrl()}/api/advertising/campaign-builder/auto-bid-suggestions?market=IT`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (!alive || !j?.groups) return; const v = Object.values(j.groups as Record<string, number>).filter((n) => n > 0).sort((a, b) => a - b); if (v.length) setSugBidEur(v[Math.floor(v.length / 2)] / 100) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+  const sug = (base: number) => ({ val: base.toFixed(2), lo: (base * 0.73).toFixed(2), hi: (base * 1.27).toFixed(2) })
+  const sugBid = sugBidEur ? sug(sugBidEur) : null
+  const sugBudget = sugBidEur ? sug(sugBidEur * 50) : null
 
   const goNext = useCallback(() => setStep((s) => (s < 2 ? ((s + 1) as StepN) : s)), [])
   const goBack = useCallback(() => setStep((s) => (s > 1 ? ((s - 1) as StepN) : s)), [])
@@ -232,11 +253,24 @@ export function SingleCampaignBuilder() {
               <section id="scb-product-selection" className="h10-spw-sec">
                 <h2>Product Selection</h2>
                 <p className="h10-spw-desc">Select Amazon product to add to this campaign</p>
-                <div className="h10-spw-card"><p className="h10-scb-todo">ProductSelection (shared) — SB.4</p></div>
+                <ProductSelection products={products} setProducts={setProducts} sponsoredVideo={{ enabled: svEnabled, onToggle: toggleSv }} />
               </section>
               <section id="scb-budget" className="h10-spw-sec">
                 <h2>Budget &amp; Default Bid</h2>
-                <div className="h10-spw-card"><p className="h10-scb-todo">Budget + default bid (suggested ranges) — SB.4</p></div>
+                <div className="h10-spw-card">
+                  <div className="h10-scb-budget">
+                    <div className="fld">
+                      <span className="lbl">Daily Budget <i className="req">*</i> <InfoTip tip="The most you'll spend per day on this campaign, on average. Some days may run up to 25% over." /></span>
+                      <Input inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} prefix="€" aria-label="Daily budget" fieldClassName="h10-scb-money" />
+                      {sugBudget && <button type="button" className="sug" onClick={() => setBudget(sugBudget.val)}>Suggested: €{sugBudget.val} <span className="rg">(€{sugBudget.lo} - €{sugBudget.hi})</span></button>}
+                    </div>
+                    <div className="fld">
+                      <span className="lbl">Default Bid <i className="req">*</i> <InfoTip tip="The starting bid applied to targets that don't have their own bid. You can fine-tune per target later." /></span>
+                      <Input inputMode="decimal" value={defaultBid} onChange={(e) => setDefaultBid(e.target.value)} prefix="€" aria-label="Default bid" fieldClassName="h10-scb-money" />
+                      {sugBid && <button type="button" className="sug" onClick={() => setDefaultBid(sugBid.val)}>Suggested: €{sugBid.val} <span className="rg">(€{sugBid.lo} - €{sugBid.hi})</span></button>}
+                    </div>
+                  </div>
+                </div>
               </section>
               <section id="scb-targeting" className="h10-spw-sec">
                 <h2>Targeting</h2>

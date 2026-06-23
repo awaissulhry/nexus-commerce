@@ -57,7 +57,13 @@ function ProductMeta({ p, copyable }: { p: SpwProduct; copyable?: boolean }) {
   )
 }
 
-export function ProductSelection({ products, setProducts }: { products: SpwProduct[]; setProducts: Dispatch<SetStateAction<SpwProduct[]>> }) {
+export function ProductSelection({ products, setProducts, sponsoredVideo }: {
+  products: SpwProduct[]
+  setProducts: Dispatch<SetStateAction<SpwProduct[]>>
+  // SB.4 — optional per-product "Sponsored Videos" toggle column (Single Campaign builder).
+  // When omitted, the right panel renders exactly as before (SP Super Wizard unaffected).
+  sponsoredVideo?: { enabled: Set<string>; onToggle: (id: string) => void }
+}) {
   const [tab, setTab] = useState<'search' | 'enter'>('search')
   const [q, setQ] = useState('')
   const [all, setAll] = useState<SpwProduct[]>([])
@@ -207,7 +213,11 @@ export function ProductSelection({ products, setProducts }: { products: SpwProdu
           <b>{products.length} Products Added</b>
           <button type="button" className="rm" disabled={!products.length} onClick={() => setProducts([])}><Trash2 size={12} /> Remove All</button>
         </div>
-        <div className="h10-spw-ps-rcol">Product <ChevronsUpDown size={11} /></div>
+        {sponsoredVideo ? (
+          <div className="h10-spw-ps-rcol sv"><span className="pcol">Product <ChevronsUpDown size={11} /></span><span className="svcol">Sponsored Videos <span className="newtag">New</span></span></div>
+        ) : (
+          <div className="h10-spw-ps-rcol">Product <ChevronsUpDown size={11} /></div>
+        )}
         <div className="h10-spw-ps-rlist">
           {products.length === 0 ? (
             <div className="h10-spw-ps-nodata">No data</div>
@@ -216,6 +226,11 @@ export function ProductSelection({ products, setProducts }: { products: SpwProdu
               <div key={p.id} className="row">
                 <Thumb p={p} />
                 <ProductMeta p={p} />
+                {sponsoredVideo && (
+                  <label className="h10-spw-ps-sv" title="Run a Sponsored Brands video for this product">
+                    <input type="checkbox" checked={sponsoredVideo.enabled.has(p.id)} onChange={() => sponsoredVideo.onToggle(p.id)} aria-label={`Sponsored Videos for ${p.name}`} />
+                  </label>
+                )}
                 <button type="button" className="x" onClick={() => remove(p.id)} aria-label={`Remove ${p.name}`}><X size={14} /></button>
               </div>
             ))
