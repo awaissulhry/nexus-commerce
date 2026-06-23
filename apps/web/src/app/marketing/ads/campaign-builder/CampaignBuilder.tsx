@@ -94,7 +94,7 @@ export function CampaignBuilder() {
     else if (key === 'sp-super-wizard') router.push('/marketing/ads/campaign-builder/sp-super-wizard')
     else if (key === 'single') router.push('/marketing/ads/campaign-builder/single')
     else if (key === 'quick') router.push('/marketing/ads/campaign-builder/quick')
-    // Guided lands in a later phase.
+    else if (key === 'guided') router.push('/marketing/ads/campaign-builder/guided')
   }
   return (
     <div className="h10-cb">

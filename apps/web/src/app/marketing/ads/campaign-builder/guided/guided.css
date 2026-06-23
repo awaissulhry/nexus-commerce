@@ -1,0 +1,73 @@
+/* G.1–G.6 — Guided campaign builder. Reuses the SP Super Wizard `h10-spw-*` shell + shared
+   components (BidStrategyCardGrid, CampaignTypeSelect, KeywordTargetingPanel, HarvestRules,
+   RuleControlPanel). This file adds only Guided-specific bits: the single-column layout, the
+   surface-local bid config, the per-type Campaign Settings table, and the step-4 recap table.
+   The substep bullets reuse `.h10-scb-substeps` (Single builder, in single.css → shared via ads). */
+
+.h10-gcb-col { max-width: 1080px; }
+.h10-gcb .h10-spw-sec h2 .req { color: #e0392b; font-style: normal; font-weight: 700; }
+.h10-gcb-note { font-size: 12.5px; color: #5b6573; line-height: 1.5; margin: 14px 0 0; max-width: 720px; }
+
+/* Step-2 substep bullets under the "Campaign Setup" step (mirrors the Single builder). */
+.h10-gcb .h10-spw-steps { align-items: flex-start; }
+.h10-gcb .h10-spw-conn { margin-top: 11px; }
+.h10-gcb .h10-spw-step { align-items: flex-start; }
+.h10-gcb .h10-spw-step .lbl { display: flex; flex-direction: column; gap: 4px; padding-top: 3px; }
+.h10-gcb .h10-scb-substeps { display: flex; gap: 16px; }
+.h10-gcb .h10-scb-substeps .ss { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; color: #8a93a1; white-space: nowrap; }
+.h10-gcb .h10-scb-substeps .ss .dot { width: 6px; height: 6px; border-radius: 50%; background: #c2cdda; flex-shrink: 0; }
+.h10-gcb .h10-scb-substeps .ss.done { color: #5b6573; }
+.h10-gcb .h10-scb-substeps .ss.done .dot { background: #1c2530; }
+.h10-gcb .h10-scb-substeps .ss.on { color: #1f6fde; }
+.h10-gcb .h10-scb-substeps .ss.on .dot { background: #1f6fde; }
+
+/* Bid Strategy — surface-local Target ACoS / Min-Max below the shared cards (mirrors Quick/Single). */
+.h10-gcb-bidcfg { margin-top: 22px; padding-top: 20px; border-top: 1px solid #eef1f5; display: flex; flex-direction: column; gap: 22px; }
+.h10-gcb-bidcfg .grp .hd { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 700; color: #1c2530; }
+.h10-gcb-bidcfg .grp > p { font-size: 12.5px; color: #5b6573; margin: 3px 0 10px; }
+.h10-gcb-bidcfg .mm { display: flex; align-items: center; gap: 12px; }
+.h10-gcb-bidcfg .mm > input[type="checkbox"] { width: 15px; height: 15px; accent-color: #1f6fde; cursor: pointer; flex-shrink: 0; }
+.h10-gcb-bidcfg .mm-fields { display: flex; gap: 12px; }
+
+/* "Include Product Target Campaign" toggle above the SP settings table. */
+.h10-gcb-incpt { display: inline-flex; align-items: center; gap: 9px; margin: 0 0 12px; cursor: pointer; font-size: 13.5px; font-weight: 600; color: #1c2530; }
+.h10-gcb-incpt input { width: 15px; height: 15px; accent-color: #1f6fde; cursor: pointer; }
+
+/* Per-type Campaign Settings table (Ad Group · Default Bid · Budget · Bid Algorithm). */
+.h10-gcb-set { padding: 0; overflow: hidden; }
+.h10-gcb-set-head, .h10-gcb-set-row { display: grid; grid-template-columns: minmax(260px, 1.7fr) 200px 200px 150px; gap: 18px; align-items: center; }
+.h10-gcb-set-head { padding: 13px 20px; border-bottom: 1px solid #eef1f5; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #8a93a1; background: #fafbfc; }
+.h10-gcb-set-row { padding: 16px 20px; border-bottom: 1px solid #f1f3f6; }
+.h10-gcb-set-row:last-child { border-bottom: none; }
+.h10-gcb-set-row .ag { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.h10-gcb-set-row .ag .badge { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.h10-gcb-set-row .ag .nm { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.h10-gcb-set-row .ag .nm .t { font-size: 13.5px; font-weight: 600; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-gcb-set-row .ag .nm .sub { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #8a93a1; }
+.h10-gcb-set-row .num { display: flex; flex-direction: column; gap: 5px; }
+.h10-gcb-set-row .num .money { display: inline-flex; align-items: center; border: 1px solid #d8dde4; border-radius: 7px; overflow: hidden; height: 34px; width: 150px; background: #fff; }
+.h10-gcb-set-row .num .money:focus-within { border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+.h10-gcb-set-row .num .money .pf { padding: 0 8px; color: #8a93a1; font-size: 13px; background: #f4f6f8; align-self: stretch; display: inline-flex; align-items: center; }
+.h10-gcb-set-row .num .money input { width: 100%; min-width: 0; border: none; outline: none; font: inherit; font-size: 13.5px; padding: 0 8px; color: #1c2530; }
+.h10-gcb-set-row .num .sug { font-size: 11.5px; color: #8a93a1; }
+.h10-gcb-set-row .num .sug b { color: #5b6573; font-weight: 600; }
+.h10-gcb-set-row .algo { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #3a4452; }
+.h10-gcb-set-row .algo svg { color: #1f6fde; }
+
+/* Advanced Naming Options */
+.h10-gcb-adv { display: inline-flex; align-items: center; gap: 7px; margin: 14px 0 0; font: inherit; font-size: 13px; font-weight: 700; color: #1f6fde; background: none; border: none; cursor: pointer; }
+.h10-gcb-adv svg { transition: transform .15s; }
+.h10-gcb-adv svg.up { transform: rotate(180deg); }
+.h10-gcb-naming { margin-top: 12px; display: flex; flex-direction: column; gap: 14px; }
+.h10-gcb-naming .row { display: grid; grid-template-columns: 160px 1fr; gap: 14px; align-items: center; }
+.h10-gcb-naming .row .l { font-size: 13px; font-weight: 600; color: #3a4452; }
+.h10-gcb-naming .row input { height: 36px; border: 1px solid #d8dde4; border-radius: 8px; padding: 0 11px; font: inherit; font-size: 13.5px; color: #1c2530; }
+.h10-gcb-naming .row input:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+
+/* Step-4 recap table (read-only, multi-format: Ad Group · Type · Targeting · Daily Budget · Default Bid · Bid Algorithm). */
+.h10-gcb-rev-head, .h10-gcb-rev-row { display: grid; grid-template-columns: minmax(260px, 2fr) 70px 90px 120px 110px 1fr; gap: 14px; align-items: center; }
+.h10-gcb-rev-head { padding: 13px 20px; border-bottom: 1px solid #eef1f5; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #8a93a1; background: #fafbfc; }
+.h10-gcb-rev-row { padding: 14px 20px; border-bottom: 1px solid #f1f3f6; font-size: 13px; color: #3a4452; }
+.h10-gcb-rev-row:last-child { border-bottom: none; }
+.h10-gcb-rev-row .ag { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: #1c2530; min-width: 0; }
+.h10-gcb-rev-row .ag span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

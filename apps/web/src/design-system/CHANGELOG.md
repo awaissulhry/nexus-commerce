@@ -4,6 +4,22 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [ADS-CB] — 2026-06-23 — Campaign-builder shared blocks (Guided)
+
+- New shared ads-builder components in `marketing/ads/_shared/`, recorded in the
+  ads inventory (study 00 §7):
+  - **`CampaignTypeSelect`** (+ co-located `.css`) — the SP / SB / SD multi-select
+    cards (ad-format mocks + Amazon copy; `disabled` keys render a "Soon" pill).
+    The canonical building block for any builder spanning ad formats.
+  - **`HarvestRules`** — the Keyword Harvesting / Negative Targeting matrix +
+    collapsible Performance Criteria, on the shared rule model (`RulesConfig` /
+    `RuleRowSel`). (SP Super Wizard's `LaunchStep` keeps an inline twin for now —
+    flagged as a dedupe candidate; model + engine are already shared.)
+- These power the new **Guided** builder (multi-format SP+SB+SD), which otherwise
+  reuses existing shared blocks (`BidStrategy`, `KeywordTargetingPanel`,
+  `ProductSelection`, the `RuleControlPanel` canvas, `PerformanceCriteria`). No DS
+  primitive/token changes; additive only.
+
 ## [P5.1a] — 2026-06-22 — AppShell: collapsible nav groups
 
 - `AppShell` gains collapsible nav **groups** (`ShellNavGroup` — icon + label +

@@ -125,6 +125,9 @@ hardcoded hex throughout, almost no CSS variables.
 | PageHeader / DetailHeader | `_shell/AdsPageHeader`, `CampaignDetailHeader` | |
 | **Builder framework** | `rules-automation/_shared/RuleBuilder.tsx` (1222), `ai-advertising/new-goal/AiGoalBuilder.tsx` (415), `rules-automation/_rank/RankGoalBuilder.tsx` ⚠WIP | full-screen wizard + scroll-spy nav; extract the shell, defer `_rank` until committed |
 | CampaignBuilder | `campaign-builder/CampaignBuilder.tsx` | type-chooser cards + profile picker |
+| **CampaignTypeSelect** | `_shared/CampaignTypeSelect.tsx` (+ `.css`) | SP/SB/SD multi-select cards w/ ad-format mocks; reusable across builders (used by Guided) |
+| **HarvestRules** | `_shared/HarvestRules.tsx` | Keyword Harvesting / Negative Targeting matrix + Performance Criteria; shared rule model (`RulesConfig`); used by Guided (SP-Wizard `LaunchStep` has an inline twin — dedupe candidate) |
+| Builder set (shared parts) | `campaign-builder/{quick,guided}/` reuse `_shared/{BidStrategy,KeywordTargetingPanel,CampaignTypeSelect,HarvestRules}` + `sp-super-wizard/{ProductSelection,RuleControlPanel,CampaignSetup}` | Quick = SP express funnel · Guided = multi-format (SP+SB+SD); zero bespoke duplication of the shared blocks |
 | FilterPanel | `.h10-am-fpanel` (in `CampaignsGrid`) | accordion, range/select/multi, presets, save-to-library |
 | BulkActionBar | `campaigns/_grid/bulkActions.tsx` + `.h10-bulkrow` | |
 | ColumnCustomizer | Customize-Columns modal (`CampaignsGrid`) | dnd reorder + per-group visibility + localStorage |

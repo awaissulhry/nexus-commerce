@@ -1,0 +1,27 @@
+/* Shared campaign-type selector (SP/SB/SD multi-select cards). Self-contained styles travel
+   with the component so any builder can reuse it. Matches the H10 card language. */
+.h10-cts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.h10-cts-card {
+  position: relative; display: flex; flex-direction: column; align-items: stretch; text-align: left;
+  gap: 10px; padding: 18px; border: 1.5px solid #e2e7ee; border-radius: 12px; background: #fff;
+  cursor: pointer; font: inherit; transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.h10-cts-card:hover { border-color: #b9c6da; }
+.h10-cts-card.on { border-color: #1f6fde; background: #f7faff; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+.h10-cts-card.off { cursor: not-allowed; opacity: .62; }
+.h10-cts-card.off:hover { border-color: #e2e7ee; }
+
+.h10-cts-tick {
+  position: absolute; top: 12px; right: 12px; width: 22px; height: 22px; border-radius: 50%;
+  background: #1f6fde; color: #fff; display: inline-flex; align-items: center; justify-content: center;
+}
+.h10-cts-soon {
+  position: absolute; top: 13px; right: 13px; font-size: 10px; font-weight: 800; letter-spacing: .03em;
+  text-transform: uppercase; color: #8a93a1; background: #eef1f5; border-radius: 5px; padding: 2px 7px;
+}
+
+.h10-cts-mock { width: 100%; height: auto; display: block; border-radius: 6px; }
+.h10-cts-ttl { font-size: 15px; font-weight: 700; color: #1c2530; margin-top: 4px; }
+.h10-cts-desc { font-size: 12.5px; line-height: 1.5; color: #5b6573; }
+
+@media (max-width: 980px) { .h10-cts { grid-template-columns: 1fr; } }
