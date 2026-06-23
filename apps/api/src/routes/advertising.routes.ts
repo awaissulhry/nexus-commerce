@@ -5166,6 +5166,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await setCampaignLimit({ marketplace: b.marketplace, month: b.month || currentMonth(), campaignId: b.campaignId, minCents: b.minCents ?? null, maxCents: b.maxCents ?? null }) }
     catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
+  // BM.B3 — enforcement preview: what Auto Pacing / Stop Over Spend WOULD do (dry-run).
+  fastify.get('/advertising/budget-manager/enforcement', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { computeBudgetEnforcement } = await import('../services/advertising/ads-budget-enforce.service.js')
+    reply.header('Cache-Control', 'private, max-age=30')
+    return computeBudgetEnforcement({ month: q.month })
+  })
 
   // ── AX3.2: Full-funnel Goal builder (branded + unbranded) ───────────
   fastify.post('/advertising/goals/suggest-targets', async (request, reply) => {
