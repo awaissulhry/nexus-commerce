@@ -1,0 +1,37 @@
+/* AC P-D — Autopilot control room layout. */
+.apr { padding: 18px 24px 64px; max-width: 1520px; }
+.apr-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 6px; }
+.apr-head .l { display: flex; gap: 12px; align-items: flex-start; }
+.apr-head .l svg { color: #1f6fde; margin-top: 4px; }
+.apr-head h1 { font-size: 22px; font-weight: 800; color: #1c2530; margin: 0; letter-spacing: -0.01em; }
+.apr-head p { font-size: 13.5px; color: #5b6573; margin: 3px 0 0; max-width: 760px; }
+
+.apr-empty { display: flex; flex-direction: column; gap: 4px; align-items: center; justify-content: center; text-align: center; min-height: 320px; color: #8a93a1; font-size: 13.5px; }
+.apr-empty b { color: #2b3440; font-size: 15px; }
+
+.apr-bar { display: flex; align-items: flex-end; gap: 16px; margin: 18px 0; flex-wrap: wrap; }
+.apr-bar .f { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 700; color: #2b3440; }
+.apr-bar select { height: 36px; border: 1px solid #d8dde4; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 13px; color: #1c2530; background: #fff; min-width: 170px; }
+.apr-bar .grow { flex: 1; }
+.apr-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #8a93a1; background: #f1f4f8; border-radius: 16px; padding: 6px 12px; }
+.apr-live.on { color: #15a34a; background: #e7f7ec; }
+.apr-run { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #1f6fde; background: #fff; color: #1f6fde; border-radius: 8px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.apr-run:hover { background: #eef4fd; }
+
+.apr-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: stretch; }
+@media (max-width: 1100px) { .apr-grid { grid-template-columns: 1fr; } }
+
+.apr-feed { border: 1px solid #e6e9ee; border-radius: 12px; background: #fff; display: flex; flex-direction: column; max-height: 540px; overflow: hidden; }
+.apr-feed .hd { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #eef1f5; }
+.apr-feed .hd b { font-size: 14px; font-weight: 700; color: #1c2530; }
+.apr-feed .hd span { font-size: 12px; color: #8a93a1; background: #f1f4f8; border-radius: 12px; padding: 2px 9px; }
+.apr-feed .empty { padding: 24px 16px; font-size: 12.5px; color: #8a93a1; line-height: 1.5; }
+.apr-feed ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+.apr-feed li { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 8px; padding: 9px 14px; border-bottom: 1px solid #f4f6f8; font-size: 12px; }
+.apr-feed .tag { text-transform: uppercase; font-size: 10px; font-weight: 800; letter-spacing: .3px; color: #5b6573; background: #eef1f5; border-radius: 5px; padding: 2px 6px; }
+.apr-feed .act { font-weight: 700; color: #1c2530; }
+.apr-feed .rsn { color: #5b6573; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apr-feed .st { font-size: 10.5px; font-weight: 700; color: #8a93a1; }
+.apr-feed .st.applied { color: #15a34a; }
+.apr-feed .st.proposed { color: #1f6fde; }
+.apr-feed .st.denied, .apr-feed .st.rolled_back { color: #e5484d; }

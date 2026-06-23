@@ -1,0 +1,24 @@
+/* AC P-C — AI Control panel (SP Super Wizard step 3). Sits inside the shared h10-spw-card chrome. */
+.h10-ai-goals { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.h10-ai-autonomy { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 860px) { .h10-ai-autonomy { grid-template-columns: 1fr; } }
+.h10-ai-warn { margin-top: 12px; font-size: 13px; color: #8a5a00; background: #fff7e6; border: 1px solid #ffe2a8; border-radius: 8px; padding: 10px 12px; line-height: 1.45; }
+
+.h10-ai-guards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px 18px; align-items: end; }
+.h10-ai-field { display: flex; flex-direction: column; gap: 6px; }
+.h10-ai-field .lbl { font-size: 12.5px; font-weight: 700; color: #2b3440; }
+.h10-ai-field .inp { display: inline-flex; align-items: stretch; border: 1px solid #d8dde4; border-radius: 8px; overflow: hidden; }
+.h10-ai-field .inp input { border: 0; outline: 0; padding: 9px 11px; font: inherit; font-size: 13.5px; width: 100%; color: #1c2530; background: #fff; }
+.h10-ai-field .inp input:focus { outline: 0; }
+.h10-ai-field .inp .sfx { padding: 0 11px; background: #f4f6f9; color: #5b6573; font-size: 13px; display: flex; align-items: center; border-left: 1px solid #d8dde4; }
+.h10-ai-toggle { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; color: #3a4452; grid-column: 1 / -1; cursor: pointer; }
+.h10-ai-sw { width: 40px; height: 22px; border-radius: 12px; border: 0; background: #cfd6df; position: relative; cursor: pointer; padding: 0; transition: background .15s; flex-shrink: 0; }
+.h10-ai-sw span { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s; }
+.h10-ai-sw.on { background: #1f6fde; }
+.h10-ai-sw.on span { left: 20px; }
+
+.h10-ai-modules { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.h10-ai-mod { display: inline-flex; align-items: center; gap: 9px; font-size: 13.5px; color: #1c2530; border: 1px solid #e6e9ee; border-radius: 9px; padding: 10px 12px; cursor: pointer; }
+.h10-ai-mod.on { border-color: #1f6fde; background: #f3f8ff; }
+.h10-ai-mod input { accent-color: #1f6fde; flex-shrink: 0; }
+.h10-ai-mod .note { display: block; font-size: 11.5px; color: #8a93a1; font-weight: 600; }

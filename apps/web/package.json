@@ -17,6 +17,7 @@
     "@nexus/shared": "*",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.13.24",
+    "@xyflow/react": "^12.11.1",
     "@zxing/browser": "^0.2.0",
     "@zxing/library": "^0.22.0",
     "axios": "^1.15.2",

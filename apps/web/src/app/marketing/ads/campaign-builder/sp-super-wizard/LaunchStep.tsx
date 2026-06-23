@@ -10,7 +10,7 @@
  * AI Control collapses the manual config to an "AI handles it" note.
  */
 import { type Dispatch, type SetStateAction, useState } from 'react'
-import { ChevronDown, Package, Layers, BarChart3, Sparkles, Megaphone, Target, ShoppingCart, SlidersHorizontal } from 'lucide-react'
+import { ChevronDown, Package, Layers, BarChart3, Megaphone, Target, ShoppingCart, SlidersHorizontal } from 'lucide-react'
 import { RadioCard, Input } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -18,6 +18,7 @@ import { InfoTip } from '../../campaigns/InfoTip'
 import { PerformanceCriteria, pcDefaultGroup, type CriteriaGroup } from '../../rules-automation/_shared/PerformanceCriteria'
 import { PortfolioPicker } from './PortfolioPicker'
 import type { SpwCampaign } from './CampaignSetup'
+import { AiControlPanel, type AiControlConfig } from './AiControlPanel'
 
 const money = (cur: string, n: number) => `${cur}${n.toFixed(2)}`
 
@@ -44,7 +45,7 @@ export type RulesConfig = {
   sel: Record<string, RuleRowSel>
   perf: CriteriaGroup
 }
-export const defaultRulesConfig = (slug = 'keyword-harvesting'): RulesConfig => ({ ruleName: '', automate: false, sel: {}, perf: pcDefaultGroup(slug) })
+export const defaultRulesConfig = (slug = 'keyword-harvesting'): RulesConfig => ({ ruleName: '', automate: true, sel: {}, perf: pcDefaultGroup(slug) })
 /** True once the operator has set up a harvest rule worth persisting. */
 export const rulesConfigured = (r: RulesConfig): boolean =>
   r.ruleName.trim().length > 0 || Object.values(r.sel).some((s) => s.st || s.tB || s.tP || s.tE || s.tBox || s.nP || s.nE || s.nBox)
@@ -60,7 +61,7 @@ const BID_STRATEGIES: Array<{ key: Exclude<BidStrategy, 'none'>; label: string; 
   { key: 'custom', label: 'Custom', desc: 'Create a custom rule that adjusts a target’s bid based on your set performance criteria.', stage: 'Custom', Icon: SlidersHorizontal },
 ]
 
-export function LaunchStep({ campaigns, productGroupName, productCount, currency, automationMode, setAutomationMode, bidConfig, setBidConfig, rules, setRules, portfolioId, setPortfolioId }: {
+export function LaunchStep({ campaigns, productGroupName, productCount, currency, automationMode, setAutomationMode, bidConfig, setBidConfig, rules, setRules, portfolioId, setPortfolioId, aiControl, setAiControl }: {
   campaigns: SpwCampaign[]
   productGroupName: string
   productCount: number
@@ -73,6 +74,8 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
   setRules: Dispatch<SetStateAction<{ harvest: RulesConfig; negative: RulesConfig }>>
   portfolioId: string
   setPortfolioId: (id: string) => void
+  aiControl: AiControlConfig
+  setAiControl: (v: AiControlConfig) => void
 }) {
   const [portfolioOpen, setPortfolioOpen] = useState(false)
   const [tab, setTab] = useState<'harvest' | 'negative'>('harvest')
@@ -109,7 +112,7 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
       </div>
 
       {ai ? (
-        <div className="h10-spw-card h10-spw-ainote"><Sparkles size={18} /><span><b>AI Control is on.</b> Helium 10 will manage bids, budgets, and targeting for these campaigns automatically. Review the set below, then launch.</span></div>
+        <AiControlPanel value={aiControl} onChange={setAiControl} />
       ) : (
         <>
           {/* Bid Strategy */}
@@ -204,6 +207,7 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
             <input type="checkbox" className="h10-spw-sw" checked={automate} onChange={(e) => setAutomate(e.target.checked)} />
             <span>Automate</span>
           </label>
+          <p className="h10-spw-rules-autohint">On a schedule, this rule proposes its harvested {isNeg ? 'negatives' : 'keywords & negatives'} on the <strong>Suggestions</strong> page for you to approve — it never changes campaigns on its own.</p>
 
           <div className={`h10-spw-mx ${isNeg ? 'neg' : ''}`}>
             <div className="h10-spw-mx-grid grp">

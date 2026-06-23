@@ -26,6 +26,7 @@ import { PlacementBidMultiplier, type PlacementBids, emptyPlacementBids } from '
 import { CampaignSetup, generateCampaigns, campaignsMissingTargeting, applyAutoNegatives, type SpwCampaign } from './CampaignSetup'
 import { TargetingModal } from './TargetingModal'
 import { LaunchStep, defaultRulesConfig, rulesConfigured, defaultBidConfig, type RulesConfig, type BidConfig } from './LaunchStep'
+import { defaultAiControl, aiGuardrailsToCents, type AiControlConfig } from './AiControlPanel'
 import { defaultCustomKeywordTypes, defaultCustomTargeting, type CustomKeywordType, type TargetingKind } from './CustomScheme'
 
 type StepN = 1 | 2 | 3
@@ -62,6 +63,7 @@ export function SpSuperWizard() {
   const [rules, setRules] = useState<{ harvest: RulesConfig; negative: RulesConfig }>({ harvest: defaultRulesConfig('keyword-harvesting'), negative: defaultRulesConfig('negative-targeting') })
   const [bidConfig, setBidConfig] = useState<BidConfig>(defaultBidConfig())
   const [portfolioId, setPortfolioId] = useState('')
+  const [aiControl, setAiControl] = useState<AiControlConfig>(defaultAiControl())
 
   // Step 2 campaigns are generated from the step-1 structure; Restore Default re-generates.
   // applyAutoNegatives layers the negative-keyword funnel + Auto-isolation on top (NT.1).
@@ -102,15 +104,32 @@ export function SpSuperWizard() {
           negative: rulesConfigured(rules.negative) ? { ruleName: rules.negative.ruleName, automate: rules.negative.automate, perf: rules.negative.perf, rows: rules.negative.sel } : undefined,
         },
         automationMode,
+        aiControl: automationMode === 'ai' ? aiControl : undefined,
         bidConfig: automationMode === 'rule' && bidConfig.strategy !== 'none' ? bidConfig : undefined,
         portfolioId: portfolioId || undefined,
       }
       const r = await fetch(`${getBackendUrl()}/api/advertising/campaign-builder/sp-super-wizard/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json().catch(() => ({}))
       if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Launch failed')
+      // AI Control: provision the AutopilotPlan for the launched set (best-effort; campaigns are
+      // already created). The Conductor (ad-autopilot.job) then drives these campaigns.
+      if (automationMode === 'ai') {
+        const createdIds: string[] = Array.isArray(j?.campaignIds) ? j.campaignIds : Array.isArray(j?.campaigns) ? j.campaigns.map((c: { id: string }) => c.id) : []
+        try {
+          await fetch(`${getBackendUrl()}/api/advertising/autopilot-plans`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: productGroupName || 'Autopilot plan', marketplace: 'IT', productGroupName,
+              campaignIds: createdIds, goal: aiControl.goal, autonomy: aiControl.autonomy,
+              guardrails: aiGuardrailsToCents(aiControl.guardrails),
+              modules: Object.fromEntries(Object.entries(aiControl.modules).map(([k, on]) => [k, { on }])),
+            }),
+          })
+        } catch { /* plan creation best-effort — campaigns already launched */ }
+      }
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, productGroupName, products, campaigns, bidMult, rules, automationMode, bidConfig, portfolioId, router])
+  }, [launching, productGroupName, products, campaigns, bidMult, rules, automationMode, bidConfig, aiControl, portfolioId, router])
 
 
   // Scroll-spy for the step-1 sub-nav. The scroll container is the .h10-main
@@ -210,7 +229,7 @@ export function SpSuperWizard() {
           </div>
         )}
 
-        {step === 3 && <LaunchStep campaigns={campaigns} productGroupName={productGroupName} productCount={products.length} currency="€" automationMode={automationMode} setAutomationMode={setAutomationMode} bidConfig={bidConfig} setBidConfig={setBidConfig} rules={rules} setRules={setRules} portfolioId={portfolioId} setPortfolioId={setPortfolioId} />}
+        {step === 3 && <LaunchStep campaigns={campaigns} productGroupName={productGroupName} productCount={products.length} currency="€" automationMode={automationMode} setAutomationMode={setAutomationMode} bidConfig={bidConfig} setBidConfig={setBidConfig} rules={rules} setRules={setRules} portfolioId={portfolioId} setPortfolioId={setPortfolioId} aiControl={aiControl} setAiControl={setAiControl} />}
       </div>
 
       <footer className="h10-spw-foot">
