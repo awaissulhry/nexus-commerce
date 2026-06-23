@@ -1180,6 +1180,7 @@ async function start() {
       markCronStep('ads:import ad-dayparting.job');
       const { startDaypartingCron } = await import('./jobs/ad-dayparting.job.js');
       const { startBudgetScheduleCron } = await import('./jobs/ad-budget-schedule.job.js');
+      const { startAutopilotCron } = await import('./jobs/ad-autopilot.job.js');
       // RS.5 — rank-defend loop (self-gated on NEXUS_ENABLE_RANK_DEFEND=1).
       const { startRankDefendCron } = await import('./jobs/ad-rank-defend.job.js');
       markCronStep('ads:import ads-budget-pacing');
@@ -1209,6 +1210,7 @@ async function start() {
       markCronStep('ads:register schedules');
       startDaypartingCron();
       startBudgetScheduleCron();
+      startAutopilotCron();
       startRankDefendCron();
       startAllAdvertisingCrons();
       startAdvertisingRuleEvaluatorCron();

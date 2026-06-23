@@ -921,6 +921,17 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // Gated: dryRun stays true (the rule proposes via the engine) until the live gate opens.
     // S3.4 — two separate rules: Keyword Harvesting + Negative Targeting.
     const rulesCreated: Array<{ id: string; name: string }> = []
+    // H.2 — destination map for keyword graduation: matchType → the ad group of the keyword campaign
+    // that hosts that match type in this product group (e.g. EXACT → the Exact campaign). A harvested
+    // winner promotes there instead of back into its source ad group. Built from the campaigns just
+    // created above; empty if the group has no keyword campaigns (then graduation falls back to source).
+    const destinations: Record<string, string> = {}
+    for (const c of campaigns) {
+      if (c.kind !== 'keyword' || !c.id) continue
+      const ref = idMap[c.id]
+      if (!ref) continue
+      for (const mt of matchTypesFor(c.matchType)) destinations[mt] = ref.adGroupId
+    }
     const buildRule = async (rcfg: SpwRule | undefined, kind: 'harvest' | 'negative') => {
       if (!rcfg) return
       const sources = Object.entries(rcfg.rows ?? {})
@@ -944,9 +955,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         const minOrders = ordersC && Number.isFinite(Number(ordersC.value)) ? Number(ordersC.value) : 2
         const minSpendCents = spendC && Number.isFinite(Number(spendC.value)) ? Math.round(Number(spendC.value) * 100) : 1000
         const defaultName = `${(b.productGroupName || 'Campaign').trim()} — ${kind === 'negative' ? 'Negative Targeting' : 'Harvest & Negate'}`
+        // H.4 — propose-first. control:'manual' makes the engine force dry-run and record each run as
+        // an AdsRuleSuggestion the operator approves on /marketing/ads/suggestions (approving re-runs
+        // it live, write-gated). No notify action — the suggestion card IS the notification, and a bare
+        // notify would otherwise create a noise card. Flip to hands-off later by dropping control:'manual'
+        // + setting dryRun:false + opening the write-gate.
         const actions = [
-          { type: 'harvest_and_negate', windowDays: 60, minSpendCents, minOrders, graduationBidEur: 0.5, sources, perfCriteria: perf, mode: kind },
-          { type: 'notify', target: 'operator', message: `${kind === 'negative' ? 'Negative targeting' : 'Harvest & negate'} rule ran — check execution log` },
+          { type: 'harvest_and_negate', control: 'manual', windowDays: 60, minSpendCents, minOrders, graduationBidEur: 0.5, sources, destinations, perfCriteria: perf, mode: kind },
         ]
         const rule = await prisma.automationRule.create({
           data: {
@@ -5257,6 +5272,81 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     })
     reply.header('Cache-Control', 'private, max-age=300')
     return { groupBy: 'hour', timezone: 'Europe/Rome', hasData: rows.length > 0, series }
+  })
+
+  // ── AC — AI Control / Autopilot: plans CRUD + decisions + real-time SSE feed ──────
+  fastify.get('/advertising/autopilot-plans', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=10')
+    const items = await prisma.autopilotPlan.findMany({ orderBy: { updatedAt: 'desc' } })
+    return { items, count: items.length }
+  })
+  fastify.get('/advertising/autopilot-plans/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const plan = await prisma.autopilotPlan.findUnique({ where: { id } })
+    if (!plan) { reply.status(404); return { error: 'not found' } }
+    return { plan }
+  })
+  fastify.post('/advertising/autopilot-plans', async (request, reply) => {
+    const b = (request.body ?? {}) as Record<string, unknown>
+    if (!b.name || !b.marketplace) { reply.status(400); return { error: 'name, marketplace required' } }
+    const plan = await prisma.autopilotPlan.create({ data: {
+      name: String(b.name), marketplace: String(b.marketplace),
+      productGroupName: (b.productGroupName as string) ?? null,
+      campaignIds: (b.campaignIds as object) ?? [],
+      goal: (b.goal as string) ?? 'BALANCED', autonomy: (b.autonomy as string) ?? 'SUGGEST',
+      guardrails: (b.guardrails as object) ?? {}, modules: (b.modules as object) ?? {},
+      graph: (b.graph as object) ?? {}, linkedRuleIds: (b.linkedRuleIds as object) ?? [],
+    } })
+    return { plan }
+  })
+  fastify.patch('/advertising/autopilot-plans/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = (request.body ?? {}) as Record<string, unknown>
+    const data: Record<string, unknown> = {}
+    for (const k of ['name', 'marketplace', 'productGroupName', 'campaignIds', 'goal', 'autonomy', 'guardrails', 'modules', 'graph', 'linkedRuleIds', 'stage', 'enabled']) if (b[k] !== undefined) data[k] = b[k]
+    try { const plan = await prisma.autopilotPlan.update({ where: { id }, data }); return { plan } } catch { reply.status(404); return { error: 'not found' } }
+  })
+  fastify.delete('/advertising/autopilot-plans/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try { await prisma.autopilotPlan.delete({ where: { id } }); return { ok: true } } catch { reply.status(404); return { error: 'not found' } }
+  })
+  fastify.get('/advertising/autopilot-plans/:id/decisions', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const q = request.query as { limit?: string; status?: string }
+    const take = Math.min(500, Math.max(1, Number(q.limit ?? 200)))
+    const items = await prisma.autopilotDecision.findMany({ where: { planId: id, ...(q.status ? { status: q.status } : {}) }, orderBy: { at: 'desc' }, take })
+    return { items, count: items.length }
+  })
+  // Manual dry-run: run the Conductor once for THIS plan and return the proposed actions (no writes).
+  fastify.post('/advertising/autopilot-plans/:id/run', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const plan = await prisma.autopilotPlan.findUnique({ where: { id } })
+    if (!plan) { reply.status(404); return { error: 'not found' } }
+    const { gatherSignals } = await import('../jobs/ad-autopilot.job.js')
+    const { runConductorCycle } = await import('../services/advertising/autopilot/conductor.js')
+    const signals = await gatherSignals(Array.isArray(plan.campaignIds) ? (plan.campaignIds as string[]) : [])
+    const result = runConductorCycle({ goal: plan.goal as never, guardrails: (plan.guardrails ?? {}) as never, modules: (plan.modules ?? {}) as never, signals })
+    return { dryRun: true, signalsEvaluated: signals.length, ...result }
+  })
+  // Real-time decision feed (SSE): emits new AutopilotDecision rows for the plan as they appear.
+  fastify.get('/advertising/autopilot-plans/:id/decisions/stream', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    reply.hijack()
+    reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' })
+    reply.raw.write(': autopilot stream open\n\n')
+    let cursor = new Date(0)
+    let alive = true
+    const tick = async () => {
+      if (!alive) return
+      try {
+        const rows = await prisma.autopilotDecision.findMany({ where: { planId: id, at: { gt: cursor } }, orderBy: { at: 'asc' }, take: 100 })
+        if (rows.length) { cursor = rows[rows.length - 1].at; for (const r of rows) reply.raw.write(`data: ${JSON.stringify(r)}\n\n`) }
+        else reply.raw.write(': ping\n\n')
+      } catch { /* keep the stream alive on transient errors */ }
+    }
+    await tick()
+    const iv = setInterval(() => { void tick() }, 3000)
+    request.raw.on('close', () => { alive = false; clearInterval(iv) })
   })
 
   // ── RS.1 — Rank Targets (reusable rank GOALS for the schedule + baseline) ──
