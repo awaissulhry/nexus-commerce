@@ -5198,10 +5198,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'private, max-age=20')
     return getOntologyChildren({ parentType, parentId: q.parentId })
   })
+  // P2 — campaign PPC settings for the Control Plane inspector (bidding strategy,
+  // target-ACoS fraction, placement multipliers).
+  fastify.get('/advertising/campaigns/:id/settings', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const c = await prisma.campaign.findUnique({ where: { id }, select: { biddingStrategy: true, status: true, dynamicBidding: true } })
+    if (!c) { reply.status(404); return { error: 'campaign not found' } }
+    const db = (c.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }>; targetAcos?: number }
+    const pl = db.placementBidding ?? []
+    const find = (p: string) => pl.find((x) => x.placement === p)?.percentage ?? null
+    reply.header('Cache-Control', 'private, max-age=15')
+    return { biddingStrategy: c.biddingStrategy, status: c.status, targetAcos: db.targetAcos ?? null, placements: { tos: find('PLACEMENT_TOP'), pdp: find('PLACEMENT_PRODUCT_PAGE'), ros: find('PLACEMENT_REST_OF_SEARCH') } }
+  })
   // CP.1 + P1.1 — Control Plane scenario commit: apply a batch of staged changes
   // through the gated + audited path, dispatched by entity type. ?dryRun=1 validates.
   fastify.post('/advertising/budget-manager/scenario/commit', async (request, reply) => {
-    const b = request.body as { month?: string; dryRun?: boolean; changes?: Array<{ entityType?: 'campaign' | 'adgroup' | 'target'; entityId?: string; campaignId?: string; marketplace?: string; kind: string; budgetCents?: number; minCents?: number | null; maxCents?: number | null; bidCents?: number; status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED' }> }
+    const b = request.body as { month?: string; dryRun?: boolean; changes?: Array<{ entityType?: 'campaign' | 'adgroup' | 'target'; entityId?: string; campaignId?: string; marketplace?: string; kind: string; budgetCents?: number; minCents?: number | null; maxCents?: number | null; bidCents?: number; status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; biddingStrategy?: 'LEGACY_FOR_SALES' | 'AUTO_FOR_SALES' | 'MANUAL'; targetAcos?: number; placements?: { tos?: number | null; pdp?: number | null; ros?: number | null } }> }
     if (!Array.isArray(b?.changes) || b.changes.length === 0) { reply.status(400); return { error: 'changes[] required' } }
     const q = request.query as Record<string, string | undefined>
     const dryRun = !!b.dryRun || q.dryRun === '1'
@@ -5241,6 +5253,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           case 'adgroupStatus': { if (!c.status) { error = 'status required'; break } const r = await updateAdGroupWithSync({ adGroupId: id, patch: { status: c.status }, actor, reason: `control plane: ad-group status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
           case 'targetBid': { if (c.bidCents == null) { error = 'bidCents required'; break } const r = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: Math.max(2, Math.round(c.bidCents)) }, actor, reason: `control plane: target bid → €${(c.bidCents / 100).toFixed(2)}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; break }
           case 'targetStatus': { if (!c.status) { error = 'status required'; break } const r = await updateAdTargetWithSync({ adTargetId: id, patch: { status: c.status }, actor, reason: `control plane: target status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
+          case 'biddingStrategy': { if (!c.biddingStrategy) { error = 'biddingStrategy required'; break } const r = await updateCampaignWithSync({ campaignId: id, patch: { biddingStrategy: c.biddingStrategy }, actor, reason: `control plane: bidding strategy → ${c.biddingStrategy}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
+          case 'targetAcos': { if (c.targetAcos == null) { error = 'targetAcos required'; break } const camp = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } }); const db = { ...((camp?.dynamicBidding as Record<string, unknown>) ?? {}), targetAcos: c.targetAcos }; await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never } }); ok = true; detail = `targetAcos ${Math.round(c.targetAcos * 100)}%`; break }
+          case 'placement': { if (!c.placements) { error = 'placements required'; break } const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); const adj: Array<{ placement: string; percentage: number }> = []; if (c.placements.tos != null) adj.push({ placement: 'PLACEMENT_TOP', percentage: c.placements.tos }); if (c.placements.pdp != null) adj.push({ placement: 'PLACEMENT_PRODUCT_PAGE', percentage: c.placements.pdp }); if (c.placements.ros != null) adj.push({ placement: 'PLACEMENT_REST_OF_SEARCH', percentage: c.placements.ros }); const r = await updatePlacementBidding({ campaignId: id, adjustments: adj }); ok = !!r.ok; break }
           default: error = 'unknown kind'
         }
         results.push({ entityId: id, kind: c.kind, ok, error, detail })
