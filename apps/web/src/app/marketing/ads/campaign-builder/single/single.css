@@ -132,10 +132,34 @@
 .h10-scb-toast { position: fixed; left: 24px; bottom: 24px; z-index: 60; display: inline-flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #d7f0df; border-left: 3px solid #15a34a; border-radius: 10px; box-shadow: 0 10px 30px rgba(20,30,45,.16); padding: 12px 16px; font-size: 13px; font-weight: 600; color: #1c2530; }
 .h10-scb-toast svg { color: #15a34a; }
 
-/* SB.7 — Review & Launch recap */
-.h10-scb-review-card h3 { font-size: 17px; font-weight: 700; color: #1c2530; margin: 0 0 16px; }
-.h10-scb-review-card .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 32px; }
+/* SB.7 — Review & Launch (structured cards + Edit jump-back + readiness + previews) */
+.h10-scb-review-warn { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 18px; padding: 12px 15px; border: 1px solid #fde0b4; background: #fff8ec; border-radius: 10px; }
+.h10-scb-review-warn svg { color: #d98a00; flex-shrink: 0; margin-top: 1px; }
+.h10-scb-review-warn b { display: block; font-size: 13px; color: #6b4500; margin-bottom: 3px; }
+.h10-scb-review-warn ul { margin: 0; padding-left: 16px; font-size: 12.5px; line-height: 1.6; color: #8a5a00; }
+.h10-scb-review-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+@media (max-width: 1080px) { .h10-scb-review-grid { grid-template-columns: 1fr; } }
+.h10-scb-review-card .rvh { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
+.h10-scb-review-card .rvh h3 { font-size: 15px; font-weight: 700; color: #1c2530; margin: 0; display: inline-flex; align-items: center; gap: 8px; }
+.h10-scb-review-card .rvh h3 .cnt { font-size: 11.5px; font-weight: 700; color: #1f6fde; background: #eaf2fe; border-radius: 20px; padding: 1px 9px; }
+.h10-scb-review-card .rvh .edit { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 600; color: #1f6fde; background: none; border: none; cursor: pointer; padding: 4px 6px; border-radius: 6px; }
+.h10-scb-review-card .rvh .edit:hover { background: #eef4fd; }
+.h10-scb-review-card .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 24px; }
 .h10-scb-review-card .f { display: flex; flex-direction: column; gap: 3px; }
-.h10-scb-review-card .f .l { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; color: #8a93a1; }
+.h10-scb-review-card .f.wide { grid-column: 1 / -1; }
+.h10-scb-review-card .f .l { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; color: #8a93a1; }
 .h10-scb-review-card .f .v { font-size: 13.5px; color: #1c2530; font-weight: 500; }
+.h10-scb-review-card .miss { color: #c2872a; font-style: italic; font-weight: 500; }
+.h10-scb-review-card .empty { font-size: 13px; color: #8a93a1; margin: 4px 0 0; }
+.h10-scb-review-card .note { font-size: 12.5px; color: #5b6573; margin: 0 0 8px; }
+.h10-scb-review-card .note.dim { color: #8a93a1; margin: 8px 0 0; }
+.h10-scb-review-thumbs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.h10-scb-review-thumbs .th { width: 38px; height: 38px; border-radius: 6px; overflow: hidden; border: 1px solid #e6e9ee; background: #f4f6f8; flex-shrink: 0; }
+.h10-scb-review-thumbs .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.h10-scb-review-thumbs .th .ph { display: block; width: 100%; height: 100%; background: linear-gradient(135deg, #eef1f5, #e2e7ee); }
+.h10-scb-review-thumbs .more { font-size: 12px; font-weight: 700; color: #5b6573; padding: 0 6px; }
+.h10-scb-review-card .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.h10-scb-review-card .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #1c2530; background: #f1f4f8; border: 1px solid #e6e9ee; border-radius: 16px; padding: 3px 10px; }
+.h10-scb-review-card .chip .mt { font-size: 9px; font-weight: 800; color: #1f6fde; background: #fff; border-radius: 4px; padding: 0 4px; }
+.h10-scb-review-card .chip.more { color: #5b6573; font-weight: 700; }
 .h10-scb-launcherr { margin-top: 14px; padding: 11px 14px; border: 1px solid #f3c9c5; background: #fdecea; border-radius: 9px; color: #b42318; font-size: 13px; font-weight: 500; }
