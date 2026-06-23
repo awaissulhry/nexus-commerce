@@ -128,6 +128,26 @@ describe('MT.2 — buildPerTypeValidation (per-row validation for mixed sheets)'
   })
 })
 
+describe('P0 — buildPerTypeValidation derives lengthByType from manifest caps', () => {
+  const union = {
+    productTypes: ['JACKET', 'PANTS'],
+    groups: [{ columns: [
+      { id: 'item_name', labelEn: 'Title', applicableProductTypes: ['JACKET', 'PANTS'], maxUtf8ByteLength: 200 },
+      { id: 'inseam', labelEn: 'Inseam', applicableProductTypes: ['PANTS'], maxLength: 10 },
+      { id: 'color', labelEn: 'Color', applicableProductTypes: ['JACKET', 'PANTS'] }, // no cap → excluded
+    ] }],
+  }
+  const { lengthByType } = buildPerTypeValidation(union)
+  it('includes only capped columns, per applicable type', () => {
+    expect(lengthByType.get('JACKET')!.map((c) => c.id)).toEqual(['item_name'])
+    expect(lengthByType.get('PANTS')!.map((c) => c.id).sort()).toEqual(['inseam', 'item_name'])
+  })
+  it('carries the byte/char cap through', () => {
+    expect(lengthByType.get('JACKET')!.find((c) => c.id === 'item_name')!.maxUtf8ByteLength).toBe(200)
+    expect(lengthByType.get('PANTS')!.find((c) => c.id === 'inseam')!.maxLength).toBe(10)
+  })
+})
+
 describe('FX.6 — validateImportRows (per-type pre-flight of import rows)', () => {
   const requiredByType = new Map([
     ['JACKET', [{ id: 'item_name', label: 'Title' }, { id: 'brand', label: 'Brand' }]],

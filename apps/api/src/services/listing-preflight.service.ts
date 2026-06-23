@@ -142,7 +142,14 @@ export function preflightRow(
 interface UnionManifestLike {
   productTypes?: string[]
   groups: Array<{
-    columns?: Array<{ id: string; labelEn?: string; applicableProductTypes?: string[]; requiredForProductTypes?: string[] }>
+    columns?: Array<{
+      id: string
+      labelEn?: string
+      applicableProductTypes?: string[]
+      requiredForProductTypes?: string[]
+      maxLength?: number
+      maxUtf8ByteLength?: number
+    }>
   }>
 }
 
@@ -151,6 +158,8 @@ export interface PerTypeValidation {
   requiredByType: Map<string, RequiredColumn[]>
   /** Column ids that APPLY to each product type (compliance fill / cell relevance). */
   applicableByType: Map<string, Set<string>>
+  /** Columns with a byte/char cap for each product type (length pre-validation). */
+  lengthByType: Map<string, LengthColumn[]>
 }
 
 /**
@@ -165,6 +174,7 @@ export function buildPerTypeValidation(union: UnionManifestLike): PerTypeValidat
   const cols = union.groups.flatMap((g) => g.columns ?? [])
   const requiredByType = new Map<string, RequiredColumn[]>()
   const applicableByType = new Map<string, Set<string>>()
+  const lengthByType = new Map<string, LengthColumn[]>()
   for (const t of types) {
     requiredByType.set(
       t,
@@ -174,8 +184,16 @@ export function buildPerTypeValidation(union: UnionManifestLike): PerTypeValidat
       t,
       new Set(cols.filter((c) => !c.applicableProductTypes || c.applicableProductTypes.includes(t)).map((c) => String(c.id))),
     )
+    // Length caps for columns that apply to this type AND declare a byte/char limit.
+    lengthByType.set(
+      t,
+      cols
+        .filter((c) => (!c.applicableProductTypes || c.applicableProductTypes.includes(t)) &&
+          (typeof c.maxUtf8ByteLength === 'number' || typeof c.maxLength === 'number'))
+        .map((c) => ({ id: String(c.id), label: String(c.labelEn ?? c.id), maxLength: c.maxLength, maxUtf8ByteLength: c.maxUtf8ByteLength })),
+    )
   }
-  return { requiredByType, applicableByType }
+  return { requiredByType, applicableByType, lengthByType }
 }
 
 /**
@@ -190,12 +208,13 @@ export function validateImportRows(
   requiredByType: Map<string, RequiredColumn[]>,
   fallbackRequired: RequiredColumn[],
   matchKey = 'item_sku',
+  lengthByType?: Map<string, LengthColumn[]>,
 ): Array<{ rowIndex: number; sku: string; issues: PreflightIssue[] }> {
   const out: Array<{ rowIndex: number; sku: string; issues: PreflightIssue[] }> = []
   rows.forEach((row, rowIndex) => {
     const type = String(row.product_type ?? '').toUpperCase()
     const required = requiredByType.get(type) ?? fallbackRequired
-    const issues = preflightRow(row, required)
+    const issues = preflightRow(row, required, lengthByType?.get(type) ?? [])
     if (issues.length) out.push({ rowIndex, sku: String(row[matchKey] ?? ''), issues })
   })
   return out

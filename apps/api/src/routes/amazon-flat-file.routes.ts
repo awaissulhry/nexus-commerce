@@ -281,13 +281,14 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         // MT.1 union manifest across every product type in the batch → MT.2
         // per-type required + applicable sets.
         const union = await flatFileService.generateUnionManifest(mp, batchTypes)
-        const { requiredByType, applicableByType: appByType } = buildPerTypeValidation(union)
+        const { requiredByType, applicableByType: appByType, lengthByType } = buildPerTypeValidation(union)
         applicableByType = appByType
         complianceBySku = await resolveComplianceForSkus(rows.map((r: any) => String(r.item_sku ?? '')))
         preflight = rows
           .map((r: any) => {
-            // Validate each row against its OWN product type's required columns.
-            const issues = preflightRow(r, requiredByType.get(rowType(r)) ?? [])
+            // Validate each row against its OWN product type's required columns +
+            // byte/char length caps (Amazon enforces maxUtf8ByteLength, not chars).
+            const issues = preflightRow(r, requiredByType.get(rowType(r)) ?? [], lengthByType.get(rowType(r)) ?? [])
             const cp = complianceBySku.get(String(r.item_sku ?? ''))
             if (cp) {
               const cIssues = evaluateCompliance(cp, mp, 'AMAZON')
@@ -480,9 +481,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     if (batchTypes.length === 0) return reply.send({ preflight: [], checkedRows: rows.length })
     try {
       const union = await flatFileService.generateUnionManifest(mp, batchTypes)
-      const { requiredByType } = buildPerTypeValidation(union)
+      const { requiredByType, lengthByType } = buildPerTypeValidation(union)
       const preflight = rows
-        .map((r: any) => ({ sku: String(r?.item_sku ?? ''), issues: preflightRow(r, requiredByType.get(rowType(r)) ?? []) }))
+        .map((r: any) => ({ sku: String(r?.item_sku ?? ''), issues: preflightRow(r, requiredByType.get(rowType(r)) ?? [], lengthByType.get(rowType(r)) ?? []) }))
         .filter((p) => p.issues.length > 0)
       return reply.send({ preflight, checkedRows: rows.length, productTypes: batchTypes })
     } catch (err: any) {
@@ -773,12 +774,12 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       const manifest = allTypes.length > 1
         ? await flatFileService.generateUnionManifest(marketplace, allTypes)
         : await flatFileService.generateManifest(marketplace, allTypes[0] ?? pt)
-      const { requiredByType } = buildPerTypeValidation(manifest)
+      const { requiredByType, lengthByType } = buildPerTypeValidation(manifest)
       const fallbackRequired = manifest.groups
         .flatMap((g) => g.columns)
         .filter((c) => c.required)
         .map((c) => ({ id: c.id, label: c.labelEn }))
-      const results = validateImportRows(rows, requiredByType, fallbackRequired)
+      const results = validateImportRows(rows, requiredByType, fallbackRequired, 'item_sku', lengthByType)
       return reply.send({ results, rowsWithIssues: results.length, total: rows.length })
     } catch (err: any) {
       request.log.error(err, 'flat-file/validate-rows failed')
