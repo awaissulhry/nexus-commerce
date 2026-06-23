@@ -93,7 +93,8 @@ export function CampaignBuilder() {
     if (key === 'ai-goal') router.push('/marketing/ads/ai-advertising/new-goal')
     else if (key === 'sp-super-wizard') router.push('/marketing/ads/campaign-builder/sp-super-wizard')
     else if (key === 'single') router.push('/marketing/ads/campaign-builder/single')
-    // Quick · Guided land in later phases.
+    else if (key === 'quick') router.push('/marketing/ads/campaign-builder/quick')
+    // Guided lands in a later phase.
   }
   return (
     <div className="h10-cb">

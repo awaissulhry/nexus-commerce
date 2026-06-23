@@ -1,0 +1,43 @@
+/* Q.1–Q.5 — Quick campaign builder. Reuses the SP Super Wizard `h10-spw-*` shell + shared
+   components (BidStrategyCardGrid, ProductSelection); this file adds only the bits unique to
+   Quick: the single-column step layout (Quick is the simplest builder — no scroll-spy sub-nav),
+   the surface-local bid config, the Review funnel table, and the automation toggles. */
+
+/* Step 1 / Review are a single readable column. */
+.h10-qcb-s1, .h10-qcb-review { max-width: 1080px; }
+.h10-qcb .h10-spw-sec h2 .req { color: #e0392b; font-style: normal; font-weight: 700; }
+
+/* Bid Strategy — surface-local Target ACoS / Min-Max below the shared cards (mirrors Single). */
+.h10-qcb-bidcfg { margin-top: 22px; padding-top: 20px; border-top: 1px solid #eef1f5; display: flex; flex-direction: column; gap: 22px; }
+.h10-qcb-bidcfg .grp .hd { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 700; color: #1c2530; }
+.h10-qcb-bidcfg .grp > p { font-size: 12.5px; color: #5b6573; margin: 3px 0 10px; }
+.h10-qcb-bidcfg .mm { display: flex; align-items: center; gap: 12px; }
+.h10-qcb-bidcfg .mm > input[type="checkbox"] { width: 15px; height: 15px; accent-color: #1f6fde; cursor: pointer; flex-shrink: 0; }
+.h10-qcb-bidcfg .mm-fields { display: flex; gap: 12px; }
+.h10-qcb-custom-note { font-size: 12.5px; color: #5b6573; line-height: 1.5; margin: 0; max-width: 620px; }
+
+/* Review — Sponsored Product Campaigns funnel table: Ad Group · Default Bid · Budget · Bid Algorithm. */
+.h10-qcb-rev { padding: 0; overflow: hidden; }
+.h10-qcb-rev-head, .h10-qcb-rev-row { display: grid; grid-template-columns: minmax(260px, 1.7fr) 200px 200px 150px; gap: 18px; align-items: center; }
+.h10-qcb-rev-head { padding: 13px 20px; border-bottom: 1px solid #eef1f5; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #8a93a1; background: #fafbfc; }
+.h10-qcb-rev-row { padding: 16px 20px; border-bottom: 1px solid #f1f3f6; }
+.h10-qcb-rev-row:last-child { border-bottom: none; }
+.h10-qcb-rev-row .ag { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.h10-qcb-rev-row .ag .badge { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.h10-qcb-rev-row .ag .nm { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.h10-qcb-rev-row .ag .nm .t { font-size: 13.5px; font-weight: 600; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-qcb-rev-row .ag .nm .sub { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #8a93a1; }
+.h10-qcb-rev-row .num { display: flex; flex-direction: column; gap: 5px; }
+.h10-qcb-rev-row .num .money { display: inline-flex; align-items: center; border: 1px solid #d8dde4; border-radius: 7px; overflow: hidden; height: 34px; width: 150px; background: #fff; }
+.h10-qcb-rev-row .num .money:focus-within { border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+.h10-qcb-rev-row .num .money .pf { padding: 0 8px; color: #8a93a1; font-size: 13px; background: #f4f6f8; align-self: stretch; display: inline-flex; align-items: center; }
+.h10-qcb-rev-row .num .money input { width: 100%; min-width: 0; border: none; outline: none; font: inherit; font-size: 13.5px; padding: 0 8px; color: #1c2530; }
+.h10-qcb-rev-row .num .sug { font-size: 11.5px; color: #8a93a1; }
+.h10-qcb-rev-row .num .sug b { color: #5b6573; font-weight: 600; }
+.h10-qcb-rev-row .algo { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #3a4452; }
+.h10-qcb-rev-row .algo svg { color: #1f6fde; }
+
+/* Review — Keyword & Bid Suggestion Automation toggles. */
+.h10-qcb-autom { display: flex; flex-direction: column; gap: 16px; }
+.h10-qcb-toggle { display: inline-flex; align-items: center; gap: 11px; cursor: pointer; width: fit-content; }
+.h10-qcb-toggle .t { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; color: #1c2530; }
