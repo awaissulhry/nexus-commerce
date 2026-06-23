@@ -5179,6 +5179,51 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'private, max-age=30')
     return computeBudgetEnforcement({ month: q.month })
   })
+  // CP.1 — Control Plane scenario commit: apply a batch of staged changes
+  // (budget | limit | suppress | restore) through the gated + audited path.
+  // ?dryRun=1 (or body.dryRun) validates without writing. Writes still honour
+  // the ads-mutation sandbox/live gate + 5-min grace-window undo.
+  fastify.post('/advertising/budget-manager/scenario/commit', async (request, reply) => {
+    const b = request.body as { month?: string; dryRun?: boolean; changes?: Array<{ campaignId: string; marketplace?: string; kind: 'budget' | 'limit' | 'suppress' | 'restore'; budgetCents?: number; minCents?: number | null; maxCents?: number | null }> }
+    if (!Array.isArray(b?.changes) || b.changes.length === 0) { reply.status(400); return { error: 'changes[] required' } }
+    const q = request.query as Record<string, string | undefined>
+    const dryRun = !!b.dryRun || q.dryRun === '1'
+    const { currentMonth, setCampaignLimit } = await import('../services/advertising/ads-budget-manager.service.js')
+    const { updateCampaignWithSync } = await import('../services/advertising/ads-mutation.service.js')
+    const { suppressCampaignBids, restoreCampaignBids } = await import('../services/advertising/ads-bid-suppression.service.js')
+    const month = b.month || currentMonth()
+    const actor = 'user:budget-manager' as const
+    const results: Array<{ campaignId: string; kind: string; ok: boolean; error?: string; detail?: string }> = []
+    for (const c of b.changes) {
+      if (!c?.campaignId || !c?.kind) { results.push({ campaignId: c?.campaignId ?? '?', kind: c?.kind ?? '?', ok: false, error: 'invalid change' }); continue }
+      if (dryRun) {
+        const exists = await prisma.campaign.findUnique({ where: { id: c.campaignId }, select: { id: true } })
+        results.push({ campaignId: c.campaignId, kind: c.kind, ok: !!exists, error: exists ? undefined : 'campaign not found' })
+        continue
+      }
+      try {
+        if (c.kind === 'budget') {
+          if (c.budgetCents == null) { results.push({ campaignId: c.campaignId, kind: c.kind, ok: false, error: 'budgetCents required' }); continue }
+          const r = await updateCampaignWithSync({ campaignId: c.campaignId, patch: { dailyBudget: Math.max(100, c.budgetCents) / 100 }, actor, reason: `control plane: daily budget → €${(c.budgetCents / 100).toFixed(2)}` })
+          results.push({ campaignId: c.campaignId, kind: c.kind, ok: r.ok, error: r.ok ? undefined : (r.error ?? 'failed'), detail: r.outboundQueueId ?? undefined })
+        } else if (c.kind === 'limit') {
+          if (!c.marketplace) { results.push({ campaignId: c.campaignId, kind: c.kind, ok: false, error: 'marketplace required' }); continue }
+          const r = await setCampaignLimit({ marketplace: c.marketplace, month, campaignId: c.campaignId, minCents: c.minCents ?? null, maxCents: c.maxCents ?? null })
+          results.push({ campaignId: c.campaignId, kind: c.kind, ok: !!r.ok })
+        } else if (c.kind === 'suppress') {
+          const n = await suppressCampaignBids(c.campaignId, { actor, reason: 'control plane: stop over spend (bid floor, no pause)' })
+          results.push({ campaignId: c.campaignId, kind: c.kind, ok: true, detail: `${n} entities floored` })
+        } else if (c.kind === 'restore') {
+          const n = await restoreCampaignBids(c.campaignId, { actor, reason: 'control plane: restore prior bids' })
+          results.push({ campaignId: c.campaignId, kind: c.kind, ok: true, detail: `${n} entities restored` })
+        } else {
+          results.push({ campaignId: c.campaignId, kind: c.kind, ok: false, error: 'unknown kind' })
+        }
+      } catch (e) { results.push({ campaignId: c.campaignId, kind: c.kind, ok: false, error: (e as Error)?.message }) }
+    }
+    const applied = results.filter((r) => r.ok).length
+    return { ok: results.length - applied === 0, dryRun, month, applied, failed: results.length - applied, results }
+  })
 
   // ── AX3.2: Full-funnel Goal builder (branded + unbranded) ───────────
   fastify.post('/advertising/goals/suggest-targets', async (request, reply) => {
