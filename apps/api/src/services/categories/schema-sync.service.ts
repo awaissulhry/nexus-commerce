@@ -372,6 +372,34 @@ export class CategorySchemaService {
       }
     }
 
+    // ALA Phase 5 — deprecation awareness. Amazon's custom vocabulary flags
+    // retiring fields/values via `replacedBy` (field replacement) and
+    // `enumDeprecated` (value retirement). We log a change row only when a
+    // deprecation NEWLY appears (diff old vs new), so operators get warned to
+    // migrate off a field/enum BEFORE Amazon removes it and submits start failing.
+    const oldDep = extractDeprecations(oldProps)
+    const newDep = extractDeprecations(newProps)
+    for (const [fieldId, replacement] of newDep.replacedBy) {
+      if (!oldDep.replacedBy.has(fieldId)) {
+        writes.push(
+          this.prisma.schemaChange.create({
+            data: { ...baseFacets, changeType: 'FIELD_DEPRECATED', fieldId, newValue: { replacedBy: replacement } },
+          }),
+        )
+      }
+    }
+    for (const [fieldId, values] of newDep.deprecatedEnums) {
+      const old = oldDep.deprecatedEnums.get(fieldId) ?? new Set<string>()
+      const newlyDeprecated = [...values].filter((v) => !old.has(v))
+      if (newlyDeprecated.length > 0) {
+        writes.push(
+          this.prisma.schemaChange.create({
+            data: { ...baseFacets, changeType: 'ENUM_DEPRECATED', fieldId, newValue: { deprecatedValues: newlyDeprecated } },
+          }),
+        )
+      }
+    }
+
     if (writes.length > 0) {
       await this.prisma.$transaction(writes)
     }
@@ -410,4 +438,41 @@ function normalizeType(field: any): string {
     return `array<${inner}>`
   }
   return String(t)
+}
+
+/** Recursively collect every value found for `key` anywhere in a subtree. */
+function collectKey(node: any, key: string, out: any[] = []): any[] {
+  if (!node || typeof node !== 'object') return out
+  if (Array.isArray(node)) {
+    for (const x of node) collectKey(x, key, out)
+    return out
+  }
+  for (const [k, v] of Object.entries(node)) {
+    if (k === key) out.push(v)
+    collectKey(v, key, out)
+  }
+  return out
+}
+
+/**
+ * ALA Phase 5 — pull Amazon deprecation signals from a properties map.
+ *   - `replacedBy` (string) anywhere in a property subtree → the FIELD is being
+ *     replaced (deprecated).
+ *   - `enumDeprecated` (array of values) → those ENUM values are retiring.
+ * Conservative: only these unambiguous custom-vocab keywords; `$lifecycle` on its
+ * own (which also describes non-deprecation changes) is not treated as deprecation.
+ */
+export function extractDeprecations(props: Record<string, any>): {
+  replacedBy: Map<string, string>
+  deprecatedEnums: Map<string, Set<string>>
+} {
+  const replacedBy = new Map<string, string>()
+  const deprecatedEnums = new Map<string, Set<string>>()
+  for (const [fieldId, prop] of Object.entries(props ?? {})) {
+    const rep = collectKey(prop, 'replacedBy').find((v) => typeof v === 'string' && v)
+    if (typeof rep === 'string') replacedBy.set(fieldId, rep)
+    const enumDep = collectKey(prop, 'enumDeprecated').flat().map(String).filter(Boolean)
+    if (enumDep.length) deprecatedEnums.set(fieldId, new Set(enumDep))
+  }
+  return { replacedBy, deprecatedEnums }
 }

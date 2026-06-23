@@ -181,6 +181,7 @@ import { startDashboardDigestCron } from "./jobs/dashboard-digest.job.js";
 import { startPricingCron } from "./jobs/pricing-refresh.job.js";
 import { startRepricerCron } from "./jobs/repricer.job.js";
 import { startCatalogRefreshCron } from "./jobs/catalog-refresh.job.js";
+import { startSchemaRefreshCron } from "./jobs/schema-refresh.job.js";
 import { startEbayTokenRefreshCron } from "./jobs/ebay-token-refresh.job.js";
 import { startEbayReturnsPollCron } from "./jobs/ebay-returns-poll.job.js";
 import { startAmazonReturnsPollCron } from "./jobs/amazon-returns-poll.job.js";
@@ -820,6 +821,10 @@ async function start() {
     if (process.env.NEXUS_ENABLE_CATALOG_SYNC_CRON === '1') {
       startCatalogRefreshCron();
     }
+
+    // ALA Phase 5 — proactive Amazon schema refresh (self-gates on
+    // NEXUS_ENABLE_SCHEMA_REFRESH_CRON=1; dormant otherwise). 04:00 UTC daily.
+    startSchemaRefreshCron();
 
     // Proactive eBay access-token refresh sweep. The reactive refresh
     // in EbayAuthService.getValidToken handles per-call refresh, but
