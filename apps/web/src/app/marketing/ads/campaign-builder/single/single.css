@@ -1,0 +1,34 @@
+/* SB.0 — Single Campaign builder. Reuses the SP Super Wizard `h10-spw-*` shell; this file
+   only adds the bits unique to the single builder (the Campaign-Setup sub-step bullets and
+   scaffolding placeholders). Section-specific styles land with their phases. */
+
+/* Stepper: step 1 ("Campaign Setup") carries two sub-step bullets below its label. */
+.h10-scb .h10-spw-steps { align-items: flex-start; }
+.h10-scb .h10-spw-conn { margin-top: 11px; }
+.h10-scb .h10-spw-step { align-items: flex-start; }
+.h10-scb .h10-spw-step .lbl { display: flex; flex-direction: column; gap: 4px; padding-top: 3px; }
+
+.h10-scb-substeps { display: flex; gap: 16px; }
+.h10-scb-substeps .ss { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; color: #8a93a1; white-space: nowrap; }
+.h10-scb-substeps .ss .dot { width: 6px; height: 6px; border-radius: 50%; background: #c2cdda; flex-shrink: 0; }
+.h10-scb-substeps .ss.done { color: #5b6573; }
+.h10-scb-substeps .ss.done .dot { background: #1c2530; }
+.h10-scb-substeps .ss.on { color: #1f6fde; }
+.h10-scb-substeps .ss.on .dot { background: #1f6fde; }
+
+/* SB.2 — Campaign Details: stacked fields inside the card. */
+.h10-scb-fields { display: flex; flex-direction: column; gap: 18px; }
+
+/* SB.2 — "Sites" sub-heading rendered within the Bidding Strategy section (no own nav item). */
+.h10-scb h2.h10-scb-subsec { margin-top: 30px; }
+
+/* SB.2 — radio list (bidding strategy + sites): radio · bold title · description. */
+.h10-scb-radios { display: flex; flex-direction: column; gap: 16px; }
+.h10-scb-radio { display: grid; grid-template-columns: 16px 1fr; gap: 11px; cursor: pointer; align-items: start; }
+.h10-scb-radio input { margin: 2px 0 0; width: 15px; height: 15px; accent-color: #1f6fde; cursor: pointer; }
+.h10-scb-radio .rb { display: flex; flex-direction: column; gap: 3px; }
+.h10-scb-radio .rb b { font-size: 13.5px; font-weight: 600; color: #1c2530; }
+.h10-scb-radio .rb .d { font-size: 12.5px; color: #5b6573; line-height: 1.45; max-width: 680px; }
+
+/* Scaffolding placeholder (removed as each section is wired). */
+.h10-scb-todo { color: #8a93a1; font-size: 13px; padding: 6px 2px; margin: 0; }
