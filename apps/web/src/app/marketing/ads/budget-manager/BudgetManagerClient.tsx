@@ -24,7 +24,7 @@ import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import { Modal, Drawer } from '@/design-system/components'
 import './budget-manager.css'
-import { AllocationCanvas } from './AllocationCanvas'
+import { ControlPlane } from './ControlPlane'
 
 // ── types (mirror ads-budget-manager.service BudgetManagerResult) ──────────
 interface SpendSlice { month: string; budgetCents: number; spendCents: number | null; pct: number | null; daily: number[] }
@@ -388,20 +388,7 @@ export function BudgetManagerClient() {
       {settingsFor && <SettingsModal row={settingsFor} month={month} onClose={() => setSettingsFor(null)} onSaved={() => load(month)} toast={toast} />}
       {moreFor && <MoreDrawer row={moreFor} month={month} onClose={() => setMoreFor(null)} onSaved={() => load(month)} toast={toast} />}
       <FaqDrawer open={faqOpen} onClose={() => setFaqOpen(false)} />
-      {canvasOpen && (
-        <Modal open onClose={() => setCanvasOpen(false)} size="xl" title="Allocation Map" subtitle="How Auto Pacing would redistribute each market’s monthly envelope today — dry-run preview, nothing is applied.">
-          {!enforcement || enforcement.plans.length === 0 ? (
-            <div className="bm-more-empty">No markets have Auto Pacing or Stop Over Spend enabled this month. Turn one on to preview the allocation.</div>
-          ) : (<>
-            <div className="bm-canvas-head">
-              {enforcement.plans.map((p) => (
-                <button type="button" key={p.marketplace} className={`bm-canvas-tab ${canvasMarket === p.marketplace ? 'on' : ''}`} onClick={() => setCanvasMarket(p.marketplace)}>{FLAG[p.marketplace] ?? '🌐'} {mktName(p.marketplace)}</button>
-              ))}
-            </div>
-            <AllocationCanvas plan={enforcement.plans.find((x) => x.marketplace === canvasMarket) ?? enforcement.plans[0]} />
-          </>)}
-        </Modal>
-      )}
+      <ControlPlane open={canvasOpen} onClose={() => setCanvasOpen(false)} enforcement={enforcement} month={month} initialMarket={canvasMarket} onCommitted={() => load(month)} toast={toast} />
 
       {toastMsg && <div className="bm-toast" role="status">{toastMsg}</div>}
     </div>
