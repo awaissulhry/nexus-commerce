@@ -59,7 +59,7 @@ export function SpSuperWizard() {
   const [customNameTokens, setCustomNameTokens] = useState<string[]>(['campaignType', 'targetingType', 'matchType', 'keywordType'])
   const [rememberSettings, setRememberSettings] = useState(true)
   const [autoNegate, setAutoNegate] = useState(true)
-  const [rules, setRules] = useState<{ harvest: RulesConfig; negative: RulesConfig }>({ harvest: defaultRulesConfig(), negative: defaultRulesConfig() })
+  const [rules, setRules] = useState<{ harvest: RulesConfig; negative: RulesConfig }>({ harvest: defaultRulesConfig('keyword-harvesting'), negative: defaultRulesConfig('negative-targeting') })
   const [bidConfig, setBidConfig] = useState<BidConfig>(defaultBidConfig())
 
   // Step 2 campaigns are generated from the step-1 structure; Restore Default re-generates.

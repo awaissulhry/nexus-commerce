@@ -15,6 +15,7 @@ import { RadioCard, Input } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import { InfoTip } from '../../campaigns/InfoTip'
+import { PerformanceCriteria, pcDefaultGroup, type CriteriaGroup } from '../../rules-automation/_shared/PerformanceCriteria'
 import type { SpwCampaign } from './CampaignSetup'
 
 const money = (cur: string, n: number) => `${cur}${n.toFixed(2)}`
@@ -40,9 +41,9 @@ export type RulesConfig = {
   ruleName: string
   automate: boolean
   sel: Record<string, RuleRowSel>
-  perf: { metric: string; op: string; value: string }
+  perf: CriteriaGroup
 }
-export const defaultRulesConfig = (): RulesConfig => ({ ruleName: '', automate: false, sel: {}, perf: { metric: 'Orders', op: 'is greater than', value: '' } })
+export const defaultRulesConfig = (slug = 'keyword-harvesting'): RulesConfig => ({ ruleName: '', automate: false, sel: {}, perf: pcDefaultGroup(slug) })
 /** True once the operator has set up a harvest rule worth persisting. */
 export const rulesConfigured = (r: RulesConfig): boolean =>
   r.ruleName.trim().length > 0 || Object.values(r.sel).some((s) => s.st || s.tB || s.tP || s.tE || s.tBox || s.nP || s.nE || s.nBox)
@@ -86,7 +87,7 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
   const setAutomate = (v: boolean) => setActive({ automate: v })
   const rowSel = (id: string) => sel[id] ?? emptyRuleRow()
   const setRow = (id: string, patch: Partial<RuleRowSel>) => setActive({ sel: { ...sel, [id]: { ...(sel[id] ?? emptyRuleRow()), ...patch } } })
-  const setPerf = (patch: Partial<RulesConfig['perf']>) => setActive({ perf: { ...perf, ...patch } })
+  const setPerf = (g: CriteriaGroup) => setActive({ perf: g })
   const tEnabled = (k: SpwCampaign['kind']) => ({ B: k === 'keyword', P: k === 'keyword', E: k === 'keyword', box: k === 'pat' })
   const nEnabled = (k: SpwCampaign['kind']) => ({ P: k !== 'pat', E: k !== 'pat', box: k !== 'keyword' })
 
@@ -244,12 +245,8 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
           <button type="button" className="h10-spw-perf" onClick={() => setPerfOpen((o) => !o)}><ChevronDown size={16} className={perfOpen ? 'up' : ''} /> Performance Criteria</button>
           {perfOpen && (
             <div className="h10-spw-perf-body">
-              <p>Only harvest search terms that meet these performance thresholds (optional).</p>
-              <div className="h10-spw-perf-row">
-                <select aria-label="Metric" value={perf.metric} onChange={(e) => setPerf({ metric: e.target.value })}><option>Orders</option><option>Clicks</option><option>ACoS</option><option>Spend</option></select>
-                <select aria-label="Operator" value={perf.op} onChange={(e) => setPerf({ op: e.target.value })}><option>is greater than</option><option>is less than</option></select>
-                <input inputMode="decimal" placeholder="Value" aria-label="Value" value={perf.value} onChange={(e) => setPerf({ value: e.target.value })} />
-              </div>
+              <p>Only act on search terms that meet these performance thresholds (optional).</p>
+              <PerformanceCriteria value={perf} onChange={setPerf} slug={isNeg ? 'negative-targeting' : 'keyword-harvesting'} />
             </div>
           )}
         </div>

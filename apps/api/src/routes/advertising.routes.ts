@@ -859,7 +859,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // the Ad Manager grid on success. dryRun returns the plan without writing.
   fastify.post('/advertising/campaign-builder/sp-super-wizard/launch', async (request, reply) => {
     type PRef = { asin?: string; sku?: string; productId?: string }
-    type SpwRule = { ruleName?: string; automate?: boolean; perf?: { metric?: string; op?: string; value?: string }; rows?: Record<string, { st?: boolean; tB?: boolean; tP?: boolean; tE?: boolean; tBox?: boolean; nP?: boolean; nE?: boolean; nBox?: boolean }> }
+    type SpwRule = { ruleName?: string; automate?: boolean; perf?: { conditions?: Array<{ metric?: string; op?: string; value?: string }>; lookback?: string; exclude?: string }; rows?: Record<string, { st?: boolean; tB?: boolean; tP?: boolean; tE?: boolean; tBox?: boolean; nP?: boolean; nE?: boolean; nBox?: boolean }> }
     const b = request.body as {
       market?: string; productGroupName?: string
       products?: PRef[]
@@ -937,9 +937,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       if (!((rcfg.ruleName ?? '').trim() || sources.length)) return
       try {
         const perf = rcfg.perf ?? {}
-        const perfVal = Number(perf.value)
-        const minOrders = perf.metric === 'Orders' && Number.isFinite(perfVal) ? perfVal : 2
-        const minSpendCents = perf.metric === 'Spend' && Number.isFinite(perfVal) ? Math.round(perfVal * 100) : 1000
+        const conds = perf.conditions ?? []
+        const ordersC = conds.find((c) => c?.metric === 'PPC Orders' || c?.metric === 'Orders')
+        const spendC = conds.find((c) => c?.metric === 'Spend')
+        const minOrders = ordersC && Number.isFinite(Number(ordersC.value)) ? Number(ordersC.value) : 2
+        const minSpendCents = spendC && Number.isFinite(Number(spendC.value)) ? Math.round(Number(spendC.value) * 100) : 1000
         const defaultName = `${(b.productGroupName || 'Campaign').trim()} — ${kind === 'negative' ? 'Negative Targeting' : 'Harvest & Negate'}`
         const actions = [
           { type: 'harvest_and_negate', windowDays: 60, minSpendCents, minOrders, graduationBidEur: 0.5, sources, perfCriteria: perf, mode: kind },
