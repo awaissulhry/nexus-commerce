@@ -2,6 +2,7 @@ export { Button, type ButtonProps, type ButtonVariant, type ButtonSize } from '.
 export { Pill, type PillStatus } from './Pill'
 export { Badge, type BadgeTone } from './Badge'
 export { Input, type InputProps } from './Input'
+export { Textarea, type TextareaProps } from './Textarea'
 export { Select, type SelectProps } from './Select'
 export { Checkbox, type CheckboxProps } from './Checkbox'
 export { Toggle, type ToggleProps } from './Toggle'

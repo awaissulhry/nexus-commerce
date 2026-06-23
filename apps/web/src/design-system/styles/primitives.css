@@ -164,6 +164,36 @@
 .h10-ds-field > input::placeholder {
   color: var(--h10-text-disabled);
 }
+
+/* Textarea primitive — the multi-line sibling of .h10-ds-field, for paste-style inputs */
+.h10-ds-textarea {
+  display: block;
+  width: 100%;
+  min-height: 168px;
+  resize: vertical;
+  border: 1px solid var(--h10-border);
+  border-radius: var(--h10-radius-lg);
+  background: var(--h10-surface);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--h10-text);
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-textarea:hover {
+  border-color: var(--h10-border-strong);
+}
+.h10-ds-textarea:focus {
+  border-color: var(--h10-primary);
+  box-shadow: var(--h10-focus-ring);
+}
+.h10-ds-textarea::placeholder {
+  color: var(--h10-text-disabled);
+}
+.h10-ds-textarea:disabled {
+  background: var(--h10-surface-sunken);
+}
 .h10-ds-field .lead {
   display: inline-flex;
   align-items: center;

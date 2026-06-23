@@ -10,6 +10,11 @@
  */
 import { type Dispatch, type SetStateAction, useEffect, useState } from 'react'
 import { X, Layers, Pencil, RotateCcw, Plus, Trash2, ChevronDown } from 'lucide-react'
+import { Modal } from '@/design-system/components'
+import { Button, Input, Radio, Textarea } from '@/design-system/primitives'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
 import { standardRows, advancedRows } from './StructureSelection'
 import { ProductSelection, type SpwProduct } from './ProductSelection'
 import type { CustomKeywordType, TargetingKind, MatchTypeKey } from './CustomScheme'
@@ -167,85 +172,60 @@ export function applyAutoNegatives(campaigns: SpwCampaign[], enabled: boolean): 
 
 const money = (cur: string, n: number) => `${cur}${n.toFixed(2)}`
 
-// ── BA.2/BA.4 — bulk-action modals (paste keywords/negatives, set a value, pick products) ──
+// ── BA.2/BA.4/BA.5 — bulk-action modals, built on the design-system Modal + primitives ──
 function BulkKeywordModal({ negative, count, onApply, onClose }: { negative: boolean; count: number; onApply: (lines: string[], mt: NegMatch) => void; onClose: () => void }) {
   const [text, setText] = useState('')
   const [mt, setMt] = useState<NegMatch>('EXACT')
-  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k) }, [onClose])
   const apply = () => { const lines = dedupeCI(text.split('\n')); if (lines.length) onApply(lines, mt) }
   const title = negative ? 'Add negative keywords' : 'Add keywords'
   return (
-    <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className="h10-modal bulk" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
-        <div className="h10-modal-h"><b>{title}</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
-        <div className="h10-modal-b">
-          <p className="h10-spw-bulk-note">Adds to <b>{count}</b> selected {negative ? '' : 'keyword '}campaign{count === 1 ? '' : 's'} — duplicates skipped.</p>
-          {negative && (
-            <div className="h10-neg-mt">
-              <span className="lbl">Match Type:</span>
-              <label className={mt === 'EXACT' ? 'on' : ''}><input type="radio" name="bulknegmt" checked={mt === 'EXACT'} onChange={() => setMt('EXACT')} /> Negative Exact</label>
-              <label className={mt === 'PHRASE' ? 'on' : ''}><input type="radio" name="bulknegmt" checked={mt === 'PHRASE'} onChange={() => setMt('PHRASE')} /> Negative Phrase</label>
-            </div>
-          )}
-          <textarea className="h10-spw-bulk-ta" value={text} onChange={(e) => setText(e.target.value)} placeholder="Enter one keyword per line" autoFocus aria-label={title} />
+    <Modal open onClose={onClose} size="md" title={title} footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={!text.trim()} onClick={apply}>Add</Button></>}>
+      <p className="h10-spw-bulk-note">Adds to <b>{count}</b> selected {negative ? '' : 'keyword '}campaign{count === 1 ? '' : 's'} — duplicates skipped.</p>
+      {negative && (
+        <div className="h10-spw-bulk-mt">
+          <span className="lbl">Match Type:</span>
+          <Radio name="bulknegmt" label="Negative Exact" checked={mt === 'EXACT'} onChange={() => setMt('EXACT')} />
+          <Radio name="bulknegmt" label="Negative Phrase" checked={mt === 'PHRASE'} onChange={() => setMt('PHRASE')} />
         </div>
-        <div className="h10-modal-f"><button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button><span className="grow" /><button type="button" className="h10-am-btn primary" disabled={!text.trim()} onClick={apply}>Add</button></div>
-      </div>
-    </div>
+      )}
+      <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Enter one keyword per line" autoFocus aria-label={title} />
+    </Modal>
   )
 }
 
 function BulkValueModal({ title, label, currency, percent, onApply, onClose }: { title: string; label: string; currency: string; percent?: boolean; onApply: (v: string) => void; onClose: () => void }) {
   const [v, setV] = useState('')
-  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k) }, [onClose])
   return (
-    <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className="h10-modal bulk sm" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
-        <div className="h10-modal-h"><b>{title}</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
-        <div className="h10-modal-b">
-          <label className="h10-spw-bulk-val"><span>{label}</span><div className={`money ${percent ? 'pct' : ''}`}>{!percent && <span className="pf">{currency}</span>}<input inputMode="decimal" value={v} onChange={(e) => setV(e.target.value)} placeholder={percent ? '±10' : '0.00'} autoFocus aria-label={label} />{percent && <span className="sf">%</span>}</div></label>
-          {percent && <p className="h10-spw-bulk-hint">e.g. <b>10</b> raises by 10%, <b>-10</b> lowers by 10%. Floored at {currency}0.02.</p>}
-        </div>
-        <div className="h10-modal-f"><button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button><span className="grow" /><button type="button" className="h10-am-btn primary" disabled={!v.trim()} onClick={() => onApply(v)}>Apply</button></div>
-      </div>
-    </div>
+    <Modal open onClose={onClose} size="sm" title={title} footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={!v.trim()} onClick={() => onApply(v)}>Apply</Button></>}>
+      <label className="h10-spw-bulk-field">
+        <span className="l">{label}</span>
+        <Input inputMode="decimal" value={v} onChange={(e) => setV(e.target.value)} placeholder={percent ? '±10' : '0.00'} autoFocus aria-label={label} prefix={percent ? undefined : currency} suffix={percent ? '%' : undefined} fieldClassName="h10-spw-bulk-numfield" />
+      </label>
+      {percent && <p className="h10-spw-bulk-hint">e.g. <b>10</b> raises by 10%, <b>-10</b> lowers by 10%. Floored at {currency}0.02.</p>}
+    </Modal>
   )
 }
 
 function BulkRenameModal({ count, sample, onApply, onClose }: { count: number; sample: string; onApply: (prefix: string, suffix: string) => void; onClose: () => void }) {
   const [prefix, setPrefix] = useState('')
   const [suffix, setSuffix] = useState('')
-  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k) }, [onClose])
   return (
-    <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className="h10-modal bulk sm" role="dialog" aria-label="Rename campaigns" onClick={(e) => e.stopPropagation()}>
-        <div className="h10-modal-h"><b>Rename campaigns</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
-        <div className="h10-modal-b">
-          <p className="h10-spw-bulk-note">Adds a prefix / suffix to <b>{count}</b> selected campaign{count === 1 ? '' : 's'}.</p>
-          <label className="h10-spw-bulk-val"><span>Prefix</span><input className="txt" value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="e.g. Q1-" autoFocus aria-label="Name prefix" /></label>
-          <label className="h10-spw-bulk-val gap"><span>Suffix</span><input className="txt" value={suffix} onChange={(e) => setSuffix(e.target.value)} placeholder="e.g. -v2" aria-label="Name suffix" /></label>
-          <p className="h10-spw-bulk-hint">Preview: <b>{prefix}{sample}{suffix}</b></p>
-        </div>
-        <div className="h10-modal-f"><button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button><span className="grow" /><button type="button" className="h10-am-btn primary" disabled={!prefix && !suffix} onClick={() => onApply(prefix, suffix)}>Apply</button></div>
-      </div>
-    </div>
+    <Modal open onClose={onClose} size="sm" title="Rename campaigns" footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={!prefix && !suffix} onClick={() => onApply(prefix, suffix)}>Apply</Button></>}>
+      <p className="h10-spw-bulk-note">Adds a prefix / suffix to <b>{count}</b> selected campaign{count === 1 ? '' : 's'}.</p>
+      <label className="h10-spw-bulk-field"><span className="l">Prefix</span><Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="e.g. Q1-" autoFocus aria-label="Name prefix" fieldClassName="h10-spw-bulk-txtfield" /></label>
+      <label className="h10-spw-bulk-field gap"><span className="l">Suffix</span><Input value={suffix} onChange={(e) => setSuffix(e.target.value)} placeholder="e.g. -v2" aria-label="Name suffix" fieldClassName="h10-spw-bulk-txtfield" /></label>
+      <p className="h10-spw-bulk-hint">Preview: <b>{prefix}{sample}{suffix}</b></p>
+    </Modal>
   )
 }
 
 function BulkProductsModal({ count, onApply, onClose }: { count: number; onApply: (p: SpwProduct[]) => void; onClose: () => void }) {
   const [prods, setProds] = useState<SpwProduct[]>([])
-  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k) }, [onClose])
   return (
-    <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className="h10-modal wide" role="dialog" aria-label="Add product targets" onClick={(e) => e.stopPropagation()}>
-        <div className="h10-modal-h"><b>Add product targets</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
-        <div className="h10-modal-b">
-          <p className="h10-spw-bulk-note">Adds to <b>{count}</b> selected PAT campaign{count === 1 ? '' : 's'} — duplicates skipped.</p>
-          <ProductSelection products={prods} setProducts={setProds} />
-        </div>
-        <div className="h10-modal-f"><button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button><span className="grow" /><button type="button" className="h10-am-btn primary" disabled={!prods.length} onClick={() => onApply(prods)}>Add</button></div>
-      </div>
-    </div>
+    <Modal open onClose={onClose} size="lg" title="Add product targets" footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={!prods.length} onClick={() => onApply(prods)}>Add</Button></>}>
+      <p className="h10-spw-bulk-note">Adds to <b>{count}</b> selected PAT campaign{count === 1 ? '' : 's'} — duplicates skipped.</p>
+      <ProductSelection products={prods} setProducts={setProds} />
+    </Modal>
   )
 }
 

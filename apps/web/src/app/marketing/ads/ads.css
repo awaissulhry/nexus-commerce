@@ -1950,25 +1950,18 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-bulk-btn.danger:hover { background: #fdeceb; border-color: #d6453d; color: #c5372b; }
 .h10-spw-bulk-clear { font: inherit; font-size: 13px; font-weight: 600; color: #5b6573; background: none; border: none; cursor: pointer; padding: 6px 4px; }
 .h10-spw-bulk-clear:hover { color: #1c2530; text-decoration: underline; }
-/* BA.2/3/4 — bulk modals */
-.h10-modal.bulk { width: 560px; max-width: 92vw; }
-.h10-modal.bulk.sm { width: 360px; }
+/* BA — bulk-modal CONTENT only. The modal chrome is the design-system <Modal>;
+   inputs are DS <Input>/<Textarea>/<Radio>/<Button>. No app-level modal classes
+   here (the old .h10-modal.bulk reuse collided with the Ad-Manager bulk dialog). */
 .h10-spw-bulk-note { font-size: 13px; color: #4a5462; margin: 0 0 14px; }
 .h10-spw-bulk-note b { color: #1c2530; }
-.h10-spw-bulk-ta { width: 100%; min-height: 200px; resize: vertical; border: 1px solid #d8dde4; border-radius: 9px; padding: 11px 13px; font: inherit; font-size: 13.5px; color: #1c2530; outline: none; }
-.h10-spw-bulk-ta:focus { border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
-.h10-spw-bulk-val { display: flex; flex-direction: column; gap: 8px; }
-.h10-spw-bulk-val > span { font-size: 13px; font-weight: 600; color: #3a4452; }
-.h10-spw-bulk-val .money { display: flex; align-items: stretch; border: 1px solid #d8dde4; border-radius: 8px; overflow: hidden; background: #fff; max-width: 180px; }
-.h10-spw-bulk-val .money:focus-within { border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
-.h10-spw-bulk-val .money .pf { padding: 0 9px; color: #8a93a1; font-size: 13.5px; border-right: 1px solid #eef1f5; display: flex; align-items: center; background: #fafbfc; }
-.h10-spw-bulk-val .money input { flex: 1; min-width: 0; border: none; outline: none; font: inherit; font-size: 14px; color: #1c2530; padding: 9px 11px; }
-/* BA.5 — percent input, rename fields, clear dropdown, hints */
-.h10-spw-bulk-val .money.pct { max-width: 130px; }
-.h10-spw-bulk-val .money .sf { padding: 0 11px; color: #8a93a1; font-size: 13.5px; border-left: 1px solid #eef1f5; display: flex; align-items: center; background: #fafbfc; }
-.h10-spw-bulk-val.gap { margin-top: 12px; }
-.h10-spw-bulk-val input.txt { border: 1px solid #d8dde4; border-radius: 8px; padding: 9px 11px; font: inherit; font-size: 14px; color: #1c2530; outline: none; max-width: 260px; }
-.h10-spw-bulk-val input.txt:focus { border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+.h10-spw-bulk-mt { display: flex; align-items: center; gap: 18px; margin: 0 0 14px; }
+.h10-spw-bulk-mt .lbl { font-size: 13px; font-weight: 700; color: #1c2530; }
+.h10-spw-bulk-field { display: flex; flex-direction: column; gap: 8px; }
+.h10-spw-bulk-field.gap { margin-top: 12px; }
+.h10-spw-bulk-field .l { font-size: 13px; font-weight: 600; color: #3a4452; }
+.h10-spw-bulk-numfield { width: 150px; }
+.h10-spw-bulk-txtfield { width: 280px; max-width: 100%; }
 .h10-spw-bulk-hint { font-size: 12px; color: #6b7585; margin: 12px 0 0; }
 .h10-spw-bulk-hint b { color: #1c2530; font-weight: 600; }
 .h10-spw-bulk-clearwrap { position: relative; }
