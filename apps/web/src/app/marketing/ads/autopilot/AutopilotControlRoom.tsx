@@ -6,7 +6,7 @@
  * PATCHes the plan; the live feed streams AutopilotDecisions (ours + mirrored harvest/negate).
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Sparkles, Play, Radio } from 'lucide-react'
+import { Sparkles, Play, Radio, LineChart } from 'lucide-react'
 import { AutopilotCanvas, type CanvasConfig } from './AutopilotCanvas'
 import { getBackendUrl } from '@/lib/backend-url'
 import './control-room.css'
@@ -25,6 +25,7 @@ export function AutopilotControlRoom() {
   const [decisions, setDecisions] = useState<Decision[]>([])
   const [loading, setLoading] = useState(true)
   const [live, setLive] = useState(false)
+  const [backtest, setBacktest] = useState<{ summary?: { byType: Record<string, number>; currentDailyBudgetCents: number; projectedDailyBudgetCents: number }; hasData?: boolean; days?: number } | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -68,6 +69,7 @@ export function AutopilotControlRoom() {
     patchPlan({ modules: { ...cur, [key]: { on: !(cur[key]?.on !== false) } } })
   }
   const runNow = async () => { if (plan) { try { await fetch(`${getBackendUrl()}/api/advertising/autopilot-plans/${plan.id}/run`, { method: 'POST' }) } catch { /* ignore */ } } }
+  const runBacktest = async () => { if (!plan) return; try { const j = await fetch(`${getBackendUrl()}/api/advertising/autopilot-plans/${plan.id}/backtest?days=30`).then((r) => r.json()); setBacktest(j) } catch { /* ignore */ } }
 
   return (
     <div className="apr">
@@ -86,7 +88,17 @@ export function AutopilotControlRoom() {
               <span className="grow" />
               <span className={`apr-live ${live ? 'on' : ''}`}><Radio size={13} /> {live ? 'Live' : 'Offline'}</span>
               <button type="button" className="apr-run" onClick={runNow}><Play size={14} /> Run now (dry-run)</button>
+              <button type="button" className="apr-run" onClick={runBacktest}><LineChart size={14} /> Backtest 30d</button>
             </div>
+
+            {backtest?.summary && (
+              <div className="apr-backtest">
+                <b>Projection</b>
+                <span>{Object.entries(backtest.summary.byType).map(([k, v]) => `${v}× ${k}`).join(' · ') || 'no actions proposed'}</span>
+                <span>Daily budget €{(backtest.summary.currentDailyBudgetCents / 100).toFixed(0)} → €{(backtest.summary.projectedDailyBudgetCents / 100).toFixed(0)}</span>
+                <span className="muted">{backtest.hasData ? `${backtest.days}d hourly history` : 'no hourly history yet (AMS not provisioned)'}</span>
+              </div>
+            )}
 
             <div className="apr-grid">
               {config && <AutopilotCanvas config={config} activeModules={activeModules} onToggleModule={toggleModule} />}

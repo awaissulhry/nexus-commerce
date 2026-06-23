@@ -6,9 +6,11 @@
  * live through the Rule-Setting engine (coordination flips their rule dryRun off when AUTO).
  * Everything is sandbox-safe — the mutation layer short-circuits writes outside live mode.
  */
+import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { checkAdsWriteGate } from '../ads-write-gate.js'
 import { previewBidOptimization, applyBidOptimization } from '../ads-bid-optimizer.service.js'
+import { setSearchPlacement } from '../ads-top-of-search.service.js'
 import { updateCampaignWithSync } from '../ads-mutation.service.js'
 import { effectiveTargetAcosPct, clamp, type Goal, type Guardrails, type CampaignSignals } from './presets.js'
 import type { ProposedAction } from './modules.js'
@@ -69,9 +71,22 @@ export async function applyPlanActions(opts: {
       } catch (e) { logger.warn('[autopilot] budget apply failed', { planId, campaignId, error: (e as Error).message }) }
     }
 
-    // PLACEMENT — live-apply deferred to P-F.2; surface as SKIPPED so the feed still shows the intent.
+    // PLACEMENT (P-F.2) — nudge the Top-of-Search bid modifier via the shipped placement path.
     for (const a of acts.filter((x) => x.module === 'placement')) {
-      decisions.push({ module: 'placement', campaignId, action: a.action, before: a.before, after: a.after, reason: `${a.reason} (live-apply pending)`, status: 'SKIPPED' })
+      try {
+        const after = (a.after ?? {}) as { raiseTosPct?: number; lowerTosPct?: number }
+        const c = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { dynamicBidding: true } })
+        const db = (c?.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
+        const cur = db.placementBidding?.find((x) => x.placement === 'PLACEMENT_TOP')?.percentage ?? 0
+        const next = clamp(Math.round(cur + (after.raiseTosPct ?? -(after.lowerTosPct ?? 0))), 0, 200)
+        if (next !== cur) {
+          await setSearchPlacement(campaignId, 'PLACEMENT_TOP', next)
+          applied += 1
+          decisions.push({ module: 'placement', campaignId, action: 'PLACEMENT', before: { tosPct: cur }, after: { tosPct: next }, reason: `Top-of-Search bid ${cur}% → ${next}%`, status: 'APPLIED' })
+        } else {
+          decisions.push({ module: 'placement', campaignId, action: 'PLACEMENT', before: { tosPct: cur }, after: { tosPct: next }, reason: `${a.reason} (already at bound)`, status: 'SKIPPED' })
+        }
+      } catch (e) { logger.warn('[autopilot] placement apply failed', { planId, campaignId, error: (e as Error).message }) }
     }
   }
 

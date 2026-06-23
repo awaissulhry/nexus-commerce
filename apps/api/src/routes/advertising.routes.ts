@@ -5338,6 +5338,17 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const result = runConductorCycle({ goal: plan.goal as never, guardrails: (plan.guardrails ?? {}) as never, modules: (plan.modules ?? {}) as never, signals })
     return { dryRun: true, signalsEvaluated: signals.length, ...result }
   })
+  // Backtest / projection: what AUTO would do now + the last-N-day spend/ACoS trajectory (P-F.2).
+  fastify.get('/advertising/autopilot-plans/:id/backtest', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const q = request.query as { days?: string }
+    const plan = await prisma.autopilotPlan.findUnique({ where: { id } })
+    if (!plan) { reply.status(404); return { error: 'not found' } }
+    const { backtestPlan } = await import('../services/advertising/autopilot/backtest.js')
+    const days = Math.min(90, Math.max(7, Number(q.days ?? 30)))
+    reply.header('Cache-Control', 'private, max-age=120')
+    return backtestPlan({ campaignIds: Array.isArray(plan.campaignIds) ? (plan.campaignIds as string[]) : [], goal: plan.goal as never, guardrails: (plan.guardrails ?? {}) as never, modules: (plan.modules ?? {}) as never, days })
+  })
   // Real-time decision feed (SSE): emits new AutopilotDecision rows for the plan as they appear.
   fastify.get('/advertising/autopilot-plans/:id/decisions/stream', async (request, reply) => {
     const { id } = request.params as { id: string }
