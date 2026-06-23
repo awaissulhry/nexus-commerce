@@ -72,9 +72,13 @@ export interface RenderableField {
   /** Free-text examples from the schema, displayed as a hint below
    *  the input. */
   examples?: string[]
-  /** Length constraints for string fields. */
+  /** Length constraints for string fields (in CHARACTERS). */
   maxLength?: number
   minLength?: number
+  /** Amazon enforces UTF-8 BYTE length (maxUtf8ByteLength), not char length —
+   *  accented chars are 2+ bytes. Captured so validation counts bytes. */
+  maxUtf8ByteLength?: number
+  minUtf8ByteLength?: number
   /** L.2 — for kind='string_array', the maximum number of entries
    *  the field accepts. bullet_point on Amazon is up to 5. */
   maxItems?: number
@@ -507,10 +511,11 @@ export class SchemaParserService {
               existing.optionalFor.push(pc.channelKey)
             }
           }
-          // Detect divergent metadata: enum sets, maxLength.
+          // Detect divergent metadata: enum sets, maxLength, byte limit.
           if (!existing.divergent) {
             if (
               (f.maxLength ?? null) !== (existing.maxLength ?? null) ||
+              (f.maxUtf8ByteLength ?? null) !== (existing.maxUtf8ByteLength ?? null) ||
               (f.kind === 'enum' &&
                 JSON.stringify(f.options) !==
                   JSON.stringify(existing.options))
@@ -523,6 +528,14 @@ export class SchemaParserService {
                   f.maxLength < existing.maxLength)
               ) {
                 existing.maxLength = f.maxLength
+              }
+              // Keep the more-restrictive byte cap when divergent.
+              if (
+                typeof f.maxUtf8ByteLength === 'number' &&
+                (typeof existing.maxUtf8ByteLength !== 'number' ||
+                  f.maxUtf8ByteLength < existing.maxUtf8ByteLength)
+              ) {
+                existing.maxUtf8ByteLength = f.maxUtf8ByteLength
               }
             }
           }
@@ -721,6 +734,8 @@ function parseProperty(fieldId: string, prop: any): RenderableField {
       examples,
       maxLength: inner.maxLength,
       minLength: inner.minLength,
+      maxUtf8ByteLength: inner.maxUtf8ByteLength,
+      minUtf8ByteLength: inner.minUtf8ByteLength,
       ...(isList ? { maxItems } : {}),
       ...(inner.unsupportedReason
         ? { unsupportedReason: inner.unsupportedReason }
@@ -779,6 +794,8 @@ function parseProperty(fieldId: string, prop: any): RenderableField {
       examples,
       maxLength: inner.maxLength,
       minLength: inner.minLength,
+      maxUtf8ByteLength: inner.maxUtf8ByteLength,
+      minUtf8ByteLength: inner.minUtf8ByteLength,
       ...(inner.unsupportedReason
         ? { unsupportedReason: inner.unsupportedReason }
         : {}),
@@ -835,6 +852,8 @@ interface LeafParse {
   options?: Array<{ value: string; label: string }>
   maxLength?: number
   minLength?: number
+  maxUtf8ByteLength?: number
+  minUtf8ByteLength?: number
   unsupportedReason?: string
 }
 
@@ -864,9 +883,11 @@ function parseLeaf(prop: any): LeafParse {
   if (prop?.type === 'string') {
     const maxLength = typeof prop?.maxLength === 'number' ? prop.maxLength : undefined
     const minLength = typeof prop?.minLength === 'number' ? prop.minLength : undefined
+    const maxUtf8ByteLength = typeof prop?.maxUtf8ByteLength === 'number' ? prop.maxUtf8ByteLength : undefined
+    const minUtf8ByteLength = typeof prop?.minUtf8ByteLength === 'number' ? prop.minUtf8ByteLength : undefined
     // Anything > 200 chars gets a textarea.
     const kind: FieldKind = maxLength && maxLength > 200 ? 'longtext' : 'text'
-    return { kind, maxLength, minLength }
+    return { kind, maxLength, minLength, maxUtf8ByteLength, minUtf8ByteLength }
   }
 
   return {

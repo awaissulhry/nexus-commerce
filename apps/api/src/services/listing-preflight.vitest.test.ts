@@ -3,7 +3,7 @@
  * schema-required + GTIN + image checks are fully unit-testable.
  */
 import { describe, it, expect } from 'vitest'
-import { validateGtin, findMissingRequired, preflightRow, buildPerTypeValidation, validateImportRows } from './listing-preflight.service.js'
+import { validateGtin, findMissingRequired, preflightRow, buildPerTypeValidation, validateImportRows, utf8ByteLength, checkLengthLimits } from './listing-preflight.service.js'
 
 describe('validateGtin (mod-10 check digit)', () => {
   it('valid EAN-13', () => expect(validateGtin('4006381333931').valid).toBe(true))
@@ -46,6 +46,58 @@ describe('preflightRow', () => {
   it('missing image → warning, not error', () => {
     const issues = preflightRow({ item_name: 'X', ean: '4006381333931' }, req)
     expect(issues.some((i) => i.field === 'main_product_image_locator' && i.severity === 'warning')).toBe(true)
+    expect(issues.filter((i) => i.severity === 'error')).toEqual([])
+  })
+})
+
+describe('P0 — utf8ByteLength', () => {
+  it('ASCII: bytes == chars', () => expect(utf8ByteLength('Jacket')).toBe(6))
+  it('accented Latin counts as 2 bytes/char', () => {
+    expect('àà'.length).toBe(2)         // 2 characters
+    expect(utf8ByteLength('àà')).toBe(4) // but 4 UTF-8 bytes
+  })
+  it('emoji counts as 4 bytes', () => expect(utf8ByteLength('🏍')).toBe(4))
+  it('empty → 0', () => expect(utf8ByteLength('')).toBe(0))
+})
+
+describe('P0 — checkLengthLimits (byte limit wins)', () => {
+  it('the core bug: value within CHAR limit but over BYTE limit → error', () => {
+    // 'àà' = 2 chars (passes maxLength 5) but 4 bytes (fails maxUtf8ByteLength 3)
+    const issues = checkLengthLimits({ item_name: 'àà' }, [{ id: 'item_name', label: 'Title', maxLength: 5, maxUtf8ByteLength: 3 }])
+    expect(issues).toHaveLength(1)
+    expect(issues[0]).toMatchObject({ field: 'item_name', severity: 'error' })
+    expect(issues[0].message).toMatch(/4 bytes/)
+  })
+  it('within byte limit → no issue', () => {
+    expect(checkLengthLimits({ item_name: 'àà' }, [{ id: 'item_name', label: 'Title', maxUtf8ByteLength: 10 }])).toEqual([])
+  })
+  it('blank value is skipped (required-ness is checked elsewhere)', () => {
+    expect(checkLengthLimits({ item_name: '   ' }, [{ id: 'item_name', label: 'Title', maxUtf8ByteLength: 1 }])).toEqual([])
+  })
+  it('falls back to char limit when no byte limit is present', () => {
+    const issues = checkLengthLimits({ brand: 'abcdef' }, [{ id: 'brand', label: 'Brand', maxLength: 3 }])
+    expect(issues[0]).toMatchObject({ field: 'brand', severity: 'error' })
+    expect(issues[0].message).toMatch(/characters/)
+  })
+  it('one length error per field (byte beats char, no double-flag)', () => {
+    const issues = checkLengthLimits({ item_name: 'àààà' }, [{ id: 'item_name', label: 'Title', maxLength: 1, maxUtf8ByteLength: 2 }])
+    expect(issues).toHaveLength(1)
+    expect(issues[0].message).toMatch(/bytes/)
+  })
+})
+
+describe('preflightRow — byte-length integration', () => {
+  const req = [{ id: 'item_name', label: 'Title' }]
+  it('over-byte title surfaces as an error alongside required checks', () => {
+    const issues = preflightRow(
+      { item_name: 'àà', ean: '4006381333931', main_product_image_locator: 'u' },
+      req,
+      [{ id: 'item_name', label: 'Title', maxUtf8ByteLength: 3 }],
+    )
+    expect(issues.some((i) => i.field === 'item_name' && i.severity === 'error' && /bytes/.test(i.message))).toBe(true)
+  })
+  it('no lengthColumns arg → behaves exactly as before (backward compatible)', () => {
+    const issues = preflightRow({ item_name: 'àà', ean: '4006381333931', main_product_image_locator: 'u' }, req)
     expect(issues.filter((i) => i.severity === 'error')).toEqual([])
   })
 })

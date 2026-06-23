@@ -34,6 +34,7 @@ import {
   MARKETPLACE_ID_MAP,
 } from '../services/amazon/flat-file.service.js'
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
+import { checkLengthLimits, type LengthColumn } from '../services/listing-preflight.service.js'
 
 const amazon = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazon)
@@ -340,6 +341,27 @@ export default async function amazonCockpitPublishRoutes(
           COCKPIT_EXPANDED_FIELDS,
           feedSchema,
         )
+
+        // P0 byte-length gate — Amazon enforces maxUtf8ByteLength (UTF-8 bytes),
+        // not characters. An accented IT/DE title within its char limit can still
+        // blow the byte cap and get rejected after the feed round-trip. Catch it
+        // here and block the submit instead. byteLimits is keyed by base field id;
+        // expanded keys (bullet_point_1) resolve back via COCKPIT_EXPANDED_FIELDS.
+        const byteLimits = (feedSchema?.byteLimits ?? {}) as Record<string, number>
+        const lengthCols: LengthColumn[] = Object.keys(row)
+          .filter((k) => typeof (row as Record<string, unknown>)[k] === 'string')
+          .map((k): LengthColumn | null => {
+            const base = COCKPIT_EXPANDED_FIELDS[k] ?? k
+            const cap = byteLimits[base]
+            return typeof cap === 'number' ? { id: k, label: base, maxUtf8ByteLength: cap } : null
+          })
+          .filter((c): c is LengthColumn => c !== null)
+        const lengthIssues = checkLengthLimits(row as Record<string, any>, lengthCols)
+        if (lengthIssues.some((i) => i.severity === 'error')) {
+          result.error = `Byte-length validation failed — ${lengthIssues.map((i) => i.message).join('; ')}`
+          submissions.push(result)
+          continue
+        }
 
         // Step 1: create feed document.
         const docRes: any = await sp.callAPI({

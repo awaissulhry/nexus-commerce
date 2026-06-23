@@ -48,6 +48,57 @@ export function findMissingRequired(row: Record<string, any>, requiredColumns: R
   return requiredColumns.filter((c) => isBlank(row[c.id]))
 }
 
+/**
+ * UTF-8 byte length of a string — what Amazon's `maxUtf8ByteLength` measures.
+ * An ASCII char is 1 byte; accented Latin (à, è, ñ, ü) is 2; many CJK/emoji are
+ * 3–4. A title within its char limit can still blow the byte limit, which Amazon
+ * rejects at submit — so byte-length is the constraint we must count.
+ */
+export function utf8ByteLength(s: string): number {
+  return Buffer.byteLength(s, 'utf8')
+}
+
+/** A manifest column carrying length constraints, for pre-submit length checks. */
+export interface LengthColumn {
+  id: string
+  label: string
+  maxLength?: number
+  maxUtf8ByteLength?: number
+}
+
+/**
+ * Pre-submit length validation against the live schema's caps. Byte limit wins
+ * when present (Amazon's real constraint); falls back to char limit otherwise.
+ * Blank values are skipped (required-ness is a separate check). Pure + testable.
+ */
+export function checkLengthLimits(row: Record<string, any>, lengthColumns: LengthColumn[]): PreflightIssue[] {
+  const issues: PreflightIssue[] = []
+  for (const c of lengthColumns) {
+    const raw = row[c.id]
+    if (isBlank(raw)) continue
+    const s = String(raw)
+    if (typeof c.maxUtf8ByteLength === 'number') {
+      const bytes = utf8ByteLength(s)
+      if (bytes > c.maxUtf8ByteLength) {
+        issues.push({
+          field: c.id,
+          severity: 'error',
+          message: `"${c.label}" is ${bytes} bytes — exceeds Amazon's ${c.maxUtf8ByteLength}-byte limit (UTF-8; accented characters count as 2+ bytes)`,
+        })
+        continue // one length error per field is enough
+      }
+    }
+    if (typeof c.maxLength === 'number' && s.length > c.maxLength) {
+      issues.push({
+        field: c.id,
+        severity: 'error',
+        message: `"${c.label}" is ${s.length} characters — exceeds the ${c.maxLength}-character limit`,
+      })
+    }
+  }
+  return issues
+}
+
 // Common flat-file columns that may carry a product identifier.
 const GTIN_FIELDS = ['externally_assigned_product_identifier', 'gtin', 'ean', 'upc', 'barcode']
 
@@ -56,12 +107,20 @@ const GTIN_FIELDS = ['externally_assigned_product_identifier', 'gtin', 'ean', 'u
  * one is present (error), and a missing main image (warning). Pure — easy to test
  * and reuse from the /preflight endpoint and inside /submit.
  */
-export function preflightRow(row: Record<string, any>, requiredColumns: RequiredColumn[]): PreflightIssue[] {
+export function preflightRow(
+  row: Record<string, any>,
+  requiredColumns: RequiredColumn[],
+  lengthColumns: LengthColumn[] = [],
+): PreflightIssue[] {
   const issues: PreflightIssue[] = []
 
   for (const m of findMissingRequired(row, requiredColumns)) {
     issues.push({ field: m.id, severity: 'error', message: `Required attribute "${m.label}" is empty` })
   }
+
+  // Byte/char length caps from the live schema (UTF-8 byte limit wins). Optional
+  // param keeps existing callers unchanged; they simply skip length checks.
+  issues.push(...checkLengthLimits(row, lengthColumns))
 
   for (const f of GTIN_FIELDS) {
     const val = row[f]

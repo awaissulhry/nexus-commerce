@@ -79,7 +79,16 @@ export interface FlatFileColumn {
   requiredForProductTypes?: string[]
   /** Amazon field usage level from x-amazon-attributes.usage */
   guidance?: 'REQUIRED' | 'RECOMMENDED' | 'OPTIONAL'
+  /** Max length in CHARACTERS (JSON Schema maxLength). */
   maxLength?: number
+  /**
+   * Max length in UTF-8 BYTES (Amazon custom-vocab maxUtf8ByteLength). Amazon
+   * enforces byte length, not char length — an accented Italian/German char is
+   * 2+ bytes, so a title that's within maxLength chars can still blow the byte
+   * limit and be rejected at submit. Captured so validation can count bytes.
+   */
+  maxUtf8ByteLength?: number
+  minUtf8ByteLength?: number
   width: number
 }
 
@@ -361,6 +370,24 @@ export function buildSchemaFieldHints(properties: Record<string, any>): {
   return { localizedFields, numericFields, booleanFields }
 }
 
+/**
+ * Map of base field id → Amazon `maxUtf8ByteLength` (UTF-8 byte cap) for every
+ * top-level property that declares one. Amazon enforces byte length, not char
+ * length, so this is what pre-submit validation must count against. Keyed by the
+ * BASE field id (bullet_point, item_name…); callers resolve an expanded column id
+ * (bullet_point_1) back to its base before lookup. Reads the cap off the unwrapped
+ * value node, matching how schemaFieldToColumn reads maxLength.
+ */
+export function buildByteLimits(properties: Record<string, any>): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [fieldId, prop] of Object.entries(properties)) {
+    const inner = (prop as Record<string, any>)?.items?.properties?.value ?? prop
+    const lim = (inner as Record<string, any>)?.maxUtf8ByteLength
+    if (typeof lim === 'number') out[fieldId] = lim
+  }
+  return out
+}
+
 /** Extract localised titles from schema properties into a flat map. */
 function buildSchemaLabels(properties: Record<string, any>): Record<string, string> {
   const map: Record<string, string> = {}
@@ -439,6 +466,8 @@ function schemaFieldToColumn(
     selectionOnly,
     guidance,
     maxLength: typeof inner?.maxLength === 'number' ? inner.maxLength : undefined,
+    maxUtf8ByteLength: typeof inner?.maxUtf8ByteLength === 'number' ? inner.maxUtf8ByteLength : undefined,
+    minUtf8ByteLength: typeof inner?.minUtf8ByteLength === 'number' ? inner.minUtf8ByteLength : undefined,
     width:
       kind === 'longtext' ? 260 :
       kind === 'enum' && (options?.length ?? 0) < 8 ? 140 :
@@ -652,10 +681,17 @@ function expandSchemaField(
       else if (subType === 'integer' || subType === 'number') kind = 'number'
       else if (subType === 'boolean') { kind = 'enum'; options = ['', 'true', 'false'] }
 
+      // A free-text sub-property can carry its own byte/char limit (Amazon puts
+      // it on the unwrapped value). Capture so byte-length validation applies.
+      const subInner = subProp?.items?.properties?.value ?? subProp
+
       columns.push({
         id: colId, fieldRef: `${fieldId}[marketplace_id]#1.${subId}`,
         labelEn: subEnLabel, labelLocal: subLoLabel,
         required: false, kind, options,
+        maxLength: typeof subInner?.maxLength === 'number' ? subInner.maxLength : undefined,
+        maxUtf8ByteLength: typeof subInner?.maxUtf8ByteLength === 'number' ? subInner.maxUtf8ByteLength : undefined,
+        minUtf8ByteLength: typeof subInner?.minUtf8ByteLength === 'number' ? subInner.minUtf8ByteLength : undefined,
         width: kind === 'enum' && (options?.length ?? 0) < 8 ? 140 : 180,
       })
     }
@@ -1257,13 +1293,19 @@ export class AmazonFlatFileService {
     localizedFields: Set<string>
     numericFields: Set<string>
     booleanFields: Set<string>
+    /** base field id → UTF-8 byte cap, for pre-submit byte-length validation. */
+    byteLimits: Record<string, number>
   }> {
     const mp = marketplace.toUpperCase()
     const pt = productType.toUpperCase()
     const cached = await this.schemas.getSchema({ channel: 'AMAZON', marketplace: mp, productType: pt })
     const def = (cached.schemaDefinition ?? {}) as Record<string, any>
     const properties = (def.properties ?? {}) as Record<string, any>
-    return { enumCodeMap: buildSchemaEnumCodeMap(properties), ...buildSchemaFieldHints(properties) }
+    return {
+      enumCodeMap: buildSchemaEnumCodeMap(properties),
+      ...buildSchemaFieldHints(properties),
+      byteLimits: buildByteLimits(properties),
+    }
   }
 
   /**
