@@ -11,8 +11,9 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { runConductorCycle, type PlanModules } from '../services/advertising/autopilot/conductor.js'
-import type { CampaignSignals, Goal, Guardrails } from '../services/advertising/autopilot/presets.js'
+import { DEFAULT_GUARDRAILS, type CampaignSignals, type Goal, type Guardrails } from '../services/advertising/autopilot/presets.js'
 import { syncLinkedRules, mirrorRuleDecisions } from '../services/advertising/autopilot/coordination.js'
+import { applyPlanActions } from '../services/advertising/autopilot/apply.js'
 
 /** Assemble per-campaign signals from Campaign aggregates + AdTarget perf roll-up. */
 export async function gatherSignals(campaignIds: string[]): Promise<CampaignSignals[]> {
@@ -62,9 +63,22 @@ export async function runAutopilotOnce(): Promise<{ plans: number; decisions: nu
       modules: (plan.modules ?? {}) as PlanModules,
       signals,
     })
-    // SUGGEST/dry-run: replace this plan's pending proposals with the fresh cycle (NO live writes).
-    await prisma.autopilotDecision.deleteMany({ where: { planId: plan.id, status: 'PROPOSED' } })
-    if (result.actions.length) {
+    // Clear this plan's stale autopilot proposals; AUTO then applies, SUGGEST re-records proposals.
+    await prisma.autopilotDecision.deleteMany({ where: { planId: plan.id, status: 'PROPOSED', source: 'autopilot' } })
+    if (plan.autonomy === 'AUTO') {
+      // AUTO: apply live (write-gated + audited). APPLIED/DENIED/SKIPPED rows are kept as history.
+      const merged: Guardrails = { ...DEFAULT_GUARDRAILS, ...((plan.guardrails ?? {}) as Partial<Guardrails>) }
+      const res = await applyPlanActions({ planId: plan.id, goal: plan.goal as Goal, marketplace: plan.marketplace, guardrails: merged, actions: result.actions, signals })
+      if (res.decisions.length) {
+        await prisma.autopilotDecision.createMany({ data: res.decisions.map((d) => ({
+          planId: plan.id, cycle: 'fast', module: d.module, campaignId: d.campaignId, action: d.action,
+          before: (d.before ?? undefined) as object | undefined, after: (d.after ?? undefined) as object | undefined,
+          reason: d.reason, status: d.status, source: 'autopilot', executionId: d.executionId ?? null,
+        })) })
+        decisions += res.decisions.length
+      }
+    } else if (result.actions.length) {
+      // SUGGEST/dry-run: record fresh proposals (NO live writes).
       await prisma.autopilotDecision.createMany({
         data: result.actions.map((a) => ({
           planId: plan.id, cycle: 'fast', module: a.module, campaignId: a.campaignId, action: a.action,
