@@ -288,7 +288,9 @@ export function BudgetManagerClient() {
   }
 
   const markets = useMemo(() => {
-    const set = new Set<string>((result?.rows ?? []).map((r) => r.marketplace))
+    // Header dropdown offers real country markets only; legacy account-id rows
+    // (e.g. a pre-merge profile id) still appear in the "All markets" grid.
+    const set = new Set<string>((result?.rows ?? []).map((r) => r.marketplace).filter((m) => MARKET_NAME[m]))
     if (set.size === 0) ['IT', 'DE', 'FR', 'ES'].forEach((m) => set.add(m))
     return [...set].sort()
   }, [result])
@@ -316,14 +318,14 @@ export function BudgetManagerClient() {
     <span className="bm-first">
       <button type="button" className="bm-ic" aria-label={`More for ${mktName(r.marketplace)}`} onClick={() => setMoreFor(r)}><MoreVertical size={15} /></button>
       <button type="button" className="bm-ic" aria-label={`Settings for ${mktName(r.marketplace)}`} onClick={() => setSettingsFor(r)}><Settings size={14} /></button>
-      <span className="bm-flag">{FLAG[r.marketplace] ?? '🏳️'}</span>
+      <span className="bm-flag">{FLAG[r.marketplace] ?? '🌐'}</span>
       <span className="bm-mkt">{mktName(r.marketplace)}{r.tag ? <em> · {r.tag}</em> : null}{r.campaignLimitCount > 0 ? <span className="bm-lim" title={`${r.campaignLimitCount} campaign limit${r.campaignLimitCount === 1 ? '' : 's'}`}>{r.campaignLimitCount} limit{r.campaignLimitCount === 1 ? '' : 's'}</span> : null}</span>
       {r.projectedOverspend && <span className="bm-warn" title={`Projected month-end spend ${eur(r.forecastSpendCents)} exceeds budget`}><AlertTriangle size={13} /></span>}
     </span>
   )
 
   return (
-    <>
+    <div className="bm-page">
       <AdsPageHeader
         title="Budget Manager"
         subtitle="Monthly ad budget per market — pacing, spend, and limits."
@@ -368,6 +370,6 @@ export function BudgetManagerClient() {
       <FaqDrawer open={faqOpen} onClose={() => setFaqOpen(false)} />
 
       {toastMsg && <div className="bm-toast" role="status">{toastMsg}</div>}
-    </>
+    </div>
   )
 }

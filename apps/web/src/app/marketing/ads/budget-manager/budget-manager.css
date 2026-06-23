@@ -1,6 +1,13 @@
 /* BM.B1 — Budget Manager. Scoped bm-* styles; reuses ads.css h10 palette +
    shared chrome (AdsDataGrid / AdsPageHeader / h10-am-btn / h10-bktoggle). */
 
+/* This 6-column table fits without horizontal scroll, so the shared grid's
+   frozen first column isn't needed here — and its opaque sticky background +
+   z-index would paint over the next column (Auto Pacing) in our narrow layout.
+   Scope it to .bm-page so other ads grids keep their freeze. */
+.bm-page .h10-am-grid th.nm.fz, .bm-page .h10-am-grid td.nm.fz { position: static; box-shadow: none; border-right: none; }
+.bm-page .h10-am-grid td.nm { max-width: 260px; }
+
 /* month bar between header and grid */
 .bm-monthbar { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; padding: 8px 12px; background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; }
 .bm-monthbar > b { font-size: 14px; font-weight: 700; color: #1c2530; min-width: 124px; text-align: center; }
