@@ -254,7 +254,7 @@ export function SpSuperWizard() {
       {editTgt && (() => {
         const c = campaigns.find((x) => x.id === editTgt.id)
         if (!c) return null
-        return <TargetingModal campaign={c} mode={editTgt.mode} autoNegate={autoNegate} currency="€" onClose={() => setEditTgt(null)} onSave={(patch) => setCampaigns((cs) => applyAutoNegatives(cs.map((x) => (x.id === c.id ? { ...x, ...patch } : x)), autoNegate))} />
+        return <TargetingModal campaign={c} mode={editTgt.mode} autoNegate={autoNegate} currency="€" products={products} onClose={() => setEditTgt(null)} onSave={(patch) => setCampaigns((cs) => applyAutoNegatives(cs.map((x) => (x.id === c.id ? { ...x, ...patch } : x)), autoNegate))} />
       })()}
     </div>
   )

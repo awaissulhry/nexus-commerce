@@ -13,6 +13,7 @@
  */
 import { useState } from 'react'
 import { Trash2, X, ChevronsUpDown, ChevronDown, Plus } from 'lucide-react'
+import './keyword-targeting.css'
 
 export type KwMatch = 'BROAD' | 'PHRASE' | 'EXACT'
 export type NegMatch = 'EXACT' | 'PHRASE'
@@ -21,7 +22,7 @@ export interface NegKw { text: string; matchType: NegMatch }
 
 const MATCH_LABEL: Record<KwMatch, string> = { BROAD: 'Broad', PHRASE: 'Phrase', EXACT: 'Exact' }
 
-export function KeywordTargetingPanel({ keywords, setKeywords, negKeywords, setNegKeywords, suggestions, defaultBid, currency = '€' }: {
+export function KeywordTargetingPanel({ keywords, setKeywords, negKeywords, setNegKeywords, suggestions, defaultBid, currency = '€', lockedMatch, showBids, hideNegatives }: {
   keywords: KwBid[]
   setKeywords: (v: KwBid[]) => void
   negKeywords: NegKw[]
@@ -29,9 +30,16 @@ export function KeywordTargetingPanel({ keywords, setKeywords, negKeywords, setN
   suggestions: string[]
   defaultBid: string
   currency?: string
+  // Adoption knobs (SP Super Wizard): campaign defines the match type → hide the selector;
+  // ad-group bids → hide the per-keyword bid column; its own negative editor → hide negatives.
+  lockedMatch?: KwMatch
+  showBids?: boolean
+  hideNegatives?: boolean
 }) {
   const [tab, setTab] = useState<'suggested' | 'enter' | 'mylist'>('suggested')
-  const [match, setMatch] = useState<KwMatch>('BROAD')
+  const [matchState, setMatchState] = useState<KwMatch>('BROAD')
+  const match = lockedMatch ?? matchState
+  const bids = showBids !== false
   const [enterText, setEnterText] = useState('')
   const [negOpen, setNegOpen] = useState(true)
   const [negMatch, setNegMatch] = useState<NegMatch>('EXACT')
@@ -65,10 +73,12 @@ export function KeywordTargetingPanel({ keywords, setKeywords, negKeywords, setN
             <button type="button" role="tab" aria-selected={tab === 'mylist'} className={tab === 'mylist' ? 'on' : ''} onClick={() => setTab('mylist')}>Add from My List</button>
           </div>
           <div className="h10-scb-tgt-mt">
-            <span className="lbl">Match Type:</span>
-            {(['BROAD', 'PHRASE', 'EXACT'] as KwMatch[]).map((m) => (
-              <label key={m} className={match === m ? 'on' : ''}><input type="radio" name="scb-kwmatch" checked={match === m} onChange={() => setMatch(m)} /> {MATCH_LABEL[m]}</label>
-            ))}
+            {!lockedMatch && <>
+              <span className="lbl">Match Type:</span>
+              {(['BROAD', 'PHRASE', 'EXACT'] as KwMatch[]).map((m) => (
+                <label key={m} className={match === m ? 'on' : ''}><input type="radio" name="scb-kwmatch" checked={match === m} onChange={() => setMatchState(m)} /> {MATCH_LABEL[m]}</label>
+              ))}
+            </>}
             <span className="grow" />
             <button type="button" className="addall" disabled={tab !== 'suggested' || !shown.length} onClick={() => addMany(shown)}><Plus size={13} /> Add All</button>
           </div>
@@ -98,12 +108,16 @@ export function KeywordTargetingPanel({ keywords, setKeywords, negKeywords, setN
             <b>{keywords.length} Keyword{keywords.length === 1 ? '' : 's'} Added</b>
             <button type="button" className="rm" disabled={!keywords.length} onClick={() => setKeywords([])}><Trash2 size={12} /> Remove All</button>
           </div>
-          <div className="h10-spw-ps-rcol sv"><span className="pcol">Keyword <ChevronsUpDown size={11} /></span><span className="svcol">Bid</span></div>
+          {bids ? (
+            <div className="h10-spw-ps-rcol sv"><span className="pcol">Keyword <ChevronsUpDown size={11} /></span><span className="svcol">Bid</span></div>
+          ) : (
+            <div className="h10-spw-ps-rcol">Keyword <ChevronsUpDown size={11} /></div>
+          )}
           <div className="h10-spw-ps-rlist">
             {keywords.length === 0 ? <div className="h10-spw-ps-nodata">No data</div> : keywords.map((k, i) => (
               <div className="row" key={`${k.text}|${k.matchType}|${i}`}>
                 <span className="h10-scb-tgt-kw bskt" title={k.text}>{k.text} <span className={`h10-scb-tgt-mtag ${k.matchType.toLowerCase()}`}>{MATCH_LABEL[k.matchType]}</span></span>
-                <span className="h10-scb-tgt-bid"><span className="pf">{currency}</span><input inputMode="decimal" value={k.bidEur} onChange={(e) => setKwBid(i, e.target.value)} placeholder="0.00" aria-label={`Bid for ${k.text}`} /></span>
+                {bids && <span className="h10-scb-tgt-bid"><span className="pf">{currency}</span><input inputMode="decimal" value={k.bidEur} onChange={(e) => setKwBid(i, e.target.value)} placeholder="0.00" aria-label={`Bid for ${k.text}`} /></span>}
                 <button type="button" className="x" onClick={() => removeKw(i)} aria-label={`Remove ${k.text}`}><X size={14} /></button>
               </div>
             ))}
@@ -111,6 +125,7 @@ export function KeywordTargetingPanel({ keywords, setKeywords, negKeywords, setN
         </div>
       </div>
 
+      {!hideNegatives && (<>
       <button type="button" className="h10-scb-tgt-adv" aria-expanded={negOpen} onClick={() => setNegOpen((o) => !o)}><ChevronDown size={15} className={negOpen ? 'up' : ''} /> Advanced Negative Keywords (Optional)</button>
       {negOpen && (
         <div className="h10-spw-ps">
@@ -142,6 +157,7 @@ export function KeywordTargetingPanel({ keywords, setKeywords, negKeywords, setN
           </div>
         </div>
       )}
+      </>)}
     </div>
   )
 }

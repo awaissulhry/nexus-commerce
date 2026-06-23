@@ -1,0 +1,38 @@
+/* KeywordTargetingPanel styles — co-located with the shared component so they load wherever
+   it's used (Single Campaign builder + SP Super Wizard's TargetingModal). The two-panel chrome
+   (.h10-spw-ps-*) lives in ads.css (loaded on both ad surfaces); these add the panel specifics. */
+
+/* match-type row (positive + negative) */
+.h10-scb-tgt-mt { display: flex; align-items: center; gap: 16px; padding: 2px 0 14px; flex-wrap: wrap; }
+.h10-scb-tgt-mt .lbl { font-size: 12.5px; font-weight: 700; color: #3a4452; }
+.h10-scb-tgt-mt label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #3a4452; cursor: pointer; }
+.h10-scb-tgt-mt label.on { color: #1f6fde; font-weight: 600; }
+.h10-scb-tgt-mt input[type="radio"] { width: 14px; height: 14px; accent-color: #1f6fde; cursor: pointer; }
+.h10-scb-tgt-mt .grow { flex: 1; }
+.h10-scb-tgt-mt .addall { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 600; color: #1f6fde; background: none; border: none; cursor: pointer; }
+.h10-scb-tgt-mt .addall:disabled { color: #b5bcc6; cursor: default; }
+
+/* keyword text + match-type badge in lists/baskets */
+.h10-scb-tgt-kw { flex: 1; min-width: 0; font-size: 13px; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-scb-tgt-mtag { display: inline-block; margin-left: 6px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px; padding: 1px 5px; border-radius: 4px; vertical-align: middle; }
+.h10-scb-tgt-mtag.broad { background: #e7f7ec; color: #15a34a; }
+.h10-scb-tgt-mtag.phrase { background: #fff3e0; color: #b76b00; }
+.h10-scb-tgt-mtag.exact { background: #e7f0ff; color: #1f6fde; }
+
+/* per-keyword bid cell in the basket */
+.h10-scb-tgt-bid { display: inline-flex; align-items: center; border: 1px solid #d8dde4; border-radius: 7px; overflow: hidden; height: 30px; width: 92px; flex-shrink: 0; }
+.h10-scb-tgt-bid .pf { padding: 0 7px; color: #8a93a1; font-size: 12px; background: #f4f6f8; align-self: stretch; display: inline-flex; align-items: center; }
+.h10-scb-tgt-bid input { width: 100%; min-width: 0; border: none; outline: none; font: inherit; font-size: 13px; padding: 0 7px; color: #1c2530; }
+
+/* Enter New Keywords textarea + Add / My List empty */
+.h10-scb-tgt-enter { display: flex; flex-direction: column; gap: 10px; }
+.h10-scb-tgt-enter textarea { min-height: 150px; resize: vertical; border: 1px solid #d8dde4; border-radius: 8px; padding: 10px 11px; font: inherit; font-size: 13px; color: #1c2530; }
+.h10-scb-tgt-enter textarea:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+.h10-scb-tgt-add { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 600; color: #fff; background: #1f6fde; border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer; }
+.h10-scb-tgt-add:disabled { background: #b9c6da; cursor: default; }
+.h10-scb-tgt-mylist { padding: 30px 16px; text-align: center; color: #8a93a1; font-size: 12.5px; line-height: 1.5; }
+
+/* Advanced Negative Keywords toggle */
+.h10-scb-tgt-adv { display: inline-flex; align-items: center; gap: 7px; margin: 18px 0 14px; font: inherit; font-size: 13px; font-weight: 700; color: #1f6fde; background: none; border: none; cursor: pointer; }
+.h10-scb-tgt-adv svg { transition: transform .15s; }
+.h10-scb-tgt-adv svg.up { transform: rotate(180deg); }

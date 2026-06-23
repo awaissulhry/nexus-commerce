@@ -17,42 +17,11 @@ import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import { ProductSelection, type SpwProduct } from './ProductSelection'
+import { KeywordTargetingPanel, deriveKeywordSuggestions, type KwMatch } from '../../_shared/KeywordTargetingPanel'
 import { AUTO_GROUP_META, type SpwCampaign, type NegKeyword, type NegMatch, type AutoGroup } from './CampaignSetup'
 
-function KeywordEditor({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
-  const [text, setText] = useState('')
-  const stage = () => {
-    const kws = text.split('\n').map((s) => s.trim()).filter(Boolean)
-    if (!kws.length) return
-    const seen = new Set(value.map((v) => v.toLowerCase()))
-    const next = [...value]
-    for (const kw of kws) { if (!seen.has(kw.toLowerCase())) { seen.add(kw.toLowerCase()); next.push(kw) } }
-    onChange(next); setText('')
-  }
-  return (
-    <div className="h10-neg-cols">
-      <div className="h10-neg-left">
-        <textarea className="h10-neg-ta" value={text} onChange={(e) => setText(e.target.value)} placeholder="Enter one keyword per line" aria-label="Keywords" />
-        <button type="button" className="h10-neg-add" disabled={!text.trim()} onClick={stage}>Add Keyword</button>
-      </div>
-      <div className="h10-neg-right">
-        <div className="h10-neg-rh">
-          <span>{value.length} Keyword{value.length === 1 ? '' : 's'} Added</span>
-          <button type="button" className="h10-neg-rmall" disabled={!value.length} onClick={() => onChange([])}><Trash2 size={14} /> Remove All</button>
-        </div>
-        <div className="h10-neg-lh"><span>Keyword</span><ChevronsUpDown size={13} /></div>
-        <div className="h10-neg-list">
-          {value.length === 0 ? <div className="h10-neg-empty">No data</div> : value.map((kw, i) => (
-            <div className="h10-neg-row" key={`${kw}|${i}`}>
-              <span className="kw" title={kw}>{kw}</span>
-              <button type="button" className="rm" onClick={() => onChange(value.filter((_, idx) => idx !== i))} aria-label={`Remove ${kw}`}><X size={13} /></button>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
+// Positive keyword editing now uses the shared KeywordTargetingPanel (richer: Suggested/Enter/
+// My-List tabs + suggested keywords). The old textarea KeywordEditor was removed in favour of it.
 
 const negMatchLabel = (m: NegMatch) => (m === 'EXACT' ? 'Neg Exact' : 'Neg Phrase')
 
@@ -144,11 +113,12 @@ function AutoTargetingEditor({ groups, currency, onChange }: { groups: AutoGroup
   )
 }
 
-export function TargetingModal({ campaign, mode, autoNegate, currency = '€', onClose, onSave }: {
+export function TargetingModal({ campaign, mode, autoNegate, currency = '€', products, onClose, onSave }: {
   campaign: SpwCampaign
   mode: 'targeting' | 'negative'
   autoNegate?: boolean
   currency?: string
+  products?: SpwProduct[]
   onClose: () => void
   onSave: (patch: Partial<SpwCampaign>) => void
 }) {
@@ -163,6 +133,12 @@ export function TargetingModal({ campaign, mode, autoNegate, currency = '€', o
   const productOnly = campaign.kind === 'pat'
   const [tab, setTab] = useState<'kw' | 'prod'>(productOnly ? 'prod' : 'kw')
   const active: 'kw' | 'prod' = showTabs ? tab : productOnly ? 'prod' : 'kw'
+  // Adopt the shared KeywordTargetingPanel for positive keywords. The SP wizard's keyword model
+  // is a flat string[] under a campaign-level match type, so lock the panel's match + hide the
+  // per-keyword bid column (ad-group bids apply) + its own negatives (the wizard has a dedicated
+  // negative editor with the funnel's auto-negatives).
+  const lockedMatch: KwMatch = campaign.matchType.toLowerCase().includes('exact') ? 'EXACT' : campaign.matchType.toLowerCase().includes('phrase') ? 'PHRASE' : 'BROAD'
+  const kwSuggestions = deriveKeywordSuggestions((products ?? []).map((p) => p.name))
 
   const save = () => {
     if (isNeg) onSave({ negKeywords: negKw, negProducts: prods })
@@ -195,7 +171,12 @@ export function TargetingModal({ campaign, mode, autoNegate, currency = '€', o
       ) : isNeg ? (
         <NegKeywordEditor manual={negKw} auto={autoNegs} onChange={setNegKw} />
       ) : (
-        <KeywordEditor value={kw} onChange={setKw} />
+        <KeywordTargetingPanel
+          keywords={kw.map((t) => ({ text: t, matchType: lockedMatch, bidEur: '' }))}
+          setKeywords={(next) => setKw(next.map((k) => k.text))}
+          negKeywords={[]} setNegKeywords={() => {}}
+          suggestions={kwSuggestions} defaultBid="" lockedMatch={lockedMatch} showBids={false} hideNegatives
+        />
       )}
     </Modal>
   )
