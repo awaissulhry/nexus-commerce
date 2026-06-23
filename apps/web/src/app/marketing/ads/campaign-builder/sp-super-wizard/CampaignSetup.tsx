@@ -115,8 +115,8 @@ export function campaignsMissingTargeting(cs: SpwCampaign[]): number {
 
 // ── NT.1 — Negative-keyword funnel (campaign isolation) ──────────────────
 // Two mechanisms, both writing ad-group-level negatives that carry a match type:
-//  ① Match-type funnel — within a keyword group, a looser campaign negates its
-//     tighter siblings' keywords so each search term serves from exactly one
+//  ① Match-type funnel — within a keyword group, a looser campaign ALWAYS negates the
+//     group's keyword set at every tighter match type so each search term serves from one
 //     campaign: Exact = none · Phrase = neg-exact · Broad = neg-exact + neg-phrase.
 //  ② Auto-isolation — the Auto campaign neg-exacts every manual keyword so it only
 //     discovers NEW search terms.
@@ -150,16 +150,16 @@ export function applyAutoNegatives(campaigns: SpwCampaign[], enabled: boolean): 
       // ② Auto-isolation: neg-exact every manual keyword in the build.
       auto = allKeywords.map((text) => ({ text, matchType: 'EXACT' as NegMatch, auto: true }))
     } else if (c.kind === 'keyword') {
-      // ① Funnel: negate same-group siblings that are TIGHTER than me.
+      // ① Funnel: negate the GROUP's whole keyword set at every match type TIGHTER than this
+      // campaign's own — Broad → neg-exact + neg-phrase, Phrase → neg-exact, Exact → none — ALWAYS
+      // (not only when a tighter sibling campaign exists). So a Broad campaign always blocks the
+      // exact + in-order-phrase forms even when the group has no dedicated Phrase/Exact tier.
       const my = singleMatch(c.matchType)
       if (my) {
         const sibs = keywordCampaigns.filter((s) => s.keywordType === c.keywordType && s.id !== c.id)
-        const tighterKw = (mt: 'EXACT' | 'PHRASE') =>
-          RANK[mt] > RANK[my] ? dedupeCI(sibs.filter((s) => singleMatch(s.matchType) === mt).flatMap((s) => s.keywords)) : []
-        auto = [
-          ...tighterKw('EXACT').map((text) => ({ text, matchType: 'EXACT' as NegMatch, auto: true })),
-          ...tighterKw('PHRASE').map((text) => ({ text, matchType: 'PHRASE' as NegMatch, auto: true })),
-        ]
+        const groupKw = dedupeCI([...c.keywords, ...sibs.flatMap((s) => s.keywords)])
+        if (RANK.EXACT > RANK[my]) auto.push(...groupKw.map((text) => ({ text, matchType: 'EXACT' as NegMatch, auto: true })))
+        if (RANK.PHRASE > RANK[my]) auto.push(...groupKw.map((text) => ({ text, matchType: 'PHRASE' as NegMatch, auto: true })))
       }
     }
     // Merge auto into manual; a manual negative for the same text+match wins (no dup).
