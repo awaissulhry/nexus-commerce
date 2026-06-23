@@ -83,7 +83,7 @@ interface SubmissionResult {
 // Bullets are the only multi-instance columns buildRow emits — map bullet_point_N
 // → bullet_point so buildJsonFeedBody reassembles them into the bullet_point array
 // instead of emitting stray "bullet_point_1" attributes (HIGH-3).
-const COCKPIT_EXPANDED_FIELDS: Record<string, string> = {
+export const COCKPIT_EXPANDED_FIELDS: Record<string, string> = {
   bullet_point_1: 'bullet_point',
   bullet_point_2: 'bullet_point',
   bullet_point_3: 'bullet_point',
@@ -93,7 +93,7 @@ const COCKPIT_EXPANDED_FIELDS: Record<string, string> = {
 /** Build a flat-file row from a ChannelListing + product. Pulls the
  *  same shape the flat-file editor would produce so the SP-API call
  *  receives identical attribute envelopes. */
-function buildRow(args: {
+export function buildRow(args: {
   listing: any
   product: any
   marketplace: string
