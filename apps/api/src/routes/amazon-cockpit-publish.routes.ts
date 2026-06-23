@@ -456,6 +456,34 @@ export default async function amazonCockpitPublishRoutes(
           },
         })
 
+        // ALA Phase 7 — record the schema version this listing was published
+        // against (reproducibility: "published against RELEASE_18.1"). Best-effort,
+        // namespaced in platformAttributes — no migration; never fails the publish.
+        try {
+          const pt = String(row.product_type ?? '').toUpperCase()
+          const schemaRow = await prisma.categorySchema.findFirst({
+            where: { channel: 'AMAZON', marketplace: mp, productType: pt },
+            orderBy: { fetchedAt: 'desc' },
+            select: { schemaVersion: true },
+          })
+          const platform = (listing.platformAttributes ?? {}) as Record<string, unknown>
+          await prisma.channelListing.update({
+            where: { id: listing.id },
+            data: {
+              platformAttributes: {
+                ...platform,
+                __alaPublishMeta: {
+                  schemaVersion: schemaRow?.schemaVersion ?? null,
+                  feedId: feedRes.feedId ?? null,
+                  publishedAt: new Date().toISOString(),
+                },
+              },
+            },
+          })
+        } catch (metaErr: any) {
+          request.log.warn({ err: metaErr?.message, marketplace: mp }, 'cockpit publish: schema-version record failed')
+        }
+
         submissions.push({
           ...result,
           ok: true,
