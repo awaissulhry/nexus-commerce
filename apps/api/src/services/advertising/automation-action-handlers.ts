@@ -728,13 +728,38 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
   const minSpendCents = typeof action.minSpendCents === 'number' ? action.minSpendCents : 1000 // €10 default
   const minOrders = typeof action.minOrders === 'number' ? action.minOrders : 2
   const { previewHarvest, applyHarvest } = await import('./ads-harvest.service.js')
-  const preview = await previewHarvest({ windowDays, minSpendCents, minOrders })
+
+  // AT.4b — if the rule carries wizard `sources` (per-ad-group harvest scope +
+  // graduate/negate match types), scope harvesting to those ad groups and honor
+  // their match types. No `sources` → unchanged global behaviour (the standalone
+  // "Auto harvest & negate" template). Scope uses live external ad-group ids, so a
+  // rule whose campaigns are still gated/local resolves to [] and harvests nothing.
+  const rawSources = (action as unknown as { sources?: unknown }).sources
+  const sources = Array.isArray(rawSources)
+    ? (rawSources as Array<{ adGroupId?: string; graduate?: string[]; negate?: string[]; harvestFrom?: boolean }>)
+    : null
+  let adGroupExternalIds: string[] | undefined
+  let plan: Record<string, { graduate?: string[]; negate?: string[] }> | undefined
+  if (sources && sources.length) {
+    const localIds = sources.filter((s) => s.adGroupId).map((s) => s.adGroupId as string)
+    const ags = localIds.length ? await prisma.adGroup.findMany({ where: { id: { in: localIds } }, select: { id: true, externalAdGroupId: true } }) : []
+    const extById = new Map(ags.map((a) => [a.id, a.externalAdGroupId]))
+    adGroupExternalIds = sources.filter((s) => s.harvestFrom && s.adGroupId).map((s) => extById.get(s.adGroupId as string)).filter((x): x is string => !!x)
+    plan = {}
+    for (const s of sources) {
+      const ext = s.adGroupId ? extById.get(s.adGroupId) : null
+      if (ext) plan[ext] = { graduate: s.graduate, negate: s.negate }
+    }
+  }
+
+  const preview = await previewHarvest({ windowDays, minSpendCents, minOrders, adGroupExternalIds })
   if (meta.dryRun) {
     return {
       type: action.type,
       ok: true,
       output: {
         dryRun: true,
+        scoped: !!sources,
         wouldNegate: preview.negatives.length,
         wouldGraduate: preview.graduations.length,
         topNegatives: preview.negatives.slice(0, 5).map((n) => ({ query: n.query, costCents: n.costCents })),
@@ -746,6 +771,7 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
     negatives: preview.negatives,
     graduations: preview.graduations.map((g) => ({ ...g, bidEur: typeof action.graduationBidEur === 'number' ? action.graduationBidEur : 0.5 })),
     userId: `automation:${meta.ruleId}`,
+    plan,
   })
   return {
     type: action.type,

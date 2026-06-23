@@ -1,15 +1,16 @@
 'use client'
 
 /**
- * SPW.6 — Step 3 "Automation & Launch" (Helium 10 match). Three sections:
+ * SPW.6 / AT.4a — Step 3 "Automation & Launch" (Helium 10 match). Three sections:
  *  • Product Group Details (name · # products · Bid Strategy "Scale" · Bid Algorithm) + Portfolio Association.
  *  • Sponsored Campaign Set — read-only summary table with grouped Amazon / Helium 10 Ads headers.
  *  • Rules — Keyword Harvesting / Negative Targeting tabs · Rule Name · Automate toggle · the
  *    Ad-Group × create-target matrix (B/P/E keyword + box product targets, P/E + box negatives,
  *    enabled per campaign kind) · Performance Criteria.
- * Launch itself (creating the campaigns) is wired in SPW.7.
+ * AT.4a lifts the Rules config into a controlled `RulesConfig` so it's persisted at launch
+ * (creates an AutomationRule) instead of being thrown away when the wizard unmounts.
  */
-import { useState } from 'react'
+import { type Dispatch, type SetStateAction, useState } from 'react'
 import { ChevronDown, Package, Layers, BarChart3 } from 'lucide-react'
 import { InfoTip } from '../../campaigns/InfoTip'
 import type { SpwCampaign } from './CampaignSetup'
@@ -31,24 +32,37 @@ function Check({ on, disabled, onChange, label }: { on: boolean; disabled?: bool
   return <input type="checkbox" className="h10-spw-mx-ck" checked={on} onChange={onChange} aria-label={label} />
 }
 
-type RowSel = { st: boolean; tB: boolean; tP: boolean; tE: boolean; tBox: boolean; nP: boolean; nE: boolean; nBox: boolean }
-const emptySel = (): RowSel => ({ st: false, tB: false, tP: false, tE: false, tBox: false, nP: false, nE: false, nBox: false })
+export type RuleRowSel = { st: boolean; tB: boolean; tP: boolean; tE: boolean; tBox: boolean; nP: boolean; nE: boolean; nBox: boolean }
+export const emptyRuleRow = (): RuleRowSel => ({ st: false, tB: false, tP: false, tE: false, tBox: false, nP: false, nE: false, nBox: false })
+export type RulesConfig = {
+  ruleName: string
+  automate: boolean
+  sel: Record<string, RuleRowSel>
+  perf: { metric: string; op: string; value: string }
+}
+export const defaultRulesConfig = (): RulesConfig => ({ ruleName: '', automate: false, sel: {}, perf: { metric: 'Orders', op: 'is greater than', value: '' } })
+/** True once the operator has set up a harvest rule worth persisting. */
+export const rulesConfigured = (r: RulesConfig): boolean =>
+  r.ruleName.trim().length > 0 || Object.values(r.sel).some((s) => s.st || s.tB || s.tP || s.tE || s.tBox || s.nP || s.nE || s.nBox)
 
-export function LaunchStep({ campaigns, productGroupName, productCount, currency }: {
+export function LaunchStep({ campaigns, productGroupName, productCount, currency, rules, setRules }: {
   campaigns: SpwCampaign[]
   productGroupName: string
   productCount: number
   currency: string
+  rules: RulesConfig
+  setRules: Dispatch<SetStateAction<RulesConfig>>
 }) {
   const [portfolioOpen, setPortfolioOpen] = useState(false)
   const [tab, setTab] = useState<'harvest' | 'negative'>('harvest')
-  const [ruleName, setRuleName] = useState('')
-  const [automate, setAutomate] = useState(false)
-  const [sel, setSel] = useState<Record<string, RowSel>>({})
   const [perfOpen, setPerfOpen] = useState(false)
 
-  const rowSel = (id: string) => sel[id] ?? emptySel()
-  const setRow = (id: string, patch: Partial<RowSel>) => setSel((s) => ({ ...s, [id]: { ...rowSel(id), ...patch } }))
+  const { ruleName, automate, sel, perf } = rules
+  const setRuleName = (v: string) => setRules((r) => ({ ...r, ruleName: v }))
+  const setAutomate = (v: boolean) => setRules((r) => ({ ...r, automate: v }))
+  const rowSel = (id: string) => sel[id] ?? emptyRuleRow()
+  const setRow = (id: string, patch: Partial<RuleRowSel>) => setRules((r) => ({ ...r, sel: { ...r.sel, [id]: { ...(r.sel[id] ?? emptyRuleRow()), ...patch } } }))
+  const setPerf = (patch: Partial<RulesConfig['perf']>) => setRules((r) => ({ ...r, perf: { ...r.perf, ...patch } }))
   const tEnabled = (k: SpwCampaign['kind']) => ({ B: k === 'keyword', P: k === 'keyword', E: k === 'keyword', box: k === 'pat' })
   const nEnabled = (k: SpwCampaign['kind']) => ({ P: k !== 'pat', E: k !== 'pat', box: k !== 'keyword' })
 
@@ -155,9 +169,9 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
           <div className="h10-spw-perf-body">
             <p>Only harvest search terms that meet these performance thresholds (optional).</p>
             <div className="h10-spw-perf-row">
-              <select aria-label="Metric"><option>Orders</option><option>Clicks</option><option>ACoS</option><option>Spend</option></select>
-              <select aria-label="Operator"><option>is greater than</option><option>is less than</option></select>
-              <input inputMode="decimal" placeholder="Value" aria-label="Value" />
+              <select aria-label="Metric" value={perf.metric} onChange={(e) => setPerf({ metric: e.target.value })}><option>Orders</option><option>Clicks</option><option>ACoS</option><option>Spend</option></select>
+              <select aria-label="Operator" value={perf.op} onChange={(e) => setPerf({ op: e.target.value })}><option>is greater than</option><option>is less than</option></select>
+              <input inputMode="decimal" placeholder="Value" aria-label="Value" value={perf.value} onChange={(e) => setPerf({ value: e.target.value })} />
             </div>
           </div>
         )}

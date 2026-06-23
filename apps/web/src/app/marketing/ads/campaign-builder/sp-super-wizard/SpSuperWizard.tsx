@@ -20,7 +20,7 @@ import { StructureSelection, type StructureMode, type AutomationMode } from './S
 import { PlacementBidMultiplier, type PlacementBids, emptyPlacementBids } from '../../_shared/PlacementBidMultiplier'
 import { CampaignSetup, generateCampaigns, campaignsMissingTargeting, applyAutoNegatives, type SpwCampaign } from './CampaignSetup'
 import { TargetingModal } from './TargetingModal'
-import { LaunchStep } from './LaunchStep'
+import { LaunchStep, defaultRulesConfig, rulesConfigured, type RulesConfig } from './LaunchStep'
 import { defaultCustomKeywordTypes, defaultCustomTargeting, type CustomKeywordType, type TargetingKind } from './CustomScheme'
 
 type StepN = 1 | 2 | 3
@@ -54,6 +54,7 @@ export function SpSuperWizard() {
   const [customNameTokens, setCustomNameTokens] = useState<string[]>(['campaignType', 'targetingType', 'matchType', 'keywordType'])
   const [rememberSettings, setRememberSettings] = useState(true)
   const [autoNegate, setAutoNegate] = useState(true)
+  const [rules, setRules] = useState<RulesConfig>(defaultRulesConfig())
 
   // Step 2 campaigns are generated from the step-1 structure; Restore Default re-generates.
   // applyAutoNegatives layers the negative-keyword funnel + Auto-isolation on top (NT.1).
@@ -82,20 +83,21 @@ export function SpSuperWizard() {
         productGroupName,
         products: products.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined, productId: p.id })),
         campaigns: campaigns.map((c) => ({
-          name: c.name, adGroupName: c.adGroupName, kind: c.kind, matchType: c.matchType,
+          id: c.id, name: c.name, adGroupName: c.adGroupName, kind: c.kind, matchType: c.matchType,
           bidEur: Number(c.bid) || 0.75, budgetEur: Number(c.budget) || 10,
           keywords: c.keywords, productTargets: c.productTargets.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined })),
           autoGroups: c.kind === 'auto' ? c.autoGroups.map((g) => ({ key: g.key, enabled: g.enabled, bidEur: Number(g.bid) || Number(c.bid) || 0.75 })) : undefined,
           negKeywords: c.negKeywords.map((n) => ({ text: n.text, matchType: n.matchType })), negProducts: c.negProducts.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined })),
         })),
         placementBids: { tos: bidMult.tos, pdp: bidMult.pdp, ros: bidMult.ros },
+        rules: rulesConfigured(rules) ? { ruleName: rules.ruleName, automate: rules.automate, perf: rules.perf, rows: rules.sel } : undefined,
       }
       const r = await fetch(`${getBackendUrl()}/api/advertising/campaign-builder/sp-super-wizard/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json().catch(() => ({}))
       if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Launch failed')
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, productGroupName, products, campaigns, bidMult, router])
+  }, [launching, productGroupName, products, campaigns, bidMult, rules, router])
 
   // Esc closes the "Targeting not set yet" guard (a11y).
   useEffect(() => {
@@ -127,7 +129,7 @@ export function SpSuperWizard() {
   const gotoSec = (id: string) => document.getElementById(`spw-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   return (
-    <div className="h10-spw">
+    <div className={`h10-spw${step === 2 ? ' cset' : ''}`}>
       <header className="h10-spw-top">
         <div className="hl">
           <span className="eyebrow">Helium 10 Ads</span>
@@ -202,7 +204,7 @@ export function SpSuperWizard() {
           </div>
         )}
 
-        {step === 3 && <LaunchStep campaigns={campaigns} productGroupName={productGroupName} productCount={products.length} currency="€" />}
+        {step === 3 && <LaunchStep campaigns={campaigns} productGroupName={productGroupName} productCount={products.length} currency="€" rules={rules} setRules={setRules} />}
       </div>
 
       <footer className="h10-spw-foot">

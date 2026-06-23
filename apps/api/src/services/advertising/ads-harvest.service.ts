@@ -32,14 +32,18 @@ export interface HarvestPreview { negatives: HarvestCandidate[]; graduations: Ha
 const DEFAULT_MIN_SPEND_CENTS = 1500 // €15 with zero orders → wasteful
 const DEFAULT_MIN_ORDERS = 2 // converting → worth graduating
 
-export async function previewHarvest(opts: { windowDays?: number; minSpendCents?: number; minOrders?: number } = {}): Promise<HarvestPreview> {
+export async function previewHarvest(opts: { windowDays?: number; minSpendCents?: number; minOrders?: number; adGroupExternalIds?: string[] } = {}): Promise<HarvestPreview> {
   const windowDays = opts.windowDays ?? 60
   const minSpend = opts.minSpendCents ?? DEFAULT_MIN_SPEND_CENTS
   const minOrders = opts.minOrders ?? DEFAULT_MIN_ORDERS
   const since = new Date(Date.now() - windowDays * 86400_000)
+  // AT.4b — when a rule carries a source scope, only consider search terms from
+  // those ad groups (by external id). Note: passing an EMPTY array intentionally
+  // matches nothing — a wizard rule scoped to not-yet-live (gated) ad groups
+  // harvests zero, never the whole account.
   const rows = await prisma.amazonAdsSearchTerm.groupBy({
     by: ['query', 'campaignId', 'adGroupId'],
-    where: { date: { gte: since } },
+    where: { date: { gte: since }, ...(opts.adGroupExternalIds ? { adGroupId: { in: opts.adGroupExternalIds } } : {}) },
     _sum: { impressions: true, clicks: true, costMicros: true, orders7d: true, sales7dCents: true },
   })
   const negatives: HarvestCandidate[] = []
@@ -60,8 +64,11 @@ export async function previewHarvest(opts: { windowDays?: number; minSpendCents?
 }
 
 export interface HarvestApplyResult { negativesAdded: number; keywordsGraduated: number; errors: string[] }
+// AT.4b — per-(external)-ad-group match-type plan from a wizard rule's `sources`.
+// Absent → the original defaults (graduate EXACT, negate NEGATIVE_EXACT).
+export type HarvestPlan = Record<string, { graduate?: string[]; negate?: string[] }>
 
-export async function applyHarvest(args: { negatives?: HarvestCandidate[]; graduations?: Array<HarvestCandidate & { bidEur?: number }>; userId?: string }): Promise<HarvestApplyResult> {
+export async function applyHarvest(args: { negatives?: HarvestCandidate[]; graduations?: Array<HarvestCandidate & { bidEur?: number }>; userId?: string; plan?: HarvestPlan }): Promise<HarvestApplyResult> {
   const result: HarvestApplyResult = { negativesAdded: 0, keywordsGraduated: 0, errors: [] }
 
   for (const n of args.negatives ?? []) {
@@ -69,7 +76,10 @@ export async function applyHarvest(args: { negatives?: HarvestCandidate[]; gradu
       // Resolve a profile from the campaign's marketplace connection.
       const camp = await prisma.campaign.findFirst({ where: { externalCampaignId: n.externalCampaignId }, select: { marketplace: true } })
       const conn = camp?.marketplace ? await prisma.amazonAdsConnection.findFirst({ where: { marketplace: camp.marketplace, isActive: true }, select: { profileId: true } }) : null
-      await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId: n.externalCampaignId, keywordText: n.query, matchType: 'NEGATIVE_EXACT', scope: 'CAMPAIGN' } as never)
+      const negMatches = args.plan?.[n.externalAdGroupId]?.negate?.length ? args.plan[n.externalAdGroupId].negate! : ['EXACT']
+      for (const nm of negMatches) {
+        await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId: n.externalCampaignId, keywordText: n.query, matchType: `NEGATIVE_${nm}`, scope: 'CAMPAIGN' } as never)
+      }
       result.negativesAdded++
     } catch (e) { result.errors.push(`neg "${n.query}": ${(e as Error).message}`) }
   }
@@ -81,7 +91,10 @@ export async function applyHarvest(args: { negatives?: HarvestCandidate[]; gradu
       if (!ag) { result.errors.push(`grad "${g.query}": no local ad group`); continue }
       // Bid = derived from observed CPC (cost/clicks) or a sensible default.
       const bidEur = g.bidEur ?? (g.clicks > 0 ? Math.max(0.05, g.costCents / g.clicks / 100) : 0.5)
-      await createKeywordLocal({ adGroupId: ag.id, keywordText: g.query, matchType: 'EXACT', bidEur, userId: args.userId })
+      const gradMatches = args.plan?.[g.externalAdGroupId]?.graduate?.length ? args.plan[g.externalAdGroupId].graduate! : ['EXACT']
+      for (const gm of gradMatches) {
+        await createKeywordLocal({ adGroupId: ag.id, keywordText: g.query, matchType: gm as 'EXACT' | 'PHRASE' | 'BROAD', bidEur, userId: args.userId })
+      }
       result.keywordsGraduated++
     } catch (e) { result.errors.push(`grad "${g.query}": ${(e as Error).message}`) }
   }

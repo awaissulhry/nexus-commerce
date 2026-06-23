@@ -1803,6 +1803,11 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
    Inline builder (rail stays visible). Header + 3-step stepper + sticky step-1
    sub-nav + Back/Next footer. Reuses the h10 blue (#1f6fde) + slate palette. */
 .h10-spw { max-width: 1320px; }
+/* Only the Campaign Setup step (the wide editable table) fills the content area
+   like H10; Product Selection / Launch / header / footer keep the 1320px column.
+   Scoped via .cset (set when step === 2) so the rest of the wizard is unchanged. */
+.h10-spw.cset { max-width: none; }
+.h10-spw.cset .h10-spw-foot { padding-right: 140px; } /* keep Next clear of the floating Ask AI button */
 .h10-spw-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .h10-spw-top .hl { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .h10-spw-top .eyebrow { font-size: 12.5px; font-weight: 500; color: #6b7a8d; }
@@ -1927,7 +1932,7 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-cset-top .grow { flex: 1; }
 .h10-spw-cset-restore { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 600; color: #fff; background: #1f6fde; border: 1px solid #1f6fde; border-radius: 8px; padding: 8px 14px; cursor: pointer; }
 .h10-spw-cset-restore:hover { background: #1b63c6; }
-.h10-spw-cset-head, .h10-spw-cset-row { display: grid; grid-template-columns: minmax(300px, 1.5fr) 92px 104px 184px 184px 104px 128px; gap: 14px; padding: 0 18px; }
+.h10-spw-cset-head, .h10-spw-cset-row { display: grid; grid-template-columns: minmax(300px, 1.6fr) 92px 112px minmax(190px, 0.9fr) minmax(190px, 0.9fr) minmax(120px, 0.55fr) minmax(140px, 0.62fr); gap: 14px; padding: 0 18px; }
 .h10-spw-cset-head { background: #f6f7fb; border-top: 1px solid #e6e9ee; border-bottom: 1px solid #e6e9ee; padding-top: 11px; padding-bottom: 11px; align-items: center; }
 .h10-spw-cset-head span { font-size: 12px; font-weight: 600; color: #5b6573; }
 .h10-spw-cset-row { padding-top: 14px; padding-bottom: 14px; border-bottom: 1px solid #eef1f5; align-items: start; }

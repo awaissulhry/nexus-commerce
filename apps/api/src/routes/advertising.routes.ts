@@ -862,8 +862,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as {
       market?: string; productGroupName?: string
       products?: PRef[]
-      campaigns?: Array<{ name: string; adGroupName?: string; kind: 'auto' | 'keyword' | 'pat'; matchType?: string; bidEur?: number; budgetEur?: number; keywords?: string[]; productTargets?: PRef[]; negKeywords?: Array<string | { text?: string; matchType?: 'EXACT' | 'PHRASE' }>; negProducts?: PRef[]; autoGroups?: Array<{ key: string; enabled?: boolean; bidEur?: number }> }>
+      campaigns?: Array<{ id?: string; name: string; adGroupName?: string; kind: 'auto' | 'keyword' | 'pat'; matchType?: string; bidEur?: number; budgetEur?: number; keywords?: string[]; productTargets?: PRef[]; negKeywords?: Array<string | { text?: string; matchType?: 'EXACT' | 'PHRASE' }>; negProducts?: PRef[]; autoGroups?: Array<{ key: string; enabled?: boolean; bidEur?: number }> }>
       placementBids?: { tos?: string; pdp?: string; ros?: string }
+      rules?: {
+        ruleName?: string; automate?: boolean
+        perf?: { metric?: string; op?: string; value?: string }
+        rows?: Record<string, { st?: boolean; tB?: boolean; tP?: boolean; tE?: boolean; tBox?: boolean; nP?: boolean; nE?: boolean; nBox?: boolean }>
+      }
       dryRun?: boolean
     }
     const market = b.market || 'IT'
@@ -886,12 +891,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       .flatMap(([placement, v]) => { const n = Number(v); return v && Number.isFinite(n) && n > 0 ? [{ placement, percentage: n }] : [] })
 
     const created: Array<{ name: string; campaignId: string; externalCampaignId: string | null; mode: string }> = []
+    const idMap: Record<string, { campaignId: string; adGroupId: string }> = {} // wizard campaign id → created ids (for the harvest rule)
     for (const c of campaigns) {
       try {
         const bidEur = Number(c.bidEur) || 0.75
         const budgetEur = Number(c.budgetEur) || 10
         const camp = await createCampaignLocal({ name: c.name, type: 'SP', marketplace: market, targetingType: c.kind === 'auto' ? 'AUTO' : 'MANUAL', dailyBudgetEur: budgetEur, biddingStrategy: 'legacyForSales', userId })
         const ag = await createAdGroupLocal({ campaignId: camp.id, name: c.adGroupName || `${c.name} Ad Group`, defaultBidEur: bidEur, userId })
+        if (c.id) idMap[c.id] = { campaignId: camp.id, adGroupId: ag.id }
         for (const p of products) { try { await createProductAdLocal({ adGroupId: ag.id, asin: p.asin, sku: p.sku, productId: p.productId, userId }) } catch (e) { logger.warn('[SPW-launch] product ad failed', { error: (e as Error).message }) } }
         if (c.kind === 'keyword') {
           for (const kw of c.keywords ?? []) for (const mt of matchTypesFor(c.matchType)) { try { await createKeywordLocal({ adGroupId: ag.id, keywordText: kw, matchType: mt, bidEur, userId }) } catch (e) { logger.warn('[SPW-launch] keyword failed', { kw, error: (e as Error).message }) } }
@@ -907,8 +914,52 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         created.push({ name: c.name, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, mode: camp.mode })
       } catch (e) { logger.error('[SPW-launch] campaign create failed', { name: c.name, market, error: (e as Error).message }) }
     }
-    logger.warn('[SPW-launch] SP Super Wizard created campaigns', { market, grp: (b.productGroupName || '').trim(), count: created.length, actor: userId })
-    return { ok: true, created, totalCampaigns: created.length }
+    // AT.4a — persist the Step-3 harvesting rule as an AutomationRule (domain advertising)
+    // so it survives launch instead of being thrown away. The matrix (which ad groups to
+    // harvest from + which match types to graduate/negate, incl. the Auto campaign's groups)
+    // is encoded in the action's `sources`; the harvest engine honours scoping in AT.4b.
+    // Gated: dryRun stays true (the rule proposes via the engine) until the live gate opens.
+    let ruleCreated: { id: string; name: string } | null = null
+    const rcfg = b.rules
+    if (rcfg && created.length) {
+      const sources = Object.entries(rcfg.rows ?? {})
+        .map(([wid, r]) => {
+          const ref = idMap[wid]
+          if (!ref || !r) return null
+          const graduate: string[] = []
+          if (r.tB) graduate.push('BROAD'); if (r.tP) graduate.push('PHRASE'); if (r.tE) graduate.push('EXACT')
+          const negate: string[] = []
+          if (r.nP) negate.push('PHRASE'); if (r.nE) negate.push('EXACT')
+          const any = r.st || graduate.length || negate.length || r.tBox || r.nBox
+          return any ? { adGroupId: ref.adGroupId, campaignId: ref.campaignId, harvestFrom: !!r.st, graduate, negate, graduateProduct: !!r.tBox, negateProduct: !!r.nBox } : null
+        })
+        .filter((s): s is NonNullable<typeof s> => s != null)
+      if ((rcfg.ruleName ?? '').trim() || sources.length) {
+        try {
+          const perf = rcfg.perf ?? {}
+          const perfVal = Number(perf.value)
+          const minOrders = perf.metric === 'Orders' && Number.isFinite(perfVal) ? perfVal : 2
+          const minSpendCents = perf.metric === 'Spend' && Number.isFinite(perfVal) ? Math.round(perfVal * 100) : 1000
+          const actions = [
+            { type: 'harvest_and_negate', windowDays: 60, minSpendCents, minOrders, graduationBidEur: 0.5, sources, perfCriteria: perf },
+            { type: 'notify', target: 'operator', message: 'Harvest & negate ran — check execution log for terms moved' },
+          ]
+          const rule = await prisma.automationRule.create({
+            data: {
+              name: ((rcfg.ruleName ?? '').trim() || `${(b.productGroupName || 'Campaign').trim()} — Harvest & Negate`).slice(0, 120),
+              description: 'Created by SP Super Wizard', domain: 'advertising', trigger: 'SCHEDULE',
+              conditions: [] as never, actions: actions as never,
+              enabled: !!rcfg.automate, dryRun: true, maxExecutionsPerDay: 3, createdBy: userId ?? null,
+            },
+          })
+          ruleCreated = { id: rule.id, name: rule.name }
+          logger.warn('[SPW-launch] created harvest rule', { ruleId: rule.id, sources: sources.length, enabled: !!rcfg.automate })
+        } catch (e) { logger.error('[SPW-launch] rule create failed', { error: (e as Error).message }) }
+      }
+    }
+
+    logger.warn('[SPW-launch] SP Super Wizard created campaigns', { market, grp: (b.productGroupName || '').trim(), count: created.length, rule: ruleCreated?.id ?? null, actor: userId })
+    return { ok: true, created, totalCampaigns: created.length, rule: ruleCreated }
   })
 
   // ── Apex A.2a: preview pending live writes for a campaign ───────────────
