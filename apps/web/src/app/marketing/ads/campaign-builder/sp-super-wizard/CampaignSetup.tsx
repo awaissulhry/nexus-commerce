@@ -195,7 +195,7 @@ function BulkKeywordModal({ negative, count, onApply, onClose }: { negative: boo
   )
 }
 
-function BulkValueModal({ title, label, currency, onApply, onClose }: { title: string; label: string; currency: string; onApply: (v: string) => void; onClose: () => void }) {
+function BulkValueModal({ title, label, currency, percent, onApply, onClose }: { title: string; label: string; currency: string; percent?: boolean; onApply: (v: string) => void; onClose: () => void }) {
   const [v, setV] = useState('')
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k) }, [onClose])
   return (
@@ -203,9 +203,30 @@ function BulkValueModal({ title, label, currency, onApply, onClose }: { title: s
       <div className="h10-modal bulk sm" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="h10-modal-h"><b>{title}</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
         <div className="h10-modal-b">
-          <label className="h10-spw-bulk-val"><span>{label}</span><div className="money"><span className="pf">{currency}</span><input inputMode="decimal" value={v} onChange={(e) => setV(e.target.value)} placeholder="0.00" autoFocus aria-label={label} /></div></label>
+          <label className="h10-spw-bulk-val"><span>{label}</span><div className={`money ${percent ? 'pct' : ''}`}>{!percent && <span className="pf">{currency}</span>}<input inputMode="decimal" value={v} onChange={(e) => setV(e.target.value)} placeholder={percent ? '±10' : '0.00'} autoFocus aria-label={label} />{percent && <span className="sf">%</span>}</div></label>
+          {percent && <p className="h10-spw-bulk-hint">e.g. <b>10</b> raises by 10%, <b>-10</b> lowers by 10%. Floored at {currency}0.02.</p>}
         </div>
         <div className="h10-modal-f"><button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button><span className="grow" /><button type="button" className="h10-am-btn primary" disabled={!v.trim()} onClick={() => onApply(v)}>Apply</button></div>
+      </div>
+    </div>
+  )
+}
+
+function BulkRenameModal({ count, sample, onApply, onClose }: { count: number; sample: string; onApply: (prefix: string, suffix: string) => void; onClose: () => void }) {
+  const [prefix, setPrefix] = useState('')
+  const [suffix, setSuffix] = useState('')
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k) }, [onClose])
+  return (
+    <div className="h10-modal-backdrop" onClick={onClose}>
+      <div className="h10-modal bulk sm" role="dialog" aria-label="Rename campaigns" onClick={(e) => e.stopPropagation()}>
+        <div className="h10-modal-h"><b>Rename campaigns</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
+        <div className="h10-modal-b">
+          <p className="h10-spw-bulk-note">Adds a prefix / suffix to <b>{count}</b> selected campaign{count === 1 ? '' : 's'}.</p>
+          <label className="h10-spw-bulk-val"><span>Prefix</span><input className="txt" value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="e.g. Q1-" autoFocus aria-label="Name prefix" /></label>
+          <label className="h10-spw-bulk-val gap"><span>Suffix</span><input className="txt" value={suffix} onChange={(e) => setSuffix(e.target.value)} placeholder="e.g. -v2" aria-label="Name suffix" /></label>
+          <p className="h10-spw-bulk-hint">Preview: <b>{prefix}{sample}{suffix}</b></p>
+        </div>
+        <div className="h10-modal-f"><button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button><span className="grow" /><button type="button" className="h10-am-btn primary" disabled={!prefix && !suffix} onClick={() => onApply(prefix, suffix)}>Apply</button></div>
       </div>
     </div>
   )
@@ -238,8 +259,9 @@ export function CampaignSetup({ campaigns, setCampaigns, currency, autoNegate, o
   onEditNegative?: (id: string) => void
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [bulk, setBulk] = useState<null | 'keywords' | 'negatives' | 'bid' | 'budget' | 'products'>(null)
+  const [bulk, setBulk] = useState<null | 'keywords' | 'negatives' | 'bid' | 'budget' | 'products' | 'adjustbid' | 'rename'>(null)
   const [selOpen, setSelOpen] = useState(false)
+  const [clearOpen, setClearOpen] = useState(false)
 
   const upd = (id: string, patch: Partial<SpwCampaign>) => setCampaigns((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)))
   const del = (id: string) => { setCampaigns((cs) => applyAutoNegatives(cs.filter((c) => c.id !== id), autoNegate)); setSelected((s) => { const n = new Set(s); n.delete(id); return n }) }
@@ -259,6 +281,11 @@ export function CampaignSetup({ campaigns, setCampaigns, currency, autoNegate, o
     const h = (e: MouseEvent) => { if (!(e.target as Element).closest('.h10-spw-cset-select')) setSelOpen(false) }
     document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h)
   }, [selOpen])
+  useEffect(() => {
+    if (!clearOpen) return
+    const h = (e: MouseEvent) => { if (!(e.target as Element).closest('.h10-spw-bulk-clearwrap')) setClearOpen(false) }
+    document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h)
+  }, [clearOpen])
 
   // ── BA.2 / BA.3 / BA.4 — bulk apply ──────────────────────────────────
   const bulkKeywords = (lines: string[]) => { setCampaigns((cs) => applyAutoNegatives(cs.map((c) => (selected.has(c.id) && c.kind === 'keyword' ? { ...c, keywords: dedupeCI([...c.keywords, ...lines]) } : c)), autoNegate)); setBulk(null) }
@@ -281,6 +308,18 @@ export function CampaignSetup({ campaigns, setCampaigns, currency, autoNegate, o
   const bulkBid = (v: string) => { setCampaigns((cs) => cs.map((c) => (selected.has(c.id) ? { ...c, bid: v } : c))); setBulk(null) }
   const bulkBudget = (v: string) => { setCampaigns((cs) => cs.map((c) => (selected.has(c.id) ? { ...c, budget: v } : c))); setBulk(null) }
   const bulkDelete = () => { setCampaigns((cs) => applyAutoNegatives(cs.filter((c) => !selected.has(c.id)), autoNegate)); clearSel() }
+  // BA.5 — adjust bid by %, rename (prefix/suffix), clear targets
+  const bulkAdjustBid = (pct: string) => { const f = 1 + (Number(pct) || 0) / 100; setCampaigns((cs) => cs.map((c) => (selected.has(c.id) ? { ...c, bid: Math.max(0.02, (Number(c.bid) || 0) * f).toFixed(2) } : c))); setBulk(null) }
+  const bulkRename = (prefix: string, suffix: string) => { setCampaigns((cs) => cs.map((c) => (selected.has(c.id) ? { ...c, name: `${prefix}${c.name}${suffix}`, adGroupName: `${prefix}${c.name}${suffix} Ad Group` } : c))); setBulk(null) }
+  const bulkClear = (what: 'keywords' | 'negatives' | 'products') => {
+    setCampaigns((cs) => applyAutoNegatives(cs.map((c) => {
+      if (!selected.has(c.id)) return c
+      if (what === 'keywords' && c.kind === 'keyword') return { ...c, keywords: [] }
+      if (what === 'negatives') return { ...c, negKeywords: [] } // clears manual; auto funnel negs re-derive
+      if (what === 'products' && c.kind === 'pat') return { ...c, productTargets: [] }
+      return c
+    }), autoNegate)); setClearOpen(false)
+  }
 
   const tgtLabel = (c: SpwCampaign) => (c.kind === 'auto' ? `Auto : ${c.autoGroups.filter((g) => g.enabled).length}/4` : c.kind === 'pat' ? `Product : ${c.productTargets.length}` : `Keyword : ${c.keywords.length}`)
   const negLabels = (c: SpwCampaign) => (c.kind === 'pat' ? [`Product : ${c.negProducts.length}`] : c.kind === 'auto' ? [`Keyword : ${c.negKeywords.length}`, `Product : ${c.negProducts.length}`] : [`Keyword : ${c.negKeywords.length}`])
@@ -293,12 +332,24 @@ export function CampaignSetup({ campaigns, setCampaigns, currency, autoNegate, o
             <span className="cnt sel">{n} selected</span>
             <button type="button" className="h10-spw-bulk-btn" disabled={!selKeyword} onClick={() => setBulk('keywords')}><Plus size={13} /> Keywords{selKeyword ? ` · ${selKeyword}` : ''}</button>
             <button type="button" className="h10-spw-bulk-btn" disabled={!selNegTargets} onClick={() => setBulk('negatives')}><Plus size={13} /> Negatives</button>
+            <div className="h10-spw-bulk-clearwrap">
+              <button type="button" className="h10-spw-bulk-btn" onClick={() => setClearOpen((o) => !o)} aria-haspopup="menu" aria-expanded={clearOpen}>Clear <ChevronDown size={13} /></button>
+              {clearOpen && (
+                <div className="menu" role="menu">
+                  <button type="button" role="menuitem" disabled={!selKeyword} onClick={() => bulkClear('keywords')}>Keywords</button>
+                  <button type="button" role="menuitem" disabled={!selNegTargets} onClick={() => bulkClear('negatives')}>Negatives</button>
+                  <button type="button" role="menuitem" disabled={!selPat} onClick={() => bulkClear('products')}>Product targets</button>
+                </div>
+              )}
+            </div>
             <button type="button" className="h10-spw-bulk-btn" onClick={() => setBulk('bid')}>Set bid</button>
             <button type="button" className="h10-spw-bulk-btn" onClick={() => setBulk('budget')}>Set budget</button>
+            <button type="button" className="h10-spw-bulk-btn" onClick={() => setBulk('adjustbid')}>Adjust bid %</button>
             <button type="button" className="h10-spw-bulk-btn" disabled={!selPat} onClick={() => setBulk('products')}><Plus size={13} /> Products{selPat ? ` · ${selPat}` : ''}</button>
+            <button type="button" className="h10-spw-bulk-btn" onClick={() => setBulk('rename')}>Rename</button>
             <button type="button" className="h10-spw-bulk-btn danger" onClick={bulkDelete}><Trash2 size={13} /> Delete</button>
             <span className="grow" />
-            <button type="button" className="h10-spw-bulk-clear" onClick={clearSel}>Clear</button>
+            <button type="button" className="h10-spw-bulk-clear" onClick={clearSel}>Deselect</button>
           </>
         ) : (
           <>
@@ -363,6 +414,8 @@ export function CampaignSetup({ campaigns, setCampaigns, currency, autoNegate, o
       {bulk === 'negatives' && <BulkKeywordModal negative count={selNegTargets} onApply={(lines, mt) => bulkNegatives(lines.map((t) => ({ text: t, matchType: mt, auto: false })))} onClose={() => setBulk(null)} />}
       {bulk === 'bid' && <BulkValueModal title="Set default bid" label="Default bid" currency={currency} onApply={bulkBid} onClose={() => setBulk(null)} />}
       {bulk === 'budget' && <BulkValueModal title="Set daily budget" label="Daily budget" currency={currency} onApply={bulkBudget} onClose={() => setBulk(null)} />}
+      {bulk === 'adjustbid' && <BulkValueModal title="Adjust bid" label="Change bid by" currency={currency} percent onApply={bulkAdjustBid} onClose={() => setBulk(null)} />}
+      {bulk === 'rename' && <BulkRenameModal count={n} sample={selCampaigns[0]?.name ?? 'Campaign'} onApply={bulkRename} onClose={() => setBulk(null)} />}
       {bulk === 'products' && <BulkProductsModal count={selPat} onApply={bulkProducts} onClose={() => setBulk(null)} />}
     </div>
   )
