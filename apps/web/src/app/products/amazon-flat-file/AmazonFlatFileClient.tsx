@@ -2409,7 +2409,7 @@ export default function AmazonFlatFileClient({
     const settled = await Promise.allSettled(
       [...markets].map(async (mp) => {
         const toSend = gatherRows(mp)
-        if (!toSend.length) return { mp, feedId: '', skipped: true }
+        if (!toSend.length) return { mp, feedId: '', skipped: true, dryRun: false, created: 0 }
         const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/submit`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2419,7 +2419,8 @@ export default function AmazonFlatFileClient({
         if (!res.ok) throw new Error(`[${mp}] ${data.error ?? 'Submit failed'}`)
         // PD.1 — carry the dry-run flag through so the UI never shows a gated/
         // dry-run no-op as a successful publish (it hid a 30-day outage).
-        return { mp, feedId: data.feedId, skipped: false, dryRun: !!data.dryRun }
+        // FFC — carry the created count so one click (create + publish) is visible.
+        return { mp, feedId: data.feedId, skipped: false, dryRun: !!data.dryRun, created: Number(data.created) || 0 }
       })
     )
 
@@ -2462,6 +2463,16 @@ export default function AmazonFlatFileClient({
       setServerFeedCount((c) => (c ?? 0) + submitted.length) // #1 — keep the count live within the session
     } else if (skipped.length && !errors.length) {
       toast.warning(`Nothing submitted — ${skipped.join(', ')} had no edited rows to send`)
+    }
+
+    // FFC — surface new products created by the submit (runs for dry-run too, since
+    // creating a product in Nexus is independent of the Amazon publish gate).
+    const totalCreated = settled.reduce(
+      (n, r) => n + (r.status === 'fulfilled' && !r.value.skipped ? (r.value.created ?? 0) : 0),
+      0,
+    )
+    if (totalCreated > 0) {
+      toast.success(`${totalCreated} new product${totalCreated === 1 ? '' : 's'} created in Nexus — find them in /products`)
     }
 
     // Save submission records to history
@@ -2538,6 +2549,11 @@ export default function AmazonFlatFileClient({
       if (syncErrors.length) {
         const sample = syncErrors.slice(0, 3).map((e) => e.sku).filter(Boolean).join(', ')
         toast.warning(`${syncErrors.length} row${syncErrors.length === 1 ? '' : 's'} didn't save${sample ? `: ${sample}${syncErrors.length > 3 ? '…' : ''}` : ''} — ${syncErrors[0]?.error ?? 'see details'}`)
+      }
+      // FFC — surface newly-created products (new SKUs become real Nexus products).
+      const createdCount: number = typeof data?.created === 'number' ? data.created : 0
+      if (createdCount > 0) {
+        toast.success(`${createdCount} new product${createdCount === 1 ? '' : 's'} created in Nexus — find them in /products`)
       }
       emitInvalidation({ type: 'channel-pricing.updated', meta: { marketplace, productType, source: 'amazon-flat-file' } })
       emitInvalidation({ type: 'stock.adjusted', meta: { source: 'amazon-flat-file', marketplace } })

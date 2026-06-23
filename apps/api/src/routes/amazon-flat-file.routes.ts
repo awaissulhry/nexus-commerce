@@ -306,6 +306,21 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       }
     }
 
+    // FFC — one-click: create/sync rows to Nexus BEFORE the publish gate, so a new
+    // SKU becomes a real product regardless of publish mode (creating a product in
+    // Nexus is a LOCAL action, not an Amazon publish). Runs for live AND dry-run;
+    // best-effort, never blocks. The existing per-row sync creates new products
+    // (_isNew) + their ChannelListing/StockLevel and updates existing ones.
+    let ffcCreated = 0
+    let ffcSyncErrors: Array<{ sku: string; error: string }> = []
+    try {
+      const syncResult = await flatFileService.syncRowsToPlatform(rows, mp, expandedFields, { isPublished: false })
+      ffcCreated = syncResult.created
+      ffcSyncErrors = syncResult.errors
+    } catch (e: any) {
+      request.log.warn({ err: e?.message, marketplace: mp }, 'flat-file/submit: pre-publish sync failed (non-fatal)')
+    }
+
     // A1.2 — unified publish gate (master flag + mode) instead of the legacy
     // NEXUS_AMAZON_BATCH_DRYRUN. Only 'live' actually submits a feed.
     const dryRun = getAmazonPublishMode() !== 'live'
@@ -316,6 +331,8 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         messageCount: rows.length,
         dryRun: true,
         preflight,
+        created: ffcCreated,
+        syncErrors: ffcSyncErrors,
       })
     }
 
@@ -459,6 +476,8 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         messageCount: rows.length,
         dryRun: false,
         preflight,
+        created: ffcCreated,
+        syncErrors: ffcSyncErrors,
       })
     } catch (err: any) {
       request.log.error(err, 'flat-file/submit failed')
