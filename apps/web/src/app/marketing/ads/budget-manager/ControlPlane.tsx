@@ -45,6 +45,17 @@ function Inspector({ node, rootCampaignId, staged, onStage, onClear, onClose }: 
   const [bid, setBid] = useState(!camp ? (staged?.bidCents != null ? (staged.bidCents / 100).toFixed(2) : (curBidCents / 100).toFixed(2)) : '')
   const [history, setHistory] = useState<HistEntry[] | null>(null)
   useEffect(() => { let alive = true; if (!rootCampaignId) { setHistory([]); return } fetch(`${API()}/api/advertising/campaigns/${rootCampaignId}/history?limit=40`).then((r) => r.json()).then((j) => { if (alive) setHistory((Array.isArray(j?.entries) ? j.entries : []).filter((e: HistEntry) => e.entityId === node.id)) }).catch(() => { if (alive) setHistory([]) }); return () => { alive = false } }, [rootCampaignId, node.id])
+  // P2 — campaign PPC settings (bidding strategy, target-ACoS, placement multipliers)
+  const [settings, setSettings] = useState<{ biddingStrategy: string; targetAcos: number | null; placements: { tos: number | null; pdp: number | null; ros: number | null } } | null>(null)
+  const [acos, setAcos] = useState('')
+  const [pl, setPl] = useState({ tos: '', pdp: '', ros: '' })
+  useEffect(() => { if (!camp) { setSettings(null); return } let alive = true; fetch(`${API()}/api/advertising/campaigns/${node.id}/settings`).then((r) => r.json()).then((j) => { if (alive) setSettings(j) }).catch(() => { if (alive) setSettings(null) }); return () => { alive = false } }, [camp, node.id])
+  useEffect(() => { if (!settings) return; setAcos(staged?.targetAcos != null ? Math.round(staged.targetAcos * 100).toString() : (settings.targetAcos != null ? Math.round(settings.targetAcos * 100).toString() : '')); const sp = staged?.placements; const gp = settings.placements ?? { tos: null, pdp: null, ros: null }; setPl({ tos: String((sp?.tos ?? gp.tos) ?? ''), pdp: String((sp?.pdp ?? gp.pdp) ?? ''), ros: String((sp?.ros ?? gp.ros) ?? '') }) }, [settings]) // eslint-disable-line react-hooks/exhaustive-deps
+  const STRAT: Array<[string, string]> = [['LEGACY_FOR_SALES', 'Down only'], ['AUTO_FOR_SALES', 'Up & Down'], ['MANUAL', 'Fixed']]
+  const effStrat = staged?.biddingStrategy ?? settings?.biddingStrategy
+  const stageStrat = (s: string) => onStage({ entityType: 'campaign', biddingStrategy: s === settings?.biddingStrategy ? undefined : s })
+  const stageAcos = (v: string) => { setAcos(v); onStage({ entityType: 'campaign', targetAcos: v.trim() === '' ? undefined : (parseFloat(v) || 0) / 100 }) }
+  const stagePl = (key: 'tos' | 'pdp' | 'ros', v: string) => { const next = { ...pl, [key]: v }; setPl(next); onStage({ entityType: 'campaign', placements: { tos: next.tos === '' ? null : Number(next.tos), pdp: next.pdp === '' ? null : Number(next.pdp), ros: next.ros === '' ? null : Number(next.ros) } }) }
 
   // campaign actions
   const effSuppress = camp ? (staged?.suppress != null ? staged.suppress : camp.currentlySuppressed) : false
@@ -92,6 +103,17 @@ function Inspector({ node, rootCampaignId, staged, onStage, onClear, onClose }: 
         </>}
         {staged && <button type="button" className="cp-clear" onClick={() => { onClear(); setBudget(camp ? (camp.currentDailyCents / 100).toFixed(2) : ''); setMin(''); setMax(''); setBid(!camp ? (curBidCents / 100).toFixed(2) : '') }}>Clear staged change</button>}
       </div>
+
+      {camp && settings && (
+        <div className="cp-insp-sec">
+          <div className="cp-sec-h">Bidding</div>
+          <div className="cp-fld"><span>Strategy</span><div className="cp-statusbtns">{STRAT.map(([v, l]) => (<button type="button" key={v} className={effStrat === v ? 'on' : ''} onClick={() => stageStrat(v)}>{l}</button>))}</div></div>
+          <label className="cp-fld"><span>Target ACoS</span><span className="cp-eurin pct"><input inputMode="decimal" value={acos} onChange={(e) => stageAcos(e.target.value)} placeholder="—" aria-label="Target ACoS" /><i>%</i></span></label>
+          <div className="cp-fld"><span>Placement multipliers</span><div className="cp-pl3">
+            {(['tos', 'pdp', 'ros'] as const).map((k) => (<label key={k}><span>{k === 'tos' ? 'ToS' : k === 'pdp' ? 'PDP' : 'RoS'}</span><span className="cp-plin"><input inputMode="decimal" value={pl[k]} onChange={(e) => stagePl(k, e.target.value)} placeholder="0" aria-label={`${k} multiplier`} /><i>%</i></span></label>))}
+          </div></div>
+        </div>
+      )}
 
       <div className="cp-insp-sec">
         <div className="cp-sec-h"><HistoryIcon size={12} /> Recent changes</div>
@@ -143,7 +165,7 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
     const merged: Record<string, unknown> = { ...prev[id], ...patch }
     for (const k of Object.keys(merged)) if (merged[k] === undefined) delete merged[k]
     const next = { ...prev }
-    const meaningful = ['budgetCents', 'minCents', 'maxCents', 'suppress', 'bidCents', 'status'].some((k) => merged[k] !== undefined)
+    const meaningful = ['budgetCents', 'minCents', 'maxCents', 'suppress', 'bidCents', 'status', 'biddingStrategy', 'targetAcos', 'placements'].some((k) => merged[k] !== undefined)
     if (!meaningful) delete next[id]; else next[id] = merged as StagedChange
     return next
   })
@@ -162,6 +184,9 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
         if (s.minCents != null || s.maxCents != null) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, marketplace: mp, kind: 'limit', minCents: s.minCents ?? null, maxCents: s.maxCents ?? null })
         if (s.suppress === true) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'suppress' })
         if (s.suppress === false) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'restore' })
+        if (s.biddingStrategy) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'biddingStrategy', biddingStrategy: s.biddingStrategy })
+        if (s.targetAcos != null) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'targetAcos', targetAcos: s.targetAcos })
+        if (s.placements) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'placement', placements: s.placements })
       } else {
         if (s.bidCents != null) changes.push({ entityType: et, entityId: id, kind: et === 'adgroup' ? 'adgroupBid' : 'targetBid', bidCents: s.bidCents })
         if (s.status) changes.push({ entityType: et, entityId: id, kind: et === 'adgroup' ? 'adgroupStatus' : 'targetStatus', status: s.status })

@@ -19,7 +19,7 @@ import './allocation-canvas.css'
 interface CampaignDecision { id: string; name: string; currentDailyCents: number; targetDailyCents: number | null; deltaCents: number; clamp: 'min' | 'max' | 'floor' | null; suppress: boolean; restore: boolean; currentlySuppressed: boolean }
 interface PlanDecision { marketplace: string; month: string; capCents: number; mtdSpendCents: number; remainingBudgetCents: number; remainingDays: number; dayOfMonth: number; daysInMonth: number; autoPacing: boolean; stopOverSpend: boolean; capReached: boolean; todayTargetCents: number | null; campaigns: CampaignDecision[] }
 export interface OntoNode { id: string; type: 'campaign' | 'adgroup' | 'target'; name: string; status: string; spendCents: number; hasChildren: boolean; dailyBudgetCents?: number; suppressed?: boolean; defaultBidCents?: number; targetingType?: string; bidCents?: number; kind?: string; expressionType?: string }
-export interface StagedChange { entityType?: 'campaign' | 'adgroup' | 'target'; budgetCents?: number; minCents?: number | null; maxCents?: number | null; suppress?: boolean; bidCents?: number; status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED' }
+export interface StagedChange { entityType?: 'campaign' | 'adgroup' | 'target'; budgetCents?: number; minCents?: number | null; maxCents?: number | null; suppress?: boolean; bidCents?: number; status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; biddingStrategy?: string; targetAcos?: number; placements?: { tos?: number | null; pdp?: number | null; ros?: number | null } }
 export type SelectRef = { id: string; type: 'campaign' | 'adgroup' | 'target' } | null
 
 const MARKET_NAME: Record<string, string> = { IT: 'Italy', DE: 'Germany', FR: 'France', ES: 'Spain', GB: 'United Kingdom', UK: 'United Kingdom', NL: 'Netherlands', SE: 'Sweden', PL: 'Poland', BE: 'Belgium', IE: 'Ireland' }
@@ -27,7 +27,7 @@ const FLAG: Record<string, string> = { IT: '🇮🇹', DE: '🇩🇪', FR: '🇫
 const eur = (c: number | null | undefined) => (c == null ? '—' : `€${(c / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 const MAX_CAMP = 14
 const MAX_CHILD = 18
-const hasStage = (s?: StagedChange) => !!s && (s.budgetCents != null || s.suppress != null || s.minCents !== undefined || s.maxCents !== undefined || s.bidCents != null || s.status != null)
+const hasStage = (s?: StagedChange) => !!s && (s.budgetCents != null || s.suppress != null || s.minCents !== undefined || s.maxCents !== undefined || s.bidCents != null || s.status != null || s.biddingStrategy != null || s.targetAcos != null || s.placements != null)
 const dot = (status: string) => (status === 'ENABLED' ? 'on' : status === 'PAUSED' ? 'pa' : 'ar')
 
 const COL = { env: 0, camp: 380, ag: 760, tg: 1140 }
