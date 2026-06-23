@@ -17,6 +17,7 @@ import { InfoTip } from '../../campaigns/InfoTip'
 // Share — reuse SP Super Wizard's product picker (Search/Enter tabs + variation expansion + N-Added)
 // so improvements propagate. Imported as-is; AI Goal maps its output to its own budget-bearing Prod.
 import { ProductSelection, type SpwProduct } from '../../campaign-builder/sp-super-wizard/ProductSelection'
+import { AiGoalPreview } from './AiGoalPreview'
 
 type TargetKey = 'impression' | 'sales' | 'roas'
 type BudgetMode = 'strict' | 'shared'
@@ -236,6 +237,8 @@ export function AiGoalBuilder() {
               <div className="adv-note"><Info size={15} /><span>If the SP Auto campaign does not immediately generate keywords or product targets (ASINs), the SP KW and SP PAT campaigns will remain in an Incomplete status due to the lack of required inputs. This is normal and may take some time as the SP Auto campaign gathers data. Please be patient and allow the SP Auto campaign to run long enough to identify relevant keywords and targets.</span></div>
             </div>
           </section>
+
+          <AiGoalPreview targetLabel={TARGETS.find((t) => t.key === target)?.title ?? ''} budgetMode={budgetMode} productCount={products.length} totalBudget={budgetMode === 'shared' ? (Number(sharedBudget) || 0) : totalBudget} seedCount={seeds.length} excludeCount={excluded.length} productTargetCount={productTargets.length} />
 
         </div>
       </div>
