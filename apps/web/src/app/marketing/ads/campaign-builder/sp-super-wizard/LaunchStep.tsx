@@ -17,6 +17,7 @@ import '@/design-system/styles/primitives.css'
 import { InfoTip } from '../../campaigns/InfoTip'
 import { PerformanceCriteria, pcDefaultGroup, type CriteriaGroup } from '../../rules-automation/_shared/PerformanceCriteria'
 import { PortfolioPicker } from './PortfolioPicker'
+import { RuleControlPanel } from './RuleControlPanel'
 import type { SpwCampaign } from './CampaignSetup'
 import { AiControlPanel, type AiControlConfig } from './AiControlPanel'
 
@@ -258,6 +259,9 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
           )}
         </div>
       )}
+
+      {/* RC.3 — Rule Setting control preview (shared canvas, interactive) */}
+      {!ai && <RuleControlPanel rules={rules} setRules={setRules} bidConfig={bidConfig} setBidConfig={setBidConfig} campaigns={campaigns} />}
     </div>
   )
 }
