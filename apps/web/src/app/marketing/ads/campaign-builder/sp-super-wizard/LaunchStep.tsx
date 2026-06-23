@@ -10,7 +10,7 @@
  * AI Control collapses the manual config to an "AI handles it" note.
  */
 import { type Dispatch, type SetStateAction, useState } from 'react'
-import { ChevronDown, Package, Layers, BarChart3, Megaphone, Target, ShoppingCart, SlidersHorizontal } from 'lucide-react'
+import { ChevronDown, Package, Layers, BarChart3 } from 'lucide-react'
 import { RadioCard, Input } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -21,6 +21,7 @@ import { RuleControlPanel } from './RuleControlPanel'
 import { AiControlPreview } from './AiControlPreview'
 import type { SpwCampaign } from './CampaignSetup'
 import { AiControlPanel, type AiControlConfig } from './AiControlPanel'
+import { BidStrategyCardGrid, BID_STRATEGIES, defaultBidConfig, type BidConfig, type BidStrategy } from '../../_shared/BidStrategy'
 
 const money = (cur: string, n: number) => `${cur}${n.toFixed(2)}`
 
@@ -52,16 +53,11 @@ export const defaultRulesConfig = (slug = 'keyword-harvesting'): RulesConfig => 
 export const rulesConfigured = (r: RulesConfig): boolean =>
   r.ruleName.trim().length > 0 || Object.values(r.sel).some((s) => s.st || s.tB || s.tP || s.tE || s.tBox || s.nP || s.nE || s.nBox)
 
-// ── S3 — bid strategy / Helium 10 automation config ──────────────────────
-export type BidStrategy = 'maxImpressions' | 'targetAcos' | 'maxOrders' | 'custom' | 'none'
-export type BidConfig = { strategy: BidStrategy; targetAcos: string; minBid: string; maxBid: string }
-export const defaultBidConfig = (): BidConfig => ({ strategy: 'targetAcos', targetAcos: '30', minBid: '', maxBid: '' })
-const BID_STRATEGIES: Array<{ key: Exclude<BidStrategy, 'none'>; label: string; desc: string; stage: string; recommended?: boolean; Icon: typeof Target }> = [
-  { key: 'maxImpressions', label: 'Max Impressions', desc: 'A bid algorithm for products in a launch stage that need to get as many impressions as possible.', stage: 'Launch', Icon: Megaphone },
-  { key: 'targetAcos', label: 'Target ACoS', desc: 'A bid algorithm for products in a performance stage that should target an ACoS for scalable advertising.', stage: 'Scale', recommended: true, Icon: Target },
-  { key: 'maxOrders', label: 'Max Orders', desc: 'A bid algorithm for products in a liquidate stage that should bid for maximum orders to clear out inventory.', stage: 'Liquidate', Icon: ShoppingCart },
-  { key: 'custom', label: 'Custom', desc: 'Create a custom rule that adjusts a target’s bid based on your set performance criteria.', stage: 'Custom', Icon: SlidersHorizontal },
-]
+// ── S3 — bid strategy: model + card selector now live in ../../_shared/BidStrategy (one
+// source of truth shared with the Single Campaign builder). Re-exported so existing imports
+// from './LaunchStep' (SpSuperWizard, RuleControlPanel) keep working unchanged.
+export { defaultBidConfig }
+export type { BidConfig, BidStrategy }
 
 export function LaunchStep({ campaigns, productGroupName, productCount, currency, automationMode, setAutomationMode, bidConfig, setBidConfig, rules, setRules, portfolioId, setPortfolioId, aiControl, setAiControl }: {
   campaigns: SpwCampaign[]
@@ -121,14 +117,7 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
           <div className="h10-spw-card">
             <h3>Bid Strategy <InfoTip tip="The Helium 10 bid algorithm applied to every campaign in this set." /></h3>
             <p className="h10-spw-desc">Select a bid algorithm based on your product &amp; campaign goals.</p>
-            <div className="h10-spw-bidstrat">
-              {BID_STRATEGIES.map((s) => (
-                <RadioCard key={s.key} className="h10-spw-bidcard" name="spw-bidstrat" selected={bidConfig.strategy === s.key} checked={bidConfig.strategy === s.key} onChange={() => setBid({ strategy: s.key })}
-                  title={<span className="h10-spw-bc-t">{s.recommended && <span className="rec">Recommended</span>}<span className="ic"><s.Icon size={16} /></span><span className="lbl">{s.label}</span></span>}
-                  description={s.desc} />
-              ))}
-            </div>
-            <RadioCard className="h10-spw-bidcard none" name="spw-bidstrat" title={<span className="h10-spw-bc-t"><span className="ic none"><Package size={15} /></span><span className="lbl">None</span></span>} description="Don't apply a bid algorithm — manage bids yourself." selected={bidConfig.strategy === 'none'} checked={bidConfig.strategy === 'none'} onChange={() => setBid({ strategy: 'none' })} />
+            <BidStrategyCardGrid value={bidConfig} onChange={setBid} />
           </div>
 
           {bidConfig.strategy === 'targetAcos' && (

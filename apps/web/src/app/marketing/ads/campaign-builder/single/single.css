@@ -30,5 +30,13 @@
 .h10-scb-radio .rb b { font-size: 13.5px; font-weight: 600; color: #1c2530; }
 .h10-scb-radio .rb .d { font-size: 12.5px; color: #5b6573; line-height: 1.45; max-width: 680px; }
 
+/* SB.3 — Bid Strategy: surface-local Target ACoS / Min-Max config below the shared cards. */
+.h10-scb-bidcfg { margin-top: 22px; padding-top: 20px; border-top: 1px solid #eef1f5; display: flex; flex-direction: column; gap: 22px; }
+.h10-scb-bidcfg .grp .hd { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 700; color: #1c2530; }
+.h10-scb-bidcfg .grp > p { font-size: 12.5px; color: #5b6573; margin: 3px 0 10px; }
+.h10-scb-bidcfg .mm { display: flex; align-items: center; gap: 12px; }
+.h10-scb-bidcfg .mm > input[type="checkbox"] { width: 15px; height: 15px; accent-color: #1f6fde; cursor: pointer; flex-shrink: 0; }
+.h10-scb-bidcfg .mm-fields { display: flex; gap: 12px; }
+
 /* Scaffolding placeholder (removed as each section is wired). */
 .h10-scb-todo { color: #8a93a1; font-size: 13px; padding: 6px 2px; margin: 0; }

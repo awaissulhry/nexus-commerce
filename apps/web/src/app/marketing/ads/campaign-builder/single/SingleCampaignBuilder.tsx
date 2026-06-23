@@ -16,8 +16,14 @@
  */
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Input } from '@/design-system/primitives'
 import { InfoTip } from '../../campaigns/InfoTip'
 import { PortfolioPicker } from '../sp-super-wizard/PortfolioPicker'
+import { PlacementBidMultiplier, type PlacementBids, emptyPlacementBids } from '../../_shared/PlacementBidMultiplier'
+import { BidStrategyCardGrid, defaultBidConfig, type BidConfig } from '../../_shared/BidStrategy'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
 import './single.css'
 
 // SB.2 — Campaign Bidding Strategy options (verbatim Amazon copy from the recording).
@@ -65,6 +71,11 @@ export function SingleCampaignBuilder() {
   const [portfolioId, setPortfolioId] = useState('')
   const [biddingStrategy, setBiddingStrategy] = useState<BiddingStrategy>('down')
   const [sites, setSites] = useState<SitesOpt>('amazon')
+  // SB.3 — Bid Multiplier (shared) + Bid Strategy (shared cards + surface-local config)
+  const [bidMult, setBidMult] = useState<PlacementBids>(emptyPlacementBids())
+  const [bidConfig, setBidConfig] = useState<BidConfig>(defaultBidConfig())
+  const [minMaxOn, setMinMaxOn] = useState(false)
+  const setBid = (patch: Partial<BidConfig>) => setBidConfig((b) => ({ ...b, ...patch }))
 
   const goNext = useCallback(() => setStep((s) => (s < 2 ? ((s + 1) as StepN) : s)), [])
   const goBack = useCallback(() => setStep((s) => (s > 1 ? ((s - 1) as StepN) : s)), [])
@@ -185,12 +196,38 @@ export function SingleCampaignBuilder() {
               <section id="scb-bid-multiplier" className="h10-spw-sec">
                 <h2>Bid Multiplier</h2>
                 <p className="h10-spw-desc">Set how much you want to increase your bid based on the placement</p>
-                <div className="h10-spw-card"><p className="h10-scb-todo">PlacementBidMultiplier (shared) — SB.3</p></div>
+                <div className="h10-spw-card">
+                  <PlacementBidMultiplier value={bidMult} onChange={(p) => setBidMult((v) => ({ ...v, ...p }))} />
+                </div>
               </section>
               <section id="scb-bid-strategy" className="h10-spw-sec">
                 <h2>Bid Strategy</h2>
                 <p className="h10-spw-desc">Select a bid algorithm based on your product &amp; campaign goals.</p>
-                <div className="h10-spw-card"><p className="h10-scb-todo">Shared Bid Strategy cards — SB.3</p></div>
+                <div className="h10-spw-card">
+                  <BidStrategyCardGrid value={bidConfig} onChange={setBid} />
+                  {bidConfig.strategy !== 'none' && (
+                    <div className="h10-scb-bidcfg">
+                      {bidConfig.strategy === 'targetAcos' && (
+                        <div className="grp">
+                          <div className="hd"><b>Target ACoS</b> <InfoTip tip="The advertising cost of sales the algorithm steers toward." /></div>
+                          <p>Set a target ACoS value</p>
+                          <label className="h10-spw-bidfield"><Input inputMode="decimal" value={bidConfig.targetAcos} onChange={(e) => setBid({ targetAcos: e.target.value })} suffix="%" aria-label="Target ACoS" fieldClassName="h10-spw-bidnum" /></label>
+                        </div>
+                      )}
+                      <div className="grp">
+                        <div className="hd"><b>Min/Max Bid</b></div>
+                        <p>Set limits to keep your bid within an acceptable range</p>
+                        <label className="mm">
+                          <input type="checkbox" checked={minMaxOn} onChange={(e) => setMinMaxOn(e.target.checked)} aria-label="Set Min/Max bid limits" />
+                          <span className="mm-fields">
+                            <Input inputMode="decimal" value={bidConfig.minBid} onChange={(e) => setBid({ minBid: e.target.value })} prefix="€" placeholder="Min" disabled={!minMaxOn} aria-label="Min bid" fieldClassName="h10-spw-bidnum" />
+                            <Input inputMode="decimal" value={bidConfig.maxBid} onChange={(e) => setBid({ maxBid: e.target.value })} prefix="€" placeholder="Max" disabled={!minMaxOn} aria-label="Max bid" fieldClassName="h10-spw-bidnum" />
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </section>
               <section id="scb-product-selection" className="h10-spw-sec">
                 <h2>Product Selection</h2>
