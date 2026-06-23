@@ -15,7 +15,7 @@
  * engine that acts on them (and floors bids instead of pausing) lands in BM.B3.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Info, Settings, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, Pencil, AlertTriangle, BadgeDollarSign } from 'lucide-react'
+import { Info, Settings, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, Pencil, AlertTriangle, BadgeDollarSign, Sparkles, Network } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridSelectFilter } from '../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -24,6 +24,7 @@ import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import { Modal, Drawer } from '@/design-system/components'
 import './budget-manager.css'
+import { AllocationCanvas } from './AllocationCanvas'
 
 // ── types (mirror ads-budget-manager.service BudgetManagerResult) ──────────
 interface SpendSlice { month: string; budgetCents: number; spendCents: number | null; pct: number | null; daily: number[] }
@@ -41,6 +42,10 @@ interface Result {
   rows: Row[]
   totals: { budgetCents: number; spendCents: number; pct: number | null; lastMonthSpendCents: number; nextMonthBudgetCents: number }
 }
+// BM.B3 enforcement preview (drives the pacing banner + Allocation Map canvas).
+interface EnfCampaign { id: string; name: string; currentDailyCents: number; targetDailyCents: number | null; deltaCents: number; clamp: 'min' | 'max' | 'floor' | null; suppress: boolean; restore: boolean; currentlySuppressed: boolean }
+interface EnfPlan { marketplace: string; month: string; capCents: number; mtdSpendCents: number; remainingBudgetCents: number; remainingDays: number; dayOfMonth: number; daysInMonth: number; autoPacing: boolean; stopOverSpend: boolean; capReached: boolean; todayTargetCents: number | null; campaigns: EnfCampaign[] }
+interface EnforcementResult { month: string; plans: EnfPlan[]; totals: { plans: number; budgetChanges: number; suppressing: number; restoring: number; netDeltaCents: number } }
 
 const FLAG: Record<string, string> = { IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', GB: '🇬🇧', UK: '🇬🇧', NL: '🇳🇱', SE: '🇸🇪', PL: '🇵🇱', BE: '🇧🇪', IE: '🇮🇪', US: '🇺🇸' }
 const MARKET_NAME: Record<string, string> = { IT: 'Italy', DE: 'Germany', FR: 'France', ES: 'Spain', GB: 'United Kingdom', UK: 'United Kingdom', NL: 'Netherlands', SE: 'Sweden', PL: 'Poland', BE: 'Belgium', IE: 'Ireland', US: 'United States' }
@@ -255,6 +260,9 @@ export function BudgetManagerClient() {
   const [editingNext, setEditingNext] = useState<string | null>(null)
   const [nextDraft, setNextDraft] = useState('')
   const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [enforcement, setEnforcement] = useState<EnforcementResult | null>(null)
+  const [canvasOpen, setCanvasOpen] = useState(false)
+  const [canvasMarket, setCanvasMarket] = useState('')
   const toast = useCallback((m: string) => { setToastMsg(m); window.setTimeout(() => setToastMsg((cur) => (cur === m ? null : cur)), 2600) }, [])
 
   const load = useCallback(async (m: string) => {
@@ -272,6 +280,8 @@ export function BudgetManagerClient() {
         nextMonthBudgetCents: x.nextMonthBudgetCents ?? null,
       }) as Row)
       setResult({ ...r, rows })
+      // refresh the BM.B3 enforcement preview alongside (non-blocking)
+      fetch(`${API()}/api/advertising/budget-manager/enforcement?month=${m}`).then((x) => x.json()).then((e) => setEnforcement(e && Array.isArray(e.plans) ? e : null)).catch(() => setEnforcement(null))
     } catch { setResult(null) } finally { setLoading(false) }
   }, [])
   useEffect(() => { load(month) }, [month, load])
@@ -342,8 +352,18 @@ export function BudgetManagerClient() {
         {month !== nowMonth() && <button type="button" className="bm-today" onClick={() => setMonth(nowMonth())}>This month</button>}
         {result && <span className="bm-mb-sum">Budget <b>{eur(result.totals.budgetCents)}</b> · Spent <b>{eur(result.totals.spendCents)}</b>{result.totals.pct != null && <em> ({pctTxt(result.totals.pct)})</em>}</span>}
         <span className="bm-grow" />
+        <button type="button" className="h10-am-btn" onClick={() => { setCanvasMarket(enforcement?.plans[0]?.marketplace ?? markets[0] ?? ''); setCanvasOpen(true) }}><Network size={13} /> Allocation Map</button>
         {result && <span className="bm-mb-day">Day {result.dayOfMonth} of {result.daysInMonth}</span>}
       </div>
+
+      {enforcement && (enforcement.totals.budgetChanges > 0 || enforcement.totals.suppressing > 0 || enforcement.totals.restoring > 0) && (
+        <div className="bm-pacebar">
+          <span className="ico"><Sparkles size={15} /></span>
+          <span className="txt"><b>Auto Pacing preview</b> — {enforcement.totals.budgetChanges} budget change{enforcement.totals.budgetChanges === 1 ? '' : 's'}{enforcement.totals.suppressing > 0 ? ` · ${enforcement.totals.suppressing} suppressing` : ''}{enforcement.totals.restoring > 0 ? ` · ${enforcement.totals.restoring} restoring` : ''} today <em>· dry-run, nothing applied</em></span>
+          <span className="bm-grow" />
+          <button type="button" className="h10-am-btn" onClick={() => { setCanvasMarket(enforcement.plans[0]?.marketplace ?? ''); setCanvasOpen(true) }}><Network size={13} /> View Allocation Map</button>
+        </div>
+      )}
 
       <AdsDataGrid<Row>
         rows={shownRows}
@@ -368,6 +388,20 @@ export function BudgetManagerClient() {
       {settingsFor && <SettingsModal row={settingsFor} month={month} onClose={() => setSettingsFor(null)} onSaved={() => load(month)} toast={toast} />}
       {moreFor && <MoreDrawer row={moreFor} month={month} onClose={() => setMoreFor(null)} onSaved={() => load(month)} toast={toast} />}
       <FaqDrawer open={faqOpen} onClose={() => setFaqOpen(false)} />
+      {canvasOpen && (
+        <Modal open onClose={() => setCanvasOpen(false)} size="xl" title="Allocation Map" subtitle="How Auto Pacing would redistribute each market’s monthly envelope today — dry-run preview, nothing is applied.">
+          {!enforcement || enforcement.plans.length === 0 ? (
+            <div className="bm-more-empty">No markets have Auto Pacing or Stop Over Spend enabled this month. Turn one on to preview the allocation.</div>
+          ) : (<>
+            <div className="bm-canvas-head">
+              {enforcement.plans.map((p) => (
+                <button type="button" key={p.marketplace} className={`bm-canvas-tab ${canvasMarket === p.marketplace ? 'on' : ''}`} onClick={() => setCanvasMarket(p.marketplace)}>{FLAG[p.marketplace] ?? '🌐'} {mktName(p.marketplace)}</button>
+              ))}
+            </div>
+            <AllocationCanvas plan={enforcement.plans.find((x) => x.marketplace === canvasMarket) ?? enforcement.plans[0]} />
+          </>)}
+        </Modal>
+      )}
 
       {toastMsg && <div className="bm-toast" role="status">{toastMsg}</div>}
     </div>

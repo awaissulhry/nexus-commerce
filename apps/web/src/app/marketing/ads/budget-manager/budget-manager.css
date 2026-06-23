@@ -21,6 +21,19 @@
 .bm-grow { flex: 1; }
 .bm-mb-day { font-size: 12px; color: #8a93a1; }
 
+/* pacing preview banner (BM.B3 → B4) */
+.bm-pacebar { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 10px 14px; background: linear-gradient(90deg, #f0f6ff, #fbfdff); border: 1px solid #cfe0fb; border-radius: 10px; }
+.bm-pacebar .ico { display: inline-flex; color: #1f6fde; }
+.bm-pacebar .txt { font-size: 12.5px; color: #2b3440; }
+.bm-pacebar .txt b { font-weight: 700; }
+.bm-pacebar .txt em { font-style: normal; color: #8a93a1; }
+
+/* allocation canvas modal — market tabs */
+.bm-canvas-head { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.bm-canvas-tab { font-size: 12.5px; font-weight: 600; color: #3a4452; background: #fff; border: 1px solid #d8dde4; border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+.bm-canvas-tab:hover { background: #f1f4f8; }
+.bm-canvas-tab.on { background: #eef5ff; color: #1f6fde; border-color: #bcd6fb; }
+
 /* first column (marketplace) */
 .bm-first { display: inline-flex; align-items: center; gap: 7px; }
 .bm-ic { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: none; color: #9aa3b0; border-radius: 6px; cursor: pointer; flex-shrink: 0; }
