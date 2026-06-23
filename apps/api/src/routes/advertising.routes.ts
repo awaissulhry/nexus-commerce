@@ -5140,6 +5140,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { deleteBudgetPlan } = await import('../services/advertising/ads-budget-manager.service.js')
     await deleteBudgetPlan(id); return { ok: true }
   })
+  // BM.B2 — per-marketplace campaign list + per-campaign min/max limits (the "More" view).
+  fastify.get('/advertising/budget-manager/campaigns', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    if (!q.marketplace) { reply.status(400); return { error: 'marketplace required' } }
+    const { listBudgetManagerCampaigns, currentMonth } = await import('../services/advertising/ads-budget-manager.service.js')
+    return listBudgetManagerCampaigns({ marketplace: q.marketplace, month: q.month || currentMonth() })
+  })
+  fastify.post('/advertising/budget-manager/campaign-limit', async (request, reply) => {
+    const b = request.body as { marketplace?: string; month?: string; campaignId?: string; minCents?: number | null; maxCents?: number | null }
+    if (!b?.marketplace || !b?.campaignId) { reply.status(400); return { error: 'marketplace + campaignId required' } }
+    const { setCampaignLimit, currentMonth } = await import('../services/advertising/ads-budget-manager.service.js')
+    try { return await setCampaignLimit({ marketplace: b.marketplace, month: b.month || currentMonth(), campaignId: b.campaignId, minCents: b.minCents ?? null, maxCents: b.maxCents ?? null }) }
+    catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
 
   // ── AX3.2: Full-funnel Goal builder (branded + unbranded) ───────────
   fastify.post('/advertising/goals/suggest-targets', async (request, reply) => {

@@ -13042,6 +13042,10 @@ model AdBudgetPlan {
   // [{ day: 1-31, pct: number }] — per-day % of the monthly budget. Empty =
   // even daily split. Used for event-weighted pacing.
   calendar           Json     @default("[]")
+  // BM.B2 — per-campaign min/max budget limits for this plan, giving the
+  // auto-pacer (BM.B3) headroom to flex each campaign within bounds.
+  // [{ campaignId, minCents, maxCents }] — empty = no per-campaign clamp.
+  campaignLimits     Json     @default("[]")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   createdBy          String?
