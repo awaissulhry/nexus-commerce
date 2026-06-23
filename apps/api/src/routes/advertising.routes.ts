@@ -863,7 +863,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as {
       market?: string; productGroupName?: string
       products?: PRef[]
-      campaigns?: Array<{ id?: string; name: string; adGroupName?: string; kind: 'auto' | 'keyword' | 'pat'; adProduct?: 'SP' | 'SB' | 'SD'; matchType?: string; bidEur?: number; budgetEur?: number; keywords?: string[]; productTargets?: PRef[]; negKeywords?: Array<string | { text?: string; matchType?: 'EXACT' | 'PHRASE' }>; negProducts?: PRef[]; autoGroups?: Array<{ key: string; enabled?: boolean; bidEur?: number }>; creative?: Record<string, unknown> }>
+      campaigns?: Array<{ id?: string; name: string; adGroupName?: string; kind: 'auto' | 'keyword' | 'pat'; adProduct?: 'SP' | 'SB' | 'SD'; matchType?: string; bidEur?: number; budgetEur?: number; keywords?: Array<string | { text: string; matchType?: 'BROAD' | 'PHRASE' | 'EXACT'; bidEur?: number }>; productTargets?: PRef[]; negKeywords?: Array<string | { text?: string; matchType?: 'EXACT' | 'PHRASE' }>; negProducts?: PRef[]; autoGroups?: Array<{ key: string; enabled?: boolean; bidEur?: number }>; creative?: Record<string, unknown> }>
       placementBids?: { tos?: string; pdp?: string; ros?: string }
       rules?: { harvest?: SpwRule; negative?: SpwRule }
       automationMode?: 'rule' | 'ai'
@@ -903,7 +903,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         if (c.id) idMap[c.id] = { campaignId: camp.id, adGroupId: ag.id }
         for (const p of products) { try { await createProductAdLocal({ adGroupId: ag.id, asin: p.asin, sku: p.sku, productId: p.productId, userId }) } catch (e) { logger.warn('[SPW-launch] product ad failed', { error: (e as Error).message }) } }
         if (c.kind === 'keyword') {
-          for (const kw of c.keywords ?? []) for (const mt of matchTypesFor(c.matchType)) { try { await createKeywordLocal({ adGroupId: ag.id, keywordText: kw, matchType: mt, bidEur, userId }) } catch (e) { logger.warn('[SPW-launch] keyword failed', { kw, error: (e as Error).message }) } }
+          // Per-keyword match type + bid when provided (Guided's Add-Keywords step); else fall back to
+          // the campaign's match type(s) + default bid (SPW / Quick send plain strings — unchanged).
+          for (const kwRaw of c.keywords ?? []) {
+            const text = (typeof kwRaw === 'string' ? kwRaw : kwRaw?.text ?? '').trim()
+            if (!text) continue
+            const kwBid = typeof kwRaw === 'object' && Number.isFinite(Number(kwRaw?.bidEur)) && Number(kwRaw?.bidEur) > 0 ? Number(kwRaw.bidEur) : bidEur
+            const mts = typeof kwRaw === 'object' && kwRaw?.matchType ? [kwRaw.matchType] : matchTypesFor(c.matchType)
+            for (const mt of mts) { try { await createKeywordLocal({ adGroupId: ag.id, keywordText: text, matchType: mt, bidEur: kwBid, userId }) } catch (e) { logger.warn('[SPW-launch] keyword failed', { text, error: (e as Error).message }) } }
+          }
         } else if (c.kind === 'pat') {
           for (const pt of c.productTargets ?? []) { const asin = pt.asin || pt.sku; if (!asin) continue; try { await createTargetLocal({ adGroupId: ag.id, kind: 'PRODUCT', value: asin, bidEur, userId }) } catch (e) { logger.warn('[SPW-launch] product target failed', { error: (e as Error).message }) } }
         } else if (c.kind === 'auto') {
@@ -924,20 +932,26 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // S3.4 — two separate rules: Keyword Harvesting + Negative Targeting.
     const rulesCreated: Array<{ id: string; name: string }> = []
     // H.2 — destination map for keyword graduation: matchType → the ad group of the keyword campaign
-    // that hosts that match type in this product group (e.g. EXACT → the Exact campaign). A harvested
-    // winner promotes there instead of back into its source ad group. Built from the campaigns just
-    // created above; empty if the group has no keyword campaigns (then graduation falls back to source).
-    const destinations: Record<string, string> = {}
+    // that hosts that match type (e.g. EXACT → the Exact campaign). A harvested winner promotes there
+    // instead of back into its source ad group. Scoped PER ad-product (multi-format) so a winner only
+    // ever graduates into a campaign of its OWN format — SP→SP exact/PAT, SB→SB — never across formats.
+    // SP-only builds (Quick / SPW / AI Goal) collapse to one product → identical to the old behaviour.
+    const widProduct: Record<string, 'SP' | 'SB' | 'SD'> = {}
+    const destinationsByProduct: Record<string, Record<string, string>> = {}
     for (const c of campaigns) {
       if (!c.id) continue
       const ref = idMap[c.id]
       if (!ref) continue
-      if (c.kind === 'keyword') { for (const mt of matchTypesFor(c.matchType)) destinations[mt] = ref.adGroupId }
-      else if (c.kind === 'pat') destinations.PRODUCT = ref.adGroupId // H.5 — converting ASINs graduate into the PAT campaign
+      const p = c.adProduct ?? 'SP'
+      widProduct[c.id] = p
+      const dest = (destinationsByProduct[p] ??= {})
+      if (c.kind === 'keyword') { for (const mt of matchTypesFor(c.matchType)) dest[mt] = ref.adGroupId }
+      else if (c.kind === 'pat') dest.PRODUCT = ref.adGroupId // H.5 — converting ASINs graduate into the PAT campaign
     }
+    type RuleSrc = { product: 'SP' | 'SB' | 'SD'; adGroupId: string; campaignId: string; harvestFrom: boolean; graduate: string[]; negate: string[]; graduateProduct: boolean; negateProduct: boolean }
     const buildRule = async (rcfg: SpwRule | undefined, kind: 'harvest' | 'negative') => {
       if (!rcfg) return
-      const sources = Object.entries(rcfg.rows ?? {})
+      const allSources: RuleSrc[] = Object.entries(rcfg.rows ?? {})
         .map(([wid, r]) => {
           const ref = idMap[wid]
           if (!ref || !r) return null
@@ -946,37 +960,45 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           const negate: string[] = []
           if (r.nP) negate.push('PHRASE'); if (r.nE) negate.push('EXACT')
           const any = r.st || graduate.length || negate.length || r.tBox || r.nBox
-          return any ? { adGroupId: ref.adGroupId, campaignId: ref.campaignId, harvestFrom: !!r.st, graduate, negate, graduateProduct: !!r.tBox, negateProduct: !!r.nBox } : null
+          return any ? { product: widProduct[wid] ?? 'SP', adGroupId: ref.adGroupId, campaignId: ref.campaignId, harvestFrom: !!r.st, graduate, negate, graduateProduct: !!r.tBox, negateProduct: !!r.nBox } : null
         })
-        .filter((s): s is NonNullable<typeof s> => s != null)
-      if (!((rcfg.ruleName ?? '').trim() || sources.length)) return
-      try {
-        const perf = rcfg.perf ?? {}
-        const conds = perf.conditions ?? []
-        const ordersC = conds.find((c) => c?.metric === 'PPC Orders' || c?.metric === 'Orders')
-        const spendC = conds.find((c) => c?.metric === 'Spend')
-        const minOrders = ordersC && Number.isFinite(Number(ordersC.value)) ? Number(ordersC.value) : 2
-        const minSpendCents = spendC && Number.isFinite(Number(spendC.value)) ? Math.round(Number(spendC.value) * 100) : 1000
-        const defaultName = `${(b.productGroupName || 'Campaign').trim()} — ${kind === 'negative' ? 'Negative Targeting' : 'Harvest & Negate'}`
-        // H.4 — propose-first. control:'manual' makes the engine force dry-run and record each run as
-        // an AdsRuleSuggestion the operator approves on /marketing/ads/suggestions (approving re-runs
-        // it live, write-gated). No notify action — the suggestion card IS the notification, and a bare
-        // notify would otherwise create a noise card. Flip to hands-off later by dropping control:'manual'
-        // + setting dryRun:false + opening the write-gate.
-        const actions = [
-          { type: 'harvest_and_negate', control: 'manual', windowDays: 60, minSpendCents, minOrders, graduationBidEur: 0.5, sources, destinations, perfCriteria: perf, mode: kind },
-        ]
-        const rule = await prisma.automationRule.create({
-          data: {
-            name: ((rcfg.ruleName ?? '').trim() || defaultName).slice(0, 120),
-            description: 'Created by SP Super Wizard', domain: 'advertising', trigger: 'SCHEDULE',
-            conditions: [] as never, actions: actions as never,
-            enabled: !!rcfg.automate, dryRun: true, maxExecutionsPerDay: 3, createdBy: userId ?? null,
-          },
-        })
-        rulesCreated.push({ id: rule.id, name: rule.name })
-        logger.warn('[SPW-launch] created rule', { ruleId: rule.id, kind, sources: sources.length, enabled: !!rcfg.automate })
-      } catch (e) { logger.error('[SPW-launch] rule create failed', { kind, error: (e as Error).message }) }
+        .filter((s): s is RuleSrc => s != null)
+      if (!allSources.length) return
+      // One correctly-scoped rule per ad-product present in the sources (so destinations never leak
+      // across formats). Single-product builds → exactly one rule (unchanged).
+      const byProduct = new Map<string, RuleSrc[]>()
+      for (const s of allSources) { const a = byProduct.get(s.product) ?? []; a.push(s); byProduct.set(s.product, a) }
+      const multi = byProduct.size > 1
+      const perf = rcfg.perf ?? {}
+      const conds = perf.conditions ?? []
+      const ordersC = conds.find((c) => c?.metric === 'PPC Orders' || c?.metric === 'Orders')
+      const spendC = conds.find((c) => c?.metric === 'Spend')
+      const minOrders = ordersC && Number.isFinite(Number(ordersC.value)) ? Number(ordersC.value) : 2
+      const minSpendCents = spendC && Number.isFinite(Number(spendC.value)) ? Math.round(Number(spendC.value) * 100) : 1000
+      for (const [product, srcs] of byProduct) {
+        try {
+          const destinations = destinationsByProduct[product] ?? {}
+          const sources = srcs.map(({ product: _p, ...rest }) => rest)
+          const tag = multi ? `${product} ` : ''
+          const base = (rcfg.ruleName ?? '').trim()
+          const name = (base ? `${base}${multi ? ` (${product})` : ''}` : `${(b.productGroupName || 'Campaign').trim()} — ${tag}${kind === 'negative' ? 'Negative Targeting' : 'Harvest & Negate'}`).slice(0, 120)
+          // H.4 — propose-first. control:'manual' makes the engine force dry-run and record each run as
+          // an AdsRuleSuggestion the operator approves on /marketing/ads/suggestions (approving re-runs
+          // it live, write-gated). Flip to hands-off later by dropping control:'manual' + dryRun:false.
+          const actions = [
+            { type: 'harvest_and_negate', control: 'manual', windowDays: 60, minSpendCents, minOrders, graduationBidEur: 0.5, sources, destinations, perfCriteria: perf, mode: kind },
+          ]
+          const rule = await prisma.automationRule.create({
+            data: {
+              name, description: 'Created by SP Super Wizard', domain: 'advertising', trigger: 'SCHEDULE',
+              conditions: [] as never, actions: actions as never,
+              enabled: !!rcfg.automate, dryRun: true, maxExecutionsPerDay: 3, createdBy: userId ?? null,
+            },
+          })
+          rulesCreated.push({ id: rule.id, name: rule.name })
+          logger.warn('[SPW-launch] created rule', { ruleId: rule.id, kind, product, sources: sources.length, enabled: !!rcfg.automate })
+        } catch (e) { logger.error('[SPW-launch] rule create failed', { kind, product, error: (e as Error).message }) }
+      }
     }
     if (created.length && b.rules) { await buildRule(b.rules.harvest, 'harvest'); await buildRule(b.rules.negative, 'negative') }
 

@@ -195,8 +195,9 @@ export function GuidedBuilder() {
     if (launching) return
     setLaunching(true); setLaunchErr('')
     const grp = productGroupName.trim()
-    const researchKw = keywords.filter((k) => k.matchType !== 'EXACT').map((k) => k.text)
-    const exactKw = keywords.filter((k) => k.matchType === 'EXACT').map((k) => k.text)
+    // "Add Research Keywords" — every seeded keyword goes into the Research campaign(s) at its own
+    // match type + bid; Performance stays empty (the harvest rules promote winners into it).
+    const researchKeywords = keywords.map((k) => ({ text: k.text, matchType: k.matchType, bidEur: Number(k.bidEur) || undefined }))
     try {
       const payload = {
         market: 'IT',
@@ -205,7 +206,7 @@ export function GuidedBuilder() {
         campaigns: campaigns.map((c) => ({
           id: c.id, name: c.name, adGroupName: c.adGroupName, kind: c.kind, matchType: c.matchType, adProduct: c.adProduct,
           bidEur: Number(c.bid) || sugBid, budgetEur: Number(c.budget) || sugBudget,
-          keywords: c.kind === 'keyword' ? (c.role === 'Performance' ? exactKw : c.role === 'Research' ? researchKw : []) : [],
+          keywords: c.kind === 'keyword' && c.role === 'Research' ? researchKeywords : [],
           productTargets: [],
           autoGroups: c.kind === 'auto' ? c.autoGroups.map((g) => ({ key: g.key, enabled: g.enabled, bidEur: Number(g.bid) || Number(c.bid) || sugBid })) : undefined,
           negKeywords: c.role === 'Research' ? negKeywords.map((n) => ({ text: n.text, matchType: n.matchType })) : [],
