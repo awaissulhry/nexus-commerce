@@ -16,43 +16,25 @@ import { H10Select, HoverCard } from '../../campaigns/FilterDropdown'
 import { ruleTypeBySlug } from './ruleTypes'
 import { NoDataIllus } from './NoDataIllus'
 import { getBackendUrl } from '@/lib/backend-url'
+// Single-sourced criteria config (also used by the SP Super Wizard's Step-3 rules).
+import { type Condition, PC_OPERATORS, PC_LOOKBACK, PC_EXCLUDE, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_SOV, PC_METRICS_RANK, PC_METRICS_PLACEMENT, pcDefaultCondition } from './PerformanceCriteria'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
-const METRICS = ['Sales', 'ACOS', 'ROAS', 'Clicks', 'Impressions', 'CVR', 'CTR', 'CPC', 'PPC Orders', 'Spend', 'Orders'].map((m) => ({ value: m, label: m }))
+const METRICS = PC_METRICS
 // Budget rules add the campaign-level "Budget Utilization" signal (best-in-class) — the others carry over.
 const METRICS_BUDGET = ['ACOS', 'ROAS', 'Sales', 'Spend', 'Orders', 'PPC Orders', 'CVR', 'CTR', 'CPC', 'Clicks', 'Impressions', 'Budget Utilization'].map((m) => ({ value: m, label: m }))
-// SOV rule criteria — Share-of-Voice signals (from the SOV report) first, then the performance
-// metrics you'd commonly combine them with (e.g. raise the bid only where SOV is low AND ACoS is healthy).
-const METRICS_SOV = ['Share of Voice', 'Top Campaign Share', 'Impression Share', 'Organic Share', 'Sponsored Share', 'ACOS', 'Spend', 'Sales', 'Orders'].map((m) => ({ value: m, label: m }))
-// Keyword Tracker rule criteria — organic / paid rank signals from the keyword tracker, plus a few
-// perf metrics. Lower rank number = better position; "Rank Change" is the period-over-period delta.
-const METRICS_RANK = ['Organic Rank', 'Sponsored Rank', 'Rank Change', 'Search Volume', 'Share of Voice', 'ACOS', 'Spend'].map((m) => ({ value: m, label: m }))
-const OPERATORS = [
-  { value: 'eq', label: 'Equal to =' },
-  { value: 'ne', label: 'Not equal to ≠' },
-  { value: 'gt', label: 'Greater than >' },
-  { value: 'gte', label: 'Greater than or equal to >=' },
-  { value: 'lt', label: 'Less than <' },
-  { value: 'lte', label: 'Less than or equal to <=' },
-]
-const LOOKBACK = ['Last 7 Days', 'Last 14 Days', 'Last 30 Days', 'Last 60 Days', 'Last 90 Days', 'Lifetime'].map((l) => ({ value: l, label: l }))
-// H10 "Lookback period … Exclude <recent window>" — keep the most-recent N days out of the window.
-const EXCLUDE = ['None', 'Last 1 Day', 'Last 3 Days', 'Last 7 Days', 'Last 14 Days', 'Last 30 Days'].map((l) => ({ value: l, label: l }))
+// SOV / Keyword-Tracker / operator / lookback / exclude catalogs — single-sourced from PerformanceCriteria.
+const METRICS_SOV = PC_METRICS_SOV
+const METRICS_RANK = PC_METRICS_RANK
+const OPERATORS = PC_OPERATORS
+const LOOKBACK = PC_LOOKBACK
+const EXCLUDE = PC_EXCLUDE
 const FREQUENCY = ['Custom', 'Daily', 'Weekly', 'Monthly', 'Hourly'].map((f) => ({ value: f, label: f }))
 // Budget rule marketplace scope (best-in-class) — limit a rule to one EU market.
 const MARKETS = [{ value: 'all', label: 'All markets' }, ...([['DE', 'Germany'], ['IT', 'Italy'], ['FR', 'France'], ['ES', 'Spain'], ['NL', 'Netherlands'], ['BE', 'Belgium'], ['SE', 'Sweden'], ['PL', 'Poland']] as const).map(([v, n]) => ({ value: v, label: `${n} (${v})` }))]
 const INTERVAL = ['Days', 'Weeks', 'Months'].map((i) => ({ value: i, label: i }))
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((d) => ({ value: d, label: d }))
-// per-metric value unit (€ for money, % for rate metrics, plain count otherwise) — matches H10
-const METRIC_UNIT: Record<string, 'eur' | 'pct' | ''> = {
-  Sales: 'eur', Spend: 'eur', CPC: 'eur',
-  ACOS: 'pct', CTR: 'pct', CVR: 'pct',
-  ROAS: '', Clicks: '', Impressions: '', 'PPC Orders': '', Orders: '',
-  'Budget Utilization': 'pct',
-  // SOV signals are percentages; rank/volume signals are bare counts.
-  'Share of Voice': 'pct', 'Top Campaign Share': 'pct', 'Impression Share': 'pct', 'Organic Share': 'pct', 'Sponsored Share': 'pct',
-  'Organic Rank': '', 'Sponsored Rank': '', 'Rank Change': '', 'Search Volume': '',
-}
+const METRIC_UNIT = PC_METRIC_UNIT
 // Campaign-scoped "THEN" actions. Budget rules adjust the daily budget; Bid rules adjust the
 // keyword/target bid. `unit` drives the value input (€ vs %). H10's recording shows "Set Bid
 // to($)" with the marketplace currency in the input; we keep our app's € convention (matching
@@ -86,7 +68,7 @@ const PLACEMENTS = [
 ]
 // IF placement-scope (which placement's metric to evaluate) — Campaign-wide or a single placement.
 const PLACEMENT_SCOPES = [{ value: 'campaign', label: 'Campaign' }, ...PLACEMENTS]
-const METRICS_PLACEMENT = ['ACOS', 'ROAS', 'Sales', 'Spend', 'Orders', 'CVR', 'CTR', 'CPC', 'Clicks', 'Impressions'].map((m) => ({ value: m, label: m }))
+const METRICS_PLACEMENT = PC_METRICS_PLACEMENT
 const actionUnit = (actions: Array<{ value: string; unit: 'eur' | 'pct' }>, op?: string): 'eur' | 'pct' => actions.find((a) => a.value === op)?.unit ?? 'eur'
 // builder slug → backend automation-rule trigger (the create payload)
 const TRIGGER_BY_SLUG: Record<string, string> = {
@@ -146,11 +128,11 @@ interface SelGroup extends AdGroupItem { look: boolean; types: { P: boolean; E: 
 interface MapBlock { id: number; groups: SelGroup[] }
 let _bid = 1
 
-interface Condition { metric: string; op: string; value: string; scope?: string } // scope = placement IF-scope (Campaign/ToS/PDP/RoS)
+// Condition is imported from PerformanceCriteria (single source); CriteriaGroup adds RuleBuilder-only
+// fields (id + the per-group THEN action), so it stays local.
 interface CriteriaGroup { id: number; conditions: Condition[]; lookback: string; exclude: string; budgetOp?: string; budgetValue?: string; placeTarget?: string } // placeTarget = placement THEN target
 let _cid = 1
-// Harvest seeds "PPC Orders ≥ 1" (converting); Negative (+others) seed "Sales = 0" (non-converting).
-const defaultCondition = (slug: string): Condition => (slug === 'keyword-harvesting' ? { metric: 'PPC Orders', op: 'gte', value: '1' } : slug === 'placement' ? { metric: 'ACOS', op: 'gt', value: '', scope: 'campaign' } : slug === 'sov' ? { metric: 'Share of Voice', op: 'lt', value: '' } : slug === 'keyword-tracker' ? { metric: 'Organic Rank', op: 'gt', value: '' } : (slug === 'budget' || slug === 'bid') ? { metric: 'ACOS', op: 'gt', value: '' } : { metric: 'Sales', op: 'eq', value: '0' })
+const defaultCondition = pcDefaultCondition
 const newGroup = (slug: string): CriteriaGroup => ({ id: _cid++, conditions: [defaultCondition(slug)], lookback: 'Last 60 Days', exclude: 'Last 3 Days', budgetOp: 'set', budgetValue: '', placeTarget: 'tos' })
 
 // per-type Rule Setup config — Negative vs Positive/Harvest differ in heading, copy,

@@ -33,6 +33,11 @@ const METRICS_BASE = ['Sales', 'ACOS', 'ROAS', 'Clicks', 'Impressions', 'CVR', '
 const METRICS_SOV = ['Share of Voice', 'Top Campaign Share', 'Impression Share', 'Organic Share', 'Sponsored Share', 'ACOS', 'Spend', 'Sales', 'Orders']
 const METRICS_RANK = ['Organic Rank', 'Sponsored Rank', 'Rank Change', 'Search Volume', 'Share of Voice', 'ACOS', 'Spend']
 const METRICS_PLACEMENT = ['ACOS', 'ROAS', 'Sales', 'Spend', 'Orders', 'CVR', 'CTR', 'CPC', 'Clicks', 'Impressions']
+// Mapped {value,label}[] forms — exported so RuleBuilder imports them drop-in (single source).
+export const PC_METRICS = METRICS_BASE.map((m) => ({ value: m, label: m }))
+export const PC_METRICS_SOV = METRICS_SOV.map((m) => ({ value: m, label: m }))
+export const PC_METRICS_RANK = METRICS_RANK.map((m) => ({ value: m, label: m }))
+export const PC_METRICS_PLACEMENT = METRICS_PLACEMENT.map((m) => ({ value: m, label: m }))
 export const pcMetricsFor = (slug: string): Array<{ value: string; label: string }> =>
   (slug === 'sov' ? METRICS_SOV : slug === 'keyword-tracker' ? METRICS_RANK : slug === 'placement' ? METRICS_PLACEMENT : METRICS_BASE).map((m) => ({ value: m, label: m }))
 export const pcDefaultCondition = (slug: string): Condition =>
