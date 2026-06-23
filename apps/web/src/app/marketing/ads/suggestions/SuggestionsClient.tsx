@@ -21,6 +21,7 @@ import { Tag, type TagTone } from '@/design-system/primitives/Tag'
 import { Select } from '@/design-system/primitives/Select'
 import { EmptyState } from '@/design-system/components/EmptyState'
 import { MetricStrip, type Metric } from '@/design-system/components/MetricStrip'
+import { ToastProvider, useToast } from '@/design-system/components/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -145,12 +146,15 @@ function RuleCell({ s }: { s: Suggestion }) {
   )
 }
 
-export function SuggestionsClient() {
+function SuggestionsInner() {
   const [items, setItems] = useState<Suggestion[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<Record<string, boolean>>({})
   const [live, setLive] = useState(false)
   const [group, setGroup] = useState<GroupKey>('none')
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkProg, setBulkProg] = useState<{ done: number; total: number } | null>(null)
+  const { toast } = useToast()
 
   const load = useCallback(async () => {
     try {
@@ -176,13 +180,46 @@ export function SuggestionsClient() {
     return () => { es?.close(); if (debounce.current) clearTimeout(debounce.current) }
   }, [load])
 
+  const post = useCallback((id: string, kind: 'apply' | 'dismiss' | 'restore') =>
+    fetch(`${getBackendUrl()}/api/advertising/suggestions/${id}/${kind}`, { method: 'POST' }).then((r) => r.ok).catch(() => false), [])
+
+  // Undo a dismiss (single or bulk): restore the rows to pending, then reload to show them again.
+  const restore = useCallback(async (ids: string[]) => {
+    await Promise.all(ids.map((id) => post(id, 'restore')))
+    void load()
+  }, [post, load])
+
   const act = useCallback(async (id: string, kind: 'apply' | 'dismiss') => {
     setBusy((b) => ({ ...b, [id]: true }))
     try {
-      const r = await fetch(`${getBackendUrl()}/api/advertising/suggestions/${id}/${kind}`, { method: 'POST' })
-      if (r.ok) setItems((cur) => cur.filter((s) => s.id !== id))
+      if (await post(id, kind)) {
+        setItems((cur) => cur.filter((s) => s.id !== id))
+        if (kind === 'dismiss') toast(<>Suggestion dismissed · <button type="button" className="h10-sug-undo" onClick={() => void restore([id])}>Undo</button></>, 'info')
+        else toast('Suggestion approved', 'success')
+      }
     } finally { setBusy((b) => { const n = { ...b }; delete n[id]; return n }) }
-  }, [])
+  }, [post, toast, restore])
+
+  // Bulk Approve / Dismiss — limited concurrency, live progress, per-row success/fail tally.
+  const runBulk = useCallback(async (ids: string[], kind: 'apply' | 'dismiss', clear: () => void) => {
+    if (!ids.length || bulkBusy) return
+    setBulkBusy(true); setBulkProg({ done: 0, total: ids.length })
+    const okIds: string[] = []; let fail = 0; let i = 0
+    const worker = async () => {
+      while (i < ids.length) {
+        const id = ids[i++]
+        if (await post(id, kind)) okIds.push(id); else fail++
+        setBulkProg((p) => (p ? { ...p, done: p.done + 1 } : p))
+      }
+    }
+    await Promise.all([worker(), worker(), worker()])
+    setItems((cur) => cur.filter((s) => !okIds.includes(s.id)))
+    clear(); setBulkBusy(false); setBulkProg(null)
+    const verb = kind === 'apply' ? 'Approved' : 'Dismissed'
+    const base = `${verb} ${okIds.length} ${okIds.length === 1 ? 'suggestion' : 'suggestions'}${fail ? ` · ${fail} failed` : ''}`
+    if (kind === 'dismiss' && okIds.length) toast(<>{base} · <button type="button" className="h10-sug-undo" onClick={() => void restore(okIds)}>Undo</button></>, fail ? 'error' : 'info')
+    else toast(base, fail ? 'error' : 'success')
+  }, [bulkBusy, post, toast, restore])
 
   // Summary tiles — addressable impact at a glance.
   const metrics = useMemo<Metric[]>(() => {
@@ -257,6 +294,13 @@ export function SuggestionsClient() {
         selectable
         customizable={false}
         defaultSort={{ key: 'when', dir: 'desc' }}
+        selectionActions={(ids, clear) => (
+          <span className="h10-bulkrow">
+            <Button variant="primary" size="sm" disabled={bulkBusy} onClick={() => void runBulk(ids, 'apply', clear)}><Check size={13} /> Approve {ids.length}</Button>
+            <Button variant="secondary" size="sm" disabled={bulkBusy} onClick={() => void runBulk(ids, 'dismiss', clear)}><X size={13} /> Dismiss {ids.length}</Button>
+            {bulkProg && <span className="h10-sug-prog">{bulkProg.done}/{bulkProg.total}</span>}
+          </span>
+        )}
         toolbarLeft={
           <label className="h10-sug-group">
             <span>Group by</span>
@@ -283,5 +327,15 @@ export function SuggestionsClient() {
         }
       />
     </div>
+  )
+}
+
+/** The Suggestions page. The ads routes are standalone (AppShell) and sit outside the root
+ *  ToastProvider, so we provide one here for the approve/dismiss + bulk-undo toasts. */
+export function SuggestionsClient() {
+  return (
+    <ToastProvider>
+      <SuggestionsInner />
+    </ToastProvider>
   )
 }

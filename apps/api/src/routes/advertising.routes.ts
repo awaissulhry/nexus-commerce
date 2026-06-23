@@ -4368,6 +4368,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     } catch { reply.code(404); return { error: 'not_found' } }
   })
 
+  // S.4 — Undo a dismiss: put a dismissed suggestion back to pending. Deliberately scoped to
+  // dismissed → pending only; an APPLIED suggestion ran a live action and is NOT un-applied here
+  // (use the execution rollback path for that).
+  fastify.post('/advertising/suggestions/:id/restore', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const sug = await prisma.adsRuleSuggestion.findUnique({ where: { id } })
+    if (!sug) { reply.code(404); return { error: 'not_found' } }
+    if (sug.status !== 'dismissed') { reply.code(409); return { error: `cannot restore ${sug.status}` } }
+    await prisma.adsRuleSuggestion.update({ where: { id }, data: { status: 'pending', decidedAt: null, decidedBy: null } })
+    return { ok: true }
+  })
+
   // Test a rule against a synthetic context — used by the rule-builder
   // UI to preview which actions would fire. Always forces dryRun=true,
   // never writes side-effects regardless of rule.dryRun.
