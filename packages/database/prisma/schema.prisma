@@ -1555,6 +1555,10 @@ model ChannelListing {
   // was suppressed 3 times last quarter for the same reason."
   amazonSuppressions AmazonSuppression[]
 
+  // ALA Phase 4 — live Listings-Items issues mirrored from getListingsItem /
+  // VALIDATION_PREVIEW (code/severity/attributeNames), open+resolved lifecycle.
+  listingIssues ListingIssue[]
+
   // C.14 — eBay Path B back-refs. Stats are time-series (per-listing
   // hourly snapshots of watcher / hit / question counts); markdowns
   // are discrete sale events with start/end windows.
@@ -1856,6 +1860,41 @@ model AmazonSuppression {
 
   @@index([listingId, suppressedAt])
   @@index([resolvedAt])
+}
+
+// ALA Phase 4 — Listings-Items issues mirror.
+//
+// The live issues array from getListingsItem / searchListingsItems (and our own
+// VALIDATION_PREVIEW pre-check) — code/severity/message + the FAILING attribute
+// names (what AmazonSuppression's defect-report source loses). Distinct from
+// AmazonSuppression (which is the GET_MERCHANT_LISTINGS_DEFECT_DATA-driven
+// suppression lifecycle): this mirrors the Listings Items API's per-attribute
+// validation issues, powering the Pre-Flight health panel + listing-health
+// scoring. Open/resolved lifecycle: an issue absent on the next sync is resolved.
+model ListingIssue {
+  id String @id @default(cuid())
+
+  channelListing ChannelListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId      String
+
+  code           String // SP-API issue code (e.g. "90220")
+  severity       String @default("ERROR") // ERROR | WARNING | INFO
+  message        String
+  attributeNames String[] // the failing attributes Amazon named
+  categories     String[] // SP-API issue categories
+  source         String   @default("listings-api") // listings-api | validation-preview
+
+  // Stable identity for an issue on a listing = code + sorted attributeNames.
+  // Lets a re-sync upsert (bump lastSeenAt) instead of duplicating.
+  fingerprint String
+
+  firstSeenAt DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  resolvedAt  DateTime?
+
+  @@unique([listingId, fingerprint])
+  @@index([listingId, resolvedAt])
+  @@index([severity])
 }
 
 // ── PHASE 9: Offer (Fulfillment-Specific SKU & Pricing) ──────────────────

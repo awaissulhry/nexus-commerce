@@ -36,6 +36,7 @@ import {
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
 import { checkLengthLimits, type LengthColumn } from '../services/listing-preflight.service.js'
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
+import { mirrorListingIssues } from '../services/listing-issues.service.js'
 
 const amazon = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazon)
@@ -393,6 +394,21 @@ export default async function amazonCockpitPublishRoutes(
                   patches: Object.entries(attrs).map(([k, v]) => ({ op: 'replace', path: `/attributes/${k}`, value: v })),
                 })
             if (preview.available) {
+              // ALA Phase 4 — mirror Amazon's verdict into ListingIssue so the
+              // Pre-Flight health panel reflects this pre-check (open + resolved).
+              try {
+                await mirrorListingIssues(
+                  prisma,
+                  listing.id,
+                  (preview.issues ?? []).map((i: any) => ({
+                    code: i.code, message: i.message, severity: i.severity,
+                    attributeNames: i.attributeNames, categories: i.categories,
+                  })),
+                  'validation-preview',
+                )
+              } catch (mErr: any) {
+                request.log.warn({ err: mErr?.message, marketplace: mp }, 'cockpit publish: mirrorListingIssues failed')
+              }
               previewWarnings = preview.warnings.length > 0 ? preview.warnings : undefined
               if (!preview.ok) {
                 result.error = `Amazon validation failed (pre-check) — ${preview.errors}`

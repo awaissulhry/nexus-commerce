@@ -1217,6 +1217,10 @@ export class AmazonSpApiClient {
         sku,
         asin,
         status,
+        // ALA Phase 4 — surface the issues array on success too (Amazon returns
+        // WARNING/INFO issues on a healthy read; previously dropped). Lets callers
+        // mirror live listing health, not just post-submit errors.
+        issues: data.issues,
         rawResponse: data,
         images,
       }

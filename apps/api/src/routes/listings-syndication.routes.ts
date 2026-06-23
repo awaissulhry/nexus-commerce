@@ -2442,6 +2442,58 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
     },
   )
 
+  // ALA Phase 4 — GET /api/products/:id/listing-issues?marketplace=<MP>
+  //
+  // Per-product Listings-Items issue view for the Pre-Flight health panel.
+  // Returns the OPEN issues (the per-attribute "what's wrong" with code /
+  // severity / attributeNames Amazon named) grouped by severity, plus a short
+  // history of recently-resolved. Sourced from ListingIssue (mirrored from
+  // getListingsItem + our VALIDATION_PREVIEW pre-check) — richer than the
+  // defect-report-driven AmazonSuppression above.
+  fastify.get<{ Params: { id: string }; Querystring: { marketplace?: string } }>(
+    '/products/:id/listing-issues',
+    async (request, reply) => {
+      const { id } = request.params
+      const marketplace = (request.query.marketplace ?? '').toUpperCase()
+
+      const product = await prisma.product.findUnique({ where: { id }, select: { id: true } })
+      if (!product) return reply.code(404).send({ error: 'Product not found' })
+
+      const listingWhere: Record<string, unknown> = { channel: 'AMAZON', productId: id }
+      if (marketplace) listingWhere.marketplace = marketplace
+
+      const select = {
+        id: true, code: true, severity: true, message: true, attributeNames: true,
+        categories: true, source: true, firstSeenAt: true, lastSeenAt: true, resolvedAt: true,
+        channelListing: { select: { id: true, marketplace: true, externalListingId: true } },
+      }
+      const [open, resolved] = await Promise.all([
+        prisma.listingIssue.findMany({
+          where: { resolvedAt: null, channelListing: listingWhere },
+          orderBy: [{ severity: 'asc' }, { lastSeenAt: 'desc' }],
+          select,
+        }),
+        prisma.listingIssue.findMany({
+          where: { resolvedAt: { not: null }, channelListing: listingWhere },
+          orderBy: { resolvedAt: 'desc' },
+          take: 10,
+          select,
+        }),
+      ])
+
+      const errors = open.filter((i) => i.severity === 'ERROR')
+      const warnings = open.filter((i) => i.severity === 'WARNING' || i.severity === 'INFO')
+      return {
+        productId: id,
+        marketplace: marketplace || null,
+        counts: { errors: errors.length, warnings: warnings.length, open: open.length },
+        errors,
+        warnings,
+        resolved,
+      }
+    },
+  )
+
   // ─────────────────────────────────────────────────────────────────
   // POST /api/listings/:id/diagnose-suppression — AI explains why a
   // listing is suppressed and what to fix.
