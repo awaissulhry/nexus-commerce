@@ -11,7 +11,9 @@
 
 /* inspector */
 .cp-insp { width: 300px; flex-shrink: 0; height: 540px; overflow-y: auto; border: 1px solid #e6e9ee; border-radius: 12px; background: #fff; padding: 14px; display: flex; flex-direction: column; gap: 16px; }
-.cp-insp-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cp-insp-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.cp-insp-h .ttl { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cp-insp-h .ty { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #8a93a1; }
 .cp-insp-h b { font-size: 13.5px; font-weight: 700; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cp-insp-h .x { border: none; background: none; font-size: 18px; line-height: 1; color: #9aa3b0; cursor: pointer; padding: 0 2px; }
 .cp-insp-h .x:hover { color: #3a4452; }
@@ -31,6 +33,11 @@
 .cp-act { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #3a4452; background: #fff; border: 1px solid #d8dde4; border-radius: 8px; padding: 6px 10px; cursor: pointer; }
 .cp-act:hover { background: #f1f4f8; }
 .cp-act.on { background: #fdf2cf; color: #97700f; border-color: #f3e2a6; }
+.cp-statusbtns { display: inline-flex; border: 1px solid #d8dde4; border-radius: 8px; overflow: hidden; width: fit-content; }
+.cp-statusbtns button { border: none; background: #fff; font: inherit; font-size: 12px; font-weight: 600; color: #5b6573; padding: 6px 12px; cursor: pointer; border-right: 1px solid #eef1f5; }
+.cp-statusbtns button:last-child { border-right: none; }
+.cp-statusbtns button:hover { background: #f1f4f8; }
+.cp-statusbtns button.on { background: #eef5ff; color: #1f6fde; }
 .cp-clear { align-self: flex-start; border: none; background: none; font: inherit; font-size: 11.5px; color: #1f6fde; cursor: pointer; padding: 0; }
 .cp-clear:hover { text-decoration: underline; }
 

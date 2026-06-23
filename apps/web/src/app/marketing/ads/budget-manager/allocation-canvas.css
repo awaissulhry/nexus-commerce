@@ -33,3 +33,31 @@
 .bmc-more .sub { font-size: 11px; color: #8a93a1; font-weight: 500; }
 
 .bmc-node .react-flow__handle { width: 6px; height: 6px; background: #b3bcc8; border: none; }
+
+/* CP — selection / staged / focus / status dot, + ad-group & target nodes */
+.bmc-camp.sel, .bmc-ag.sel, .bmc-tg.sel { box-shadow: 0 0 0 2px #1f6fde, 0 2px 8px rgba(31, 111, 222, 0.18); border-color: #1f6fde; }
+.bmc-camp.staged, .bmc-ag.staged, .bmc-tg.staged { border-color: #7c3aed; border-style: dashed; }
+.bmc-camp.focus, .bmc-ag.focus { border-left: 3px solid #1f6fde; }
+.bmc-camp .stgtag { font-size: 9.5px; font-weight: 700; color: #7c3aed; }
+.bmc-camp .flow em.stg, .bmc-camp .flow .stg { color: #7c3aed; font-style: normal; font-weight: 700; }
+.bmc-node .cdot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0; }
+.bmc-node .cdot.on { background: #1f9d5b; }
+.bmc-node .cdot.pa { background: #e0a92e; }
+.bmc-node .cdot.ar { background: #b3bcc8; }
+
+.bmc-ag { width: 246px; padding: 9px 12px; display: flex; flex-direction: column; gap: 3px; border-color: #d8e0ea; }
+.bmc-ag.paused { opacity: 0.6; }
+.bmc-ag .hd { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.bmc-ag b { font-size: 12px; font-weight: 600; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bmc-ag .meta { font-size: 11.5px; color: #5b6573; }
+.bmc-ag .meta em { font-style: normal; font-weight: 600; color: #1c2530; }
+.bmc-ag .meta em.stg { color: #7c3aed; }
+
+.bmc-tg { width: 230px; padding: 7px 11px; display: flex; flex-direction: column; gap: 2px; border-color: #e2e6ec; }
+.bmc-tg.paused { opacity: 0.6; }
+.bmc-tg .hd { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.bmc-tg b { font-size: 11.5px; font-weight: 600; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bmc-tg .meta { font-size: 11px; color: #5b6573; }
+.bmc-tg .meta em { font-style: normal; font-weight: 600; color: #1c2530; }
+.bmc-tg .meta em.stg { color: #7c3aed; }
+.bmc-tg .meta em.mt { font-size: 9px; font-weight: 700; text-transform: uppercase; color: #6b7480; background: #eef1f5; border-radius: 4px; padding: 1px 5px; margin-right: 4px; }
