@@ -24,14 +24,39 @@ function mapStrategy(raw?: string): 'AUTO_FOR_SALES' | 'LEGACY_FOR_SALES' | 'MAN
   return null
 }
 
+// H.12 — campaign deletion reconciliation. A local ACTIVE campaign (ENABLED/PAUSED, with an external
+// id) owned by this connection's marketplace that Amazon's current ENABLED+PAUSED list no longer
+// returns is no longer active on Amazon (archived or deleted) → archive locally. Tight campaign-scale
+// guard (floor 2, ≤20% — NOT the floor-20 used for the many-per-ad-group targets) so a partial/empty
+// fetch can't wipe the account; soft-archive is reversible; gated-local campaigns (no external id) are
+// exempt. Must only be called on a SUCCESSFUL fetch. Exported so the scoping/guard can be tested.
+export async function reconcileCampaignDeletions(opts: { connMarketplace: string; seenExternalCampaignIds: Set<string>; fetchOk: boolean }): Promise<number> {
+  if (!opts.fetchOk) return 0
+  const { normalizeMarketplaceCode } = await import('../../utils/marketplace-code.js')
+  const locals = await prisma.campaign.findMany({
+    where: { externalCampaignId: { not: null }, status: { in: ['ENABLED', 'PAUSED'] } },
+    select: { id: true, externalCampaignId: true, marketplace: true },
+  })
+  const owned = locals.filter((c) => (normalizeMarketplaceCode(c.marketplace) ?? c.marketplace) === opts.connMarketplace || c.marketplace === opts.connMarketplace)
+  const toArchive = owned.filter((c) => c.externalCampaignId && !opts.seenExternalCampaignIds.has(c.externalCampaignId)).map((c) => c.id)
+  const cap = Math.max(2, Math.ceil(owned.length * 0.2))
+  if (toArchive.length === 0 || toArchive.length > cap) {
+    if (toArchive.length) logger.warn('[settings-sync] campaign-deletion guard tripped — skipping', { wouldArchive: toArchive.length, owned: owned.length, cap, marketplace: opts.connMarketplace })
+    return 0
+  }
+  const r = await prisma.campaign.updateMany({ where: { id: { in: toArchive } }, data: { status: 'ARCHIVED', lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS', lastSyncError: null } })
+  logger.warn('[settings-sync] archived campaigns no longer active on Amazon', { count: r.count, marketplace: opts.connMarketplace })
+  return r.count
+}
+
 export async function syncCampaignSettingsFromAmazon(
   opts?: { profileId?: string },
-): Promise<{ profiles: number; campaigns: number; updated: number; placementsFilled: number; sampleShape?: unknown; errors: string[] }> {
+): Promise<{ profiles: number; campaigns: number; updated: number; placementsFilled: number; archived: number; sampleShape?: unknown; errors: string[] }> {
   const conns = await prisma.amazonAdsConnection.findMany({
     where: opts?.profileId ? { profileId: opts.profileId } : {},
     select: { profileId: true, region: true, marketplace: true },
   })
-  let campaigns = 0, updated = 0, placementsFilled = 0
+  let campaigns = 0, updated = 0, placementsFilled = 0, archived = 0
   let sampleShape: unknown
   const errors: string[] = []
 
@@ -39,15 +64,19 @@ export async function syncCampaignSettingsFromAmazon(
     const region: AdsRegion = conn.region === 'NA' || conn.region === 'FE' ? (conn.region as AdsRegion) : 'EU'
     let list: Awaited<ReturnType<typeof listCampaignsV3>> = []
     try {
-      list = await listCampaignsV3({ profileId: conn.profileId, region })
+      // H.12 — explicit ENABLED+PAUSED snapshot: bounded (no archived bloat → no truncation) and lets
+      // us treat any local active campaign absent from it as "no longer active on Amazon".
+      list = await listCampaignsV3({ profileId: conn.profileId, region }, { states: ['ENABLED', 'PAUSED'] })
     } catch (e) {
       errors.push(`${conn.profileId}: ${(e as Error).message.slice(0, 160)}`)
       continue
     }
     if (!sampleShape && list[0]) sampleShape = list[0]
 
+    const seen = new Set<string>()
     for (const c of list) {
       if (!c.campaignId) continue
+      seen.add(c.campaignId)
       campaigns++
       const existing = await prisma.campaign.findFirst({ where: { externalCampaignId: c.campaignId }, select: { id: true, dynamicBidding: true } })
       if (!existing) continue
@@ -70,10 +99,13 @@ export async function syncCampaignSettingsFromAmazon(
         try { await prisma.campaign.update({ where: { id: existing.id }, data }); updated++ } catch (e) { errors.push(`update ${c.campaignId}: ${(e as Error).message.slice(0, 120)}`) }
       }
     }
+    // H.12 — archive local active campaigns this profile's list no longer returns (archived/deleted on Amazon).
+    try { archived += await reconcileCampaignDeletions({ connMarketplace: conn.marketplace, seenExternalCampaignIds: seen, fetchOk: true }) }
+    catch (e) { errors.push(`camp-del ${conn.profileId}: ${(e as Error).message.slice(0, 120)}`) }
   }
 
-  logger.info('[settings-sync] done', { profiles: conns.length, campaigns, updated, placementsFilled, errors: errors.length })
-  return { profiles: conns.length, campaigns, updated, placementsFilled, sampleShape, errors }
+  logger.info('[settings-sync] done', { profiles: conns.length, campaigns, updated, placementsFilled, archived, errors: errors.length })
+  return { profiles: conns.length, campaigns, updated, placementsFilled, archived, sampleShape, errors }
 }
 
 // Map one v3 record onto a non-destructive update patch (only present fields).

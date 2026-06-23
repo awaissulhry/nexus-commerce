@@ -340,7 +340,7 @@ export interface V3CampaignSettings {
   dynamicBidding?: { strategy?: string; placementBidding?: Array<{ placement: string; percentage: number }> }
   budget?: { budget?: number; budgetType?: string }
 }
-export async function listCampaignsV3(ctx: ClientContext, opts?: { campaignIds?: string[] }): Promise<V3CampaignSettings[]> {
+export async function listCampaignsV3(ctx: ClientContext, opts?: { campaignIds?: string[]; states?: string[] }): Promise<V3CampaignSettings[]> {
   if (adsMode() === 'sandbox') return loadFixture<V3CampaignSettings[]>('campaigns-v3', [])
   const out: V3CampaignSettings[] = []
   let nextToken: string | undefined
@@ -348,6 +348,8 @@ export async function listCampaignsV3(ctx: ClientContext, opts?: { campaignIds?:
   do {
     const body: Record<string, unknown> = { maxResults: 100, ...(nextToken ? { nextToken } : {}) }
     if (opts?.campaignIds?.length) body.campaignIdFilter = { include: opts.campaignIds }
+    // H.12 — explicit state filter so the deletion-reconcile snapshot is deterministic + bounded.
+    if (opts?.states?.length) body.stateFilter = { include: opts.states }
     const res = await liveCall<{ campaigns?: V3CampaignSettings[]; nextToken?: string }>({
       profileId: ctx.profileId,
       region: ctx.region,

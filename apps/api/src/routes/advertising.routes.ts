@@ -927,10 +927,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // created above; empty if the group has no keyword campaigns (then graduation falls back to source).
     const destinations: Record<string, string> = {}
     for (const c of campaigns) {
-      if (c.kind !== 'keyword' || !c.id) continue
+      if (!c.id) continue
       const ref = idMap[c.id]
       if (!ref) continue
-      for (const mt of matchTypesFor(c.matchType)) destinations[mt] = ref.adGroupId
+      if (c.kind === 'keyword') { for (const mt of matchTypesFor(c.matchType)) destinations[mt] = ref.adGroupId }
+      else if (c.kind === 'pat') destinations.PRODUCT = ref.adGroupId // H.5 — converting ASINs graduate into the PAT campaign
     }
     const buildRule = async (rcfg: SpwRule | undefined, kind: 'harvest' | 'negative') => {
       if (!rcfg) return
@@ -3991,6 +3992,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const limit = Math.min(Number(q.limit) || 50, 500)
     const result = await drainAdsSyncOnce(limit)
     return { ok: true, processed: result.processed, results: result.results }
+  })
+
+  // H.10 — on-demand mirror refresh: pull CURRENT keywords, negatives (ad-group + campaign-level),
+  // targets, and reconcile Amazon-side deletions right now (the same v3 resync the hourly cron runs),
+  // so an operator never has to wait for the next tick to see Amazon's state reflected locally.
+  fastify.post('/advertising/cron/keyword-resync/trigger', async (_request, _reply) => {
+    const { resyncAllCampaignKeywords } = await import('../services/advertising/ads-keyword-list-sync.service.js')
+    const r = await resyncAllCampaignKeywords({})
+    return { ok: true, summary: `kwUpserted=${r.upserted} campNeg=${r.campaignNegatives} targets=${r.targetsUpdated} archived=${r.archived} adGroups=${r.adGroups} mode=${r.mode}`, detail: r }
   })
 
   // ── AD.3: Automation rules (domain-filtered proxy over the existing

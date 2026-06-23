@@ -736,19 +736,20 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
   // rule whose campaigns are still gated/local resolves to [] and harvests nothing.
   const rawSources = (action as unknown as { sources?: unknown }).sources
   const sources = Array.isArray(rawSources)
-    ? (rawSources as Array<{ adGroupId?: string; graduate?: string[]; negate?: string[]; harvestFrom?: boolean }>)
+    ? (rawSources as Array<{ adGroupId?: string; graduate?: string[]; negate?: string[]; harvestFrom?: boolean; graduateProduct?: boolean; negateProduct?: boolean }>)
     : null
   let adGroupExternalIds: string[] | undefined
-  let plan: Record<string, { graduate?: string[]; negate?: string[] }> | undefined
+  let plan: Record<string, { graduate?: string[]; negate?: string[]; graduateProduct?: boolean; negateProduct?: boolean }> | undefined
   if (sources && sources.length) {
     const localIds = sources.filter((s) => s.adGroupId).map((s) => s.adGroupId as string)
     const ags = localIds.length ? await prisma.adGroup.findMany({ where: { id: { in: localIds } }, select: { id: true, externalAdGroupId: true } }) : []
     const extById = new Map(ags.map((a) => [a.id, a.externalAdGroupId]))
     adGroupExternalIds = sources.filter((s) => s.harvestFrom && s.adGroupId).map((s) => extById.get(s.adGroupId as string)).filter((x): x is string => !!x)
     plan = {}
+    // H.5 — forward the product flags (graduateProduct/negateProduct) so the engine harvests ASINs too.
     for (const s of sources) {
       const ext = s.adGroupId ? extById.get(s.adGroupId) : null
-      if (ext) plan[ext] = { graduate: s.graduate, negate: s.negate }
+      if (ext) plan[ext] = { graduate: s.graduate, negate: s.negate, graduateProduct: s.graduateProduct, negateProduct: s.negateProduct }
     }
   }
 
@@ -760,25 +761,38 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
       output: {
         dryRun: true,
         scoped: !!sources,
+        // H.4 — nothing to harvest this tick → noChange, so the Suggestions generator skips an empty card.
+        noChange: preview.negatives.length === 0 && preview.graduations.length === 0 && preview.productNegatives.length === 0 && preview.productGraduations.length === 0,
         wouldNegate: preview.negatives.length,
         wouldGraduate: preview.graduations.length,
+        wouldGraduateProduct: preview.productGraduations.length,
+        wouldNegateProduct: preview.productNegatives.length,
         topNegatives: preview.negatives.slice(0, 5).map((n) => ({ query: n.query, costCents: n.costCents })),
         topGraduations: preview.graduations.slice(0, 5).map((g) => ({ query: g.query, orders: g.orders })),
       },
     }
   }
+  // H.2 — destination map (matchType → destination local ad group) carried by the wizard rule, so a
+  // graduated keyword promotes into the campaign that hosts that match type instead of its source.
+  const destinations = (action as unknown as { destinations?: Record<string, string> }).destinations
   const result = await applyHarvest({
     negatives: preview.negatives,
     graduations: preview.graduations.map((g) => ({ ...g, bidEur: typeof action.graduationBidEur === 'number' ? action.graduationBidEur : 0.5 })),
+    productNegatives: preview.productNegatives,
+    productGraduations: preview.productGraduations.map((g) => ({ ...g, bidEur: typeof action.graduationBidEur === 'number' ? action.graduationBidEur : 0.5 })),
     userId: `automation:${meta.ruleId}`,
     plan,
+    destinations: destinations && typeof destinations === 'object' ? destinations : undefined,
   })
   return {
     type: action.type,
-    ok: result.errors.length === 0 || result.negativesAdded + result.keywordsGraduated > 0,
+    ok: result.errors.length === 0 || result.negativesAdded + result.keywordsGraduated + result.productsGraduated + result.productNegativesAdded > 0,
     output: {
       negativesAdded: result.negativesAdded,
       keywordsGraduated: result.keywordsGraduated,
+      isolationNegativesAdded: result.isolationNegativesAdded,
+      productsGraduated: result.productsGraduated,
+      productNegativesAdded: result.productNegativesAdded,
       errors: result.errors.slice(0, 5),
     },
   }

@@ -440,7 +440,10 @@ export async function runV1ExportCreateCron(): Promise<void> {
 
 export function startV1ExportCreateCron(): void {
   if (v1ExportCreateTask) { logger.warn('ads-v1-export-create already started'); return }
-  const schedule = process.env.NEXUS_ADS_V1_EXPORT_CREATE_SCHEDULE ?? '0 */6 * * *'
+  // H.10 — every 2h (was 6h) to halve the structure-freshness lag for campaigns/ad-groups created on
+  // Amazon. Env-overridable. (Amazon offers no usable real-time push for ad structure, so frequent
+  // polling is the lever; the v3 keyword/negative resync above runs hourly for the higher-churn surface.)
+  const schedule = process.env.NEXUS_ADS_V1_EXPORT_CREATE_SCHEDULE ?? '0 */2 * * *'
   if (!cron.validate(schedule)) { logger.error('ads-v1-export-create: invalid schedule', { schedule }); return }
   v1ExportCreateTask = cron.schedule(schedule, () => { void runV1ExportCreateCron() })
   logger.info('ads-v1-export-create cron: scheduled', { schedule })
@@ -518,16 +521,16 @@ export async function runKeywordBidResyncCron(): Promise<void> {
   await recordCronRun('ads-keyword-bid-resync', async () => {
     const { resyncAllCampaignKeywords } = await import('../services/advertising/ads-keyword-list-sync.service.js')
     const r = await resyncAllCampaignKeywords({})
-    return `profiles=${r.profiles} adGroups=${r.adGroups} kwUpserted=${r.upserted} targetsUpdated=${r.targetsUpdated} mode=${r.mode}`
+    return `profiles=${r.profiles} adGroups=${r.adGroups} kwUpserted=${r.upserted} targetsUpdated=${r.targetsUpdated} campNeg=${r.campaignNegatives} archived=${r.archived} mode=${r.mode}`
   }).catch((err) => logger.error('ads-keyword-bid-resync cron: failure', { error: String(err) }))
 }
 
 export function startKeywordBidResyncCron(): void {
   if (keywordBidResyncTask) { logger.warn('ads-keyword-bid-resync already started'); return }
-  // Every 6h at :45. The v1 ingest no longer clobbers good bids with €0 (it
-  // preserves the existing bid on update), so this is just a backstop to pull
-  // any newly-changed bids — no need to hammer Amazon + the container hourly.
-  const schedule = process.env.NEXUS_ADS_KEYWORD_BID_RESYNC_SCHEDULE ?? '45 */6 * * *'
+  // H.10 — hourly at :45. Beyond bids, this v3 resync now also carries the campaign-negative mirror
+  // (H.8) and deletion reconciliation (H.9) — the freshness-critical inbound path — so it runs hourly
+  // to keep the local platform close to Amazon. Env-overridable if the account ever hits rate limits.
+  const schedule = process.env.NEXUS_ADS_KEYWORD_BID_RESYNC_SCHEDULE ?? '45 * * * *'
   if (!cron.validate(schedule)) { logger.error('ads-keyword-bid-resync: invalid schedule', { schedule }); return }
   keywordBidResyncTask = cron.schedule(schedule, () => { void runKeywordBidResyncCron() })
   logger.info('ads-keyword-bid-resync cron: scheduled', { schedule })

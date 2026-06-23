@@ -82,6 +82,15 @@ export interface NewKeyword { adGroupId: string; keywordText: string; matchType:
 export async function createKeywordLocal(input: NewKeyword): Promise<{ id: string; externalTargetId: string | null }> {
   const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true } } } })
   if (!ag) throw new Error('ad group not found')
+  // H.1 — idempotent. A positive keyword is uniquely identified by (ad group, match type, text).
+  // Harvest rules run on a schedule and re-surface the same converting term every tick; return the
+  // existing target instead of piling up duplicate rows (Amazon rejects the dup keyword too). Text
+  // match is case-insensitive because Amazon keyword matching is.
+  const existing = await prisma.adTarget.findFirst({
+    where: { adGroupId: input.adGroupId, kind: 'KEYWORD', isNegative: false, expressionType: input.matchType, expressionValue: { equals: input.keywordText, mode: 'insensitive' } },
+    select: { id: true, externalTargetId: true },
+  })
+  if (existing) return { id: existing.id, externalTargetId: existing.externalTargetId }
   let externalId: string | null = null
   if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
@@ -141,6 +150,10 @@ export interface NewTarget {
 export async function createTargetLocal(input: NewTarget): Promise<{ id: string; externalTargetId: string | null; mode: string }> {
   const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true } } } })
   if (!ag) throw new Error('ad group not found')
+  // H.5 — idempotent (mirror H.1): a positive target is identified by ad group + kind + value, so a
+  // scheduled product/auto harvest re-run returns the existing target instead of duplicating it.
+  const dupe = await prisma.adTarget.findFirst({ where: { adGroupId: input.adGroupId, kind: input.kind, isNegative: false, expressionValue: input.value }, select: { id: true, externalTargetId: true } })
+  if (dupe) return { id: dupe.id, externalTargetId: dupe.externalTargetId, mode: 'local' }
   const isAudience = input.kind === 'AUDIENCE'
   const audType = input.audienceType ?? 'AUDIENCE'
   const expression = input.kind === 'PRODUCT'
@@ -256,6 +269,9 @@ export interface NewNegativeProductTarget { adGroupId: string; asin: string; use
 export async function createNegativeProductTargetLocal(input: NewNegativeProductTarget): Promise<{ id: string; externalTargetId: string | null; mode: string }> {
   const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true } } } })
   if (!ag) throw new Error('ad group not found')
+  // H.5 — idempotent: a negative product target is identified by ad group + ASIN.
+  const dupe = await prisma.adTarget.findFirst({ where: { adGroupId: input.adGroupId, kind: 'PRODUCT', isNegative: true, expressionValue: input.asin }, select: { id: true, externalTargetId: true } })
+  if (dupe) return { id: dupe.id, externalTargetId: dupe.externalTargetId, mode: 'local' }
   let externalId: string | null = null, mode = 'local'
   if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
@@ -285,4 +301,24 @@ export async function createNegativeKeywordLocal(input: NewNegativeKeyword): Pro
   const t = await prisma.adTarget.create({ data: { adGroupId: input.adGroupId, kind: 'KEYWORD', expressionType: input.matchType, expressionValue: input.keywordText, bidCents: 0, status: 'ENABLED', externalTargetId: externalId, isNegative: true, negativeLevel: 'AD_GROUP' } })
   await audit('create_negative_keyword', 'AD_TARGET', t.id, { keywordText: input.keywordText, matchType: input.matchType, externalId, mode }, input.userId)
   return { id: t.id, externalTargetId: externalId, mode }
+}
+
+// H.7 — persist a CAMPAIGN-scope negative keyword as a local mirror row so our platform reflects it
+// immediately (gated-local), matching how the sync stores campaign negatives: AdTarget with
+// negativeLevel='CAMPAIGN' + expressionType='NEGATIVE_<mt>', attached to a representative ad group of
+// the campaign (the schema's legacy campaign-negative structure). The Amazon push is done separately
+// by createNegative (so its existsLocally probe — which matches this exact shape — keeps the first
+// push unblocked and dedupes subsequent runs). Idempotent + matches createNegative's probe precisely.
+export async function createNegativeKeywordCampaignLocal(input: { externalCampaignId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE'; externalTargetId?: string | null; userId?: string }): Promise<{ id: string; created: boolean } | null> {
+  const camp = await prisma.campaign.findFirst({ where: { externalCampaignId: input.externalCampaignId }, select: { id: true, adGroups: { select: { id: true }, take: 1 } } })
+  if (!camp || camp.adGroups.length === 0) return null // no ad group to attach the campaign-level negative to
+  const expressionType = `NEGATIVE_${input.matchType}`
+  const existing = await prisma.adTarget.findFirst({
+    where: { adGroup: { campaignId: camp.id }, isNegative: true, negativeLevel: 'CAMPAIGN', expressionType, expressionValue: input.keywordText },
+    select: { id: true },
+  })
+  if (existing) return { id: existing.id, created: false }
+  const t = await prisma.adTarget.create({ data: { adGroupId: camp.adGroups[0].id, kind: 'KEYWORD', expressionType, expressionValue: input.keywordText, bidCents: 0, status: 'ENABLED', isNegative: true, negativeLevel: 'CAMPAIGN', externalTargetId: input.externalTargetId ?? null } })
+  await audit('create_negative_keyword', 'AD_TARGET', t.id, { keywordText: input.keywordText, matchType: input.matchType, scope: 'CAMPAIGN', externalTargetId: input.externalTargetId ?? null }, input.userId)
+  return { id: t.id, created: true }
 }

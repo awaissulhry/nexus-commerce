@@ -14,12 +14,12 @@ import './suggestions.css'
 interface Suggestion {
   id: string; ruleId: string; ruleName: string | null; trigger: string | null; marketplace: string | null
   entityType: string; entityId: string; entityName: string | null
-  proposedAction: { type?: string; wouldChange?: string; placement?: string; op?: string; value?: number }
+  proposedAction: { type?: string; wouldChange?: string; placement?: string; op?: string; value?: number; wouldGraduate?: number; wouldNegate?: number }
   status: string; createdAt: string
 }
 
 const ENTITY_LABEL: Record<string, string> = { CAMPAIGN: 'Campaign', AD_TARGET: 'Keyword/Target', SEARCH_TERM: 'Search term', MARKETPLACE: 'Marketplace' }
-const ACTION_LABEL: Record<string, string> = { budget_apply: 'Budget', placement_apply: 'Placement', bid_apply: 'Bid', dayparting_apply: 'Dayparting', add_negative_exact: 'Add negative', promote_to_exact: 'Promote to exact' }
+const ACTION_LABEL: Record<string, string> = { budget_apply: 'Budget', placement_apply: 'Placement', bid_apply: 'Bid', dayparting_apply: 'Dayparting', add_negative_exact: 'Add negative', promote_to_exact: 'Promote to exact', harvest_and_negate: 'Harvest & negate' }
 const ago = (iso: string) => { const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)}m ago` : s < 86400 ? `${Math.floor(s / 3600)}h ago` : `${Math.floor(s / 86400)}d ago` }
 
 export function SuggestionsClient() {
@@ -63,6 +63,10 @@ export function SuggestionsClient() {
   const proposed = (s: Suggestion) => {
     const a = s.proposedAction ?? {}
     const kind = ACTION_LABEL[a.type ?? ''] ?? a.type ?? '—'
+    // Harvest cards carry a batch (promote N / negate M) rather than a single change.
+    if (a.type === 'harvest_and_negate') {
+      return <><b>{kind}</b><span className="wc"> promote {a.wouldGraduate ?? 0} · negate {a.wouldNegate ?? 0}</span></>
+    }
     const place = a.placement ? ` · ${a.placement.replace('PLACEMENT_', '').replace(/_/g, ' ').toLowerCase()}` : ''
     return <><b>{kind}{place}</b>{a.wouldChange ? <span className="wc"> {a.wouldChange}</span> : null}</>
   }

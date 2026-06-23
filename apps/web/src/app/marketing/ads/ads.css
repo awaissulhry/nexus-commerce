@@ -2094,8 +2094,10 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-rules-rn .l { font-size: 13px; font-weight: 600; color: #3a4452; }
 .h10-spw-rules-rn input { font: inherit; font-size: 13.5px; color: #1c2530; border: 1px solid #d8dde4; border-radius: 8px; padding: 9px 11px; }
 .h10-spw-rules-rn input:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
-.h10-spw-rules-auto { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 18px; }
+.h10-spw-rules-auto { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 6px; }
 .h10-spw-rules-auto > span { font-size: 13.5px; font-weight: 500; color: #5b6573; }
+.h10-spw-rules-autohint { font-size: 12.5px; line-height: 1.5; color: #5b6573; margin: 0 0 18px; max-width: 560px; }
+.h10-spw-rules-autohint strong { color: #3a4452; font-weight: 600; }
 /* pill toggle switch (Automate, and any wizard on/off) */
 .h10-spw-sw { appearance: none; -webkit-appearance: none; width: 34px; height: 18px; border-radius: 10px; background: #c2cdda; position: relative; cursor: pointer; transition: background .15s; flex-shrink: 0; margin: 0; }
 .h10-spw-sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
@@ -2145,8 +2147,8 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-perf { display: inline-flex; align-items: center; gap: 7px; margin-top: 16px; font: inherit; font-size: 14px; font-weight: 600; color: #1f6fde; background: none; border: none; cursor: pointer; }
 .h10-spw-perf svg { transition: transform .15s; }
 .h10-spw-perf svg.up { transform: rotate(180deg); }
-.h10-spw-perf-body { margin-top: 12px; }
-.h10-spw-perf-body p { font-size: 13px; color: #5b6573; margin: 0 0 12px; }
+.h10-spw-perf-body { margin-top: 12px; background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; padding: 18px 20px; }
+.h10-spw-perf-body p { font-size: 13px; color: #5b6573; margin: 0 0 14px; }
 /* Shared performance-criteria builder (.h10-pc) — wizard Step-3 rules + RuleBuilder */
 .h10-pc { display: flex; flex-direction: column; gap: 10px; }
 .h10-pc-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
