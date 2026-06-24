@@ -311,6 +311,28 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
   const loadScenario = (id: string) => { const s = saved.find((x) => x.id === id); if (!s) return; if (activeId == null && stageCount > 0 && !window.confirm('Discard the unsaved working set?')) return; setScenario({ ...s.changes }); setActiveId(id); setSel(null) }
   const newScenario = () => { if (stageCount > 0 && activeId == null && !window.confirm('Discard the unsaved working set?')) return; setScenario({}); setActiveId(null); setSel(null) }
   const delScenario = (id: string) => { persistAndSet(saved.filter((s) => s.id !== id)); if (activeId === id) setActiveId(null); if (compareId === id) setCompareId(null) }
+  // P4b — promote the scenario's mappable campaign actions into a standing rule
+  // (SCHEDULE-triggered, disabled + dry-run; refine in Rules & Automation).
+  const promoteToRule = async () => {
+    const actions: Array<Record<string, unknown>> = []
+    let skipped = 0
+    for (const [id, s] of Object.entries(scenario)) {
+      if ((s.entityType ?? 'campaign') === 'campaign') {
+        if (s.budgetCents != null) actions.push({ type: 'set_daily_budget', budgetEur: s.budgetCents / 100, campaignId: id })
+        if (s.targetAcos != null) actions.push({ type: 'set_campaign_target_acos', targetAcos: s.targetAcos, campaignId: id })
+        if (s.placements) (([['tos', 'PLACEMENT_TOP'], ['pdp', 'PLACEMENT_PRODUCT_PAGE'], ['ros', 'PLACEMENT_REST_OF_SEARCH']]) as Array<['tos' | 'pdp' | 'ros', string]>).forEach(([k, plc]) => { const v = s.placements?.[k]; if (v != null) actions.push({ type: 'set_placement_multiplier', placement: plc, percentage: v, campaignId: id }) })
+        if (s.minCents != null || s.maxCents != null || s.suppress != null || s.biddingStrategy != null) skipped++
+      } else skipped++
+    }
+    if (actions.length === 0) { toast('Nothing promotable — rules support campaign budget, target-ACoS and placement.'); return }
+    const name = window.prompt('Name the rule:', (activeId && saved.find((s) => s.id === activeId)?.name) || 'Control Plane rule')
+    if (!name) return
+    try {
+      const r = await fetch(`${API()}/api/advertising/automation-rules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, description: 'Created from a Control Plane scenario', trigger: 'SCHEDULE', actions }) }).then((x) => x.json())
+      if (r?.id || r?.rule?.id) toast(`Rule “${name}” created — disabled & dry-run${skipped ? `, ${skipped} non-promotable skipped` : ''}. Refine it in Rules & Automation.`)
+      else toast('Rule creation failed.')
+    } catch { toast('Rule creation failed.') }
+  }
 
   const tryClose = () => { if (stageCount > 0 && !window.confirm(`Discard ${stageCount} staged change${stageCount === 1 ? '' : 's'}?`)) return; setScenario({}); onClose() }
   const rootCampaignId = sel?.type === 'campaign' ? sel.id : focusCampaign
@@ -342,6 +364,7 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
             <span className="grow" />
             {activeId && <button type="button" className="h10-am-btn" disabled={!stageCount} onClick={updateActiveScenario}>Update</button>}
             <button type="button" className="h10-am-btn" disabled={!stageCount} onClick={saveScenarioAs}>Save as…</button>
+            <button type="button" className="h10-am-btn" disabled={!stageCount} onClick={promoteToRule}>Save as rule</button>
             {saved.length > 0 && <button type="button" className="h10-am-btn" onClick={() => setCompareId(compareId ? null : saved[0].id)}>{compareId ? 'Close compare' : '⇄ Compare'}</button>}
           </div>
           {compareId ? (
