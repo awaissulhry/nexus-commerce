@@ -96,11 +96,14 @@ interface CellProps {
   onFileDrop?: (file: File) => void
   onMoveDrop?: (payload: { rowKey: string | null; columnKey: string; url: string }) => void
   onRemove?: () => void
+  /** Plain-click / Enter on a filled cell → enlarge (preview). Replace stays on
+   *  the hover "Change" button. */
+  onEnlarge?: () => void
 }
 
 function ImageCell({
   cell, column, rowLabel, rowKey, isFocused, cellRef, minDimensionPx,
-  onClick, onKeyDown, onFocus, onDrop, onFileDrop, onMoveDrop, onRemove,
+  onClick, onKeyDown, onFocus, onDrop, onFileDrop, onMoveDrop, onRemove, onEnlarge,
 }: CellProps) {
   const [isOver, setIsOver] = useState(false)
   const tooSmall = cell?.width != null && minDimensionPx != null && cell.width < minDimensionPx
@@ -156,7 +159,7 @@ function ImageCell({
       aria-label={ariaLabel}
       tabIndex={isFocused ? 0 : -1}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); return }
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (cell && onEnlarge) onEnlarge(); else onClick(); return }
         onKeyDown(e)
       }}
       onFocus={onFocus}
@@ -174,7 +177,7 @@ function ImageCell({
         <div
           draggable={!!onMoveDrop}
           onDragStart={handleDragStart}
-          onClick={onClick}
+          onClick={onEnlarge ?? onClick}
           title={tooSmall ? `${cell.width}×${cell.height ?? '?'} — below ${minDimensionPx} px minimum` : undefined}
           className={cn(
             'w-full h-full rounded-lg overflow-hidden relative group cursor-pointer',
@@ -270,6 +273,9 @@ export default function ChannelImageGrid({
   // Roving tabindex keyboard navigation.
   const [focused, setFocused] = useState<{ row: number; col: number }>({ row: 0, col: 0 })
   const cellRefs = useRef<Map<string, HTMLDivElement | null>>(new Map())
+  // Click / Enter on a filled cell → full-screen preview (so you can read size
+  // charts and confirm exactly which image it is before publishing).
+  const [enlarged, setEnlarged] = useState<string | null>(null)
 
   useEffect(() => {
     setFocused((p) => ({ row: Math.min(p.row, Math.max(0, rowCount - 1)), col: Math.min(p.col, Math.max(0, colCount - 1)) }))
@@ -293,6 +299,7 @@ export default function ChannelImageGrid({
   }, [rowCount, colCount])
 
   return (
+    <>
     <div className="overflow-x-auto rounded-xl border border-default dark:border-slate-700">
       <div
         role="grid"
@@ -368,6 +375,7 @@ export default function ChannelImageGrid({
                     onFileDrop={onCellFileDrop ? (file) => onCellFileDrop(row.key, col.key, file) : undefined}
                     onMoveDrop={onCellMove ? (from) => onCellMove(from, { rowKey: row.key, columnKey: col.key }) : undefined}
                     onRemove={onCellRemove && cell ? () => onCellRemove(row.key, col.key) : undefined}
+                    onEnlarge={cell ? () => setEnlarged(cell.url) : undefined}
                   />
                 )
               })}
@@ -376,5 +384,28 @@ export default function ChannelImageGrid({
         })}
       </div>
     </div>
+
+    {/* Enlarge preview — click a filled cell to read the full image (size charts,
+        market-specific art) before committing it. */}
+    {enlarged && (
+      <div
+        className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 p-6 sm:p-10 cursor-zoom-out"
+        role="dialog"
+        aria-label="Enlarged image preview"
+        onClick={() => setEnlarged(null)}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={enlarged} alt="" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setEnlarged(null) }}
+          aria-label="Close preview"
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/15 hover:bg-white/30 text-white flex items-center justify-center text-xl leading-none"
+        >
+          ×
+        </button>
+      </div>
+    )}
+    </>
   )
 }
