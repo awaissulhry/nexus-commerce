@@ -675,6 +675,17 @@ async function pushVariationGroup(
     }
   }
 
+  // eBay validates Brand/Marca at the GROUP level at publish_by_inventory_item_group.
+  // Setting it only on the individual inventory_items is not enough.
+  const GROUP_BRAND_ASPECT: Record<string, string> = {
+    IT: 'Marca', ES: 'Marca', DE: 'Marke', FR: 'Marque', UK: 'Brand', GB: 'Brand',
+  }
+  const groupBrandKey = GROUP_BRAND_ASPECT[mp.toUpperCase()] ?? 'Brand'
+  const groupBrandVal =
+    brandBySku.get(parentRow.sku as string) ||
+    [...brandBySku.values()][0] ||
+    'Xavia'
+
   const groupBody = {
     inventoryItemGroupKey: groupKey,
     title: parentRow.title ?? '',
@@ -684,6 +695,9 @@ async function pushVariationGroup(
     variesBy: {
       aspectsImageVariesBy: imageVariesByAxes,
       specifications,
+    },
+    aspects: {
+      [groupBrandKey]: [groupBrandVal],
     },
   }
 
