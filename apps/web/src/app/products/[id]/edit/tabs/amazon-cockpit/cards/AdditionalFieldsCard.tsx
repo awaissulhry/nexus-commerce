@@ -166,9 +166,9 @@ export default function AdditionalFieldsCard({
           )}
         </span>
         {collapsed ? (
-          <ChevronDown aria-hidden className="w-4 h-4 text-slate-400 shrink-0" />
+          <ChevronDown aria-hidden className="w-4 h-4 text-tertiary shrink-0" />
         ) : (
-          <ChevronUp aria-hidden className="w-4 h-4 text-slate-400 shrink-0" />
+          <ChevronUp aria-hidden className="w-4 h-4 text-tertiary shrink-0" />
         )}
       </button>
 
