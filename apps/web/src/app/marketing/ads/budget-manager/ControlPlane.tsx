@@ -12,7 +12,7 @@
  *
  * Palantir-style scenario → review → commit over the live ontology.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Lock, History as HistoryIcon } from 'lucide-react'
 import { Modal } from '@/design-system/components'
 import { AllocationCanvas, type StagedChange, type OntoNode, type SelectRef } from './AllocationCanvas'
@@ -248,7 +248,29 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
   const [activeId, setActiveId] = useState<string | null>(null)
   const [compareId, setCompareId] = useState<string | null>(null)
   const [multi, setMulti] = useState<Array<{ id: string; type: 'campaign' | 'adgroup' | 'target' }>>([])
-  useEffect(() => { if (open) { setMarket(initialMarket); setSel(null); setMulti([]); setFocusCampaign(null); setFocusAdGroup(null); setAdGroups(null); setTargets(null); setSaved(loadScenarios()); setCompareId(null) } }, [open, initialMarket])
+  const [liveOn, setLiveOn] = useState(false)
+  const [liveCount, setLiveCount] = useState(0)
+  const [flash, setFlash] = useState(false)
+  const onCommittedRef = useRef(onCommitted); onCommittedRef.current = onCommitted
+  const lastTs = useRef(0)
+  useEffect(() => {
+    if (!open) return
+    let sm = initialMarket
+    try { const s = localStorage.getItem('cp.lastMarket'); if (s && enforcement?.plans.some((p) => p.marketplace === s)) sm = s } catch { /* */ }
+    setMarket(sm); setSel(null); setMulti([]); setFocusCampaign(null); setFocusAdGroup(null); setAdGroups(null); setTargets(null); setSaved(loadScenarios()); setCompareId(null); setLiveCount(0)
+  }, [open, initialMarket]) // eslint-disable-line react-hooks/exhaustive-deps
+  // P5 — live SSE: while open, mark connected on ping, and on automation activity
+  // bump the count, flash the canvas, and refresh the enforcement preview.
+  useEffect(() => {
+    if (!open) return
+    let es: EventSource | null = null
+    try {
+      es = new EventSource(`${API()}/api/advertising/execution-events?since=${lastTs.current}`)
+      es.addEventListener('ping', () => setLiveOn(true))
+      es.addEventListener('automation.rule.fired', ((ev: MessageEvent) => { try { const e = JSON.parse(ev.data); lastTs.current = Math.max(lastTs.current, e.ts || 0); setLiveCount((n) => n + 1); setFlash(true); window.setTimeout(() => setFlash(false), 700); onCommittedRef.current() } catch { /* */ } }) as EventListener)
+    } catch { /* no SSE */ }
+    return () => { es?.close(); setLiveOn(false) }
+  }, [open])
 
   const plan = useMemo(() => enforcement?.plans.find((p) => p.marketplace === market) ?? enforcement?.plans[0] ?? null, [enforcement, market])
   const allCamps = useMemo(() => { const m = new Map<string, EnfCampaign>(); for (const p of enforcement?.plans ?? []) for (const c of p.campaigns) m.set(c.id, c); return m }, [enforcement])
@@ -362,6 +384,7 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
               </span>
             ))}
             <span className="grow" />
+            <span className="cp-live" title="Live automation activity"><span className={`dot ${liveOn ? 'on' : ''}`} />{liveOn ? (liveCount ? `Live · ${liveCount}` : 'Live') : 'Connecting…'}</span>
             {activeId && <button type="button" className="h10-am-btn" disabled={!stageCount} onClick={updateActiveScenario}>Update</button>}
             <button type="button" className="h10-am-btn" disabled={!stageCount} onClick={saveScenarioAs}>Save as…</button>
             <button type="button" className="h10-am-btn" disabled={!stageCount} onClick={promoteToRule}>Save as rule</button>
@@ -371,10 +394,10 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
             <ComparePanel working={scenario} workingName={activeId ? `${saved.find((s) => s.id === activeId)?.name ?? 'Working'} (active)` : 'Working set'} saved={saved} compareId={compareId} setCompareId={setCompareId} allCamps={allCamps} committing={committing} onCommit={commitChanges} />
           ) : (
             <div className="cp-layout">
-              <div className="cp-main">
+              <div className={`cp-main ${flash ? 'flash' : ''}`}>
                 <div className="cp-tabs">
                   {enforcement.plans.map((p) => (
-                    <button type="button" key={p.marketplace} className={`cp-tab ${market === p.marketplace ? 'on' : ''}`} onClick={() => { setMarket(p.marketplace); setSel(null); setMulti([]); setFocusCampaign(null); setFocusAdGroup(null); setAdGroups(null); setTargets(null) }}>{FLAG[p.marketplace] ?? '🌐'} {mkt(p.marketplace)}{stagedInMarket(p) > 0 ? <em className="dot"> ●</em> : null}</button>
+                    <button type="button" key={p.marketplace} className={`cp-tab ${market === p.marketplace ? 'on' : ''}`} onClick={() => { setMarket(p.marketplace); setSel(null); setMulti([]); setFocusCampaign(null); setFocusAdGroup(null); setAdGroups(null); setTargets(null); try { localStorage.setItem('cp.lastMarket', p.marketplace) } catch { /* */ } }}>{FLAG[p.marketplace] ?? '🌐'} {mkt(p.marketplace)}{stagedInMarket(p) > 0 ? <em className="dot"> ●</em> : null}</button>
                   ))}
                   <span className="grow" />
                   <span className="cp-hint">Click a node to inspect · ⌘-click to multi-select · campaigns &amp; ad groups drill in</span>
