@@ -442,12 +442,14 @@ async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise<void> 
         for (const it of createdItems) {
           if (!it.productId) continue;
           // Get fresh available qty after reservation
-          const sl = await prisma.stockLevel.findFirst({
-            where: { productId: it.productId },
+          // Warehouse (FBM) pool only — never push Amazon-managed FBA stock to
+          // merchant channels (the split-inventory bleed). Mirrors the cascade.
+          const whRows = await prisma.stockLevel.findMany({
+            where: { productId: it.productId, location: { type: 'WAREHOUSE' } },
             select: { available: true },
           });
-          if (!sl) continue;
-          const availableQty = sl.available;
+          if (whRows.length === 0) continue;
+          const availableQty = whRows.reduce((a, s) => a + s.available, 0);
 
           // Find all active ChannelListings for this product on OTHER channels
           const listings = await prisma.channelListing.findMany({

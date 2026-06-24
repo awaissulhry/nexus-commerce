@@ -958,12 +958,15 @@ export class AmazonOrdersService {
       try {
         for (const it of args.items) {
           if (!it.productId) continue
-          const sl = await prisma.stockLevel.findFirst({
-            where: { productId: it.productId },
+          // Warehouse (FBM) pool only — FBA stock is Amazon-managed and must not
+          // be pushed to merchant channels (the split-inventory bleed). Mirrors
+          // the canonical cascade's warehouse-available pool.
+          const whRows = await prisma.stockLevel.findMany({
+            where: { productId: it.productId, location: { type: 'WAREHOUSE' } },
             select: { available: true },
           })
-          if (!sl) continue
-          const availableQty = sl.available
+          if (whRows.length === 0) continue
+          const availableQty = whRows.reduce((a, s) => a + s.available, 0)
 
           const listings = await prisma.channelListing.findMany({
             where: {
