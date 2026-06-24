@@ -474,8 +474,21 @@ async function pushVariationGroup(
     })
     for (const al of amazonListings) {
       const attrs = (al.platformAttributes ?? {}) as Record<string, unknown>
-      const urls = ((attrs.imageUrls ?? attrs.images) as string[] | undefined) ?? []
-      if (urls.length) amazonImagesBySku.set(al.product.sku, urls.filter(Boolean))
+      // Normalised format (string[]) stored by our import pipeline
+      let urls: string[] = Array.isArray(attrs.imageUrls)
+        ? (attrs.imageUrls as string[]).filter(Boolean)
+        : []
+      // SP-API raw format: main_product_image_locator: [{media_location, marketplace_id, …}]
+      if (urls.length === 0 && Array.isArray(attrs.main_product_image_locator)) {
+        urls = (attrs.main_product_image_locator as Array<{ media_location?: string }>)
+          .map(l => l.media_location ?? '')
+          .filter(Boolean)
+      }
+      // Fallback: single mainImage string
+      if (urls.length === 0 && typeof attrs.mainImage === 'string' && attrs.mainImage) {
+        urls = [attrs.mainImage]
+      }
+      if (urls.length) amazonImagesBySku.set(al.product.sku, urls)
     }
   } catch (err) {
     console.warn('[ebay-push] Amazon image fallback fetch failed', err)
@@ -566,6 +579,13 @@ async function pushVariationGroup(
     // stores separate image sets per child ASIN (variant).
     if (imageUrls.length === 0) {
       imageUrls.push(...(amazonImagesBySku.get(sku) ?? []))
+    }
+    // eBay rejects inventory_item PUT with error 25717 when imageUrls is empty.
+    // Fail fast here so the operator sees a clear per-SKU error, not a masked
+    // "Manca Marca" from publish_by_group overwriting the real failure.
+    if (imageUrls.length === 0) {
+      results.push({ sku, market: mp, status: 'ERROR', message: 'No images found for this SKU — upload images via the image editor or populate image_1 in the flat-file before pushing' })
+      continue
     }
 
     // Translate numeric conditionId (e.g. '1000') to eBay ConditionEnum ('NEW').
@@ -811,7 +831,11 @@ async function pushVariationGroup(
 
   if (!publishRes.ok) {
     const err = await publishRes.text().catch(() => '')
-    return results.map(r => ({ ...r, status: 'ERROR' as const, message: `publish_by_group ${publishRes.status}: ${err.slice(0, 300)}` }))
+    const pubMsg = `publish_by_group ${publishRes.status}: ${err.slice(0, 300)}`
+    // Preserve per-SKU step-1 errors — only stamp publish failure on rows that
+    // made it through to the offer stage (status 'PUSHED'). Overwriting step-1
+    // errors with "Manca Marca" masks the real root cause (e.g. imageUrls empty).
+    return results.map(r => r.status === 'ERROR' ? r : { ...r, status: 'ERROR' as const, message: pubMsg })
   }
 
   const pubData = await publishRes.json().catch(() => ({})) as { listingId?: string }
@@ -836,7 +860,9 @@ async function pushVariationGroup(
     }
   }
 
-  return results.map(r => ({ ...r, status: 'PUSHED' as const, message: 'pushed as variation group', itemId: listingId }))
+  // Preserve step-1 errors even on successful publish — a SKU that failed
+  // inventory_item PUT was not actually pushed, even though the group published.
+  return results.map(r => r.status === 'ERROR' ? r : { ...r, status: 'PUSHED' as const, message: 'pushed as variation group', itemId: listingId })
 }
 
 // ── Route plugin ───────────────────────────────────────────────────────
