@@ -142,10 +142,12 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       {
         id: 'ean',
         label: 'EAN',
-        description: 'European Article Number (barcode)',
+        description: "EAN/UPC/GTIN barcode — or 'Does not apply' to list a product without one (eBay GTIN exemption)",
         required: false,
         kind: 'text',
-        maxLength: 13,
+        // 14 fits both a GTIN-14 and the exemption value "Does not apply" (14 chars);
+        // 20 leaves headroom. The old cap of 13 made "Does not apply" impossible to type.
+        maxLength: 20,
         width: 120,
       },
       {
