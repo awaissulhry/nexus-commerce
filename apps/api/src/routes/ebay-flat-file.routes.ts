@@ -564,12 +564,16 @@ async function pushVariationGroup(
     for (const row of variantRows) {
       const colorVal = String((row as Record<string, unknown>)[axisKey] ?? '').toLowerCase()
       if (!colorVal || colorRepImages.has(colorVal)) continue
-      const imgs: string[] = []
-      for (let i = 1; i <= 6; i++) {
-        const url = (row as Record<string, unknown>)[`image_${i}`] as string | undefined
-        if (url) imgs.push(url)
+      const sku = row.sku as string
+      // Prefer imagesBySku (ProductImage rows + Amazon PA — set in the merge above)
+      // over the flat-file image_1..6 columns which may contain old stale URLs.
+      let imgs = (imagesBySku.get(sku) ?? []).slice(0, 6)
+      if (imgs.length === 0) {
+        for (let i = 1; i <= 6; i++) {
+          const url = (row as Record<string, unknown>)[`image_${i}`] as string | undefined
+          if (url) imgs.push(url)
+        }
       }
-      if (imgs.length === 0) imgs.push(...(imagesBySku.get(row.sku as string) ?? []).slice(0, 6))
       colorRepImages.set(colorVal, imgs)
     }
   }
@@ -1034,7 +1038,24 @@ async function pushVariationGroup(
   }
 
   const pubData = await publishRes.json().catch(() => ({})) as { listingId?: string }
-  const listingId = pubData.listingId
+  let listingId = pubData.listingId
+
+  // Re-publishing an already-active listing returns no listingId in the publish body.
+  // Fall back to GET offer for the first variant — the offer's listing.listingId is
+  // always populated once the group has been published at least once.
+  if (!listingId && variantRows.length > 0) {
+    try {
+      const firstSku = variantRows[0].sku as string
+      const offerLookup = await fetch(
+        `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(firstSku)}&marketplace_id=${marketplaceId}`,
+        { headers },
+      )
+      if (offerLookup.ok) {
+        const offerData = await offerLookup.json().catch(() => ({})) as { offers?: Array<{ listing?: { listingId?: string } }> }
+        listingId = offerData.offers?.[0]?.listing?.listingId
+      }
+    } catch { /* non-fatal — listingId stays undefined */ }
+  }
 
   // Write the shared listingId back to all variant ChannelListings.
   // _productId may be stripped in the frontend round-trip; fall back to SKU lookup.
