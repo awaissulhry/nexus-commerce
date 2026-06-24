@@ -70,6 +70,32 @@ export function toListingLanguage(mp: string): string {
   return MAP[mp.toUpperCase()] ?? 'en-US'
 }
 
+// Transient eBay Inventory errors — 25001 ("internal warehouse service error")
+// and 25604 ("product not found") — fire when a PUT/POST races eBay's eventual
+// consistency (e.g. a group PUT referencing inventory_items written <2s earlier,
+// common for large families). Retry with exponential backoff. The body is peeked
+// via res.clone() so callers still read res.ok / res.text() on the result unchanged.
+async function ebayFetchRetry(
+  url: string,
+  init: RequestInit,
+  opts: { retries?: number; baseDelayMs?: number } = {},
+): Promise<Response> {
+  const { retries = 3, baseDelayMs = 2000 } = opts
+  let res = await fetch(url, init)
+  for (let attempt = 0; attempt < retries; attempt++) {
+    if (res.ok || res.status === 204) return res
+    let body = ''
+    try { body = await res.clone().text() } catch { /* unreadable — treat as non-transient */ }
+    const transient =
+      res.status === 500 || res.status === 503 ||
+      body.includes('"errorId":25001') || body.includes('"errorId":25604')
+    if (!transient) return res
+    await new Promise((r) => setTimeout(r, baseDelayMs * 2 ** attempt)) // 2s → 4s → 8s
+    res = await fetch(url, init)
+  }
+  return res
+}
+
 export async function pushVariationGroup(
   groupKey: string,
   rows: Array<Record<string, unknown>>,
@@ -81,6 +107,11 @@ export async function pushVariationGroup(
   marketplaceId: string,
   // FCF.3 — caps each variant's qty at its FBM-available pool.
   capToFbm: (pid: string | undefined, sku: string, requested: number, market?: string) => number,
+  // P3 — per-colour curated image override (colourValue.toLowerCase() → ordered
+  // URLs). When a colour is present here these URLs WIN over the ProductImage-
+  // derived colorRepImages, so the operator's master-gallery selections become
+  // the per-variant images. Colours absent from the map keep the default.
+  imageOverrideByColor?: Map<string, string[]>,
 ): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
   const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
 
@@ -322,7 +353,11 @@ export async function pushVariationGroup(
     if (colorAxisRawName) {
       const axisKey = `aspect_${colorAxisRawName.replace(/ /g, '_')}`
       const colorVal = String((row as Record<string, unknown>)[axisKey] ?? '').toLowerCase()
-      if (colorVal && colorRepImages.has(colorVal)) {
+      // P3 — curated per-colour override (operator's master-gallery picks) wins
+      // over the ProductImage-derived set; otherwise fall back to colorRepImages.
+      if (colorVal && imageOverrideByColor?.get(colorVal)?.length) {
+        imageUrls.push(...imageOverrideByColor.get(colorVal)!)
+      } else if (colorVal && colorRepImages.has(colorVal)) {
         imageUrls.push(...colorRepImages.get(colorVal)!)
       }
     }
@@ -370,7 +405,7 @@ export async function pushVariationGroup(
       ...(pkgSize ? { packageWeightAndSize: pkgSize } : {}),
     }
 
-    const itemRes = await fetch(`${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, {
+    const itemRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, {
       method: 'PUT', headers, body: JSON.stringify(itemBody),
     })
     if (!itemRes.ok && itemRes.status !== 204) {
@@ -530,7 +565,7 @@ export async function pushVariationGroup(
   // SKU key by ending the listing in eBay Seller Hub, then re-pushing.
   let effectiveGroupKey = groupKey
 
-  let groupRes = await fetch(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(effectiveGroupKey)}`, {
+  let groupRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(effectiveGroupKey)}`, {
     method: 'PUT', headers, body: JSON.stringify({ ...groupBody, inventoryItemGroupKey: effectiveGroupKey }),
   })
 
@@ -548,7 +583,7 @@ export async function pushVariationGroup(
         // Update the existing group in place (preserving its old key on eBay)
         effectiveGroupKey = oldGroupId
         console.log(`[ebay-push] 25703 — updating existing group ${effectiveGroupKey} in place`)
-        groupRes = await fetch(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(effectiveGroupKey)}`, {
+        groupRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(effectiveGroupKey)}`, {
           method: 'PUT', headers, body: JSON.stringify({ ...groupBody, inventoryItemGroupKey: effectiveGroupKey }),
         })
       }
@@ -694,7 +729,7 @@ export async function pushVariationGroup(
 
   // Step 4: Publish the variation listing.
   // Use effectiveGroupKey (may be old UUID if 25703 triggered in-place update).
-  const publishRes = await fetch(`${apiBase}/sell/inventory/v1/offer/publish_by_inventory_item_group`, {
+  const publishRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/offer/publish_by_inventory_item_group`, {
     method: 'POST', headers,
     body: JSON.stringify({ inventoryItemGroupKey: effectiveGroupKey, marketplaceId }),
   })

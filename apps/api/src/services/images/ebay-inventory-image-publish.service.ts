@@ -118,6 +118,23 @@ export async function publishEbayImagesViaInventory(
   const passthroughCap = (_pid: string | undefined, _sku: string, requested: number) =>
     Number(requested) || 0
 
+  // P3 — per-colour curation. The operator's master-gallery picks per colour are
+  // saved as eBay ListingImage colour-sets (variantGroupKey set). Feed them to the
+  // push as imageOverrideByColor so they WIN over the default (Amazon-CDN child)
+  // per-variant images. Colours with no curated set keep the default behaviour.
+  const curatedSets = await prisma.listingImage.findMany({
+    where: { productId, platform: 'EBAY', variantGroupKey: { not: null }, mediaType: 'IMAGE' },
+    orderBy: { position: 'asc' },
+    select: { variantGroupValue: true, url: true },
+  })
+  const imageOverrideByColor = new Map<string, string[]>()
+  for (const r of curatedSets) {
+    const key = String(r.variantGroupValue ?? '').toLowerCase()
+    if (!key) continue
+    if (!imageOverrideByColor.has(key)) imageOverrideByColor.set(key, [])
+    imageOverrideByColor.get(key)!.push(r.url)
+  }
+
   const allResults: Array<{ sku: string; market: string; status: string; message: string }> = []
   for (const mp of markets) {
     const groupResults = await pushVariationGroup(
@@ -130,6 +147,7 @@ export async function publishEbayImagesViaInventory(
       EBAY_API_BASE,
       toMarketplaceId(mp),
       passthroughCap,
+      imageOverrideByColor.size > 0 ? imageOverrideByColor : undefined,
     )
     allResults.push(...groupResults)
   }
@@ -164,7 +182,7 @@ export async function publishEbayImagesViaInventory(
   return {
     success,
     message: success
-      ? `Published eBay images across ${markets.join(', ')} · ${variantRows.length} variants, ${colours.size} colour${colours.size === 1 ? '' : 's'}`
+      ? `Published eBay images across ${markets.join(', ')} · ${variantRows.length} variants, ${colours.size} colour${colours.size === 1 ? '' : 's'}${imageOverrideByColor.size > 0 ? ` (${imageOverrideByColor.size} curated)` : ''}`
       : `eBay publish failed: ${errors[0]?.message ?? 'unknown error'}`,
     pictureCount: pushedSkus,
     colorSetCount: colours.size,
