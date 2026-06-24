@@ -771,39 +771,39 @@ async function pushVariationGroup(
     },
   }
 
-  let groupRes = await fetch(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(groupKey)}`, {
-    method: 'PUT', headers, body: JSON.stringify(groupBody),
+  // eBay error 25703: one or more SKUs are already members of a DIFFERENT group —
+  // typically the old UUID-based group from before we switched to parent-SKU keys.
+  // eBay won't let us DELETE an active group (it has published offers pointing to it).
+  // Strategy: update the EXISTING group IN PLACE using its old key so all content
+  // fixes (specs dedup, image cap, correct title) land immediately on the live listing.
+  // The groupKey stays as the old UUID for now — the operator can migrate to the parent
+  // SKU key by ending the listing in eBay Seller Hub, then re-pushing.
+  let effectiveGroupKey = groupKey
+
+  let groupRes = await fetch(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(effectiveGroupKey)}`, {
+    method: 'PUT', headers, body: JSON.stringify({ ...groupBody, inventoryItemGroupKey: effectiveGroupKey }),
   })
 
-  // eBay error 25703: one or more SKUs are already members of a DIFFERENT group
-  // (typically the old UUID-based group from a previous push before we switched to
-  // parent-SKU keys). eBay embeds the conflicting groupId inside the error message
-  // text as "groupId: <key>" (not as a JSON property).
-  // Recover automatically: parse the groupId out of the message, DELETE that old
-  // group to release the SKU memberships, then retry the PUT with the new key.
   if (!groupRes.ok && groupRes.status === 400) {
     const errText = await groupRes.text().catch(() => '')
     let errJson: { errors?: Array<{ errorId?: number; message?: string }> } = {}
-    try { errJson = JSON.parse(errText) } catch { /* use raw text fallback */ }
+    try { errJson = JSON.parse(errText) } catch { /* raw text fallback */ }
     const firstErr = errJson.errors?.[0]
-    const is25703 = firstErr?.errorId === 25703
-      || errText.includes('"errorId":25703')
+    const is25703 = firstErr?.errorId === 25703 || errText.includes('"errorId":25703')
     if (is25703) {
-      // "groupId" appears in the human-readable message text: "... groupId: abc123"
+      // Extract the existing groupId from the error message text ("...groupId: abc123")
       const groupIdMatch = (firstErr?.message ?? errText).match(/groupId[:\s]+([a-zA-Z0-9]+)/)
       const oldGroupId = groupIdMatch?.[1]
-      if (oldGroupId && oldGroupId !== groupKey) {
-        console.log(`[ebay-push] 25703 — deleting old group ${oldGroupId} to migrate to key ${groupKey}`)
-        await fetch(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(oldGroupId)}`, {
-          method: 'DELETE', headers,
-        }).catch(() => {/* non-fatal if already gone */})
-        // Brief pause for eBay to release the SKU memberships before the retry
-        await new Promise(r => setTimeout(r, 1500))
-        groupRes = await fetch(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(groupKey)}`, {
-          method: 'PUT', headers, body: JSON.stringify(groupBody),
+      if (oldGroupId && oldGroupId !== effectiveGroupKey) {
+        // Update the existing group in place (preserving its old key on eBay)
+        effectiveGroupKey = oldGroupId
+        console.log(`[ebay-push] 25703 — updating existing group ${effectiveGroupKey} in place`)
+        groupRes = await fetch(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(effectiveGroupKey)}`, {
+          method: 'PUT', headers, body: JSON.stringify({ ...groupBody, inventoryItemGroupKey: effectiveGroupKey }),
         })
       }
     }
+    // If still not ok after 25703 fallback (or other error), fall through to error return below
   }
 
   if (!groupRes.ok && groupRes.status !== 204) {
@@ -943,9 +943,10 @@ async function pushVariationGroup(
   if (anyOfferFailed) return results
 
   // Step 4: Publish the variation listing.
+  // Use effectiveGroupKey (may be old UUID if 25703 triggered in-place update).
   const publishRes = await fetch(`${apiBase}/sell/inventory/v1/offer/publish_by_inventory_item_group`, {
     method: 'POST', headers,
-    body: JSON.stringify({ inventoryItemGroupKey: groupKey, marketplaceId }),
+    body: JSON.stringify({ inventoryItemGroupKey: effectiveGroupKey, marketplaceId }),
   })
 
   if (!publishRes.ok) {
