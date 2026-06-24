@@ -25,6 +25,7 @@ import { productSearchIndexerService } from '../services/product-search-indexer.
 import { backfillNormalizeProductImageUrls } from '../services/images/normalize-image-urls-backfill.service.js'
 import { resolveSlotTaxonomy } from '../services/images/amazon-slot-taxonomy.service.js'
 import { restoreFbaListings } from '../services/fba-restore.service.js'
+import { hydrateAmazonAttributes } from '../services/amazon/flat-file-hydrate.service.js'
 import {
   isSearchConfigured,
   searchHealthy,
@@ -418,6 +419,15 @@ export async function adminRoutes(app: FastifyInstance) {
    * GET /admin/health
    * System health check
    */
+  // F.3 — hydrate Amazon attributes for sparse listings so the flat-file editor
+  // shows real fabric_type/country_of_origin/bullets. ATTRIBUTES-ONLY (never
+  // writes quantity/price/followMaster*). Body: { onlySparse?: boolean, limit?: number }.
+  app.post('/admin/amazon/hydrate-attributes', async (request, reply) => {
+    const body = (request.body ?? {}) as { onlySparse?: boolean; limit?: number }
+    const result = await hydrateAmazonAttributes({ onlySparse: body.onlySparse ?? true, limit: body.limit })
+    return reply.send({ ok: true, ...result })
+  })
+
   app.get('/admin/health', async (request, reply) => {
     try {
       const report = await validationService.validateAllProducts()
