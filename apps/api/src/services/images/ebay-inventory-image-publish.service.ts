@@ -43,7 +43,7 @@ export async function publishEbayImagesViaInventory(
 ): Promise<EbayInventoryPublishResult> {
   const product = await prisma.product.findUnique({
     where: { id: productId },
-    select: { id: true, sku: true, isParent: true, parentId: true },
+    select: { id: true, sku: true, isParent: true, parentId: true, imageAxisPreference: true },
   })
   if (!product) throw new Error(`Product ${productId} not found`)
 
@@ -118,21 +118,41 @@ export async function publishEbayImagesViaInventory(
   const passthroughCap = (_pid: string | undefined, _sku: string, requested: number) =>
     Number(requested) || 0
 
-  // P3 — per-colour curation. The operator's master-gallery picks per colour are
-  // saved as eBay ListingImage colour-sets (variantGroupKey set). Feed them to the
-  // push as imageOverrideByColor so they WIN over the default (Amazon-CDN child)
-  // per-variant images. Colours with no curated set keep the default behaviour.
-  const curatedSets = await prisma.listingImage.findMany({
-    where: { productId, platform: 'EBAY', variantGroupKey: { not: null }, mediaType: 'IMAGE' },
+  // P3/P4 — curation. The operator's master-gallery picks are saved as eBay
+  // ListingImage rows: per-axis-value sets (variantGroupKey = the chosen picture
+  // axis, variantGroupValue = e.g. "Nero") and optional per-SKU overrides
+  // (variationId = the variant's product id). Both feed the push and WIN over the
+  // default (Amazon-CDN child) images; per-SKU wins over per-axis-value.
+  const pictureAxis = product.imageAxisPreference ?? 'Color'
+  const curatedRows = await prisma.listingImage.findMany({
+    where: {
+      productId, platform: 'EBAY', mediaType: 'IMAGE',
+      OR: [{ variantGroupKey: pictureAxis }, { variationId: { not: null } }],
+    },
     orderBy: { position: 'asc' },
-    select: { variantGroupValue: true, url: true },
+    select: { variantGroupValue: true, variationId: true, url: true },
   })
+  // Resolve per-SKU rows (variationId → sku) so the push can key by SKU.
+  const variationIds = [...new Set(curatedRows.map((r) => r.variationId).filter((v): v is string => !!v))]
+  const skuByVariationId = new Map<string, string>()
+  if (variationIds.length > 0) {
+    const vprods = await prisma.product.findMany({ where: { id: { in: variationIds } }, select: { id: true, sku: true } })
+    for (const p of vprods) skuByVariationId.set(p.id, p.sku)
+  }
   const imageOverrideByColor = new Map<string, string[]>()
-  for (const r of curatedSets) {
-    const key = String(r.variantGroupValue ?? '').toLowerCase()
-    if (!key) continue
-    if (!imageOverrideByColor.has(key)) imageOverrideByColor.set(key, [])
-    imageOverrideByColor.get(key)!.push(r.url)
+  const imageOverrideBySku = new Map<string, string[]>()
+  for (const r of curatedRows) {
+    if (r.variationId) {
+      const sku = skuByVariationId.get(r.variationId)
+      if (!sku) continue
+      if (!imageOverrideBySku.has(sku)) imageOverrideBySku.set(sku, [])
+      imageOverrideBySku.get(sku)!.push(r.url)
+    } else {
+      const key = String(r.variantGroupValue ?? '').toLowerCase()
+      if (!key) continue
+      if (!imageOverrideByColor.has(key)) imageOverrideByColor.set(key, [])
+      imageOverrideByColor.get(key)!.push(r.url)
+    }
   }
 
   const allResults: Array<{ sku: string; market: string; status: string; message: string }> = []
@@ -148,6 +168,8 @@ export async function publishEbayImagesViaInventory(
       toMarketplaceId(mp),
       passthroughCap,
       imageOverrideByColor.size > 0 ? imageOverrideByColor : undefined,
+      pictureAxis,
+      imageOverrideBySku.size > 0 ? imageOverrideBySku : undefined,
     )
     allResults.push(...groupResults)
   }
@@ -182,7 +204,7 @@ export async function publishEbayImagesViaInventory(
   return {
     success,
     message: success
-      ? `Published eBay images across ${markets.join(', ')} · ${variantRows.length} variants, ${colours.size} colour${colours.size === 1 ? '' : 's'}${imageOverrideByColor.size > 0 ? ` (${imageOverrideByColor.size} curated)` : ''}`
+      ? `Published eBay images across ${markets.join(', ')} · ${variantRows.length} variants · vary by ${pictureAxis}${imageOverrideByColor.size > 0 ? ` (${imageOverrideByColor.size} ${pictureAxis.toLowerCase()} curated)` : ''}${imageOverrideBySku.size > 0 ? ` + ${imageOverrideBySku.size} per-SKU` : ''}`
       : `eBay publish failed: ${errors[0]?.message ?? 'unknown error'}`,
     pictureCount: pushedSkus,
     colorSetCount: colours.size,

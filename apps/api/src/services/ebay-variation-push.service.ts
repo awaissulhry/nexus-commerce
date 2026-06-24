@@ -112,6 +112,14 @@ export async function pushVariationGroup(
   // derived colorRepImages, so the operator's master-gallery selections become
   // the per-variant images. Colours absent from the map keep the default.
   imageOverrideByColor?: Map<string, string[]>,
+  // P4 — the variation axis eBay varies images by (aspectsImageVariesBy). Defaults
+  // to the auto-detected colour axis when omitted, so the flat-file push is
+  // unchanged. imageOverrideByColor is keyed by THIS axis's values.
+  pictureAxisOverride?: string,
+  // P4 — per-SKU image override; WINS over the per-axis-value override for that
+  // exact variant. Keyed by SKU. (eBay only shows per-SKU images when the picture
+  // axis is granular enough — e.g. Size — so this is for those configurations.)
+  imageOverrideBySku?: Map<string, string[]>,
 ): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
   const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
 
@@ -260,9 +268,15 @@ export async function pushVariationGroup(
   // products, bundles, etc.).
   const COLOR_AXIS_NAMES_PRE = new Set(['colore', 'color', 'farbe', 'couleur', 'colour', 'kleur'])
   const colorAxisRawName = effectiveVarAxes.find(n => COLOR_AXIS_NAMES_PRE.has(n.toLowerCase()))
-  const colorRepImages = new Map<string, string[]>() // colourValue.toLowerCase() → [url, ...]
-  if (colorAxisRawName) {
-    const axisKey = `aspect_${colorAxisRawName.replace(/ /g, '_')}`
+  // P4 — operator-chosen picture axis (the aspect eBay varies images by). Resolve
+  // the requested name against the real variation axes; fall back to the colour
+  // axis. With no override this IS colorAxisRawName, so behaviour is unchanged.
+  const pictureAxis = (pictureAxisOverride
+    && effectiveVarAxes.find(a => a.toLowerCase() === pictureAxisOverride.toLowerCase()))
+    || colorAxisRawName
+  const colorRepImages = new Map<string, string[]>() // pictureAxisValue.toLowerCase() → [url, ...]
+  if (pictureAxis) {
+    const axisKey = `aspect_${pictureAxis.replace(/ /g, '_')}`
     for (const row of variantRows) {
       const colorVal = String((row as Record<string, unknown>)[axisKey] ?? '').toLowerCase()
       if (!colorVal || colorRepImages.has(colorVal)) continue
@@ -350,15 +364,19 @@ export async function pushVariationGroup(
     // end up showing the same 6 images in the carousel instead of 9×6=54.
     // Falls back to per-SKU images when no colour axis is detected.
     const imageUrls: string[] = []
-    if (colorAxisRawName) {
-      const axisKey = `aspect_${colorAxisRawName.replace(/ /g, '_')}`
-      const colorVal = String((row as Record<string, unknown>)[axisKey] ?? '').toLowerCase()
-      // P3 — curated per-colour override (operator's master-gallery picks) wins
-      // over the ProductImage-derived set; otherwise fall back to colorRepImages.
-      if (colorVal && imageOverrideByColor?.get(colorVal)?.length) {
-        imageUrls.push(...imageOverrideByColor.get(colorVal)!)
-      } else if (colorVal && colorRepImages.has(colorVal)) {
-        imageUrls.push(...colorRepImages.get(colorVal)!)
+    // P4 — a per-SKU override (operator pinned images to this exact variant) wins
+    // over everything else.
+    if (imageOverrideBySku?.get(sku)?.length) {
+      imageUrls.push(...imageOverrideBySku.get(sku)!)
+    } else if (pictureAxis) {
+      const axisKey = `aspect_${pictureAxis.replace(/ /g, '_')}`
+      const axisVal = String((row as Record<string, unknown>)[axisKey] ?? '').toLowerCase()
+      // P3 — curated per-axis-value override (operator's master-gallery picks) wins
+      // over the ProductImage-derived set; otherwise fall back to the rep-image set.
+      if (axisVal && imageOverrideByColor?.get(axisVal)?.length) {
+        imageUrls.push(...imageOverrideByColor.get(axisVal)!)
+      } else if (axisVal && colorRepImages.has(axisVal)) {
+        imageUrls.push(...colorRepImages.get(axisVal)!)
       }
     }
     // Fallback: per-SKU images (no colour axis, or this variant's colour value
@@ -463,15 +481,14 @@ export async function pushVariationGroup(
   const specifications = deduplicatedSpecs.length > 0
     ? deduplicatedSpecs.map(e => ({ name: e.name, values: [...e.values] }))
     : [{ name: 'Custom Bundle', values: variantRows.map(r => r.sku as string) }]
-  // imageVariesByAxes must name the COLOR spec so eBay switches jacket photos
-  // when a buyer selects a colour. We already detected colorAxisRawName in the
-  // pre-pass; find its normalised spec entry and use that exact name so the value
-  // matches specifications[].name after eBay's locale normalisation.
-  const colorSpec = colorAxisRawName
-    ? deduplicatedSpecs.find(s => s.name.toLowerCase() === colorAxisRawName.toLowerCase()
-        || COLOR_AXIS_NAMES_PRE.has(s.name.toLowerCase()))
+  // imageVariesByAxes names the spec eBay switches photos by — the operator's
+  // chosen picture axis (default = the colour axis). Match it to the normalised
+  // spec so the value lines up after eBay's locale normalisation.
+  const pictureSpec = pictureAxis
+    ? deduplicatedSpecs.find(s => s.name.toLowerCase() === pictureAxis.toLowerCase()
+        || (COLOR_AXIS_NAMES_PRE.has(s.name.toLowerCase()) && COLOR_AXIS_NAMES_PRE.has(pictureAxis.toLowerCase())))
     : undefined
-  const imageVariesByAxes = colorSpec ? [colorSpec.name] : deduplicatedSpecs.slice(0, 1).map(e => e.name)
+  const imageVariesByAxes = pictureSpec ? [pictureSpec.name] : deduplicatedSpecs.slice(0, 1).map(e => e.name)
 
   // Step 3: Create/update the inventory_item_group.
   // variantSKUs is the correct field name (plain string array, not objects).
