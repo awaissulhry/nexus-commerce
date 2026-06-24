@@ -144,13 +144,16 @@ function buildFlatRow(
 
   // Prefer Cloudinary images (ProductImage rows) over Amazon CDN platformAttributes URLs.
   // Sort MAIN type first, then by sortOrder. Fall back to non-Amazon platformAttributes URLs.
+  // Prefer Cloudinary (ProductImage rows) over platformAttributes URLs.
+  // Do NOT filter out Amazon CDN fallback URLs — m.media-amazon.com images are
+  // publicly accessible; eBay fetches and re-hosts them in eBay Picture Services.
+  // Filtering them was leaving imageUrls empty → eBay error 25717.
   const cloudinaryUrls = (product.images ?? [])
     .slice()
     .sort((a, b) => (a.type === 'MAIN' ? -1 : b.type === 'MAIN' ? 1 : 0) || a.sortOrder - b.sortOrder)
     .map((img) => img.url)
-    .filter((url) => !url.includes('amazon.com'));
-  const fallbackUrls = firstImageUrls.filter((url) => !url.includes('amazon.com'));
-  const effectiveImageUrls = cloudinaryUrls.length > 0 ? cloudinaryUrls : fallbackUrls;
+    .filter((url) => !!url);
+  const effectiveImageUrls = cloudinaryUrls.length > 0 ? cloudinaryUrls : firstImageUrls.filter(Boolean);
 
   // EV.5b — variation linkage. Axis names normalised to comma-separated
   // (what the variation publish's split(',') expects); axis values from
@@ -526,12 +529,10 @@ async function pushVariationGroup(
     // FCF.3 — cap each variant at its FBM-available pool.
     const qty = capToFbm(row._productId as string | undefined, sku, Number(row[`${mp.toLowerCase()}_qty`] ?? row.quantity ?? 0), mp)
 
-    // Filter out Amazon CDN URLs — eBay cannot crawl m.media-amazon.com
-    // (WAF restrictions). Send only publicly accessible URLs.
     const imageUrls: string[] = []
     for (let i = 1; i <= 6; i++) {
       const url = row[`image_${i}`] as string | undefined
-      if (url && !url.includes('amazon.com')) imageUrls.push(url)
+      if (url) imageUrls.push(url)
     }
 
     // Translate numeric conditionId (e.g. '1000') to eBay ConditionEnum ('NEW').
@@ -606,7 +607,7 @@ async function pushVariationGroup(
   const groupImageUrls: string[] = []
   for (let i = 1; i <= 6; i++) {
     const url = parentRow[`image_${i}`] as string | undefined
-    if (url && !url.includes('amazon.com')) groupImageUrls.push(url)
+    if (url) groupImageUrls.push(url)
   }
 
   const groupBody = {
@@ -1482,11 +1483,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           const encodedSku = encodeURIComponent(sku);
           const invUrl = `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodedSku}`;
 
-          // Filter Amazon CDN URLs — eBay cannot crawl m.media-amazon.com.
           const imageUrls: string[] = [];
           for (let i = 1; i <= 6; i++) {
             const url = row[`image_${i}`] as string | undefined;
-            if (url && !url.includes('amazon.com')) imageUrls.push(url);
+            if (url) imageUrls.push(url);
           }
 
           // Deduplicate aspects by key (Map last-write wins for repeated keys).
