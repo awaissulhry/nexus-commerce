@@ -5004,6 +5004,12 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
         const appliesToType = !col.applicableProductTypes
           || col.applicableProductTypes.includes(String(row.product_type ?? '').toUpperCase())
 
+        // FBA rows: quantity is Amazon-managed (a merchant qty flips FBA→FBM).
+        // F.1 already blanks the value server-side; grey the cell so it reads as
+        // not-applicable here (FBM rows still get an editable quantity cell).
+        const isFbaQtyCell = col.id === 'fulfillment_availability__quantity'
+          && /^(AMAZON|AFN|FBA)/.test(String(row.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase())
+
         return (
           <SpreadsheetCell
             key={col.id}
@@ -5013,7 +5019,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             isEditing={isCellEditing}
             editInitialChar={isCellEditing ? editInitialChar : null}
             cellBg={stickyLeft !== undefined ? gColor(groupColor).band : gColor(groupColor).cell}
-            grayed={!appliesToType}
+            grayed={!appliesToType || isFbaQtyCell}
             isGhost={!!row._ghost}
             width={w}
             cellHeight={rowHeight}
