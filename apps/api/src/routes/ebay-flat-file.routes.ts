@@ -550,11 +550,13 @@ async function pushVariationGroup(
   //   • inventoryItemGroupKey is NOT a valid offer field — group linkage is
   //     established exclusively via variantSKUs in the group PUT above.
   //   • availableQuantity is required before publishOfferByInventoryItemGroup.
+  // Offer + policy endpoints do NOT accept language headers (error 25709).
+  // Locale is conveyed via X-EBAY-C-MARKETPLACE-ID only.
   const acctHeaders = {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
     'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
-    'Accept-Language': lang,
+    Accept: 'application/json',
   }
   let fulfillmentPolicyId = (parentRow.fulfillment_policy_id as string | undefined) ?? ''
   let paymentPolicyId     = (parentRow.payment_policy_id     as string | undefined) ?? ''
