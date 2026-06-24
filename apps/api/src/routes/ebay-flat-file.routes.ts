@@ -461,6 +461,26 @@ async function pushVariationGroup(
   const nmLabel = (a: string) => nameLabels[a] || a
   const vlLabel = (a: string, v: string) => valueLabels[a]?.[v] || v
 
+  // Pre-fetch Amazon ChannelListing imageUrls per SKU as fallback for variants
+  // that have no eBay-specific images. Amazon imports per-variant images (each
+  // colour/size child ASIN has its own photo set), so this gives SKU-specific
+  // colour images without requiring the operator to manually populate image_1..6.
+  const amazonImagesBySku = new Map<string, string[]>()
+  try {
+    const variantSkus = variantRows.map(r => r.sku as string).filter(Boolean)
+    const amazonListings = await prisma.channelListing.findMany({
+      where: { product: { sku: { in: variantSkus } }, channel: 'AMAZON' },
+      select: { platformAttributes: true, product: { select: { sku: true } } },
+    })
+    for (const al of amazonListings) {
+      const attrs = (al.platformAttributes ?? {}) as Record<string, unknown>
+      const urls = ((attrs.imageUrls ?? attrs.images) as string[] | undefined) ?? []
+      if (urls.length) amazonImagesBySku.set(al.product.sku, urls.filter(Boolean))
+    }
+  } catch (err) {
+    console.warn('[ebay-push] Amazon image fallback fetch failed', err)
+  }
+
   // Detect variation axes dynamically: scan all aspect_* keys across variant
   // rows and find those with >1 distinct value. Robust against the Amazon
   // variation theme (e.g. "SIZE_COLOR") not matching the eBay category's
@@ -533,6 +553,11 @@ async function pushVariationGroup(
     for (let i = 1; i <= 6; i++) {
       const url = row[`image_${i}`] as string | undefined
       if (url) imageUrls.push(url)
+    }
+    // Fall back to per-SKU Amazon images — colour-specific because Amazon
+    // stores separate image sets per child ASIN (variant).
+    if (imageUrls.length === 0) {
+      imageUrls.push(...(amazonImagesBySku.get(sku) ?? []))
     }
 
     // Translate numeric conditionId (e.g. '1000') to eBay ConditionEnum ('NEW').
@@ -608,6 +633,18 @@ async function pushVariationGroup(
   for (let i = 1; i <= 6; i++) {
     const url = parentRow[`image_${i}`] as string | undefined
     if (url) groupImageUrls.push(url)
+  }
+  // If parent has no images, aggregate from all variant Amazon images so the
+  // group listing shows at least one photo (eBay requires imageUrls on the group).
+  if (groupImageUrls.length === 0) {
+    const seen = new Set<string>()
+    for (const urls of amazonImagesBySku.values()) {
+      for (const u of urls) {
+        if (u && !seen.has(u) && groupImageUrls.length < 12) {
+          seen.add(u); groupImageUrls.push(u)
+        }
+      }
+    }
   }
 
   const groupBody = {
