@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, Loader2, RefreshCw, RotateCcw, Search, Send, X,
+  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, Loader2, Plus, RefreshCw, RotateCcw, Search, Send, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -11,6 +11,9 @@ import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
 import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx, RenderCellContent } from '@/components/flat-file/FlatFileGrid.types'
+import { Modal } from '@/design-system/components/Modal'
+import { Skeleton } from '@/design-system/primitives/Skeleton'
+import { AddListingPopover } from './AddListingPopover'
 import { ChannelStrip } from './ChannelStrip'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import { CascadeModal } from '../_shared/CascadeModal'
@@ -102,23 +105,27 @@ function DescriptionModal({ value, onSave, onClose }: { value: string; onSave: (
   const [text, setText] = useState(value)
   const remaining = 4000 - text.length
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl flex flex-col w-[800px] max-w-full max-h-[80vh] p-4 gap-2">
-        <div className="flex items-center justify-between">
-          <span className="font-semibold text-sm">Description Editor</span>
-          <span className={cn('text-xs', remaining < 0 ? 'text-red-600' : 'text-slate-400')}>{remaining} chars remaining</span>
-        </div>
-        <textarea
-          className="flex-1 min-h-[400px] border border-slate-300 dark:border-slate-600 rounded-lg p-3 text-xs font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100"
-          value={text} onChange={(e) => setText(e.target.value)} placeholder="Enter HTML description…" />
-        <p className="text-xs text-slate-400">HTML is supported: &lt;p&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;br&gt;…</p>
-        <div className="flex justify-end gap-2">
+    <Modal
+      open
+      onClose={onClose}
+      title="Description Editor"
+      subtitle={<span className={cn(remaining < 0 ? 'text-red-500 font-medium' : '')}>{remaining} chars remaining</span>}
+      size="xl"
+      footer={
+        <>
           <Button size="sm" variant="ghost" onClick={onClose}>Cancel</Button>
           <Button size="sm" onClick={() => { onSave(text); onClose() }}>Save</Button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <textarea
+        className="w-full min-h-[400px] border border-slate-300 dark:border-slate-600 rounded-lg p-3 text-xs font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Enter HTML description…"
+      />
+      <p className="mt-2 text-xs text-slate-400">HTML is supported: &lt;p&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;br&gt;…</p>
+    </Modal>
   )
 }
 
@@ -130,65 +137,68 @@ function CategorySearchPanel({ marketplace, onSelect, onClose }: {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<CategoryResult[]>([])
   const [loading, setLoading] = useState(false)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  useState(() => { setTimeout(() => inputRef.current?.focus(), 0) })
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 0) }, [])
 
-  useState(() => {}) // mount effect placeholder — using pattern below instead
-  const lastQuery = useRef('')
-  if (query !== lastQuery.current) {
-    lastQuery.current = query
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (query.trim().length >= 2) {
-      debounceRef.current = setTimeout(async () => {
-        setLoading(true)
-        try {
-          const mpId = marketplace.startsWith('EBAY_') ? marketplace : `EBAY_${marketplace}`
-          const res = await fetch(`${getBackendUrl()}/api/ebay/flat-file/category-search?q=${encodeURIComponent(query)}&marketplace=${mpId}`)
-          if (res.ok) setResults((await res.json() as { categories: CategoryResult[] }).categories)
-        } catch { setResults([]) }
-        finally { setLoading(false) }
-      }, 300)
-    } else {
-      setResults([])
-    }
-  }
+  useEffect(() => {
+    if (query.trim().length < 2) { setResults([]); return }
+    const t = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const mpId = marketplace.startsWith('EBAY_') ? marketplace : `EBAY_${marketplace}`
+        const res = await fetch(`${getBackendUrl()}/api/ebay/flat-file/category-search?q=${encodeURIComponent(query)}&marketplace=${mpId}`)
+        if (res.ok) setResults((await res.json() as { categories: CategoryResult[] }).categories)
+      } catch { setResults([]) }
+      finally { setLoading(false) }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [query, marketplace])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-32"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-[500px] max-w-full border border-slate-200 dark:border-slate-700">
-        <div className="flex items-center gap-2 p-3 border-b border-slate-200 dark:border-slate-700">
-          <Search className="w-4 h-4 text-slate-400 shrink-0" />
-          <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Escape' && onClose()}
-            placeholder="Search eBay categories…"
-            className="flex-1 text-sm bg-transparent outline-none text-slate-800 dark:text-slate-100 placeholder:text-slate-400" />
-          {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400 shrink-0" />}
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
-        </div>
-        {results.length > 0 && (
-          <ul className="max-h-72 overflow-y-auto py-1">
-            {results.map((cat) => (
-              <li key={cat.id}>
-                <button type="button" onClick={() => { onSelect(cat.id, cat.name); onClose() }}
-                  className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                  <div className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{cat.path}</div>
-                  <div className="text-[10px] text-slate-400 font-mono">ID: {cat.id}</div>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {query.trim().length >= 2 && !loading && !results.length && (
-          <div className="px-4 py-3 text-xs text-slate-400">No categories found. Try a different term.</div>
-        )}
-        {query.trim().length < 2 && (
-          <div className="px-4 py-3 text-xs text-slate-400">Type at least 2 characters to search…</div>
-        )}
+    <Modal open onClose={onClose} title="Search eBay Categories" size="md">
+      <div className="flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mb-3">
+        <Search className="w-4 h-4 text-slate-400 shrink-0" />
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search eBay categories…"
+          className="flex-1 text-sm bg-transparent outline-none text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+        />
+        {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400 shrink-0" />}
       </div>
-    </div>
+
+      {loading && !results.length && (
+        <div className="space-y-2">
+          <Skeleton height={40} radius={6} />
+          <Skeleton height={40} radius={6} />
+          <Skeleton height={40} radius={6} />
+        </div>
+      )}
+
+      {!loading && results.length > 0 && (
+        <ul className="max-h-72 overflow-y-auto rounded-lg border border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+          {results.map((cat) => (
+            <li key={cat.id}>
+              <button type="button" onClick={() => { onSelect(cat.id, cat.name); onClose() }}
+                className="w-full text-left px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                <div className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{cat.path}</div>
+                <div className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {cat.id}</div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {!loading && query.trim().length >= 2 && !results.length && (
+        <div className="text-xs text-slate-400 text-center py-6">No categories found. Try a different term.</div>
+      )}
+      {query.trim().length < 2 && (
+        <div className="text-xs text-slate-400 text-center py-6">Type at least 2 characters to search…</div>
+      )}
+    </Modal>
   )
 }
 
@@ -354,6 +364,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   useEffect(() => { try { localStorage.setItem('ff-show-cascade', showCascadeButtons ? '1' : '0') } catch {} }, [showCascadeButtons])
   const [cascadeRow, setCascadeRow] = useState<BaseRow | null>(null)
 
+  const [addListingOpen, setAddListingOpen] = useState(false)
+
   // IN.1 — Override badges toggle (default on, persisted to localStorage)
   const [showOverrideBadges, setShowOverrideBadges] = useState<boolean>(() => {
     try { return localStorage.getItem('ff-show-overrides') !== '0' } catch { return true }
@@ -381,6 +393,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // canonical "Size,Color" theme convention.
   const [variantAxisNames, setVariantAxisNames] = useState<string[]>([])
   const variantAxisCacheRef = useRef<Map<string, string[]>>(new Map())
+  const [categoryLoading, setCategoryLoading] = useState(false)
 
   // ── Business policies (fulfillment / payment / return) ─────────────────
   const [policyOptions, setPolicyOptions] = useState<{
@@ -479,6 +492,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       setVariantAxisNames(variantAxisCacheRef.current.get(categoryId) ?? [])
       return
     }
+    setCategoryLoading(true)
     try {
       const mpId = marketplace.startsWith('EBAY_') ? marketplace : `EBAY_${marketplace}`
       const res  = await fetch(`${BACKEND}/api/ebay/flat-file/category-schema?categoryId=${encodeURIComponent(categoryId)}&marketplace=${mpId}`)
@@ -497,6 +511,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       setConditionOptions(conds)
       setVariantAxisNames(axisNames)
     } catch { /* silently fail — optional */ }
+    finally { setCategoryLoading(false) }
   }, [marketplace, categoryColumnsCache, BACKEND])
 
   // Auto-load the category schema on mount from the rows' own category, so
@@ -837,9 +852,17 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     }
     // Category ID
     if (col.id === 'category_id') {
+      if (categoryLoading && displayVal) {
+        return (
+          <span className="flex items-center gap-1 text-slate-400 text-[10px]">
+            <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+            <span className="font-mono">{displayVal}</span>
+          </span>
+        )
+      }
       return displayVal
         ? <span className="font-mono text-[10px] text-blue-700 dark:text-blue-300">{displayVal}</span>
-        : <span className="text-slate-300 text-[10px]">Double-click to search…</span>
+        : <span className="text-slate-300 text-[10px]">Click to search categories…</span>
     }
     // Boolean display
     if (col.kind === 'boolean') {
@@ -872,7 +895,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     }
     return null
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [familyParentIds])
+  }, [familyParentIds, categoryLoading])
 
   // ── Edit intercept for modal-based editing ─────────────────────────────
   const onBeforeEditCell = useCallback((col: FlatFileColumn, row: BaseRow): boolean => {
@@ -964,6 +987,30 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   const renderToolbarFetch = useCallback(({ rows, selectedRows, setRows, pushHistory }: ToolbarFetchCtx) => (
     <>
+      {/* Add listing row generator */}
+      <div className="relative">
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setAddListingOpen((o) => !o)}
+          title="Add a new listing — generates parent + variant rows in the grid"
+        >
+          <Plus className="w-3.5 h-3.5 mr-1.5" />
+          Add listing
+        </Button>
+        {addListingOpen && (
+          <AddListingPopover
+            categoryAxisNames={variantAxisNames}
+            onConfirm={(newRows) => {
+              const next = [...rows, ...newRows]
+              pushHistory(next)
+              setRows(next)
+            }}
+            onClose={() => setAddListingOpen(false)}
+          />
+        )}
+      </div>
+
       {/* Phase 3 — Pull from eBay (full data, undoable, diff preview) */}
       <div className="relative">
         <SharedTbBtn
@@ -1027,7 +1074,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       )}
     </>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, pullHistoryOpen])
+  ), [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, pullHistoryOpen, addListingOpen, variantAxisNames])
 
   // ── Slot: import button ────────────────────────────────────────────────
 
