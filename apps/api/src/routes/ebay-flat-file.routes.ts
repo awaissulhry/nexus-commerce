@@ -38,6 +38,7 @@ import {
 } from '../services/ebay-flat-file-pull-preview.service.js';
 import { pushVariationGroup, buildPackageWeightAndSize, toListingLanguage, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields } from '../services/ebay-variation-push.service.js';
+import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
 
@@ -499,6 +500,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return reply.code(400).send({ error: 'rows must be non-empty' });
+    }
+
+    // ── Publish gate ─────────────────────────────────────────────────────
+    // Mirror the cockpit path: honour NEXUS_ENABLE_EBAY_PUBLISH so that
+    // the safety flag blocks ALL eBay writes, not just cockpit publishes.
+    const publishMode = getEbayPublishMode();
+    if (publishMode === 'gated') {
+      return reply.code(503).send({ error: 'eBay publish is currently disabled', mode: publishMode });
     }
 
     // Resolve which markets to push to

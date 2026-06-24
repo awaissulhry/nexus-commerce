@@ -1,50 +1,17 @@
 'use client'
 
-// IM.5 — eBay images panel.
-//
-// Two sections:
-//   Gallery  — product-level ordered images (up to 24). Position 1 = main
-//              listing image shown in search results.
-//   Color Sets — per-colour VariationSpecificPictureSet. eBay supports only
-//              one variation dimension for images (typically Color).
-//              Images here are sent in the <VariationSpecificPictureSet>
-//              XML block of ReviseItem.
-//
-// All mutations create pending upserts (staged, saved via action bar).
-// Reordering gallery regenerates positions for all gallery images.
+// Simplified eBay colour-photo panel.
+// ONE job: assign per-colour images, then publish.
+// No global pending store — all state is local.
 
-import { useRef, useState, useMemo } from 'react'
-import {
-  AlertTriangle, CheckCircle2, ChevronDown, Clock, Eye, GripVertical, Link2, Loader2, Plus, RotateCcw,
-  ShoppingBag, Trash2, Upload,
-} from 'lucide-react'
-import { PLATFORM_RULES } from '@nexus/shared/image-validation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, Plus, ShoppingBag, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { beFetch } from '../api'
-import ImagePickerModal from '../ImagePickerModal'
-import CrossChannelSyncBar from '../CrossChannelSyncBar'
-import ChannelPreview from '../ChannelPreview'
-import ChannelValidationBanner, { useChannelValidation } from '../ChannelValidationBanner'
-import ChannelPublishPreviewModal from '../ChannelPublishPreviewModal'
-import ChannelStaleBanner from '../ChannelStaleBanner'
-import ImagePublishHistory from '../ImagePublishHistory'
-import RecentChannelJobsStrip from '../RecentChannelJobsStrip'
-import LiveChannelStrip from '../LiveChannelStrip'
-import type { ChannelLiveImage, ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
+import type { ListingImage, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
 
-interface CopyResult { copied: number; skipped: number }
-
-// Single source of truth — bumping eBay's gallery max means editing
-// PLATFORM_RULES in packages/shared/image-validation, not here.
-const EBAY_MAX = PLATFORM_RULES.EBAY.maxImages ?? 24
-
-function elapsedTime(from: string): string {
-  const m = Math.floor((Date.now() - new Date(from).getTime()) / 60000)
-  if (m < 1) return 'just now'
-  if (m < 60) return `${m}m ago`
-  return `${Math.floor(m / 60)}h ago`
-}
+// ── Types ──────────────────────────────────────────────────────────────────
 
 interface Props {
   productId: string
@@ -52,40 +19,360 @@ interface Props {
   masterImages: ProductImage[]
   listingImages: ListingImage[]
   variants: VariantSummary[]
-  activeAxis: string
-  pendingUpserts: Map<string, PendingUpsert>
-  pendingDeletes: Set<string>
-  addPendingUpsert: (u: Omit<PendingUpsert, '_tempId'>) => void
-  addPendingDelete: (id: string) => void
-  onToast: (msg: string) => void
-  /** IR.3.3 — open lightbox for a clicked image. */
-  onOpenLightboxForCell?: (listingImageId: string | undefined, fallbackUrl: string) => void
-  onCopyFromMaster: () => CopyResult
-  onCopyFromAmazonGallery: () => CopyResult
-  onCopyFromAmazonColorSets: () => CopyResult
-  publishedCount: number
-  onPublish: () => Promise<{ success: boolean; message: string }>
-  // PB.8a — live channel strip props (mirrors AmazonPanel).
-  channelLiveImages?: ChannelLiveImage[]
   onReload?: () => void
+  onToast?: (msg: string) => void
+
+  // Old props — accepted but ignored so the parent doesn't need to change.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  activeAxis?: string
+  pendingUpserts?: unknown
+  pendingDeletes?: unknown
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  addPendingUpsert?: (upsert: any) => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  addPendingDelete?: (id: any) => void
+  onCopyFromMaster?: () => void
+  onCopyFromAmazonGallery?: () => void
+  onCopyFromAmazonColorSets?: () => void
+  publishedCount?: number
+  onPublish?: () => Promise<{ success: boolean; message: string }>
+  channelLiveImages?: unknown[]
   onAdoptToMaster?: (url: string) => void | Promise<void>
-  // PB.9 — open the rollback modal for this channel.
   onOpenRollback?: () => void
+  onOpenLightboxForCell?: (id: string | undefined, url: string) => void
 }
 
-interface DisplayItem {
-  id: string        // ListingImage.id or _tempId
+interface ListingImageUpsert {
+  scope: 'GLOBAL' | 'PLATFORM' | 'MARKETPLACE'
+  platform?: string | null
+  marketplace?: string | null
+  variantGroupKey?: string | null
+  variantGroupValue?: string | null
+  variationId?: string | null
   url: string
-  position: number
-  isPending: boolean
-  publishStatus?: string
-  // IE.3 — preview-only row sourced from MasterPanel when the gallery
-  // has nothing real to render. Rendered with a dashed border + chain
-  // link badge; converting these to real pending upserts is what the
-  // "Copy from master" button already does.
-  fromMaster?: boolean
-  masterImageId?: string
+  position?: number
+  role?: string
+  sourceProductImageId?: string | null
 }
+
+// colour (axis value) → ordered list of URLs
+type ColorSets = Map<string, string[]>
+// variationId (child product id) → ordered list of URLs — optional per-SKU override
+type SkuSets = Map<string, string[]>
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function getAxisValues(variants: VariantSummary[], axis: string): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const v of variants) {
+    const val = (v.variantAttributes as Record<string, string> | null)?.[axis]
+    if (val && !seen.has(val)) { seen.add(val); out.push(val) }
+  }
+  return out
+}
+
+function availableAxes(variants: VariantSummary[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const v of variants) {
+    for (const k of Object.keys(v.variantAttributes ?? {})) {
+      if (!seen.has(k)) { seen.add(k); out.push(k) }
+    }
+  }
+  return out
+}
+
+function defaultAxis(product: WorkspaceProduct, axes: string[]): string {
+  const pref = product.imageAxisPreference
+  if (pref) {
+    const match = axes.find((a) => a.toLowerCase() === pref.toLowerCase())
+    if (match) return match
+  }
+  return axes.find((a) => a.toLowerCase() === 'color') ?? axes[0] ?? 'Color'
+}
+
+function initColorSets(listingImages: ListingImage[], axis: string, colorValues: string[]): ColorSets {
+  const map: ColorSets = new Map()
+  for (const cv of colorValues) map.set(cv, [])
+
+  for (const img of listingImages) {
+    if (img.platform !== 'EBAY' || img.variantGroupKey !== axis) continue
+    const cv = img.variantGroupValue ?? '—'
+    if (!map.has(cv)) map.set(cv, [])
+    const list = map.get(cv)!
+    // insert at correct position
+    list.push(img.url)
+  }
+  // sort each bucket by original position
+  for (const img of listingImages) {
+    if (img.platform !== 'EBAY' || img.variantGroupKey !== axis) continue
+  }
+  return map
+}
+
+function initSkuSets(listingImages: ListingImage[]): SkuSets {
+  const map: SkuSets = new Map()
+  const rows = listingImages
+    .filter((i) => i.platform === 'EBAY' && i.variationId)
+    .slice()
+    .sort((a, b) => a.position - b.position)
+  for (const img of rows) {
+    const k = img.variationId as string
+    if (!map.has(k)) map.set(k, [])
+    map.get(k)!.push(img.url)
+  }
+  return map
+}
+
+// The non-picture-axis attribute values that distinguish a SKU within a value
+// (e.g. the size), falling back to the SKU itself.
+function skuLabel(v: VariantSummary, pictureAxis: string): string {
+  const attrs = v.variantAttributes ?? {}
+  const parts = Object.entries(attrs)
+    .filter(([k]) => k.toLowerCase() !== pictureAxis.toLowerCase())
+    .map(([, val]) => val)
+    .filter(Boolean)
+  return parts.length > 0 ? parts.join(' · ') : v.sku
+}
+
+// ── Mini image picker popover ──────────────────────────────────────────────
+
+interface MasterPickerProps {
+  masterImages: ProductImage[]
+  onPick: (url: string, id: string) => void
+  onClose: () => void
+  anchorRef: React.RefObject<HTMLButtonElement | null>
+}
+
+function MasterPicker({ masterImages, onPick, onClose, anchorRef }: MasterPickerProps) {
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (
+        panelRef.current && !panelRef.current.contains(e.target as Node) &&
+        anchorRef.current && !anchorRef.current.contains(e.target as Node)
+      ) onClose()
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [onClose, anchorRef])
+
+  return (
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-label="Pick from master images"
+      className="absolute z-50 mt-1 left-0 bg-white dark:bg-slate-900 border border-default rounded-xl shadow-lg p-2 w-56"
+    >
+      {masterImages.length === 0 ? (
+        <p className="text-xs text-tertiary p-2">No master images available.</p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
+          {masterImages.map((img) => (
+            <button
+              key={img.id}
+              type="button"
+              onClick={() => { onPick(img.url, img.id); onClose() }}
+              className="w-14 h-14 rounded-lg border border-default overflow-hidden bg-slate-50 dark:bg-slate-800 hover:ring-2 hover:ring-blue-400 transition-all flex-shrink-0"
+              title={img.alt ?? img.url}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={img.url} alt={img.alt ?? ''} className="w-full h-full object-contain" loading="lazy" decoding="async" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Reusable "+ from master" button with popover picker ─────────────────────
+
+function MasterPlusButton({
+  masterImages, onPick, label, size = 'lg',
+}: {
+  masterImages: ProductImage[]
+  onPick: (url: string, id: string) => void
+  label: string
+  size?: 'lg' | 'sm'
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLButtonElement>(null)
+  const box = size === 'lg' ? 'w-16 h-16' : 'w-10 h-10'
+  return (
+    <div className="relative">
+      <button
+        ref={ref}
+        type="button"
+        aria-label={label}
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className={cn(box, 'rounded-lg border-2 border-dashed border-default flex items-center justify-center text-tertiary hover:border-blue-300 transition-colors flex-shrink-0')}
+      >
+        <Plus className={size === 'lg' ? 'w-4 h-4' : 'w-3 h-3'} />
+      </button>
+      {open && (
+        <MasterPicker
+          masterImages={masterImages}
+          onPick={onPick}
+          onClose={() => setOpen(false)}
+          anchorRef={ref}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Colour bucket row ──────────────────────────────────────────────────────
+
+interface ColorBucketProps {
+  colorValue: string
+  urls: string[]
+  masterImages: ProductImage[]
+  variantsForColor: VariantSummary[]
+  skuSets: SkuSets
+  pictureAxis: string
+  onAdd: (url: string, sourceId: string) => void
+  onRemove: (index: number) => void
+  onReorder: (fromIndex: number, toIndex: number) => void
+  onAddSku: (variationId: string, url: string, sourceId: string) => void
+  onRemoveSku: (variationId: string, index: number) => void
+}
+
+function ColorBucket({
+  colorValue, urls, masterImages, variantsForColor, skuSets, pictureAxis,
+  onAdd, onRemove, onReorder, onAddSku, onRemoveSku,
+}: ColorBucketProps) {
+  const dragIndexRef = useRef<number | null>(null)
+  const [dragOver, setDragOver] = useState<number | null>(null)
+  const [skuOpen, setSkuOpen] = useState(false)
+
+  const groupId = `ebay-bucket-${colorValue.replace(/\s+/g, '-').toLowerCase()}`
+  const overrideCount = variantsForColor.filter((v) => (skuSets.get(v.id) ?? []).length > 0).length
+
+  return (
+    <div
+      role="group"
+      aria-labelledby={groupId}
+      className="border border-default rounded-xl overflow-hidden"
+    >
+      {/* Label row */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-subtle">
+        <span id={groupId} className="text-sm font-semibold text-slate-800 dark:text-slate-200">{colorValue}</span>
+        <span className="text-xs text-tertiary ml-auto">{urls.length} image{urls.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {/* Thumbnails */}
+      <div className="flex flex-wrap gap-2 p-3">
+        {urls.length === 0 && (
+          <div className="w-16 h-16 rounded-lg border-2 border-dashed border-default flex items-center justify-center text-tertiary flex-shrink-0">
+            <Plus className="w-4 h-4" />
+          </div>
+        )}
+
+        {urls.map((url, idx) => (
+          <div
+            key={`${url}-${idx}`}
+            draggable
+            onDragStart={(e) => {
+              dragIndexRef.current = idx
+              e.dataTransfer.effectAllowed = 'move'
+            }}
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragOver(idx)
+            }}
+            onDragLeave={() => setDragOver(null)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setDragOver(null)
+              const from = dragIndexRef.current
+              dragIndexRef.current = null
+              if (from !== null && from !== idx) onReorder(from, idx)
+            }}
+            onDragEnd={() => { dragIndexRef.current = null; setDragOver(null) }}
+            className={cn(
+              'group relative w-16 h-16 rounded-lg border border-default overflow-hidden bg-white dark:bg-slate-900 flex-shrink-0 cursor-grab',
+              dragOver === idx && 'ring-2 ring-blue-400',
+            )}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={url} alt="" draggable={false} className="w-full h-full object-contain" loading="lazy" decoding="async" />
+            <button
+              type="button"
+              aria-label={`Remove image from ${colorValue}`}
+              onClick={() => onRemove(idx)}
+              className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-red-500 rounded-full p-0.5"
+            >
+              <X className="w-2.5 h-2.5 text-white" />
+            </button>
+          </div>
+        ))}
+
+        <MasterPlusButton masterImages={masterImages} onPick={onAdd} label={`Add image to ${colorValue}`} size="lg" />
+      </div>
+
+      {/* Per-SKU override drill-in (optional — collapsed by default) */}
+      {variantsForColor.length > 0 && (
+        <div className="border-t border-subtle">
+          <button
+            type="button"
+            onClick={() => setSkuOpen((o) => !o)}
+            aria-expanded={skuOpen}
+            className="w-full flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+          >
+            <ChevronDown className={cn('w-3 h-3 transition-transform', skuOpen && 'rotate-180')} />
+            Per-size override
+            {overrideCount > 0 && <span className="text-blue-600 dark:text-blue-400 font-medium">· {overrideCount} set</span>}
+            <span className="text-tertiary ml-auto">optional</span>
+          </button>
+          {skuOpen && (
+            <div className="px-3 pb-3 space-y-1.5">
+              {variantsForColor.map((v) => {
+                const su = skuSets.get(v.id) ?? []
+                return (
+                  <div key={v.id} className="flex items-center gap-2">
+                    <span className="text-xs text-slate-600 dark:text-slate-300 w-14 flex-shrink-0 truncate" title={v.sku}>
+                      {skuLabel(v, pictureAxis)}
+                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5 flex-1">
+                      {su.length === 0 && <span className="text-[10px] text-tertiary italic">inherits {colorValue}</span>}
+                      {su.map((url, idx) => (
+                        <div key={`${url}-${idx}`} className="group relative w-10 h-10 rounded border border-default overflow-hidden bg-white dark:bg-slate-900 flex-shrink-0">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={url} alt="" className="w-full h-full object-contain" loading="lazy" decoding="async" />
+                          <button
+                            type="button"
+                            aria-label={`Remove override from ${v.sku}`}
+                            onClick={() => onRemoveSku(v.id, idx)}
+                            className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-red-500 rounded-bl p-0.5"
+                          >
+                            <X className="w-2 h-2 text-white" />
+                          </button>
+                        </div>
+                      ))}
+                      <MasterPlusButton
+                        masterImages={masterImages}
+                        onPick={(url, id) => onAddSku(v.id, url, id)}
+                        label={`Add override image to ${v.sku}`}
+                        size="sm"
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main component ─────────────────────────────────────────────────────────
 
 export default function EbayPanel({
   productId,
@@ -93,673 +380,322 @@ export default function EbayPanel({
   masterImages,
   listingImages,
   variants,
-  activeAxis,
-  pendingUpserts,
-  pendingDeletes,
-  addPendingUpsert,
-  addPendingDelete,
-  onToast,
-  onOpenLightboxForCell,
-  onCopyFromMaster,
-  onCopyFromAmazonGallery,
-  onCopyFromAmazonColorSets,
-  publishedCount,
-  onPublish,
-  channelLiveImages = [],
   onReload,
-  onAdoptToMaster,
-  onOpenRollback,
+  onToast,
 }: Props) {
-  const [previewOpen, setPreviewOpen] = useState(false)
-  const [publishPreviewOpen, setPublishPreviewOpen] = useState(false)
-  const [historyOpen, setHistoryOpen] = useState(false)
+  // ── Axis picker ──────────────────────────────────────────────────────
+  const axes = useMemo(() => availableAxes(variants), [variants])
+  const [axis, setAxis] = useState<string>(() => defaultAxis(product, axes))
+  const [axisOpen, setAxisOpen] = useState(false)
+  const axisRef = useRef<HTMLButtonElement>(null)
+  const axisMenuRef = useRef<HTMLDivElement>(null)
+
+  // Close axis dropdown on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (
+        axisMenuRef.current && !axisMenuRef.current.contains(e.target as Node) &&
+        axisRef.current && !axisRef.current.contains(e.target as Node)
+      ) setAxisOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const colorValues = useMemo(() => getAxisValues(variants, axis), [variants, axis])
+
+  // P4.B — persist the chosen axis so the publish (which reads imageAxisPreference)
+  // varies images by the SAME axis the operator picks here.
+  const persistAxis = useCallback((a: string) => {
+    setAxis(a)
+    void beFetch(`/api/products/${productId}/images-workspace/axis`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ axis: a }),
+    }).catch(() => { /* non-fatal — local state still reflects the choice */ })
+  }, [productId])
+
+  // ── Local color sets state ───────────────────────────────────────────
+  const [colorSets, setColorSets] = useState<ColorSets>(() =>
+    initColorSets(listingImages, axis, colorValues),
+  )
+
+  // Re-initialise when axis changes or listingImages reload
+  useEffect(() => {
+    setColorSets(initColorSets(listingImages, axis, colorValues))
+  }, [listingImages, axis, colorValues])
+
+  // ── Per-SKU overrides (optional) ─────────────────────────────────────
+  const [skuSets, setSkuSets] = useState<SkuSets>(() => initSkuSets(listingImages))
+  useEffect(() => { setSkuSets(initSkuSets(listingImages)) }, [listingImages])
+
+  const handleAdd = useCallback((colorValue: string, url: string) => {
+    setColorSets((prev) => {
+      const next = new Map(prev)
+      const list = [...(next.get(colorValue) ?? [])]
+      if (!list.includes(url)) list.push(url)
+      next.set(colorValue, list)
+      return next
+    })
+  }, [])
+
+  const handleRemove = useCallback((colorValue: string, idx: number) => {
+    setColorSets((prev) => {
+      const next = new Map(prev)
+      const list = [...(next.get(colorValue) ?? [])]
+      list.splice(idx, 1)
+      next.set(colorValue, list)
+      return next
+    })
+  }, [])
+
+  const handleReorder = useCallback((colorValue: string, fromIdx: number, toIdx: number) => {
+    setColorSets((prev) => {
+      const next = new Map(prev)
+      const list = [...(next.get(colorValue) ?? [])]
+      const [moved] = list.splice(fromIdx, 1)
+      list.splice(toIdx, 0, moved)
+      next.set(colorValue, list)
+      return next
+    })
+  }, [])
+
+  const handleAddSku = useCallback((variationId: string, url: string) => {
+    setSkuSets((prev) => {
+      const next = new Map(prev)
+      const list = [...(next.get(variationId) ?? [])]
+      if (!list.includes(url)) list.push(url)
+      next.set(variationId, list)
+      return next
+    })
+  }, [])
+
+  const handleRemoveSku = useCallback((variationId: string, idx: number) => {
+    setSkuSets((prev) => {
+      const next = new Map(prev)
+      const list = [...(next.get(variationId) ?? [])]
+      list.splice(idx, 1)
+      next.set(variationId, list)
+      return next
+    })
+  }, [])
+
+  // ── Publish ──────────────────────────────────────────────────────────
   const [publishing, setPublishing] = useState(false)
-  // PB.3c — Increment after a publish so the recent-jobs strip refetches.
-  const [jobsRefreshKey, setJobsRefreshKey] = useState(0)
-  const [lastPublish, setLastPublish] = useState<{ success: boolean; message: string; ts: string } | null>(null)
-  const [pickerTarget, setPickerTarget] = useState<'gallery' | { colorValue: string } | null>(null)
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
-  const [dropZoneActive, setDropZoneActive] = useState(false)
-  const dragIndexRef = useRef<number | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState(false)
+  const [publishResult, setPublishResult] = useState<{ success: boolean; message: string } | null>(null)
 
-  // ── Effective gallery (server + pending overlay) ───────────────────
-  const effectiveGallery = useMemo<DisplayItem[]>(() => {
-    const pendingMap = new Map<string, PendingUpsert>()
-    const pendingNew: PendingUpsert[] = []
-
-    for (const u of pendingUpserts.values()) {
-      if (u.platform !== 'EBAY' || u.variantGroupKey || u.variationId) continue
-      if (u.id) pendingMap.set(u.id, u)
-      else pendingNew.push(u)
-    }
-
-    const base = listingImages
-      .filter((i) => i.platform === 'EBAY' && !i.variantGroupKey && !i.variationId && !pendingDeletes.has(i.id))
-      .map((i) => {
-        const p = pendingMap.get(i.id)
-        return {
-          id: i.id,
-          url: p?.url ?? i.url,
-          position: p?.position ?? i.position,
-          isPending: !!p,
-          publishStatus: i.publishStatus,
-        }
-      })
-
-    const news = pendingNew.map((u, idx) => ({
-      id: u._tempId,
-      url: u.url,
-      position: (base.length + idx) * 10,
-      isPending: true,
-    }))
-
-    const items = [...base, ...news].sort((a, b) => a.position - b.position)
-    // IE.3 — when the gallery has nothing real, surface master gallery
-    // images as preview-only suggestions so the operator sees what
-    // "Copy from master" would write. Up to EBAY_MAX.
-    if (items.length === 0 && masterImages.length > 0) {
-      return masterImages.slice(0, EBAY_MAX).map((m, idx) => ({
-        id: `master:${m.id}`,
-        url: m.url,
-        position: idx * 10,
-        isPending: false,
-        fromMaster: true,
-        masterImageId: m.id,
-      }))
-    }
-    return items
-  }, [listingImages, pendingUpserts, pendingDeletes, masterImages])
-
-  // ── Effective color sets ───────────────────────────────────────────
-  const variantGroups = useMemo(() => {
-    const map = new Map<string, string[]>()
-    for (const v of variants) {
-      const val = (v.variantAttributes as Record<string, string> | null)?.[activeAxis] ?? '—'
-      if (!map.has(val)) map.set(val, [])
-    }
-    return map
-  }, [variants, activeAxis])
-
-  const colorSets = useMemo(() => {
-    const result = new Map<string, DisplayItem[]>()
-
-    // Seed all known color groups (even if empty)
-    for (const [val] of variantGroups) {
-      result.set(val, [])
-    }
-
-    // Server images
-    for (const img of listingImages) {
-      if (img.platform !== 'EBAY' || img.variantGroupKey !== activeAxis || pendingDeletes.has(img.id)) continue
-      const val = img.variantGroupValue ?? '—'
-      if (!result.has(val)) result.set(val, [])
-      result.get(val)!.push({ id: img.id, url: img.url, position: img.position, isPending: false })
-    }
-
-    // Pending new color images
-    for (const u of pendingUpserts.values()) {
-      if (u.platform !== 'EBAY' || u.variantGroupKey !== activeAxis || u.id) continue
-      const val = u.variantGroupValue ?? '—'
-      if (!result.has(val)) result.set(val, [])
-      result.get(val)!.push({ id: u._tempId, url: u.url, position: 999, isPending: true })
-    }
-
-    return result
-  }, [listingImages, pendingUpserts, pendingDeletes, activeAxis, variantGroups])
-
-  // ── Gallery DnD ────────────────────────────────────────────────────
-  function onDragStart(e: React.DragEvent, index: number) {
-    if (e.dataTransfer.types.includes('Files')) return
-    dragIndexRef.current = index
-    e.dataTransfer.effectAllowed = 'move'
-    // IA.16 — proper-sized drag preview from the inner img.
-    const imgEl = e.currentTarget.querySelector('img') as HTMLImageElement | null
-    if (imgEl) e.dataTransfer.setDragImage(imgEl, imgEl.width / 2, imgEl.height / 2)
-  }
-
-  function onDragOver(e: React.DragEvent, index: number) {
-    if (e.dataTransfer.types.includes('Files')) return
-    e.preventDefault()
-    setDragOverIndex(index)
-  }
-
-  function onDrop(e: React.DragEvent, targetIndex: number) {
-    if (e.dataTransfer.types.includes('Files')) return
-    e.preventDefault()
-    setDragOverIndex(null)
-    const fromIndex = dragIndexRef.current
-    dragIndexRef.current = null
-    if (fromIndex === null || fromIndex === targetIndex) return
-
-    const reordered = [...effectiveGallery]
-    const [moved] = reordered.splice(fromIndex, 1)
-    reordered.splice(targetIndex, 0, moved)
-
-    // Create pending upserts for all gallery items with new positions
-    reordered.forEach((item, idx) => {
-      if (!item.id.startsWith('tmp_')) {
-        // Existing server row — update position
-        addPendingUpsert({
-          id: item.id,
-          scope: 'PLATFORM',
-          platform: 'EBAY',
-          marketplace: null,
-          url: item.url,
-          position: idx,
-          role: idx === 0 ? 'MAIN' : 'GALLERY',
+  async function handlePublish() {
+    setPublishing(true)
+    setPublishResult(null)
+    try {
+      // Build upserts from local colorSets
+      const upserts: ListingImageUpsert[] = []
+      for (const [colorValue, urls] of colorSets.entries()) {
+        urls.forEach((url, position) => {
+          upserts.push({
+            scope: 'PLATFORM',
+            platform: 'EBAY',
+            marketplace: null,
+            variantGroupKey: axis,
+            variantGroupValue: colorValue,
+            url,
+            position,
+            role: 'GALLERY',
+          })
         })
       }
-    })
-  }
 
-  // ── File upload ────────────────────────────────────────────────────
-  async function handleFiles(files: File[]) {
-    if (!files.length) return
-    setUploading(true)
-    try {
-      for (const file of files) {
-        const fd = new FormData()
-        fd.append('file', file)
-        const res = await beFetch(`/api/products/${productId}/images?type=ALT`, { method: 'POST', body: fd })
-        if (!res.ok) continue
-        const created = await res.json()
-        handleAddToGallery(created.url, created.id)
+      // Per-SKU overrides (optional — pinned to a specific variant)
+      for (const [variationId, urls] of skuSets.entries()) {
+        urls.forEach((url, position) => {
+          upserts.push({
+            scope: 'PLATFORM',
+            platform: 'EBAY',
+            marketplace: null,
+            variationId,
+            url,
+            position,
+            role: 'GALLERY',
+          })
+        })
       }
+
+      // Replace ALL existing eBay variation + per-SKU image rows with the current sets.
+      const deletes = listingImages
+        .filter((i) => i.platform === 'EBAY' && (i.variantGroupKey !== null || i.variationId !== null))
+        .map((i) => i.id)
+
+      // 1. Save
+      const saveRes = await beFetch(`/api/products/${productId}/images-workspace/bulk-save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ upserts, deletes }),
+      })
+      if (!saveRes.ok) {
+        const err = await saveRes.text()
+        setPublishResult({ success: false, message: `Save failed: ${err}` })
+        return
+      }
+
+      // 2. Publish to eBay
+      const pubRes = await beFetch(`/api/products/${productId}/ebay-images/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      if (!pubRes.ok) {
+        const err = await pubRes.text()
+        setPublishResult({ success: false, message: `Publish failed: ${err}` })
+        return
+      }
+
+      setPublishResult({ success: true, message: 'Published to eBay' })
+      onToast?.('eBay colour images published')
+      onReload?.()
+    } catch (err) {
+      setPublishResult({ success: false, message: String(err) })
     } finally {
-      setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
+      setPublishing(false)
     }
   }
 
-  // ── Add to gallery ─────────────────────────────────────────────────
-  function handleAddToGallery(url: string, sourceId?: string) {
-    addPendingUpsert({
-      scope: 'PLATFORM',
-      platform: 'EBAY',
-      marketplace: null,
-      url,
-      sourceProductImageId: sourceId,
-      role: effectiveGallery.length === 0 ? 'MAIN' : 'GALLERY',
-      position: effectiveGallery.length * 10,
-    })
-  }
-
-  // ── Add to color set ───────────────────────────────────────────────
-  function handleAddToColorSet(colorValue: string, url: string, sourceId?: string) {
-    const existing = colorSets.get(colorValue) ?? []
-    addPendingUpsert({
-      scope: 'PLATFORM',
-      platform: 'EBAY',
-      marketplace: null,
-      variantGroupKey: activeAxis,
-      variantGroupValue: colorValue,
-      url,
-      sourceProductImageId: sourceId,
-      role: 'GALLERY',
-      position: existing.length,
-    })
-  }
-
-  const atMax = effectiveGallery.length >= EBAY_MAX
-
-  // PB.3a — Validation gate. Pre-filters incoming arrays once and
-  // computes blocking + warnings. The Publish button disables when
-  // validation.blocking.length > 0; the banner explains why inline.
-  const ebayListing = useMemo(() => listingImages.filter((i) => i.platform === 'EBAY'), [listingImages])
-  const ebayPending = useMemo(
-    () => Array.from(pendingUpserts.values()).filter((u) => u.platform === 'EBAY'),
-    [pendingUpserts],
-  )
-  const validation = useChannelValidation({
-    channel: 'EBAY',
-    masterImages,
-    channelImages: ebayListing,
-    pendingForChannel: ebayPending,
-    pendingDeletes,
-  })
+  // ── Render ───────────────────────────────────────────────────────────
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-xl space-y-0">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-default dark:border-slate-700">
-        <ShoppingBag className="w-4 h-4 text-slate-500" />
-        <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">eBay Images</span>
-        <div className="ml-auto flex items-center gap-3">
-          {/* Usage bar */}
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <div className="w-20 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-              <div
-                className={cn('h-full rounded-full transition-all', effectiveGallery.length >= EBAY_MAX ? 'bg-red-500' : 'bg-blue-500')}
-                style={{ width: `${Math.min(100, (effectiveGallery.length / EBAY_MAX) * 100)}%` }}
-              />
-            </div>
-            <span className={effectiveGallery.length >= EBAY_MAX ? 'text-red-500' : ''}>
-              {effectiveGallery.length}/{EBAY_MAX}
-            </span>
-          </div>
-          <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => fileInputRef.current?.click()} disabled={uploading || atMax}>
-            {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-            Upload
-          </Button>
-          <input ref={fileInputRef} type="file" accept="image/*" multiple className="sr-only" onChange={(e) => handleFiles(Array.from(e.target.files ?? []))} />
-        </div>
-      </div>
+    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-xl flex flex-col">
+      {/* ── Sticky header ─────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b border-default bg-white dark:bg-slate-900 rounded-t-xl">
+        <ShoppingBag className="w-4 h-4 text-slate-500 flex-shrink-0" />
+        <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">eBay Colour Photos</span>
 
-      {/* PB.8a — Live channel strip (eBay) */}
-      {onReload && (
-        <div className="px-5 pt-3">
-          <LiveChannelStrip
-            productId={productId}
-            channel="EBAY"
-            marketplaces={['GLOBAL']}
-            liveImages={channelLiveImages}
-            listingImages={listingImages}
-            onRefreshed={onReload}
-            {...(onAdoptToMaster
-              ? { onAdoptToMaster: (url: string) => { void onAdoptToMaster(url) } }
-              : {})}
-          />
-        </div>
-      )}
-
-      {/* PB.3a — Pre-publish validation gate */}
-      <ChannelValidationBanner
-        channel="EBAY"
-        masterImages={masterImages}
-        channelImages={ebayListing}
-        pendingForChannel={ebayPending}
-        pendingDeletes={pendingDeletes}
-      />
-
-      {/* PB.3d — Stale-detection banner */}
-      <ChannelStaleBanner
-        channel="EBAY"
-        masterImages={masterImages}
-        channelImages={ebayListing}
-        onPublish={onPublish}
-        onToast={onToast}
-        publishingExternally={publishing}
-      />
-
-      {/* ── Gallery section ─────────────────────────────────────────── */}
-      <section
-        aria-labelledby="ebay-gallery-heading"
-        className="px-5 py-4 border-b border-subtle dark:border-slate-800"
-      >
-        <div className="flex items-center gap-2 mb-3">
-          <h3 id="ebay-gallery-heading" className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Gallery</h3>
-          <span className="text-xs text-tertiary">Position 1 = main listing image</span>
-        </div>
-
-        {effectiveGallery.length === 0 ? (
-          <div
-            role="button"
-            tabIndex={0}
-            aria-label="Add gallery images"
-            className="border-2 border-dashed border-default dark:border-slate-700 rounded-xl py-10 flex flex-col items-center gap-2 text-tertiary cursor-pointer hover:border-blue-300 transition-colors"
-            onClick={() => setPickerTarget('gallery')}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPickerTarget('gallery') } }}
-          >
-            <Plus className="w-6 h-6" />
-            <span className="text-sm">Add gallery images</span>
-          </div>
-        ) : (
-          <div
-            role="listbox"
-            aria-labelledby="ebay-gallery-heading"
-            aria-orientation="horizontal"
-            className={cn('flex flex-wrap gap-3', dropZoneActive && 'ring-2 ring-blue-300 rounded-lg p-1')}
-            onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropZoneActive(true) } }}
-            onDragLeave={() => setDropZoneActive(false)}
-            onDrop={(e) => { setDropZoneActive(false); if (e.dataTransfer.files.length) { e.preventDefault(); handleFiles(Array.from(e.dataTransfer.files)) } }}
-          >
-            {effectiveGallery.map((item, index) => (
-              <div
-                key={item.id}
-                role="option"
-                aria-selected={false}
-                aria-label={`Position ${index + 1}${index === 0 ? ' (main listing image)' : ''}${item.isPending ? ', unsaved' : ''}`}
-                draggable
-                onDragStart={(e) => onDragStart(e, index)}
-                onDragOver={(e) => onDragOver(e, index)}
-                onDragLeave={() => setDragOverIndex(null)}
-                onDrop={(e) => onDrop(e, index)}
-                onClick={() => onOpenLightboxForCell?.(
-                  item.id.startsWith('tmp_') ? undefined : item.id,
-                  item.url,
-                )}
-                className={cn(
-                  'group relative w-20 h-20 rounded-xl border-2 overflow-hidden bg-slate-50 dark:bg-slate-800 transition-all flex-shrink-0',
-                  dragOverIndex === index
-                    ? 'border-blue-400 ring-2 ring-blue-300'
-                    : item.fromMaster
-                      ? 'border-dashed border-slate-300 dark:border-slate-600 opacity-75'
-                      : 'border-default dark:border-slate-700',
-                  item.isPending && 'ring-1 ring-amber-400',
-                  onOpenLightboxForCell && 'cursor-zoom-in',
-                )}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={item.url} alt="" draggable={false} className="w-full h-full object-contain" loading="lazy" decoding="async" />
-
-                {/* Position badge */}
-                <div className={cn(
-                  'absolute top-0.5 left-0.5 text-[9px] font-mono rounded px-0.5 leading-tight',
-                  index === 0 ? 'bg-blue-500 text-white' : 'bg-black/50 text-white',
-                )}>
-                  {index === 0 ? '★1' : index + 1}
-                </div>
-
-                {/* Pending dot */}
-                {item.isPending && (
-                  <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
-                )}
-
-                {/* IE.3 — master-inherited preview badge */}
-                {item.fromMaster && (
-                  <div
-                    className="absolute bottom-0.5 right-0.5 bg-slate-700/70 text-white rounded p-0.5 leading-none"
-                    title="Inherited from master — click 'Copy from master' to commit"
-                  >
-                    <Link2 className="w-2.5 h-2.5" />
-                  </div>
-                )}
-
-                {/* Drag handle — hidden for master previews (no real row to reorder yet) */}
-                {!item.fromMaster && (
-                  <div className="absolute bottom-0.5 left-0.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
-                    <GripVertical className="w-3 h-3 text-white drop-shadow" />
-                  </div>
-                )}
-
-                {/* Delete button — hidden for master previews; deleting one
-                    would have nothing to delete (no ListingImage row exists). */}
-                {!item.fromMaster && (
-                  <button
-                    type="button"
-                    aria-label="Remove from gallery"
-                    className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-red-500 rounded p-0.5"
-                    onClick={(e) => { e.stopPropagation(); addPendingDelete(item.id) }}
-                  >
-                    <Trash2 className="w-2.5 h-2.5 text-white" />
-                  </button>
-                )}
-              </div>
-            ))}
-
-            {/* Add card */}
-            {!atMax && (
+        {/* Axis picker */}
+        {axes.length > 0 && (
+          <div className="relative flex items-center gap-1.5 ml-2">
+            <span className="text-xs text-tertiary">Vary by:</span>
+            <div className="relative">
               <button
+                ref={axisRef}
                 type="button"
-                onClick={() => setPickerTarget('gallery')}
-                className="w-20 h-20 rounded-xl border-2 border-dashed border-default dark:border-slate-700 flex flex-col items-center justify-center gap-1 text-tertiary hover:border-blue-300 transition-colors flex-shrink-0"
+                aria-haspopup="listbox"
+                aria-expanded={axisOpen}
+                onClick={() => setAxisOpen((o) => !o)}
+                className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-300 border border-default rounded-md px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
               >
-                <Plus className="w-5 h-5" />
-                <span className="text-[10px]">Add</span>
+                {axis}
+                <ChevronDown className={cn('w-3 h-3 text-tertiary transition-transform', axisOpen && 'rotate-180')} />
               </button>
-            )}
-          </div>
-        )}
-
-        {atMax && (
-          <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
-            <AlertTriangle className="w-3.5 h-3.5" />
-            Gallery full (24 max). Remove images to add more.
-          </div>
-        )}
-      </section>
-
-      {/* ── Color Sets section ──────────────────────────────────────── */}
-      {variants.length > 0 && (
-        <section
-          aria-labelledby="ebay-colorsets-heading"
-          className="px-5 py-4"
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <h3 id="ebay-colorsets-heading" className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Color Sets</h3>
-            <span className="text-xs text-tertiary">(VariationSpecificPictureSet — picture dimension: {activeAxis})</span>
-          </div>
-          <p className="text-xs text-tertiary dark:text-slate-500 mb-4">
-            eBay shows these images when a buyer selects a specific {activeAxis.toLowerCase()}. Only one variation dimension is supported.
-          </p>
-
-          <div className="space-y-3">
-            {Array.from(colorSets.entries()).map(([colorValue, images]) => {
-              const groupId = `ebay-colorset-${colorValue.replace(/\s+/g, '-').toLowerCase()}`
-              return (
+              {axisOpen && (
                 <div
-                  key={colorValue}
-                  role="group"
-                  aria-labelledby={groupId}
-                  className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl"
+                  ref={axisMenuRef}
+                  role="listbox"
+                  aria-label="Variation axis"
+                  className="absolute top-full left-0 mt-1 z-50 bg-white dark:bg-slate-900 border border-default rounded-lg shadow-md py-1 min-w-[8rem]"
                 >
-                  {/* Color label */}
-                  <div className="w-28 flex-shrink-0 pt-1">
-                    <span id={groupId} className="text-sm font-medium text-slate-800 dark:text-slate-200">{colorValue}</span>
-                  </div>
-
-                  {/* Images */}
-                  <div className="flex flex-wrap gap-2 flex-1">
-                    {images.map((img) => (
-                      <div
-                        key={img.id}
-                        role="img"
-                        aria-label={`${colorValue} variation image${img.isPending ? ', unsaved' : ''}`}
-                        onClick={() => onOpenLightboxForCell?.(
-                          img.id.startsWith('tmp_') ? undefined : img.id,
-                          img.url,
-                        )}
-                        className={cn(
-                          'group relative w-16 h-16 rounded-lg border border-default dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-900',
-                          onOpenLightboxForCell && 'cursor-zoom-in',
-                        )}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={img.url} alt="" draggable={false} className="w-full h-full object-contain" loading="lazy" decoding="async" />
-                        {img.isPending && (
-                          <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
-                        )}
-                        <button
-                          type="button"
-                          aria-label={`Remove ${colorValue} variation image`}
-                          className="absolute inset-0 bg-red-500/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                          onClick={(e) => { e.stopPropagation(); addPendingDelete(img.id) }}
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-white" />
-                        </button>
-                      </div>
-                    ))}
-
+                  {axes.map((a) => (
                     <button
+                      key={a}
+                      role="option"
+                      aria-selected={a === axis}
                       type="button"
-                      aria-label={`Add ${colorValue} variation image`}
-                      onClick={() => setPickerTarget({ colorValue })}
-                      className="w-16 h-16 rounded-lg border-2 border-dashed border-default dark:border-slate-700 flex items-center justify-center text-tertiary hover:border-blue-300 transition-colors"
+                      onClick={() => { persistAxis(a); setAxisOpen(false) }}
+                      className={cn(
+                        'w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors',
+                        a === axis ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-slate-700 dark:text-slate-300',
+                      )}
                     >
-                      <Plus className="w-4 h-4" />
+                      {a}
                     </button>
-                  </div>
+                  ))}
                 </div>
-              )
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* IM.7 — Cross-channel sync */}
-      <CrossChannelSyncBar
-        channel="ebay"
-        hasMasterImages={masterImages.length > 0}
-        hasAmazonImages={listingImages.some((i) => i.platform === 'AMAZON' && !i.variantGroupKey)}
-        hasAmazonColorSets={listingImages.some((i) => i.platform === 'AMAZON' && i.variantGroupKey)}
-        onCopyFromMaster={onCopyFromMaster}
-        onCopyFromAmazonGallery={onCopyFromAmazonGallery}
-        onCopyFromAmazonColorSets={onCopyFromAmazonColorSets}
-        onToast={onToast}
-      />
-
-      {/* IR.5.4 — Buyer preview */}
-      <div className="border-t border-subtle dark:border-slate-800">
-        <button
-          type="button"
-          onClick={() => setPreviewOpen((p) => !p)}
-          className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
-          aria-expanded={previewOpen}
-        >
-          <Eye className="w-3.5 h-3.5 text-tertiary" />
-          <span className="font-medium">Buyer preview</span>
-          <span className="text-tertiary ml-1">— eBay listing card as a buyer would see it</span>
-          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-tertiary transition-transform', previewOpen && 'rotate-180')} />
-        </button>
-        {previewOpen && (
-          <div className="px-4 pb-4">
-            <ChannelPreview
-              platform="EBAY"
-              product={product}
-              masterImages={masterImages}
-              listingImages={listingImages}
-              variants={variants}
-            />
+              )}
+            </div>
           </div>
         )}
-      </div>
 
-      {/* IR.9.4 — Publish history */}
-      <div className="border-t border-subtle dark:border-slate-800">
-        <button
-          type="button"
-          onClick={() => setHistoryOpen((p) => !p)}
-          className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
-          aria-expanded={historyOpen}
-        >
-          <Clock className="w-3.5 h-3.5 text-tertiary" />
-          <span className="font-medium">Publish history</span>
-          <span className="text-tertiary ml-1">— eBay ReviseItem submissions + retry</span>
-          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-tertiary transition-transform', historyOpen && 'rotate-180')} />
-        </button>
-        {historyOpen && (
-          <div className="px-4 pb-4">
-            <ImagePublishHistory productId={productId} channel="EBAY" />
-          </div>
-        )}
-      </div>
-
-      {/* PB.3c — Recent jobs strip (compact, last 3) */}
-      <RecentChannelJobsStrip productId={productId} channel="EBAY" refreshKey={jobsRefreshKey} />
-
-      {/* PB.4 — sticky publish bar so the Publish button stays in
-          reach when the gallery + color sets push it below the fold. */}
-      <div
-        data-publish-anchor
-        className="sticky bottom-0 z-10 bg-white dark:bg-slate-900 rounded-b-xl px-5 py-3 border-t border-subtle dark:border-slate-800 shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.08)] dark:shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.5)] flex flex-col gap-1.5"
-      >
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-tertiary">
-            ReviseItem · PictureDetails + VariationSpecificPictureSet via Trading API
-            {publishedCount > 0 && (
-              <span className="ml-2 text-emerald-600 dark:text-emerald-400">· {publishedCount} published</span>
-            )}
-          </span>
+        <div className="ml-auto flex items-center gap-2">
           <Button
             size="sm"
-            variant="ghost"
-            className="gap-1.5 border border-default dark:border-slate-700"
-            onClick={() => setPublishPreviewOpen(true)}
             disabled={publishing}
-            title="Open pre-publish preview"
-          >
-            <Eye className="w-3.5 h-3.5" />
-            Preview
-          </Button>
-          {onOpenRollback && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="gap-1.5 border border-default dark:border-slate-700"
-              onClick={onOpenRollback}
-              disabled={publishing}
-              title="Revert to the last successful eBay publish (per-browser snapshot)"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Revert
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant="ghost"
-            className="gap-1.5 border border-default dark:border-slate-700"
-            disabled={publishing || validation.blocking.length > 0}
-            title={validation.blocking.length > 0
-              ? `${validation.blocking.length} blocking issue${validation.blocking.length === 1 ? '' : 's'} — see banner above`
-              : undefined}
-            onClick={async () => {
-              setPublishing(true)
-              try {
-                const result = await onPublish()
-                setLastPublish({ ...result, ts: new Date().toISOString() })
-                setJobsRefreshKey((k) => k + 1)
-              } finally {
-                setPublishing(false)
-              }
-            }}
+            onClick={handlePublish}
+            className="gap-1.5"
           >
             {publishing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-            Publish to eBay
+            {publishing ? 'Publishing…' : 'Publish'}
           </Button>
         </div>
-        {lastPublish && (
-          <div className={cn('flex items-center gap-1.5 text-xs', lastPublish.success ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')}>
-            {lastPublish.success
-              ? <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
-              : <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />}
-            {lastPublish.message} · {elapsedTime(lastPublish.ts)}
-          </div>
-        )}
       </div>
 
-      {/* Image picker modal */}
-      {pickerTarget !== null && (
-        <ImagePickerModal
-          productId={productId}
-          masterImages={masterImages}
-          onSelect={(url, sourceId) => {
-            if (pickerTarget === 'gallery') {
-              handleAddToGallery(url, sourceId)
-            } else {
-              handleAddToColorSet(pickerTarget.colorValue, url, sourceId)
-            }
-            setPickerTarget(null)
-          }}
-          onClose={() => setPickerTarget(null)}
-        />
+      {/* ── Publish result banner ──────────────────────────────────────── */}
+      {publishResult && (
+        <div
+          className={cn(
+            'flex items-center gap-2 px-4 py-2 text-xs border-b border-subtle',
+            publishResult.success
+              ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+              : 'bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300',
+          )}
+        >
+          {publishResult.success
+            ? <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+            : <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />}
+          <span>{publishResult.message}</span>
+          <button
+            type="button"
+            onClick={() => setPublishResult(null)}
+            className="ml-auto opacity-60 hover:opacity-100"
+            aria-label="Dismiss"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
       )}
 
-      {/* PB.3b — Pre-publish preview modal */}
-      <ChannelPublishPreviewModal
-        open={publishPreviewOpen}
-        channel="EBAY"
-        masterImages={masterImages}
-        listingImages={listingImages}
-        pendingUpserts={pendingUpserts}
-        pendingDeletes={pendingDeletes}
-        variants={variants}
-        activeAxis={activeAxis}
-        publishing={publishing}
-        onClose={() => setPublishPreviewOpen(false)}
-        onConfirmPublish={async () => {
-          setPublishing(true)
-          try {
-            const result = await onPublish()
-            setLastPublish({ ...result, ts: new Date().toISOString() })
-            setJobsRefreshKey((k) => k + 1)
-            if (result.success) setPublishPreviewOpen(false)
-          } finally {
-            setPublishing(false)
-          }
-        }}
-      />
+      {/* ── Master photo strip ─────────────────────────────────────────── */}
+      {masterImages.length > 0 && (
+        <div className="px-4 py-3 border-b border-subtle">
+          <p className="text-xs text-tertiary mb-2">
+            Assign from master photos — click "+" on a colour row to add
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {masterImages.map((img) => (
+              <div
+                key={img.id}
+                className="w-16 h-16 rounded-lg border border-default overflow-hidden bg-slate-50 dark:bg-slate-800 flex-shrink-0"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={img.url} alt={img.alt ?? ''} className="w-full h-full object-contain" loading="lazy" decoding="async" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Colour buckets ─────────────────────────────────────────────── */}
+      <div className="px-4 py-4 space-y-3 flex-1">
+        {colorValues.length === 0 ? (
+          <div className="py-10 text-center text-xs text-tertiary">
+            No variants found for axis &ldquo;{axis}&rdquo;.
+            {axes.length > 1 && ' Try a different variation axis.'}
+          </div>
+        ) : (
+          colorValues.map((cv) => (
+            <ColorBucket
+              key={cv}
+              colorValue={cv}
+              urls={colorSets.get(cv) ?? []}
+              masterImages={masterImages}
+              variantsForColor={variants.filter((v) => (v.variantAttributes as Record<string, string> | null)?.[axis] === cv)}
+              skuSets={skuSets}
+              pictureAxis={axis}
+              onAdd={(url) => handleAdd(cv, url)}
+              onRemove={(idx) => handleRemove(cv, idx)}
+              onReorder={(from, to) => handleReorder(cv, from, to)}
+              onAddSku={(variationId, url) => handleAddSku(variationId, url)}
+              onRemoveSku={(variationId, idx) => handleRemoveSku(variationId, idx)}
+            />
+          ))
+        )}
+      </div>
     </div>
   )
 }

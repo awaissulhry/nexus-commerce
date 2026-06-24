@@ -194,6 +194,7 @@ import { startAmazonZeroTotalsBackfillCron } from "./jobs/amazon-zero-totals-bac
 import { startSalesDriftDetectorCron } from "./jobs/sales-drift-detector.job.js";
 import { startAmazonOrderItemsRetryCron } from "./jobs/amazon-order-items-retry.job.js";
 import { startEbayOrdersCron } from "./jobs/ebay-orders-sync.job.js";
+import { startEbayStatusReconcileCron } from "./jobs/ebay-status-reconcile.job.js";
 import { startAmazonFinancialSyncCron } from "./jobs/amazon-financial-sync.job.js";
 import { startEbayFinancialSyncCron } from "./jobs/ebay-financial-sync.job.js";
 import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
@@ -928,6 +929,14 @@ async function start() {
     // Gated behind NEXUS_ENABLE_EBAY_ORDERS_CRON=1.
     if (process.env.NEXUS_ENABLE_EBAY_ORDERS_CRON === '1') {
       startEbayOrdersCron();
+    }
+
+    // B4 — eBay listing status-reconcile. Daily 02:00 UTC. Detects listings
+    // that ended, got suspended, or were relisted on eBay's side without
+    // Nexus knowing, and corrects ChannelListing.listingStatus accordingly.
+    // Gated behind NEXUS_ENABLE_EBAY_STATUS_RECONCILE_CRON=1 (default OFF).
+    if (process.env.NEXUS_ENABLE_EBAY_STATUS_RECONCILE_CRON === '1') {
+      startEbayStatusReconcileCron();
     }
 
     // IS.2 — Real-time Amazon order detection via SQS (~30-90 second latency).
