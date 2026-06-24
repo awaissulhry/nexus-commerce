@@ -427,10 +427,17 @@ export class EbayPublishAdapter {
       })
       return result
     }
+    // eBay's Sell Inventory API validates BOTH language headers. Sending only
+    // Content-Language makes createOrReplaceInventoryItem 400 with errorId 25709
+    // ("Invalid value for header Accept-Language") — every eBay publish died here.
+    // Set Accept-Language to the same marketplace locale (it-IT/de-DE/…). This one
+    // headers object is reused across the inventory/offer/publish steps.
+    const acceptLang = contentLanguageFor(payload.marketplaceId)
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
-      'Content-Language': contentLanguageFor(payload.marketplaceId),
+      'Content-Language': acceptLang,
+      'Accept-Language': acceptLang,
       Accept: 'application/json',
     }
 
