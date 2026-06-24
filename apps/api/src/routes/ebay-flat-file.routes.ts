@@ -544,6 +544,14 @@ async function pushVariationGroup(
       if (brandVal) aspectsMap.set(targetBrandAspect, [brandVal])
     }
 
+    // Unconditional safety net: if the brand aspect is still absent after all
+    // injection paths (DB lookup, rename, row data), force-set it. A missing
+    // brand causes eBay error 25002 at publish_by_group. The brandBySku map
+    // should have the value; 'Xavia' is the correct fallback for this system.
+    if (!aspectsMap.has(targetBrandAspect)) {
+      aspectsMap.set(targetBrandAspect, [brandBySku.get(sku) || 'Xavia'])
+    }
+
     const aspects = Object.fromEntries(aspectsMap)
 
     // FCF.3 — cap each variant at its FBM-available pool.
