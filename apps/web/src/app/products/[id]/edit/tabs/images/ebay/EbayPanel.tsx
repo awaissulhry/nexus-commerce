@@ -16,7 +16,9 @@ import ChannelImageGrid, { type ImageGridColumn, type ImageGridRow, type GridCel
 import type { ListingImage, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
 
 const EBAY_MAX = PLATFORM_RULES.EBAY.maxImages ?? 24
-const MIN_COLS = 6
+// Starting width of the grid — it still auto-grows to fit each colour's photos
+// (up to EBAY_MAX). 12 gives plenty of room visible up front.
+const MIN_COLS = 12
 
 interface Props {
   productId: string
