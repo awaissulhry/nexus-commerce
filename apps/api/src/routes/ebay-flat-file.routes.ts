@@ -562,7 +562,9 @@ async function pushVariationGroup(
   const specifications = specificationsMap.size > 0
     ? [...specificationsMap.values()].map(e => ({ name: e.name, values: [...e.values] }))
     : [{ name: 'Custom Bundle', values: variantRows.map(r => r.sku as string) }]
-  const imageVariesByAxes = [...specificationsMap.keys()].slice(0, 1)
+  // Must use the stored .name (properly-cased, e.g. "Colore") not the lowercase
+  // map key ("colore") — eBay requires pictureVariesOn to match a specifications name exactly.
+  const imageVariesByAxes = [...specificationsMap.values()].slice(0, 1).map(e => e.name)
 
   // Step 3: Create/update the inventory_item_group.
   // variantSKUs is the correct field name (plain string array, not objects).
