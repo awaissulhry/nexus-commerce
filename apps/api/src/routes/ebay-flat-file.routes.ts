@@ -1253,8 +1253,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             headers: {
               Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
-              'Content-Language': mp === 'IT' ? 'it-IT' : mp === 'DE' ? 'de-DE' : mp === 'FR' ? 'fr-FR' : mp === 'ES' ? 'es-ES' : 'en-GB',
-              'Accept-Language': mp === 'IT' ? 'it-IT' : mp === 'DE' ? 'de-DE' : mp === 'FR' ? 'fr-FR' : mp === 'ES' ? 'es-ES' : 'en-GB',
+              'Content-Language': 'en-US',
+              'Accept-Language': 'en-US',
               'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
             },
             body: JSON.stringify(invBody),
@@ -1317,15 +1317,28 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             }
 
             if (offerId) {
-              await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, {
-                method: 'PUT',
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                  'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
+              const updateOfferRes = await fetch(
+                `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`,
+                {
+                  method: 'PUT',
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
+                  },
+                  body: JSON.stringify(offerBody),
                 },
-                body: JSON.stringify(offerBody),
-              });
+              );
+              if (!updateOfferRes.ok) {
+                const errBody = await updateOfferRes.text().catch(() => '');
+                perRowResults.push({
+                  sku,
+                  market: mp,
+                  status: 'ERROR',
+                  message: `Offer update ${updateOfferRes.status}: ${errBody.slice(0, 300)}`,
+                });
+                continue;
+              }
             } else {
               const createOfferRes = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer`, {
                 method: 'POST',
@@ -1340,6 +1353,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               if (createOfferRes.ok) {
                 const offerResp = (await createOfferRes.json()) as { offerId?: string };
                 offerId = offerResp.offerId ?? null;
+              } else {
+                const errBody = await createOfferRes.text().catch(() => '');
+                perRowResults.push({
+                  sku,
+                  market: mp,
+                  status: 'ERROR',
+                  message: `Offer create ${createOfferRes.status}: ${errBody.slice(0, 300)}`,
+                });
+                continue;
               }
             }
 
@@ -1380,6 +1402,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 }
 
                 perRowResults.push({ sku, market: mp, status: 'PUSHED', message: 'Listed', itemId });
+                continue;
+              } else {
+                const errBody = await publishRes.text().catch(() => '');
+                perRowResults.push({
+                  sku,
+                  market: mp,
+                  status: 'ERROR',
+                  message: `Publish ${publishRes.status}: ${errBody.slice(0, 300)}`,
+                });
                 continue;
               }
             }
