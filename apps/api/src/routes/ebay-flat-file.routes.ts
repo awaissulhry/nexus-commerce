@@ -2071,4 +2071,39 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: err?.message ?? 'Audit write failed' });
     }
   });
+
+  // TEMP: one-shot eBay inventory location bootstrap.
+  // POST /api/ebay/admin/create-location — call once to create xavia-main, then this route is removed.
+  fastify.post('/ebay/admin/create-location', async (request, reply) => {
+    const connection = await prisma.channelConnection.findFirst({
+      where: { channelType: 'EBAY', isActive: true },
+      select: { id: true },
+    })
+    if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
+    const token = await ebayAuthService.getValidToken(connection.id)
+    const LOCATION_KEY = 'xavia-main'
+    const checkRes = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/location/${LOCATION_KEY}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    })
+    if (checkRes.ok) {
+      const existing = await checkRes.json()
+      return reply.send({ already_exists: true, location: existing })
+    }
+    const body = {
+      location: { address: { addressLine1: 'Via Giovanni Pascoli, 58', city: 'Santarcangelo Di Romagna', country: 'IT', postalCode: '47822' } },
+      locationTypes: ['WAREHOUSE'],
+      name: 'Xavia Main',
+      merchantLocationStatus: 'ENABLED',
+    }
+    const createRes = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/location/${LOCATION_KEY}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const text = await createRes.text()
+    if (createRes.ok || createRes.status === 204) {
+      return reply.send({ created: true, merchantLocationKey: LOCATION_KEY, status: createRes.status, body: text })
+    }
+    return reply.code(createRes.status).send({ error: text })
+  })
 }
