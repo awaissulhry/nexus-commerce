@@ -14,6 +14,7 @@ import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImport
 import { Modal } from '@/design-system/components/Modal'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { AddListingPopover } from './AddListingPopover'
+import { AspectsPanel } from './AspectsPanel'
 import { ChannelStrip } from './ChannelStrip'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import { CascadeModal } from '../_shared/CascadeModal'
@@ -103,6 +104,7 @@ function validateRows(rows: BaseRow[]) {
 
 function DescriptionModal({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
   const [text, setText] = useState(value)
+  const [tab, setTab] = useState<'edit' | 'preview'>('edit')
   const remaining = 4000 - text.length
   return (
     <Modal
@@ -118,13 +120,36 @@ function DescriptionModal({ value, onSave, onClose }: { value: string; onSave: (
         </>
       }
     >
-      <textarea
-        className="w-full min-h-[400px] border border-slate-300 dark:border-slate-600 rounded-lg p-3 text-xs font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="Enter HTML description…"
-      />
-      <p className="mt-2 text-xs text-slate-400">HTML is supported: &lt;p&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;br&gt;…</p>
+      {/* Tab switcher */}
+      <div className="flex gap-1 mb-3 border-b border-slate-200 dark:border-slate-700 -mx-[18px] px-[18px]">
+        {(['edit', 'preview'] as const).map((t) => (
+          <button key={t} type="button"
+            onClick={() => setTab(t)}
+            className={cn('px-3 py-1.5 text-xs font-medium capitalize rounded-t transition-colors',
+              tab === t
+                ? 'text-blue-700 dark:text-blue-300 border-b-2 border-blue-500'
+                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            )}
+          >{t}</button>
+        ))}
+      </div>
+      {tab === 'edit' ? (
+        <>
+          <textarea
+            className="w-full min-h-[380px] border border-slate-300 dark:border-slate-600 rounded-lg p-3 text-xs font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Enter HTML description…"
+          />
+          <p className="mt-2 text-xs text-slate-400">HTML is supported: &lt;p&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;br&gt;…</p>
+        </>
+      ) : (
+        <div
+          className="min-h-[380px] border border-slate-200 dark:border-slate-700 rounded-lg p-4 prose prose-sm dark:prose-invert max-w-none text-sm overflow-y-auto"
+          // This is operator-entered content previewed in their own admin UI — no external source
+          dangerouslySetInnerHTML={{ __html: text || '<p class="text-slate-400 italic">No content yet…</p>' }}
+        />
+      )}
     </Modal>
   )
 }
@@ -291,6 +316,32 @@ const VARIANT_NOT_NEEDED = new Set([
   'variation_theme', 'category_id', 'subtitle', 'listing_format', 'listing_duration',
 ])
 
+// ── Row completeness ─────────────────────────────────────────────────────────
+
+function computeRowCompleteness(
+  row: BaseRow,
+  groups: Array<{ columns: Array<{ id: string; label: string; required?: boolean; readOnly?: boolean }> }>,
+): { filled: number; total: number; missing: Array<{ id: string; label: string }> } {
+  const er = row as EbayRow
+  const isVariant = er._isParent === false
+  const isParent  = er._isParent === true
+  const missing: Array<{ id: string; label: string }> = []
+  let total = 0, filled = 0
+  for (const group of groups) {
+    for (const col of group.columns) {
+      if (!col.required || col.readOnly) continue
+      if (isParent && (PARENT_NOT_NEEDED.has(col.id) || /^(it|de|fr|es|uk)_(price|qty)$/.test(col.id))) continue
+      if (isVariant && VARIANT_NOT_NEEDED.has(col.id)) continue
+      total++
+      const val = (row as any)[col.id]
+      const isEmpty = val === null || val === undefined || val === ''
+      if (!isEmpty) filled++
+      else missing.push({ id: col.id, label: col.label.replace(/[\s*○↕]+$/, '').trim() })
+    }
+  }
+  return { filled, total, missing }
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 
 export default function EbayFlatFileClient({ initialRows, initialMarketplace, familyId }: Props) {
@@ -365,6 +416,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [cascadeRow, setCascadeRow] = useState<BaseRow | null>(null)
 
   const [addListingOpen, setAddListingOpen] = useState(false)
+  const [aspectsPanelRowId, setAspectsPanelRowId] = useState<string | null>(null)
+  const [incompleteBefore, setIncompleteBefore] = useState<Array<{ sku: string; count: number }>>([])
 
   // IN.1 — Override badges toggle (default on, persisted to localStorage)
   const [showOverrideBadges, setShowOverrideBadges] = useState<boolean>(() => {
@@ -559,6 +612,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       ? rows.filter((r) => selectedRows.has(r._rowId))
       : rows.filter((r) => r._dirty)
     if (!toPush.length) { toast({ title: 'Nothing to push', tone: 'info' }); return }
+
+    // EFF.3 — pre-push completeness check (warn, not block)
+    const incomplete = toPush.flatMap((r) => {
+      const { missing } = computeRowCompleteness(r, columnGroups)
+      return missing.length ? [{ sku: String((r as EbayRow).sku ?? ''), count: missing.length }] : []
+    })
+    setIncompleteBefore(incomplete)
     setPushing(true)
     try {
       // DSP.7 — pre-save dirty rows BEFORE pushing to eBay. Pre-DSP.7
@@ -791,12 +851,15 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── Cell content overrides ─────────────────────────────────────────────
   const renderCellContent = useCallback<RenderCellContent>((col, _row, value, displayVal) => {
-    // SKU — parent / variant cue (drives off the _isParent flag + family set)
+    // SKU — parent / variant cue + completeness chip
     if (col.id === 'sku') {
       const er = _row as EbayRow
       const isVariant = er._isParent === false
       const isParent = er._isParent === true && familyParentIds.has(String(er.platformProductId ?? ''))
-      if (!isVariant && !isParent) return null // standalone — plain SKU
+      const { filled, total } = computeRowCompleteness(_row, columnGroups)
+      const complete = total > 0 && filled === total
+      const partial  = total > 0 && filled > 0 && filled < total
+      const empty    = total > 0 && filled === 0
       return (
         <span className="flex items-center gap-1.5 min-w-0">
           {isVariant && <span className="text-slate-300 dark:text-slate-600 shrink-0 font-mono" aria-hidden>└</span>}
@@ -806,6 +869,16 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           )}
           {isVariant && (
             <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700">Variant</span>
+          )}
+          {total > 0 && (
+            <span className={cn('ml-auto shrink-0 font-mono text-[9px] rounded px-1 py-0.5 tabular-nums',
+              complete ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+              : partial  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+              : empty    ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400'
+              : ''
+            )} title={`${filled}/${total} required fields filled`}>
+              {filled}/{total}
+            </span>
           )}
         </span>
       )
@@ -850,19 +923,28 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         </span>
       )
     }
-    // Category ID
+    // Category ID — single-click opens search panel
     if (col.id === 'category_id') {
+      const openSearch = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        setCategorySearchRowId(_row._rowId)
+        setCategorySearchOpen(true)
+      }
       if (categoryLoading && displayVal) {
         return (
-          <span className="flex items-center gap-1 text-slate-400 text-[10px]">
-            <Loader2 className="w-3 h-3 animate-spin shrink-0" />
-            <span className="font-mono">{displayVal}</span>
-          </span>
+          <button type="button" className="flex items-center gap-1 text-[10px] w-full text-left" onClick={openSearch}>
+            <Loader2 className="w-3 h-3 animate-spin shrink-0 text-slate-400" />
+            <span className="font-mono text-slate-500 dark:text-slate-400">{displayVal}</span>
+          </button>
         )
       }
-      return displayVal
-        ? <span className="font-mono text-[10px] text-blue-700 dark:text-blue-300">{displayVal}</span>
-        : <span className="text-slate-300 text-[10px]">Click to search categories…</span>
+      return (
+        <button type="button" className="flex items-center w-full h-full text-left" onClick={openSearch}>
+          {displayVal
+            ? <span className="font-mono text-[10px] text-blue-700 dark:text-blue-300">{displayVal}</span>
+            : <span className="text-slate-300 text-[10px]">Click to search categories…</span>}
+        </button>
+      )
     }
     // Boolean display
     if (col.kind === 'boolean') {
@@ -895,7 +977,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     }
     return null
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [familyParentIds, categoryLoading])
+  }, [familyParentIds, categoryLoading, columnGroups])
 
   // ── Edit intercept for modal-based editing ─────────────────────────────
   const onBeforeEditCell = useCallback((col: FlatFileColumn, row: BaseRow): boolean => {
@@ -908,8 +990,14 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       setCategorySearchOpen(true)
       return true
     }
+    // EFF.4 — Item Specifics aspects: open structured panel instead of inline editor
+    if (col.id.startsWith('aspect_') && categoryColumns) {
+      setAspectsPanelRowId(row._rowId)
+      return true
+    }
     return false
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryColumns])
 
   // ── Listing guidance ──────────────────────────────────────────────────
   const getCellGuidance = useCallback((col: FlatFileColumn, row: BaseRow): 'not-applicable' | 'optional' | null => {
@@ -958,7 +1046,23 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── Slot: push extras (after Save button) ─────────────────────────────
 
   const renderPushExtras = useCallback(({ rows, selectedRows }: PushExtrasCtx) => (
-    <div className="relative">
+    <div className="relative flex flex-col items-end gap-1">
+      {incompleteBefore.length > 0 && publishPanelOpen && (
+        <div className="absolute bottom-full mb-1.5 right-0 w-72 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2 shadow-sm z-50">
+          <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">
+            {incompleteBefore.length} row{incompleteBefore.length !== 1 ? 's' : ''} have missing required fields
+          </p>
+          <ul className="text-[10px] text-amber-700 dark:text-amber-400 space-y-0.5 max-h-24 overflow-y-auto">
+            {incompleteBefore.map(({ sku, count }) => (
+              <li key={sku} className="flex justify-between">
+                <span className="font-mono truncate">{sku}</span>
+                <span className="shrink-0 ml-2">{count} missing</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[10px] text-amber-600 dark:text-amber-500 mt-1">eBay may reject these rows. Push anyway?</p>
+        </div>
+      )}
       <Button size="sm" onClick={() => setPublishPanelOpen((o) => !o)} disabled={pushing} loading={pushing}>
         <Send className="w-3.5 h-3.5 mr-1.5" />
         Push to eBay
@@ -970,12 +1074,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           onChangeTargets={setPublishTargets}
           onPublish={() => void pushToEbay(rows, selectedRows)}
           pushing={pushing}
-          onClose={() => setPublishPanelOpen(false)}
+          onClose={() => { setPublishPanelOpen(false); setIncompleteBefore([]) }}
         />
       )}
     </div>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [pushing, publishPanelOpen, publishTargets])
+  ), [pushing, publishPanelOpen, publishTargets, incompleteBefore])
 
   // ── Slot: feed banner ──────────────────────────────────────────────────
 
@@ -1141,8 +1245,22 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   const renderModals = useCallback(({ rows, setRows, pushHistory }: ModalsCtx) => {
     const desc = descModal ? rows.find((r) => r._rowId === descModal.rowId) : null
+    const aspectsRow = aspectsPanelRowId ? rows.find((r) => r._rowId === aspectsPanelRowId) ?? null : null
     return (
       <>
+        {/* EFF.4 — Aspects side panel */}
+        <AspectsPanel
+          open={aspectsPanelRowId !== null}
+          row={aspectsRow}
+          categoryGroup={categoryColumns}
+          onSave={(rowId, values) => {
+            const next = rows.map((r) => r._rowId === rowId ? { ...r, ...values, _dirty: true } : r)
+            pushHistory(next)
+            setRows(next)
+          }}
+          onClose={() => setAspectsPanelRowId(null)}
+        />
+
         {desc && descModal && (
           <DescriptionModal
             value={String(desc.description ?? '')}
@@ -1191,7 +1309,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       </>
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [descModal, categorySearchOpen, categorySearchRowId, marketplace, loadCategorySchema, pullDiffData, pullDiffOpen, makePullDiffApplyHandler])
+  }, [descModal, categorySearchOpen, categorySearchRowId, marketplace, loadCategorySchema, pullDiffData, pullDiffOpen, makePullDiffApplyHandler, aspectsPanelRowId, categoryColumns])
 
   // ── Group key for eBay variations ──────────────────────────────────────
 
