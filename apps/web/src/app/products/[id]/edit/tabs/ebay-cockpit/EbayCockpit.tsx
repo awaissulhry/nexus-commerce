@@ -17,7 +17,7 @@
 // the corresponding ChannelListingTab section.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Send, ExternalLink, Settings2, History, Layers, ListTree, Link2 } from 'lucide-react'
+import { Send, ExternalLink, Settings2, History, Layers, ListTree, Link2, CheckCircle2 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
@@ -497,6 +497,10 @@ export default function EbayCockpit(props: Props) {
         }}
       />
 
+      {/* CX.6 — Sync status badge: fires each time the eBay listing is
+          saved (listingUpdatedAt advances on every card PATCH). */}
+      <SyncStatusBadge savedAt={events.listingUpdatedAt} />
+
       {/* ── Zone 2+3: Split-screen — cards left, preview+health right ── */}
       <div className="flex gap-4 items-start min-w-0">
         {/* Left column — sequential cards */}
@@ -876,6 +880,33 @@ export default function EbayCockpit(props: Props) {
       />
     </div>
     </FieldSourceProvider>
+  )
+}
+
+// CX.6 — Sync status badge.
+// Shown for 4 s after any card PATCH lands (signalled via SSE
+// listingUpdatedAt). Confirms that flat-file editor will reflect the
+// change on next open.
+function SyncStatusBadge({ savedAt }: { savedAt: number | null }) {
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    if (savedAt === null) return
+    setVisible(true)
+    const t = window.setTimeout(() => setVisible(false), 4000)
+    return () => window.clearTimeout(t)
+  }, [savedAt])
+
+  if (!visible) return null
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-[11.5px] text-emerald-700 dark:text-emerald-300"
+    >
+      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden />
+      Saved — flat file editor will reflect this change on next open
+    </div>
   )
 }
 

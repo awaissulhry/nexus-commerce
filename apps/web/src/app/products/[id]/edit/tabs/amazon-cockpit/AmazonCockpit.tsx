@@ -84,6 +84,8 @@ import {
   type FieldSource,
 } from '../../_shared/cockpit-shell'
 import ApplyToSiblingsModal from './templates/ApplyToSiblingsModal'
+import { useSchemaChangeDetector } from './schema/useSchemaChangeDetector'
+import SchemaChangeBanner from './schema/SchemaChangeBanner'
 
 /** A linkable content field surfaced in the Shared-fields card. */
 interface LinkField {
@@ -220,6 +222,14 @@ export default function AmazonCockpit(props: Props) {
   const [propagateData, setPropagateData] = useState<PropagatePreview | null>(null)
   const [propagateBusy, setPropagateBusy] = useState(false)
 
+  // CX.6 — track last successful card save so SyncStatusBadge can show
+  // "✓ Synced to flat file" for a few seconds after any PATCH lands.
+  const [lastSaveAt, setLastSaveAt] = useState<number | null>(null)
+  const handleCardSaved = useCallback(() => {
+    setLastSaveAt(Date.now())
+    props.onSave(listing ?? ({} as Listing))
+  }, [listing, props])
+
   const composed = useAmazonCompositor({
     product,
     listing,
@@ -268,6 +278,11 @@ export default function AmazonCockpit(props: Props) {
   // within the 5-min window.
   const productType =
     (product?.productType as string | null | undefined) ?? null
+
+  // CX.7 — schema change detector (localStorage fingerprint diff).
+  // Must come after productType declaration.
+  const schemaChanges = useSchemaChangeDetector(marketInfo.code, productType)
+
   const handleHoverWarm = useCallback(
     (code: string) => {
       if (!productType) return
@@ -583,6 +598,26 @@ export default function AmazonCockpit(props: Props) {
         onDismiss={fieldLinks.dismissSuggestion}
       />
 
+      {/* CX.7 — Schema change banner: shown when Amazon adds/removes fields. */}
+      {schemaChanges.hasChanged && productType && (
+        <SchemaChangeBanner
+          productType={productType}
+          marketplace={marketInfo.code}
+          newFields={schemaChanges.newFields}
+          removedFields={schemaChanges.removedFields}
+          onDismiss={schemaChanges.acknowledge}
+          onReview={() => {
+            schemaChanges.acknowledge()
+            // Jump to the AdditionalFieldsCard which lists the new fields.
+            const el = document.querySelector<HTMLElement>('[data-jump-target="additional-fields"]')
+            el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }}
+        />
+      )}
+
+      {/* CX.6 — Sync status: brief confirmation after any card save. */}
+      <SyncStatusBadge savedAt={lastSaveAt} />
+
       {/* ── Side-by-side split: left = cards, right = preview + health ── */}
       <div className="flex gap-4 items-start min-w-0">
         {/* Left column: all interactive cards */}
@@ -676,12 +711,7 @@ export default function AmazonCockpit(props: Props) {
               }
               marketplace={marketInfo.code}
               listingId={listing?.id ?? null}
-              onSaved={() =>
-                // Parent's onSave currently does router.refresh() and
-                // ignores the payload; pass the listing if we have it,
-                // otherwise an empty stub so the call type-checks.
-                props.onSave(listing ?? ({} as Listing))
-              }
+              onSaved={handleCardSaved}
               onJumpToClassic={() => handleJumpTo('classic')}
             />
             {/* UC.2/UC.3 — Images now uses the shared ImagesSummaryCard
@@ -716,7 +746,7 @@ export default function AmazonCockpit(props: Props) {
                 (listing?.lastSyncedAt as string | null | undefined) ?? null
               }
               listingId={listing?.id ?? null}
-              onSaved={() => props.onSave(listing ?? ({} as Listing))}
+              onSaved={handleCardSaved}
               snsEnabled={
                 (
                   (
@@ -783,13 +813,15 @@ export default function AmazonCockpit(props: Props) {
               onJumpToClassic={() => handleJumpTo('classic')}
             />
             {productType && listing && (
-              <AdditionalFieldsCard
-                productId={product.id}
-                marketplace={marketInfo.code}
-                productType={productType}
-                listingId={listing.id ?? null}
-                onSaved={() => props.onSave(listing ?? ({} as Listing))}
-              />
+              <div data-jump-target="additional-fields">
+                <AdditionalFieldsCard
+                  productId={product.id}
+                  marketplace={marketInfo.code}
+                  productType={productType}
+                  listingId={listing.id ?? null}
+                  onSaved={handleCardSaved}
+                />
+              </div>
             )}
           </CockpitCardGrid>
         </div>
@@ -919,6 +951,38 @@ export default function AmazonCockpit(props: Props) {
           })()
         }}
       />
+    </div>
+  )
+}
+
+// ── CX.6 — Sync status badge ───────────────────────────────────────────
+//
+// Appears for 4 seconds after any cockpit card PATCH succeeds to confirm
+// that the edit is now reflected in the flat-file editor as well (both
+// read from the same ChannelListing record).
+
+import { CheckCircle2 } from 'lucide-react'
+
+function SyncStatusBadge({ savedAt }: { savedAt: number | null }) {
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    if (savedAt === null) return
+    setVisible(true)
+    const t = window.setTimeout(() => setVisible(false), 4000)
+    return () => window.clearTimeout(t)
+  }, [savedAt])
+
+  if (!visible) return null
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-[11.5px] text-emerald-700 dark:text-emerald-300"
+    >
+      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden />
+      Saved — flat file editor will reflect this change on next open
     </div>
   )
 }
