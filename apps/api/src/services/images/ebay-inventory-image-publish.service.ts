@@ -125,12 +125,9 @@ export async function publishEbayImagesViaInventory(
   // default (Amazon-CDN child) images; per-SKU wins over per-axis-value.
   const pictureAxis = product.imageAxisPreference ?? 'Color'
   const curatedRows = await prisma.listingImage.findMany({
-    where: {
-      productId, platform: 'EBAY', mediaType: 'IMAGE',
-      OR: [{ variantGroupKey: pictureAxis }, { variationId: { not: null } }],
-    },
+    where: { productId, platform: 'EBAY', mediaType: 'IMAGE' },
     orderBy: { position: 'asc' },
-    select: { variantGroupValue: true, variationId: true, url: true },
+    select: { variantGroupKey: true, variantGroupValue: true, variationId: true, url: true },
   })
   // Resolve per-SKU rows (variationId → sku) so the push can key by SKU.
   const variationIds = [...new Set(curatedRows.map((r) => r.variationId).filter((v): v is string => !!v))]
@@ -139,6 +136,7 @@ export async function publishEbayImagesViaInventory(
     const vprods = await prisma.product.findMany({ where: { id: { in: variationIds } }, select: { id: true, sku: true } })
     for (const p of vprods) skuByVariationId.set(p.id, p.sku)
   }
+  const sharedUrls: string[] = []
   const imageOverrideByColor = new Map<string, string[]>()
   const imageOverrideBySku = new Map<string, string[]>()
   for (const r of curatedRows) {
@@ -147,12 +145,22 @@ export async function publishEbayImagesViaInventory(
       if (!sku) continue
       if (!imageOverrideBySku.has(sku)) imageOverrideBySku.set(sku, [])
       imageOverrideBySku.get(sku)!.push(r.url)
-    } else {
+    } else if (r.variantGroupKey && r.variantGroupKey === pictureAxis) {
       const key = String(r.variantGroupValue ?? '').toLowerCase()
       if (!key) continue
       if (!imageOverrideByColor.has(key)) imageOverrideByColor.set(key, [])
       imageOverrideByColor.get(key)!.push(r.url)
+    } else if (!r.variantGroupKey && !r.variationId) {
+      // P5 — the shared "cover & common" gallery (group/default images).
+      sharedUrls.push(r.url)
     }
+  }
+  // P5 — de-dupe: a photo in the cover/common gallery must NOT also appear in a
+  // per-colour or per-SKU set, or eBay shows it twice. The shared gallery wins.
+  if (sharedUrls.length > 0) {
+    const sharedSet = new Set(sharedUrls)
+    for (const [k, urls] of imageOverrideByColor) imageOverrideByColor.set(k, urls.filter((u) => !sharedSet.has(u)))
+    for (const [k, urls] of imageOverrideBySku) imageOverrideBySku.set(k, urls.filter((u) => !sharedSet.has(u)))
   }
 
   const allResults: Array<{ sku: string; market: string; status: string; message: string }> = []
@@ -170,6 +178,7 @@ export async function publishEbayImagesViaInventory(
       imageOverrideByColor.size > 0 ? imageOverrideByColor : undefined,
       pictureAxis,
       imageOverrideBySku.size > 0 ? imageOverrideBySku : undefined,
+      sharedUrls.length > 0 ? sharedUrls : undefined,
     )
     allResults.push(...groupResults)
   }

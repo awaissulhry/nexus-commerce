@@ -120,6 +120,10 @@ export async function pushVariationGroup(
   // exact variant. Keyed by SKU. (eBay only shows per-SKU images when the picture
   // axis is granular enough — e.g. Size — so this is for those configurations.)
   imageOverrideBySku?: Map<string, string[]>,
+  // P5 — operator-curated group/default gallery (the "cover & common" set). When
+  // provided it REPLACES the parent-derived group images (up to 12). The caller
+  // de-dupes the per-variant sets against this so nothing shows twice on eBay.
+  groupImageOverride?: string[],
 ): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
   const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
 
@@ -511,9 +515,15 @@ export async function pushVariationGroup(
   // eBay group title max is 80 chars — truncate silently to avoid error 25718.
   if (parentTitle.length > 80) parentTitle = parentTitle.slice(0, 80)
   const groupImageUrls: string[] = []
-  for (let i = 1; i <= 6; i++) {
-    const url = parentRow[`image_${i}`] as string | undefined
-    if (url) groupImageUrls.push(url)
+  if (groupImageOverride && groupImageOverride.length > 0) {
+    // P5 — operator-curated cover & common gallery wins over the parent-derived
+    // mix (eBay allows up to 12 group photos).
+    groupImageUrls.push(...groupImageOverride.slice(0, 12))
+  } else {
+    for (let i = 1; i <= 6; i++) {
+      const url = parentRow[`image_${i}`] as string | undefined
+      if (url) groupImageUrls.push(url)
+    }
   }
   // If parent has no direct images, use the first color variant's images as the
   // group representative. Using ALL variant images (both colors) creates too many

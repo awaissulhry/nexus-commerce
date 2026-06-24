@@ -1,9 +1,13 @@
 'use client'
 
-// eBay images — renders the SHARED ChannelImageGrid (the same grid component the
-// Amazon panel will migrate onto). Rows = colours (the chosen axis), columns =
-// photo positions 1,2,3… Each colour holds an ordered list of photos that eBay
-// shows when a buyer selects that colour (VariationSpecificPictureSet).
+// eBay images — renders the SHARED ChannelImageGrid. Rows = a "Default
+// (cover & common)" row + one row per colour; columns = photo positions 1,2,3…
+//
+// eBay shows the Default/group photos before a buyer picks a colour (position 1 =
+// the cover/search thumbnail), then focuses the selected colour's photos. eBay
+// does NOT reliably de-dupe, so every photo lives in exactly ONE bucket
+// (Default OR a colour) — assigning/moving a photo removes it from the others,
+// and the publish de-dupes per-colour against the Default set as a safety net.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, ShoppingBag, X } from 'lucide-react'
@@ -16,9 +20,9 @@ import ChannelImageGrid, { type ImageGridColumn, type ImageGridRow, type GridCel
 import type { ListingImage, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
 
 const EBAY_MAX = PLATFORM_RULES.EBAY.maxImages ?? 24
-// Starting width of the grid — it still auto-grows to fit each colour's photos
-// (up to EBAY_MAX). 12 gives plenty of room visible up front.
 const MIN_COLS = 12
+// Bucket key for the shared "Default (cover & common)" gallery row.
+const SHARED = '__shared__'
 
 interface Props {
   productId: string
@@ -28,9 +32,7 @@ interface Props {
   variants: VariantSummary[]
   onReload?: () => void
   onToast?: (msg: string) => void
-
-  // Legacy props from the old panel — accepted but ignored so ImagesTab
-  // doesn't need to change.
+  // Legacy props from the old panel — accepted but ignored so ImagesTab doesn't change.
   activeAxis?: string
   pendingUpserts?: unknown
   pendingDeletes?: unknown
@@ -60,8 +62,8 @@ interface ListingImageUpsert {
   role?: string
 }
 
-// colour (axis value) → ordered list of URLs
-type ColorSets = Map<string, string[]>
+// bucket key (SHARED or a colour value) → ordered list of URLs
+type Buckets = Map<string, string[]>
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -88,21 +90,23 @@ function defaultAxis(product: WorkspaceProduct, axes: string[]): string {
   return axes.find((a) => a.toLowerCase() === 'color') ?? axes[0] ?? 'Color'
 }
 
-function initColorSets(listingImages: ListingImage[], axis: string, values: string[]): ColorSets {
-  const map: ColorSets = new Map()
+function initBuckets(listingImages: ListingImage[], axis: string, values: string[]): Buckets {
+  const map: Buckets = new Map()
+  map.set(SHARED, [])
   for (const v of values) map.set(v, [])
-  // Collect (position, url) per colour, then sort by position so a reload after
-  // a reorder reflects the saved order.
-  const buckets = new Map<string, Array<{ position: number; url: string }>>()
+  const pairsByBucket = new Map<string, Array<{ position: number; url: string }>>()
   for (const img of listingImages) {
-    if (img.platform !== 'EBAY' || img.variantGroupKey !== axis || img.variationId) continue
-    const v = img.variantGroupValue ?? '—'
-    if (!buckets.has(v)) buckets.set(v, [])
-    buckets.get(v)!.push({ position: img.position ?? 0, url: img.url })
+    if (img.platform !== 'EBAY' || img.variationId) continue
+    let bucket: string | null = null
+    if (img.variantGroupKey == null) bucket = SHARED                       // Default / group images
+    else if (img.variantGroupKey === axis) bucket = img.variantGroupValue ?? '—'  // per-colour
+    if (bucket == null) continue
+    if (!pairsByBucket.has(bucket)) pairsByBucket.set(bucket, [])
+    pairsByBucket.get(bucket)!.push({ position: img.position ?? 0, url: img.url })
   }
-  for (const [v, pairs] of buckets.entries()) {
+  for (const [bucket, pairs] of pairsByBucket.entries()) {
     pairs.sort((a, b) => a.position - b.position)
-    map.set(v, pairs.map((p) => p.url))
+    map.set(bucket, pairs.map((p) => p.url))
   }
   return map
 }
@@ -126,8 +130,6 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
 
   const colorValues = useMemo(() => getAxisValues(variants, axis), [variants, axis])
 
-  // P4.B — persist the chosen axis so the publish (which reads imageAxisPreference)
-  // varies images by the SAME axis shown here.
   const persistAxis = useCallback((a: string) => {
     setAxis(a)
     void beFetch(`/api/products/${productId}/images-workspace/axis`, {
@@ -135,86 +137,97 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
     }).catch(() => { /* non-fatal */ })
   }, [productId])
 
-  // ── Local colour-set state ───────────────────────────────────────────
-  const [colorSets, setColorSets] = useState<ColorSets>(() => initColorSets(listingImages, axis, colorValues))
-  useEffect(() => { setColorSets(initColorSets(listingImages, axis, colorValues)) }, [listingImages, axis, colorValues])
+  // ── Buckets state (SHARED + per-colour) ──────────────────────────────
+  const [buckets, setBuckets] = useState<Buckets>(() => initBuckets(listingImages, axis, colorValues))
+  useEffect(() => { setBuckets(initBuckets(listingImages, axis, colorValues)) }, [listingImages, axis, colorValues])
 
-  const assignColor = useCallback((colour: string, replaceIndex: number | null, url: string) => {
-    setColorSets((prev) => {
+  // Assign a URL to a bucket cell. No-overlap: the photo is removed from every
+  // OTHER bucket first, so it can never appear twice.
+  const assign = useCallback((bucket: string, replaceIndex: number | null, url: string) => {
+    setBuckets((prev) => {
       const next = new Map(prev)
-      const list = [...(next.get(colour) ?? [])]
+      // No cross-bucket overlap — remove this photo from every OTHER bucket.
+      for (const [k, list] of next) if (k !== bucket && list.includes(url)) next.set(k, list.filter((u) => u !== url))
+      let list = [...(next.get(bucket) ?? [])]
       if (replaceIndex != null && replaceIndex < list.length) list[replaceIndex] = url
-      else if (!list.includes(url)) list.push(url)
-      next.set(colour, list)
+      else list.push(url)
+      // In-bucket de-dupe (first occurrence wins) so a photo never repeats in a row.
+      const seen = new Set<string>()
+      list = list.filter((u) => (seen.has(u) ? false : (seen.add(u), true)))
+      next.set(bucket, list)
       return next
     })
   }, [])
 
-  const removeCell = useCallback((colour: string, position: number) => {
-    setColorSets((prev) => {
+  const removeAt = useCallback((bucket: string, position: number) => {
+    setBuckets((prev) => {
       const next = new Map(prev)
-      const list = [...(next.get(colour) ?? [])]
+      const list = [...(next.get(bucket) ?? [])]
       list.splice(position - 1, 1)
-      next.set(colour, list)
+      next.set(bucket, list)
       return next
     })
   }, [])
 
-  const moveCell = useCallback((from: { rowKey: string | null; columnKey: string }, to: { rowKey: string | null; columnKey: string }) => {
-    if (from.rowKey === null || to.rowKey === null) return
-    const fromRow = from.rowKey
-    const toRow = to.rowKey
-    setColorSets((prev) => {
+  // Move a photo between cells (drag-reorder, incl. dragging a colour photo onto
+  // the Default row = "set as cover"). No-overlap kept on cross-bucket moves.
+  const move = useCallback((from: { rowKey: string | null; columnKey: string }, to: { rowKey: string | null; columnKey: string }) => {
+    const fromB = from.rowKey ?? SHARED
+    const toB = to.rowKey ?? SHARED
+    setBuckets((prev) => {
       const next = new Map(prev)
-      const fromList = [...(next.get(fromRow) ?? [])]
+      const fromList = [...(next.get(fromB) ?? [])]
       const [moved] = fromList.splice(Number(from.columnKey) - 1, 1)
       if (moved === undefined) return prev
-      if (fromRow === toRow) {
+      if (fromB === toB) {
         fromList.splice(Math.min(Number(to.columnKey) - 1, fromList.length), 0, moved)
-        next.set(fromRow, fromList)
+        next.set(fromB, fromList)
       } else {
-        const toList = [...(next.get(toRow) ?? [])]
-        if (!toList.includes(moved)) toList.splice(Math.min(Number(to.columnKey) - 1, toList.length), 0, moved)
-        next.set(fromRow, fromList)
-        next.set(toRow, toList)
+        const toList = [...(next.get(toB) ?? [])].filter((u) => u !== moved)
+        toList.splice(Math.min(Number(to.columnKey) - 1, toList.length), 0, moved)
+        next.set(fromB, fromList)
+        next.set(toB, toList)
       }
       return next
     })
   }, [])
 
-  // ── Grid model (rows = colours, columns = positions) ─────────────────
+  // ── Grid model ───────────────────────────────────────────────────────
   const colCount = useMemo(() => {
-    const longest = colorValues.reduce((m, cv) => Math.max(m, (colorSets.get(cv) ?? []).length), 0)
+    let longest = 0
+    for (const list of buckets.values()) longest = Math.max(longest, list.length)
     return Math.min(EBAY_MAX, Math.max(MIN_COLS, longest + 1))
-  }, [colorValues, colorSets])
+  }, [buckets])
 
   const columns: ImageGridColumn[] = useMemo(
     () => Array.from({ length: colCount }, (_, i) => ({ key: String(i + 1), label: String(i + 1), sublabel: i === 0 ? 'Main' : undefined, isPrimary: i === 0 })),
     [colCount],
   )
 
-  const gridRows: ImageGridRow[] = useMemo(
-    () => colorValues.map((cv) => {
-      const n = (colorSets.get(cv) ?? []).length
-      return { key: cv, label: cv, sublabel: `${n} photo${n === 1 ? '' : 's'}` }
-    }),
-    [colorValues, colorSets],
-  )
+  const gridRows: ImageGridRow[] = useMemo(() => {
+    const sharedN = (buckets.get(SHARED) ?? []).length
+    return [
+      { key: null, label: 'Default', sublabel: `cover + common · ${sharedN} photo${sharedN === 1 ? '' : 's'}` },
+      ...colorValues.map((cv) => {
+        const n = (buckets.get(cv) ?? []).length
+        return { key: cv, label: cv, sublabel: `${n} photo${n === 1 ? '' : 's'}` }
+      }),
+    ]
+  }, [colorValues, buckets])
 
   const resolveCell = useCallback((rowKey: string | null, colKey: string): GridCellDisplay | null => {
-    if (rowKey === null) return null
-    const url = (colorSets.get(rowKey) ?? [])[Number(colKey) - 1]
+    const url = (buckets.get(rowKey ?? SHARED) ?? [])[Number(colKey) - 1]
     return url ? { url, origin: 'own' } : null
-  }, [colorSets])
+  }, [buckets])
 
   // ── Picker (shared modal) ────────────────────────────────────────────
-  const [pickerTarget, setPickerTarget] = useState<{ colour: string; replaceIndex: number | null } | null>(null)
+  const [pickerTarget, setPickerTarget] = useState<{ bucket: string; replaceIndex: number | null } | null>(null)
   const onCellClick = useCallback((rowKey: string | null, colKey: string) => {
-    if (rowKey === null) return
-    const list = colorSets.get(rowKey) ?? []
+    const bucket = rowKey ?? SHARED
+    const list = buckets.get(bucket) ?? []
     const idx = Number(colKey) - 1
-    setPickerTarget({ colour: rowKey, replaceIndex: idx < list.length ? idx : null })
-  }, [colorSets])
+    setPickerTarget({ bucket, replaceIndex: idx < list.length ? idx : null })
+  }, [buckets])
 
   // ── Publish ──────────────────────────────────────────────────────────
   const [publishing, setPublishing] = useState(false)
@@ -225,14 +238,18 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
     setPublishResult(null)
     try {
       const upserts: ListingImageUpsert[] = []
-      for (const [colour, urls] of colorSets.entries()) {
+      for (const [bucket, urls] of buckets.entries()) {
         urls.forEach((url, position) => {
-          upserts.push({ scope: 'PLATFORM', platform: 'EBAY', marketplace: null, variantGroupKey: axis, variantGroupValue: colour, url, position, role: 'GALLERY' })
+          if (bucket === SHARED) {
+            upserts.push({ scope: 'PLATFORM', platform: 'EBAY', marketplace: null, variantGroupKey: null, variantGroupValue: null, url, position, role: position === 0 ? 'MAIN' : 'GALLERY' })
+          } else {
+            upserts.push({ scope: 'PLATFORM', platform: 'EBAY', marketplace: null, variantGroupKey: axis, variantGroupValue: bucket, url, position, role: 'GALLERY' })
+          }
         })
       }
-      // Replace existing per-colour rows for this axis; leave per-SKU rows (variationId) alone.
+      // Replace the Default + this-axis colour rows; leave per-SKU + other-axis rows alone.
       const deletes = listingImages
-        .filter((i) => i.platform === 'EBAY' && i.variantGroupKey !== null && !i.variationId)
+        .filter((i) => i.platform === 'EBAY' && !i.variationId && (i.variantGroupKey == null || i.variantGroupKey === axis))
         .map((i) => i.id)
 
       const saveRes = await beFetch(`/api/products/${productId}/images-workspace/bulk-save`, {
@@ -302,11 +319,12 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
         </div>
       )}
 
-      {/* Master photo strip — drag a photo onto any grid cell, or click a cell to pick */}
+      {/* Master photo strip — drag a photo onto any cell, or click a cell to pick */}
       {masterImages.length > 0 && (
         <div className="px-4 py-3 border-b border-subtle">
           <p className="text-xs text-tertiary mb-2">
-            Main listing photo comes from your <span className="font-medium text-slate-600 dark:text-slate-300">Master</span> tab. Drag a photo below onto a cell, or click a cell to pick — per {axis.toLowerCase()}.
+            <span className="font-medium text-slate-600 dark:text-slate-300">Default</span> = the cover + colour-neutral photos (size charts, features) shown before a colour is picked.
+            Each colour row = that colour&rsquo;s photos. A photo lives in one row only. Drag a photo below onto a cell, or click a cell.
           </p>
           <div className="flex flex-wrap gap-2">
             {masterImages.map((img) => (
@@ -341,9 +359,13 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
             columns={columns}
             resolveCell={resolveCell}
             onCellClick={onCellClick}
-            onCellDrop={(rowKey, colKey, url) => { if (rowKey) assignColor(rowKey, Number(colKey) - 1 < (colorSets.get(rowKey) ?? []).length ? Number(colKey) - 1 : null, url) }}
-            onCellMove={moveCell}
-            onCellRemove={(rowKey, colKey) => { if (rowKey) removeCell(rowKey, Number(colKey)) }}
+            onCellDrop={(rowKey, colKey, url) => {
+              const bucket = rowKey ?? SHARED
+              const idx = Number(colKey) - 1
+              assign(bucket, idx < (buckets.get(bucket) ?? []).length ? idx : null, url)
+            }}
+            onCellMove={move}
+            onCellRemove={(rowKey, colKey) => removeAt(rowKey ?? SHARED, Number(colKey))}
             minDimensionPx={PLATFORM_RULES.EBAY.minDimensionPx}
             ariaLabel={`eBay photos grouped by ${axis}`}
             rowHeaderLabel={axis}
@@ -356,7 +378,7 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
         <ImagePickerModal
           productId={productId}
           masterImages={masterImages}
-          onSelect={(url) => { assignColor(pickerTarget.colour, pickerTarget.replaceIndex, url) }}
+          onSelect={(url) => { assign(pickerTarget.bucket, pickerTarget.replaceIndex, url) }}
           onClose={() => setPickerTarget(null)}
         />
       )}
