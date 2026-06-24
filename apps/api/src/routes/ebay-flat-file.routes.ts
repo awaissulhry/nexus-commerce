@@ -108,6 +108,7 @@ function buildFlatRow(
     parentId?: string | null;
     variationTheme?: string | null;
     categoryAttributes?: unknown;
+    images?: Array<{ url: string; sortOrder: number; type: string }>;
     channelListings: Array<{
       id: string;
       region: string;
@@ -139,6 +140,16 @@ function buildFlatRow(
   const first = listings[0];
   const firstAttrs = first ? ((first.platformAttributes ?? {}) as Record<string, unknown>) : {};
   const firstImageUrls = (firstAttrs.imageUrls as string[] | undefined) ?? [];
+
+  // Prefer Cloudinary images (ProductImage rows) over Amazon CDN platformAttributes URLs.
+  // Sort MAIN type first, then by sortOrder. Fall back to non-Amazon platformAttributes URLs.
+  const cloudinaryUrls = (product.images ?? [])
+    .slice()
+    .sort((a, b) => (a.type === 'MAIN' ? -1 : b.type === 'MAIN' ? 1 : 0) || a.sortOrder - b.sortOrder)
+    .map((img) => img.url)
+    .filter((url) => !url.includes('amazon.com'));
+  const fallbackUrls = firstImageUrls.filter((url) => !url.includes('amazon.com'));
+  const effectiveImageUrls = cloudinaryUrls.length > 0 ? cloudinaryUrls : fallbackUrls;
 
   // EV.5b — variation linkage. Axis names normalised to comma-separated
   // (what the variation publish's split(',') expects); axis values from
@@ -182,12 +193,12 @@ function buildFlatRow(
     package_width: (firstAttrs.packageWidth as number | undefined) ?? 0,
     package_height: (firstAttrs.packageHeight as number | undefined) ?? 0,
     dimension_unit: (firstAttrs.dimensionUnit as string | undefined) ?? 'CENTIMETER',
-    image_1: firstImageUrls[0] ?? '',
-    image_2: firstImageUrls[1] ?? '',
-    image_3: firstImageUrls[2] ?? '',
-    image_4: firstImageUrls[3] ?? '',
-    image_5: firstImageUrls[4] ?? '',
-    image_6: firstImageUrls[5] ?? '',
+    image_1: effectiveImageUrls[0] ?? '',
+    image_2: effectiveImageUrls[1] ?? '',
+    image_3: effectiveImageUrls[2] ?? '',
+    image_4: effectiveImageUrls[3] ?? '',
+    image_5: effectiveImageUrls[4] ?? '',
+    image_6: effectiveImageUrls[5] ?? '',
     fulfillment_policy_id: (firstAttrs.fulfillmentPolicyId as string | undefined) ?? '',
     payment_policy_id: (firstAttrs.paymentPolicyId as string | undefined) ?? '',
     return_policy_id: (firstAttrs.returnPolicyId as string | undefined) ?? '',
@@ -766,6 +777,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         include: {
           channelListings: {
             where: { channel: 'EBAY' },
+          },
+          images: {
+            select: { url: true, sortOrder: true, type: true },
+            orderBy: { sortOrder: 'asc' },
           },
         },
         orderBy: { sku: 'asc' },
