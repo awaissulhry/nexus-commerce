@@ -256,6 +256,9 @@ export default function ProductEditClient({
     if (initial === 'global') return 'master'
     return (initial as TopTab) || 'master'
   })
+  // isAnyCockpitActive must live after topTab is declared (topTab is
+  // used in the expression; hoisting above useState would be a TDZ error).
+  const isAnyCockpitActive = (topTab === 'AMAZON' && amazonCockpitMode === 'cockpit') || (topTab === 'EBAY' && cockpitMode === 'cockpit')
 
   // TC.6 — visibility + order driven by useTabPrefs (replaces the
   // legacy binary `showAllTabs` toggle persisted as
@@ -1247,7 +1250,7 @@ export default function ProductEditClient({
       </header>
 
       {/* ── Body ───────────────────────────────────────────────── */}
-      <main className="max-w-7xl mx-auto px-6 py-6">
+      <main className={cn('py-6', isAnyCockpitActive ? 'px-4' : 'max-w-7xl mx-auto px-6')}>
         {/* PP — post-create bridge banner */}
         {showCreatedBanner && (
           <div className="mb-4 border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 rounded-lg px-4 py-3 flex items-start justify-between gap-3">
