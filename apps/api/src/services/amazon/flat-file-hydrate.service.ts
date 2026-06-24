@@ -18,13 +18,15 @@ import { logger } from '../../utils/logger.js'
 const MARKETPLACE_ID_MAP: Record<string, string> = {
   IT: 'APJ6JRA9NG5V4', DE: 'A1PA6795UKMFR9', FR: 'A13V1IB3VIYZZH', ES: 'A1RKKUPIHCS9HS', UK: 'A1F83G8C2ARO7P',
 }
-// Display-critical keys; a listing missing any of these would render blank cells.
-const KEY_ATTRS = ['bullet_point', 'fabric_type', 'country_of_origin']
-
 function isSparse(pa: unknown): boolean {
+  // "Sparse" = NO stored attribute set at all (never pulled). We deliberately do
+  // not require specific keys (fabric_type/country_of_origin) — many products
+  // genuinely lack them on Amazon, so requiring them would re-pull the same
+  // already-hydrated listings forever (cron churn / a non-terminating backfill).
+  // Once a listing has any attributes it reflects what Amazon has; we leave it.
   const root = (pa ?? {}) as Record<string, any>
   const attrs = (root.attributes ?? root) as Record<string, any>
-  return KEY_ATTRS.filter((k) => attrs && attrs[k] !== undefined).length < KEY_ATTRS.length
+  return !attrs || typeof attrs !== 'object' || Object.keys(attrs).length === 0
 }
 
 export type HydrateResult = { scanned: number; hydrated: number; skipped: number; errors: number }
