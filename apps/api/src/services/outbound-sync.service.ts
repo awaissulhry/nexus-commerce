@@ -26,6 +26,7 @@ import {
 import { ebayAuthService } from "./ebay-auth.service.js";
 import { listingPublishService } from "./listing-publish.service.js";
 import { resolveComplianceById, buildShopifyComplianceMetafields } from "./compliance-resolver.service.js";
+import { computeAvailableToPublish } from "./available-to-publish.service.js";
 
 // Advertising mutations (bids/budgets/state) ride the same OutboundSyncQueue
 // table but are owned exclusively by the dedicated ads-sync worker
@@ -673,6 +674,43 @@ export class OutboundSyncService {
     const { product, payload, id: queueId } = queueItem;
     const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
     const marketplaceId = payload?.marketplaceId ?? "EBAY_IT";
+
+    // FCF.2 / 1.4 — defensive pool cap (defence-in-depth). The cascade now
+    // queues reserved-adjusted available, but a stale/pre-fix or manually
+    // inserted queue row could carry a quantity above what the warehouse can
+    // ship. Clamp FBM eBay quantity to the own-warehouse pool (available −
+    // buffer) so the auto-sync path can never oversell — same pool maths as the
+    // flat-file manual push (capToFbm). Only triggers on overshoot; FBA-backed
+    // (MCF) eBay listings draw the Amazon pool, so they're left to the MCF path.
+    if (payload.quantity !== undefined && product?.id) {
+      const [whRows, cl] = await Promise.all([
+        prisma.stockLevel.findMany({
+          where: { productId: product.id, location: { type: "WAREHOUSE" } },
+          select: { available: true },
+        }),
+        queueItem.channelListingId
+          ? prisma.channelListing.findUnique({
+              where: { id: queueItem.channelListingId },
+              select: { stockBuffer: true, fulfillmentMethod: true },
+            })
+          : Promise.resolve(null),
+      ]);
+      if (cl?.fulfillmentMethod !== "FBA") {
+        const warehouseAvailable = whRows.reduce((s, r) => s + r.available, 0);
+        const cap = computeAvailableToPublish({
+          fulfillmentMethod: "FBM",
+          warehouseAvailable,
+          fbaSellable: 0,
+          stockBuffer: cl?.stockBuffer ?? 0,
+        }).available;
+        if (payload.quantity > cap) {
+          console.warn(
+            `[EBAY] capping ${sku} quantity ${payload.quantity} -> ${cap} (warehouse available ${warehouseAvailable}, buffer ${cl?.stockBuffer ?? 0})`,
+          );
+          payload.quantity = cap;
+        }
+      }
+    }
 
     const digest = digestPayload({
       price: payload.price,
