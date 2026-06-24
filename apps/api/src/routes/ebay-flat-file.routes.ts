@@ -622,6 +622,12 @@ async function pushVariationGroup(
     results.push({ sku, market: mp, status: 'PUSHED', message: 'inventory_item updated' })
   }
 
+  // eBay's Inventory Service has eventual consistency: a freshly PUT inventory_item
+  // may not be visible to the offer endpoint for ~1s. Without this pause, rapid
+  // sequential calls hit a 25604 "product not found" / 25001 internal error on
+  // random SKUs (the exact SKU varies each run — it is eBay-side, not data-driven).
+  await new Promise(r => setTimeout(r, 1500))
+
   // Step 2: Build variesBy specifications from the detected variation axes.
   // Deduplicate by nmLabel output: two different aspect_* raw keys (e.g. "color"
   // imported from Amazon + "Colore" set up on eBay) can both have >1 distinct value
