@@ -33,6 +33,52 @@ const mkt = (m: string) => MARKET_NAME[m] ?? m
 const parseEur = (s: string) => Math.max(0, Math.round((parseFloat(s.replace(',', '.')) || 0) * 100))
 const fetchChildren = (parentType: string, parentId: string): Promise<OntoNode[]> => fetch(`${API()}/api/advertising/ontology/children?parentType=${parentType}&parentId=${encodeURIComponent(parentId)}`).then((r) => r.json()).then((j) => (Array.isArray(j?.children) ? j.children : [])).catch(() => [])
 
+// ── P3 — named scenarios (localStorage) + compare ──────────────────────────
+interface SavedScenario { id: string; name: string; changes: Record<string, StagedChange>; createdAt: number }
+const SCEN_KEY = 'cp.scenarios.v1'
+const loadScenarios = (): SavedScenario[] => { try { const a = JSON.parse(localStorage.getItem(SCEN_KEY) || '[]'); return Array.isArray(a) ? a : [] } catch { return [] } }
+const saveScenarios = (s: SavedScenario[]) => { try { localStorage.setItem(SCEN_KEY, JSON.stringify(s)) } catch { /* quota */ } }
+const genId = () => `scn_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`
+
+function buildChanges(scenario: Record<string, StagedChange>, plans: EnfPlan[]): Array<Record<string, unknown>> {
+  const changes: Array<Record<string, unknown>> = []
+  for (const [id, s] of Object.entries(scenario)) {
+    const et = s.entityType ?? 'campaign'
+    if (et === 'campaign') {
+      const mp = plans.find((p) => p.campaigns.some((c) => c.id === id))?.marketplace
+      if (s.budgetCents != null) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'budget', budgetCents: s.budgetCents })
+      if (s.minCents != null || s.maxCents != null) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, marketplace: mp, kind: 'limit', minCents: s.minCents ?? null, maxCents: s.maxCents ?? null })
+      if (s.suppress === true) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'suppress' })
+      if (s.suppress === false) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'restore' })
+      if (s.biddingStrategy) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'biddingStrategy', biddingStrategy: s.biddingStrategy })
+      if (s.targetAcos != null) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'targetAcos', targetAcos: s.targetAcos })
+      if (s.placements) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'placement', placements: s.placements })
+    } else {
+      if (s.bidCents != null) changes.push({ entityType: et, entityId: id, kind: et === 'adgroup' ? 'adgroupBid' : 'targetBid', bidCents: s.bidCents })
+      if (s.status) changes.push({ entityType: et, entityId: id, kind: et === 'adgroup' ? 'adgroupStatus' : 'targetStatus', status: s.status })
+    }
+  }
+  return changes
+}
+function summarizeStaged(s: StagedChange): string {
+  const p: string[] = []
+  if (s.budgetCents != null) p.push(`budget €${(s.budgetCents / 100).toFixed(2)}`)
+  if (s.minCents != null || s.maxCents != null) p.push('min/max')
+  if (s.suppress === true) p.push('suppress')
+  if (s.suppress === false) p.push('restore')
+  if (s.bidCents != null) p.push(`bid €${(s.bidCents / 100).toFixed(2)}`)
+  if (s.status) p.push(s.status.toLowerCase())
+  if (s.biddingStrategy) p.push(s.biddingStrategy === 'LEGACY_FOR_SALES' ? 'down-only' : s.biddingStrategy === 'AUTO_FOR_SALES' ? 'up&down' : 'fixed')
+  if (s.targetAcos != null) p.push(`ACoS ${Math.round(s.targetAcos * 100)}%`)
+  if (s.placements) p.push('placements')
+  return p.join(', ') || '—'
+}
+function scenarioStats(scenario: Record<string, StagedChange>, allCamps: Map<string, EnfCampaign>) {
+  let delta = 0
+  for (const [id, s] of Object.entries(scenario)) if (s.budgetCents != null && (s.entityType ?? 'campaign') === 'campaign') { const c = allCamps.get(id); if (c) delta += s.budgetCents - c.currentDailyCents }
+  return { count: Object.keys(scenario).length, delta, suppress: Object.values(scenario).filter((s) => s.suppress === true).length }
+}
+
 // ── Inspector — adapts to the selected object type ─────────────────────────
 function Inspector({ node, rootCampaignId, staged, onStage, onClear, onClose }: { node: AnyNode; rootCampaignId: string | null; staged: StagedChange | undefined; onStage: (p: Partial<StagedChange>) => void; onClear: () => void; onClose: () => void }) {
   const t = node.kindType
@@ -129,6 +175,30 @@ function Inspector({ node, rootCampaignId, staged, onStage, onClear, onClose }: 
   )
 }
 
+// ── P3 — compare two scenarios side-by-side ────────────────────────────────
+function ComparePanel({ working, workingName, saved, compareId, setCompareId, allCamps, committing, onCommit }: { working: Record<string, StagedChange>; workingName: string; saved: SavedScenario[]; compareId: string; setCompareId: (id: string) => void; allCamps: Map<string, EnfCampaign>; committing: boolean; onCommit: (changes: Record<string, StagedChange>, isWorking: boolean) => void }) {
+  const right = saved.find((s) => s.id === compareId)
+  const cols: Array<{ key: string; name: string; changes: Record<string, StagedChange>; isWorking: boolean }> = [{ key: 'working', name: workingName, changes: working, isWorking: true }, ...(right ? [{ key: right.id, name: right.name, changes: right.changes, isWorking: false }] : [])]
+  return (
+    <div className="cp-compare">
+      <div className="cp-compare-pick"><span>Compare the working set against</span><select value={compareId} onChange={(e) => setCompareId(e.target.value)}>{saved.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+      <div className="cp-compare-cols">
+        {cols.map((col) => {
+          const st = scenarioStats(col.changes, allCamps)
+          const rows = Object.entries(col.changes)
+          return (
+            <div className="cp-compare-col" key={col.key}>
+              <div className="hd"><b>{col.name}</b><span className="st">{st.count} change{st.count === 1 ? '' : 's'}{st.delta !== 0 ? ` · daily ${st.delta > 0 ? '+' : ''}${eur(st.delta)}` : ''}{st.suppress ? ` · ${st.suppress} suppress` : ''}</span></div>
+              <div className="rows">{rows.length === 0 ? <div className="empty">No changes.</div> : rows.map(([id, s]) => { const c = allCamps.get(id); const name = c ? c.name : `${s.entityType ?? 'campaign'} ·${id.slice(-6)}`; return <div className="row" key={id}><span className="nm" title={name}>{name}</span><span className="ch">{summarizeStaged(s)}</span></div> })}</div>
+              <button type="button" className="h10-am-btn primary" disabled={committing || st.count === 0} onClick={() => onCommit(col.changes, col.isWorking)}>Commit this</button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export function ControlPlane({ open, onClose, enforcement, month, initialMarket, onCommitted, toast }: { open: boolean; onClose: () => void; enforcement: EnforcementResult | null; month: string; initialMarket: string; onCommitted: () => void; toast: (m: string) => void }) {
   const [market, setMarket] = useState(initialMarket)
   const [sel, setSel] = useState<SelectRef>(null)
@@ -138,7 +208,10 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
   const [focusAdGroup, setFocusAdGroup] = useState<string | null>(null)
   const [adGroups, setAdGroups] = useState<OntoNode[] | null>(null)
   const [targets, setTargets] = useState<OntoNode[] | null>(null)
-  useEffect(() => { if (open) { setMarket(initialMarket); setSel(null); setFocusCampaign(null); setFocusAdGroup(null); setAdGroups(null); setTargets(null) } }, [open, initialMarket])
+  const [saved, setSaved] = useState<SavedScenario[]>([])
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [compareId, setCompareId] = useState<string | null>(null)
+  useEffect(() => { if (open) { setMarket(initialMarket); setSel(null); setFocusCampaign(null); setFocusAdGroup(null); setAdGroups(null); setTargets(null); setSaved(loadScenarios()); setCompareId(null) } }, [open, initialMarket])
 
   const plan = useMemo(() => enforcement?.plans.find((p) => p.marketplace === market) ?? enforcement?.plans[0] ?? null, [enforcement, market])
   const allCamps = useMemo(() => { const m = new Map<string, EnfCampaign>(); for (const p of enforcement?.plans ?? []) for (const c of p.campaigns) m.set(c.id, c); return m }, [enforcement])
@@ -172,32 +245,24 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
   const clearStage = (id: string) => setScenario((prev) => { const n = { ...prev }; delete n[id]; return n })
   const stagedInMarket = (p: EnfPlan) => p.campaigns.filter((c) => scenario[c.id]).length
 
-  const commit = async () => {
-    if (stageCount === 0) return
+  const commitChanges = async (changesMap: Record<string, StagedChange>, isWorking: boolean) => {
+    const changes = buildChanges(changesMap, enforcement?.plans ?? [])
+    if (changes.length === 0) return
     setCommitting(true)
-    const changes: Array<Record<string, unknown>> = []
-    for (const [id, s] of Object.entries(scenario)) {
-      const et = s.entityType ?? 'campaign'
-      if (et === 'campaign') {
-        const mp = [...(enforcement?.plans ?? [])].find((p) => p.campaigns.some((c) => c.id === id))?.marketplace
-        if (s.budgetCents != null) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'budget', budgetCents: s.budgetCents })
-        if (s.minCents != null || s.maxCents != null) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, marketplace: mp, kind: 'limit', minCents: s.minCents ?? null, maxCents: s.maxCents ?? null })
-        if (s.suppress === true) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'suppress' })
-        if (s.suppress === false) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'restore' })
-        if (s.biddingStrategy) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'biddingStrategy', biddingStrategy: s.biddingStrategy })
-        if (s.targetAcos != null) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'targetAcos', targetAcos: s.targetAcos })
-        if (s.placements) changes.push({ entityType: 'campaign', entityId: id, campaignId: id, kind: 'placement', placements: s.placements })
-      } else {
-        if (s.bidCents != null) changes.push({ entityType: et, entityId: id, kind: et === 'adgroup' ? 'adgroupBid' : 'targetBid', bidCents: s.bidCents })
-        if (s.status) changes.push({ entityType: et, entityId: id, kind: et === 'adgroup' ? 'adgroupStatus' : 'targetStatus', status: s.status })
-      }
-    }
     try {
       const r = await fetch(`${API()}/api/advertising/budget-manager/scenario/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month, changes }) }).then((x) => x.json())
-      if (r?.ok) { toast(`Committed ${r.applied} change${r.applied === 1 ? '' : 's'} · undo within 5 min`); setScenario({}); setSel(null); onCommitted() }
+      if (r?.ok) { toast(`Committed ${r.applied} change${r.applied === 1 ? '' : 's'} · undo within 5 min`); if (isWorking) { setScenario({}); setActiveId(null) } setSel(null); setCompareId(null); onCommitted() }
       else { toast(`Committed ${r?.applied ?? 0}, ${r?.failed ?? 0} failed`); onCommitted() }
     } catch { toast('Commit failed') } finally { setCommitting(false) }
   }
+  const commit = () => commitChanges(scenario, true)
+  // P3 — scenario manager (localStorage-backed)
+  const persistAndSet = (next: SavedScenario[]) => { setSaved(next); saveScenarios(next) }
+  const saveScenarioAs = () => { if (stageCount === 0) return; const name = window.prompt('Name this scenario:', `Scenario ${saved.length + 1}`); if (!name) return; const id = genId(); persistAndSet([...saved, { id, name, changes: scenario, createdAt: Date.now() }]); setActiveId(id); toast(`Saved “${name.trim()}”`) }
+  const updateActiveScenario = () => { if (!activeId) return; persistAndSet(saved.map((s) => (s.id === activeId ? { ...s, changes: scenario } : s))); toast('Scenario updated') }
+  const loadScenario = (id: string) => { const s = saved.find((x) => x.id === id); if (!s) return; if (activeId == null && stageCount > 0 && !window.confirm('Discard the unsaved working set?')) return; setScenario({ ...s.changes }); setActiveId(id); setSel(null) }
+  const newScenario = () => { if (stageCount > 0 && activeId == null && !window.confirm('Discard the unsaved working set?')) return; setScenario({}); setActiveId(null); setSel(null) }
+  const delScenario = (id: string) => { persistAndSet(saved.filter((s) => s.id !== id)); if (activeId === id) setActiveId(null); if (compareId === id) setCompareId(null) }
 
   const tryClose = () => { if (stageCount > 0 && !window.confirm(`Discard ${stageCount} staged change${stageCount === 1 ? '' : 's'}?`)) return; setScenario({}); onClose() }
   const rootCampaignId = sel?.type === 'campaign' ? sel.id : focusCampaign
@@ -216,19 +281,39 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
       {!enforcement || enforcement.plans.length === 0 ? (
         <div className="cp-empty">No markets have Auto Pacing or Stop Over Spend enabled this month. Turn one on (the row toggles) to load the control plane.</div>
       ) : (
-        <div className="cp-layout">
-          <div className="cp-main">
-            <div className="cp-tabs">
-              {enforcement.plans.map((p) => (
-                <button type="button" key={p.marketplace} className={`cp-tab ${market === p.marketplace ? 'on' : ''}`} onClick={() => { setMarket(p.marketplace); setSel(null); setFocusCampaign(null); setFocusAdGroup(null); setAdGroups(null); setTargets(null) }}>{FLAG[p.marketplace] ?? '🌐'} {mkt(p.marketplace)}{stagedInMarket(p) > 0 ? <em className="dot"> ●</em> : null}</button>
-              ))}
-              <span className="grow" />
-              <span className="cp-hint">Click a node to inspect · campaigns &amp; ad groups drill in</span>
-            </div>
-            {plan && <AllocationCanvas plan={plan} selectedId={sel?.id ?? null} onSelect={onSelect} staged={scenario} adGroups={adGroups} targets={targets} focusCampaign={focusCampaign} focusAdGroup={focusAdGroup} />}
+        <>
+          <div className="cp-scenbar">
+            <span className="lbl">Scenario</span>
+            <button type="button" className={`cp-scenchip ${!activeId ? 'on' : ''}`} onClick={newScenario}>Working set{!activeId && stageCount ? ` · ${stageCount}` : ''}</button>
+            {saved.map((s) => (
+              <span key={s.id} className={`cp-scenchip wrap ${activeId === s.id ? 'on' : ''}`}>
+                <button type="button" onClick={() => loadScenario(s.id)}>{s.name} · {Object.keys(s.changes).length}</button>
+                <button type="button" className="x" aria-label={`Delete ${s.name}`} onClick={() => delScenario(s.id)}>×</button>
+              </span>
+            ))}
+            <span className="grow" />
+            {activeId && <button type="button" className="h10-am-btn" disabled={!stageCount} onClick={updateActiveScenario}>Update</button>}
+            <button type="button" className="h10-am-btn" disabled={!stageCount} onClick={saveScenarioAs}>Save as…</button>
+            {saved.length > 0 && <button type="button" className="h10-am-btn" onClick={() => setCompareId(compareId ? null : saved[0].id)}>{compareId ? 'Close compare' : '⇄ Compare'}</button>}
           </div>
-          {selectedNode && <Inspector key={selectedNode.id} node={selectedNode} rootCampaignId={rootCampaignId} staged={scenario[selectedNode.id]} onStage={(p) => setStage(selectedNode.id, p)} onClear={() => clearStage(selectedNode.id)} onClose={() => setSel(null)} />}
-        </div>
+          {compareId ? (
+            <ComparePanel working={scenario} workingName={activeId ? `${saved.find((s) => s.id === activeId)?.name ?? 'Working'} (active)` : 'Working set'} saved={saved} compareId={compareId} setCompareId={setCompareId} allCamps={allCamps} committing={committing} onCommit={commitChanges} />
+          ) : (
+            <div className="cp-layout">
+              <div className="cp-main">
+                <div className="cp-tabs">
+                  {enforcement.plans.map((p) => (
+                    <button type="button" key={p.marketplace} className={`cp-tab ${market === p.marketplace ? 'on' : ''}`} onClick={() => { setMarket(p.marketplace); setSel(null); setFocusCampaign(null); setFocusAdGroup(null); setAdGroups(null); setTargets(null) }}>{FLAG[p.marketplace] ?? '🌐'} {mkt(p.marketplace)}{stagedInMarket(p) > 0 ? <em className="dot"> ●</em> : null}</button>
+                  ))}
+                  <span className="grow" />
+                  <span className="cp-hint">Click a node to inspect · campaigns &amp; ad groups drill in</span>
+                </div>
+                {plan && <AllocationCanvas plan={plan} selectedId={sel?.id ?? null} onSelect={onSelect} staged={scenario} adGroups={adGroups} targets={targets} focusCampaign={focusCampaign} focusAdGroup={focusAdGroup} />}
+              </div>
+              {selectedNode && <Inspector key={selectedNode.id} node={selectedNode} rootCampaignId={rootCampaignId} staged={scenario[selectedNode.id]} onStage={(p) => setStage(selectedNode.id, p)} onClear={() => clearStage(selectedNode.id)} onClose={() => setSel(null)} />}
+            </div>
+          )}
+        </>
       )}
     </Modal>
   )
