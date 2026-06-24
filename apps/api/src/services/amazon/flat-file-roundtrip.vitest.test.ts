@@ -48,6 +48,29 @@ describe('FFX.3 — flat-file pull round-trip contract', () => {
     expect(bullets).toEqual(['B1', 'B2', 'B3'])
   })
 
+  // F.1 — slot 1 now lives in bullet_point_1 (matching the manifest column);
+  // the bare bullet_point is only a blank sentinel.
+  it('bullet_point_1 (new slot-1 key) round-trips in order', () => {
+    const row = { item_sku: 'X2b', bullet_point: '', bullet_point_1: 'B1', bullet_point_2: 'B2', bullet_point_3: 'B3' }
+    const bullets = (collapse(row).bullet_point as any[]).map((b) => b.value)
+    expect(bullets).toEqual(['B1', 'B2', 'B3'])
+  })
+  it('an edited bullet_point_1 is NOT clobbered by a stale bare bullet_point (the revert bug)', () => {
+    const row = { item_sku: 'X2c', bullet_point: '', bullet_point_1: 'EDITED-1', bullet_point_2: 'B2' }
+    const bullets = (collapse(row).bullet_point as any[]).map((b) => b.value)
+    expect(bullets).toEqual(['EDITED-1', 'B2'])
+  })
+  it('buildJsonFeedBody reassembles bullet_point_1..N into the feed array (slot 1 not dropped)', () => {
+    const svc3 = new AmazonFlatFileService({} as any, {} as any)
+    const expandedFields = { bullet_point_1: 'bullet_point', bullet_point_2: 'bullet_point', bullet_point_3: 'bullet_point' }
+    const feed = JSON.parse(svc3.buildJsonFeedBody(
+      [{ item_sku: 'B2', item_name: 'T', bullet_point: '', bullet_point_1: 'First', bullet_point_2: 'Second', bullet_point_3: 'Third' } as any],
+      'IT', 'SELLER', expandedFields,
+    ))
+    const bp = (feed.messages[0].attributes.bullet_point as any[]).map((b) => b.value)
+    expect(bp).toEqual(['First', 'Second', 'Third'])
+  })
+
   it('does not invent fields that were not pulled (empty in → absent out)', () => {
     const attrs = collapse({ item_sku: 'X3', item_name: 'Only a title' })
     expect(readBack(attrs, 'item_name')).toBe('Only a title')
@@ -140,9 +163,17 @@ describe('RR — applySnapshotOverlay (lossless grid round-trip)', () => {
     expect(row.purchasable_offer__our_price).toBe('199.99')
     expect(row.item_name).toBe('XAVIA GALE Giacca (live title)')
   })
-  it('keeps the snapshot value when the live column is empty', () => {
+  it('blanks the quantity for FBA rows (Amazon-managed; a merchant qty would flip to FBM)', () => {
     const row = applySnapshotOverlay(snapshot, liveRow)
-    expect(row.fulfillment_availability__quantity).toBe('10') // snapshot wins over empty live
+    // snapshot is AMAZON_EU (FBA) with qty 10 — we deliberately surface NO merchant
+    // quantity for FBA, even though the snapshot saved one.
+    expect(row.fulfillment_availability__quantity).toBe('')
+  })
+  it('keeps the snapshot quantity for FBM rows when the live column is empty (lossless)', () => {
+    const fbmSnap = { ...snapshot, fulfillment_availability__fulfillment_channel_code: 'DEFAULT' }
+    const fbmLive = { ...liveRow, fulfillment_availability__fulfillment_channel_code: 'DEFAULT', fulfillment_availability__quantity: '' }
+    const row = applySnapshotOverlay(fbmSnap, fbmLive)
+    expect(row.fulfillment_availability__quantity).toBe('10') // FBM: snapshot wins over empty live
   })
   it('carries internal row metadata from the live (DB) row', () => {
     const row = applySnapshotOverlay(snapshot, liveRow)

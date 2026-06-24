@@ -727,7 +727,7 @@ export function isBlankFeedValue(val: unknown): boolean {
 // row metadata. Everything else comes from the snapshot exactly as saved.
 const SNAPSHOT_LIVE_OVERLAY = [
   'item_name', 'product_description',
-  'bullet_point', 'bullet_point_2', 'bullet_point_3', 'bullet_point_4', 'bullet_point_5',
+  'bullet_point_2', 'bullet_point_3', 'bullet_point_4', 'bullet_point_5',
   'purchasable_offer__our_price', 'purchasable_offer__sale_price',
   'fulfillment_availability__quantity',
 ]
@@ -736,9 +736,23 @@ export function applySnapshotOverlay(snapshot: Record<string, any>, liveRow: Fla
   for (const k of SNAPSHOT_LIVE_OVERLAY) {
     if (liveRow[k] !== undefined && liveRow[k] !== '') overlay[k] = liveRow[k]
   }
+  // FBA rows: Amazon owns the stock — never surface a merchant quantity (it both
+  // shouldn't show, and a merchant qty would flip FBA→FBM). Force-blank for FBA;
+  // FBM keeps the normal lossless overlay (live qty if set, else the snapshot).
+  const faCodeU = String(
+    liveRow['fulfillment_availability__fulfillment_channel_code'] ??
+      snapshot['fulfillment_availability__fulfillment_channel_code'] ?? '',
+  ).toUpperCase()
+  const isFba = faCodeU.startsWith('AMAZON') || faCodeU === 'AFN' || faCodeU === 'FBA'
   return {
     ...snapshot,
     ...overlay,
+    // Bullets: slot 1 is bullet_point_1 everywhere; the bare bullet_point is only
+    // the generic-loop sentinel. Resolve slot 1 (live override > snapshot _1 >
+    // legacy bare) and blank the bare key so no consumer reads a stale slot-1.
+    bullet_point: '',
+    bullet_point_1: (liveRow as any)['bullet_point_1'] || snapshot['bullet_point_1'] || snapshot['bullet_point'] || '',
+    ...(isFba ? { fulfillment_availability__quantity: '' } : {}),
     item_sku: liveRow.item_sku ?? snapshot.item_sku,
     _rowId: liveRow._rowId,
     _productId: liveRow._productId,
@@ -1287,6 +1301,10 @@ export class AmazonFlatFileService {
         ? String(faAttrs.fulfillment_channel_code)
         : ((p as any).fulfillmentMethod === 'FBA' ? 'AMAZON_EU' : 'DEFAULT')
       const faLeadTime = faAttrs?.lead_time_to_ship_max_days != null ? String(faAttrs.lead_time_to_ship_max_days) : ''
+      // FBA listings: Amazon owns the stock and a merchant quantity flips the
+      // offer to FBM, so the quantity column is left blank (and the UI hides it).
+      const faCodeU = faCode.toUpperCase()
+      const isFbaChannel = faCodeU.startsWith('AMAZON') || faCodeU === 'AFN' || faCodeU === 'FBA'
 
       // Start with fixed structural fields
       const row: FlatFileRow = {
@@ -1301,7 +1319,11 @@ export class AmazonFlatFileService {
         item_name:             listing?.title ?? attrs.item_name?.[0]?.value ?? p.name ?? '',
         brand:                 String(attrs.brand?.[0]?.value ?? ''),
         product_description:   listing?.description ?? attrs.product_description?.[0]?.value ?? '',
-        bullet_point:          bullets[0] ?? '',
+        // bullet_point: bare key is a blank sentinel so the generic loop below
+        // skips attrs.bullet_point; slot 1 lives in bullet_point_1 to match the
+        // manifest column (expandSchemaField numbers repeatable fields from _1).
+        bullet_point:          '',
+        bullet_point_1:        bullets[0] ?? '',
         bullet_point_2:        bullets[1] ?? '',
         bullet_point_3:        bullets[2] ?? '',
         bullet_point_4:        bullets[3] ?? '',
@@ -1319,7 +1341,7 @@ export class AmazonFlatFileService {
         // fulfillment_availability expanded — bare key sentinel
         fulfillment_availability:                        '',
         fulfillment_availability__fulfillment_channel_code: faCode,
-        fulfillment_availability__quantity:              listing?.quantity != null ? String(listing.quantity) : '',
+        fulfillment_availability__quantity:              isFbaChannel ? '' : (listing?.quantity != null ? String(listing.quantity) : ''),
         fulfillment_availability__lead_time_to_ship_max_days: faLeadTime,
         main_product_image_locator: String(attrs.main_product_image_locator?.[0]?.media_location ?? ''),
       }
