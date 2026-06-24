@@ -17,6 +17,7 @@ import cron from 'node-cron'
 import { prisma } from '@nexus/database'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
+import { restoreFbaListings } from '../services/fba-restore.service.js'
 
 const JOB = 'fba-flip-guard'
 const SCHEDULE = '*/10 * * * *'
@@ -50,16 +51,36 @@ export async function runFbaFlipGuardCron(): Promise<void> {
           )`
 
       if (rows.length > 0) {
-        const skus = [...new Set(rows.map((r) => r.sku).filter(Boolean))]
+        const skus = [...new Set(rows.map((r) => r.sku).filter(Boolean))] as string[]
         logger.error(
           '🔴 FBA-FLIP GUARD TRIPPED — a merchant QUANTITY_UPDATE succeeded for FBA SKU(s); the Amazon offer was likely flipped to FBM',
           {
             critical: true,
             count: rows.length,
             skus: skus.slice(0, 25),
-            action: 'Set NEXUS_ENABLE_AMAZON_PUBLISH=false now, then check the fail-closed guard + that the fixed build is live (/api/health).',
+            action: 'Check the fail-closed guard + that the fixed build is live (/api/health). Auto-restore is firing now.',
           },
         )
+
+        if (process.env.NEXUS_FBA_AUTO_RESTORE !== '0') {
+          try {
+            const summary = await restoreFbaListings({ skus, dryRun: false })
+            logger.error('🟡 FBA auto-restore fired by flip-guard', {
+              restored: summary.sent,
+              processed: summary.processed,
+              skippedNoFba: summary.skippedNoFba,
+              errors: summary.results.filter((r) => !r.ok && !r.dryRun).length,
+              sample: summary.results.slice(0, 10),
+            })
+          } catch (restoreErr) {
+            logger.error('fba-flip-guard: auto-restore failed', {
+              error: restoreErr instanceof Error ? restoreErr.message : String(restoreErr),
+            })
+          }
+        } else {
+          logger.error('fba-flip-guard: auto-restore disabled (NEXUS_FBA_AUTO_RESTORE=0) — run POST /admin/amazon/restore-fba {"dryRun":false} manually')
+        }
+
         return `ALERT: ${rows.length} FBA quantity push(es) across ${skus.length} sku(s)`
       }
       return 'ok — no FBA quantity pushes in window'

@@ -24,6 +24,7 @@ import {
 import { productSearchIndexerService } from '../services/product-search-indexer.service.js'
 import { backfillNormalizeProductImageUrls } from '../services/images/normalize-image-urls-backfill.service.js'
 import { resolveSlotTaxonomy } from '../services/images/amazon-slot-taxonomy.service.js'
+import { restoreFbaListings } from '../services/fba-restore.service.js'
 import {
   isSearchConfigured,
   searchHealthy,
@@ -88,55 +89,17 @@ export async function adminRoutes(app: FastifyInstance) {
       const body = request.body ?? {}
       const dryRun = body.dryRun !== false // default true; only explicit false sends
       const limit = Number.isFinite(body.limit as number) ? Math.max(1, Number(body.limit)) : undefined
-      const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
-      if (!sellerId) return reply.code(503).send({ error: 'AMAZON_SELLER_ID not configured' })
-
-      const listings = await prisma.channelListing.findMany({
-        where: {
-          channel: 'AMAZON',
-          ...(body.skus?.length ? { product: { sku: { in: body.skus } } } : {}),
-          ...(body.marketplaces?.length ? { marketplace: { in: body.marketplaces } } : {}),
-        },
-        select: {
-          id: true,
-          marketplace: true,
-          platformAttributes: true,
-          product: { select: { id: true, sku: true, productType: true } },
-        },
-        orderBy: { id: 'asc' },
-      })
-
-      const results: Array<Record<string, unknown>> = []
-      let processed = 0, sent = 0, skippedNoFba = 0
-      for (const cl of listings) {
-        if (limit && processed >= limit) break
-        const sku = cl.product?.sku
-        if (!sku || !cl.product?.id) continue
-        // Only restore listings actually backed by FBA stock (the flipped set).
-        const agg = await prisma.stockLevel
-          .aggregate({ where: { productId: cl.product.id, location: { code: 'AMAZON-EU-FBA' } }, _sum: { quantity: true } })
-          .catch(() => null)
-        if (!(agg?._sum.quantity && agg._sum.quantity > 0)) { skippedNoFba++; continue }
-        processed++
-        const marketplaceId = AMZ_MP_ID[cl.marketplace] ?? AMZ_MP_ID.IT
-        const productType = String((cl.platformAttributes as any)?.productType ?? cl.product?.productType ?? '').toUpperCase()
-        const payload = {
-          productType: productType || 'PRODUCT',
-          patches: [{
-            op: 'replace',
-            path: '/attributes/fulfillment_availability',
-            value: [{ fulfillment_channel_code: 'AMAZON_EU', marketplace_id: marketplaceId }],
-          }],
-        }
-        if (dryRun) {
-          results.push({ sku, marketplace: cl.marketplace, productType: payload.productType, dryRun: true, payload })
-          continue
-        }
-        const r = await amazonSpApiClient.submitListingPayload({ sellerId, sku, payload })
-        sent++
-        results.push({ sku, marketplace: cl.marketplace, productType: payload.productType, ok: r.success, status: r.status, dryRun: r.dryRun ?? false, error: r.error })
+      try {
+        const summary = await restoreFbaListings({
+          skus: body.skus,
+          marketplaces: body.marketplaces,
+          dryRun,
+          limit,
+        })
+        return reply.send({ ...summary, count: summary.results.length })
+      } catch (err) {
+        return reply.code(503).send({ error: err instanceof Error ? err.message : String(err) })
       }
-      return reply.send({ dryRun, processed, sent, skippedNoFba, count: results.length, results })
     },
   )
 

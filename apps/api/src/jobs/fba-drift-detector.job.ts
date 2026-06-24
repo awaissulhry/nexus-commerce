@@ -22,6 +22,7 @@ import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import type { CatalogItem } from '../services/marketplaces/amazon.service.js'
+import { restoreFbaListings } from '../services/fba-restore.service.js'
 
 const JOB = 'fba-drift-detector'
 const SCHEDULE = process.env.NEXUS_FBA_DRIFT_CRON_SCHEDULE ?? '0 5 * * *'
@@ -94,15 +95,41 @@ export async function runFbaDriftDetector(): Promise<void> {
       }
 
       if (drift.length > 0) {
+        const driftSkus = [...new Set(drift.map((d) => d.sku))]
+        const driftMarkets = [...new Set(drift.map((d) => d.market))]
+
         logger.error(
-          '🔴 FBA→FBM DRIFT DETECTED — Amazon reports FBM for SKU(s) we expect to be FBA (flipped outside Nexus, or a regression)',
+          '🔴 FBA→FBM DRIFT DETECTED — Amazon reports FBM for SKU(s) we expect to be FBA',
           {
             critical: true,
             count: drift.length,
             sample: drift.slice(0, 25),
-            action: 'Run POST /admin/amazon/restore-fba {"dryRun":false} to convert them back, then investigate the source (Seller Central edit / other tool / flat-file upload).',
           },
         )
+
+        if (process.env.NEXUS_FBA_AUTO_RESTORE !== '0') {
+          try {
+            const summary = await restoreFbaListings({
+              skus: driftSkus,
+              marketplaces: driftMarkets,
+              dryRun: false,
+            })
+            logger.error('🟡 FBA auto-restore fired by drift-detector', {
+              restored: summary.sent,
+              processed: summary.processed,
+              skippedNoFba: summary.skippedNoFba,
+              errors: summary.results.filter((r) => !r.ok && !r.dryRun).length,
+              sample: summary.results.slice(0, 10),
+            })
+          } catch (restoreErr) {
+            logger.error('fba-drift-detector: auto-restore failed', {
+              error: restoreErr instanceof Error ? restoreErr.message : String(restoreErr),
+            })
+          }
+        } else {
+          logger.error('fba-drift-detector: auto-restore disabled (NEXUS_FBA_AUTO_RESTORE=0) — run POST /admin/amazon/restore-fba {"dryRun":false} manually')
+        }
+
         return `DRIFT: ${drift.length} FBA→FBM across ${marketsPulled} market(s); checked ${checked}; ${marketsFailed} pull(s) failed`
       }
       return `ok — no drift (checked ${checked} sku(s) across ${marketsPulled} market(s); ${marketsFailed} pull(s) failed)`
