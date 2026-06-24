@@ -2965,24 +2965,34 @@ export default function AmazonFlatFileClient({
   // existing rows in place (by _rowId) + append new rows; one undoable snapshot.
   const handleImportApply = useCallback((result: ImportApplyResult) => {
     pushSnapshot()
-    setRows((prev) => {
-      const next = [...prev]
-      const idxById = new Map(next.map((r, i) => [String(r._rowId), i]))
-      for (const u of result.updates) {
-        const idx = idxById.get(u.rowId)
-        if (idx == null) continue
-        next[idx] = { ...next[idx], ...u.cells, _dirty: true }
-      }
-      for (const n of result.newRows) {
-        const row = makeEmptyRow(productType, marketplace)
-        Object.assign(row, n.cells, { _dirty: true, _isNew: true })
-        next.push(row)
-      }
-      return next
-    })
+    // F.2 — build the post-import rows imperatively (from the live ref) so we can
+    // both render them AND persist them in the same handler. Applying an import is
+    // an explicit user action, so it SAVES immediately — the backend FFC creates
+    // any new products and syncToPlatform surfaces created/skipped feedback —
+    // rather than silently staging rows that then look like a stale "draft" on
+    // reload. (Not the silent-auto-save anti-pattern: the operator clicked Import.)
+    const prev = rowsRef.current
+    const next = [...prev]
+    const idxById = new Map(next.map((r, i) => [String(r._rowId), i]))
+    for (const u of result.updates) {
+      const idx = idxById.get(u.rowId)
+      if (idx == null) continue
+      next[idx] = { ...next[idx], ...u.cells, _dirty: true }
+    }
+    for (const n of result.newRows) {
+      const row = makeEmptyRow(productType, marketplace)
+      Object.assign(row, n.cells, { _dirty: true, _isNew: true })
+      next.push(row)
+    }
+    setRows(next)
     setImportOpen(false); setImportInitialFile(null)
-    toast.success(`Imported ${result.cellCount} value${result.cellCount === 1 ? '' : 's'} · ⌘Z to undo`)
-  }, [pushSnapshot, productType, marketplace])
+    const newCount = result.newRows.length
+    toast.success(
+      `Imported ${result.cellCount} value${result.cellCount === 1 ? '' : 's'}` +
+      `${newCount ? ` · creating ${newCount} product${newCount === 1 ? '' : 's'}` : ''} · saving…`,
+    )
+    void syncToPlatform(next.filter((r) => !r._ghost), false)
+  }, [pushSnapshot, productType, marketplace, syncToPlatform])
 
   // FX.1 — export the grid to TSV (Amazon template), CSV, or XLSX. Uses
   // effectiveManifest so a multi-category (MT) union sheet exports every column;
