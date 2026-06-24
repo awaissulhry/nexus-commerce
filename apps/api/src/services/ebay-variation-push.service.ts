@@ -8,6 +8,7 @@
 import prisma from '../db.js'
 import { ebayAccountService } from './ebay-account.service.js'
 import { syncActivatedListings } from './listing-activation-sync.service.js'
+import { Prisma } from '@nexus/database'
 
 // FF-EN.2 — eBay numeric conditionId → Inventory API ConditionEnum string.
 // get_item_condition_policies returns numeric ids; the flat-file/Inventory
@@ -759,4 +760,315 @@ export async function pushVariationGroup(
   // Preserve step-1 errors even on successful publish — a SKU that failed
   // inventory_item PUT was not actually pushed, even though the group published.
   return results.map(r => r.status === 'ERROR' ? r : { ...r, status: 'PUSHED' as const, message: 'pushed as variation group', itemId: listingId })
+}
+
+// ── Market constants ───────────────────────────────────────────────────
+export const MARKETS = ['IT', 'DE', 'FR', 'ES', 'UK'] as const;
+export type Market = (typeof MARKETS)[number];
+
+// ── Helpers ────────────────────────────────────────────────────────────
+
+export function toMarketplaceId(marketplace: string): string {
+  const MAP: Record<string, string> = {
+    IT: 'EBAY_IT',
+    DE: 'EBAY_DE',
+    FR: 'EBAY_FR',
+    ES: 'EBAY_ES',
+    UK: 'EBAY_GB',
+    GB: 'EBAY_GB',
+  };
+  return MAP[marketplace.toUpperCase()] ?? `EBAY_${marketplace.toUpperCase()}`;
+}
+
+export function toChannelMarket(mp: Market): string {
+  if (mp === 'UK') return 'EBAY_GB';
+  return `EBAY_${mp}`;
+}
+
+/**
+ * Build a flat multi-market row from a Product + its eBay ChannelListings.
+ */
+export function buildFlatRow(
+  product: {
+    id: string;
+    sku: string;
+    name: string;
+    ean: string | null;
+    // EV.5b — family linkage + variation data (present at runtime; /rows
+    // selects all Product scalars).
+    parentId?: string | null;
+    variationTheme?: string | null;
+    categoryAttributes?: unknown;
+    brand?: string | null;
+    images?: Array<{ url: string; sortOrder: number; type: string }>;
+    channelListings: Array<{
+      id: string;
+      region: string;
+      externalListingId: string | null;
+      title: string | null;
+      description: string | null;
+      price: { toNumber(): number } | null;
+      quantity: number | null;
+      platformAttributes: unknown;
+      listingStatus: string;
+      offerActive: boolean;
+      syncStatus: string;
+      updatedAt: Date;
+      // IN.1 — Inheritance state fields (present at runtime, optional in type)
+      followMasterTitle?: boolean | null;
+      followMasterDescription?: boolean | null;
+      followMasterPrice?: boolean | null;
+      followMasterQuantity?: boolean | null;
+      followMasterBulletPoints?: boolean | null;
+      masterTitle?: string | null;
+      masterDescription?: string | null;
+      masterPrice?: { toNumber(): number } | null;
+      masterQuantity?: number | null;
+    }>;
+  },
+): Record<string, unknown> {
+  // Shared fields come from the first listing that has data, or from the product
+  const listings = product.channelListings;
+  const first = listings[0];
+  const firstAttrs = first ? ((first.platformAttributes ?? {}) as Record<string, unknown>) : {};
+  const firstImageUrls = (firstAttrs.imageUrls as string[] | undefined) ?? [];
+
+  // Prefer Cloudinary images (ProductImage rows) over Amazon CDN platformAttributes URLs.
+  // Sort MAIN type first, then by sortOrder. Fall back to non-Amazon platformAttributes URLs.
+  // Prefer Cloudinary (ProductImage rows) over platformAttributes URLs.
+  // Do NOT filter out Amazon CDN fallback URLs — m.media-amazon.com images are
+  // publicly accessible; eBay fetches and re-hosts them in eBay Picture Services.
+  // Filtering them was leaving imageUrls empty → eBay error 25717.
+  const cloudinaryUrls = (product.images ?? [])
+    .slice()
+    .sort((a, b) => (a.type === 'MAIN' ? -1 : b.type === 'MAIN' ? 1 : 0) || a.sortOrder - b.sortOrder)
+    .map((img) => img.url)
+    .filter((url) => !!url);
+  const effectiveImageUrls = cloudinaryUrls.length > 0 ? cloudinaryUrls : firstImageUrls.filter(Boolean);
+
+  // EV.5b — variation linkage. Axis names normalised to comma-separated
+  // (what the variation publish's split(',') expects); axis values from
+  // the canonical categoryAttributes.variations.
+  const variationAxisNames = (product.variationTheme ?? '')
+    .split(/[/,|]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const variationValues =
+    ((product.categoryAttributes as { variations?: Record<string, string> } | null)?.variations) ?? {};
+
+  const row: Record<string, unknown> = {
+    _rowId: product.id,
+    _productId: product.id,
+    _dirty: false,
+    _status: 'idle',
+    sku: product.sku,
+    ean: product.ean ?? '',
+    mpn: '',
+    // shared listing fields from first listing
+    title: first?.title || product.name || '',
+    condition: (firstAttrs.conditionId as string | undefined) ?? 'NEW',
+    category_id: (firstAttrs.categoryId as string | undefined) ?? '',
+    subtitle: (firstAttrs.subtitle as string | undefined) ?? '',
+    description: first?.description ?? '',
+    price: first?.price?.toNumber() ?? 0,
+    best_offer_enabled: (firstAttrs.bestOffer as boolean | undefined) ?? false,
+    best_offer_floor: (firstAttrs.bestOfferFloor as number | undefined) ?? 0,
+    best_offer_ceiling: (firstAttrs.bestOfferCeiling as number | undefined) ?? 0,
+    quantity: first?.quantity ?? 0,
+    handling_time: (firstAttrs.handlingTime as number | undefined) ?? 1,
+    // FF-EN.4 — full-parity fields (round-trip via platformAttributes)
+    vat_rate: (firstAttrs.vatRate as string | undefined) ?? '',
+    listing_format: (firstAttrs.listingFormat as string | undefined) ?? 'FIXED_PRICE',
+    listing_duration: (firstAttrs.listingDuration as string | undefined) ?? 'GTC',
+    item_location_country: (firstAttrs.itemLocationCountry as string | undefined) ?? '',
+    package_type: (firstAttrs.packageType as string | undefined) ?? '',
+    package_weight: (firstAttrs.packageWeight as number | undefined) ?? 0,
+    weight_unit: (firstAttrs.weightUnit as string | undefined) ?? 'KILOGRAM',
+    package_length: (firstAttrs.packageLength as number | undefined) ?? 0,
+    package_width: (firstAttrs.packageWidth as number | undefined) ?? 0,
+    package_height: (firstAttrs.packageHeight as number | undefined) ?? 0,
+    dimension_unit: (firstAttrs.dimensionUnit as string | undefined) ?? 'CENTIMETER',
+    image_1: effectiveImageUrls[0] ?? '',
+    image_2: effectiveImageUrls[1] ?? '',
+    image_3: effectiveImageUrls[2] ?? '',
+    image_4: effectiveImageUrls[3] ?? '',
+    image_5: effectiveImageUrls[4] ?? '',
+    image_6: effectiveImageUrls[5] ?? '',
+    fulfillment_policy_id: (firstAttrs.fulfillmentPolicyId as string | undefined) ?? '',
+    payment_policy_id: (firstAttrs.paymentPolicyId as string | undefined) ?? '',
+    return_policy_id: (firstAttrs.returnPolicyId as string | undefined) ?? '',
+    _brand: product.brand ?? '',
+    // legacy single-market fields (backward compat)
+    listing_status: first?.listingStatus ?? 'DRAFT',
+    last_pushed_at: first?.updatedAt.toISOString() ?? '',
+    sync_status: first?.syncStatus ?? 'pending',
+    ebay_item_id: first?.externalListingId ?? '',
+    // EV.5b — family group key: children share the parent's id, the parent
+    // uses its own. So a family groups (push + UI) instead of every row
+    // being its own one-row "family".
+    platformProductId: product.parentId ?? product.id,
+    variation_theme: variationAxisNames.join(','),
+    // metadata flag (underscore-prefixed, not a display column).
+    _isParent: !product.parentId,
+  };
+
+  // Dynamic item specifics from first listing
+  const itemSpecifics = (firstAttrs.itemSpecifics as Record<string, string> | undefined) ?? {};
+  for (const [key, val] of Object.entries(itemSpecifics)) {
+    const colId = `aspect_${key.replace(/\s+/g, '_')}`;
+    row[colId] = val;
+  }
+
+  // EV.5b — variation axis values from categoryAttributes.variations,
+  // under both the case-preserved key (the dynamic UI columns) and the
+  // lowercased key the variation publish's variesBy build reads.
+  for (const [axis, val] of Object.entries(variationValues)) {
+    if (!val) continue;
+    row[`aspect_${axis.replace(/\s+/g, '_')}`] = val;
+    row[`aspect_${axis.toLowerCase().replace(/\s+/g, '_')}`] = val;
+  }
+
+  // Per-market flat fields
+  for (const mp of MARKETS) {
+    const listing = listings.find((l) => l.region === mp || l.region === (mp === 'UK' ? 'GB' : mp));
+    const attrs = listing ? ((listing.platformAttributes ?? {}) as Record<string, unknown>) : {};
+    const prefix = mp.toLowerCase() as Lowercase<Market>;
+    row[`${prefix}_price`] = listing?.price?.toNumber() ?? null;
+    row[`${prefix}_qty`] = listing?.quantity ?? null;
+    row[`${prefix}_item_id`] = listing?.externalListingId ?? null;
+    row[`${prefix}_status`] = listing?.listingStatus ?? null;
+    row[`${prefix}_listing_id`] = (attrs.offerId as string | undefined) ?? null;
+  }
+
+  // IN.1 — Inheritance state from the first (primary) listing.
+  // _marketFieldStates provides per-market breakdown for the eBay popover.
+  if (first) {
+    row._listingId = first.id
+    row._fieldStates = {
+      price:        (first.followMasterPrice        ?? true) ? 'INHERITED' : 'OVERRIDE',
+      title:        (first.followMasterTitle        ?? true) ? 'INHERITED' : 'OVERRIDE',
+      description:  (first.followMasterDescription  ?? true) ? 'INHERITED' : 'OVERRIDE',
+      quantity:     (first.followMasterQuantity     ?? true) ? 'INHERITED' : 'OVERRIDE',
+      bulletPoints: (first.followMasterBulletPoints ?? true) ? 'INHERITED' : 'OVERRIDE',
+    }
+    row._masterValues = {
+      price:       first.masterPrice != null ? first.masterPrice.toNumber() : null,
+      title:       first.masterTitle       ?? null,
+      description: first.masterDescription ?? null,
+      quantity:    first.masterQuantity    ?? null,
+    }
+    // Per-market override state (price + qty are the key ones for eBay)
+    const marketFieldStates: Record<string, Record<string, 'INHERITED' | 'OVERRIDE'>> = {}
+    for (const mp of MARKETS) {
+      const l = listings.find((x) => x.region === mp || x.region === (mp === 'UK' ? 'GB' : mp))
+      if (l) {
+        marketFieldStates[mp] = {
+          price:    (l.followMasterPrice    ?? true) ? 'INHERITED' : 'OVERRIDE',
+          quantity: (l.followMasterQuantity ?? true) ? 'INHERITED' : 'OVERRIDE',
+          title:    (l.followMasterTitle    ?? true) ? 'INHERITED' : 'OVERRIDE',
+        }
+      }
+    }
+    row._marketFieldStates = marketFieldStates
+    // Build list of per-market listing IDs for the reset-per-market action
+    const marketListingIds: Record<string, string> = {}
+    for (const mp of MARKETS) {
+      const l = listings.find((x) => x.region === mp || x.region === (mp === 'UK' ? 'GB' : mp))
+      if (l) marketListingIds[mp] = l.id
+    }
+    row._marketListingIds = marketListingIds
+  }
+
+  return row;
+}
+
+/**
+ * Pack shared listing fields back into ChannelListing DB fields.
+ */
+export function packSharedFields(row: Record<string, unknown>): {
+  title: string;
+  description: string;
+  externalListingId: string | null;
+  listingStatus: string;
+  offerActive: boolean;
+  platformAttributes: Prisma.InputJsonValue;
+} {
+  const imageUrls: string[] = [];
+  for (let i = 1; i <= 6; i++) {
+    const url = row[`image_${i}`] as string | undefined;
+    if (url) imageUrls.push(url);
+  }
+
+  // Collect item specifics from aspect_* keys — deduplicate by lowercase name
+  // so both aspect_Colore and aspect_colore (buildFlatRow writes both for variation
+  // axes) don't end up as two separate keys in platformAttributes.itemSpecifics.
+  const itemSpecifics: Record<string, string> = {};
+  const seenAspectLower = new Set<string>();
+  for (const [key, val] of Object.entries(row)) {
+    if (key.startsWith('aspect_') && typeof val === 'string' && val) {
+      const aspectName = key.slice('aspect_'.length).replace(/_/g, ' ');
+      const lk = aspectName.toLowerCase();
+      if (!seenAspectLower.has(lk)) {
+        seenAspectLower.add(lk);
+        itemSpecifics[aspectName] = val;
+      }
+    }
+  }
+
+  return {
+    title: (row.title as string) ?? '',
+    description: (row.description as string) ?? '',
+    externalListingId: (row.ebay_item_id as string) || null,
+    listingStatus: (row.listing_status as string) ?? 'DRAFT',
+    offerActive: row.listing_status === 'ACTIVE',
+    platformAttributes: {
+      conditionId: (row.condition as string) ?? 'NEW',
+      categoryId: (row.category_id as string) ?? '',
+      subtitle: (row.subtitle as string) ?? '',
+      imageUrls,
+      itemSpecifics,
+      handlingTime: Number(row.handling_time ?? 1),
+      bestOffer: Boolean(row.best_offer_enabled),
+      bestOfferFloor: Number(row.best_offer_floor ?? 0),
+      bestOfferCeiling: Number(row.best_offer_ceiling ?? 0),
+      fulfillmentPolicyId: (row.fulfillment_policy_id as string) ?? '',
+      paymentPolicyId: (row.payment_policy_id as string) ?? '',
+      returnPolicyId: (row.return_policy_id as string) ?? '',
+      // FF-EN.4 — full-parity fields
+      vatRate: (row.vat_rate as string) ?? '',
+      listingFormat: (row.listing_format as string) ?? 'FIXED_PRICE',
+      listingDuration: (row.listing_duration as string) ?? 'GTC',
+      itemLocationCountry: (row.item_location_country as string) ?? '',
+      packageType: (row.package_type as string) ?? '',
+      packageWeight: Number(row.package_weight ?? 0),
+      weightUnit: (row.weight_unit as string) ?? 'KILOGRAM',
+      packageLength: Number(row.package_length ?? 0),
+      packageWidth: Number(row.package_width ?? 0),
+      packageHeight: Number(row.package_height ?? 0),
+      dimensionUnit: (row.dimension_unit as string) ?? 'CENTIMETER',
+    } as Prisma.InputJsonValue,
+  };
+}
+
+/**
+ * Load the full eBay flat-row payload for ONE product family (parent + variant
+ * children) — identical to GET /api/ebay/flat-file/rows?familyId=. Lets the
+ * per-product Images tab publish build the SAME listing body the flat-file page
+ * builds, so there is one source of truth for the eBay listing payload.
+ */
+export async function buildEbayFamilyRows(
+  familyParentId: string,
+): Promise<Array<Record<string, unknown>>> {
+  const products = await prisma.product.findMany({
+    where: {
+      deletedAt: null,
+      OR: [{ id: familyParentId }, { parentId: familyParentId }],
+    },
+    include: {
+      channelListings: { where: { channel: 'EBAY' } },
+      images: { select: { url: true, sortOrder: true, type: true }, orderBy: { sortOrder: 'asc' } },
+    },
+    orderBy: { sku: 'asc' },
+  })
+  return products.map((p) => buildFlatRow(p as Parameters<typeof buildFlatRow>[0]))
 }

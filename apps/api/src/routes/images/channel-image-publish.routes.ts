@@ -21,7 +21,7 @@
  */
 
 import type { FastifyPluginAsync } from 'fastify'
-import { publishEbayImages } from '../../services/images/ebay-image-publish.service.js'
+import { publishEbayImagesViaInventory } from '../../services/images/ebay-inventory-image-publish.service.js'
 import { publishShopifyImages } from '../../services/images/shopify-image-publish.service.js'
 import { submitAmazonImageFeed } from '../../services/images/amazon-image-feed.service.js'
 import { recordImagePublishAudit } from '../../utils/image-publish-audit.js'
@@ -57,7 +57,6 @@ const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
     '/products/:productId/ebay-images/publish',
     async (request, reply) => {
       const { productId } = request.params
-      const { activeAxis } = request.body ?? ({} as any)
 
       const product = await prisma.product.findUnique({
         where: { id: productId },
@@ -66,7 +65,7 @@ const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
       if (!product) return reply.code(404).send({ error: 'Product not found' })
 
       try {
-        const result = await publishEbayImages(productId, activeAxis)
+        const result = await publishEbayImagesViaInventory(productId)
         // PB.16 — Audit log.
         void recordImagePublishAudit({
           productId,
@@ -325,7 +324,7 @@ const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
 
       try {
         if (channelJob.channel === 'EBAY') {
-          const result = await publishEbayImages(channelJob.productId, activeAxis)
+          const result = await publishEbayImagesViaInventory(channelJob.productId)
           return reply.send({ ok: result.success, channel: 'EBAY', newJobId: result.jobId, status: result.success ? 'DONE' : 'FATAL', error: result.error })
         }
         if (channelJob.channel === 'SHOPIFY') {
