@@ -610,8 +610,12 @@ async function pushVariationGroup(
         description: row.description ?? '',
         imageUrls,
         aspects,
-        ...(row.ean ? { ean: [String(row.ean)] } : {}),
-        ...(row.mpn ? { mpn: String(row.mpn) } : {}),
+        // eBay requires the EAN/GTIN identifier field to be explicitly set.
+        // When no real barcode exists, 'Does not apply' is the correct value —
+        // equivalent to selecting "Does not apply" in eBay's listing form.
+        ean: row.ean ? [String(row.ean)] : ['Does not apply'],
+        // MPN is required alongside EAN. Use 'Does not apply' when absent.
+        mpn: row.mpn ? String(row.mpn) : 'Does not apply',
       },
       condition,
       availability: {
