@@ -16,6 +16,7 @@ import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { AddListingPopover } from './AddListingPopover'
 import { AspectsPanel } from './AspectsPanel'
 import { ChannelStrip } from './ChannelStrip'
+import { EbayPushHistoryPanel } from './EbayPushHistoryPanel'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import { CascadeModal } from '../_shared/CascadeModal'
 import { FlatFileAiPanel } from '../_shared/FlatFileAiPanel'
@@ -353,6 +354,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [pushing, setPushing]                 = useState(false)
   const [feedStatus, setFeedStatus]           = useState<FeedStatus | null>(null)
   const [publishPanelOpen, setPublishPanelOpen] = useState(false)
+  const [historyPanelOpen, setHistoryPanelOpen] = useState(false)
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0)
   const [publishTargets, setPublishTargets]   = useState<string[]>(['IT'])
   const [descModal, setDescModal]             = useState<{ rowId: string } | null>(null)
   const [categorySearchOpen, setCategorySearchOpen]   = useState(false)
@@ -642,6 +645,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json() as { results?: PushResult[]; taskId?: string }
+      // A push just landed — refresh the durable history, and auto-open it on
+      // errors so the operator sees the full per-SKU result, not a vanishing toast.
+      setHistoryRefreshKey((k) => k + 1)
       if (json.taskId) {
         setFeedStatus({ taskId: json.taskId, status: 'IN_PROGRESS' })
         toast({ title: `Feed job started: ${json.taskId}`, tone: 'info' })
@@ -651,6 +657,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           const first = errors[0]
           const more = errors.length > 1 ? ` (+${errors.length - 1} more)` : ''
           toast.error(`${first.sku}: ${first.message}${more}`)
+          setHistoryPanelOpen(true)
         } else {
           toast.success(`Pushed ${json.results.length} rows`)
         }
@@ -1063,10 +1070,16 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           <p className="text-[10px] text-amber-600 dark:text-amber-500 mt-1">eBay may reject these rows. Push anyway?</p>
         </div>
       )}
-      <Button size="sm" onClick={() => setPublishPanelOpen((o) => !o)} disabled={pushing} loading={pushing}>
-        <Send className="w-3.5 h-3.5 mr-1.5" />
-        Push to eBay
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="ghost" onClick={() => setHistoryPanelOpen(true)} title="Push history — every push and its full per-SKU result, kept durably">
+          <History className="w-3.5 h-3.5 mr-1.5" />
+          History
+        </Button>
+        <Button size="sm" onClick={() => setPublishPanelOpen((o) => !o)} disabled={pushing} loading={pushing}>
+          <Send className="w-3.5 h-3.5 mr-1.5" />
+          Push to eBay
+        </Button>
+      </div>
       {publishPanelOpen && (
         <PublishPanel
           selectedCount={selectedRows.size}
@@ -1077,9 +1090,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           onClose={() => { setPublishPanelOpen(false); setIncompleteBefore([]) }}
         />
       )}
+      {historyPanelOpen && (
+        <EbayPushHistoryPanel refreshKey={historyRefreshKey} onClose={() => setHistoryPanelOpen(false)} />
+      )}
     </div>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [pushing, publishPanelOpen, publishTargets, incompleteBefore])
+  ), [pushing, publishPanelOpen, publishTargets, incompleteBefore, historyPanelOpen, historyRefreshKey])
 
   // ── Slot: feed banner ──────────────────────────────────────────────────
 
