@@ -21,10 +21,18 @@ import type { ComposedListing } from './types'
 interface Props {
   composed: ComposedListing
   className?: string
+  childrenList?: Array<{ id: string; variations?: Record<string, string> | null; totalStock?: number | null }>
+  platformAttributes?: Record<string, unknown>
 }
 
 const MARKET_FLAG: Record<string, string> = {
   IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', UK: '🇬🇧', US: '🇺🇸',
+}
+
+const COLOR_AXIS_NAMES = ['color', 'colour', 'colore', 'farbe', 'couleur', 'color']
+
+function isColorAxis(name: string): boolean {
+  return COLOR_AXIS_NAMES.includes(name.toLowerCase())
 }
 
 function formatPrice(value: number | null, currency: string): string {
@@ -33,7 +41,96 @@ function formatPrice(value: number | null, currency: string): string {
   return `${symbol}${value.toFixed(2)}`
 }
 
-export default function EbayLivePreview({ composed, className }: Props) {
+// ── Variation Selector ─────────────────────────────────────────────────
+interface VariationSelectorProps {
+  composed: ComposedListing
+  childrenList: Array<{ id: string; variations?: Record<string, string> | null; totalStock?: number | null }>
+  platformAttributes: Record<string, unknown>
+  selectedValues: Record<string, string>
+  onSelect: (axis: string, value: string) => void
+}
+
+function VariationSelector({ composed, childrenList, platformAttributes, selectedValues, onSelect }: VariationSelectorProps) {
+  // Resolve axis names: prefer platformAttributes._variationAxes, fall back to composed
+  const rawAxes = platformAttributes._variationAxes
+  const axes: string[] = Array.isArray(rawAxes) && rawAxes.length > 0
+    ? (rawAxes as string[])
+    : (composed.variationSummary?.axes ?? [])
+
+  if (axes.length === 0 || childrenList.length === 0) return null
+
+  // eBay display name overrides (e.g. "Color" → "Colour" on UK)
+  const axisNameLabels = (platformAttributes._axisNameLabels as Record<string, string> | undefined) ?? {}
+
+  return (
+    <div className="space-y-2">
+      {axes.map((axis) => {
+        const displayName = axisNameLabels[axis] ?? axis
+        // Collect unique values: try both the canonical axis name and the display name
+        const valueSet = new Set<string>()
+        for (const child of childrenList) {
+          const v = child.variations?.[axis] ?? child.variations?.[displayName]
+          if (v) valueSet.add(v)
+        }
+        const values = Array.from(valueSet)
+        if (values.length === 0) return null
+
+        const selected = selectedValues[axis] ?? values[0]
+
+        return (
+          <div key={axis}>
+            <div className="text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
+              Select {displayName}:
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {values.map((val) => {
+                const isSelected = val === selected
+                if (isColorAxis(axis)) {
+                  return (
+                    <button
+                      key={val}
+                      type="button"
+                      title={val}
+                      onClick={() => onSelect(axis, val)}
+                      className={cn(
+                        'w-5 h-5 rounded bg-slate-300 dark:bg-slate-600 border border-default text-[0px] overflow-hidden flex-shrink-0 transition-all',
+                        isSelected
+                          ? 'ring-2 ring-blue-500 ring-offset-1'
+                          : 'hover:ring-1 hover:ring-slate-400',
+                      )}
+                      aria-label={val}
+                      aria-pressed={isSelected}
+                    >
+                      {val}
+                    </button>
+                  )
+                }
+                return (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => onSelect(axis, val)}
+                    className={cn(
+                      'px-2 py-0.5 rounded border text-[11px] font-medium transition-all',
+                      isSelected
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500'
+                        : 'border-default dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                    )}
+                    aria-pressed={isSelected}
+                  >
+                    {val}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+export default function EbayLivePreview({ composed, className, childrenList = [], platformAttributes = {} }: Props) {
   const [skin, setSkin] = useState<Skin>('mobile')
   const [galleryIdx, setGalleryIdx] = useState(0)
 
@@ -46,6 +143,29 @@ export default function EbayLivePreview({ composed, className }: Props) {
 
   const flag = MARKET_FLAG[composed.marketplace.code] ?? '🌐'
   const priceStr = formatPrice(composed.price.value, composed.currency)
+
+  // Resolve axes for initial selected values
+  const rawAxes = platformAttributes._variationAxes
+  const axes: string[] = Array.isArray(rawAxes) && rawAxes.length > 0
+    ? (rawAxes as string[])
+    : (composed.variationSummary?.axes ?? [])
+
+  const [selectedValues, setSelectedValues] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {}
+    const axisNameLabels = (platformAttributes._axisNameLabels as Record<string, string> | undefined) ?? {}
+    for (const axis of axes) {
+      const displayName = axisNameLabels[axis] ?? axis
+      for (const child of childrenList) {
+        const v = child.variations?.[axis] ?? child.variations?.[displayName]
+        if (v) { init[axis] = v; break }
+      }
+    }
+    return init
+  })
+
+  function handleSelect(axis: string, value: string) {
+    setSelectedValues((prev) => ({ ...prev, [axis]: value }))
+  }
 
   return (
     <div className={cn('rounded-xl border border-default dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900', className)}>
@@ -79,6 +199,10 @@ export default function EbayLivePreview({ composed, className }: Props) {
           galleryIdx={galleryIdx}
           setGalleryIdx={setGalleryIdx}
           priceStr={priceStr}
+          childrenList={childrenList}
+          platformAttributes={platformAttributes}
+          selectedValues={selectedValues}
+          onSelect={handleSelect}
         />
       ) : (
         <DesktopSkin
@@ -88,6 +212,10 @@ export default function EbayLivePreview({ composed, className }: Props) {
           galleryIdx={galleryIdx}
           setGalleryIdx={setGalleryIdx}
           priceStr={priceStr}
+          childrenList={childrenList}
+          platformAttributes={platformAttributes}
+          selectedValues={selectedValues}
+          onSelect={handleSelect}
         />
       )}
 
@@ -111,7 +239,7 @@ export default function EbayLivePreview({ composed, className }: Props) {
 
 // ── Mobile skin ────────────────────────────────────────────────────────
 function MobileSkin(props: SkinProps) {
-  const { composed, currentImg, gallery, galleryIdx, setGalleryIdx, priceStr } = props
+  const { composed, currentImg, gallery, galleryIdx, setGalleryIdx, priceStr, childrenList, platformAttributes, selectedValues, onSelect } = props
   return (
     <div className="mx-auto" style={{ maxWidth: 380 }}>
       {/* Image */}
@@ -144,6 +272,15 @@ function MobileSkin(props: SkinProps) {
           <span className="text-xs text-slate-500">+ shipping</span>
         </div>
         <ConditionRow composed={composed} />
+        {childrenList.length > 0 && (
+          <VariationSelector
+            composed={composed}
+            childrenList={childrenList}
+            platformAttributes={platformAttributes}
+            selectedValues={selectedValues}
+            onSelect={onSelect}
+          />
+        )}
         <div className="grid grid-cols-2 gap-2 pt-2">
           <button className="h-10 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">
             Buy It Now
@@ -161,7 +298,7 @@ function MobileSkin(props: SkinProps) {
 
 // ── Desktop skin ───────────────────────────────────────────────────────
 function DesktopSkin(props: SkinProps) {
-  const { composed, currentImg, gallery, galleryIdx, setGalleryIdx, priceStr } = props
+  const { composed, currentImg, gallery, galleryIdx, setGalleryIdx, priceStr, childrenList, platformAttributes, selectedValues, onSelect } = props
   return (
     <div className="p-4 grid grid-cols-[280px_1fr] gap-5 max-w-[820px] mx-auto">
       {/* Left: image + thumbs */}
@@ -211,6 +348,15 @@ function DesktopSkin(props: SkinProps) {
             or Best Offer · Free returns
           </div>
         </div>
+        {childrenList.length > 0 && (
+          <VariationSelector
+            composed={composed}
+            childrenList={childrenList}
+            platformAttributes={platformAttributes}
+            selectedValues={selectedValues}
+            onSelect={onSelect}
+          />
+        )}
         <div className="grid grid-cols-2 gap-2 pt-1 max-w-md">
           <button className="h-10 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">
             Buy It Now
@@ -234,6 +380,10 @@ interface SkinProps {
   galleryIdx: number
   setGalleryIdx: (n: number) => void
   priceStr: string
+  childrenList: Array<{ id: string; variations?: Record<string, string> | null; totalStock?: number | null }>
+  platformAttributes: Record<string, unknown>
+  selectedValues: Record<string, string>
+  onSelect: (axis: string, value: string) => void
 }
 
 function GalleryNav({ idx, setIdx, total }: { idx: number; setIdx: (n: number) => void; total: number }) {

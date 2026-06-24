@@ -25,7 +25,6 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import {
   COCKPIT_ROOT,
   CockpitHeader,
-  CockpitPreviewBand,
   CockpitCardGrid,
   CockpitClassicPassthrough,
   CockpitDrawer,
@@ -114,6 +113,7 @@ interface ChildProduct {
   sku: string
   name?: string | null
   variantLabel?: string | null
+  variations?: Record<string, string> | null
 }
 
 interface Props {
@@ -158,7 +158,6 @@ export default function EbayCockpit(props: Props) {
   } = props
   const { t } = useTranslations()
   const [, setMode] = useCockpitMode()
-  const [previewOpen, setPreviewOpen] = useState(true)
   const [classicOpen, setClassicOpen] = useState(true)
   // AF.4/5 — "All fields" drawer (flag-guarded; keepMounted keeps the
   // editor's dirty/save lifecycle identical to today).
@@ -498,217 +497,220 @@ export default function EbayCockpit(props: Props) {
         }}
       />
 
-      {/* ── Zone 2: Preview + Health band (UC.4 — shared band) ────── */}
-      <CockpitPreviewBand
-        open={previewOpen}
-        onToggle={() => setPreviewOpen((o) => !o)}
-        title={t('products.edit.cockpit.ebay.preview.title')}
-        subtitle={t('products.edit.cockpit.ebay.preview.subtitle', { market: marketInfo.code })}
-        healthWidth="280px"
-        contentClassName="bg-slate-50/40 dark:bg-slate-900/30"
-        preview={<EbayLivePreview composed={composed} />}
-        health={
-          <HealthScoreRail
-            marketplace={marketplace}
-            categoryId={composed.categoryId.value}
-            categoryName={composed.categoryLabel.value}
-            categoryPath={((listing?.platformAttributes as Record<string, unknown> | null)
-              ?.categoryPath as string | undefined) ?? null}
-            title={composed.title.value}
-            description={composed.description.value}
-            brand={composed.brand.value}
-            gtin={(product?.gtin as string | null) ?? null}
-            mpn={(product?.mpn as string | null) ?? null}
-            priceValue={composed.price.value}
-            imageCount={composed.galleryUrls.value.length}
-            itemSpecifics={
-              (((listing?.platformAttributes as Record<string, unknown> | null)
-                ?.itemSpecifics as Record<string, unknown> | undefined) ?? {})
-            }
-            policies={{
-              fulfillmentPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.fulfillmentPolicyId as string | null) ?? null,
-              paymentPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.paymentPolicyId as string | null) ?? null,
-              returnPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.returnPolicyId as string | null) ?? null,
-              merchantLocationKey: ((listing?.platformAttributes as Record<string, unknown> | null)?.merchantLocationKey as string | null) ?? null,
-            }}
-          />
-        }
-      />
-
-      {/* ── Zone 3: Cards (UC.4 — shared CockpitCardGrid, sequential) ─ */}
-      <CockpitCardGrid layout="sequential">
-      {/* FL — Shared fields: scope pill (master / linked / independent)
-          + propagate per linkable content field. */}
-      <IdentifiersCard title={t('products.edit.cockpit.ebay.sharedFields')} rows={scopeRows} />
-      {/* ── EC.2 — Listing Essentials (Field Source System demo) ──── */}
-      <ListingEssentialsCard
-        productId={product.id}
-        marketplace={marketplace}
-        currency={marketInfo.currency}
-        initial={{
-          title: { source: composed.title.source, value: composed.title.value },
-          description: { source: composed.description.source, value: composed.description.value },
-          price: {
-            source: composed.price.source,
-            value: composed.price.value != null ? String(composed.price.value) : '',
-          },
-        }}
-        master={{
-          name: product.name ?? '',
-          description: product.description ?? '',
-          price: (() => {
-            const raw = product.basePrice
-            if (raw == null || raw === '') return null
-            const n = typeof raw === 'string' ? parseFloat(raw) : Number(raw)
-            return Number.isFinite(n) ? n : null
-          })(),
-        }}
-        siblings={siblingListings.map((l) => {
-          const priceRaw = l.priceOverride ?? l.price
-          const priceNum = priceRaw == null
-            ? null
-            : typeof priceRaw === 'string'
-            ? parseFloat(priceRaw)
-            : Number(priceRaw)
-          return {
-            marketplace: l.marketplace,
-            title: l.title ?? '',
-            description: l.description ?? '',
-            price: Number.isFinite(priceNum) ? (priceNum as number) : null,
-          }
-        })}
-      />
-
-      {/* ── EC.4 — Category card (replaces the EC.1 placeholder) ───── */}
-      <CategoryCard
-        productId={product.id}
-        marketplace={marketplace}
-        marketName={marketInfo.name}
-        siblingMarketCodes={(siblingMarkets ?? []).map((m) => m.code)}
-        seedTitle={composed.title.value}
-        seedDescription={composed.description.value}
-        current={{
-          id: composed.categoryId.value,
-          name: composed.categoryLabel.value,
-          path: ((listing?.platformAttributes as Record<string, unknown> | null)
-            ?.categoryPath as string | undefined) ?? null,
-        }}
-      />
-
-      {/* ── EC.5 — Aspects card (dynamic, Field Source aware) ─────── */}
-      <AspectsCard
-        productId={product.id}
-        marketplace={marketplace}
-        categoryId={composed.categoryId.value}
-        initialItemSpecifics={
-          (((listing?.platformAttributes as Record<string, unknown> | null)
-            ?.itemSpecifics as Record<string, string | string[]> | undefined) ?? {})
-        }
-        master={{
-          brand: (product.brand as string | null) ?? null,
-          color: (product.color as string | null) ?? null,
-          size: (product.size as string | null) ?? null,
-          material: (product.material as string | null) ?? null,
-          gender: (product.gender as string | null) ?? null,
-          productType: (product.productType as string | null) ?? null,
-          weightG: (product.weightG as number | null) ?? null,
-          countryOfOrigin: (product.countryOfOrigin as string | null) ?? null,
-          mpn: (product.mpn as string | null) ?? null,
-          gtin: (product.gtin as string | null) ?? null,
-          ean: (product.ean as string | null) ?? null,
-          upc: (product.upc as string | null) ?? null,
-        }}
-        siblings={siblingListings.map((l) => ({
-          marketplace: l.marketplace,
-          itemSpecifics:
-            (((l.platformAttributes as Record<string, unknown> | null)
-              ?.itemSpecifics as Record<string, string[]> | undefined) ?? {}),
-        }))}
-      />
-
-      {/* ── EC.6 — Variations Matrix (replaces placeholder) ─────────── */}
-      <VariationsMatrixCard
-        productId={product.id}
-        marketplace={marketplace}
-        currency={marketInfo.currency}
-        isParentWithChildren={(childrenList?.length ?? 0) > 0}
-      />
-
-      {/* ── EC.7 — Images card (replaces placeholder) ─────────────── */}
-      <ImagesCard
-        productId={product.id}
-        marketplace={marketplace}
-        productUpdatedAt={(product?.updatedAt as string | undefined) ?? null}
-      />
-
-      {/* ── EC.8 — Pricing + Best Offer + Policies (one card) ──────── */}
-      <PricingPoliciesCard
-        productId={product.id}
-        marketplace={marketplace}
-        currency={marketInfo.currency}
-        initial={{
-          priceOverride: (() => {
-            const v = listing?.priceOverride
-            if (v == null || v === '') return null
-            const n = typeof v === 'string' ? parseFloat(v) : Number(v)
-            return Number.isFinite(n) ? n : null
-          })(),
-          pricingRule: ((listing?.pricingRule as string | undefined) ?? 'FIXED') as 'FIXED' | 'MATCH_AMAZON' | 'PERCENT_OF_MASTER',
-          priceAdjustmentPercent: (() => {
-            const v = listing?.priceAdjustmentPercent
-            if (v == null || v === '') return null
-            const n = typeof v === 'string' ? parseFloat(v) : Number(v)
-            return Number.isFinite(n) ? n : null
-          })(),
-          bestOfferEnabled: !!((listing?.platformAttributes as Record<string, unknown> | null)?.bestOfferEnabled),
-          bestOfferAutoAcceptPrice: ((listing?.platformAttributes as Record<string, unknown> | null)?.bestOfferAutoAcceptPrice as number | null) ?? null,
-          bestOfferMinAcceptPrice: ((listing?.platformAttributes as Record<string, unknown> | null)?.bestOfferMinAcceptPrice as number | null) ?? null,
-          fulfillmentPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.fulfillmentPolicyId as string | null) ?? null,
-          paymentPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.paymentPolicyId as string | null) ?? null,
-          returnPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.returnPolicyId as string | null) ?? null,
-          merchantLocationKey: ((listing?.platformAttributes as Record<string, unknown> | null)?.merchantLocationKey as string | null) ?? null,
-        }}
-        masterPrice={(() => {
-          const v = product.basePrice
-          if (v == null || v === '') return null
-          const n = typeof v === 'string' ? parseFloat(v) : Number(v)
-          return Number.isFinite(n) ? n : null
-        })()}
-      />
-
-      {/* ── FCF.5b — Fulfillment method (FBM vs Amazon MCF) ─────────── */}
-      <FulfillmentMethodCard productId={product.id} marketplace={marketplace} />
-
-      {/* ── EC.13 — Compatibility (motors) — replaces placeholder ───── */}
-      <CompatibilityCard
-        productId={product.id}
-        marketplace={marketplace}
-        categoryName={composed.categoryLabel.value}
-        categoryPath={((listing?.platformAttributes as Record<string, unknown> | null)
-          ?.categoryPath as string | undefined) ?? null}
-        productName={(product?.name as string | null) ?? null}
-        productType={(product?.productType as string | null) ?? null}
-        initial={(() => {
-          const raw = (listing?.platformAttributes as Record<string, unknown> | null)?.compatibility
-          if (raw && typeof raw === 'object') {
-            const r = raw as Record<string, unknown>
+      {/* ── Zone 2+3: Split-screen — cards left, preview+health right ── */}
+      <div className="flex gap-4 items-start min-w-0">
+        {/* Left column — sequential cards */}
+        <div className="flex-1 min-w-0 space-y-3">
+        <CockpitCardGrid layout="sequential">
+        {/* FL — Shared fields: scope pill (master / linked / independent)
+            + propagate per linkable content field. */}
+        <IdentifiersCard title={t('products.edit.cockpit.ebay.sharedFields')} rows={scopeRows} />
+        {/* ── EC.2 — Listing Essentials (Field Source System demo) ──── */}
+        <ListingEssentialsCard
+          productId={product.id}
+          marketplace={marketplace}
+          currency={marketInfo.currency}
+          initial={{
+            title: { source: composed.title.source, value: composed.title.value },
+            description: { source: composed.description.source, value: composed.description.value },
+            price: {
+              source: composed.price.source,
+              value: composed.price.value != null ? String(composed.price.value) : '',
+            },
+          }}
+          master={{
+            name: product.name ?? '',
+            description: product.description ?? '',
+            price: (() => {
+              const raw = product.basePrice
+              if (raw == null || raw === '') return null
+              const n = typeof raw === 'string' ? parseFloat(raw) : Number(raw)
+              return Number.isFinite(n) ? n : null
+            })(),
+          }}
+          siblings={siblingListings.map((l) => {
+            const priceRaw = l.priceOverride ?? l.price
+            const priceNum = priceRaw == null
+              ? null
+              : typeof priceRaw === 'string'
+              ? parseFloat(priceRaw)
+              : Number(priceRaw)
             return {
-              universal: typeof r.universal === 'boolean' ? r.universal : true,
-              fitments: Array.isArray(r.fitments)
-                ? (r.fitments as Array<Record<string, unknown>>).map((f) => ({
-                    year: String(f?.year ?? ''),
-                    make: String(f?.make ?? ''),
-                    model: String(f?.model ?? ''),
-                    submodel: f?.submodel ? String(f.submodel) : null,
-                  }))
-                : [],
-              updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : null,
+              marketplace: l.marketplace,
+              title: l.title ?? '',
+              description: l.description ?? '',
+              price: Number.isFinite(priceNum) ? (priceNum as number) : null,
             }
+          })}
+        />
+
+        {/* ── EC.4 — Category card (replaces the EC.1 placeholder) ───── */}
+        <CategoryCard
+          productId={product.id}
+          marketplace={marketplace}
+          marketName={marketInfo.name}
+          siblingMarketCodes={(siblingMarkets ?? []).map((m) => m.code)}
+          seedTitle={composed.title.value}
+          seedDescription={composed.description.value}
+          current={{
+            id: composed.categoryId.value,
+            name: composed.categoryLabel.value,
+            path: ((listing?.platformAttributes as Record<string, unknown> | null)
+              ?.categoryPath as string | undefined) ?? null,
+          }}
+        />
+
+        {/* ── EC.5 — Aspects card (dynamic, Field Source aware) ─────── */}
+        <AspectsCard
+          productId={product.id}
+          marketplace={marketplace}
+          categoryId={composed.categoryId.value}
+          initialItemSpecifics={
+            (((listing?.platformAttributes as Record<string, unknown> | null)
+              ?.itemSpecifics as Record<string, string | string[]> | undefined) ?? {})
           }
-          return { universal: true, fitments: [], updatedAt: null }
-        })()}
-      />
-      </CockpitCardGrid>
+          master={{
+            brand: (product.brand as string | null) ?? null,
+            color: (product.color as string | null) ?? null,
+            size: (product.size as string | null) ?? null,
+            material: (product.material as string | null) ?? null,
+            gender: (product.gender as string | null) ?? null,
+            productType: (product.productType as string | null) ?? null,
+            weightG: (product.weightG as number | null) ?? null,
+            countryOfOrigin: (product.countryOfOrigin as string | null) ?? null,
+            mpn: (product.mpn as string | null) ?? null,
+            gtin: (product.gtin as string | null) ?? null,
+            ean: (product.ean as string | null) ?? null,
+            upc: (product.upc as string | null) ?? null,
+          }}
+          siblings={siblingListings.map((l) => ({
+            marketplace: l.marketplace,
+            itemSpecifics:
+              (((l.platformAttributes as Record<string, unknown> | null)
+                ?.itemSpecifics as Record<string, string[]> | undefined) ?? {}),
+          }))}
+        />
+
+        {/* ── EC.6 — Variations Matrix (replaces placeholder) ─────────── */}
+        <VariationsMatrixCard
+          productId={product.id}
+          marketplace={marketplace}
+          currency={marketInfo.currency}
+          isParentWithChildren={(childrenList?.length ?? 0) > 0}
+        />
+
+        {/* ── EC.7 — Images card (replaces placeholder) ─────────────── */}
+        <ImagesCard
+          productId={product.id}
+          marketplace={marketplace}
+          productUpdatedAt={(product?.updatedAt as string | undefined) ?? null}
+        />
+
+        {/* ── EC.8 — Pricing + Best Offer + Policies (one card) ──────── */}
+        <PricingPoliciesCard
+          productId={product.id}
+          marketplace={marketplace}
+          currency={marketInfo.currency}
+          initial={{
+            priceOverride: (() => {
+              const v = listing?.priceOverride
+              if (v == null || v === '') return null
+              const n = typeof v === 'string' ? parseFloat(v) : Number(v)
+              return Number.isFinite(n) ? n : null
+            })(),
+            pricingRule: ((listing?.pricingRule as string | undefined) ?? 'FIXED') as 'FIXED' | 'MATCH_AMAZON' | 'PERCENT_OF_MASTER',
+            priceAdjustmentPercent: (() => {
+              const v = listing?.priceAdjustmentPercent
+              if (v == null || v === '') return null
+              const n = typeof v === 'string' ? parseFloat(v) : Number(v)
+              return Number.isFinite(n) ? n : null
+            })(),
+            bestOfferEnabled: !!((listing?.platformAttributes as Record<string, unknown> | null)?.bestOfferEnabled),
+            bestOfferAutoAcceptPrice: ((listing?.platformAttributes as Record<string, unknown> | null)?.bestOfferAutoAcceptPrice as number | null) ?? null,
+            bestOfferMinAcceptPrice: ((listing?.platformAttributes as Record<string, unknown> | null)?.bestOfferMinAcceptPrice as number | null) ?? null,
+            fulfillmentPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.fulfillmentPolicyId as string | null) ?? null,
+            paymentPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.paymentPolicyId as string | null) ?? null,
+            returnPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.returnPolicyId as string | null) ?? null,
+            merchantLocationKey: ((listing?.platformAttributes as Record<string, unknown> | null)?.merchantLocationKey as string | null) ?? null,
+          }}
+          masterPrice={(() => {
+            const v = product.basePrice
+            if (v == null || v === '') return null
+            const n = typeof v === 'string' ? parseFloat(v) : Number(v)
+            return Number.isFinite(n) ? n : null
+          })()}
+        />
+
+        {/* ── FCF.5b — Fulfillment method (FBM vs Amazon MCF) ─────────── */}
+        <FulfillmentMethodCard productId={product.id} marketplace={marketplace} />
+
+        {/* ── EC.13 — Compatibility (motors) — replaces placeholder ───── */}
+        <CompatibilityCard
+          productId={product.id}
+          marketplace={marketplace}
+          categoryName={composed.categoryLabel.value}
+          categoryPath={((listing?.platformAttributes as Record<string, unknown> | null)
+            ?.categoryPath as string | undefined) ?? null}
+          productName={(product?.name as string | null) ?? null}
+          productType={(product?.productType as string | null) ?? null}
+          initial={(() => {
+            const raw = (listing?.platformAttributes as Record<string, unknown> | null)?.compatibility
+            if (raw && typeof raw === 'object') {
+              const r = raw as Record<string, unknown>
+              return {
+                universal: typeof r.universal === 'boolean' ? r.universal : true,
+                fitments: Array.isArray(r.fitments)
+                  ? (r.fitments as Array<Record<string, unknown>>).map((f) => ({
+                      year: String(f?.year ?? ''),
+                      make: String(f?.make ?? ''),
+                      model: String(f?.model ?? ''),
+                      submodel: f?.submodel ? String(f.submodel) : null,
+                    }))
+                  : [],
+                updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : null,
+              }
+            }
+            return { universal: true, fitments: [], updatedAt: null }
+          })()}
+        />
+        </CockpitCardGrid>
+        </div>
+
+        {/* Right column — live preview + health score (sticky) */}
+        <div className="w-96 flex-shrink-0">
+          <div className="sticky top-4 space-y-3">
+            <EbayLivePreview
+              composed={composed}
+              childrenList={childrenList ?? []}
+              platformAttributes={(listing?.platformAttributes as Record<string, unknown> | null) ?? {}}
+            />
+            <HealthScoreRail
+              marketplace={marketplace}
+              categoryId={composed.categoryId.value}
+              categoryName={composed.categoryLabel.value}
+              categoryPath={((listing?.platformAttributes as Record<string, unknown> | null)
+                ?.categoryPath as string | undefined) ?? null}
+              title={composed.title.value}
+              description={composed.description.value}
+              brand={composed.brand.value}
+              gtin={(product?.gtin as string | null) ?? null}
+              mpn={(product?.mpn as string | null) ?? null}
+              priceValue={composed.price.value}
+              imageCount={composed.galleryUrls.value.length}
+              itemSpecifics={
+                (((listing?.platformAttributes as Record<string, unknown> | null)
+                  ?.itemSpecifics as Record<string, unknown> | undefined) ?? {})
+              }
+              policies={{
+                fulfillmentPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.fulfillmentPolicyId as string | null) ?? null,
+                paymentPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.paymentPolicyId as string | null) ?? null,
+                returnPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.returnPolicyId as string | null) ?? null,
+                merchantLocationKey: ((listing?.platformAttributes as Record<string, unknown> | null)?.merchantLocationKey as string | null) ?? null,
+              }}
+            />
+          </div>
+        </div>
+      </div>
 
       {/* ── Zone 4 — classic editor (AF.4/5) ─────────────────────────
           Full classic editor in a slide-over when the All-fields drawer

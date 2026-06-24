@@ -57,6 +57,7 @@ import SuppressionCard from './suppression/SuppressionCard'
 import FulfillmentCard from './fulfillment/FulfillmentCard'
 import ComplianceCard from './compliance/ComplianceCard'
 import FitCompatibilityCard from './fit/FitCompatibilityCard'
+import AdditionalFieldsCard from './cards/AdditionalFieldsCard'
 import AutoFillCard from './autofill/AutoFillCard'
 import PublishCard from './publish/PublishCard'
 import PreflightPanel from './preflight/PreflightPanel'
@@ -781,6 +782,15 @@ export default function AmazonCockpit(props: Props) {
               }
               onJumpToClassic={() => handleJumpTo('classic')}
             />
+            {productType && listing && (
+              <AdditionalFieldsCard
+                productId={product.id}
+                marketplace={marketInfo.code}
+                productType={productType}
+                listingId={listing.id ?? null}
+                onSaved={() => props.onSave(listing ?? ({} as Listing))}
+              />
+            )}
           </CockpitCardGrid>
         </div>
 
