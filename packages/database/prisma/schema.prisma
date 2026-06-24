@@ -368,6 +368,7 @@ model Product {
   amazonReviewInsights      AmazonReviewInsight[] // D.2: official Customer Feedback API insights
   qualitySnapshots          ListingQualitySnapshot[] // PA.2: listing quality history
   fieldLinkGroups           FieldLinkGroup[] // FL.1: cross-channel/market field-sharing groups
+  skuAliases                SkuAlias[] // IM.1: alternate names / codes that resolve to this product
 
   // H.16 — Compliance master data. HS code = customs classification,
   // mostly 6-digit (HS) or 8-10 digit (CN/HTS); stored as text since
@@ -449,6 +450,46 @@ model Product {
   // merge them for ordering, only filtering). Composite supports the
   // exact column order operators chain via the U.x sort UI.
   @@index([brand, basePrice(sort: Desc), sku])
+}
+
+// ── SkuAlias: maps arbitrary strings → Product ──────────────────────────────
+// Enables "Gale Jacket Black" or "GAL-BLK" to resolve to the canonical SKU
+// during bulk imports. Sources: MANUAL (operator), IMPORT (confirmed from an
+// import session), AUTO (seeded from product.name at first import).
+model SkuAlias {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  alias     String   @unique // normalized: lowercase + trimmed
+  raw       String           // original as the operator typed it
+  source    String   @default("MANUAL") // MANUAL | IMPORT | AUTO
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+}
+
+// ── StockImportJob: audit log of every bulk import applied ──────────────────
+// Each committed import writes one row here so operators can review history,
+// download error reports, and understand cumulative stock movements.
+model StockImportJob {
+  id           String    @id @default(cuid())
+  filename     String?
+  fileKind     String?   // csv | xlsx | json
+  locationCode String
+  mode         String    // ADJUST | SET
+  target       String    // WAREHOUSE | CHANNEL | BOTH
+  totalRows    Int       @default(0)
+  succeeded    Int       @default(0)
+  failed       Int       @default(0)
+  skipped      Int       @default(0)
+  status       String    @default("PENDING") // PENDING | APPLIED | PARTIAL | FAILED
+  appliedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  errorSummary String?
+  results      Json?     // per-row outcome snapshot for history drill-down
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([locationCode])
 }
 
 /// W2.1 — Product family (Akeneo cornerstone PIM template).

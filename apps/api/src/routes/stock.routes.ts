@@ -2,6 +2,17 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { applyStockMovement, listStockMovements } from '../services/stock-movement.service.js'
 import {
+  resolveRows,
+  previewImport,
+  applyImport,
+  normalizeAlias,
+  bulkCreateAliases,
+  type ImportRow,
+  type ImportMode,
+  type ImportTarget,
+} from '../services/stock-import.service.js'
+import { detectFileKind, parseCsv, parseXlsx, sniffDelimiter } from '../services/import/parsers.js'
+import {
   reserveStock,
   releaseReservation,
   transferStock,
@@ -3040,6 +3051,194 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
+
+  // ════════════════════════════════════════════════════════════════
+  // IM.1 — Bulk Inventory Import Wizard endpoints
+  // ════════════════════════════════════════════════════════════════
+
+  // ── POST /api/stock/import/parse ────────────────────────────────
+  // Accepts multipart file upload (CSV/XLSX/JSON/TSV). Returns
+  // detected headers + first 20 rows so the column-mapper step can
+  // render a live preview without sending the full payload.
+  fastify.post('/stock/import/parse', async (request, reply) => {
+    try {
+      const data = await request.file()
+      if (!data) return reply.code(400).send({ error: 'No file attached' })
+      const filename = data.filename ?? 'upload'
+      const kind = detectFileKind(filename)
+      const buf = await data.toBuffer()
+
+      let parsed: { headers: string[]; rows: Record<string, unknown>[] }
+      if (kind === 'xlsx') {
+        parsed = await parseXlsx(buf)
+      } else {
+        const text = buf.toString('utf8')
+        parsed = parseCsv(text, sniffDelimiter(filename, text))
+      }
+
+      return {
+        filename,
+        kind,
+        headers: parsed.headers,
+        totalRows: parsed.rows.length,
+        preview: parsed.rows.slice(0, 20),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/import/parse] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/import/resolve ──────────────────────────────
+  // Batch SKU resolution. Returns per-row tier + candidates for the
+  // Resolve step UI.
+  fastify.post<{
+    Body: { rows: Array<{ raw: string; quantity: number; notes?: string }> }
+  }>('/stock/import/resolve', async (request, reply) => {
+    try {
+      const { rows = [] } = request.body ?? {}
+      if (rows.length === 0) return reply.code(400).send({ error: 'rows[] required' })
+      if (rows.length > 5000) return reply.code(400).send({ error: 'capped at 5000 rows' })
+      const resolved = await resolveRows(rows as ImportRow[])
+      return { rows: resolved }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/import/resolve] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/import/preview ──────────────────────────────
+  // Full validation pass — quantities, negative-guard, channel rows.
+  // Returns PreviewResult with per-row currentQty / wouldBeQty.
+  fastify.post<{
+    Body: {
+      rows: ImportRow[]
+      locationCode: string
+      mode: ImportMode
+      target: ImportTarget
+    }
+  }>('/stock/import/preview', async (request, reply) => {
+    try {
+      const { rows, locationCode, mode, target } = request.body ?? {}
+      if (!rows?.length) return reply.code(400).send({ error: 'rows[] required' })
+      const result = await previewImport({ rows, locationCode, mode, target })
+      return result
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/import/preview] failed')
+      return reply.code(400).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/import/apply ────────────────────────────────
+  // Commit a previewed import. Creates StockImportJob audit row.
+  fastify.post<{
+    Body: {
+      rows: import('../services/stock-import.service.js').PreviewRow[]
+      locationCode: string
+      mode: ImportMode
+      target: ImportTarget
+      filename?: string
+      fileKind?: string
+    }
+  }>('/stock/import/apply', async (request, reply) => {
+    try {
+      const { rows, locationCode, mode, target, filename, fileKind } = request.body ?? {}
+      if (!rows?.length) return reply.code(400).send({ error: 'rows[] required' })
+      const result = await applyImport({ rows, locationCode, mode, target, filename, fileKind })
+      return result
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/import/apply] failed')
+      return reply.code(400).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/import/aliases ───────────────────────────────
+  // List all SKU aliases with product info.
+  fastify.get('/stock/import/aliases', async (_request, reply) => {
+    try {
+      const aliases = await prisma.skuAlias.findMany({
+        orderBy: [{ source: 'asc' }, { createdAt: 'desc' }],
+        include: { product: { select: { id: true, sku: true, name: true } } },
+      })
+      return { aliases }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/import/aliases GET] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/import/aliases ──────────────────────────────
+  // Create one or many aliases (from import confirm or manual entry).
+  fastify.post<{
+    Body: {
+      entries: Array<{ productId: string; raw: string; source?: string }>
+    }
+  }>('/stock/import/aliases', async (request, reply) => {
+    try {
+      const { entries = [] } = request.body ?? {}
+      if (entries.length === 0) return reply.code(400).send({ error: 'entries[] required' })
+      const created = await bulkCreateAliases(entries)
+      return { created }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/import/aliases POST] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── DELETE /api/stock/import/aliases/:id ────────────────────────
+  fastify.delete<{ Params: { id: string } }>(
+    '/stock/import/aliases/:id',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        await prisma.skuAlias.delete({ where: { id } })
+        return { ok: true }
+      } catch (error: any) {
+        if (error?.code === 'P2025') return reply.code(404).send({ error: 'Alias not found' })
+        fastify.log.error({ err: error }, '[stock/import/aliases DELETE] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  // ── GET /api/stock/import/history ───────────────────────────────
+  // Past import jobs (most recent first, limit 50).
+  fastify.get('/stock/import/history', async (_request, reply) => {
+    try {
+      const jobs = await prisma.stockImportJob.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: {
+          id: true, filename: true, fileKind: true, locationCode: true,
+          mode: true, target: true, totalRows: true, succeeded: true,
+          failed: true, skipped: true, status: true, appliedAt: true,
+          createdAt: true, errorSummary: true,
+        },
+      })
+      return { jobs }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/import/history] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/import/history/:id ───────────────────────────
+  // Full per-row results for a past job (drill-down).
+  fastify.get<{ Params: { id: string } }>(
+    '/stock/import/history/:id',
+    async (request, reply) => {
+      try {
+        const job = await prisma.stockImportJob.findUnique({
+          where: { id: request.params.id },
+        })
+        if (!job) return reply.code(404).send({ error: 'Job not found' })
+        return { job }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[stock/import/history/:id] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
 
   // ── POST /api/stock/transfer ─────────────────────────────────────
   fastify.post('/stock/transfer', async (request, reply) => {
