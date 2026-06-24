@@ -554,13 +554,14 @@ async function pushVariationGroup(
   //   • inventoryItemGroupKey is NOT a valid offer field — group linkage is
   //     established exclusively via variantSKUs in the group PUT above.
   //   • availableQuantity is required before publishOfferByInventoryItemGroup.
-  let fulfillmentPolicyId = (parentRow.fulfillment_policy_id as string | undefined) ?? ''
-  let paymentPolicyId     = (parentRow.payment_policy_id     as string | undefined) ?? ''
-  let returnPolicyId      = (parentRow.return_policy_id      as string | undefined) ?? ''
+  let fulfillmentPolicyId  = (parentRow.fulfillment_policy_id   as string | undefined) ?? ''
+  let paymentPolicyId      = (parentRow.payment_policy_id       as string | undefined) ?? ''
+  let returnPolicyId       = (parentRow.return_policy_id        as string | undefined) ?? ''
+  let merchantLocationKey  = (parentRow.merchant_location_key   as string | undefined) ?? ''
 
   if (!fulfillmentPolicyId) {
     try {
-      const r = await fetch(`${apiBase}/sell/account/v1/fulfillment_policy?marketplace_id=${marketplaceId}`, { headers: headers })
+      const r = await fetch(`${apiBase}/sell/account/v1/fulfillment_policy?marketplace_id=${marketplaceId}`, { headers })
       if (r.ok) {
         const d = await r.json() as { fulfillmentPolicies?: Array<{ fulfillmentPolicyId: string }> }
         fulfillmentPolicyId = d.fulfillmentPolicies?.[0]?.fulfillmentPolicyId ?? ''
@@ -569,7 +570,7 @@ async function pushVariationGroup(
   }
   if (!returnPolicyId) {
     try {
-      const r = await fetch(`${apiBase}/sell/account/v1/return_policy?marketplace_id=${marketplaceId}`, { headers: headers })
+      const r = await fetch(`${apiBase}/sell/account/v1/return_policy?marketplace_id=${marketplaceId}`, { headers })
       if (r.ok) {
         const d = await r.json() as { returnPolicies?: Array<{ returnPolicyId: string }> }
         returnPolicyId = d.returnPolicies?.[0]?.returnPolicyId ?? ''
@@ -578,10 +579,21 @@ async function pushVariationGroup(
   }
   if (!paymentPolicyId) {
     try {
-      const r = await fetch(`${apiBase}/sell/account/v1/payment_policy?marketplace_id=${marketplaceId}`, { headers: headers })
+      const r = await fetch(`${apiBase}/sell/account/v1/payment_policy?marketplace_id=${marketplaceId}`, { headers })
       if (r.ok) {
         const d = await r.json() as { paymentPolicies?: Array<{ paymentPolicyId: string }> }
         paymentPolicyId = d.paymentPolicies?.[0]?.paymentPolicyId ?? ''
+      }
+    } catch { /* best-effort */ }
+  }
+  // merchantLocationKey is required so eBay can resolve Item.Country (error 25002).
+  // Read from row data first; fall back to first active seller location.
+  if (!merchantLocationKey) {
+    try {
+      const r = await fetch(`${apiBase}/sell/inventory/v1/location?limit=1`, { headers })
+      if (r.ok) {
+        const d = await r.json() as { locations?: Array<{ merchantLocationKey: string }> }
+        merchantLocationKey = d.locations?.[0]?.merchantLocationKey ?? ''
       }
     } catch { /* best-effort */ }
   }
@@ -607,6 +619,9 @@ async function pushVariationGroup(
         ...(paymentPolicyId     ? { paymentPolicyId }     : {}),
         ...(returnPolicyId      ? { returnPolicyId }      : {}),
       },
+      // merchantLocationKey (top-level, not inside listingPolicies) tells eBay
+      // the seller's location so it can resolve Item.Country for the listing.
+      ...(merchantLocationKey ? { merchantLocationKey } : {}),
       quantityLimitPerBuyer: 10,
     }
 
@@ -1431,6 +1446,26 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
           const categoryId = row.category_id as string | undefined;
           if (categoryId) {
+            // Resolve merchantLocationKey for Item.Country (error 25002 if absent).
+            let singleMlk = (row.merchant_location_key as string | undefined) ?? ''
+            if (!singleMlk) {
+              try {
+                const mlkRes = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/location?limit=1`, {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    'Content-Language': lang,
+                    'Accept-Language': lang,
+                    Accept: 'application/json',
+                    'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
+                  },
+                })
+                if (mlkRes.ok) {
+                  const d = await mlkRes.json() as { locations?: Array<{ merchantLocationKey: string }> }
+                  singleMlk = d.locations?.[0]?.merchantLocationKey ?? ''
+                }
+              } catch { /* best-effort */ }
+            }
             const offerBody: Record<string, unknown> = {
               sku,
               marketplaceId,
@@ -1454,6 +1489,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                   ? { returnPolicyId: row.return_policy_id as string }
                   : {}),
               },
+              ...(singleMlk ? { merchantLocationKey: singleMlk } : {}),
               quantityLimitPerBuyer: 10,
             };
 
