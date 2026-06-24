@@ -681,6 +681,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         const taskId = await createInventoryTask(mp, token);
         await uploadFeedFile(taskId, ndjson, token);
 
+        // Durable push-history record (feed mode). Non-fatal — never blocks the push.
+        try {
+          await prisma.ebayPushJob.create({
+            data: { mode: 'feed', taskId, markets: [mp], skuCount: rows.length, status: 'SUBMITTED', warnings: oversellWarnings as any },
+          });
+        } catch (e) {
+          request.log.warn({ err: e }, 'ebay/flat-file/push: failed to persist EbayPushJob feed-mode (non-fatal)');
+        }
+
         return reply.send({
           mode: 'feed',
           taskId,
@@ -1032,7 +1041,39 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     const pushed = perRowResults.filter((r) => r.status === 'PUSHED').length;
     const errors = perRowResults.filter((r) => r.status === 'ERROR').length;
 
+    // Durable push-history record (mirrors AmazonFlatFileFeedJob) so a failed push
+    // is inspectable forever, not a 3-second toast. Non-fatal.
+    try {
+      await prisma.ebayPushJob.create({
+        data: {
+          mode: 'api',
+          markets: targetMarkets,
+          skuCount: rows.length,
+          status: errors === 0 ? 'DONE' : pushed === 0 ? 'FATAL' : 'PARTIAL',
+          pushed,
+          failed: errors,
+          perSkuResults: perRowResults as any,
+          warnings: oversellWarnings as any,
+          completedAt: new Date(),
+        },
+      });
+    } catch (e) {
+      request.log.warn({ err: e }, 'ebay/flat-file/push: failed to persist EbayPushJob (non-fatal)');
+    }
+
     return reply.send({ mode: 'api', pushed, errors, results: perRowResults, warnings: oversellWarnings });
+  });
+
+  // ── GET /api/ebay/flat-file/pushes ──────────────────────────────────
+  // Durable push history so a failed "Push to eBay" is inspectable forever
+  // (the eBay parallel of GET /amazon/flat-file/feeds).
+  fastify.get<{ Querystring: { limit?: string } }>('/ebay/flat-file/pushes', async (request, reply) => {
+    const limit = Math.min(Number(request.query.limit ?? 25) || 25, 100);
+    const pushes = await prisma.ebayPushJob.findMany({
+      orderBy: { submittedAt: 'desc' },
+      take: limit,
+    });
+    return reply.send({ pushes });
   });
 
   // ── POST /api/ebay/flat-file/publish ────────────────────────────────

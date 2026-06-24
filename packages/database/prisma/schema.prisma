@@ -6817,6 +6817,31 @@ model AmazonFlatFileFeedJob {
   @@index([nextPollAt])
 }
 
+/// eBay flat-file "Push to eBay" job log — a durable record of every push so a
+/// failed push is inspectable forever (the eBay parallel of AmazonFlatFileFeedJob).
+model EbayPushJob {
+  id     String  @id @default(cuid())
+  mode   String  // 'api' | 'feed'
+  taskId String? // eBay Sell Feed task id (feed mode); null for api mode
+
+  markets  Json? // string[] — target markets (IT/DE/FR/ES/UK)
+  skuCount Int   @default(0)
+
+  // SUBMITTED | DONE | PARTIAL | FATAL  (api resolves immediately; feed polls)
+  status String @default("SUBMITTED")
+  pushed Int    @default(0)
+  failed Int    @default(0)
+
+  perSkuResults Json?   // [{ sku, market, status: success|error, listingId?, message }]
+  warnings      Json?   // oversell warnings
+  errorMessage  String? // top-level error
+
+  submittedAt DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([status, submittedAt])
+}
+
 /// IR.9.1 — eBay + Shopify image publish job log.
 ///
 /// Parallel to AmazonImageFeedJob but for the non-Amazon channels.
