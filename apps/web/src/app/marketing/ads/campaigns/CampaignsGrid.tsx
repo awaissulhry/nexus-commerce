@@ -1247,7 +1247,7 @@ export function CampaignsGrid() {
         </div>
         <button type="button" className="h10-am-btn"><Download size={13} /> Export Data</button>
         <Link href="/marketing/ads/rules-automation" className="h10-am-btn"><Wand2 size={13} /> Create Rule</Link>
-        <Link href="/marketing/ads-console/campaign-builder/guided" className="h10-am-btn primary"><Plus size={13} /> Campaign</Link>
+        <Link href="/marketing/ads/campaign-builder" className="h10-am-btn primary"><Plus size={13} /> Campaign</Link>
       </div>
 
       {/* grid */}
