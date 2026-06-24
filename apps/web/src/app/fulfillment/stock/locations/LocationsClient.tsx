@@ -254,11 +254,11 @@ function LocationsInner() {
       width: 160,
       render: (row) =>
         row.servesMarketplaces.length > 0 ? (
-          <span className="text-sm text-slate-600 dark:text-slate-400">
+          <span className="text-sm text-secondary">
             {row.servesMarketplaces.join(', ')}
           </span>
         ) : (
-          <span className="text-sm text-slate-400">—</span>
+          <span className="text-sm text-tertiary">—</span>
         ),
     },
     {
@@ -370,7 +370,7 @@ function LocationsInner() {
             initialSort={{ key: 'name', dir: 'asc' }}
             emptyState={
               <EmptyState
-                icon={<MapPin size={32} className="text-slate-400" />}
+                icon={<MapPin size={32} className="text-tertiary" />}
                 title={t('stock.locations.empty.title')}
                 description={t('stock.locations.empty.description')}
                 action={
@@ -463,7 +463,7 @@ function LocationsInner() {
             </div>
           </div>
 
-          <div className="border-t border-slate-200 dark:border-slate-700 pt-3">
+          <div className="border-t border-default pt-3">
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
               {t('stock.locations.form.addressStreet')} / {t('stock.locations.form.addressCity')} / {t('stock.locations.form.addressCountry')}
             </p>
@@ -487,7 +487,7 @@ function LocationsInner() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2">
+          <div className="flex items-center justify-between rounded-md border border-default px-3 py-2">
             <div>
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 {t('stock.locations.form.active')}
@@ -522,7 +522,7 @@ function LocationsInner() {
           </div>
         }
       >
-        <p className="text-sm text-slate-600 dark:text-slate-400 px-1 py-2">
+        <p className="text-sm text-secondary px-1 py-2">
           {t('stock.locations.deactivateNote')}
         </p>
       </Modal>
