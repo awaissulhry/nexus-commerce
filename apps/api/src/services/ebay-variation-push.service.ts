@@ -780,27 +780,63 @@ export async function pushVariationGroup(
     } catch { /* non-fatal — listingId stays undefined */ }
   }
 
-  // Write the shared listingId back to all variant ChannelListings.
+  // Write the shared listingId back to all variant ChannelListings AND the parent.
   // _productId may be stripped in the frontend round-trip; fall back to SKU lookup.
   let productIds = variantRows.map(r => r._productId as string).filter(Boolean)
+  let parentProductId: string | null = null
   if (productIds.length === 0) {
     const skus = variantRows.map(r => r.sku as string).filter(Boolean)
     if (skus.length > 0) {
-      const prods = await prisma.product.findMany({ where: { sku: { in: skus }, deletedAt: null }, select: { id: true } }).catch(() => [])
+      const prods = await prisma.product.findMany({
+        where: { sku: { in: skus }, deletedAt: null },
+        select: { id: true, parentId: true },
+      }).catch(() => [])
       productIds = prods.map(p => p.id)
+      parentProductId = prods.find(p => p.parentId != null)?.parentId ?? null
     }
+  } else {
+    // Resolve parent from the first child record (non-fatal).
+    const first = await prisma.product.findFirst({
+      where: { id: productIds[0], deletedAt: null },
+      select: { parentId: true },
+    }).catch(() => null)
+    parentProductId = first?.parentId ?? null
   }
   const region = mp === 'UK' ? 'GB' : mp
-  if (productIds.length > 0) {
+  // Include the parent product ID so its ChannelListing transitions to ACTIVE too.
+  const allIds = [...new Set([...productIds, ...(parentProductId ? [parentProductId] : [])])]
+  if (allIds.length > 0) {
     try {
       await prisma.channelListing.updateMany({
-        where: { productId: { in: productIds }, channel: 'EBAY', region },
+        where: { productId: { in: allIds }, channel: 'EBAY', region },
         // Only set externalListingId when we have a fresh value from the publish response.
         // Re-publishing an existing listing returns no new listingId — don't overwrite with null.
         data: { ...(listingId ? { externalListingId: listingId } : {}), listingStatus: 'ACTIVE', offerActive: true },
       })
+      // Seed any missing parent/child ChannelListing rows for this market so the
+      // cockpit and status views reflect the live eBay state going forward.
+      const existing = await prisma.channelListing.findMany({
+        where: { productId: { in: allIds }, channel: 'EBAY', region },
+        select: { productId: true },
+      })
+      const existingSet = new Set(existing.map(e => e.productId))
+      const missing = allIds.filter(id => !existingSet.has(id))
+      if (missing.length > 0) {
+        await prisma.channelListing.createMany({
+          data: missing.map(productId => ({
+            productId,
+            channel: 'EBAY',
+            channelMarket: `EBAY_${region}`,
+            region,
+            marketplace: region,
+            listingStatus: 'ACTIVE' as const,
+            ...(listingId ? { externalListingId: listingId } : {}),
+          })),
+          skipDuplicates: true,
+        })
+      }
       const activated = await prisma.channelListing.findMany({
-        where: { productId: { in: productIds }, channel: 'EBAY', region },
+        where: { productId: { in: allIds }, channel: 'EBAY', region },
         select: { id: true },
       })
       void syncActivatedListings(activated.map(l => l.id))
