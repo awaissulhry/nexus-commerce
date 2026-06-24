@@ -566,7 +566,7 @@ export default function EbayPanel({
       {/* ── Sticky header ─────────────────────────────────────────────── */}
       <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b border-default bg-white dark:bg-slate-900 rounded-t-xl">
         <ShoppingBag className="w-4 h-4 text-slate-500 flex-shrink-0" />
-        <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">eBay Colour Photos</span>
+        <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">eBay Photos</span>
 
         {/* Axis picker */}
         {axes.length > 0 && (
@@ -654,7 +654,7 @@ export default function EbayPanel({
       {masterImages.length > 0 && (
         <div className="px-4 py-3 border-b border-subtle">
           <p className="text-xs text-tertiary mb-2">
-            Assign from master photos — click "+" on a colour row to add
+            Main listing photo comes from your <span className="font-medium text-slate-600 dark:text-slate-300">Master</span> tab. Below, choose the photos buyers see for each {axis.toLowerCase()}.
           </p>
           <div className="flex flex-wrap gap-2">
             {masterImages.map((img) => (
