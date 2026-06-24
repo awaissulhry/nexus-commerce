@@ -310,16 +310,36 @@ export default async function amazonCockpitPublishRoutes(
       }
 
       try {
-        const listing = await prisma.channelListing.findFirst({
+        let listing = await prisma.channelListing.findFirst({
           where: { productId: id, channel: 'AMAZON', marketplace: mp },
         })
+        // B7 — CREATE path: when no ChannelListing exists yet, auto-create a
+        // minimal shell so the publish can proceed. The row is flagged _isNew
+        // so buildJsonFeedBody emits operationType:'UPDATE' (full create) rather
+        // than 'PARTIAL_UPDATE' (which would be rejected for a brand-new SKU).
+        // The operator doesn't need to visit the classic editor to bootstrap a
+        // listing — one cockpit publish is enough.
+        let isNewListing = false
         if (!listing) {
-          result.error = `No Amazon ChannelListing for marketplace ${mp} — create it via the classic editor first.`
-          submissions.push(result)
-          continue
+          const productType = String(product.productType ?? '').toUpperCase()
+          listing = await prisma.channelListing.create({
+            data: {
+              productId: id,
+              channel: 'AMAZON',
+              marketplace: mp,
+              channelMarket: `AMAZON_${mp}`,
+              region: mp,
+              listingStatus: 'DRAFT',
+              platformAttributes: productType ? { productType } : {},
+            },
+          })
+          isNewListing = true
+          request.log.info({ productId: id, marketplace: mp }, 'cockpit publish-amazon: created new ChannelListing shell (B7)')
         }
 
         const row = buildRow({ listing, product, marketplace: mp, parentSku })
+        // Mark new listings so the feed uses full UPDATE (not partial-update).
+        if (isNewListing) (row as any)._isNew = true
         if (dryRun) {
           submissions.push({
             ...result,
