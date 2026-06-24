@@ -425,31 +425,35 @@ async function pushVariationGroup(
   const variantRowsAll = rows.filter((r) => !r._isParent)
   const variantRows = variantRowsAll.length > 0 ? variantRowsAll : rows
 
-  // EV.6b — name/value renames from parent ChannelListing platformAttributes
+  // EV.6b — name/value renames from parent ChannelListing platformAttributes.
+  // Also build brandBySku (sku-keyed, not _productId-keyed) so brand lookup is
+  // frontend-round-trip-proof: _productId/_brand are _ -prefixed internal fields
+  // that React state may drop; sku is always present in the push body.
   let nameLabels: Record<string, string> = {}
   let valueLabels: Record<string, Record<string, string>> = {}
-  const brandByProductId = new Map<string, string>()
+  const brandBySku = new Map<string, string>()
   try {
-    const ids = rows.map((r) => r._productId as string).filter(Boolean)
+    const skus = rows.map((r) => r.sku as string).filter(Boolean)
     const prods = await prisma.product.findMany({
-      where: { id: { in: ids } },
-      select: { id: true, parentId: true, brand: true },
+      where: { sku: { in: skus } },
+      select: { sku: true, parentId: true, brand: true },
     })
     for (const p of prods) {
-      if (p.brand) brandByProductId.set(p.id, p.brand)
+      if (p.brand) brandBySku.set(p.sku, p.brand)
     }
-    const parentId = prods.find((p) => !p.parentId)?.id ?? prods[0]?.parentId ?? ids[0]
-    if (parentId) {
+    // Resolve name/value label overrides from the parent listing's platformAttributes
+    const parentSku = (rows.find((r) => r._isParent) ?? rows[0])?.sku as string | undefined
+    if (parentSku) {
       const pl = await prisma.channelListing.findFirst({
-        where: { productId: parentId, channel: 'EBAY', marketplace: mp },
+        where: { product: { sku: parentSku }, channel: 'EBAY', marketplace: mp },
         select: { platformAttributes: true },
       })
       const pa = (pl?.platformAttributes ?? {}) as Record<string, unknown>
       nameLabels = (pa._axisNameLabels ?? {}) as Record<string, string>
       valueLabels = (pa._axisValueLabels ?? {}) as Record<string, Record<string, string>>
     }
-  } catch {
-    /* renames best-effort — publish proceeds with canonical values */
+  } catch (err) {
+    console.warn('[ebay-push] brand/label fetch failed — proceeding without renames', err)
   }
   const nmLabel = (a: string) => nameLabels[a] || a
   const vlLabel = (a: string, v: string) => valueLabels[a]?.[v] || v
@@ -506,13 +510,14 @@ async function pushVariationGroup(
     const BRAND_ALIASES = new Set(['marca', 'brand', 'marke', 'marque', 'marka'])
     const existingBrandKey = [...aspectsMap.keys()].find(k => BRAND_ALIASES.has(k.toLowerCase()))
     if (existingBrandKey && existingBrandKey !== targetBrandAspect) {
+      // Rename e.g. "Brand" → "Marca" for EBAY_IT
       const v = aspectsMap.get(existingBrandKey)!
       aspectsMap.delete(existingBrandKey)
       aspectsMap.set(targetBrandAspect, v)
     } else if (!existingBrandKey) {
-      // Use DB-fetched brand (most reliable) then row._brand, then row title word
-      const dbBrand = brandByProductId.get(String(row._productId ?? '')) ?? ''
-      const brandVal = (dbBrand || String(row._brand ?? '')).trim()
+      // Look up brand by SKU — sku is always preserved through the frontend round-trip
+      // unlike _productId/_brand which are underscore-prefixed internal fields.
+      const brandVal = (brandBySku.get(sku) ?? '').trim()
       if (brandVal) aspectsMap.set(targetBrandAspect, [brandVal])
     }
 
