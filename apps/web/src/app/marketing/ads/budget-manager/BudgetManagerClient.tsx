@@ -15,7 +15,7 @@
  * engine that acts on them (and floors bids instead of pausing) lands in BM.B3.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Info, Settings, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, Pencil, AlertTriangle, BadgeDollarSign, Sparkles, Network } from 'lucide-react'
+import { Info, Settings, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, Pencil, AlertTriangle, BadgeDollarSign, Sparkles, Network, Search } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridSelectFilter } from '../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -165,6 +165,8 @@ function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: 
   const [camps, setCamps] = useState<BmCampaign[] | null>(null)
   const [edits, setEdits] = useState<Record<string, { min: string; max: string }>>({})
   const [saving, setSaving] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<'ENABLED' | 'PAUSED' | 'ALL'>('ENABLED')
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     let alive = true
@@ -184,6 +186,7 @@ function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: 
     if (!camps) return [] as BmCampaign[]
     return camps.filter((c) => { const e = edits[c.id]; if (!e) return false; const min = e.min === '' ? null : parseEur(e.min); const max = e.max === '' ? null : parseEur(e.max); return min !== c.minCents || max !== c.maxCents })
   }, [camps, edits])
+  const shown = useMemo(() => (camps ?? []).filter((c) => (statusFilter === 'ALL' || c.status === statusFilter) && c.name.toLowerCase().includes(search.trim().toLowerCase())), [camps, statusFilter, search])
 
   const saveAll = async () => {
     setSaving(true)
@@ -203,20 +206,29 @@ function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: 
       footer={<><span className="bm-more-foot">{dirty.length ? `${dirty.length} change${dirty.length === 1 ? '' : 's'}` : 'No changes'}</span><button type="button" className="h10-am-btn primary" disabled={saving || !dirty.length} onClick={saveAll}>{saving ? 'Saving…' : 'Save limits'}</button></>}>
       <p className="bm-more-intro">Set a minimum and maximum daily budget per campaign. Auto Pacing keeps each campaign within these bounds when it redistributes this market’s monthly budget.</p>
       {camps == null ? <div className="bm-more-loading">Loading campaigns…</div>
-        : camps.length === 0 ? <div className="bm-more-empty">No active campaigns in {mktName(row.marketplace)}.</div>
-        : (
-          <div className="bm-more-list">
-            <div className="bm-more-head"><span>Campaign</span><span>Daily</span><span>Min €/day</span><span>Max €/day</span></div>
-            {camps.map((c) => (
-              <div className="bm-more-row" key={c.id}>
-                <span className="nm"><span className={`bm-cdot ${c.status === 'ENABLED' ? 'on' : c.status === 'PAUSED' ? 'pa' : 'ar'}`} />{c.name}</span>
-                <span className="db">{eur(c.dailyBudgetCents)}</span>
-                <span className="lim"><input inputMode="decimal" placeholder="—" value={edits[c.id]?.min ?? ''} onChange={(e) => setEdits((p) => ({ ...p, [c.id]: { min: e.target.value, max: p[c.id]?.max ?? '' } }))} aria-label={`Min for ${c.name}`} /></span>
-                <span className="lim"><input inputMode="decimal" placeholder="—" value={edits[c.id]?.max ?? ''} onChange={(e) => setEdits((p) => ({ ...p, [c.id]: { min: p[c.id]?.min ?? '', max: e.target.value } }))} aria-label={`Max for ${c.name}`} /></span>
-              </div>
-            ))}
+        : camps.length === 0 ? <div className="bm-more-empty">No campaigns in {mktName(row.marketplace)}.</div>
+        : (<>
+          <div className="bm-more-filter">
+            <div className="bm-more-seg">
+              {(['ENABLED', 'PAUSED', 'ALL'] as const).map((s) => (<button type="button" key={s} className={statusFilter === s ? 'on' : ''} onClick={() => setStatusFilter(s)}>{s === 'ENABLED' ? 'Enabled' : s === 'PAUSED' ? 'Paused' : 'All'}</button>))}
+            </div>
+            <span className="bm-more-search"><Search size={13} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search campaigns…" aria-label="Search campaigns" /></span>
+            <span className="bm-more-count">{shown.length} of {camps.length}</span>
           </div>
-        )}
+          {shown.length === 0 ? <div className="bm-more-empty">No campaigns match this filter.</div> : (
+            <div className="bm-more-list">
+              <div className="bm-more-head"><span>Campaign</span><span>Daily</span><span>Min €/day</span><span>Max €/day</span></div>
+              {shown.map((c) => (
+                <div className="bm-more-row" key={c.id}>
+                  <span className="nm"><span className={`bm-cdot ${c.status === 'ENABLED' ? 'on' : c.status === 'PAUSED' ? 'pa' : 'ar'}`} />{c.name}</span>
+                  <span className="db">{eur(c.dailyBudgetCents)}</span>
+                  <span className="lim"><input inputMode="decimal" placeholder="—" value={edits[c.id]?.min ?? ''} onChange={(e) => setEdits((p) => ({ ...p, [c.id]: { min: e.target.value, max: p[c.id]?.max ?? '' } }))} aria-label={`Min for ${c.name}`} /></span>
+                  <span className="lim"><input inputMode="decimal" placeholder="—" value={edits[c.id]?.max ?? ''} onChange={(e) => setEdits((p) => ({ ...p, [c.id]: { min: p[c.id]?.min ?? '', max: e.target.value } }))} aria-label={`Max for ${c.name}`} /></span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>)}
     </Drawer>
   )
 }
