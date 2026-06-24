@@ -31,6 +31,7 @@ import {
   Package,
   Cable,
   Scale,
+  MapPin,
 } from 'lucide-react'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -67,6 +68,7 @@ export function StockSubNav({ cycleCountActive = 0, recallsOpen = 0, channelDrif
     { href: '/fulfillment/stock/shopify-locations', labelKey: 'stock.shopifyLocations.title', icon: Store },
     { href: '/fulfillment/stock/mcf', labelKey: 'stock.mcf.title', icon: Truck },
     { href: '/fulfillment/stock/fba-pan-eu', labelKey: 'stock.fbaPanEu.title', icon: Globe },
+    { href: '/fulfillment/stock/locations', labelKey: 'stock.locations.title', icon: MapPin },
   ] as const
 
   function isActive(tab: typeof tabs[number]) {

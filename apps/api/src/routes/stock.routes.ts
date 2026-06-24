@@ -933,6 +933,105 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── POST /api/stock/locations ────────────────────────────────────
+  // Create a new StockLocation (WAREHOUSE or AMAZON_FBA only — Shopify
+  // locations are discovered via their own discovery endpoint).
+  fastify.post<{
+    Body: {
+      name: string
+      code: string
+      type: 'WAREHOUSE' | 'AMAZON_FBA'
+      servesMarketplaces: string[]
+      isActive?: boolean
+      address?: { street?: string; city?: string; country?: string }
+    }
+  }>('/stock/locations', async (request, reply) => {
+    try {
+      const { name, code, type, servesMarketplaces, isActive = true, address } = request.body ?? {}
+      if (!name?.trim()) return reply.code(400).send({ error: 'name is required' })
+      if (!code?.trim()) return reply.code(400).send({ error: 'code is required' })
+      if (!['WAREHOUSE', 'AMAZON_FBA'].includes(type)) {
+        return reply.code(400).send({ error: 'type must be WAREHOUSE or AMAZON_FBA' })
+      }
+      const normalised = code.toUpperCase().trim()
+      if (!/^[A-Z0-9][A-Z0-9-]{0,29}$/.test(normalised)) {
+        return reply.code(400).send({ error: 'code must be uppercase alphanumeric with hyphens, 1–30 chars' })
+      }
+      const existing = await prisma.stockLocation.findUnique({ where: { code: normalised } })
+      if (existing) return reply.code(409).send({ error: `Location code ${normalised} already exists` })
+
+      const loc = await prisma.stockLocation.create({
+        data: {
+          name: name.trim(),
+          code: normalised,
+          type,
+          servesMarketplaces,
+          isActive,
+          address: address ?? undefined,
+        },
+      })
+      return reply.code(201).send({ location: loc })
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[POST /stock/locations] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── PATCH /api/stock/locations/:id ───────────────────────────────
+  // Update a location's mutable fields. Code is immutable once set.
+  fastify.patch<{
+    Params: { id: string }
+    Body: {
+      name?: string
+      servesMarketplaces?: string[]
+      isActive?: boolean
+      address?: { street?: string; city?: string; country?: string } | null
+    }
+  }>('/stock/locations/:id', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const { name, servesMarketplaces, isActive, address } = request.body ?? {}
+      const loc = await prisma.stockLocation.findUnique({ where: { id } })
+      if (!loc) return reply.code(404).send({ error: 'Location not found' })
+
+      const updated = await prisma.stockLocation.update({
+        where: { id },
+        data: {
+          ...(name !== undefined ? { name: name.trim() } : {}),
+          ...(servesMarketplaces !== undefined ? { servesMarketplaces } : {}),
+          ...(isActive !== undefined ? { isActive } : {}),
+          ...(address !== undefined ? { address: address ?? undefined } : {}),
+        },
+      })
+      return reply.send({ location: updated })
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[PATCH /stock/locations/:id] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── DELETE /api/stock/locations/:id ──────────────────────────────
+  // Soft-delete: sets isActive=false. Cannot hard-delete locations
+  // that have StockLevel rows (would break historical movements).
+  fastify.delete<{ Params: { id: string } }>(
+    '/stock/locations/:id',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const loc = await prisma.stockLocation.findUnique({ where: { id } })
+        if (!loc) return reply.code(404).send({ error: 'Location not found' })
+        if (['AMAZON-EU-FBA', 'IT-MAIN'].includes(loc.code)) {
+          return reply.code(409).send({ error: `Built-in location ${loc.code} cannot be deactivated here` })
+        }
+        await prisma.stockLocation.update({ where: { id }, data: { isActive: false } })
+        return reply.send({ ok: true })
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[DELETE /stock/locations/:id] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
   // ── GET /api/stock/product/:productId ────────────────────────────
   // One-shot bundle for the multi-location drawer. Returns:
   //   - product header
