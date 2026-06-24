@@ -513,7 +513,101 @@ async function pushVariationGroup(
     return results.map(r => ({ ...r, status: 'ERROR' as const, message: `inventory_item_group PUT ${groupRes.status}: ${err.slice(0, 200)}` }))
   }
 
-  // Step 4: Publish via group
+  // Step 3.5: Create/update one eBay offer per variant.
+  // publish_by_inventory_item_group requires an UNPUBLISHED offer to exist
+  // for every member SKU before it will create the variation listing.
+  // Auto-fetch account business policies when not set on the parent row so
+  // this works without the operator having to fill in policy IDs manually.
+  const acctHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  let fulfillmentPolicyId = (parentRow.fulfillment_policy_id as string | undefined) ?? ''
+  let paymentPolicyId     = (parentRow.payment_policy_id     as string | undefined) ?? ''
+  let returnPolicyId      = (parentRow.return_policy_id      as string | undefined) ?? ''
+
+  if (!fulfillmentPolicyId) {
+    try {
+      const r = await fetch(`${apiBase}/sell/account/v1/fulfillment_policy?marketplace_id=${marketplaceId}`, { headers: acctHeaders })
+      if (r.ok) {
+        const d = await r.json() as { fulfillmentPolicies?: Array<{ fulfillmentPolicyId: string }> }
+        fulfillmentPolicyId = d.fulfillmentPolicies?.[0]?.fulfillmentPolicyId ?? ''
+      }
+    } catch { /* best-effort */ }
+  }
+  if (!returnPolicyId) {
+    try {
+      const r = await fetch(`${apiBase}/sell/account/v1/return_policy?marketplace_id=${marketplaceId}`, { headers: acctHeaders })
+      if (r.ok) {
+        const d = await r.json() as { returnPolicies?: Array<{ returnPolicyId: string }> }
+        returnPolicyId = d.returnPolicies?.[0]?.returnPolicyId ?? ''
+      }
+    } catch { /* best-effort */ }
+  }
+  if (!paymentPolicyId) {
+    try {
+      const r = await fetch(`${apiBase}/sell/account/v1/payment_policy?marketplace_id=${marketplaceId}`, { headers: acctHeaders })
+      if (r.ok) {
+        const d = await r.json() as { paymentPolicies?: Array<{ paymentPolicyId: string }> }
+        paymentPolicyId = d.paymentPolicies?.[0]?.paymentPolicyId ?? ''
+      }
+    } catch { /* best-effort */ }
+  }
+
+  const currency   = mp === 'UK' ? 'GBP' : 'EUR'
+  const catId      = (parentRow.category_id as string | undefined) ?? ''
+  const listingDesc = (parentRow.description as string | undefined) ?? ''
+
+  for (const row of variantRows) {
+    const sku   = row.sku as string
+    const price = Number(row[`${mp.toLowerCase()}_price`] ?? row.price ?? 0)
+    const offerBody: Record<string, unknown> = {
+      sku,
+      marketplaceId,
+      format: 'FIXED_PRICE',
+      ...(listingDesc ? { listingDescription: listingDesc } : {}),
+      ...(catId       ? { categoryId: catId }               : {}),
+      pricingSummary: { price: { value: price.toFixed(2), currency } },
+      listingPolicies: {
+        ...(fulfillmentPolicyId ? { fulfillmentPolicyId } : {}),
+        ...(paymentPolicyId     ? { paymentPolicyId }     : {}),
+        ...(returnPolicyId      ? { returnPolicyId }      : {}),
+      },
+      quantityLimitPerBuyer: 10,
+    }
+
+    // GET existing offer for this SKU + marketplace
+    const getOfferRes = await fetch(
+      `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
+      { headers: { Authorization: `Bearer ${token}`, 'X-EBAY-C-MARKETPLACE-ID': marketplaceId } },
+    )
+    let offerId: string | null = null
+    if (getOfferRes.ok) {
+      const od = await getOfferRes.json() as { offers?: Array<{ offerId: string }> }
+      offerId = od.offers?.[0]?.offerId ?? null
+    }
+
+    if (offerId) {
+      const upd = await fetch(`${apiBase}/sell/inventory/v1/offer/${offerId}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-EBAY-C-MARKETPLACE-ID': marketplaceId },
+        body: JSON.stringify(offerBody),
+      })
+      if (!upd.ok) {
+        const err = await upd.text().catch(() => '')
+        return results.map(r => ({ ...r, status: 'ERROR' as const, message: `offer update ${upd.status}: ${err.slice(0, 300)}` }))
+      }
+    } else {
+      const cre = await fetch(`${apiBase}/sell/inventory/v1/offer`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-EBAY-C-MARKETPLACE-ID': marketplaceId },
+        body: JSON.stringify(offerBody),
+      })
+      if (!cre.ok) {
+        const err = await cre.text().catch(() => '')
+        return results.map(r => ({ ...r, status: 'ERROR' as const, message: `offer create ${cre.status}: ${err.slice(0, 300)}` }))
+      }
+    }
+  }
+
+  // Step 4: Publish via group — all variants' offers in one call
   const publishRes = await fetch(`${apiBase}/sell/inventory/v1/offer/publish_by_inventory_item_group`, {
     method: 'POST', headers,
     body: JSON.stringify({ inventoryItemGroupKey: groupKey, marketplaceId }),
@@ -525,7 +619,7 @@ async function pushVariationGroup(
     listingId = pubData.listingId
   } else {
     const err = await publishRes.text().catch(() => '')
-    return results.map(r => ({ ...r, status: 'ERROR' as const, message: `publish_by_group ${publishRes.status}: ${err.slice(0, 200)}` }))
+    return results.map(r => ({ ...r, status: 'ERROR' as const, message: `publish_by_group ${publishRes.status}: ${err.slice(0, 300)}` }))
   }
 
   // Mark all rows PUSHED with the shared listingId
