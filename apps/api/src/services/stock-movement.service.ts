@@ -4,6 +4,7 @@ import { outboundSyncQueue } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { handleMovementStockoutTransition } from './stockout-detector.service.js'
 import { consumeLayersInTx, receiveLayerInTx } from './cost-layers.service.js'
+import { computeAvailableToPublish } from './available-to-publish.service.js'
 
 // S.20 — reasons that consume cost layers (decrease quantity AND
 // realise COGS). Manual-adjustment subtractions also consume; the
@@ -21,6 +22,10 @@ const RECEIVE_AUTO_LAYER_REASONS = new Set([
   'INBOUND_RECEIVED', 'SUPPLIER_DELIVERY', 'MANUFACTURING_OUTPUT',
   'TRANSFER_IN',
 ])
+// FCF.2 — channels whose published quantity follows the OWN-warehouse (FBM)
+// pool. Amazon resolves per listing/offer; it defaults to FBM only when no FBA
+// signal is present (an explicit ChannelListing.fulfillmentMethod always wins).
+const MERCHANT_CHANNELS = new Set(['EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
 
 // B.1/B.2 — single entrypoint for every stock change.
 // Anyone touching Product.totalStock or ProductVariation.stock MUST go
@@ -543,13 +548,14 @@ interface CascadeResult {
  * product. Mirrors MasterPriceService.computeListingPrice / cascade —
  * runs inside the caller's transaction.
  *
- * Cascade rules:
+ * Cascade rules (FCF.2 — pool-aware):
  *   masterQuantity := newTotalStock         (always — drift snapshot)
- *   if followMasterQuantity = true:
- *      newListingQty := max(0, newTotalStock - stockBuffer)
+ *   if followMasterQuantity = true AND listing pool = FBM:
+ *      newListingQty := available-to-publish(warehouse available − stockBuffer)
  *      if newListingQty != current listing.quantity:
  *         update listing.quantity + lastSyncStatus=PENDING
  *         enqueue OutboundSyncQueue (syncType='QUANTITY_UPDATE')
+ *   FBA listings are Amazon-managed: master snapshot only, no quantity push.
  *
  * The ['AMAZON','EBAY','SHOPIFY','WOOCOMMERCE'] gate matches the
  * SyncChannel enum's accepted values for OutboundSyncQueue.targetChannel —
@@ -574,8 +580,30 @@ async function cascadeQuantityToListings(
       masterQuantity: true,
       stockBuffer: true,
       followMasterQuantity: true,
+      fulfillmentMethod: true,
     },
   })
+
+  // FCF.2 — resolve the merchant (FBM) warehouse pool ONCE for this product.
+  // The cascade publishes reserved-adjusted AVAILABLE (StockLevel.available
+  // over WAREHOUSE locations), not gross totalStock, so FBM listings never list
+  // the last `reserved`+`buffer` units. Runs inside the caller's tx, so it sees
+  // the just-written stock state.
+  const stockRows = await tx.stockLevel.findMany({
+    where: { productId },
+    select: { quantity: true, available: true, location: { select: { type: true } } },
+  })
+  const warehouseAvailable = stockRows
+    .filter((s) => s.location?.type === 'WAREHOUSE')
+    .reduce((sum, s) => sum + s.available, 0)
+  const fbaBucket = stockRows
+    .filter((s) => s.location?.type === 'AMAZON_FBA')
+    .reduce((sum, s) => sum + s.quantity, 0)
+  const cascadeProduct = await tx.product.findUnique({
+    where: { id: productId },
+    select: { fulfillmentMethod: true },
+  })
+  const productFulfillment = cascadeProduct?.fulfillmentMethod ?? null
 
   const cascadedListingIds: string[] = []
   const snapshottedListingIds: string[] = []
@@ -590,9 +618,31 @@ async function cascadeQuantityToListings(
   )
 
   for (const listing of listings) {
-    const newListingQty = listing.followMasterQuantity
-      ? Math.max(0, newTotalStock - (listing.stockBuffer ?? 0))
-      : null
+    // FCF.2 — resolve the pool that backs THIS listing. Explicit method wins;
+    // else merchant channels are FBM; else (Amazon) infer FBA from an FBA
+    // signal (stock in the AMAZON_FBA bucket, or Product.fulfillmentMethod=FBA).
+    const method: 'FBA' | 'FBM' =
+      listing.fulfillmentMethod === 'FBA' || listing.fulfillmentMethod === 'FBM'
+        ? listing.fulfillmentMethod
+        : MERCHANT_CHANNELS.has(listing.channel)
+          ? 'FBM'
+          : fbaBucket > 0 || productFulfillment === 'FBA'
+            ? 'FBA'
+            : 'FBM'
+
+    // FBM follows the warehouse pool (reserved-adjusted available − buffer).
+    // FBA is Amazon-managed: snapshot its master but never cascade/push a
+    // warehouse quantity onto it (outbound-sync's isFbaListing would skip the
+    // push regardless; not enqueuing avoids wasted-job churn).
+    const newListingQty =
+      listing.followMasterQuantity && method === 'FBM'
+        ? computeAvailableToPublish({
+            fulfillmentMethod: 'FBM',
+            warehouseAvailable,
+            fbaSellable: 0,
+            stockBuffer: listing.stockBuffer ?? 0,
+          }).available
+        : null
 
     if (newListingQty != null && newListingQty !== listing.quantity) {
       await tx.channelListing.update({
