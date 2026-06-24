@@ -690,9 +690,14 @@ async function pushVariationGroup(
   const specifications = deduplicatedSpecs.length > 0
     ? deduplicatedSpecs.map(e => ({ name: e.name, values: [...e.values] }))
     : [{ name: 'Custom Bundle', values: variantRows.map(r => r.sku as string) }]
-  // Must use the stored .name (properly-cased, e.g. "Colore") not the lowercase
-  // map key ("colore") — eBay requires pictureVariesOn to match a specifications name exactly.
-  const imageVariesByAxes = deduplicatedSpecs.slice(0, 1).map(e => e.name)
+  // imageVariesByAxes must name the COLOR axis so eBay switches jacket photos
+  // when a buyer selects a colour. eBay normalises locale names (Colore→Color) and
+  // requires the value to match a spec name AFTER normalisation — always send the
+  // canonical English name 'Color' for the colour axis regardless of locale.
+  // Fall back to the first spec if no colour axis is detected.
+  const COLOR_AXIS_NAMES = new Set(['colore', 'color', 'farbe', 'couleur', 'colour', 'color', 'kleur'])
+  const colorSpec = deduplicatedSpecs.find(s => COLOR_AXIS_NAMES.has(s.name.toLowerCase()))
+  const imageVariesByAxes = colorSpec ? ['Color'] : deduplicatedSpecs.slice(0, 1).map(e => e.name)
 
   // Step 3: Create/update the inventory_item_group.
   // variantSKUs is the correct field name (plain string array, not objects).
@@ -962,13 +967,23 @@ async function pushVariationGroup(
   const listingId = pubData.listingId
 
   // Write the shared listingId back to all variant ChannelListings.
-  const productIds = variantRows.map(r => r._productId as string).filter(Boolean)
+  // _productId may be stripped in the frontend round-trip; fall back to SKU lookup.
+  let productIds = variantRows.map(r => r._productId as string).filter(Boolean)
+  if (productIds.length === 0) {
+    const skus = variantRows.map(r => r.sku as string).filter(Boolean)
+    if (skus.length > 0) {
+      const prods = await prisma.product.findMany({ where: { sku: { in: skus }, deletedAt: null }, select: { id: true } }).catch(() => [])
+      productIds = prods.map(p => p.id)
+    }
+  }
   const region = mp === 'UK' ? 'GB' : mp
   if (productIds.length > 0) {
     try {
       await prisma.channelListing.updateMany({
         where: { productId: { in: productIds }, channel: 'EBAY', region },
-        data: { externalListingId: listingId ?? null, listingStatus: 'ACTIVE', offerActive: true },
+        // Only set externalListingId when we have a fresh value from the publish response.
+        // Re-publishing an existing listing returns no new listingId — don't overwrite with null.
+        data: { ...(listingId ? { externalListingId: listingId } : {}), listingStatus: 'ACTIVE', offerActive: true },
       })
       const activated = await prisma.channelListing.findMany({
         where: { productId: { in: productIds }, channel: 'EBAY', region },
