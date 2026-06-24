@@ -145,16 +145,26 @@ export type StockMovementInput = {
 }
 
 /**
- * Recompute Product.totalStock = SUM(StockLevel.quantity) for a given
- * product, inside the supplied transaction. Called after any StockLevel
- * mutation so the cached totalStock cannot drift.
+ * Recompute Product.totalStock = SUM(StockLevel.quantity) over WAREHOUSE
+ * (own-shippable / FBM) locations only, inside the supplied transaction.
+ * Called after any StockLevel mutation so the cached totalStock cannot drift.
+ *
+ * FCF / split-inventory: totalStock is the MERCHANT pool that FBM channels
+ * (eBay, Shopify, Amazon-FBM) follow via followMasterQuantity. Channel-side
+ * mirror locations — AMAZON_FBA (Amazon-managed) and any future
+ * SHOPIFY_LOCATION / CHANNEL_RESERVED — MUST be excluded, or their stock
+ * leaks into the merchant pool and inflates FBM listing quantities (the
+ * "eBay tracks Amazon FBA" bleed). This mirrors the
+ * `location.type === 'AMAZON_FBA'` bucketing used in every read/display path
+ * (e.g. products.routes fbmLevels). WAREHOUSE-only is deliberately the
+ * narrowest, oversell-safe definition.
  */
 export async function recomputeProductTotalStock(
   tx: Prisma.TransactionClient,
   productId: string,
 ): Promise<number> {
   const sum = await tx.stockLevel.aggregate({
-    where: { productId },
+    where: { productId, location: { type: 'WAREHOUSE' } },
     _sum: { quantity: true },
   })
   const total = sum._sum.quantity ?? 0
@@ -306,8 +316,9 @@ export async function applyStockMovement(input: StockMovementInput) {
       )
     }
 
-    // Product.totalStock as cached SUM(StockLevel.quantity). Single
-    // source of truth across all locations for the H.2 world.
+    // Product.totalStock as cached SUM(StockLevel.quantity) over WAREHOUSE
+    // (FBM / own-shippable) locations only — the merchant pool. FBA and other
+    // channel-mirror locations are excluded (see recomputeProductTotalStock).
     const newTotalStock = await recomputeProductTotalStock(tx, productId)
 
     // S.20 — cost-layer hook. Subtractive movements consume layers
