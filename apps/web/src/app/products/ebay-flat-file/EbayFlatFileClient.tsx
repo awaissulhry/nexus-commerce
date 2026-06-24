@@ -89,14 +89,41 @@ function makeBlankRow(): EbayRow {
 
 // ── Validation ────────────────────────────────────────────────────────────
 
-function validateRows(rows: BaseRow[]) {
+function validateRows(rows: BaseRow[], allRows: BaseRow[] = rows) {
   const issues: Array<{ level: 'error' | 'warn'; sku: string; field: string; msg: string }> = []
+
+  // G.1 — parent/child integrity. Build the set of parent identifiers from the
+  // WHOLE sheet (robust to either rowId- or productId-based variant linkage) and
+  // a SKU frequency map for duplicate detection. eBay rejects duplicate SKUs and
+  // orphaned variants, so catch them here instead of after a failed push.
+  const parentIds = new Set<string>()
+  const skuCount = new Map<string, number>()
+  for (const r of allRows) {
+    const er = r as EbayRow & Record<string, unknown>
+    if (er._isParent === true) {
+      for (const k of [er._rowId, er._productId, er.platformProductId]) if (k) parentIds.add(String(k))
+    }
+    const s = String(r.sku ?? '')
+    if (s) skuCount.set(s, (skuCount.get(s) ?? 0) + 1)
+  }
+
   for (const row of rows) {
+    const er = row as EbayRow & Record<string, unknown>
     const sku = String(row.sku ?? '')
-    if (!sku) issues.push({ level: 'error', sku: '?', field: 'sku', msg: 'SKU is required' })
+    if (!sku) { issues.push({ level: 'error', sku: '?', field: 'sku', msg: 'SKU is required' }); continue }
+    if ((skuCount.get(sku) ?? 0) > 1) issues.push({ level: 'error', sku, field: 'sku', msg: 'Duplicate SKU — each listing needs a unique SKU' })
     const title = String(row.title ?? '')
     if (!title) issues.push({ level: 'warn', sku, field: 'title', msg: 'Title is empty' })
     if (title.length > 80) issues.push({ level: 'error', sku, field: 'title', msg: `Title exceeds 80 chars (${title.length})` })
+
+    if (er._isParent === true) {
+      // A parent groups its variants by an axis — without a theme they won't group.
+      if (!String(er.variation_theme ?? '').trim()) issues.push({ level: 'warn', sku, field: 'variation_theme', msg: 'Parent has no variation theme (e.g. Color, Size) — variants won’t group' })
+    } else if (er._isParent === false) {
+      // A variant must belong to a parent present in this sheet.
+      const link = String(er.platformProductId ?? '')
+      if (link && !parentIds.has(link)) issues.push({ level: 'error', sku, field: 'parent', msg: 'Variant’s parent isn’t in this sheet — load the family before pushing' })
+    }
   }
   return issues
 }
@@ -421,6 +448,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [addListingOpen, setAddListingOpen] = useState(false)
   const [aspectsPanelRowId, setAspectsPanelRowId] = useState<string | null>(null)
   const [incompleteBefore, setIncompleteBefore] = useState<Array<{ sku: string; count: number }>>([])
+  const [blockingErrors, setBlockingErrors] = useState<Array<{ level: 'error' | 'warn'; sku: string; field: string; msg: string }>>([])
 
   // IN.1 — Override badges toggle (default on, persisted to localStorage)
   const [showOverrideBadges, setShowOverrideBadges] = useState<boolean>(() => {
@@ -615,6 +643,17 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       ? rows.filter((r) => selectedRows.has(r._rowId))
       : rows.filter((r) => r._dirty)
     if (!toPush.length) { toast({ title: 'Nothing to push', tone: 'info' }); return }
+
+    // G.1 — hard-block structural errors (duplicate SKU, orphan variant, oversized
+    // title) before pushing, surfaced persistently rather than as a vanishing toast.
+    const blocking = validateRows(toPush, rows).filter((i) => i.level === 'error')
+    if (blocking.length) {
+      setBlockingErrors(blocking)
+      setPublishPanelOpen(true)
+      toast.error(`${blocking.length} blocking issue${blocking.length > 1 ? 's' : ''} — fix before pushing`)
+      return
+    }
+    setBlockingErrors([])
 
     // EFF.3 — pre-push completeness check (warn, not block)
     const incomplete = toPush.flatMap((r) => {
@@ -1054,6 +1093,22 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   const renderPushExtras = useCallback(({ rows, selectedRows }: PushExtrasCtx) => (
     <div className="relative flex flex-col items-end gap-1">
+      {blockingErrors.length > 0 && publishPanelOpen && (
+        <div className="absolute bottom-full mb-1.5 right-0 w-80 rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-800 px-3 py-2 shadow-sm z-50">
+          <p className="text-xs font-semibold text-red-800 dark:text-red-300 mb-1">
+            {blockingErrors.length} issue{blockingErrors.length !== 1 ? 's' : ''} block this push
+          </p>
+          <ul className="text-[10px] text-red-700 dark:text-red-400 space-y-0.5 max-h-28 overflow-y-auto">
+            {blockingErrors.map((e, i) => (
+              <li key={`${e.sku}-${e.field}-${i}`} className="flex gap-1">
+                <span className="font-mono shrink-0">{e.sku}</span>
+                <span className="truncate">· {e.msg}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[10px] text-red-600 dark:text-red-500 mt-1">Fix these, then push again.</p>
+        </div>
+      )}
       {incompleteBefore.length > 0 && publishPanelOpen && (
         <div className="absolute bottom-full mb-1.5 right-0 w-72 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2 shadow-sm z-50">
           <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">
@@ -1087,7 +1142,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           onChangeTargets={setPublishTargets}
           onPublish={() => void pushToEbay(rows, selectedRows)}
           pushing={pushing}
-          onClose={() => { setPublishPanelOpen(false); setIncompleteBefore([]) }}
+          onClose={() => { setPublishPanelOpen(false); setIncompleteBefore([]); setBlockingErrors([]) }}
         />
       )}
       {historyPanelOpen && (
@@ -1095,7 +1150,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       )}
     </div>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [pushing, publishPanelOpen, publishTargets, incompleteBefore, historyPanelOpen, historyRefreshKey])
+  ), [pushing, publishPanelOpen, publishTargets, incompleteBefore, blockingErrors, historyPanelOpen, historyRefreshKey])
 
   // ── Slot: feed banner ──────────────────────────────────────────────────
 
