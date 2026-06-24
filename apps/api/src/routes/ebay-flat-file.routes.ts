@@ -543,13 +543,18 @@ async function pushVariationGroup(
   // same Italian label → two specs entries with identical name → eBay error 25013
   // ("Duplicate names in variant specifications"). Merge values across raw keys that
   // share a label so the group sees exactly one specification entry per axis.
+  // Key by lowercase label so "Colore" and "colore" (buildFlatRow writes both
+  // the original-case and a lowercase duplicate of each variation axis) collapse
+  // into a single specifications entry. Without this, both pass the vals.size > 1
+  // filter and produce two entries with identical display names → eBay 25013.
   const specificationsMap = new Map<string, { name: string; values: Set<string> }>()
   for (const rawName of effectiveVarAxes) {
     const label = nmLabel(rawName)
-    if (!specificationsMap.has(label)) {
-      specificationsMap.set(label, { name: label, values: new Set() })
+    const mapKey = label.toLowerCase()
+    if (!specificationsMap.has(mapKey)) {
+      specificationsMap.set(mapKey, { name: label, values: new Set() })
     }
-    const entry = specificationsMap.get(label)!
+    const entry = specificationsMap.get(mapKey)!
     for (const v of (allAspectValueSets.get(rawName) ?? [])) {
       entry.values.add(vlLabel(rawName, v))
     }
