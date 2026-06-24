@@ -565,6 +565,15 @@ async function pushVariationGroup(
       aspectsMap.set(targetBrandAspect, [brandBySku.get(sku) || 'Xavia'])
     }
 
+    // eBay IT requires EAN as an item specific for clothing (error 25002 "Manca EAN").
+    // When no real EAN exists, 'Does not apply' is the eBay-standard placeholder for
+    // products that genuinely have no GTIN/barcode. Accepted by all EU marketplaces.
+    const EAN_ALIASES = new Set(['ean', 'gtin', 'upc', 'isbn'])
+    const existingEanKey = [...aspectsMap.keys()].find(k => EAN_ALIASES.has(k.toLowerCase()))
+    if (!existingEanKey && !row.ean) {
+      aspectsMap.set('EAN', ['Does not apply'])
+    }
+
     const aspects = Object.fromEntries(aspectsMap)
 
     // FCF.3 — cap each variant at its FBM-available pool.
