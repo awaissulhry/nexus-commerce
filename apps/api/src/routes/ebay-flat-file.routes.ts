@@ -512,15 +512,27 @@ async function pushVariationGroup(
   }
 
   // Step 2: Build variesBy specifications from the detected variation axes.
-  // aspectsImageVariesBy uses the first varying axis (e.g. "Colore" for colour
-  // images). Must match a specifications.name exactly — both are run through
-  // nmLabel so renames stay consistent.
-  const specifications = effectiveVarAxes.length > 0
-    ? effectiveVarAxes.map((name) => ({
-        name: nmLabel(name),
-        values: [...(allAspectValueSets.get(name) ?? [])].map((v) => vlLabel(name, v)),
-      }))
+  // Deduplicate by nmLabel output: two different aspect_* raw keys (e.g. "color"
+  // imported from Amazon + "Colore" set up on eBay) can both have >1 distinct value
+  // and therefore both appear in effectiveVarAxes, then nmLabel maps both to the
+  // same Italian label → two specs entries with identical name → eBay error 25013
+  // ("Duplicate names in variant specifications"). Merge values across raw keys that
+  // share a label so the group sees exactly one specification entry per axis.
+  const specificationsMap = new Map<string, { name: string; values: Set<string> }>()
+  for (const rawName of effectiveVarAxes) {
+    const label = nmLabel(rawName)
+    if (!specificationsMap.has(label)) {
+      specificationsMap.set(label, { name: label, values: new Set() })
+    }
+    const entry = specificationsMap.get(label)!
+    for (const v of (allAspectValueSets.get(rawName) ?? [])) {
+      entry.values.add(vlLabel(rawName, v))
+    }
+  }
+  const specifications = specificationsMap.size > 0
+    ? [...specificationsMap.values()].map(e => ({ name: e.name, values: [...e.values] }))
     : [{ name: 'Custom Bundle', values: variantRows.map(r => r.sku as string) }]
+  const imageVariesByAxes = [...specificationsMap.keys()].slice(0, 1)
 
   // Step 3: Create/update the inventory_item_group.
   // variantSKUs is the correct field name (plain string array, not objects).
@@ -537,7 +549,7 @@ async function pushVariationGroup(
     imageUrls: groupImageUrls,
     variantSKUs: variantRows.map(r => r.sku as string),
     variesBy: {
-      aspectsImageVariesBy: effectiveVarAxes.slice(0, 1).map(nmLabel),
+      aspectsImageVariesBy: imageVariesByAxes,
       specifications,
     },
   }
