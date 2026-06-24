@@ -428,12 +428,16 @@ async function pushVariationGroup(
   // EV.6b — name/value renames from parent ChannelListing platformAttributes
   let nameLabels: Record<string, string> = {}
   let valueLabels: Record<string, Record<string, string>> = {}
+  const brandByProductId = new Map<string, string>()
   try {
     const ids = rows.map((r) => r._productId as string).filter(Boolean)
     const prods = await prisma.product.findMany({
       where: { id: { in: ids } },
-      select: { id: true, parentId: true },
+      select: { id: true, parentId: true, brand: true },
     })
+    for (const p of prods) {
+      if (p.brand) brandByProductId.set(p.id, p.brand)
+    }
     const parentId = prods.find((p) => !p.parentId)?.id ?? prods[0]?.parentId ?? ids[0]
     if (parentId) {
       const pl = await prisma.channelListing.findFirst({
@@ -506,7 +510,9 @@ async function pushVariationGroup(
       aspectsMap.delete(existingBrandKey)
       aspectsMap.set(targetBrandAspect, v)
     } else if (!existingBrandKey) {
-      const brandVal = String(row._brand ?? '').trim()
+      // Use DB-fetched brand (most reliable) then row._brand, then row title word
+      const dbBrand = brandByProductId.get(String(row._productId ?? '')) ?? ''
+      const brandVal = (dbBrand || String(row._brand ?? '')).trim()
       if (brandVal) aspectsMap.set(targetBrandAspect, [brandVal])
     }
 
