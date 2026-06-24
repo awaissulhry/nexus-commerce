@@ -251,6 +251,7 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
   const [liveOn, setLiveOn] = useState(false)
   const [liveCount, setLiveCount] = useState(0)
   const [flash, setFlash] = useState(false)
+  const [adsMode, setAdsMode] = useState<{ mode: 'sandbox' | 'live'; liveWriteCount: number } | null>(null)
   const onCommittedRef = useRef(onCommitted); onCommittedRef.current = onCommitted
   const lastTs = useRef(0)
   useEffect(() => {
@@ -271,6 +272,7 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
     } catch { /* no SSE */ }
     return () => { es?.close(); setLiveOn(false) }
   }, [open])
+  useEffect(() => { if (!open) return; let alive = true; fetch(`${API()}/api/advertising/ads-mode`).then((r) => r.json()).then((j) => { if (alive && j?.mode) setAdsMode(j) }).catch(() => { /* */ }); return () => { alive = false } }, [open])
 
   const plan = useMemo(() => enforcement?.plans.find((p) => p.marketplace === market) ?? enforcement?.plans[0] ?? null, [enforcement, market])
   const allCamps = useMemo(() => { const m = new Map<string, EnfCampaign>(); for (const p of enforcement?.plans ?? []) for (const c of p.campaigns) m.set(c.id, c); return m }, [enforcement])
@@ -374,6 +376,12 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
         <div className="cp-empty">No markets have Auto Pacing or Stop Over Spend enabled this month. Turn one on (the row toggles) to load the control plane.</div>
       ) : (
         <>
+          {adsMode && (
+            <div className={`cp-gov ${adsMode.mode}`}>
+              <b>{adsMode.mode === 'live' ? '⚡ Live mode' : '🛡 Sandbox mode'}</b>
+              <span>{adsMode.mode === 'live' ? `Commits push to Amazon — ${adsMode.liveWriteCount} campaign${adsMode.liveWriteCount === 1 ? '' : 's'} allowlisted for live writes. Audited · 5-min grace undo.` : 'Commits update state, queue, audit and are reversible (5-min grace) — they do NOT reach Amazon until live is enabled.'}</span>
+            </div>
+          )}
           <div className="cp-scenbar">
             <span className="lbl">Scenario</span>
             <button type="button" className={`cp-scenchip ${!activeId ? 'on' : ''}`} onClick={newScenario}>Working set{!activeId && stageCount ? ` · ${stageCount}` : ''}</button>

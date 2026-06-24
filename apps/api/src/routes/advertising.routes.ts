@@ -5198,6 +5198,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'private, max-age=20')
     return getOntologyChildren({ parentType, parentId: q.parentId })
   })
+  // P6 — governance: the ads write mode (sandbox=local only / live=pushes to Amazon)
+  // + how many campaigns are allowlisted for live bid/budget writes.
+  fastify.get('/advertising/ads-mode', async (_request, reply) => {
+    const { adsMode } = await import('../services/advertising/ads-api-client.js')
+    const liveWriteCount = await prisma.campaign.count({ where: { liveBidWritesEnabled: true, status: { not: 'ARCHIVED' } } })
+    reply.header('Cache-Control', 'private, max-age=30')
+    return { mode: adsMode(), liveWriteCount }
+  })
   // P2 — campaign PPC settings for the Control Plane inspector (bidding strategy,
   // target-ACoS fraction, placement multipliers).
   fastify.get('/advertising/campaigns/:id/settings', async (request, reply) => {

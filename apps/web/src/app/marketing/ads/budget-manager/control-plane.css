@@ -111,3 +111,11 @@
 @keyframes cp-livedot { 0% { box-shadow: 0 0 0 0 rgba(31, 157, 91, 0.5); } 70% { box-shadow: 0 0 0 5px rgba(31, 157, 91, 0); } 100% { box-shadow: 0 0 0 0 rgba(31, 157, 91, 0); } }
 .cp-main.flash .bmc-wrap { animation: cp-flash 0.7s ease; }
 @keyframes cp-flash { 0% { box-shadow: inset 0 0 0 0 rgba(31, 111, 222, 0); } 30% { box-shadow: inset 0 0 0 3px rgba(31, 111, 222, 0.4); } 100% { box-shadow: inset 0 0 0 0 rgba(31, 111, 222, 0); } }
+
+/* P6 — governance banner */
+.cp-gov { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 12px; padding: 9px 13px; border-radius: 10px; font-size: 12px; line-height: 1.45; }
+.cp-gov b { font-weight: 700; white-space: nowrap; }
+.cp-gov.sandbox { background: #fdf6e3; border: 1px solid #f0e3b8; color: #7a6310; }
+.cp-gov.sandbox b { color: #92700a; }
+.cp-gov.live { background: #fef2f2; border: 1px solid #f3c9c6; color: #9a3a36; }
+.cp-gov.live b { color: #c0392b; }
