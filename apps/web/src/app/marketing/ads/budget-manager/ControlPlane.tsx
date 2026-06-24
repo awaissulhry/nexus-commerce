@@ -175,6 +175,42 @@ function Inspector({ node, rootCampaignId, staged, onStage, onClear, onClose }: 
   )
 }
 
+// ── P4a — bulk actions on a multi-selection ────────────────────────────────
+function BulkPanel({ refs, allCamps, adGroups, targets, onStageMany, onClear }: { refs: Array<{ id: string; type: 'campaign' | 'adgroup' | 'target' }>; allCamps: Map<string, EnfCampaign>; adGroups: OntoNode[] | null; targets: OntoNode[] | null; onStageMany: (u: Array<{ id: string; patch: Partial<StagedChange> }>) => void; onClear: () => void }) {
+  const camps = refs.filter((r) => r.type === 'campaign')
+  const childRefs = refs.filter((r) => r.type !== 'campaign')
+  const nAg = childRefs.filter((r) => r.type === 'adgroup').length
+  const nTg = childRefs.filter((r) => r.type === 'target').length
+  const [budgetPct, setBudgetPct] = useState('10')
+  const [bidPct, setBidPct] = useState('10')
+  const keep = <T,>(x: T | null): x is T => x != null
+  const bulkBudget = (sign: number) => { const p = (parseFloat(budgetPct) || 0) / 100; onStageMany(camps.map((r) => { const c = allCamps.get(r.id); return c ? { id: r.id, patch: { entityType: 'campaign' as const, budgetCents: Math.max(100, Math.round(c.currentDailyCents * (1 + sign * p))) } } : null }).filter(keep)) }
+  const bulkSuppress = (v: boolean) => onStageMany(camps.map((r) => ({ id: r.id, patch: { entityType: 'campaign' as const, suppress: v } })))
+  const bulkBid = (sign: number) => { const p = (parseFloat(bidPct) || 0) / 100; onStageMany(childRefs.map((r) => { const cur = r.type === 'adgroup' ? adGroups?.find((g) => g.id === r.id)?.defaultBidCents : targets?.find((t) => t.id === r.id)?.bidCents; return cur == null ? null : { id: r.id, patch: { entityType: r.type, bidCents: Math.max(2, Math.round(cur * (1 + sign * p))) } } }).filter(keep)) }
+  const bulkStatus = (status: 'ENABLED' | 'PAUSED') => onStageMany(childRefs.map((r) => ({ id: r.id, patch: { entityType: r.type, status } })))
+  return (
+    <aside className="cp-insp cp-bulk">
+      <div className="cp-insp-h"><span className="ttl"><span className="ty">Bulk</span><b>{refs.length} selected</b></span><button type="button" className="x" aria-label="Clear selection" onClick={onClear}>×</button></div>
+      <div className="cp-bulk-counts">{camps.length > 0 && <span>{camps.length} campaign{camps.length === 1 ? '' : 's'}</span>}{nAg > 0 && <span>{nAg} ad group{nAg === 1 ? '' : 's'}</span>}{nTg > 0 && <span>{nTg} target{nTg === 1 ? '' : 's'}</span>}</div>
+      {camps.length > 0 && (
+        <div className="cp-insp-sec">
+          <div className="cp-sec-h">Campaigns</div>
+          <div className="cp-bulk-row"><span>Budget</span><span className="cp-eurin pct"><input inputMode="decimal" value={budgetPct} onChange={(e) => setBudgetPct(e.target.value)} aria-label="Budget percent" /><i>%</i></span><button type="button" className="cp-act" onClick={() => bulkBudget(1)}>Raise</button><button type="button" className="cp-act" onClick={() => bulkBudget(-1)}>Lower</button></div>
+          <div className="cp-insp-actions"><button type="button" className="cp-act" onClick={() => bulkSuppress(true)}>Suppress all</button><button type="button" className="cp-act" onClick={() => bulkSuppress(false)}>Restore all</button></div>
+        </div>
+      )}
+      {childRefs.length > 0 && (
+        <div className="cp-insp-sec">
+          <div className="cp-sec-h">Ad groups &amp; targets</div>
+          <div className="cp-bulk-row"><span>Bid</span><span className="cp-eurin pct"><input inputMode="decimal" value={bidPct} onChange={(e) => setBidPct(e.target.value)} aria-label="Bid percent" /><i>%</i></span><button type="button" className="cp-act" onClick={() => bulkBid(1)}>Raise</button><button type="button" className="cp-act" onClick={() => bulkBid(-1)}>Lower</button></div>
+          <div className="cp-insp-actions"><button type="button" className="cp-act" onClick={() => bulkStatus('ENABLED')}>Enable all</button><button type="button" className="cp-act" onClick={() => bulkStatus('PAUSED')}>Pause all</button></div>
+        </div>
+      )}
+      <div className="cp-bulk-hint">⌘/Ctrl/Shift-click nodes to add or remove. Bulk edits stage like any other change — review &amp; commit below.</div>
+    </aside>
+  )
+}
+
 // ── P3 — compare two scenarios side-by-side ────────────────────────────────
 function ComparePanel({ working, workingName, saved, compareId, setCompareId, allCamps, committing, onCommit }: { working: Record<string, StagedChange>; workingName: string; saved: SavedScenario[]; compareId: string; setCompareId: (id: string) => void; allCamps: Map<string, EnfCampaign>; committing: boolean; onCommit: (changes: Record<string, StagedChange>, isWorking: boolean) => void }) {
   const right = saved.find((s) => s.id === compareId)
@@ -211,7 +247,8 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
   const [saved, setSaved] = useState<SavedScenario[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [compareId, setCompareId] = useState<string | null>(null)
-  useEffect(() => { if (open) { setMarket(initialMarket); setSel(null); setFocusCampaign(null); setFocusAdGroup(null); setAdGroups(null); setTargets(null); setSaved(loadScenarios()); setCompareId(null) } }, [open, initialMarket])
+  const [multi, setMulti] = useState<Array<{ id: string; type: 'campaign' | 'adgroup' | 'target' }>>([])
+  useEffect(() => { if (open) { setMarket(initialMarket); setSel(null); setMulti([]); setFocusCampaign(null); setFocusAdGroup(null); setAdGroups(null); setTargets(null); setSaved(loadScenarios()); setCompareId(null) } }, [open, initialMarket])
 
   const plan = useMemo(() => enforcement?.plans.find((p) => p.marketplace === market) ?? enforcement?.plans[0] ?? null, [enforcement, market])
   const allCamps = useMemo(() => { const m = new Map<string, EnfCampaign>(); for (const p of enforcement?.plans ?? []) for (const c of p.campaigns) m.set(c.id, c); return m }, [enforcement])
@@ -223,9 +260,10 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
     const tg = targets?.find((x) => x.id === sel.id); return tg ? { ...tg, kindType: 'target' } : null
   }, [sel, plan, adGroups, targets])
 
-  const onSelect = async (ref: SelectRef) => {
-    setSel(ref)
-    if (!ref) return
+  const onSelect = async (ref: SelectRef, additive?: boolean) => {
+    if (!ref) { setSel(null); setMulti([]); return }
+    if (additive) { setSel(null); setMulti((prev) => (prev.some((m) => m.id === ref.id) ? prev.filter((m) => m.id !== ref.id) : [...prev, ref])); return }
+    setMulti([]); setSel(ref)
     if (ref.type === 'campaign') { setFocusCampaign(ref.id); setFocusAdGroup(null); setTargets(null); setAdGroups(null); setAdGroups(await fetchChildren('campaign', ref.id)) }
     else if (ref.type === 'adgroup') { setFocusAdGroup(ref.id); setTargets(null); setTargets(await fetchChildren('adgroup', ref.id)) }
   }
@@ -243,6 +281,16 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
     return next
   })
   const clearStage = (id: string) => setScenario((prev) => { const n = { ...prev }; delete n[id]; return n })
+  const setStageMany = (updates: Array<{ id: string; patch: Partial<StagedChange> }>) => setScenario((prev) => {
+    const next = { ...prev }
+    for (const u of updates) {
+      const merged: Record<string, unknown> = { ...next[u.id], ...u.patch }
+      for (const k of Object.keys(merged)) if (merged[k] === undefined) delete merged[k]
+      const meaningful = ['budgetCents', 'minCents', 'maxCents', 'suppress', 'bidCents', 'status', 'biddingStrategy', 'targetAcos', 'placements'].some((k) => merged[k] !== undefined)
+      if (!meaningful) delete next[u.id]; else next[u.id] = merged as StagedChange
+    }
+    return next
+  })
   const stagedInMarket = (p: EnfPlan) => p.campaigns.filter((c) => scenario[c.id]).length
 
   const commitChanges = async (changesMap: Record<string, StagedChange>, isWorking: boolean) => {
@@ -303,14 +351,14 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
               <div className="cp-main">
                 <div className="cp-tabs">
                   {enforcement.plans.map((p) => (
-                    <button type="button" key={p.marketplace} className={`cp-tab ${market === p.marketplace ? 'on' : ''}`} onClick={() => { setMarket(p.marketplace); setSel(null); setFocusCampaign(null); setFocusAdGroup(null); setAdGroups(null); setTargets(null) }}>{FLAG[p.marketplace] ?? '🌐'} {mkt(p.marketplace)}{stagedInMarket(p) > 0 ? <em className="dot"> ●</em> : null}</button>
+                    <button type="button" key={p.marketplace} className={`cp-tab ${market === p.marketplace ? 'on' : ''}`} onClick={() => { setMarket(p.marketplace); setSel(null); setMulti([]); setFocusCampaign(null); setFocusAdGroup(null); setAdGroups(null); setTargets(null) }}>{FLAG[p.marketplace] ?? '🌐'} {mkt(p.marketplace)}{stagedInMarket(p) > 0 ? <em className="dot"> ●</em> : null}</button>
                   ))}
                   <span className="grow" />
-                  <span className="cp-hint">Click a node to inspect · campaigns &amp; ad groups drill in</span>
+                  <span className="cp-hint">Click a node to inspect · ⌘-click to multi-select · campaigns &amp; ad groups drill in</span>
                 </div>
-                {plan && <AllocationCanvas plan={plan} selectedId={sel?.id ?? null} onSelect={onSelect} staged={scenario} adGroups={adGroups} targets={targets} focusCampaign={focusCampaign} focusAdGroup={focusAdGroup} />}
+                {plan && <AllocationCanvas plan={plan} selectedId={sel?.id ?? null} onSelect={onSelect} staged={scenario} adGroups={adGroups} targets={targets} focusCampaign={focusCampaign} focusAdGroup={focusAdGroup} multiSelected={new Set(multi.map((m) => m.id))} />}
               </div>
-              {selectedNode && <Inspector key={selectedNode.id} node={selectedNode} rootCampaignId={rootCampaignId} staged={scenario[selectedNode.id]} onStage={(p) => setStage(selectedNode.id, p)} onClear={() => clearStage(selectedNode.id)} onClose={() => setSel(null)} />}
+              {multi.length > 0 ? <BulkPanel refs={multi} allCamps={allCamps} adGroups={adGroups} targets={targets} onStageMany={setStageMany} onClear={() => setMulti([])} /> : selectedNode && <Inspector key={selectedNode.id} node={selectedNode} rootCampaignId={rootCampaignId} staged={scenario[selectedNode.id]} onStage={(p) => setStage(selectedNode.id, p)} onClear={() => clearStage(selectedNode.id)} onClose={() => setSel(null)} />}
             </div>
           )}
         </>

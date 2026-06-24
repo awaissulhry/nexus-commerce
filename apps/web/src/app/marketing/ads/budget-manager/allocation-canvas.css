@@ -36,6 +36,7 @@
 
 /* CP — selection / staged / focus / status dot, + ad-group & target nodes */
 .bmc-camp.sel, .bmc-ag.sel, .bmc-tg.sel { box-shadow: 0 0 0 2px #1f6fde, 0 2px 8px rgba(31, 111, 222, 0.18); border-color: #1f6fde; }
+.bmc-camp.multi, .bmc-ag.multi, .bmc-tg.multi { box-shadow: 0 0 0 2px #0d9488; border-color: #0d9488; }
 .bmc-camp.staged, .bmc-ag.staged, .bmc-tg.staged { border-color: #7c3aed; border-style: dashed; }
 .bmc-camp.focus, .bmc-ag.focus { border-left: 3px solid #1f6fde; }
 .bmc-camp .stgtag { font-size: 9.5px; font-weight: 700; color: #7c3aed; }
