@@ -377,6 +377,7 @@ async function pushVariationGroup(
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
     'Content-Language': 'en-US',
+    'Accept-Language': 'en-US',
     Accept: 'application/json',
   }
 
@@ -1253,6 +1254,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
               'Content-Language': mp === 'IT' ? 'it-IT' : mp === 'DE' ? 'de-DE' : mp === 'FR' ? 'fr-FR' : mp === 'ES' ? 'es-ES' : 'en-GB',
+              'Accept-Language': mp === 'IT' ? 'it-IT' : mp === 'DE' ? 'de-DE' : mp === 'FR' ? 'fr-FR' : mp === 'ES' ? 'es-ES' : 'en-GB',
               'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
             },
             body: JSON.stringify(invBody),
