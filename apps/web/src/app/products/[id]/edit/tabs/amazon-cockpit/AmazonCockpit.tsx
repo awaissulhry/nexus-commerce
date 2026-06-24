@@ -67,7 +67,6 @@ import { getBackendUrl } from '@/lib/backend-url'
 import {
   COCKPIT_ROOT,
   CockpitHeader,
-  CockpitPreviewBand,
   CockpitCardGrid,
   CockpitClassicPassthrough,
   CockpitDrawer,
@@ -200,7 +199,6 @@ export default function AmazonCockpit(props: Props) {
   } = props
   const [, setMode] = useAmazonCockpitMode()
   const { t } = useTranslations()
-  const [previewOpen, setPreviewOpen] = useState(true)
   const [classicOpen, setClassicOpen] = useState(true)
   // AF.4/5 — "All fields" drawer. The full classic editor moves into a
   // slide-over (decluttered cockpit, one editor surface). Flag-guarded:
@@ -584,223 +582,224 @@ export default function AmazonCockpit(props: Props) {
         onDismiss={fieldLinks.dismissSuggestion}
       />
 
-      {/* ── Zone 2: Preview + Health band (UC.3 — shared band) ────── */}
-      <CockpitPreviewBand
-        open={previewOpen}
-        onToggle={() => setPreviewOpen((o) => !o)}
-        title={t('products.edit.cockpit.amazon.preview.title')}
-        subtitle={t('products.edit.cockpit.amazon.preview.subtitle', {
-          market: marketInfo.code,
-        })}
-        healthWidth="320px"
-        contentClassName="bg-slate-50/40 dark:bg-slate-900/30"
-        preview={<AmazonLivePreview composed={composed} />}
-        health={
-          <HealthPanel
-            report={report}
-            onJumpTo={(target) => handleJumpTo(target as JumpTarget)}
-            statusLabel={t(`products.edit.cockpit.amazon.health.${report.status}`)}
-            suppressionNote="Listing suppressed — check Seller Central → Manage Inventory → Suppressed."
+      {/* ── Side-by-side split: left = cards, right = preview + health ── */}
+      <div className="flex gap-4 items-start min-w-0">
+        {/* Left column: all interactive cards */}
+        <div className="flex-1 min-w-0 space-y-3">
+          {/* ── ALA P8 — Pre-Flight Check (what's wrong + diff + Review/Confirm) ── */}
+          <PreflightPanel productId={product.id} marketplace={marketInfo.code} />
+
+          {/* ── AC.12 — Publish flow ──── */}
+          <PublishCard
+            productId={product.id}
+            activeMarketplace={marketInfo.code}
+            activeHealth={report}
+            markets={chips}
           />
-        }
-      />
 
-      {/* ── ALA P8 — Pre-Flight Check (what's wrong + diff + Review/Confirm) ── */}
-      <PreflightPanel productId={product.id} marketplace={marketInfo.code} />
+          {/* ── AC.11 — Smart auto-fill bar ── */}
+          <AutoFillCard
+            productId={product.id}
+            productName={product.name ?? null}
+            productDescription={product.description ?? null}
+            productBrand={product.brand ?? null}
+            productKeywords={
+              Array.isArray(product.keywords) ? (product.keywords as string[]) : null
+            }
+            marketplace={marketInfo.code}
+            language={marketInfo.language}
+            currentTitle={composed.title.value}
+            currentDescription={composed.description.value}
+            currentBullets={composed.bullets.value}
+            siblingListings={siblingListings.map((l) => ({
+              marketplace: l.marketplace,
+              title: l.title,
+              description: l.description,
+              bulletPointsOverride: l.bulletPointsOverride,
+            }))}
+            onJumpToClassic={() => handleJumpTo('classic')}
+          />
 
-      {/* ── AC.12 — Publish flow (full-width, top of cards zone) ──── */}
-      <PublishCard
-        productId={product.id}
-        activeMarketplace={marketInfo.code}
-        activeHealth={report}
-        markets={chips}
-      />
-
-      {/* ── AC.11 — Smart auto-fill bar (full-width, top of cards zone) ── */}
-      <AutoFillCard
-        productId={product.id}
-        productName={product.name ?? null}
-        productDescription={product.description ?? null}
-        productBrand={product.brand ?? null}
-        productKeywords={
-          Array.isArray(product.keywords) ? (product.keywords as string[]) : null
-        }
-        marketplace={marketInfo.code}
-        language={marketInfo.language}
-        currentTitle={composed.title.value}
-        currentDescription={composed.description.value}
-        currentBullets={composed.bullets.value}
-        siblingListings={siblingListings.map((l) => ({
-          marketplace: l.marketplace,
-          title: l.title,
-          description: l.description,
-          bulletPointsOverride: l.bulletPointsOverride,
-        }))}
-        onJumpToClassic={() => handleJumpTo('classic')}
-      />
-
-      {/* ── UC.6 — Variant Cube (wraps the AC.6 axis grid + pivots) ── */}
-      {childrenList && childrenList.length > 0 && (
-        <VariantCube
-          productId={product.id}
-          channel="AMAZON"
-          activeMarket={marketInfo.code}
-          activeCurrency={marketInfo.currency}
-          activeFulfillment={composed.fulfillmentChannel.value}
-          axisGrid={
-            <VariationMatrix
+          {/* ── UC.6 — Variant Cube (wraps the AC.6 axis grid + pivots) ── */}
+          {childrenList && childrenList.length > 0 && (
+            <VariantCube
               productId={product.id}
-              children={childrenList}
-              channelListings={[
-                ...(listing ? [listing] : []),
-                ...siblingListings,
-              ]}
-              activeMarketplace={marketInfo.code}
+              channel="AMAZON"
+              activeMarket={marketInfo.code}
               activeCurrency={marketInfo.currency}
-              siblingMarkets={(siblingMarkets ?? []).map((m) => ({
-                code: m.code,
-                name: m.name,
-                currency: m.currency,
-              }))}
-              variationTheme={composed.variationTheme.value}
+              activeFulfillment={composed.fulfillmentChannel.value}
+              axisGrid={
+                <VariationMatrix
+                  productId={product.id}
+                  children={childrenList}
+                  channelListings={[
+                    ...(listing ? [listing] : []),
+                    ...siblingListings,
+                  ]}
+                  activeMarketplace={marketInfo.code}
+                  activeCurrency={marketInfo.currency}
+                  siblingMarkets={(siblingMarkets ?? []).map((m) => ({
+                    code: m.code,
+                    name: m.name,
+                    currency: m.currency,
+                  }))}
+                  variationTheme={composed.variationTheme.value}
+                  onJumpToClassic={() => handleJumpTo('classic')}
+                />
+              }
+            />
+          )}
+
+          {/* ── Zone 3: Cards (UC.3 — shared CockpitCardGrid) ─────────── */}
+          <CockpitCardGrid layout="grid">
+            {/* UC.2/UC.3 — Identifiers now uses the shared IdentifiersCard
+                (replaces the dashed placeholder). */}
+            <IdentifiersCard
+              title={t('products.edit.cockpit.amazon.cards.identifiers')}
+              rows={[
+                { label: 'SKU', value: composed.sku, mono: true, source: 'locked' },
+                { label: 'ASIN', value: composed.asin.value, mono: true, source: composed.asin.source },
+                { label: 'GTIN', value: composed.gtin.value, mono: true, source: 'locked' },
+              ]}
+            />
+            {/* FL — Shared fields: every linkable content field with a
+                clickable scope pill (master / linked / independent) + propagate. */}
+            <IdentifiersCard title={t('products.edit.cockpit.amazon.cards.sharedFields')} rows={scopeRows} />
+            <CategoryCard
+              productId={product.id}
+              productType={composed.productType.value}
+              browseNodeId={composed.browseNodeId.value}
+              categoryPath={
+                (listing?.platformAttributes as Record<string, unknown> | null | undefined)
+                  ?.detectedCategoryPath as string | null | undefined
+              }
+              marketplace={marketInfo.code}
+              listingId={listing?.id ?? null}
+              onSaved={() =>
+                // Parent's onSave currently does router.refresh() and
+                // ignores the payload; pass the listing if we have it,
+                // otherwise an empty stub so the call type-checks.
+                props.onSave(listing ?? ({} as Listing))
+              }
               onJumpToClassic={() => handleJumpTo('classic')}
             />
-          }
-        />
-      )}
+            {/* UC.2/UC.3 — Images now uses the shared ImagesSummaryCard
+                (read-only summary; the AC.5 deep editor handoff is added
+                when that card lands). */}
+            <ImagesSummaryCard
+              title="Images"
+              primaryImageUrl={composed.primaryImageUrl.value}
+              galleryCount={composed.galleryUrls.value.length}
+              totalSlots={9}
+            />
+            <AplusCard
+              asin={composed.asin.value}
+              brand={composed.brand.value}
+              marketplace={marketInfo.code}
+              onJumpToClassic={() => handleJumpTo('classic')}
+            />
+            <PricingCard
+              productId={product.id}
+              marketplace={marketInfo.code}
+              currency={composed.currency}
+              price={composed.price.value}
+              salePrice={
+                listing?.salePrice != null
+                  ? typeof listing.salePrice === 'string'
+                    ? parseFloat(listing.salePrice)
+                    : Number(listing.salePrice)
+                  : null
+              }
+              quantity={composed.quantity.value}
+              lastSyncedAt={
+                (listing?.lastSyncedAt as string | null | undefined) ?? null
+              }
+              listingId={listing?.id ?? null}
+              onSaved={() => props.onSave(listing ?? ({} as Listing))}
+              snsEnabled={
+                (
+                  (
+                    listing?.platformAttributes as Record<string, unknown> | null | undefined
+                  )?.subscribeAndSave as Record<string, unknown> | null | undefined
+                )?.enabled === true
+              }
+              snsDiscountPercent={(() => {
+                const v = (
+                  (
+                    listing?.platformAttributes as Record<string, unknown> | null | undefined
+                  )?.subscribeAndSave as Record<string, unknown> | null | undefined
+                )?.discountPercent
+                return typeof v === 'number' ? v : null
+              })()}
+              businessQty={(() => {
+                const v = (
+                  (
+                    listing?.platformAttributes as Record<string, unknown> | null | undefined
+                  )?.businessPricing as Record<string, unknown> | null | undefined
+                )?.quantity
+                return typeof v === 'number' ? v : null
+              })()}
+              businessPrice={(() => {
+                const v = (
+                  (
+                    listing?.platformAttributes as Record<string, unknown> | null | undefined
+                  )?.businessPricing as Record<string, unknown> | null | undefined
+                )?.price
+                return typeof v === 'number' ? v : null
+              })()}
+              onJumpToClassic={() => handleJumpTo('classic')}
+            />
+            <FulfillmentCard
+              productId={product.id}
+              marketplace={marketInfo.code}
+              seedFulfillment={composed.fulfillmentChannel.value as 'FBA' | 'FBM' | null}
+              productFulfillment={(product?.fulfillmentMethod as string | null) ?? null}
+              conditionType={composed.conditionType.value}
+              onJumpToClassic={() => handleJumpTo('classic')}
+            />
+            <SuppressionCard
+              productId={product.id}
+              marketplace={marketInfo.code}
+              asin={composed.asin.value}
+              healthReport={report}
+              onJumpTo={handleJumpTo}
+            />
+            <ComplianceCard
+              attributes={
+                (listing?.platformAttributes as Record<string, unknown> | null | undefined)
+                  ?.attributes as Record<string, unknown> | null | undefined
+              }
+              onJumpToClassic={() => handleJumpTo('classic')}
+            />
+            <FitCompatibilityCard
+              productType={composed.productType.value}
+              variationTheme={(product?.variationTheme as string | null) ?? null}
+              variantCount={childrenList?.length ?? 0}
+              attributes={
+                (listing?.platformAttributes as Record<string, unknown> | null | undefined)
+                  ?.attributes as Record<string, unknown> | null | undefined
+              }
+              onJumpToClassic={() => handleJumpTo('classic')}
+            />
+          </CockpitCardGrid>
+        </div>
 
-      {/* ── Zone 3: Cards (UC.3 — shared CockpitCardGrid) ─────────── */}
-      <CockpitCardGrid layout="grid">
-        {/* UC.2/UC.3 — Identifiers now uses the shared IdentifiersCard
-            (replaces the dashed placeholder). */}
-        <IdentifiersCard
-          title={t('products.edit.cockpit.amazon.cards.identifiers')}
-          rows={[
-            { label: 'SKU', value: composed.sku, mono: true, source: 'locked' },
-            { label: 'ASIN', value: composed.asin.value, mono: true, source: composed.asin.source },
-            { label: 'GTIN', value: composed.gtin.value, mono: true, source: 'locked' },
-          ]}
-        />
-        {/* FL — Shared fields: every linkable content field with a
-            clickable scope pill (master / linked / independent) + propagate. */}
-        <IdentifiersCard title={t('products.edit.cockpit.amazon.cards.sharedFields')} rows={scopeRows} />
-        <CategoryCard
-          productId={product.id}
-          productType={composed.productType.value}
-          browseNodeId={composed.browseNodeId.value}
-          categoryPath={
-            (listing?.platformAttributes as Record<string, unknown> | null | undefined)
-              ?.detectedCategoryPath as string | null | undefined
-          }
-          marketplace={marketInfo.code}
-          listingId={listing?.id ?? null}
-          onSaved={() =>
-            // Parent's onSave currently does router.refresh() and
-            // ignores the payload; pass the listing if we have it,
-            // otherwise an empty stub so the call type-checks.
-            props.onSave(listing ?? ({} as Listing))
-          }
-          onJumpToClassic={() => handleJumpTo('classic')}
-        />
-        {/* UC.2/UC.3 — Images now uses the shared ImagesSummaryCard
-            (read-only summary; the AC.5 deep editor handoff is added
-            when that card lands). */}
-        <ImagesSummaryCard
-          title="Images"
-          primaryImageUrl={composed.primaryImageUrl.value}
-          galleryCount={composed.galleryUrls.value.length}
-          totalSlots={9}
-        />
-        <AplusCard
-          asin={composed.asin.value}
-          brand={composed.brand.value}
-          marketplace={marketInfo.code}
-          onJumpToClassic={() => handleJumpTo('classic')}
-        />
-        <PricingCard
-          productId={product.id}
-          marketplace={marketInfo.code}
-          currency={composed.currency}
-          price={composed.price.value}
-          salePrice={
-            listing?.salePrice != null
-              ? typeof listing.salePrice === 'string'
-                ? parseFloat(listing.salePrice)
-                : Number(listing.salePrice)
-              : null
-          }
-          quantity={composed.quantity.value}
-          lastSyncedAt={
-            (listing?.lastSyncedAt as string | null | undefined) ?? null
-          }
-          listingId={listing?.id ?? null}
-          onSaved={() => props.onSave(listing ?? ({} as Listing))}
-          snsEnabled={
-            (
-              (
-                listing?.platformAttributes as Record<string, unknown> | null | undefined
-              )?.subscribeAndSave as Record<string, unknown> | null | undefined
-            )?.enabled === true
-          }
-          snsDiscountPercent={(() => {
-            const v = (
-              (
-                listing?.platformAttributes as Record<string, unknown> | null | undefined
-              )?.subscribeAndSave as Record<string, unknown> | null | undefined
-            )?.discountPercent
-            return typeof v === 'number' ? v : null
-          })()}
-          businessQty={(() => {
-            const v = (
-              (
-                listing?.platformAttributes as Record<string, unknown> | null | undefined
-              )?.businessPricing as Record<string, unknown> | null | undefined
-            )?.quantity
-            return typeof v === 'number' ? v : null
-          })()}
-          businessPrice={(() => {
-            const v = (
-              (
-                listing?.platformAttributes as Record<string, unknown> | null | undefined
-              )?.businessPricing as Record<string, unknown> | null | undefined
-            )?.price
-            return typeof v === 'number' ? v : null
-          })()}
-          onJumpToClassic={() => handleJumpTo('classic')}
-        />
-        <FulfillmentCard
-          productId={product.id}
-          marketplace={marketInfo.code}
-          seedFulfillment={composed.fulfillmentChannel.value as 'FBA' | 'FBM' | null}
-          productFulfillment={(product?.fulfillmentMethod as string | null) ?? null}
-          conditionType={composed.conditionType.value}
-          onJumpToClassic={() => handleJumpTo('classic')}
-        />
-        <SuppressionCard
-          productId={product.id}
-          marketplace={marketInfo.code}
-          asin={composed.asin.value}
-          healthReport={report}
-          onJumpTo={handleJumpTo}
-        />
-        <ComplianceCard
-          attributes={
-            (listing?.platformAttributes as Record<string, unknown> | null | undefined)
-              ?.attributes as Record<string, unknown> | null | undefined
-          }
-          onJumpToClassic={() => handleJumpTo('classic')}
-        />
-        <FitCompatibilityCard
-          productType={composed.productType.value}
-          variationTheme={(product?.variationTheme as string | null) ?? null}
-          variantCount={childrenList?.length ?? 0}
-          attributes={
-            (listing?.platformAttributes as Record<string, unknown> | null | undefined)
-              ?.attributes as Record<string, unknown> | null | undefined
-          }
-          onJumpToClassic={() => handleJumpTo('classic')}
-        />
-      </CockpitCardGrid>
+        {/* Right column: sticky preview + health */}
+        <div className="w-96 flex-shrink-0">
+          <div className="sticky top-4 space-y-3">
+            <AmazonLivePreview
+              composed={composed}
+              childrenList={childrenList ?? []}
+            />
+            <HealthPanel
+              report={report}
+              onJumpTo={(target) => handleJumpTo(target as JumpTarget)}
+              statusLabel={t(`products.edit.cockpit.amazon.health.${report.status}`)}
+              suppressionNote="Listing suppressed — check Seller Central → Manage Inventory → Suppressed."
+            />
+          </div>
+        </div>
+      </div>
 
       {/* ── Zone 4 — classic editor (AF.4/5) ─────────────────────────
           Full classic editor in a slide-over when the All-fields drawer

@@ -41,6 +41,19 @@ import type { ComposedAmazonListing } from './types'
 interface Props {
   composed: ComposedAmazonListing
   className?: string
+  children?: Array<{
+    id: string
+    variations?: Record<string, string> | null
+    totalStock?: number | null
+    images?: Array<{ url: string; type?: string }>
+  }>
+  /** Alias for children — matches the prop name used in AmazonCockpit. */
+  childrenList?: Array<{
+    id: string
+    variations?: Record<string, string> | null
+    totalStock?: number | null
+    images?: Array<{ url: string; type?: string }>
+  }>
 }
 
 const MARKET_FLAG: Record<string, string> = {
@@ -62,9 +75,11 @@ const MARKET_TLD: Record<string, string> = {
   BE: 'amazon.com.be',
 }
 
-export default function AmazonLivePreview({ composed, className }: Props) {
+export default function AmazonLivePreview({ composed, className, children, childrenList }: Props) {
   const [skin, setSkin] = useState<Skin>('mobile')
   const [galleryIdx, setGalleryIdx] = useState(0)
+  // Normalise: accept either prop name
+  const variantChildren = childrenList ?? children ?? []
 
   const gallery =
     composed.galleryUrls.value.length > 0
@@ -112,6 +127,7 @@ export default function AmazonLivePreview({ composed, className }: Props) {
           gallery={gallery}
           galleryIdx={galleryIdx}
           setGalleryIdx={setGalleryIdx}
+          variantChildren={variantChildren}
         />
       ) : (
         <DesktopSkin
@@ -120,6 +136,7 @@ export default function AmazonLivePreview({ composed, className }: Props) {
           gallery={gallery}
           galleryIdx={galleryIdx}
           setGalleryIdx={setGalleryIdx}
+          variantChildren={variantChildren}
         />
       )}
 
@@ -148,17 +165,25 @@ export default function AmazonLivePreview({ composed, className }: Props) {
   )
 }
 
+interface VariantChild {
+  id: string
+  variations?: Record<string, string> | null
+  totalStock?: number | null
+  images?: Array<{ url: string; type?: string }>
+}
+
 interface SkinProps {
   composed: ComposedAmazonListing
   currentImg: string | null
   gallery: string[]
   galleryIdx: number
   setGalleryIdx: (n: number) => void
+  variantChildren: VariantChild[]
 }
 
 // ── Mobile skin — single column, sticky CTA at bottom ──────────────────
 function MobileSkin(props: SkinProps) {
-  const { composed, currentImg, gallery, galleryIdx, setGalleryIdx } = props
+  const { composed, currentImg, gallery, galleryIdx, setGalleryIdx, variantChildren } = props
   const isFba = composed.fulfillmentChannel.value === 'FBA'
   return (
     <div className="mx-auto bg-white dark:bg-slate-950" style={{ maxWidth: 400 }}>
@@ -238,7 +263,7 @@ function MobileSkin(props: SkinProps) {
 
         {/* Variation chips */}
         {composed.variationSummary.variantCount > 0 && (
-          <VariationStrip composed={composed} compact />
+          <VariationStrip composed={composed} variantChildren={variantChildren} compact />
         )}
 
         {/* CTAs */}
@@ -275,7 +300,7 @@ function MobileSkin(props: SkinProps) {
 
 // ── Desktop skin — 3-column with buy box on the right ──────────────────
 function DesktopSkin(props: SkinProps) {
-  const { composed, currentImg, gallery, galleryIdx, setGalleryIdx } = props
+  const { composed, currentImg, gallery, galleryIdx, setGalleryIdx, variantChildren } = props
   const isFba = composed.fulfillmentChannel.value === 'FBA'
   return (
     // The 40+240+220 fixed columns (= ~500px) plus a 1fr middle
@@ -349,7 +374,7 @@ function DesktopSkin(props: SkinProps) {
 
         <div className="border-t border-default dark:border-slate-800 pt-2">
           {composed.variationSummary.variantCount > 0 && (
-            <VariationStrip composed={composed} />
+            <VariationStrip composed={composed} variantChildren={variantChildren} />
           )}
         </div>
 
@@ -530,41 +555,82 @@ function PrimeBadge() {
   )
 }
 
+const COLOR_AXIS_NAMES = new Set([
+  'color', 'colour', 'colore', 'farbe', 'couleur', 'color',
+])
+
+function isColorAxis(axis: string): boolean {
+  return COLOR_AXIS_NAMES.has(axis.toLowerCase())
+}
+
 function VariationStrip({
   composed,
+  variantChildren,
   compact = false,
 }: {
   composed: ComposedAmazonListing
+  variantChildren: VariantChild[]
   compact?: boolean
 }) {
-  // AC.2 surfaces a flat variation chip row built from the axes the
-  // compositor saw on the master record. AC.6 replaces this with the
-  // real per-axis selector + live image swap.
   const axes = composed.variationSummary.axes
-  if (axes.length === 0) return null
+  if (axes.length === 0 || variantChildren.length === 0) return null
+
   return (
     <div className={cn('space-y-1.5', compact ? 'pt-1' : 'pt-0')}>
-      {axes.map((axis) => (
-        <div key={axis} className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11.5px] text-slate-600 dark:text-slate-400 min-w-[60px]">
-            {axis}:
-          </span>
-          <div className="flex items-center gap-1 flex-wrap">
-            {/* Placeholder chips — AC.6 reads real Variant.options. */}
-            {['1', '2', '3'].map((slot) => (
-              <span
-                key={slot}
-                className="inline-flex items-center px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-[11px] text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800"
-              >
-                Option {slot}
-              </span>
-            ))}
+      {axes.map((axis) => {
+        // Collect unique non-empty values for this axis from real children
+        const seen = new Set<string>()
+        const values: string[] = []
+        for (const child of variantChildren) {
+          const v = child.variations?.[axis]
+          if (v && !seen.has(v)) {
+            seen.add(v)
+            values.push(v)
+          }
+        }
+        if (values.length === 0) return null
+
+        const visible = values.slice(0, 5)
+        const overflow = values.length - visible.length
+        const colorAxis = isColorAxis(axis)
+
+        return (
+          <div key={axis} className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11.5px] text-slate-600 dark:text-slate-400 min-w-[60px]">
+              {axis}:
+            </span>
+            <div className="flex items-center gap-1 flex-wrap">
+              {colorAxis
+                ? visible.map((val) => (
+                    <span
+                      key={val}
+                      title={val}
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-[11px] text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800"
+                    >
+                      <span
+                        className="w-3 h-3 rounded-sm bg-slate-400 dark:bg-slate-500 flex-shrink-0"
+                        aria-hidden="true"
+                      />
+                      {val}
+                    </span>
+                  ))
+                : visible.map((val) => (
+                    <span
+                      key={val}
+                      className="inline-flex items-center px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-[11px] text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800"
+                    >
+                      {val}
+                    </span>
+                  ))}
+              {overflow > 0 && (
+                <span className="text-[11px] text-tertiary">
+                  +{overflow} more
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
-      <div className="text-[10.5px] text-tertiary italic">
-        AC.6 — real per-axis values + image swap.
-      </div>
+        )
+      })}
     </div>
   )
 }
