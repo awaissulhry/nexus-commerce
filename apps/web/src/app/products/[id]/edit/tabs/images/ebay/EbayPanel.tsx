@@ -5,11 +5,11 @@
 // No global pending store — all state is local.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, Plus, ShoppingBag, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { beFetch } from '../api'
+import ImagePickerModal from '../ImagePickerModal'
 import type { ListingImage, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -137,110 +137,26 @@ function skuLabel(v: VariantSummary, pictureAxis: string): string {
   return parts.length > 0 ? parts.join(' · ') : v.sku
 }
 
-// ── Mini image picker popover ──────────────────────────────────────────────
-
-interface MasterPickerProps {
-  masterImages: ProductImage[]
-  onPick: (url: string, id: string) => void
-  onClose: () => void
-  anchorRef: React.RefObject<HTMLButtonElement | null>
-  anchorRect: DOMRect | null
-}
-
-function MasterPicker({ masterImages, onPick, onClose, anchorRef, anchorRect }: MasterPickerProps) {
-  const panelRef = useRef<HTMLDivElement>(null)
-
-  // Close on outside click
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (
-        panelRef.current && !panelRef.current.contains(e.target as Node) &&
-        anchorRef.current && !anchorRef.current.contains(e.target as Node)
-      ) onClose()
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [onClose, anchorRef])
-
-  if (!anchorRect || typeof document === 'undefined') return null
-
-  // Render in a PORTAL with fixed positioning so the popover ESCAPES the colour
-  // bucket's overflow-hidden (which previously clipped it to invisibility — the
-  // "+ does nothing" bug). Clamp to the viewport so it never runs off an edge.
-  const WIDTH = 224 // w-56
-  const left = Math.max(8, Math.min(anchorRect.left, window.innerWidth - WIDTH - 8))
-  const top = Math.min(anchorRect.bottom + 4, window.innerHeight - 16)
-
-  return createPortal(
-    <div
-      ref={panelRef}
-      role="dialog"
-      aria-label="Pick from master images"
-      style={{ position: 'fixed', top, left, width: WIDTH }}
-      className="z-[200] bg-white dark:bg-slate-900 border border-default rounded-xl shadow-lg p-2 max-h-72 overflow-y-auto"
-    >
-      {masterImages.length === 0 ? (
-        <p className="text-xs text-tertiary p-2">No master images available.</p>
-      ) : (
-        <div className="flex flex-wrap gap-1.5">
-          {masterImages.map((img) => (
-            <button
-              key={img.id}
-              type="button"
-              onClick={() => { onPick(img.url, img.id); onClose() }}
-              className="w-14 h-14 rounded-lg border border-default overflow-hidden bg-slate-50 dark:bg-slate-800 hover:ring-2 hover:ring-blue-400 transition-all flex-shrink-0"
-              title={img.alt ?? img.url}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={img.url} alt={img.alt ?? ''} className="w-full h-full object-contain" loading="lazy" decoding="async" />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>,
-    document.body,
-  )
-}
-
-// ── Reusable "+ from master" button with popover picker ─────────────────────
+// ── "+ from master" button — opens the shared ImagePickerModal (full overlay,
+//    always on top, never clipped by a container) ────────────────────────────
 
 function MasterPlusButton({
-  masterImages, onPick, label, size = 'lg',
+  onClick, label, size = 'lg',
 }: {
-  masterImages: ProductImage[]
-  onPick: (url: string, id: string) => void
+  onClick: () => void
   label: string
   size?: 'lg' | 'sm'
 }) {
-  const [open, setOpen] = useState(false)
-  const [rect, setRect] = useState<DOMRect | null>(null)
-  const ref = useRef<HTMLButtonElement>(null)
   const box = size === 'lg' ? 'w-16 h-16' : 'w-10 h-10'
   return (
-    <div className="relative">
-      <button
-        ref={ref}
-        type="button"
-        aria-label={label}
-        aria-expanded={open}
-        onClick={() => {
-          setRect(ref.current?.getBoundingClientRect() ?? null)
-          setOpen((o) => !o)
-        }}
-        className={cn(box, 'rounded-lg border-2 border-dashed border-default flex items-center justify-center text-tertiary hover:border-blue-300 transition-colors flex-shrink-0')}
-      >
-        <Plus className={size === 'lg' ? 'w-4 h-4' : 'w-3 h-3'} />
-      </button>
-      {open && (
-        <MasterPicker
-          masterImages={masterImages}
-          onPick={onPick}
-          onClose={() => setOpen(false)}
-          anchorRef={ref}
-          anchorRect={rect}
-        />
-      )}
-    </div>
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className={cn(box, 'rounded-lg border-2 border-dashed border-default flex items-center justify-center text-tertiary hover:border-blue-300 transition-colors flex-shrink-0')}
+    >
+      <Plus className={size === 'lg' ? 'w-4 h-4' : 'w-3 h-3'} />
+    </button>
   )
 }
 
@@ -249,20 +165,19 @@ function MasterPlusButton({
 interface ColorBucketProps {
   colorValue: string
   urls: string[]
-  masterImages: ProductImage[]
   variantsForColor: VariantSummary[]
   skuSets: SkuSets
   pictureAxis: string
-  onAdd: (url: string, sourceId: string) => void
+  onRequestAdd: () => void
   onRemove: (index: number) => void
   onReorder: (fromIndex: number, toIndex: number) => void
-  onAddSku: (variationId: string, url: string, sourceId: string) => void
+  onRequestAddSku: (variationId: string) => void
   onRemoveSku: (variationId: string, index: number) => void
 }
 
 function ColorBucket({
-  colorValue, urls, masterImages, variantsForColor, skuSets, pictureAxis,
-  onAdd, onRemove, onReorder, onAddSku, onRemoveSku,
+  colorValue, urls, variantsForColor, skuSets, pictureAxis,
+  onRequestAdd, onRemove, onReorder, onRequestAddSku, onRemoveSku,
 }: ColorBucketProps) {
   const dragIndexRef = useRef<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
@@ -330,7 +245,7 @@ function ColorBucket({
           </div>
         ))}
 
-        <MasterPlusButton masterImages={masterImages} onPick={onAdd} label={`Add image to ${colorValue}`} size="lg" />
+        <MasterPlusButton onClick={onRequestAdd} label={`Add image to ${colorValue}`} size="lg" />
       </div>
 
       {/* Per-SKU override drill-in (optional — collapsed by default) */}
@@ -373,8 +288,7 @@ function ColorBucket({
                         </div>
                       ))}
                       <MasterPlusButton
-                        masterImages={masterImages}
-                        onPick={(url, id) => onAddSku(v.id, url, id)}
+                        onClick={() => onRequestAddSku(v.id)}
                         label={`Add override image to ${v.sku}`}
                         size="sm"
                       />
@@ -497,6 +411,12 @@ export default function EbayPanel({
       return next
     })
   }, [])
+
+  // ── Image picker (shared modal) ──────────────────────────────────────
+  // Which bucket / SKU the "+ from master" was clicked for. The shared
+  // ImagePickerModal (a full overlay) opens at the panel level so it is always
+  // on top of the colour buckets — never clipped by a container.
+  const [pickerTarget, setPickerTarget] = useState<{ value: string } | { variationId: string } | null>(null)
 
   // ── Publish ──────────────────────────────────────────────────────────
   const [publishing, setPublishing] = useState(false)
@@ -701,19 +621,32 @@ export default function EbayPanel({
               key={cv}
               colorValue={cv}
               urls={colorSets.get(cv) ?? []}
-              masterImages={masterImages}
               variantsForColor={variants.filter((v) => (v.variantAttributes as Record<string, string> | null)?.[axis] === cv)}
               skuSets={skuSets}
               pictureAxis={axis}
-              onAdd={(url) => handleAdd(cv, url)}
+              onRequestAdd={() => setPickerTarget({ value: cv })}
               onRemove={(idx) => handleRemove(cv, idx)}
               onReorder={(from, to) => handleReorder(cv, from, to)}
-              onAddSku={(variationId, url) => handleAddSku(variationId, url)}
+              onRequestAddSku={(variationId) => setPickerTarget({ variationId })}
               onRemoveSku={(variationId, idx) => handleRemoveSku(variationId, idx)}
             />
           ))
         )}
       </div>
+
+      {/* Shared image picker — full overlay (fixed inset-0), always on top of the
+          colour buckets. Same component the Amazon panel uses. */}
+      {pickerTarget && (
+        <ImagePickerModal
+          productId={productId}
+          masterImages={masterImages}
+          onSelect={(url) => {
+            if ('value' in pickerTarget) handleAdd(pickerTarget.value, url)
+            else handleAddSku(pickerTarget.variationId, url)
+          }}
+          onClose={() => setPickerTarget(null)}
+        />
+      )}
     </div>
   )
 }
