@@ -460,28 +460,42 @@ async function pushVariationGroup(
   // Step 1: Create/update each variant's inventory_item.
   for (const row of variantRows) {
     const sku = row.sku as string
-    const aspects: Record<string, string[]> = {}
+
+    // Deduplicate aspects by nmLabel key: buildFlatRow writes both the
+    // case-preserved key (aspect_Colore) and lowercased key (aspect_color),
+    // and Amazon import can add English equivalents. Using a Map keyed by
+    // nmLabel ensures each logical axis appears exactly once in the item.
+    const aspectsMap = new Map<string, string[]>()
     for (const [k, v] of Object.entries(row)) {
       if (k.startsWith('aspect_') && v) {
         const aspectName = k.slice('aspect_'.length).replace(/_/g, ' ')
         if (isVarAxis(aspectName)) {
-          aspects[nmLabel(aspectName)] = [vlLabel(aspectName, String(v))]
+          aspectsMap.set(nmLabel(aspectName), [vlLabel(aspectName, String(v))])
         } else {
-          aspects[aspectName] = [String(v)]
+          aspectsMap.set(aspectName, [String(v)])
         }
       }
     }
-    if (row.ean) aspects['EAN'] = [String(row.ean)]
-    if (row.mpn) aspects['MPN'] = [String(row.mpn)]
+    if (row.ean) aspectsMap.set('EAN', [String(row.ean)])
+    if (row.mpn) aspectsMap.set('MPN', [String(row.mpn)])
+    const aspects = Object.fromEntries(aspectsMap)
 
     // FCF.3 — cap each variant at its FBM-available pool.
     const qty = capToFbm(row._productId as string | undefined, sku, Number(row[`${mp.toLowerCase()}_qty`] ?? row.quantity ?? 0), mp)
 
+    // Filter out Amazon CDN URLs — eBay cannot crawl m.media-amazon.com
+    // (WAF restrictions). Send only publicly accessible URLs.
     const imageUrls: string[] = []
     for (let i = 1; i <= 6; i++) {
       const url = row[`image_${i}`] as string | undefined
-      if (url) imageUrls.push(url)
+      if (url && !url.includes('amazon.com')) imageUrls.push(url)
     }
+
+    // Translate numeric conditionId (e.g. '1000') to eBay ConditionEnum ('NEW').
+    // buildFlatRow stores the raw conditionId from platformAttributes; the
+    // Inventory API rejects numeric strings.
+    const rawCondition = String(row.condition ?? '')
+    const condition = CONDITION_ID_TO_ENUM[rawCondition] ?? (rawCondition || 'NEW')
 
     const pkgSize = buildPackageWeightAndSize(row)
     const itemBody = {
@@ -493,7 +507,7 @@ async function pushVariationGroup(
         ...(row.ean ? { ean: [String(row.ean)] } : {}),
         ...(row.mpn ? { mpn: String(row.mpn) } : {}),
       },
-      condition: row.condition ?? 'NEW',
+      condition,
       availability: {
         shipToLocationAvailability: { quantity: Number(qty) },
       },
@@ -536,10 +550,13 @@ async function pushVariationGroup(
 
   // Step 3: Create/update the inventory_item_group.
   // variantSKUs is the correct field name (plain string array, not objects).
+  if (!String(parentRow.title ?? '').trim()) {
+    return results.map(r => ({ ...r, status: 'ERROR' as const, message: 'Missing title on parent row — set a title before pushing' }))
+  }
   const groupImageUrls: string[] = []
   for (let i = 1; i <= 6; i++) {
     const url = parentRow[`image_${i}`] as string | undefined
-    if (url) groupImageUrls.push(url)
+    if (url && !url.includes('amazon.com')) groupImageUrls.push(url)
   }
 
   const groupBody = {
@@ -618,6 +635,16 @@ async function pushVariationGroup(
     const sku   = row.sku as string
     const price = Number(row[`${mp.toLowerCase()}_price`] ?? row.price ?? 0)
     const qty   = capToFbm(row._productId as string | undefined, sku, Number(row[`${mp.toLowerCase()}_qty`] ?? row.quantity ?? 0), mp)
+
+    if (!price || price <= 0) {
+      const msg = `No ${mp} price set for ${sku} — enter a price before pushing`
+      const idx = results.findIndex(r => r.sku === sku)
+      if (idx >= 0) results[idx] = { ...results[idx], status: 'ERROR', message: msg }
+      else results.push({ sku, market: mp, status: 'ERROR', message: msg })
+      anyOfferFailed = true
+      continue
+    }
+
     const offerBody: Record<string, unknown> = {
       sku,
       marketplaceId,
@@ -1401,22 +1428,27 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           const encodedSku = encodeURIComponent(sku);
           const invUrl = `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodedSku}`;
 
+          // Filter Amazon CDN URLs — eBay cannot crawl m.media-amazon.com.
           const imageUrls: string[] = [];
           for (let i = 1; i <= 6; i++) {
             const url = row[`image_${i}`] as string | undefined;
-            if (url) imageUrls.push(url);
+            if (url && !url.includes('amazon.com')) imageUrls.push(url);
           }
 
-          // Collect aspects from row
-          const aspects: Record<string, string[]> = {};
+          // Deduplicate aspects by key (Map last-write wins for repeated keys).
+          const aspectsMap = new Map<string, string[]>();
           for (const [key, val] of Object.entries(row)) {
             if (key.startsWith('aspect_') && typeof val === 'string' && val) {
-              const aspectName = key.slice('aspect_'.length).replace(/_/g, ' ');
-              aspects[aspectName] = [val];
+              aspectsMap.set(key.slice('aspect_'.length).replace(/_/g, ' '), [val]);
             }
           }
-          if (row.ean) aspects['EAN'] = [row.ean as string];
-          if (row.mpn) aspects['MPN'] = [row.mpn as string];
+          if (row.ean) aspectsMap.set('EAN', [row.ean as string]);
+          if (row.mpn) aspectsMap.set('MPN', [row.mpn as string]);
+          const aspects = Object.fromEntries(aspectsMap);
+
+          // Translate numeric conditionId ('1000') to eBay ConditionEnum ('NEW').
+          const rawCond = String(row.condition ?? '');
+          const condition = CONDITION_ID_TO_ENUM[rawCond] ?? (rawCond || 'NEW');
 
           const invBody = {
             product: {
@@ -1427,7 +1459,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               ...((row.ean as string) ? { ean: [row.ean as string] } : {}),
               ...((row.mpn as string) ? { mpn: row.mpn as string } : {}),
             },
-            condition: (row.condition as string) ?? 'NEW',
+            condition,
             availability: {
               shipToLocationAvailability: { quantity: qty },
             },
