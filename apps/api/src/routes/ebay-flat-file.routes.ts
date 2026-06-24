@@ -521,6 +521,36 @@ async function pushVariationGroup(
 
   const isVarAxis = (name: string) => effectiveVarAxes.includes(name)
 
+  // ── Colour-representative image sets ─────────────────────────────────────
+  // eBay with aspectsImageVariesBy=['Color'] aggregates images from EVERY variant
+  // that matches the selected colour. If all 9 Black-size variants each carry 6
+  // images (even identical URLs), eBay may show up to 9×6=54 photos in the
+  // carousel instead of 6.
+  //
+  // Fix: pre-compute ONE canonical image set per colour value, then assign that
+  // exact same set to every same-colour variant. eBay deduplicates by URL so the
+  // buyer always sees 6 images regardless of how many sizes the colour has.
+  //
+  // Falls back to per-SKU images when no colour axis is present (single-colour
+  // products, bundles, etc.).
+  const COLOR_AXIS_NAMES_PRE = new Set(['colore', 'color', 'farbe', 'couleur', 'colour', 'kleur'])
+  const colorAxisRawName = effectiveVarAxes.find(n => COLOR_AXIS_NAMES_PRE.has(n.toLowerCase()))
+  const colorRepImages = new Map<string, string[]>() // colourValue.toLowerCase() → [url, ...]
+  if (colorAxisRawName) {
+    const axisKey = `aspect_${colorAxisRawName.replace(/ /g, '_')}`
+    for (const row of variantRows) {
+      const colorVal = String((row as Record<string, unknown>)[axisKey] ?? '').toLowerCase()
+      if (!colorVal || colorRepImages.has(colorVal)) continue
+      const imgs: string[] = []
+      for (let i = 1; i <= 6; i++) {
+        const url = (row as Record<string, unknown>)[`image_${i}`] as string | undefined
+        if (url) imgs.push(url)
+      }
+      if (imgs.length === 0) imgs.push(...(amazonImagesBySku.get(row.sku as string) ?? []).slice(0, 6))
+      colorRepImages.set(colorVal, imgs)
+    }
+  }
+
   // Step 1: Create/update each variant's inventory_item.
   for (const row of variantRows) {
     const sku = row.sku as string
@@ -586,20 +616,30 @@ async function pushVariationGroup(
     // FCF.3 — cap each variant at its FBM-available pool.
     const qty = capToFbm(row._productId as string | undefined, sku, Number(row[`${mp.toLowerCase()}_qty`] ?? row.quantity ?? 0), mp)
 
+    // Use the colour-representative image set (same URLs for every variant of
+    // the same colour). eBay deduplicates by URL, so all Black-size variants
+    // end up showing the same 6 images in the carousel instead of 9×6=54.
+    // Falls back to per-SKU images when no colour axis is detected.
     const imageUrls: string[] = []
-    for (let i = 1; i <= 6; i++) {
-      const url = row[`image_${i}`] as string | undefined
-      if (url) imageUrls.push(url)
+    if (colorAxisRawName) {
+      const axisKey = `aspect_${colorAxisRawName.replace(/ /g, '_')}`
+      const colorVal = String((row as Record<string, unknown>)[axisKey] ?? '').toLowerCase()
+      if (colorVal && colorRepImages.has(colorVal)) {
+        imageUrls.push(...colorRepImages.get(colorVal)!)
+      }
     }
-    // Fall back to per-SKU Amazon images — colour-specific because Amazon
-    // stores separate image sets per child ASIN (variant). Cap at 6 so the
-    // eBay listing carousel doesn't become unmanageably long.
+    // Fallback: per-SKU images (no colour axis, or this variant's colour value
+    // wasn't found in the pre-pass map).
     if (imageUrls.length === 0) {
-      imageUrls.push(...(amazonImagesBySku.get(sku) ?? []).slice(0, 6))
+      for (let i = 1; i <= 6; i++) {
+        const url = row[`image_${i}`] as string | undefined
+        if (url) imageUrls.push(url)
+      }
+      if (imageUrls.length === 0) {
+        imageUrls.push(...(amazonImagesBySku.get(sku) ?? []).slice(0, 6))
+      }
     }
     // eBay rejects inventory_item PUT with error 25717 when imageUrls is empty.
-    // Fail fast here so the operator sees a clear per-SKU error, not a masked
-    // "Manca Marca" from publish_by_group overwriting the real failure.
     if (imageUrls.length === 0) {
       results.push({ sku, market: mp, status: 'ERROR', message: 'No images found for this SKU — upload images via the image editor or populate image_1 in the flat-file before pushing' })
       continue
@@ -690,14 +730,15 @@ async function pushVariationGroup(
   const specifications = deduplicatedSpecs.length > 0
     ? deduplicatedSpecs.map(e => ({ name: e.name, values: [...e.values] }))
     : [{ name: 'Custom Bundle', values: variantRows.map(r => r.sku as string) }]
-  // imageVariesByAxes must name the COLOR axis so eBay switches jacket photos
-  // when a buyer selects a colour. eBay normalises locale names (Colore→Color) and
-  // requires the value to match a spec name AFTER normalisation — always send the
-  // canonical English name 'Color' for the colour axis regardless of locale.
-  // Fall back to the first spec if no colour axis is detected.
-  const COLOR_AXIS_NAMES = new Set(['colore', 'color', 'farbe', 'couleur', 'colour', 'color', 'kleur'])
-  const colorSpec = deduplicatedSpecs.find(s => COLOR_AXIS_NAMES.has(s.name.toLowerCase()))
-  const imageVariesByAxes = colorSpec ? ['Color'] : deduplicatedSpecs.slice(0, 1).map(e => e.name)
+  // imageVariesByAxes must name the COLOR spec so eBay switches jacket photos
+  // when a buyer selects a colour. We already detected colorAxisRawName in the
+  // pre-pass; find its normalised spec entry and use that exact name so the value
+  // matches specifications[].name after eBay's locale normalisation.
+  const colorSpec = colorAxisRawName
+    ? deduplicatedSpecs.find(s => s.name.toLowerCase() === colorAxisRawName.toLowerCase()
+        || COLOR_AXIS_NAMES_PRE.has(s.name.toLowerCase()))
+    : undefined
+  const imageVariesByAxes = colorSpec ? [colorSpec.name] : deduplicatedSpecs.slice(0, 1).map(e => e.name)
 
   // Step 3: Create/update the inventory_item_group.
   // variantSKUs is the correct field name (plain string array, not objects).
