@@ -3,7 +3,7 @@
  * schema-required + GTIN + image checks are fully unit-testable.
  */
 import { describe, it, expect } from 'vitest'
-import { validateGtin, findMissingRequired, preflightRow, buildPerTypeValidation, validateImportRows, utf8ByteLength, checkLengthLimits } from './listing-preflight.service.js'
+import { validateGtin, findMissingRequired, preflightRow, buildPerTypeValidation, validateImportRows, utf8ByteLength, checkLengthLimits, validateParentChildBatch } from './listing-preflight.service.js'
 
 describe('validateGtin (mod-10 check digit)', () => {
   it('valid EAN-13', () => expect(validateGtin('4006381333931').valid).toBe(true))
@@ -170,5 +170,52 @@ describe('FX.6 — validateImportRows (per-type pre-flight of import rows)', () 
     const rows = [{ item_sku: 'A3', product_type: '', item_name: '', main_product_image_locator: img }]
     const r = validateImportRows(rows, requiredByType, fallback)
     expect(r[0].issues.some((i) => i.field === 'item_name' && i.severity === 'error')).toBe(true)
+  })
+})
+
+describe('G.1 — parent/child structural integrity (preflightRow)', () => {
+  const req = [{ id: 'item_name', label: 'Title' }]
+  const ok = { item_name: 'X', ean: '4006381333931', main_product_image_locator: 'u' }
+
+  it('parent with no variation_theme → error', () => {
+    expect(preflightRow({ ...ok, parentage_level: 'parent', variation_theme: '' }, req)
+      .some((i) => i.field === 'variation_theme' && i.severity === 'error')).toBe(true)
+  })
+  it('parent WITH a variation_theme → no theme error', () => {
+    expect(preflightRow({ ...ok, parentage_level: 'parent', variation_theme: 'SizeName' }, req)
+      .some((i) => i.field === 'variation_theme')).toBe(false)
+  })
+  it('child with no parent_sku → error', () => {
+    expect(preflightRow({ ...ok, parentage_level: 'child', parent_sku: '' }, req)
+      .some((i) => i.field === 'parent_sku' && i.severity === 'error')).toBe(true)
+  })
+  it('child WITH a parent_sku → no parent_sku error', () => {
+    expect(preflightRow({ ...ok, parentage_level: 'child', parent_sku: 'P1' }, req)
+      .some((i) => i.field === 'parent_sku')).toBe(false)
+  })
+  it('standalone row (no parentage) → no structural errors', () => {
+    expect(preflightRow({ ...ok }, req)
+      .some((i) => i.field === 'variation_theme' || i.field === 'parent_sku')).toBe(false)
+  })
+})
+
+describe('G.1 — validateParentChildBatch (orphan variant)', () => {
+  it('child whose parent_sku is absent from the batch → orphan error', () => {
+    const out = validateParentChildBatch([
+      { item_sku: 'P1', parentage_level: 'parent', variation_theme: 'SizeName' },
+      { item_sku: 'C1', parentage_level: 'child', parent_sku: 'GHOST' },
+    ])
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ itemSku: 'C1' })
+    expect(out[0].issue.severity).toBe('error')
+  })
+  it('child whose parent IS in the batch → no orphan', () => {
+    expect(validateParentChildBatch([
+      { item_sku: 'P1', parentage_level: 'parent', variation_theme: 'SizeName' },
+      { item_sku: 'C1', parentage_level: 'child', parent_sku: 'P1' },
+    ])).toEqual([])
+  })
+  it('child with blank parent_sku is not flagged here (handled per-row)', () => {
+    expect(validateParentChildBatch([{ item_sku: 'C1', parentage_level: 'child', parent_sku: '' }])).toEqual([])
   })
 })

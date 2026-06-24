@@ -29,7 +29,7 @@ import { coerceRowsWithAi } from '../services/amazon/flat-file-coerce-ai.js'
 import { planImportMerge, type ImportApplyMode } from '../services/amazon/flat-file-merge.js'
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
-import { preflightRow, buildPerTypeValidation, validateImportRows } from '../services/listing-preflight.service.js'
+import { preflightRow, buildPerTypeValidation, validateImportRows, validateParentChildBatch } from '../services/listing-preflight.service.js'
 import {
   resolveComplianceForSkus,
   evaluateCompliance,
@@ -506,6 +506,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       // blocked at /submit); other channels = warning (qty ignored — clear it).
       const fbaFlags = await flatFileService.findFbaQtyRows(rows)
       const fbaBySku = new Map(fbaFlags.map((f) => [f.sku, f]))
+      // G.1 — batch parent/child orphan check (a child's parent_sku must point to a
+      // parent present in this submission). eBay-parity with the orphan-variant check.
+      const orphanFlags = validateParentChildBatch(rows)
       const preflight = rows
         .map((r: any) => {
           const sku = String(r?.item_sku ?? '')
@@ -518,6 +521,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
                 : { field: 'fulfillment_availability__quantity', severity: 'warning', message: 'FBA product — quantity is ignored (Amazon manages FBA stock); clear it to be safe' },
             )
           }
+          for (const o of orphanFlags) if (o.itemSku === sku) issues.push(o.issue)
           return { sku, issues }
         })
         .filter((p) => p.issues.length > 0)

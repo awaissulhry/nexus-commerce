@@ -135,7 +135,48 @@ export function preflightRow(
     issues.push({ field: 'main_product_image_locator', severity: 'warning', message: 'No main product image' })
   }
 
+  // G.1 — parent/child structural integrity (Amazon variation model). A parent
+  // groups its children by an axis; a child must name its parent. Catch these
+  // here so a malformed family is blocked before the feed, not rejected by Amazon.
+  const parentage = String(row.parentage_level ?? '').toLowerCase()
+  if (parentage === 'parent' && isBlank(row.variation_theme)) {
+    issues.push({ field: 'variation_theme', severity: 'error', message: 'Parent listing needs a variation theme (e.g. SizeName, ColorName)' })
+  }
+  if (parentage === 'child' && isBlank(row.parent_sku)) {
+    issues.push({ field: 'parent_sku', severity: 'error', message: 'Variant needs a parent_sku linking it to its parent' })
+  }
+
   return issues
+}
+
+/**
+ * G.1 — batch parent/child integrity: a child's parent_sku must point to a parent
+ * present in the SAME submission. Per-row preflight can't see siblings, so this
+ * runs once over the whole batch and returns issues keyed by item_sku. eBay-parity
+ * with the orphan-variant check in the eBay flat file.
+ */
+export function validateParentChildBatch(
+  rows: Array<Record<string, any>>,
+): Array<{ itemSku: string; issue: PreflightIssue }> {
+  const out: Array<{ itemSku: string; issue: PreflightIssue }> = []
+  const parentSkus = new Set<string>()
+  for (const r of rows) {
+    if (String(r.parentage_level ?? '').toLowerCase() === 'parent') {
+      const s = String(r.item_sku ?? '').trim()
+      if (s) parentSkus.add(s)
+    }
+  }
+  for (const r of rows) {
+    if (String(r.parentage_level ?? '').toLowerCase() !== 'child') continue
+    const parent = String(r.parent_sku ?? '').trim()
+    if (parent && !parentSkus.has(parent)) {
+      out.push({
+        itemSku: String(r.item_sku ?? ''),
+        issue: { field: 'parent_sku', severity: 'error', message: `Parent "${parent}" isn't in this submission — add the parent row or fix parent_sku` },
+      })
+    }
+  }
+  return out
 }
 
 /** Minimal shape of a (union) manifest column needed for per-type validation. */
