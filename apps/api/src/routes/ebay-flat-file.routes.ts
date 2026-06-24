@@ -1049,6 +1049,11 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'markets must be non-empty' });
     }
 
+    const republishMode = getEbayPublishMode();
+    if (republishMode === 'gated') {
+      return reply.code(503).send({ error: 'eBay publish is currently disabled', mode: republishMode });
+    }
+
     const connection = await prisma.channelConnection.findFirst({
       where: { channelType: 'EBAY', isActive: true },
       select: { id: true },

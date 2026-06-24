@@ -1007,6 +1007,11 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'productId, marketplace are required' })
     }
 
+    const publishMode = getEbayPublishMode()
+    if (publishMode === 'gated') {
+      return reply.code(503).send({ error: 'eBay publish is currently disabled', mode: publishMode })
+    }
+
     // Load the product + its eBay listing for this marketplace.
     const product = await prisma.product.findUnique({
       where: { id: productId },
