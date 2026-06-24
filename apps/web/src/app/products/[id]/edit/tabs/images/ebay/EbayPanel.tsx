@@ -5,6 +5,7 @@
 // No global pending store — all state is local.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, Plus, ShoppingBag, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
@@ -143,9 +144,10 @@ interface MasterPickerProps {
   onPick: (url: string, id: string) => void
   onClose: () => void
   anchorRef: React.RefObject<HTMLButtonElement | null>
+  anchorRect: DOMRect | null
 }
 
-function MasterPicker({ masterImages, onPick, onClose, anchorRef }: MasterPickerProps) {
+function MasterPicker({ masterImages, onPick, onClose, anchorRef, anchorRect }: MasterPickerProps) {
   const panelRef = useRef<HTMLDivElement>(null)
 
   // Close on outside click
@@ -160,17 +162,27 @@ function MasterPicker({ masterImages, onPick, onClose, anchorRef }: MasterPicker
     return () => document.removeEventListener('mousedown', handler)
   }, [onClose, anchorRef])
 
-  return (
+  if (!anchorRect || typeof document === 'undefined') return null
+
+  // Render in a PORTAL with fixed positioning so the popover ESCAPES the colour
+  // bucket's overflow-hidden (which previously clipped it to invisibility — the
+  // "+ does nothing" bug). Clamp to the viewport so it never runs off an edge.
+  const WIDTH = 224 // w-56
+  const left = Math.max(8, Math.min(anchorRect.left, window.innerWidth - WIDTH - 8))
+  const top = Math.min(anchorRect.bottom + 4, window.innerHeight - 16)
+
+  return createPortal(
     <div
       ref={panelRef}
       role="dialog"
       aria-label="Pick from master images"
-      className="absolute z-50 mt-1 left-0 bg-white dark:bg-slate-900 border border-default rounded-xl shadow-lg p-2 w-56"
+      style={{ position: 'fixed', top, left, width: WIDTH }}
+      className="z-[200] bg-white dark:bg-slate-900 border border-default rounded-xl shadow-lg p-2 max-h-72 overflow-y-auto"
     >
       {masterImages.length === 0 ? (
         <p className="text-xs text-tertiary p-2">No master images available.</p>
       ) : (
-        <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
+        <div className="flex flex-wrap gap-1.5">
           {masterImages.map((img) => (
             <button
               key={img.id}
@@ -185,7 +197,8 @@ function MasterPicker({ masterImages, onPick, onClose, anchorRef }: MasterPicker
           ))}
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -200,6 +213,7 @@ function MasterPlusButton({
   size?: 'lg' | 'sm'
 }) {
   const [open, setOpen] = useState(false)
+  const [rect, setRect] = useState<DOMRect | null>(null)
   const ref = useRef<HTMLButtonElement>(null)
   const box = size === 'lg' ? 'w-16 h-16' : 'w-10 h-10'
   return (
@@ -209,7 +223,10 @@ function MasterPlusButton({
         type="button"
         aria-label={label}
         aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          setRect(ref.current?.getBoundingClientRect() ?? null)
+          setOpen((o) => !o)
+        }}
         className={cn(box, 'rounded-lg border-2 border-dashed border-default flex items-center justify-center text-tertiary hover:border-blue-300 transition-colors flex-shrink-0')}
       >
         <Plus className={size === 'lg' ? 'w-4 h-4' : 'w-3 h-3'} />
@@ -220,6 +237,7 @@ function MasterPlusButton({
           onPick={onPick}
           onClose={() => setOpen(false)}
           anchorRef={ref}
+          anchorRect={rect}
         />
       )}
     </div>
