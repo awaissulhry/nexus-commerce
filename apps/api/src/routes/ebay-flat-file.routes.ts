@@ -174,7 +174,7 @@ function buildFlatRow(
     ean: product.ean ?? '',
     mpn: '',
     // shared listing fields from first listing
-    title: first?.title ?? '',
+    title: first?.title || product.name || '',
     condition: (firstAttrs.conditionId as string | undefined) ?? 'NEW',
     category_id: (firstAttrs.categoryId as string | undefined) ?? '',
     subtitle: (firstAttrs.subtitle as string | undefined) ?? '',
@@ -308,12 +308,19 @@ function packSharedFields(row: Record<string, unknown>): {
     if (url) imageUrls.push(url);
   }
 
-  // Collect item specifics from aspect_* keys
+  // Collect item specifics from aspect_* keys — deduplicate by lowercase name
+  // so both aspect_Colore and aspect_colore (buildFlatRow writes both for variation
+  // axes) don't end up as two separate keys in platformAttributes.itemSpecifics.
   const itemSpecifics: Record<string, string> = {};
+  const seenAspectLower = new Set<string>();
   for (const [key, val] of Object.entries(row)) {
     if (key.startsWith('aspect_') && typeof val === 'string' && val) {
       const aspectName = key.slice('aspect_'.length).replace(/_/g, ' ');
-      itemSpecifics[aspectName] = val;
+      const lk = aspectName.toLowerCase();
+      if (!seenAspectLower.has(lk)) {
+        seenAspectLower.add(lk);
+        itemSpecifics[aspectName] = val;
+      }
     }
   }
 
@@ -585,9 +592,10 @@ async function pushVariationGroup(
       if (url) imageUrls.push(url)
     }
     // Fall back to per-SKU Amazon images — colour-specific because Amazon
-    // stores separate image sets per child ASIN (variant).
+    // stores separate image sets per child ASIN (variant). Cap at 6 so the
+    // eBay listing carousel doesn't become unmanageably long.
     if (imageUrls.length === 0) {
-      imageUrls.push(...(amazonImagesBySku.get(sku) ?? []))
+      imageUrls.push(...(amazonImagesBySku.get(sku) ?? []).slice(0, 6))
     }
     // eBay rejects inventory_item PUT with error 25717 when imageUrls is empty.
     // Fail fast here so the operator sees a clear per-SKU error, not a masked
@@ -664,16 +672,44 @@ async function pushVariationGroup(
       entry.values.add(vlLabel(rawName, v))
     }
   }
-  const specifications = specificationsMap.size > 0
-    ? [...specificationsMap.values()].map(e => ({ name: e.name, values: [...e.values] }))
+  // Deduplicate specifications by value-set fingerprint: axes with the same set of
+  // values are the same physical attribute (e.g. "Color" from Amazon's variation
+  // theme and "Colore" from eBay IT's category schema both carry {BLACK, YELLOW}).
+  // buildFlatRow writes variation values under both names so both appear in
+  // allAspectValueSets with >1 distinct value → without dedup eBay shows 4 selectors
+  // instead of 2. First occurrence wins — itemSpecifics keys (written first in
+  // buildFlatRow) are in the correct market locale (Colore, Taglia for EBAY_IT).
+  const specFingerprintsSeen = new Set<string>()
+  const specificationsRaw = [...specificationsMap.values()]
+  const deduplicatedSpecs = specificationsRaw.filter(spec => {
+    const fp = [...spec.values].map(v => v.toLowerCase()).sort().join('|')
+    if (specFingerprintsSeen.has(fp)) return false
+    specFingerprintsSeen.add(fp)
+    return true
+  })
+  const specifications = deduplicatedSpecs.length > 0
+    ? deduplicatedSpecs.map(e => ({ name: e.name, values: [...e.values] }))
     : [{ name: 'Custom Bundle', values: variantRows.map(r => r.sku as string) }]
   // Must use the stored .name (properly-cased, e.g. "Colore") not the lowercase
   // map key ("colore") — eBay requires pictureVariesOn to match a specifications name exactly.
-  const imageVariesByAxes = [...specificationsMap.values()].slice(0, 1).map(e => e.name)
+  const imageVariesByAxes = deduplicatedSpecs.slice(0, 1).map(e => e.name)
 
   // Step 3: Create/update the inventory_item_group.
   // variantSKUs is the correct field name (plain string array, not objects).
-  if (!String(parentRow.title ?? '').trim()) {
+  let parentTitle = String(parentRow.title ?? '').trim()
+  if (!parentTitle) {
+    // Flat-file rows built from buildFlatRow already fall back to product.name, but
+    // when the eBay ChannelListing has an explicitly empty title (operator cleared it)
+    // or the product has never been saved with a title, try the master product name.
+    try {
+      const masterProduct = await prisma.product.findFirst({
+        where: { sku: parentRow.sku as string },
+        select: { name: true },
+      })
+      parentTitle = masterProduct?.name?.trim() ?? ''
+    } catch { /* ignore — fall through to the error below */ }
+  }
+  if (!parentTitle) {
     return results.map(r => ({ ...r, status: 'ERROR' as const, message: 'Missing title on parent row — set a title before pushing' }))
   }
   const groupImageUrls: string[] = []
@@ -681,17 +717,30 @@ async function pushVariationGroup(
     const url = parentRow[`image_${i}`] as string | undefined
     if (url) groupImageUrls.push(url)
   }
-  // If parent has no images, aggregate from all variant Amazon images so the
-  // group listing shows at least one photo (eBay requires imageUrls on the group).
+  // If parent has no direct images, use the first color variant's images as the
+  // group representative. Using ALL variant images (both colors) creates too many
+  // images in the eBay listing carousel. The per-variant inventory_items already
+  // carry their own color-specific images (shown when buyer selects a color).
   if (groupImageUrls.length === 0) {
-    const seen = new Set<string>()
-    for (const urls of amazonImagesBySku.values()) {
-      for (const u of urls) {
-        if (u && !seen.has(u) && groupImageUrls.length < 12) {
-          seen.add(u); groupImageUrls.push(u)
+    const firstVariantSku = variantRows[0]?.sku as string | undefined
+    const firstVariantImages = firstVariantSku ? (amazonImagesBySku.get(firstVariantSku) ?? []) : []
+    groupImageUrls.push(...firstVariantImages.slice(0, 6))
+    // Fallback: aggregate from remaining variants if first has none
+    if (groupImageUrls.length === 0) {
+      const seen = new Set<string>()
+      for (const urls of amazonImagesBySku.values()) {
+        for (const u of urls) {
+          if (u && !seen.has(u) && groupImageUrls.length < 6) {
+            seen.add(u); groupImageUrls.push(u)
+          }
         }
       }
     }
+  }
+  // eBay requires imageUrls on the group — hard-fail if still empty so the
+  // operator gets a clear message rather than a cryptic eBay error 25717.
+  if (groupImageUrls.length === 0) {
+    return results.map(r => r.status === 'ERROR' ? r : { ...r, status: 'ERROR' as const, message: 'No images found for this group — upload images via the image editor or populate image_1 on the parent row before pushing' })
   }
 
   // eBay validates Brand/Marca at the GROUP level at publish_by_inventory_item_group.
@@ -707,7 +756,7 @@ async function pushVariationGroup(
 
   const groupBody = {
     inventoryItemGroupKey: groupKey,
-    title: parentRow.title ?? '',
+    title: parentTitle,
     description: parentRow.description ?? '',
     imageUrls: groupImageUrls,
     variantSKUs: variantRows.map(r => r.sku as string),
@@ -779,7 +828,10 @@ async function pushVariationGroup(
   const currency = mp === 'UK' ? 'GBP' : 'EUR'
   const catId    = (parentRow.category_id as string | undefined) ?? ''
 
-  let anyOfferFailed = false
+  // Seed from Step-1 errors: if any inventory_item PUT already failed, skip
+  // publish_by_group — eBay would reject it because the group's variantSKUs
+  // includes SKUs without valid inventory_items.
+  let anyOfferFailed = results.some(r => r.status === 'ERROR')
   for (const row of variantRows) {
     const sku   = row.sku as string
     const price = Number(row[`${mp.toLowerCase()}_price`] ?? row.price ?? 0)
@@ -1552,9 +1604,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
       for (const [familyKey, familyRows] of families) {
         if (familyRows.length > 1) {
-          // Multi-SKU family — push as variation group
+          // Multi-SKU family — push as variation group.
+          // Use the parent row's SKU as the inventoryItemGroupKey so that eBay
+          // Seller Hub shows the parent SKU as "Etichetta personalizzata" (Custom Label)
+          // rather than the internal UUID platformProductId.
+          const parentRowForKey = familyRows.find(r => r._isParent) ?? familyRows[0]
+          const resolvedGroupKey = (parentRowForKey.sku as string) || familyKey
           const groupResults = await pushVariationGroup(
-            familyKey,
+            resolvedGroupKey,
             familyRows,
             mp,
             token,
@@ -1580,6 +1637,13 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         const currency = mp === 'UK' ? 'GBP' : 'EUR';
         const lang = toListingLanguage(mp);
         const price = Number(row[`${prefix}_price`] ?? row.price ?? 0);
+
+        // P0: reject before touching eBay API so the operator gets a clear message
+        if (!price || price <= 0) {
+          perRowResults.push({ sku, market: mp, status: 'ERROR', message: `No ${mp} price set — enter a price before pushing` });
+          continue;
+        }
+
         // FCF.3 — cap at FBM-available so eBay never lists more than we hold.
         const qty = capToFbm(row._productId as string | undefined, sku, Number(row[`${prefix}_qty`] ?? row.quantity ?? 0), mp);
 
@@ -1593,37 +1657,92 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             if (url) imageUrls.push(url);
           }
 
-          // Deduplicate aspects by key (Map last-write wins for repeated keys).
-          const aspectsMap = new Map<string, string[]>();
+          // Build aspects — deduplicate by lowercase key so both aspect_Colore and
+          // aspect_colore (buildFlatRow writes both) collapse to one entry.
+          const singleAspectMap = new Map<string, string[]>(); // lowercase → value
+          const singleAspectNames = new Map<string, string>(); // lowercase → display name
           for (const [key, val] of Object.entries(row)) {
             if (key.startsWith('aspect_') && typeof val === 'string' && val) {
-              aspectsMap.set(key.slice('aspect_'.length).replace(/_/g, ' '), [val]);
+              const displayName = key.slice('aspect_'.length).replace(/_/g, ' ');
+              const lk = displayName.toLowerCase();
+              if (!singleAspectMap.has(lk)) { // first encountered wins (cased > lowercase)
+                singleAspectMap.set(lk, [val]);
+                singleAspectNames.set(lk, displayName);
+              }
             }
           }
-          if (row.ean) aspectsMap.set('EAN', [row.ean as string]);
-          if (row.mpn) aspectsMap.set('MPN', [row.mpn as string]);
-          const aspects = Object.fromEntries(aspectsMap);
+          if (row.ean) singleAspectMap.set('ean', [row.ean as string]);
+          if (row.mpn) singleAspectMap.set('mpn', [row.mpn as string]);
+
+          // Brand injection — same logic as pushVariationGroup. The eBay market-locale
+          // brand aspect key (Marca/Marke/Marque/Brand) is REQUIRED; missing it causes
+          // eBay error 25002 at publish.
+          const SINGLE_BRAND_ASPECT: Record<string, string> = {
+            IT: 'Marca', ES: 'Marca', DE: 'Marke', FR: 'Marque', UK: 'Brand', GB: 'Brand',
+          }
+          const singleTargetBrand = SINGLE_BRAND_ASPECT[mp.toUpperCase()] ?? 'Brand'
+          const singleBrandAliases = new Set(['marca', 'brand', 'marke', 'marque', 'marka'])
+          const existingBrandLk = [...singleAspectMap.keys()].find(k => singleBrandAliases.has(k))
+          if (existingBrandLk && singleAspectNames.get(existingBrandLk) !== singleTargetBrand) {
+            // Rename e.g. 'brand' → 'Marca' for EBAY_IT
+            const v = singleAspectMap.get(existingBrandLk)!
+            singleAspectMap.delete(existingBrandLk)
+            singleAspectNames.delete(existingBrandLk)
+            singleAspectMap.set(singleTargetBrand.toLowerCase(), v)
+            singleAspectNames.set(singleTargetBrand.toLowerCase(), singleTargetBrand)
+          } else if (!existingBrandLk) {
+            let brandVal = (row._brand as string | undefined ?? '').trim()
+            if (!brandVal) {
+              try {
+                const brandProd = await prisma.product.findFirst({ where: { sku }, select: { brand: true } })
+                brandVal = brandProd?.brand?.trim() ?? ''
+              } catch { /* ignore */ }
+            }
+            const bv = brandVal || 'Xavia'
+            singleAspectMap.set(singleTargetBrand.toLowerCase(), [bv])
+            singleAspectNames.set(singleTargetBrand.toLowerCase(), singleTargetBrand)
+          }
+          // Unconditional safety net
+          if (!singleAspectMap.has(singleTargetBrand.toLowerCase())) {
+            singleAspectMap.set(singleTargetBrand.toLowerCase(), ['Xavia'])
+            singleAspectNames.set(singleTargetBrand.toLowerCase(), singleTargetBrand)
+          }
+
+          // EAN 'Does not apply' fallback — same as variation path
+          const EAN_ALIASES_SINGLE = new Set(['ean', 'gtin', 'upc', 'isbn'])
+          const hasEanAspect = [...singleAspectMap.keys()].some(k => EAN_ALIASES_SINGLE.has(k))
+          if (!hasEanAspect && !row.ean) {
+            singleAspectMap.set('ean', ['Does not apply'])
+            singleAspectNames.set('ean', 'EAN')
+          }
+
+          // Reconstruct with original-cased display names
+          const aspects: Record<string, string[]> = {}
+          for (const [lk, v] of singleAspectMap) {
+            aspects[singleAspectNames.get(lk) ?? lk] = v
+          }
 
           // Translate numeric conditionId ('1000') to eBay ConditionEnum ('NEW').
           const rawCond = String(row.condition ?? '');
           const condition = CONDITION_ID_TO_ENUM[rawCond] ?? (rawCond || 'NEW');
 
+          const pkgSize = buildPackageWeightAndSize(row);
           const invBody = {
             product: {
-              title: (row.title as string) ?? sku,
+              title: (row.title as string) || sku,
               description: (row.description as string) ?? '',
               imageUrls,
               aspects,
-              ...((row.ean as string) ? { ean: [row.ean as string] } : {}),
-              ...((row.mpn as string) ? { mpn: row.mpn as string } : {}),
+              // Always set ean/mpn explicitly — 'Does not apply' is the eBay-standard
+              // sentinel for products without a GTIN/barcode.
+              ean: row.ean ? [String(row.ean)] : ['Does not apply'],
+              mpn: row.mpn ? String(row.mpn) : 'Does not apply',
             },
             condition,
             availability: {
               shipToLocationAvailability: { quantity: qty },
             },
-            ...(buildPackageWeightAndSize(row)
-              ? { packageWeightAndSize: buildPackageWeightAndSize(row) }
-              : {}),
+            ...(pkgSize ? { packageWeightAndSize: pkgSize } : {}),
           };
 
           const invRes = await fetch(invUrl, {
@@ -1782,7 +1901,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             }
           }
 
-          perRowResults.push({ sku, market: mp, status: 'PUSHED', message: 'Inventory updated' });
+          // No category_id: inventory_item was updated but no offer was created — item is
+          // not live on eBay. Surface as an error so the operator can see the gap.
+          perRowResults.push({ sku, market: mp, status: 'ERROR', message: 'category_id is required — set a category in the flat-file before pushing (offer not created, item not live)' });
         } catch (err: unknown) {
           perRowResults.push({
             sku,
@@ -1854,38 +1975,56 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             continue;
           }
 
+          const lang = toListingLanguage(mpUpper);
+          const publishHeaders = {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Content-Language': lang,
+            'Accept-Language': lang,
+            Accept: 'application/json',
+            'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
+          };
+
           const encodedSku = encodeURIComponent(listing.product.sku);
           const getOfferUrl = `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodedSku}&marketplace_id=${marketplaceId}`;
-          const getOfferRes = await fetch(getOfferUrl, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
-            },
-          });
+          const getOfferRes = await fetch(getOfferUrl, { headers: publishHeaders });
 
           if (!getOfferRes.ok) {
             results.push({ productId, market: mpUpper, status: 'ERROR', message: `Could not fetch offer: ${getOfferRes.status}` });
             continue;
           }
 
-          const offerData = (await getOfferRes.json()) as { offers?: Array<{ offerId: string }> };
-          const offerId = offerData.offers?.[0]?.offerId;
+          const offerData = (await getOfferRes.json()) as { offers?: Array<{ offerId: string; availableQuantity?: number; pricingSummary?: { price?: { value?: string; currency?: string } }; listingPolicies?: unknown; merchantLocationKey?: string; categoryId?: string; format?: string }> };
+          const existingOffer = offerData.offers?.[0];
+          const offerId = existingOffer?.offerId;
 
           if (!offerId) {
             results.push({ productId, market: mpUpper, status: 'SKIPPED', message: 'No offer found — push first' });
             continue;
           }
 
+          // Sync current qty from DB to the offer before re-publishing so the
+          // live listing reflects any qty changes made since the last push.
+          const currentQty = listing.quantity ?? existingOffer?.availableQuantity ?? 0;
+          if (currentQty !== existingOffer?.availableQuantity) {
+            const updBody = {
+              sku: listing.product.sku,
+              marketplaceId,
+              format: existingOffer?.format ?? 'FIXED_PRICE',
+              availableQuantity: currentQty,
+              ...(existingOffer?.pricingSummary ? { pricingSummary: existingOffer.pricingSummary } : {}),
+              ...(existingOffer?.listingPolicies ? { listingPolicies: existingOffer.listingPolicies } : {}),
+              ...(existingOffer?.merchantLocationKey ? { merchantLocationKey: existingOffer.merchantLocationKey } : {}),
+              ...(existingOffer?.categoryId ? { categoryId: existingOffer.categoryId } : {}),
+            };
+            await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, {
+              method: 'PUT', headers: publishHeaders, body: JSON.stringify(updBody),
+            });
+          }
+
           const publishRes = await fetch(
             `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}/publish`,
-            {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-              body: '{}',
-            },
+            { method: 'POST', headers: publishHeaders, body: '{}' },
           );
 
           if (publishRes.ok) {
@@ -1919,6 +2058,113 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     const errors = results.filter((r) => r.status === 'ERROR').length;
 
     return reply.send({ published, errors, results });
+  });
+
+  // ── DELETE /api/ebay/flat-file/offer ────────────────────────────────
+  // Withdraw/delete eBay offers for selected products + markets.
+  // Works for both unpublished offers and active listings.
+  // After deletion the DB listing is set back to DRAFT.
+  fastify.delete<{
+    Body: { rowIds: string[]; markets: string[] }
+  }>('/ebay/flat-file/offer', async (request, reply) => {
+    const { rowIds, markets } = request.body;
+
+    if (!Array.isArray(rowIds) || rowIds.length === 0) {
+      return reply.code(400).send({ error: 'rowIds must be non-empty' });
+    }
+    if (!Array.isArray(markets) || markets.length === 0) {
+      return reply.code(400).send({ error: 'markets must be non-empty' });
+    }
+
+    const connection = await prisma.channelConnection.findFirst({
+      where: { channelType: 'EBAY', isActive: true },
+      select: { id: true },
+    });
+    if (!connection) return reply.code(503).send({ error: 'No active eBay connection' });
+
+    let token: string;
+    try {
+      token = await ebayAuthService.getValidToken(connection.id);
+    } catch (err: unknown) {
+      return reply.code(503).send({ error: `Failed to get eBay token: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    const results: Array<{ productId: string; market: string; status: string; message: string }> = [];
+
+    for (const productId of rowIds) {
+      for (const mp of markets) {
+        const mpUpper = mp.toUpperCase() as Market;
+        if (!(MARKETS as readonly string[]).includes(mpUpper)) continue;
+
+        const region = mpUpper === 'UK' ? 'GB' : mpUpper;
+        const marketplaceId = toMarketplaceId(mpUpper);
+        const lang = toListingLanguage(mpUpper);
+        const deleteHeaders = {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Content-Language': lang,
+          'Accept-Language': lang,
+          'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
+        };
+
+        try {
+          const listing = await prisma.channelListing.findFirst({
+            where: { productId, channel: 'EBAY', region },
+            include: { product: { select: { sku: true } } },
+          });
+
+          if (!listing) {
+            results.push({ productId, market: mpUpper, status: 'SKIPPED', message: 'No listing found' });
+            continue;
+          }
+
+          const encodedSku = encodeURIComponent(listing.product.sku);
+          const getOfferRes = await fetch(
+            `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodedSku}&marketplace_id=${marketplaceId}`,
+            { headers: deleteHeaders },
+          );
+
+          if (!getOfferRes.ok) {
+            results.push({ productId, market: mpUpper, status: 'ERROR', message: `Could not fetch offer: ${getOfferRes.status}` });
+            continue;
+          }
+
+          const offerData = (await getOfferRes.json()) as { offers?: Array<{ offerId: string }> };
+          const offerId = offerData.offers?.[0]?.offerId;
+
+          if (!offerId) {
+            // No offer on eBay — reset DB status if stale
+            await prisma.channelListing.update({
+              where: { id: listing.id },
+              data: { listingStatus: 'DRAFT', offerActive: false, externalListingId: null },
+            });
+            results.push({ productId, market: mpUpper, status: 'SKIPPED', message: 'No offer found on eBay — DB status reset to DRAFT' });
+            continue;
+          }
+
+          const delRes = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, {
+            method: 'DELETE', headers: deleteHeaders,
+          });
+
+          if (delRes.ok || delRes.status === 204) {
+            await prisma.channelListing.update({
+              where: { id: listing.id },
+              data: { listingStatus: 'DRAFT', offerActive: false, externalListingId: null },
+            });
+            results.push({ productId, market: mpUpper, status: 'DELETED', message: `Offer ${offerId} deleted` });
+          } else {
+            const errBody = await delRes.text().catch(() => '');
+            results.push({ productId, market: mpUpper, status: 'ERROR', message: `Delete failed ${delRes.status}: ${errBody.slice(0, 200)}` });
+          }
+        } catch (err: unknown) {
+          results.push({ productId, market: mpUpper, status: 'ERROR', message: err instanceof Error ? err.message : 'Unknown error' });
+        }
+      }
+    }
+
+    const deleted = results.filter((r) => r.status === 'DELETED').length;
+    const errors2 = results.filter((r) => r.status === 'ERROR').length;
+    return reply.send({ deleted, errors: errors2, results });
   });
 
   // ── GET /api/ebay/flat-file/feed/:taskId ────────────────────────────
