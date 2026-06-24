@@ -468,10 +468,31 @@ async function pushVariationGroup(
   const nmLabel = (a: string) => nameLabels[a] || a
   const vlLabel = (a: string, v: string) => valueLabels[a]?.[v] || v
 
-  // Pre-fetch Amazon ChannelListing imageUrls per SKU as fallback for variants
-  // that have no eBay-specific images. Amazon imports per-variant images (each
-  // colour/size child ASIN has its own photo set), so this gives SKU-specific
-  // colour images without requiring the operator to manually populate image_1..6.
+  // Pre-fetch images per SKU. Priority order:
+  //   1. ProductImage rows (PI) — the canonical image store; always populated for
+  //      products that went through the image editor. Covers all colours + all sizes.
+  //   2. Amazon ChannelListing platformAttributes.imageUrls — SP-API import fallback
+  //      (only present when Amazon sync has run and stored per-variant image URLs).
+  //   3. row.image_1..image_6 — operator-entered flat-file image columns (fallback
+  //      of last resort; used per-variant in the loop below).
+  const productImagesBySku = new Map<string, string[]>()
+  try {
+    const variantSkus = variantRows.map(r => r.sku as string).filter(Boolean)
+    const piRows = await prisma.product.findMany({
+      where: { sku: { in: variantSkus }, deletedAt: null },
+      select: {
+        sku: true,
+        images: { orderBy: { sortOrder: 'asc' }, select: { url: true } },
+      },
+    })
+    for (const p of piRows) {
+      const urls = p.images.map(i => i.url).filter(Boolean)
+      if (urls.length) productImagesBySku.set(p.sku, urls)
+    }
+  } catch (err) {
+    console.warn('[ebay-push] ProductImage fetch failed', err)
+  }
+
   const amazonImagesBySku = new Map<string, string[]>()
   try {
     const variantSkus = variantRows.map(r => r.sku as string).filter(Boolean)
@@ -481,17 +502,14 @@ async function pushVariationGroup(
     })
     for (const al of amazonListings) {
       const attrs = (al.platformAttributes ?? {}) as Record<string, unknown>
-      // Normalised format (string[]) stored by our import pipeline
       let urls: string[] = Array.isArray(attrs.imageUrls)
         ? (attrs.imageUrls as string[]).filter(Boolean)
         : []
-      // SP-API raw format: main_product_image_locator: [{media_location, marketplace_id, …}]
       if (urls.length === 0 && Array.isArray(attrs.main_product_image_locator)) {
         urls = (attrs.main_product_image_locator as Array<{ media_location?: string }>)
           .map(l => l.media_location ?? '')
           .filter(Boolean)
       }
-      // Fallback: single mainImage string
       if (urls.length === 0 && typeof attrs.mainImage === 'string' && attrs.mainImage) {
         urls = [attrs.mainImage]
       }
@@ -500,6 +518,11 @@ async function pushVariationGroup(
   } catch (err) {
     console.warn('[ebay-push] Amazon image fallback fetch failed', err)
   }
+
+  // Merge: ProductImage rows win over Amazon ChannelListing platformAttributes.
+  const imagesBySku = new Map<string, string[]>()
+  for (const [sku, urls] of amazonImagesBySku) imagesBySku.set(sku, urls)
+  for (const [sku, urls] of productImagesBySku) imagesBySku.set(sku, urls) // PI wins
 
   // Detect variation axes dynamically: scan all aspect_* keys across variant
   // rows and find those with >1 distinct value. Robust against the Amazon
@@ -546,7 +569,7 @@ async function pushVariationGroup(
         const url = (row as Record<string, unknown>)[`image_${i}`] as string | undefined
         if (url) imgs.push(url)
       }
-      if (imgs.length === 0) imgs.push(...(amazonImagesBySku.get(row.sku as string) ?? []).slice(0, 6))
+      if (imgs.length === 0) imgs.push(...(imagesBySku.get(row.sku as string) ?? []).slice(0, 6))
       colorRepImages.set(colorVal, imgs)
     }
   }
@@ -636,7 +659,7 @@ async function pushVariationGroup(
         if (url) imageUrls.push(url)
       }
       if (imageUrls.length === 0) {
-        imageUrls.push(...(amazonImagesBySku.get(sku) ?? []).slice(0, 6))
+        imageUrls.push(...(imagesBySku.get(sku) ?? []).slice(0, 6))
       }
     }
     // eBay rejects inventory_item PUT with error 25717 when imageUrls is empty.
@@ -770,13 +793,19 @@ async function pushVariationGroup(
   // images in the eBay listing carousel. The per-variant inventory_items already
   // carry their own color-specific images (shown when buyer selects a color).
   if (groupImageUrls.length === 0) {
+    // Try the first variant's full image set (ProductImage rows preferred)
     const firstVariantSku = variantRows[0]?.sku as string | undefined
-    const firstVariantImages = firstVariantSku ? (amazonImagesBySku.get(firstVariantSku) ?? []) : []
+    const firstVariantImages = firstVariantSku ? (imagesBySku.get(firstVariantSku) ?? []) : []
     groupImageUrls.push(...firstVariantImages.slice(0, 6))
-    // Fallback: aggregate from remaining variants if first has none
+    // Fallback: use the colour-representative image set built in the pre-pass
+    if (groupImageUrls.length === 0 && colorRepImages.size > 0) {
+      const firstRepImages = colorRepImages.values().next().value as string[] ?? []
+      groupImageUrls.push(...firstRepImages.slice(0, 6))
+    }
+    // Last resort: aggregate unique URLs from all variants
     if (groupImageUrls.length === 0) {
       const seen = new Set<string>()
-      for (const urls of amazonImagesBySku.values()) {
+      for (const urls of imagesBySku.values()) {
         for (const u of urls) {
           if (u && !seen.has(u) && groupImageUrls.length < 6) {
             seen.add(u); groupImageUrls.push(u)
