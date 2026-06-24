@@ -362,6 +362,19 @@ function buildPackageWeightAndSize(
   return Object.keys(out).length ? out : undefined;
 }
 
+// Maps eBay marketplace short-code to the BCP-47 language tag that eBay's
+// Inventory API requires for Content-Language / Accept-Language headers.
+// eBay stores aspect names in the locale used at write time — sending en-US
+// for an EBAY_IT listing causes eBay to expect English names ("Color", "Size")
+// which then don't match the Italian category aspects ("Colore", "Taglia"),
+// triggering publish error 25013.
+function toListingLanguage(mp: string): string {
+  const MAP: Record<string, string> = {
+    IT: 'it-IT', DE: 'de-DE', FR: 'fr-FR', ES: 'es-ES', UK: 'en-GB', GB: 'en-GB',
+  }
+  return MAP[mp.toUpperCase()] ?? 'en-US'
+}
+
 async function pushVariationGroup(
   groupKey: string,
   rows: Array<Record<string, unknown>>,
@@ -373,31 +386,26 @@ async function pushVariationGroup(
   capToFbm: (pid: string | undefined, sku: string, requested: number, market?: string) => number,
 ): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
   const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
+
+  const lang = toListingLanguage(mp)
   const headers = {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
-    'Content-Language': 'en-US',
-    'Accept-Language': 'en-US',
+    'Content-Language': lang,
+    'Accept-Language': lang,
     Accept: 'application/json',
+    'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
   }
 
-  // EV.6b — eBay-only renames from the parent listing, applied to the
-  // variation specifics so the Inventory API publishes the same labels
-  // the cockpit shows (Color→Colour, Giallo→Yellow). With no renames set
-  // the helpers are identity, so the publish is unchanged.
   // EV.5b — the family load (EV.5) includes the parent *container* row
   // (_isParent). The parent is not a sellable variant: it must not get
-  // its own inventory_item nor be a group member, because eBay rejects a
-  // member that lacks values for the variesBy specifications. It IS the
-  // right source for the group-level title/description/images. Falls back
-  // gracefully when no _isParent flag is present (older data / a single
-  // product pushed as a "family").
+  // its own inventory_item nor be a group member. It IS the right source
+  // for the group-level title/description/images.
   const parentRow = rows.find((r) => r._isParent) ?? rows[0]
   const variantRowsAll = rows.filter((r) => !r._isParent)
   const variantRows = variantRowsAll.length > 0 ? variantRowsAll : rows
 
-  const variationTheme = (parentRow.variation_theme as string | undefined) ?? ''
-  const varAspectNames = variationTheme.split(',').map((s: string) => s.trim()).filter(Boolean)
+  // EV.6b — name/value renames from parent ChannelListing platformAttributes
   let nameLabels: Record<string, string> = {}
   let valueLabels: Record<string, Record<string, string>> = {}
   try {
@@ -421,17 +429,34 @@ async function pushVariationGroup(
   }
   const nmLabel = (a: string) => nameLabels[a] || a
   const vlLabel = (a: string, v: string) => valueLabels[a]?.[v] || v
-  const isVarAxis = (name: string) => varAspectNames.includes(name)
 
-  // Step 1: Create/update each individual inventory item (same as single-row flow).
-  // Variants only — never the parent container row.
+  // Detect variation axes dynamically: scan all aspect_* keys across variant
+  // rows and find those with >1 distinct value. Robust against the Amazon
+  // variation theme (e.g. "SIZE_COLOR") not matching the eBay category's
+  // locale-specific aspect names ("Colore", "Taglia" on EBAY_IT).
+  const allAspectValueSets = new Map<string, Set<string>>()
+  for (const row of variantRows) {
+    for (const [k, v] of Object.entries(row)) {
+      if (k.startsWith('aspect_') && typeof v === 'string' && v) {
+        const name = k.slice('aspect_'.length).replace(/_/g, ' ')
+        if (!allAspectValueSets.has(name)) allAspectValueSets.set(name, new Set())
+        allAspectValueSets.get(name)!.add(v)
+      }
+    }
+  }
+  const effectiveVarAxes = [...allAspectValueSets.entries()]
+    .filter(([, vals]) => vals.size > 1)
+    .map(([name]) => name)
+
+  const isVarAxis = (name: string) => effectiveVarAxes.includes(name)
+
+  // Step 1: Create/update each variant's inventory_item.
   for (const row of variantRows) {
     const sku = row.sku as string
     const aspects: Record<string, string[]> = {}
     for (const [k, v] of Object.entries(row)) {
       if (k.startsWith('aspect_') && v) {
-        const aspectName = k.replace('aspect_', '').replace(/_/g, ' ')
-          .replace(/\b\w/g, (c: string) => c.toUpperCase())
+        const aspectName = k.slice('aspect_'.length).replace(/_/g, ' ')
         if (isVarAxis(aspectName)) {
           aspects[nmLabel(aspectName)] = [vlLabel(aspectName, String(v))]
         } else {
@@ -442,20 +467,29 @@ async function pushVariationGroup(
     if (row.ean) aspects['EAN'] = [String(row.ean)]
     if (row.mpn) aspects['MPN'] = [String(row.mpn)]
 
-    const price = row[`${mp.toLowerCase()}_price`] ?? row.price ?? 0
-    // FCF.3 — cap each variant at its FBM-available pool (never oversell).
-    const qty   = capToFbm(row._productId as string | undefined, sku, Number(row[`${mp.toLowerCase()}_qty`] ?? row.quantity ?? 0), mp)
+    // FCF.3 — cap each variant at its FBM-available pool.
+    const qty = capToFbm(row._productId as string | undefined, sku, Number(row[`${mp.toLowerCase()}_qty`] ?? row.quantity ?? 0), mp)
+
+    const imageUrls: string[] = []
+    for (let i = 1; i <= 6; i++) {
+      const url = row[`image_${i}`] as string | undefined
+      if (url) imageUrls.push(url)
+    }
 
     const pkgSize = buildPackageWeightAndSize(row)
     const itemBody = {
       product: {
-        title: row.title,
+        title: row.title ?? sku,
         description: row.description ?? '',
-        imageUrls: [row.image_1, row.image_2, row.image_3].filter(Boolean),
+        imageUrls,
         aspects,
+        ...(row.ean ? { ean: [String(row.ean)] } : {}),
+        ...(row.mpn ? { mpn: String(row.mpn) } : {}),
       },
       condition: row.condition ?? 'NEW',
-      shipToLocationAvailability: { quantity: Number(qty) },
+      availability: {
+        shipToLocationAvailability: { quantity: Number(qty) },
+      },
       ...(pkgSize ? { packageWeightAndSize: pkgSize } : {}),
     }
 
@@ -464,45 +498,41 @@ async function pushVariationGroup(
     })
     if (!itemRes.ok && itemRes.status !== 204) {
       const err = await itemRes.text().catch(() => '')
-      results.push({ sku, market: mp, status: 'ERROR', message: `inventory_item PUT ${itemRes.status}: ${err.slice(0, 200)}` })
+      results.push({ sku, market: mp, status: 'ERROR', message: `inventory_item PUT ${itemRes.status}: ${err.slice(0, 300)}` })
       continue
     }
     results.push({ sku, market: mp, status: 'PUSHED', message: 'inventory_item updated' })
   }
 
-  // Step 2: Build variesBy (variationTheme + varAspectNames computed above).
-  // Collect all values per variation aspect across all rows.
-  const specMap = new Map<string, Set<string>>()
-  for (const name of varAspectNames) {
-    specMap.set(name, new Set())
-  }
-  for (const row of variantRows) {
-    for (const name of varAspectNames) {
-      const key = `aspect_${name.toLowerCase().replace(/\s+/g, '_')}`
-      const val = row[key] as string | undefined
-      if (val) specMap.get(name)?.add(val)
-    }
-  }
-  // EV.6b — render names + values through the eBay renames, consistent
-  // with the per-item aspects set in Step 1.
-  const specifications = [...specMap.entries()].map(([name, vals]) => ({
-    name: nmLabel(name),
-    values: [...vals].map((v) => vlLabel(name, v)),
-  }))
+  // Step 2: Build variesBy specifications from the detected variation axes.
+  // aspectsImageVariesBy uses the first varying axis (e.g. "Colore" for colour
+  // images). Must match a specifications.name exactly — both are run through
+  // nmLabel so renames stay consistent.
+  const specifications = effectiveVarAxes.length > 0
+    ? effectiveVarAxes.map((name) => ({
+        name: nmLabel(name),
+        values: [...(allAspectValueSets.get(name) ?? [])].map((v) => vlLabel(name, v)),
+      }))
+    : [{ name: 'Custom Bundle', values: variantRows.map(r => r.sku as string) }]
 
-  // Step 3: Create/update the inventory item group
+  // Step 3: Create/update the inventory_item_group.
+  // variantSKUs is the correct field name (plain string array, not objects).
+  const groupImageUrls: string[] = []
+  for (let i = 1; i <= 6; i++) {
+    const url = parentRow[`image_${i}`] as string | undefined
+    if (url) groupImageUrls.push(url)
+  }
+
   const groupBody = {
     inventoryItemGroupKey: groupKey,
-    // Group-level content comes from the parent container row.
     title: parentRow.title ?? '',
     description: parentRow.description ?? '',
-    imageUrls: [parentRow.image_1, parentRow.image_2, parentRow.image_3].filter(Boolean),
+    imageUrls: groupImageUrls,
+    variantSKUs: variantRows.map(r => r.sku as string),
     variesBy: {
-      aspectsImageVariesBy: varAspectNames.slice(0, 1).map(nmLabel), // first aspect drives image variation (renamed)
-      specifications: specifications.length ? specifications : [{ name: 'Model', values: variantRows.map(r => r.sku as string) }],
+      aspectsImageVariesBy: effectiveVarAxes.slice(0, 1).map(nmLabel),
+      specifications,
     },
-    // Members are the sellable variants only — never the parent.
-    inventoryItems: variantRows.map(r => ({ sku: r.sku as string })),
   }
 
   const groupRes = await fetch(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(groupKey)}`, {
@@ -510,15 +540,22 @@ async function pushVariationGroup(
   })
   if (!groupRes.ok && groupRes.status !== 204) {
     const err = await groupRes.text().catch(() => '')
-    return results.map(r => ({ ...r, status: 'ERROR' as const, message: `inventory_item_group PUT ${groupRes.status}: ${err.slice(0, 200)}` }))
+    return results.map(r => ({ ...r, status: 'ERROR' as const, message: `inventory_item_group PUT ${groupRes.status}: ${err.slice(0, 300)}` }))
   }
 
-  // Step 3.5: Create/update one eBay offer per variant.
-  // publish_by_inventory_item_group requires an UNPUBLISHED offer to exist
-  // for every member SKU before it will create the variation listing.
-  // Auto-fetch account business policies when not set on the parent row so
-  // this works without the operator having to fill in policy IDs manually.
-  const acctHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  // Step 3.5: Create/update one offer per variant.
+  // Rules for variation member offers (eBay Inventory API):
+  //   • listingDescription MUST be omitted — it comes from the group description;
+  //     including it overwrites the group description on the live listing.
+  //   • inventoryItemGroupKey is NOT a valid offer field — group linkage is
+  //     established exclusively via variantSKUs in the group PUT above.
+  //   • availableQuantity is required before publishOfferByInventoryItemGroup.
+  const acctHeaders = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
+    'Accept-Language': lang,
+  }
   let fulfillmentPolicyId = (parentRow.fulfillment_policy_id as string | undefined) ?? ''
   let paymentPolicyId     = (parentRow.payment_policy_id     as string | undefined) ?? ''
   let returnPolicyId      = (parentRow.return_policy_id      as string | undefined) ?? ''
@@ -551,19 +588,21 @@ async function pushVariationGroup(
     } catch { /* best-effort */ }
   }
 
-  const currency   = mp === 'UK' ? 'GBP' : 'EUR'
-  const catId      = (parentRow.category_id as string | undefined) ?? ''
-  const listingDesc = (parentRow.description as string | undefined) ?? ''
+  const currency = mp === 'UK' ? 'GBP' : 'EUR'
+  const catId    = (parentRow.category_id as string | undefined) ?? ''
 
+  let anyOfferFailed = false
   for (const row of variantRows) {
     const sku   = row.sku as string
     const price = Number(row[`${mp.toLowerCase()}_price`] ?? row.price ?? 0)
+    const qty   = capToFbm(row._productId as string | undefined, sku, Number(row[`${mp.toLowerCase()}_qty`] ?? row.quantity ?? 0), mp)
     const offerBody: Record<string, unknown> = {
       sku,
       marketplaceId,
       format: 'FIXED_PRICE',
-      ...(listingDesc ? { listingDescription: listingDesc } : {}),
-      ...(catId       ? { categoryId: catId }               : {}),
+      // listingDescription intentionally omitted — comes from group description
+      ...(catId ? { categoryId: catId } : {}),
+      availableQuantity: qty,
       pricingSummary: { price: { value: price.toFixed(2), currency } },
       listingPolicies: {
         ...(fulfillmentPolicyId ? { fulfillmentPolicyId } : {}),
@@ -573,10 +612,9 @@ async function pushVariationGroup(
       quantityLimitPerBuyer: 10,
     }
 
-    // GET existing offer for this SKU + marketplace
     const getOfferRes = await fetch(
       `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
-      { headers: { Authorization: `Bearer ${token}`, 'X-EBAY-C-MARKETPLACE-ID': marketplaceId } },
+      { headers: acctHeaders },
     )
     let offerId: string | null = null
     if (getOfferRes.ok) {
@@ -586,43 +624,70 @@ async function pushVariationGroup(
 
     if (offerId) {
       const upd = await fetch(`${apiBase}/sell/inventory/v1/offer/${offerId}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-EBAY-C-MARKETPLACE-ID': marketplaceId },
-        body: JSON.stringify(offerBody),
+        method: 'PUT', headers: acctHeaders, body: JSON.stringify(offerBody),
       })
       if (!upd.ok) {
         const err = await upd.text().catch(() => '')
-        return results.map(r => ({ ...r, status: 'ERROR' as const, message: `offer update ${upd.status}: ${err.slice(0, 300)}` }))
+        const msg = `offer update ${upd.status}: ${err.slice(0, 300)}`
+        const idx = results.findIndex(r => r.sku === sku)
+        if (idx >= 0) results[idx] = { ...results[idx], status: 'ERROR', message: msg }
+        else results.push({ sku, market: mp, status: 'ERROR', message: msg })
+        anyOfferFailed = true
+        continue
       }
     } else {
       const cre = await fetch(`${apiBase}/sell/inventory/v1/offer`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-EBAY-C-MARKETPLACE-ID': marketplaceId },
-        body: JSON.stringify(offerBody),
+        method: 'POST', headers: acctHeaders, body: JSON.stringify(offerBody),
       })
       if (!cre.ok) {
         const err = await cre.text().catch(() => '')
-        return results.map(r => ({ ...r, status: 'ERROR' as const, message: `offer create ${cre.status}: ${err.slice(0, 300)}` }))
+        const msg = `offer create ${cre.status}: ${err.slice(0, 300)}`
+        const idx = results.findIndex(r => r.sku === sku)
+        if (idx >= 0) results[idx] = { ...results[idx], status: 'ERROR', message: msg }
+        else results.push({ sku, market: mp, status: 'ERROR', message: msg })
+        anyOfferFailed = true
+        continue
       }
     }
   }
 
-  // Step 4: Publish via group — all variants' offers in one call
+  // If any offer failed, skip publish and return per-variant results so the
+  // operator can see exactly which SKUs need attention.
+  if (anyOfferFailed) return results
+
+  // Step 4: Publish the variation listing.
   const publishRes = await fetch(`${apiBase}/sell/inventory/v1/offer/publish_by_inventory_item_group`, {
     method: 'POST', headers,
     body: JSON.stringify({ inventoryItemGroupKey: groupKey, marketplaceId }),
   })
 
-  let listingId: string | undefined
-  if (publishRes.ok) {
-    const pubData = await publishRes.json().catch(() => ({})) as { listingId?: string }
-    listingId = pubData.listingId
-  } else {
+  if (!publishRes.ok) {
     const err = await publishRes.text().catch(() => '')
     return results.map(r => ({ ...r, status: 'ERROR' as const, message: `publish_by_group ${publishRes.status}: ${err.slice(0, 300)}` }))
   }
 
-  // Mark all rows PUSHED with the shared listingId
+  const pubData = await publishRes.json().catch(() => ({})) as { listingId?: string }
+  const listingId = pubData.listingId
+
+  // Write the shared listingId back to all variant ChannelListings.
+  const productIds = variantRows.map(r => r._productId as string).filter(Boolean)
+  const region = mp === 'UK' ? 'GB' : mp
+  if (productIds.length > 0) {
+    try {
+      await prisma.channelListing.updateMany({
+        where: { productId: { in: productIds }, channel: 'EBAY', region },
+        data: { externalListingId: listingId ?? null, listingStatus: 'ACTIVE', offerActive: true },
+      })
+      const activated = await prisma.channelListing.findMany({
+        where: { productId: { in: productIds }, channel: 'EBAY', region },
+        select: { id: true },
+      })
+      void syncActivatedListings(activated.map(l => l.id))
+    } catch {
+      /* DB write-back failure is non-fatal — listing is already live on eBay */
+    }
+  }
+
   return results.map(r => ({ ...r, status: 'PUSHED' as const, message: 'pushed as variation group', itemId: listingId }))
 }
 
@@ -1299,6 +1364,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
         const prefix = mp.toLowerCase() as Lowercase<Market>;
         const currency = mp === 'UK' ? 'GBP' : 'EUR';
+        const lang = toListingLanguage(mp);
         const price = Number(row[`${prefix}_price`] ?? row.price ?? 0);
         // FCF.3 — cap at FBM-available so eBay never lists more than we hold.
         const qty = capToFbm(row._productId as string | undefined, sku, Number(row[`${prefix}_qty`] ?? row.quantity ?? 0), mp);
@@ -1347,8 +1413,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             headers: {
               Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
-              'Content-Language': 'en-US',
-              'Accept-Language': 'en-US',
+              'Content-Language': lang,
+              'Accept-Language': lang,
               'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
             },
             body: JSON.stringify(invBody),

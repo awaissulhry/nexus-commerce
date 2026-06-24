@@ -572,8 +572,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         toast({ title: `Feed job started: ${json.taskId}`, tone: 'info' })
       } else if (json.results) {
         const errors = json.results.filter((r) => r.status === 'ERROR')
-        if (errors.length) toast.error(`${errors.length} push errors`)
-        else toast.success(`Pushed ${json.results.length} rows`)
+        if (errors.length) {
+          const first = errors[0]
+          const more = errors.length > 1 ? ` (+${errors.length - 1} more)` : ''
+          toast.error(`${first.sku}: ${first.message}${more}`)
+        } else {
+          toast.success(`Pushed ${json.results.length} rows`)
+        }
       }
     } catch (err) {
       toast.error('Push failed: ' + (err instanceof Error ? err.message : String(err)))
