@@ -21,7 +21,7 @@
 // Best Offer + policies stay direct inputs — sources beyond Manual
 // don't make sense (they're operational settings, not content).
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { DollarSign, ShieldCheck, Sparkles, Save, Loader2, ExternalLink } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -160,7 +160,9 @@ export default function PricingPoliciesCard(props: Props) {
   // pricing endpoint instead of the offer-policies one. The
   // FieldSourceRow handles its own value buffer; we read it back on
   // save via a ref-style closure.
-  const [priceBuffer, setPriceBuffer] = useState<string>(
+  // Track the FieldSourceRow's current price value via ref — no state
+  // needed since the value is only read on save, not rendered directly.
+  const priceBufferRef = useRef<string>(
     initial.priceOverride != null ? String(initial.priceOverride) : '',
   )
 
@@ -172,7 +174,7 @@ export default function PricingPoliciesCard(props: Props) {
       // 1. Save pricing via existing endpoint.
       const pricingBody: Record<string, unknown> = { pricingRule: rule }
       if (rule === 'FIXED' || rule === 'MATCH_AMAZON') {
-        pricingBody.priceOverride = priceBuffer !== '' ? parseFloat(priceBuffer) : null
+        pricingBody.priceOverride = priceBufferRef.current !== '' ? parseFloat(priceBufferRef.current) : null
       }
       if (rule === 'PERCENT_OF_MASTER') {
         pricingBody.priceAdjustmentPercent = adj !== '' ? parseFloat(adj) : null
@@ -219,7 +221,7 @@ export default function PricingPoliciesCard(props: Props) {
     } finally {
       setSaving(false)
     }
-  }, [saving, rule, priceBuffer, adj, boEnabled, boAccept, boMin, fulfillmentId, paymentId, returnId, locationKey, productId, marketplace, router])
+  }, [saving, rule, adj, boEnabled, boAccept, boMin, fulfillmentId, paymentId, returnId, locationKey, productId, marketplace, router])
 
   return (
     <Card noPadding>
@@ -255,12 +257,9 @@ export default function PricingPoliciesCard(props: Props) {
               }}
             >
               {({ value, onChange }) => {
-                // Bridge the FieldSourceRow buffer to the card's local
-                // state so Save All can read it.
-                if (value !== priceBuffer) {
-                  // queueMicrotask avoids the "setState during render" warning
-                  queueMicrotask(() => setPriceBuffer(value))
-                }
+                // Sync the FieldSourceRow's current value into the ref so
+                // handleSaveAll can read it without triggering a re-render.
+                priceBufferRef.current = value
                 return (
                   <input
                     type="number"

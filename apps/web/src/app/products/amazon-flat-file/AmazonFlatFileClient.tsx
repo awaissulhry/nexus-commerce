@@ -836,7 +836,7 @@ export default function AmazonFlatFileClient({
     pushSnapshot()
     setRows((prev) => {
       const byRowId = new Map(prev.map((r) => [r._rowId as string, r]))
-      const bySku = new Map(prev.map((r) => [(r.sku as string) ?? '', r]))
+      const bySku = new Map(prev.map((r) => [String(r.item_sku ?? ''), r]))
       const updated = new Map<string, Row>()
       for (const ch of changes) {
         const row = byRowId.get(ch.rowId) ?? bySku.get(ch.sku)

@@ -69,7 +69,7 @@ export default function ApplyToSiblingsModal({ productId, marketplace, open, onC
         const u = new URL(`${getBackendUrl()}/api/amazon/cockpit/template-candidates`)
         u.searchParams.set('productId', productId)
         u.searchParams.set('marketplace', marketplace)
-        const res = await fetch(u.toString())
+        const res = await fetch(u.toString(), { credentials: 'include' })
         const json = await res.json()
         if (!res.ok) setError(json?.error ?? `HTTP ${res.status}`)
         else setData(json as CandidatesResponse)
@@ -114,6 +114,7 @@ export default function ApplyToSiblingsModal({ productId, marketplace, open, onC
     try {
       const res = await fetch(`${getBackendUrl()}/api/amazon/cockpit/template-apply`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           donorProductId: productId,

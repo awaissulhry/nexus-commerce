@@ -16,7 +16,7 @@
 // IE.12b once we settle on the right "target picker" shape for
 // gallery / pool layouts.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Layers, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
@@ -84,7 +84,7 @@ export default function BulkApplyModal({
   })
   const [selectedMarketplace, setSelectedMarketplace] = useState<AmazonMarketplace>('ALL')
   // Reset when modal reopens with a different image.
-  useMemo(() => {
+  useEffect(() => {
     if (!open || !image) return
     setSelectedValues(new Set(axisValues))
     setSelectedSlot(TYPE_TO_DEFAULT_SLOT[image.type] ?? 'PT01')

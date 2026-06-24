@@ -79,6 +79,7 @@ export default function CategoryPickerModal({
   const [siblings, setSiblings] = useState<SiblingHit[]>([])
   const [siblingsLoading, setSiblingsLoading] = useState(false)
   const [pendingPick, setPendingPick] = useState<CategoryHit | null>(null)
+  const [aiRefreshKey, setAiRefreshKey] = useState(0)
   const [applying, setApplying] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
 
@@ -105,7 +106,7 @@ export default function CategoryPickerModal({
         const u = new URL(`${getBackendUrl()}/api/ebay/flat-file/category-search`)
         u.searchParams.set('q', query.trim())
         u.searchParams.set('marketplace', `EBAY_${marketplace.toUpperCase()}`)
-        const res = await fetch(u.toString())
+        const res = await fetch(u.toString(), { credentials: 'include' })
         const json = await res.json()
         if (!aborted) setSearchHits(json.categories ?? [])
       } catch {
@@ -132,6 +133,7 @@ export default function CategoryPickerModal({
           `${getBackendUrl()}/api/ebay/cockpit/suggest-categories`,
           {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               marketplace,
@@ -158,10 +160,7 @@ export default function CategoryPickerModal({
     return () => {
       aborted = true
     }
-    // mode change + once-seeded only — re-fire happens via the
-    // "Refresh suggestions" button below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode])
+  }, [mode, aiRefreshKey])
 
   // Sibling map — fires when a category is picked OR when entering
   // the tab if a current category already exists.
@@ -180,7 +179,7 @@ export default function CategoryPickerModal({
         u.searchParams.set('source', marketplace)
         u.searchParams.set('categoryName', seedName)
         u.searchParams.set('targets', siblingMarketCodes.join(','))
-        const res = await fetch(u.toString())
+        const res = await fetch(u.toString(), { credentials: 'include' })
         const json = await res.json()
         if (aborted) return
         const map = (json.map ?? {}) as Record<string, CategoryHit | null>
@@ -286,6 +285,7 @@ export default function CategoryPickerModal({
               onRefresh={() => {
                 setAiHits([])
                 setAiError(null)
+                setAiRefreshKey(k => k + 1)
               }}
               seedTitle={seedTitle}
             />

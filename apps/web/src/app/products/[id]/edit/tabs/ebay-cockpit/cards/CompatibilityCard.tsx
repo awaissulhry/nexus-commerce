@@ -312,7 +312,7 @@ export default function CompatibilityCard(props: Props) {
                   <tbody>
                     {fitments.map((f, i) => (
                       <FitmentRow
-                        key={i}
+                        key={`${f.year ?? ''}-${f.make ?? ''}-${f.model ?? ''}-${i}`}
                         fitment={f}
                         onChange={(patch) => handleUpdateFitment(i, patch)}
                         onDelete={() => handleDeleteFitment(i)}

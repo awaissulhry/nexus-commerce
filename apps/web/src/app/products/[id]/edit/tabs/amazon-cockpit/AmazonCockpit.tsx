@@ -227,7 +227,7 @@ export default function AmazonCockpit(props: Props) {
   const [lastSaveAt, setLastSaveAt] = useState<number | null>(null)
   const handleCardSaved = useCallback(() => {
     setLastSaveAt(Date.now())
-    props.onSave(listing ?? ({} as Listing))
+    if (listing) props.onSave(listing)
   }, [listing, props])
 
   const composed = useAmazonCompositor({

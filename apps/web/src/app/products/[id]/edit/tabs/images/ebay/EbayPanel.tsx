@@ -97,17 +97,18 @@ function initColorSets(listingImages: ListingImage[], axis: string, colorValues:
   const map: ColorSets = new Map()
   for (const cv of colorValues) map.set(cv, [])
 
+  // Collect (position, url) pairs per colour value, then sort by position
+  // so reload after a reorder reflects the saved order.
+  const buckets = new Map<string, Array<{ position: number; url: string }>>()
   for (const img of listingImages) {
     if (img.platform !== 'EBAY' || img.variantGroupKey !== axis) continue
     const cv = img.variantGroupValue ?? '—'
-    if (!map.has(cv)) map.set(cv, [])
-    const list = map.get(cv)!
-    // insert at correct position
-    list.push(img.url)
+    if (!buckets.has(cv)) buckets.set(cv, [])
+    buckets.get(cv)!.push({ position: img.position ?? 0, url: img.url })
   }
-  // sort each bucket by original position
-  for (const img of listingImages) {
-    if (img.platform !== 'EBAY' || img.variantGroupKey !== axis) continue
+  for (const [cv, pairs] of buckets.entries()) {
+    pairs.sort((a, b) => a.position - b.position)
+    map.set(cv, pairs.map(p => p.url))
   }
   return map
 }

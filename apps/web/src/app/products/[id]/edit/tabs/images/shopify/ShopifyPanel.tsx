@@ -236,7 +236,7 @@ export default function ShopifyPanel({
 
     // Create pending upserts for existing rows with new positions
     reordered.forEach((item, idx) => {
-      if (!item.id.startsWith('tmp_')) {
+      if (!item.id.startsWith('tmp_') && !item.fromMaster) {
         addPendingUpsert({
           id: item.id,
           scope: 'PLATFORM',
