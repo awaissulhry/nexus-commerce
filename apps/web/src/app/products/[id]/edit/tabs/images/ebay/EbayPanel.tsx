@@ -10,7 +10,7 @@
 // and the publish de-dupes per-colour against the Default set as a safety net.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, ShoppingBag, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, ShoppingBag, Star, X } from 'lucide-react'
 import { PLATFORM_RULES } from '@nexus/shared/image-validation'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
@@ -169,6 +169,22 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
     })
   }, [])
 
+  // Promote a photo to the row's lead (position 1 / Main) — the photo buyers see
+  // first for that row. Pure in-bucket move-to-front, so no duplication risk.
+  const setAsMain = useCallback((bucket: string, position: number) => {
+    setBuckets((prev) => {
+      const idx = position - 1
+      const cur = prev.get(bucket) ?? []
+      if (idx <= 0 || idx >= cur.length) return prev // already main / out of range
+      const next = new Map(prev)
+      const list = [...cur]
+      const [moved] = list.splice(idx, 1)
+      list.unshift(moved)
+      next.set(bucket, list)
+      return next
+    })
+  }, [])
+
   // Move a photo between cells (drag-reorder, incl. dragging a colour photo onto
   // the Default row = "set as cover"). No-overlap kept on cross-bucket moves.
   const move = useCallback((from: { rowKey: string | null; columnKey: string }, to: { rowKey: string | null; columnKey: string }) => {
@@ -228,6 +244,25 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
     const idx = Number(colKey) - 1
     setPickerTarget({ bucket, replaceIndex: idx < list.length ? idx : null })
   }, [buckets])
+
+  // Promote any photo to the lead (Main).
+  const onSetPrimary = useCallback((rowKey: string | null, colKey: string) => {
+    setAsMain(rowKey ?? SHARED, Number(colKey))
+  }, [setAsMain])
+
+  // ── Remove (with a guard on the lead photo) ──────────────────────────
+  // Removing the Main when other photos remain would silently promote the next
+  // one — and that photo is what buyers see first. So confirm + show the swap.
+  const [confirmRemoveMain, setConfirmRemoveMain] = useState<{ bucket: string; rowLabel: string; currentUrl: string; nextUrl: string } | null>(null)
+  const handleCellRemove = useCallback((rowKey: string | null, colKey: string) => {
+    const bucket = rowKey ?? SHARED
+    const list = buckets.get(bucket) ?? []
+    if (Number(colKey) === 1 && list.length > 1) {
+      setConfirmRemoveMain({ bucket, rowLabel: bucket === SHARED ? 'Default' : bucket, currentUrl: list[0], nextUrl: list[1] })
+      return
+    }
+    removeAt(bucket, Number(colKey))
+  }, [buckets, removeAt])
 
   // ── Publish ──────────────────────────────────────────────────────────
   const [publishing, setPublishing] = useState(false)
@@ -365,7 +400,8 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
               assign(bucket, idx < (buckets.get(bucket) ?? []).length ? idx : null, url)
             }}
             onCellMove={move}
-            onCellRemove={(rowKey, colKey) => removeAt(rowKey ?? SHARED, Number(colKey))}
+            onCellRemove={handleCellRemove}
+            onSetPrimary={onSetPrimary}
             minDimensionPx={PLATFORM_RULES.EBAY.minDimensionPx}
             ariaLabel={`eBay photos grouped by ${axis}`}
             rowHeaderLabel={axis}
@@ -381,6 +417,44 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
           onSelect={(url) => { assign(pickerTarget.bucket, pickerTarget.replaceIndex, url) }}
           onClose={() => setPickerTarget(null)}
         />
+      )}
+
+      {/* Confirm removing the Main (lead) photo — never silently change what
+          buyers see first; show exactly which photo takes over. */}
+      {confirmRemoveMain && (
+        <div className="fixed inset-0 z-[310] flex items-center justify-center bg-black/60 p-6" role="dialog" aria-modal="true" aria-label="Confirm removing the main photo">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-default shadow-2xl max-w-sm w-full p-5">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Remove the main photo?</h3>
+            <p className="text-xs text-tertiary mt-1">
+              The next photo becomes the new main for{' '}
+              <span className="font-medium text-slate-700 dark:text-slate-300">{confirmRemoveMain.rowLabel}</span>
+              {' '}— what buyers see first.
+            </p>
+            <div className="flex items-center justify-center gap-3 my-4">
+              <div className="text-center">
+                <div className="w-20 h-20 rounded-lg border border-default overflow-hidden bg-slate-50 dark:bg-slate-800 relative opacity-70">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={confirmRemoveMain.currentUrl} alt="" className="w-full h-full object-contain" />
+                  <div className="absolute inset-0 bg-red-500/10" />
+                </div>
+                <span className="text-[10px] text-red-500 mt-1 block">Removing</span>
+              </div>
+              <span className="text-tertiary text-lg leading-none">→</span>
+              <div className="text-center">
+                <div className="w-20 h-20 rounded-lg border-2 border-amber-400 overflow-hidden bg-slate-50 dark:bg-slate-800 relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={confirmRemoveMain.nextUrl} alt="" className="w-full h-full object-contain" />
+                  <Star className="absolute top-1 left-1 w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                </div>
+                <span className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 block">New main</span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setConfirmRemoveMain(null)}>Cancel</Button>
+              <Button variant="danger" size="sm" onClick={() => { removeAt(confirmRemoveMain.bucket, 1); setConfirmRemoveMain(null) }}>Remove &amp; promote</Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

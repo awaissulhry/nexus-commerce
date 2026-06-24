@@ -13,7 +13,7 @@
 // file and every channel that renders it gets the change.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Link2, Plus } from 'lucide-react'
+import { AlertTriangle, Link2, Plus, Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // ── Public types ─────────────────────────────────────────────────────────────
@@ -71,6 +71,10 @@ export interface ChannelImageGridProps {
   ) => void
   /** Remove the image in a cell. */
   onCellRemove?: (rowKey: string | null, columnKey: string) => void
+  /** Promote a cell's image to the row's primary/lead (the "Main" shown first).
+   *  Opt-in: the "set as main" affordance only appears when this is provided, so
+   *  channels that don't want it (e.g. Amazon's fixed named slots) are unchanged. */
+  onSetPrimary?: (rowKey: string | null, columnKey: string) => void
   /** Below-minimum-dimension warning threshold (px). */
   minDimensionPx?: number
   /** Accessible grid label. */
@@ -96,6 +100,10 @@ interface CellProps {
   onFileDrop?: (file: File) => void
   onMoveDrop?: (payload: { rowKey: string | null; columnKey: string; url: string }) => void
   onRemove?: () => void
+  /** Promote this filled, non-primary cell to the row's primary/lead (Main). */
+  onSetPrimary?: () => void
+  /** True when this cell sits in the primary (Main / position-1) column. */
+  isPrimaryColumn?: boolean
   /** Plain-click / Enter on a filled cell → enlarge (preview). Replace stays on
    *  the hover "Change" button. */
   onEnlarge?: () => void
@@ -103,7 +111,7 @@ interface CellProps {
 
 function ImageCell({
   cell, column, rowLabel, rowKey, isFocused, cellRef, minDimensionPx,
-  onClick, onKeyDown, onFocus, onDrop, onFileDrop, onMoveDrop, onRemove, onEnlarge,
+  onClick, onKeyDown, onFocus, onDrop, onFileDrop, onMoveDrop, onRemove, onSetPrimary, isPrimaryColumn, onEnlarge,
 }: CellProps) {
   const [isOver, setIsOver] = useState(false)
   const tooSmall = cell?.width != null && minDimensionPx != null && cell.width < minDimensionPx
@@ -193,10 +201,32 @@ function ImageCell({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={cell.url} alt="" draggable={false} className="w-full h-full object-contain bg-white" loading="lazy" decoding="async" />
 
-          {/* Column label */}
-          <div className="absolute top-0.5 right-0.5 text-[8px] font-mono bg-black/50 text-white rounded px-0.5 leading-tight">
+          {/* Column label (yields to the "set as main" star on hover) */}
+          <div className={cn('absolute top-0.5 right-0.5 text-[8px] font-mono bg-black/50 text-white rounded px-0.5 leading-tight transition-opacity', onSetPrimary && 'group-hover:opacity-0')}>
             {column.label}
           </div>
+
+          {/* Main (lead) indicator — the photo buyers see first for this row.
+              Rests at top-left; fades on hover so the × remove sits in its place. */}
+          {isPrimaryColumn && (
+            <div className="absolute top-0.5 left-0.5 transition-opacity group-hover:opacity-0 pointer-events-none" title="Main photo — shown first">
+              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]" />
+            </div>
+          )}
+
+          {/* Set as main — promote a non-primary photo to the row's lead. */}
+          {onSetPrimary && (
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={(e) => { e.stopPropagation(); onSetPrimary() }}
+              aria-label="Set as main photo"
+              title="Set as main photo"
+              className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-amber-500 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-amber-600 leading-none"
+            >
+              <Star className="w-2.5 h-2.5" />
+            </button>
+          )}
 
           {/* Inherited / master-fallback badge */}
           {cell.origin === 'inherited' && (
@@ -265,7 +295,7 @@ function ImageCell({
 
 export default function ChannelImageGrid({
   rows, columns, resolveCell, onCellClick, onCellDrop, onCellFileDrop,
-  onCellMove, onCellRemove, minDimensionPx, ariaLabel, rowHeaderLabel,
+  onCellMove, onCellRemove, onSetPrimary, minDimensionPx, ariaLabel, rowHeaderLabel,
 }: ChannelImageGridProps) {
   const rowCount = rows.length
   const colCount = columns.length
@@ -375,6 +405,8 @@ export default function ChannelImageGrid({
                     onFileDrop={onCellFileDrop ? (file) => onCellFileDrop(row.key, col.key, file) : undefined}
                     onMoveDrop={onCellMove ? (from) => onCellMove(from, { rowKey: row.key, columnKey: col.key }) : undefined}
                     onRemove={onCellRemove && cell ? () => onCellRemove(row.key, col.key) : undefined}
+                    onSetPrimary={onSetPrimary && cell && !col.isPrimary ? () => onSetPrimary(row.key, col.key) : undefined}
+                    isPrimaryColumn={col.isPrimary ?? false}
                     onEnlarge={cell ? () => setEnlarged(cell.url) : undefined}
                   />
                 )
