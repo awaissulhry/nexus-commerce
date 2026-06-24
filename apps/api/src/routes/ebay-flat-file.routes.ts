@@ -17,6 +17,7 @@ import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@nexus/database';
 import prisma from '../db.js';
 import { ebayAuthService } from '../services/ebay-auth.service.js';
+import { ebayAccountService } from '../services/ebay-account.service.js';
 import { EbayCategoryService } from '../services/ebay-category.service.js';
 import { syncActivatedListings } from '../services/listing-activation-sync.service.js';
 import { enqueueContentSyncIfEnabled } from '../services/content-auto-publish.service.js';
@@ -380,6 +381,8 @@ async function pushVariationGroup(
   rows: Array<Record<string, unknown>>,
   mp: string,
   token: string,
+  connectionId: string,
+  connectionMeta: Record<string, unknown>,
   apiBase: string,
   marketplaceId: string,
   // FCF.3 — caps each variant's qty at its FBM-available pool.
@@ -554,48 +557,45 @@ async function pushVariationGroup(
   //   • inventoryItemGroupKey is NOT a valid offer field — group linkage is
   //     established exclusively via variantSKUs in the group PUT above.
   //   • availableQuantity is required before publishOfferByInventoryItemGroup.
-  let fulfillmentPolicyId  = (parentRow.fulfillment_policy_id   as string | undefined) ?? ''
-  let paymentPolicyId      = (parentRow.payment_policy_id       as string | undefined) ?? ''
-  let returnPolicyId       = (parentRow.return_policy_id        as string | undefined) ?? ''
-  let merchantLocationKey  = (parentRow.merchant_location_key   as string | undefined) ?? ''
+  //   • merchantLocationKey (top-level on offer) is required so eBay can resolve
+  //     Item.Country; absence causes error 25002 at publish.
+  //
+  // Policy waterfall (mirrors ebay-publish.adapter.ts):
+  //   1. Per-row flat-file columns (operator override)
+  //   2. ChannelConnection.connectionMetadata.ebayPolicies (account default)
+  //   3. ebayAccountService.getSnapshot() — live eBay Account + Inventory API
+  //   Hard-fail if any required field is still missing after all three tiers.
+  const configured = ((connectionMeta.ebayPolicies ?? {}) as {
+    fulfillmentPolicyId?: string
+    paymentPolicyId?: string
+    returnPolicyId?: string
+    merchantLocationKey?: string
+  })
+  let fulfillmentPolicyId = (parentRow.fulfillment_policy_id as string | undefined) || configured.fulfillmentPolicyId || ''
+  let paymentPolicyId     = (parentRow.payment_policy_id     as string | undefined) || configured.paymentPolicyId     || ''
+  let returnPolicyId      = (parentRow.return_policy_id      as string | undefined) || configured.returnPolicyId      || ''
+  let merchantLocationKey = (parentRow.merchant_location_key as string | undefined) || configured.merchantLocationKey || ''
 
-  if (!fulfillmentPolicyId) {
+  if (!fulfillmentPolicyId || !paymentPolicyId || !returnPolicyId || !merchantLocationKey) {
     try {
-      const r = await fetch(`${apiBase}/sell/account/v1/fulfillment_policy?marketplace_id=${marketplaceId}`, { headers })
-      if (r.ok) {
-        const d = await r.json() as { fulfillmentPolicies?: Array<{ fulfillmentPolicyId: string }> }
-        fulfillmentPolicyId = d.fulfillmentPolicies?.[0]?.fulfillmentPolicyId ?? ''
-      }
-    } catch { /* best-effort */ }
+      const snapshot = await ebayAccountService.getSnapshot(connectionId, marketplaceId)
+      if (!fulfillmentPolicyId) fulfillmentPolicyId = snapshot.fulfillmentPolicies[0]?.id ?? ''
+      if (!paymentPolicyId)     paymentPolicyId     = snapshot.paymentPolicies[0]?.id     ?? ''
+      if (!returnPolicyId)      returnPolicyId      = snapshot.returnPolicies[0]?.id      ?? ''
+      if (!merchantLocationKey) merchantLocationKey = snapshot.locations[0]?.key           ?? ''
+    } catch (err) {
+      const msg = `Could not fetch seller policies: ${err instanceof Error ? err.message : String(err)}`
+      return rows.map(r => ({ sku: (r.sku ?? '') as string, market: mp, status: 'ERROR' as const, message: msg }))
+    }
   }
-  if (!returnPolicyId) {
-    try {
-      const r = await fetch(`${apiBase}/sell/account/v1/return_policy?marketplace_id=${marketplaceId}`, { headers })
-      if (r.ok) {
-        const d = await r.json() as { returnPolicies?: Array<{ returnPolicyId: string }> }
-        returnPolicyId = d.returnPolicies?.[0]?.returnPolicyId ?? ''
-      }
-    } catch { /* best-effort */ }
-  }
-  if (!paymentPolicyId) {
-    try {
-      const r = await fetch(`${apiBase}/sell/account/v1/payment_policy?marketplace_id=${marketplaceId}`, { headers })
-      if (r.ok) {
-        const d = await r.json() as { paymentPolicies?: Array<{ paymentPolicyId: string }> }
-        paymentPolicyId = d.paymentPolicies?.[0]?.paymentPolicyId ?? ''
-      }
-    } catch { /* best-effort */ }
-  }
-  // merchantLocationKey is required so eBay can resolve Item.Country (error 25002).
-  // Read from row data first; fall back to first active seller location.
-  if (!merchantLocationKey) {
-    try {
-      const r = await fetch(`${apiBase}/sell/inventory/v1/location?limit=1`, { headers })
-      if (r.ok) {
-        const d = await r.json() as { locations?: Array<{ merchantLocationKey: string }> }
-        merchantLocationKey = d.locations?.[0]?.merchantLocationKey ?? ''
-      }
-    } catch { /* best-effort */ }
+
+  const missing: string[] = []
+  if (!merchantLocationKey) missing.push('merchantLocation (configure in eBay Seller Hub > Inventory > Locations)')
+  if (!fulfillmentPolicyId) missing.push('fulfillmentPolicy')
+  if (!returnPolicyId)      missing.push('returnPolicy')
+  if (missing.length > 0) {
+    const msg = `Missing required seller settings: ${missing.join(', ')}`
+    return rows.map(r => ({ sku: (r.sku ?? '') as string, market: mp, status: 'ERROR' as const, message: msg }))
   }
 
   const currency = mp === 'UK' ? 'GBP' : 'EUR'
@@ -1157,10 +1157,11 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'No valid target markets specified' });
     }
 
-    // Get eBay connection
+    // Get eBay connection — connectionMetadata carries ebayPolicies (policy IDs +
+    // merchantLocationKey) configured by the operator in account settings.
     const connection = await prisma.channelConnection.findFirst({
       where: { channelType: 'EBAY', isActive: true },
-      select: { id: true },
+      select: { id: true, connectionMetadata: true },
     });
 
     if (!connection) {
@@ -1359,6 +1360,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             familyRows,
             mp,
             token,
+            connection.id,
+            (connection.connectionMetadata ?? {}) as Record<string, unknown>,
             EBAY_API_BASE,
             marketplaceId,
             capToFbm,
@@ -1446,115 +1449,89 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
           const categoryId = row.category_id as string | undefined;
           if (categoryId) {
-            // Resolve merchantLocationKey for Item.Country (error 25002 if absent).
-            let singleMlk = (row.merchant_location_key as string | undefined) ?? ''
-            if (!singleMlk) {
-              try {
-                const mlkRes = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/location?limit=1`, {
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                    'Content-Language': lang,
-                    'Accept-Language': lang,
-                    Accept: 'application/json',
-                    'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
-                  },
-                })
-                if (mlkRes.ok) {
-                  const d = await mlkRes.json() as { locations?: Array<{ merchantLocationKey: string }> }
-                  singleMlk = d.locations?.[0]?.merchantLocationKey ?? ''
-                }
-              } catch { /* best-effort */ }
+            // Single headers object reused for all steps (mirrors ebay-publish.adapter.ts).
+            // Both Content-Language AND Accept-Language required on every Inventory API call.
+            const singleHeaders = {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'Content-Language': lang,
+              'Accept-Language': lang,
+              Accept: 'application/json',
+              'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
+            };
+
+            // Policy waterfall — row data → connectionMetadata → live snapshot.
+            // Hard-fail if merchantLocationKey cannot be resolved (causes error 25002).
+            const connMeta = ((connection.connectionMetadata ?? {}) as Record<string, unknown>)
+            const connPolicies = ((connMeta.ebayPolicies ?? {}) as {
+              fulfillmentPolicyId?: string; paymentPolicyId?: string;
+              returnPolicyId?: string; merchantLocationKey?: string;
+            })
+            let sFulfillmentId  = (row.fulfillment_policy_id  as string | undefined) || connPolicies.fulfillmentPolicyId  || ''
+            let sPaymentId      = (row.payment_policy_id      as string | undefined) || connPolicies.paymentPolicyId      || ''
+            let sReturnId       = (row.return_policy_id       as string | undefined) || connPolicies.returnPolicyId       || ''
+            let sMlk            = (row.merchant_location_key  as string | undefined) || connPolicies.merchantLocationKey   || ''
+            if (!sFulfillmentId || !sPaymentId || !sReturnId || !sMlk) {
+              const snap = await ebayAccountService.getSnapshot(connection.id, marketplaceId)
+              if (!sFulfillmentId) sFulfillmentId = snap.fulfillmentPolicies[0]?.id ?? ''
+              if (!sPaymentId)     sPaymentId     = snap.paymentPolicies[0]?.id     ?? ''
+              if (!sReturnId)      sReturnId      = snap.returnPolicies[0]?.id      ?? ''
+              if (!sMlk)           sMlk           = snap.locations[0]?.key           ?? ''
             }
+            if (!sMlk) {
+              perRowResults.push({ sku, market: mp, status: 'ERROR',
+                message: 'Missing merchantLocation: add an inventory location in eBay Seller Hub > Inventory > Locations' })
+              continue
+            }
+
             const offerBody: Record<string, unknown> = {
               sku,
               marketplaceId,
               format: 'FIXED_PRICE',
               listingDescription: (row.description as string) ?? '',
               categoryId,
-              pricingSummary: {
-                price: {
-                  value: price.toFixed(2),
-                  currency,
-                },
-              },
+              pricingSummary: { price: { value: price.toFixed(2), currency } },
               listingPolicies: {
-                ...((row.fulfillment_policy_id as string)
-                  ? { fulfillmentPolicyId: row.fulfillment_policy_id as string }
-                  : {}),
-                ...((row.payment_policy_id as string)
-                  ? { paymentPolicyId: row.payment_policy_id as string }
-                  : {}),
-                ...((row.return_policy_id as string)
-                  ? { returnPolicyId: row.return_policy_id as string }
-                  : {}),
+                ...(sFulfillmentId ? { fulfillmentPolicyId: sFulfillmentId } : {}),
+                ...(sPaymentId     ? { paymentPolicyId: sPaymentId }         : {}),
+                ...(sReturnId      ? { returnPolicyId: sReturnId }           : {}),
               },
-              ...(singleMlk ? { merchantLocationKey: singleMlk } : {}),
+              merchantLocationKey: sMlk,
               quantityLimitPerBuyer: 10,
             };
 
             // Check if offer exists
             const getOfferUrl = `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodedSku}&marketplace_id=${marketplaceId}`;
-            const getOfferRes = await fetch(getOfferUrl, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
-              },
-            });
+            const getOfferRes = await fetch(getOfferUrl, { headers: singleHeaders });
 
             let offerId: string | null = null;
             if (getOfferRes.ok) {
-              const offerData = (await getOfferRes.json()) as {
-                offers?: Array<{ offerId: string }>;
-              };
+              const offerData = (await getOfferRes.json()) as { offers?: Array<{ offerId: string }> };
               offerId = offerData.offers?.[0]?.offerId ?? null;
             }
 
             if (offerId) {
               const updateOfferRes = await fetch(
                 `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`,
-                {
-                  method: 'PUT',
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                    'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
-                  },
-                  body: JSON.stringify(offerBody),
-                },
+                { method: 'PUT', headers: singleHeaders, body: JSON.stringify(offerBody) },
               );
               if (!updateOfferRes.ok) {
                 const errBody = await updateOfferRes.text().catch(() => '');
-                perRowResults.push({
-                  sku,
-                  market: mp,
-                  status: 'ERROR',
-                  message: `Offer update ${updateOfferRes.status}: ${errBody.slice(0, 300)}`,
-                });
+                perRowResults.push({ sku, market: mp, status: 'ERROR',
+                  message: `Offer update ${updateOfferRes.status}: ${errBody.slice(0, 300)}` });
                 continue;
               }
             } else {
               const createOfferRes = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer`, {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                  'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
-                },
-                body: JSON.stringify(offerBody),
+                method: 'POST', headers: singleHeaders, body: JSON.stringify(offerBody),
               });
-
               if (createOfferRes.ok) {
                 const offerResp = (await createOfferRes.json()) as { offerId?: string };
                 offerId = offerResp.offerId ?? null;
               } else {
                 const errBody = await createOfferRes.text().catch(() => '');
-                perRowResults.push({
-                  sku,
-                  market: mp,
-                  status: 'ERROR',
-                  message: `Offer create ${createOfferRes.status}: ${errBody.slice(0, 300)}`,
-                });
+                perRowResults.push({ sku, market: mp, status: 'ERROR',
+                  message: `Offer create ${createOfferRes.status}: ${errBody.slice(0, 300)}` });
                 continue;
               }
             }
@@ -1562,14 +1539,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             if (offerId) {
               const publishRes = await fetch(
                 `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}/publish`,
-                {
-                  method: 'POST',
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: '{}',
-                },
+                { method: 'POST', headers: singleHeaders, body: '{}' },
               );
 
               if (publishRes.ok) {
