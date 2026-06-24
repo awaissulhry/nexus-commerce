@@ -108,6 +108,7 @@ function buildFlatRow(
     parentId?: string | null;
     variationTheme?: string | null;
     categoryAttributes?: unknown;
+    brand?: string | null;
     images?: Array<{ url: string; sortOrder: number; type: string }>;
     channelListings: Array<{
       id: string;
@@ -202,6 +203,7 @@ function buildFlatRow(
     fulfillment_policy_id: (firstAttrs.fulfillmentPolicyId as string | undefined) ?? '',
     payment_policy_id: (firstAttrs.paymentPolicyId as string | undefined) ?? '',
     return_policy_id: (firstAttrs.returnPolicyId as string | undefined) ?? '',
+    _brand: product.brand ?? '',
     // legacy single-market fields (backward compat)
     listing_status: first?.listingStatus ?? 'DRAFT',
     last_pushed_at: first?.updatedAt.toISOString() ?? '',
@@ -489,6 +491,25 @@ async function pushVariationGroup(
     }
     if (row.ean) aspectsMap.set('EAN', [String(row.ean)])
     if (row.mpn) aspectsMap.set('MPN', [String(row.mpn)])
+
+    // eBay requires the market-localised brand aspect ("Marca" for IT/ES,
+    // "Marke" for DE, "Marque" for FR, "Brand" for UK). Normalise any
+    // existing brand-like key, or inject from Product.brand (_brand on row).
+    const BRAND_ASPECT: Record<string, string> = {
+      IT: 'Marca', ES: 'Marca', DE: 'Marke', FR: 'Marque', UK: 'Brand', GB: 'Brand',
+    }
+    const targetBrandAspect = BRAND_ASPECT[mp.toUpperCase()] ?? 'Brand'
+    const BRAND_ALIASES = new Set(['marca', 'brand', 'marke', 'marque', 'marka'])
+    const existingBrandKey = [...aspectsMap.keys()].find(k => BRAND_ALIASES.has(k.toLowerCase()))
+    if (existingBrandKey && existingBrandKey !== targetBrandAspect) {
+      const v = aspectsMap.get(existingBrandKey)!
+      aspectsMap.delete(existingBrandKey)
+      aspectsMap.set(targetBrandAspect, v)
+    } else if (!existingBrandKey) {
+      const brandVal = String(row._brand ?? '').trim()
+      if (brandVal) aspectsMap.set(targetBrandAspect, [brandVal])
+    }
+
     const aspects = Object.fromEntries(aspectsMap)
 
     // FCF.3 — cap each variant at its FBM-available pool.
