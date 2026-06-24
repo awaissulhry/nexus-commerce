@@ -388,6 +388,10 @@ async function pushVariationGroup(
   const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
 
   const lang = toListingLanguage(mp)
+  // eBay Sell Inventory API requires BOTH Content-Language AND Accept-Language
+  // on every call (inventory_item, inventory_item_group, offer, publish).
+  // Sending only one triggers error 25709 ("Invalid value for Content-Language
+  // header"). Use one headers object for all steps — mirrors ebay-publish.adapter.ts.
   const headers = {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
@@ -550,21 +554,13 @@ async function pushVariationGroup(
   //   • inventoryItemGroupKey is NOT a valid offer field — group linkage is
   //     established exclusively via variantSKUs in the group PUT above.
   //   • availableQuantity is required before publishOfferByInventoryItemGroup.
-  // Offer + policy endpoints do NOT accept language headers (error 25709).
-  // Locale is conveyed via X-EBAY-C-MARKETPLACE-ID only.
-  const acctHeaders = {
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-    'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
-    Accept: 'application/json',
-  }
   let fulfillmentPolicyId = (parentRow.fulfillment_policy_id as string | undefined) ?? ''
   let paymentPolicyId     = (parentRow.payment_policy_id     as string | undefined) ?? ''
   let returnPolicyId      = (parentRow.return_policy_id      as string | undefined) ?? ''
 
   if (!fulfillmentPolicyId) {
     try {
-      const r = await fetch(`${apiBase}/sell/account/v1/fulfillment_policy?marketplace_id=${marketplaceId}`, { headers: acctHeaders })
+      const r = await fetch(`${apiBase}/sell/account/v1/fulfillment_policy?marketplace_id=${marketplaceId}`, { headers: headers })
       if (r.ok) {
         const d = await r.json() as { fulfillmentPolicies?: Array<{ fulfillmentPolicyId: string }> }
         fulfillmentPolicyId = d.fulfillmentPolicies?.[0]?.fulfillmentPolicyId ?? ''
@@ -573,7 +569,7 @@ async function pushVariationGroup(
   }
   if (!returnPolicyId) {
     try {
-      const r = await fetch(`${apiBase}/sell/account/v1/return_policy?marketplace_id=${marketplaceId}`, { headers: acctHeaders })
+      const r = await fetch(`${apiBase}/sell/account/v1/return_policy?marketplace_id=${marketplaceId}`, { headers: headers })
       if (r.ok) {
         const d = await r.json() as { returnPolicies?: Array<{ returnPolicyId: string }> }
         returnPolicyId = d.returnPolicies?.[0]?.returnPolicyId ?? ''
@@ -582,7 +578,7 @@ async function pushVariationGroup(
   }
   if (!paymentPolicyId) {
     try {
-      const r = await fetch(`${apiBase}/sell/account/v1/payment_policy?marketplace_id=${marketplaceId}`, { headers: acctHeaders })
+      const r = await fetch(`${apiBase}/sell/account/v1/payment_policy?marketplace_id=${marketplaceId}`, { headers: headers })
       if (r.ok) {
         const d = await r.json() as { paymentPolicies?: Array<{ paymentPolicyId: string }> }
         paymentPolicyId = d.paymentPolicies?.[0]?.paymentPolicyId ?? ''
@@ -616,7 +612,7 @@ async function pushVariationGroup(
 
     const getOfferRes = await fetch(
       `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
-      { headers: acctHeaders },
+      { headers: headers },
     )
     let offerId: string | null = null
     if (getOfferRes.ok) {
@@ -626,7 +622,7 @@ async function pushVariationGroup(
 
     if (offerId) {
       const upd = await fetch(`${apiBase}/sell/inventory/v1/offer/${offerId}`, {
-        method: 'PUT', headers: acctHeaders, body: JSON.stringify(offerBody),
+        method: 'PUT', headers: headers, body: JSON.stringify(offerBody),
       })
       if (!upd.ok) {
         const err = await upd.text().catch(() => '')
@@ -639,7 +635,7 @@ async function pushVariationGroup(
       }
     } else {
       const cre = await fetch(`${apiBase}/sell/inventory/v1/offer`, {
-        method: 'POST', headers: acctHeaders, body: JSON.stringify(offerBody),
+        method: 'POST', headers: headers, body: JSON.stringify(offerBody),
       })
       if (!cre.ok) {
         const err = await cre.text().catch(() => '')
