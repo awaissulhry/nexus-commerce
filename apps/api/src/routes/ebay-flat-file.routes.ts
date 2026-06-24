@@ -712,6 +712,8 @@ async function pushVariationGroup(
   if (!parentTitle) {
     return results.map(r => ({ ...r, status: 'ERROR' as const, message: 'Missing title on parent row — set a title before pushing' }))
   }
+  // eBay group title max is 80 chars — truncate silently to avoid error 25718.
+  if (parentTitle.length > 80) parentTitle = parentTitle.slice(0, 80)
   const groupImageUrls: string[] = []
   for (let i = 1; i <= 6; i++) {
     const url = parentRow[`image_${i}`] as string | undefined
@@ -769,9 +771,34 @@ async function pushVariationGroup(
     },
   }
 
-  const groupRes = await fetch(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(groupKey)}`, {
+  let groupRes = await fetch(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(groupKey)}`, {
     method: 'PUT', headers, body: JSON.stringify(groupBody),
   })
+
+  // eBay error 25703: one or more SKUs are already members of a DIFFERENT group
+  // (typically the old UUID-based group from a previous push before we switched to
+  // parent-SKU keys). Recover automatically: extract the old groupId from the error
+  // body, delete it to release the SKUs, and retry the PUT with the new key.
+  if (!groupRes.ok && groupRes.status === 400) {
+    const errText = await groupRes.text().catch(() => '')
+    const match25703 = errText.match(/"errorId":25703[^}]*"groupId":\s*"([^"]+)"/s)
+      ?? errText.match(/"groupId":\s*"([^"]+)"/)
+    if (match25703) {
+      const oldGroupId = match25703[1]
+      if (oldGroupId && oldGroupId !== groupKey) {
+        console.log(`[ebay-push] 25703 — deleting old group ${oldGroupId} to migrate to new key ${groupKey}`)
+        await fetch(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(oldGroupId)}`, {
+          method: 'DELETE', headers,
+        }).catch(() => {/* non-fatal if already gone */})
+        // Brief pause for eBay to release the SKU memberships
+        await new Promise(r => setTimeout(r, 1000))
+        groupRes = await fetch(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(groupKey)}`, {
+          method: 'PUT', headers, body: JSON.stringify(groupBody),
+        })
+      }
+    }
+  }
+
   if (!groupRes.ok && groupRes.status !== 204) {
     const err = await groupRes.text().catch(() => '')
     return results.map(r => ({ ...r, status: 'ERROR' as const, message: `inventory_item_group PUT ${groupRes.status}: ${err.slice(0, 300)}` }))
