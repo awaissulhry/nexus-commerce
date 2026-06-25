@@ -634,7 +634,7 @@ export default function FlatFileGrid({
   onReplicate,
   renderChannelStrip, renderPushExtras, renderFeedBanner, renderModals,
   renderToolbarFetch, renderToolbarImport, renderBar3Left,
-  renderAiPanel,
+  renderAiPanel, renderEmptyAction,
 }: FlatFileGridProps) {
   const router = useRouter()
   const { toast } = useToast()
@@ -1826,8 +1826,16 @@ export default function FlatFileGrid({
               })()}
 
               {filteredRows.length === 0 && !loading && (
-                <tr><td colSpan={allColumns.length + 2} className="px-6 py-6 text-center text-sm text-slate-400 italic">
-                  {searchQuery ? 'No rows match your search.' : 'No rows yet.'}
+                <tr><td colSpan={allColumns.length + 2} className="px-6 py-10 text-center">
+                  {searchQuery ? (
+                    <span className="text-sm text-slate-400 italic">No rows match your search.</span>
+                  ) : (
+                    <div className="flex flex-col items-center gap-1.5">
+                      <p className="text-sm font-medium text-slate-600 dark:text-slate-300">No products yet</p>
+                      <p className="text-xs text-slate-400 max-w-md">Add your first listing to get started — choose a parent if it has variations (sizes, colours), or a single item if it doesn’t.</p>
+                      {renderEmptyAction ? <div className="mt-1">{renderEmptyAction()}</div> : null}
+                    </div>
+                  )}
                 </td></tr>
               )}
 

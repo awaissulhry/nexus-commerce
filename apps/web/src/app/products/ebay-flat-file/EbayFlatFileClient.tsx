@@ -1507,6 +1507,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       onReplicate={onReplicate}
       renderChannelStrip={renderChannelStrip}
       renderPushExtras={renderPushExtras}
+      renderEmptyAction={() => (
+        <Button size="sm" onClick={() => setAddListingOpen(true)}>
+          <Plus className="w-3.5 h-3.5 mr-1.5" />Add your first listing
+        </Button>
+      )}
       renderFeedBanner={renderFeedBanner}
       renderModals={renderModals as (ctx: ModalsCtx) => React.ReactNode}
       renderToolbarFetch={renderToolbarFetch}

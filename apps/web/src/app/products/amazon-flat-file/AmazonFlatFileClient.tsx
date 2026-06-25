@@ -4220,6 +4220,26 @@ export default function AmazonFlatFileClient({
                 </tr>
               )}
 
+              {/* G.2 — genuinely empty: beginner CTA distinguishing parent (variations) vs single item */}
+              {!searchQuery && displayRows.length === 0 && (
+                <tr>
+                  <td colSpan={allColumns.length + 2} className="px-6 py-10 text-center">
+                    <div className="flex flex-col items-center gap-1.5">
+                      <p className="text-sm font-medium text-slate-600 dark:text-slate-300">No products yet</p>
+                      <p className="text-xs text-slate-400 max-w-md">Add your first product to get started — &ldquo;Add a parent&rdquo; for a listing with variations (sizes, colours), or &ldquo;Add a single item&rdquo; if it has none.</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <Button size="sm" onClick={() => setAddRowsPanel({ type: 'parent', position: 'end' })}>
+                          <Plus className="w-3.5 h-3.5 mr-1.5" />Add a parent (variations)
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={() => setAddRowsPanel({ type: 'row', position: 'end' })}>
+                          <Plus className="w-3.5 h-3.5 mr-1.5" />Add a single item
+                        </Button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              )}
+
               {/* Add-row bar */}
               <tr>
                 <td colSpan={allColumns.length + 2} className="px-4 py-2 border-t border-dashed border-slate-200 dark:border-slate-700">

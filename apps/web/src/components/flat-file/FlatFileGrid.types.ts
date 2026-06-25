@@ -175,6 +175,8 @@ export interface FlatFileGridProps {
   renderBar3Left?: () => React.ReactNode
   /** A4.1 — AI assistant panel slot */
   renderAiPanel?: (ctx: AiPanelCtx) => React.ReactNode
+  /** G.2 — beginner empty-state CTA (launches the editor's add flow). */
+  renderEmptyAction?: () => React.ReactNode
 }
 
 // ── A4.1 — AI panel context ───────────────────────────────────────────────
