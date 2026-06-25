@@ -37,6 +37,7 @@ import { Badge } from '@/components/ui/Badge'
 import { IconButton } from '@/components/ui/IconButton'
 import { TagInput } from '@/design-system/primitives/TagInput'
 import { ChannelStrip } from '../ebay-flat-file/ChannelStrip'
+import { SyncHelpPanel } from '../_shared/SyncHelpPanel'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import type { FlatFileAiChange } from '@/components/flat-file/FlatFileGrid.types'
 
@@ -4052,6 +4053,11 @@ export default function AmazonFlatFileClient({
           </div>
         )}
       </header>
+
+      {/* G.4 — inventory & image sync explainer (collapsed by default) */}
+      <div className="px-3 pt-2">
+        <SyncHelpPanel channel="amazon" />
+      </div>
 
       {/* ── Empty / loading states ────────────────────────────── */}
       {!manifest && !loading && (

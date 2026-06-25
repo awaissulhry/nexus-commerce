@@ -19,6 +19,7 @@ import { ChannelStrip } from './ChannelStrip'
 import { EbayPushHistoryPanel } from './EbayPushHistoryPanel'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import { CascadeModal } from '../_shared/CascadeModal'
+import { SyncHelpPanel } from '../_shared/SyncHelpPanel'
 import { FlatFileAiPanel } from '../_shared/FlatFileAiPanel'
 import type { AiPanelCtx } from '@/components/flat-file/FlatFileGrid.types'
 import {
@@ -1086,7 +1087,10 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── Slot: channel strip ────────────────────────────────────────────────
 
   const renderChannelStrip = useCallback(() => (
-    <ChannelStrip channel="ebay" marketplace={marketplace} familyId={familyId} />
+    <div className="space-y-2">
+      <SyncHelpPanel channel="ebay" />
+      <ChannelStrip channel="ebay" marketplace={marketplace} familyId={familyId} />
+    </div>
   ), [marketplace, familyId])
 
   // ── Slot: push extras (after Save button) ─────────────────────────────
