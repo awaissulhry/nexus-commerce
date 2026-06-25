@@ -42,6 +42,8 @@ export interface EbayImportWizardProps {
   existingSkus?: Set<string>
   onImport: (rows: Record<string, unknown>[], mode: 'fill-missing' | 'overwrite') => void
   marketplace: string
+  /** when set + open, auto-parse this file (the drag-drop-on-grid entry) */
+  initialFile?: File | null
 }
 
 type MergeMode = 'fill-missing' | 'overwrite'
@@ -114,6 +116,7 @@ export function EbayImportWizard({
   existingSkus,
   onImport,
   marketplace,
+  initialFile,
 }: EbayImportWizardProps) {
   const [step, setStep] = useState(0)
   const [parsing, setParsing] = useState(false)
@@ -135,6 +138,12 @@ export function EbayImportWizard({
       setMode('fill-missing')
     }
   }, [open])
+
+  // Drag-drop-on-grid entry: when opened with a pre-loaded file, parse it.
+  useEffect(() => {
+    if (open && initialFile) onFiles([initialFile])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialFile])
 
   // The combobox target options: every eBay column + an explicit Skip option.
   const targetOptions: ComboboxOption[] = useMemo(

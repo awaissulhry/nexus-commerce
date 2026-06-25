@@ -456,6 +456,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   const [addListingOpen, setAddListingOpen] = useState(false)
   const [importWizardOpen, setImportWizardOpen] = useState(false)
+  const [importInitialFile, setImportInitialFile] = useState<File | null>(null)
   const [aspectsPanelRowId, setAspectsPanelRowId] = useState<string | null>(null)
   const [incompleteBefore, setIncompleteBefore] = useState<Array<{ sku: string; count: number }>>([])
   const [blockingErrors, setBlockingErrors] = useState<Array<{ level: 'error' | 'warn'; sku: string; field: string; msg: string }>>([])
@@ -1341,10 +1342,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       />
       <EbayImportWizard
         open={importWizardOpen}
-        onClose={() => setImportWizardOpen(false)}
+        onClose={() => { setImportWizardOpen(false); setImportInitialFile(null) }}
         columns={exportColumns}
         existingSkus={new Set(rows.map((r) => String(r.sku ?? '').trim()).filter(Boolean))}
         marketplace={marketplace}
+        initialFile={importInitialFile}
         onImport={(imported, mode) => handleImport(imported, mode, rows, setRows, pushHistory)}
       />
 
@@ -1365,7 +1367,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       )}
     </>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, pullHistoryOpen, addListingOpen, variantAxisNames, exportEbay, importWizardOpen, handleImport, exportColumns])
+  ), [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, pullHistoryOpen, addListingOpen, variantAxisNames, exportEbay, importWizardOpen, handleImport, exportColumns, importInitialFile])
 
   // ── Slot: import button ────────────────────────────────────────────────
 
@@ -1552,7 +1554,17 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   ] : []
 
   return (
-    <>
+    <div
+      style={{ display: 'contents' }}
+      onDragOver={(e) => { if (!importWizardOpen && e.dataTransfer.types.includes('Files')) e.preventDefault() }}
+      onDrop={(e) => {
+        // IE.3 — drop a spreadsheet anywhere on the editor to open the import wizard pre-loaded.
+        if (importWizardOpen || !e.dataTransfer.types.includes('Files')) return
+        e.preventDefault()
+        const f = e.dataTransfer.files?.[0]
+        if (f) { setImportInitialFile(f); setImportWizardOpen(true) }
+      }}
+    >
       {/* Pull history drawer — Phase 4 */}
       <PullHistoryDrawer
         open={pullHistoryOpen}
@@ -1661,7 +1673,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         </div>
       )}
     />
-    </>
+    </div>
   )
 }
 
