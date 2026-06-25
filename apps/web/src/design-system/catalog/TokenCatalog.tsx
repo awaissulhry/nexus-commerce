@@ -43,6 +43,7 @@ import {
   Skeleton,
   Kbd,
   Divider,
+  SegmentedControl,
   type BadgeTone,
   type PillStatus,
 } from '@/design-system/primitives'
@@ -63,6 +64,9 @@ import {
   PerformanceGraph,
   Heatmap,
   DataGrid,
+  Banner,
+  Stepper,
+  FileDropzone,
   type Column,
   ToastProvider,
   useToast,
@@ -214,6 +218,7 @@ export function TokenCatalog() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [msVal, setMsVal] = useState<string[]>(['sp', 'sd'])
   const [comboVal, setComboVal] = useState('it')
+  const [segVal, setSegVal] = useState('live')
   const [dateRange, setDateRange] = useState(() => ({ start: new Date(2026, 5, 1), end: new Date(2026, 5, 22) }))
   const [gridSel, setGridSel] = useState<Set<string>>(() => new Set(['1']))
   const [builderOpen, setBuilderOpen] = useState(false)
@@ -402,7 +407,77 @@ export function TokenCatalog() {
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Divider</div>
           <Divider />
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Segmented control</div>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+            <SegmentedControl
+              options={[
+                { value: 'live', label: 'Live' },
+                { value: 'official', label: 'Official' },
+              ]}
+              value={segVal}
+              onChange={setSegVal}
+            />
+            <SegmentedControl
+              size="sm"
+              options={[
+                { value: 'live', label: 'List' },
+                { value: 'official', label: 'Board' },
+                { value: 'cal', label: 'Calendar' },
+              ]}
+              value={segVal === 'cal' ? 'cal' : segVal}
+              onChange={setSegVal}
+            />
+            <SegmentedControl
+              disabled
+              options={[
+                { value: 'live', label: 'On' },
+                { value: 'official', label: 'Off' },
+              ]}
+              value="live"
+              onChange={() => {}}
+            />
+          </div>
         </Card>
+      </section>
+
+      <section data-cat="feedback" style={{ marginBottom: 40 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
+          Banner · Stepper · FileDropzone <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--h10-text-3)' }}>· Phase 4 · Wave 6</span>
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>
+          Inline status callouts, a multi-step progress indicator, and a generic file picker.
+        </p>
+        <DSCard padded elevated>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Banner</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <Banner variant="info" title="Sandbox mode" action={<Button size="sm">Learn more</Button>} onDismiss={() => {}}>
+              Changes here won&apos;t push to live marketplaces until you publish.
+            </Banner>
+            <Banner variant="success" title="All channels in sync">Amazon, eBay and Shopify reflect the latest catalogue.</Banner>
+            <Banner variant="warning" title="2 listings missing images">Add a main image before these can go live.</Banner>
+            <Banner variant="error" title="Publish failed — rate limited" action={<Button size="sm">Retry</Button>}>
+              Amazon throttled the feed. We&apos;ll back off and retry automatically.
+            </Banner>
+          </div>
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Stepper</div>
+          <Stepper
+            current={2}
+            steps={[
+              { key: 'details', label: 'Details' },
+              { key: 'pricing', label: 'Pricing' },
+              { key: 'images', label: 'Images' },
+              { key: 'review', label: 'Review' },
+              { key: 'publish', label: 'Publish' },
+            ]}
+          />
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>FileDropzone</div>
+          <div style={{ maxWidth: 420 }}>
+            <FileDropzone accept=".csv,.tsv,.xlsx,.xls,.json" maxBytes={10 * 1024 * 1024} onFiles={() => {}} />
+          </div>
+        </DSCard>
       </section>
 
       <section data-cat="components" style={{ marginBottom: 40 }}>

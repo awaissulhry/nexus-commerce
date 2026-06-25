@@ -498,3 +498,58 @@
   width: 0;
   height: auto;
 }
+
+/* ── SegmentedControl (single-select view toggle) ────────────────────── */
+.h10-ds-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--h10-surface-sunken);
+  border: 1px solid var(--h10-border-subtle);
+  border-radius: var(--h10-radius-lg);
+}
+.h10-ds-seg.disabled {
+  opacity: 0.55;
+}
+.h10-ds-seg-opt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--h10-text-2);
+  background: transparent;
+  border: none;
+  border-radius: var(--h10-radius-md);
+  padding: 6px 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-seg-opt:hover:not(.on):not(:disabled) {
+  color: var(--h10-text);
+}
+.h10-ds-seg-opt.on {
+  color: var(--h10-text);
+  background: var(--h10-surface);
+  box-shadow: 0 1px 2px rgb(var(--h10-shadow-rgb) / 0.14);
+}
+.h10-ds-seg-opt:focus-visible {
+  outline: none;
+  box-shadow: var(--h10-focus-ring);
+}
+.h10-ds-seg-opt:disabled {
+  cursor: not-allowed;
+}
+.h10-ds-seg-icon {
+  display: inline-flex;
+  align-items: center;
+}
+.h10-ds-seg.sm .h10-ds-seg-opt {
+  font-size: 12px;
+  padding: 4px 10px;
+}

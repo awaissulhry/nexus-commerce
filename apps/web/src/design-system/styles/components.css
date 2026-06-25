@@ -963,3 +963,229 @@
 .h10-ds-imgup-assets { align-self: flex-start; background: none; border: none; padding: 0; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--h10-primary, #1f6fde); cursor: pointer; }
 .h10-ds-imgup-assets:hover { text-decoration: underline; }
 .h10-ds-imgup-err { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #cc1100; }
+
+/* ── Banner (inline status callout) ────────────────────────────────────── */
+.h10-ds-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px 14px;
+  border: 1px solid var(--h10-border-subtle);
+  border-left-width: 3px;
+  border-radius: var(--h10-radius-lg);
+  background: var(--h10-surface);
+  color: var(--h10-text);
+}
+.h10-ds-banner-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.h10-ds-banner-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.h10-ds-banner-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--h10-text);
+  line-height: 1.35;
+}
+.h10-ds-banner-desc {
+  font-size: 12.5px;
+  color: var(--h10-text-2);
+  line-height: 1.45;
+}
+.h10-ds-banner-action {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+}
+.h10-ds-banner-dismiss {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: -2px -4px 0 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--h10-radius-sm);
+  background: none;
+  color: var(--h10-text-3);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.h10-ds-banner-dismiss:hover {
+  background: var(--h10-surface-hover);
+  color: var(--h10-text);
+}
+.h10-ds-banner.info {
+  border-left-color: var(--h10-info);
+  background: var(--h10-info-soft);
+}
+.h10-ds-banner.info .h10-ds-banner-icon { color: var(--h10-info); }
+.h10-ds-banner.success {
+  border-left-color: var(--h10-success);
+  background: var(--h10-success-soft);
+}
+.h10-ds-banner.success .h10-ds-banner-icon { color: var(--h10-success-strong); }
+.h10-ds-banner.warning {
+  border-left-color: var(--h10-warning);
+  background: var(--h10-warning-soft);
+}
+.h10-ds-banner.warning .h10-ds-banner-icon { color: var(--h10-warning-strong); }
+.h10-ds-banner.error {
+  border-left-color: var(--h10-danger);
+  background: var(--h10-danger-soft);
+}
+.h10-ds-banner.error .h10-ds-banner-icon { color: var(--h10-danger-strong); }
+
+/* ── Stepper (horizontal step progress) ────────────────────────────────── */
+.h10-ds-stepper {
+  display: flex;
+  align-items: flex-start;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.h10-ds-step {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  text-align: center;
+  min-width: 0;
+}
+.h10-ds-step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--h10-radius-round);
+  background: var(--h10-surface);
+  border: 1.5px solid var(--h10-border-strong);
+  color: var(--h10-text-3);
+  z-index: 1;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.h10-ds-step-num {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+.h10-ds-step-label {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--h10-text-3);
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* connector line — sits behind the badge, spans toward the next step */
+.h10-ds-step-line {
+  position: absolute;
+  top: 13px;
+  left: calc(50% + 17px);
+  right: calc(-50% + 17px);
+  height: 2px;
+  background: var(--h10-border);
+}
+.h10-ds-step.done .h10-ds-step-badge {
+  background: var(--h10-primary);
+  border-color: var(--h10-primary);
+  color: var(--h10-text-inverse);
+}
+.h10-ds-step.done .h10-ds-step-label {
+  color: var(--h10-text-2);
+}
+.h10-ds-step.done .h10-ds-step-line {
+  background: var(--h10-primary);
+}
+.h10-ds-step.active .h10-ds-step-badge {
+  background: var(--h10-surface);
+  border-color: var(--h10-primary);
+  color: var(--h10-primary);
+  box-shadow: var(--h10-focus-ring);
+}
+.h10-ds-step.active .h10-ds-step-label {
+  color: var(--h10-text);
+  font-weight: 600;
+}
+
+/* ── FileDropzone (generic file picker) ────────────────────────────────── */
+.h10-ds-dropzone-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.h10-ds-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 26px 18px;
+  border: 1.5px dashed var(--h10-border-strong);
+  border-radius: var(--h10-radius-xl);
+  background: var(--h10-surface-sunken);
+  color: var(--h10-text-3);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.h10-ds-dropzone:hover:not(:disabled) {
+  border-color: var(--h10-primary);
+  color: var(--h10-primary);
+  background: var(--h10-primary-soft);
+}
+.h10-ds-dropzone:focus-visible {
+  outline: none;
+  border-color: var(--h10-primary);
+  border-style: solid;
+  box-shadow: var(--h10-focus-ring);
+}
+.h10-ds-dropzone.drag {
+  border-color: var(--h10-primary);
+  border-style: solid;
+  background: var(--h10-primary-soft);
+  color: var(--h10-primary);
+}
+.h10-ds-dropzone:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.h10-ds-dropzone-primary {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--h10-text-2);
+}
+.h10-ds-dropzone:hover:not(:disabled) .h10-ds-dropzone-primary,
+.h10-ds-dropzone.drag .h10-ds-dropzone-primary {
+  color: var(--h10-primary);
+}
+.h10-ds-dropzone-hint {
+  font-size: 11.5px;
+  color: var(--h10-text-3);
+}
+.h10-ds-dropzone-input {
+  display: none;
+}
+.h10-ds-dropzone-err {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--h10-danger-strong);
+}
