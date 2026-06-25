@@ -4750,6 +4750,34 @@ interface RowProps {
   onCascadeRow: (row: Row) => void
 }
 
+// Per-row required-fields completeness. Counts the SAME required cells the grid
+// reddens — i.e. col.required AND applicable to this row — mirroring the cell's
+// own applicability gates (applicableParentage greying L5012-5019,
+// applicableProductTypes L5024-5025, FBA-qty greying L5030-5031) and emptiness
+// (value != null ? String : '' → isEmpty, L5293/5345). Greyed/not-applicable
+// required cells are excluded so the chip never over-counts.
+function computeRowCompleteness(row: Row, columns: Column[]): { filled: number; total: number } {
+  if (row._ghost) return { filled: 0, total: 0 }
+  const parentage = String(row.parentage_level ?? '')
+  const rowType = parentage.toLowerCase() === 'parent' ? 'VARIATION_PARENT'
+    : parentage.toLowerCase() === 'child' ? 'VARIATION_CHILD'
+    : 'STANDALONE'
+  let total = 0, filled = 0
+  for (const col of columns) {
+    if (!col.required) continue
+    // applicableParentage greying (mirrors guidanceLevel === 'not-applicable')
+    if (col.applicableParentage?.length && !col.applicableParentage.includes(rowType)) continue
+    // applicableProductTypes greying (mirrors !appliesToType)
+    if (col.applicableProductTypes && !col.applicableProductTypes.includes(String(row.product_type ?? '').toUpperCase())) continue
+    // FBA-managed quantity is greyed/not-applicable on FBA rows
+    if (col.id === 'fulfillment_availability__quantity'
+      && /^(AMAZON|AFN|FBA)/.test(String(row.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase())) continue
+    total++
+    if (row[col.id] != null && String(row[col.id]) !== '') filled++
+  }
+  return { filled, total }
+}
+
 function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell,
   marketplace, colWidths, rowHeight, rowHeaderWidth, showRowImages, imageSize, imagesByAsin,
   isDraggingRow, dropIndicator,
@@ -4926,6 +4954,24 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
               : s === 'INACTIVE' ? 'text-amber-500 dark:text-amber-400'
               : 'text-red-500 dark:text-red-400'
             return <span className={cn('text-[9px] font-semibold leading-none', cls)}>{s.slice(0, 4)}</span>
+          })()}
+
+          {/* Required-fields completeness chip — mirrors the eBay flat file; counts
+              the same required cells the grid reddens (greyed/N-A excluded). */}
+          {!row._ghost && (() => {
+            const { filled, total } = computeRowCompleteness(row, columns)
+            if (total === 0) return null
+            const complete = filled === total
+            const empty = filled === 0
+            return (
+              <span
+                className={cn('shrink-0 font-mono text-[9px] rounded px-1 py-0.5 tabular-nums leading-none',
+                  complete ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                  : empty  ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400'
+                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300')}
+                title={`${filled}/${total} required fields filled`}
+              >{filled}/{total}</span>
+            )
           })()}
 
           {/* IN.1 — Override badge: shows when toggle is on and any field has followMaster*=false */}
