@@ -566,6 +566,7 @@ export async function pushVariationGroup(
   }
   const groupBrandKey = GROUP_BRAND_ASPECT[mp.toUpperCase()] ?? 'Brand'
   const groupBrandVal =
+    (parentRow.brand as string | undefined ?? '').trim() ||
     brandBySku.get(parentRow.sku as string) ||
     [...brandBySku.values()][0] ||
     'Xavia'
