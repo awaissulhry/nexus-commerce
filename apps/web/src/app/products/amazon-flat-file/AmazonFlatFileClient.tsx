@@ -5489,7 +5489,7 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
   isSelected, selEdges, isCorner, isFillTarget, fillTargetEdges,
   isEditing, editInitialChar, isClipboard, clipboardEdges,
   validIssue, stickyLeft, isMatch, toneCls,
-  guidanceLevel, isGhost,
+  guidanceLevel, isGhost, grayed,
   onCellPointerDown, onCellDoubleClick, onFillHandlePointerDown, onFillToBottom, onFillDrop,
   onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate }: CellProps) {
   const displayValue = value != null ? String(value) : ''
@@ -5497,13 +5497,17 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [liveLen, setLiveLen] = useState(displayValue.length)
   const cancelledRef = useRef(false)
+  // Grayed cells (e.g. FBA quantity) are read-only; deactivate immediately if the
+  // grid somehow starts editing one (e.g. via keyboard shortcut).
+  useEffect(() => { if (isEditing && grayed) onDeactivate() }, [isEditing, grayed, onDeactivate])
+  const effectivelyEditing = isEditing && !grayed
   const pendingWordSelRef = useRef<{ start: number; end: number } | null | undefined>(undefined)
   // undefined = F2 entry (select all), null = dblclick but no word found (cursor end), {start,end} = word found
   const originalValueRef = useRef('')
   const snapshotPushedRef = useRef(false)
 
   useEffect(() => {
-    if (!isEditing || col.kind === 'enum' || !inputRef.current) return
+    if (!effectivelyEditing || col.kind === 'enum' || !inputRef.current) return
     inputRef.current.focus()
     if (editInitialChar !== null) return // key-triggered entry: browser handles selection
 
@@ -5527,21 +5531,21 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
     if ('select' in inputRef.current) {
       (inputRef.current as HTMLInputElement).select()
     }
-  }, [isEditing, col.kind, editInitialChar])
+  }, [effectivelyEditing, col.kind, editInitialChar])
 
   useEffect(() => {
-    if (isEditing) {
+    if (effectivelyEditing) {
       snapshotPushedRef.current = false
     }
-  }, [isEditing])
+  }, [effectivelyEditing])
 
   // Reset counter to committed value length each time cell becomes editing
-  useEffect(() => { if (isEditing) setLiveLen(displayValue.length) }, [isEditing])
+  useEffect(() => { if (effectivelyEditing) setLiveLen(displayValue.length) }, [effectivelyEditing])
 
   // GX.2b — typing on an active enum cell (or F2) opens its dropdown, pre-filled
   // with the typed character, so Color/Size/Brand support type-to-replace too.
   useEffect(() => {
-    if (isEditing && col.kind === 'enum') setDropdownOpen(true)
+    if (effectivelyEditing && col.kind === 'enum') setDropdownOpen(true)
   }, [isEditing, col.kind])
 
   const isEmpty = !displayValue
@@ -5566,7 +5570,8 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
   } : {}
 
   const guidanceCls = !isActive && !isSelected && !isMatch && !toneCls
-    ? guidanceLevel === 'not-applicable' ? 'bg-slate-200 dark:bg-slate-700/70'
+    ? grayed                             ? 'bg-slate-200 dark:bg-slate-700/70'
+    : guidanceLevel === 'not-applicable' ? 'bg-slate-200 dark:bg-slate-700/70'
     : guidanceLevel === 'optional'       ? 'bg-slate-100/80 dark:bg-slate-800/60'
     : ''
     : ''
@@ -5585,8 +5590,8 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
     : isMatch ? 'bg-yellow-100 dark:bg-yellow-900/30'
     : toneCls ? toneCls
     : guidanceCls || cellBg,
-    isActive && !isEditing && 'outline outline-2 outline-blue-500 outline-offset-[-1px] z-[5]',
-    isEditing && 'ring-2 ring-inset ring-blue-500 z-[5]',
+    isActive && !effectivelyEditing && 'outline outline-2 outline-blue-500 outline-offset-[-1px] z-[5]',
+    effectivelyEditing && 'ring-2 ring-inset ring-blue-500 z-[5]',
     !isActive && !isSelected && !isMatch && !toneCls && !guidanceLevel && (
       validIssue?.level === 'error' ? 'bg-red-100/80 dark:bg-red-950/30'
       : validIssue?.level === 'warn' ? 'bg-amber-50/80 dark:bg-amber-950/20'
@@ -5599,7 +5604,7 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
     const tag = (e.target as HTMLElement).tagName
     // While editing, let clicks on the input/textarea pass through so the browser
     // can reposition the cursor naturally — don't exit edit mode or reset selection.
-    if (isEditing && (tag === 'INPUT' || tag === 'TEXTAREA')) return
+    if (effectivelyEditing && (tag === 'INPUT' || tag === 'TEXTAREA')) return
     e.currentTarget.releasePointerCapture(e.pointerId)
     onCellPointerDown(e.shiftKey)
   }
@@ -5655,6 +5660,7 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
     onPointerDown: tdPointerDown,
     onPointerUp: onFillDrop,
     onDoubleClick: (e: React.MouseEvent) => {
+      if (grayed) return
       // Compute word bounds NOW while static text node is still in DOM
       const charPos = getCharIndexFromPoint(e.clientX, e.clientY)
       if (charPos >= 0) {
@@ -5710,7 +5716,7 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
 
   // Longtext cell
   if (col.kind === 'longtext') {
-    if (isEditing) {
+    if (effectivelyEditing) {
       const atLimit = col.maxLength != null && liveLen >= col.maxLength
       const nearLimit = col.maxLength != null && liveLen >= col.maxLength * 0.8
       return (
@@ -5754,7 +5760,7 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
   }
 
   // Text / number cell
-  if (isEditing) {
+  if (effectivelyEditing) {
     const atLimit = col.maxLength != null && liveLen >= col.maxLength
     const nearLimit = col.maxLength != null && liveLen >= col.maxLength * 0.8
     return (
@@ -5791,13 +5797,14 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
   }
 
   return (
-    <td {...tdShared} className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
-      style={{ ...cellStyle, ...selStyle }} title={guidanceTitle ?? validIssue?.msg ?? col.description}>
+    <td {...tdShared} className={cn(baseCls, grayed ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
+      style={{ ...cellStyle, ...selStyle }} title={grayed ? 'Quantity is managed by Amazon for FBA listings' : (guidanceTitle ?? validIssue?.msg ?? col.description)}>
       {fillHandle}
       <div className={cn('px-1.5 flex items-center text-xs truncate',
-        isEmpty ? ((col.required && !isGhost) ? 'text-red-400 dark:text-red-500 italic' : 'text-slate-300 dark:text-slate-600') : 'text-slate-800 dark:text-slate-200')}
+        grayed ? 'text-slate-400 dark:text-slate-500 select-none'
+        : isEmpty ? ((col.required && !isGhost) ? 'text-red-400 dark:text-red-500 italic' : 'text-slate-300 dark:text-slate-600') : 'text-slate-800 dark:text-slate-200')}
         style={hStyle}>
-        {displayValue || ((col.required && !isGhost) ? '⚠ required' : '')}
+        {grayed ? '—' : (displayValue || ((col.required && !isGhost) ? '⚠ required' : ''))}
       </div>
     </td>
   )
