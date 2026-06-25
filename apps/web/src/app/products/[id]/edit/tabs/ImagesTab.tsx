@@ -96,7 +96,24 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
   const lightbox = useLightbox()
   const { t } = useTranslations()
 
-  const workspace = useImagesWorkspace(product.id, discardSignal, onDirtyChange)
+  // Phase 1 — eBay edits live in EbayPanel's bucket state, not the shared
+  // pendingUpserts registry. The panel reports its unsaved-edit count here and
+  // hands us an imperative flush()/discard(), so the ONE shared action bar drives
+  // Save / Discard / Publish for eBay too.
+  const [ebayDirty, setEbayDirty] = useState(0)
+  const ebayDirtyRef = useRef(0)
+  useEffect(() => { ebayDirtyRef.current = ebayDirty }, [ebayDirty])
+  const ebayControllerRef = useRef<{ flush: () => Promise<boolean>; discard: () => void } | null>(null)
+  const registerEbayController = useCallback((ctl: { flush: () => Promise<boolean>; discard: () => void } | null) => {
+    ebayControllerRef.current = ctl
+  }, [])
+  // Report the TOTAL unsaved count (shared registry + eBay buckets) to the shell.
+  const reportDirty = useCallback((ws: number) => onDirtyChange(ws + ebayDirtyRef.current), [onDirtyChange])
+
+  const workspace = useImagesWorkspace(product.id, discardSignal, reportDirty)
+  // Re-report the total whenever eBay's dirty count changes (the workspace
+  // re-reports on its own when ITS count changes, via reportDirty).
+  useEffect(() => { onDirtyChange(workspace.dirtyCount + ebayDirty) }, [ebayDirty]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function showToast(msg: string) {
     setToast(msg)
@@ -233,7 +250,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
       },
       ebay: {
         hasContent: masterExists || listing.some((i) => i.platform === 'EBAY'),
-        pendingCount: pendingFor('EBAY'),
+        pendingCount: pendingFor('EBAY') + ebayDirty,
         lastPublishedAt: maxPubAt('EBAY'),
       },
       shopify: {
@@ -242,17 +259,27 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
         lastPublishedAt: maxPubAt('SHOPIFY'),
       },
     }
-  }, [listing, master, workspace.pendingUpserts, workspace.pendingDeletes])
+  }, [listing, master, workspace.pendingUpserts, workspace.pendingDeletes, ebayDirty])
+
+  // Phase 1 — flush eBay buckets + the shared pending registry together so Save
+  // (button, Cmd+S, auto-publish pre-save) covers every channel in one go.
+  const saveAllPending = useCallback(async (): Promise<boolean> => {
+    if (ebayControllerRef.current && ebayDirtyRef.current > 0) {
+      const eok = await ebayControllerRef.current.flush()
+      if (!eok) return false
+    }
+    return workspace.savePending()
+  }, [workspace.savePending])
 
   // Cmd+S to save pending changes from any channel tab.
   // Ref keeps the latest workspace state so the listener binds once.
   const saveRef = useRef<{ save: () => Promise<boolean>; dirty: number }>({
-    save: workspace.savePending,
-    dirty: workspace.dirtyCount,
+    save: saveAllPending,
+    dirty: workspace.dirtyCount + ebayDirty,
   })
   useEffect(() => {
-    saveRef.current = { save: workspace.savePending, dirty: workspace.dirtyCount }
-  }, [workspace.savePending, workspace.dirtyCount])
+    saveRef.current = { save: saveAllPending, dirty: workspace.dirtyCount + ebayDirty }
+  }, [saveAllPending, workspace.dirtyCount, ebayDirty])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -353,6 +380,11 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
           return
         }
       }
+      // Phase 1 — flush eBay buckets too so the approver sees the real edits.
+      if (target.channel === 'EBAY' && ebayControllerRef.current && ebayDirtyRef.current > 0) {
+        const eok = await ebayControllerRef.current.flush()
+        if (!eok) { showToast('eBay save failed — fix errors before queueing approval'); return }
+      }
       if (workspace.dirtyCount > 0) {
         const ok = await savePending()
         if (!ok) {
@@ -381,6 +413,12 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
           showToast(`Save failed before publishing: ${err instanceof Error ? err.message : String(err)}`)
           return
         }
+      }
+      // Phase 1 — eBay edits live in the panel's bucket state; flush them to the
+      // DB before any reload/publish so we publish the operator's actual edits.
+      if (target.channel === 'EBAY' && ebayControllerRef.current && ebayDirtyRef.current > 0) {
+        const eok = await ebayControllerRef.current.flush()
+        if (!eok) { showToast('eBay save failed — fix errors before publishing'); return }
       }
       if (workspace.dirtyCount > 0) {
         const ok = await savePending()
@@ -520,7 +558,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
           <div className="flex items-center gap-1 flex-1 -mb-px overflow-x-auto">
             {CHANNEL_TABS.map(({ key, label }) => {
               const isActive = activeChannel === key
-              const dotCount = key === 'master' ? 0 : pendingForChannel(key as any)
+              const dotCount = key === 'master' ? 0 : pendingForChannel(key as 'amazon' | 'ebay' | 'shopify') + (key === 'ebay' ? ebayDirty : 0)
               const score = key === 'master' ? null : channelScores[key as keyof typeof channelScores]
               const pubCount = key === 'master' ? null : publishedCount[key as keyof typeof publishedCount]
               // PB.2 — count of ListingImage rows not yet PUBLISHED.
@@ -707,27 +745,8 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
               onCopyFromMaster={() => workspace.copyChannelImages({ fromPlatform: 'MASTER', toPlatform: 'EBAY', type: 'gallery', activeAxis })}
               onCopyFromAmazonGallery={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'EBAY', type: 'gallery', activeAxis })}
               onCopyFromAmazonColorSets={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'EBAY', type: 'colorSets', activeAxis })}
-              publishedCount={publishedCount.ebay}
-              onPublish={async () => {
-                const ok = await savePending()
-                if (!ok) {
-                  showToast('Save failed — fix errors before publishing')
-                  return { success: false, message: 'Save failed — fix errors first' }
-                }
-                const res = await beFetch(`/api/products/${product.id}/ebay-images/publish`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ activeAxis }),
-                })
-                const body = await res.json()
-                const message = body.message ?? (res.ok ? 'Published to eBay' : 'eBay publish failed')
-                if (res.ok && body.success !== false) {
-                  // PB.9 — capture snapshot on success (panel-side publish path).
-                  captureSnapshot({ productId: product.id, channel: 'EBAY', marketplace: null, listingImages: listing })
-                }
-                showToast(message)
-                return { success: res.ok && body.success !== false, message }
-              }}
+              onEbayDirtyChange={setEbayDirty}
+              registerController={registerEbayController}
               channelLiveImages={channelLiveImages}
               onReload={workspace.reload}
               onAdoptToMaster={(url) => handleAdoptToMaster(url)}
@@ -798,7 +817,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
       {/* ── Action bar ───────────────────────────────────────────────── */}
       <ImageActionBar
         productId={product.id}
-        dirtyCount={dirtyCount}
+        dirtyCount={dirtyCount + ebayDirty}
         saving={saving}
         publishing={publishing}
         channelStatus={channelStatus}
@@ -817,7 +836,9 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
               dirtyChannels.add(li.platform)
             }
           }
-          const ok = await savePending()
+          // Phase 1 — eBay buckets are dirty outside the shared registry.
+          if (ebayDirtyRef.current > 0) dirtyChannels.add('EBAY')
+          const ok = await saveAllPending()
           if (!ok) return
           showToast(t('products.edit.images.toasts.changesSaved'))
           // Auto-publish dispatch — sequential to keep error reporting clear.
@@ -837,6 +858,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
         }}
         onDiscard={() => {
           discardPending()
+          ebayControllerRef.current?.discard()  // Phase 1 — reset eBay buckets too
           showToast(t('products.edit.images.toasts.changesDiscarded'))
         }}
         onPublish={handlePublish}

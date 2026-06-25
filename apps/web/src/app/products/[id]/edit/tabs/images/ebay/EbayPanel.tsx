@@ -10,7 +10,7 @@
 // and the publish de-dupes per-colour against the Default set as a safety net.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, ShoppingBag, Star, X } from 'lucide-react'
+import { ChevronDown, ShoppingBag, Star } from 'lucide-react'
 import { PLATFORM_RULES } from '@nexus/shared/image-validation'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
@@ -24,6 +24,17 @@ const MIN_COLS = 12
 // Bucket key for the shared "Default (cover & common)" gallery row.
 const SHARED = '__shared__'
 
+// Phase-1 — imperative handle the panel hands to ImagesTab so the ONE shared
+// bottom action bar (Save / Discard / Publish) drives eBay too. eBay edits live
+// in this panel's bucket state, not the shared pendingUpserts registry, so the
+// parent calls flush()/discard() instead of savePending()/discardPending().
+export interface EbayController {
+  /** Persist the current buckets via images-workspace/bulk-save (no publish). */
+  flush: () => Promise<boolean>
+  /** Revert the working buckets to the saved server baseline. */
+  discard: () => void
+}
+
 interface Props {
   productId: string
   product: WorkspaceProduct
@@ -32,6 +43,10 @@ interface Props {
   variants: VariantSummary[]
   onReload?: () => void
   onToast?: (msg: string) => void
+  // Phase-1 — feed the shared dirty registry so the bottom bar shows Save/Discard
+  // for eBay and the single Publish path covers it.
+  onEbayDirtyChange?: (count: number) => void
+  registerController?: (ctl: EbayController | null) => void
   // Legacy props from the old panel — accepted but ignored so ImagesTab doesn't change.
   activeAxis?: string
   pendingUpserts?: unknown
@@ -43,8 +58,6 @@ interface Props {
   onCopyFromMaster?: () => void
   onCopyFromAmazonGallery?: () => void
   onCopyFromAmazonColorSets?: () => void
-  publishedCount?: number
-  onPublish?: () => Promise<{ success: boolean; message: string }>
   channelLiveImages?: unknown[]
   onAdoptToMaster?: (url: string) => void | Promise<void>
   onOpenRollback?: () => void
@@ -111,9 +124,29 @@ function initBuckets(listingImages: ListingImage[], axis: string, values: string
   return map
 }
 
+// Deep-copy buckets so resetting to a baseline never mutates the baseline.
+function cloneBuckets(b: Buckets): Buckets {
+  const out: Buckets = new Map()
+  for (const [k, v] of b) out.set(k, [...v])
+  return out
+}
+
+// Count cells that differ between the working buckets and the saved baseline.
+// Drives the unsaved-changes indicator; reorders count (position matters on eBay).
+function bucketsDiff(a: Buckets, b: Buckets): number {
+  const keys = new Set<string>([...a.keys(), ...b.keys()])
+  let diff = 0
+  for (const k of keys) {
+    const la = a.get(k) ?? [], lb = b.get(k) ?? []
+    const n = Math.max(la.length, lb.length)
+    for (let i = 0; i < n; i++) if (la[i] !== lb[i]) diff++
+  }
+  return diff
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
-export default function EbayPanel({ productId, product, masterImages, listingImages, variants, onReload, onToast }: Props) {
+export default function EbayPanel({ productId, product, masterImages, listingImages, variants, onReload, onToast, onEbayDirtyChange, registerController }: Props) {
   const axes = useMemo(() => availableAxes(variants), [variants])
   const [axis, setAxis] = useState<string>(() => defaultAxis(product, axes))
   const [axisOpen, setAxisOpen] = useState(false)
@@ -138,8 +171,13 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
   }, [productId])
 
   // ── Buckets state (SHARED + per-colour) ──────────────────────────────
-  const [buckets, setBuckets] = useState<Buckets>(() => initBuckets(listingImages, axis, colorValues))
-  useEffect(() => { setBuckets(initBuckets(listingImages, axis, colorValues)) }, [listingImages, axis, colorValues])
+  // `baseline` = the saved server truth; `buckets` = the working copy. Edits
+  // diverge the working copy; Save (flush) persists it, Discard resets to
+  // baseline. The divergence count feeds the shared dirty registry (Phase 1).
+  const baseline = useMemo(() => initBuckets(listingImages, axis, colorValues), [listingImages, axis, colorValues])
+  const [buckets, setBuckets] = useState<Buckets>(() => cloneBuckets(baseline))
+  useEffect(() => { setBuckets(cloneBuckets(baseline)) }, [baseline])
+  const dirtyCount = useMemo(() => bucketsDiff(buckets, baseline), [buckets, baseline])
 
   // Assign a URL to a bucket cell. No-overlap: the photo is removed from every
   // OTHER bucket first, so it can never appear twice.
@@ -264,47 +302,55 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
     removeAt(bucket, Number(colKey))
   }, [buckets, removeAt])
 
-  // ── Publish ──────────────────────────────────────────────────────────
-  const [publishing, setPublishing] = useState(false)
-  const [publishResult, setPublishResult] = useState<{ success: boolean; message: string } | null>(null)
+  // ── Save / Discard wiring (Phase 1) ──────────────────────────────────
+  // The shared bottom action bar owns Save / Discard / Publish. We hand it an
+  // imperative flush()/discard() + report our dirty count. Refs keep those
+  // callbacks stable while always reading the latest state.
+  const bucketsRef = useRef(buckets)
+  useEffect(() => { bucketsRef.current = buckets }, [buckets])
+  const axisStateRef = useRef(axis)
+  useEffect(() => { axisStateRef.current = axis }, [axis])
+  const listingRef = useRef(listingImages)
+  useEffect(() => { listingRef.current = listingImages }, [listingImages])
+  const baselineRef = useRef(baseline)
+  useEffect(() => { baselineRef.current = baseline }, [baseline])
 
-  async function handlePublish() {
-    setPublishing(true)
-    setPublishResult(null)
+  // flush — persist the working buckets as eBay ListingImage rows (full replace of
+  // the Default + this-axis colour rows; per-SKU + other-axis rows untouched).
+  // Does NOT publish — publishing is the bottom bar's single Publish action.
+  const flush = useCallback(async (): Promise<boolean> => {
+    const upserts: ListingImageUpsert[] = []
+    for (const [bucket, urls] of bucketsRef.current.entries()) {
+      urls.forEach((url, position) => {
+        if (bucket === SHARED) upserts.push({ scope: 'PLATFORM', platform: 'EBAY', marketplace: null, variantGroupKey: null, variantGroupValue: null, url, position, role: position === 0 ? 'MAIN' : 'GALLERY' })
+        else upserts.push({ scope: 'PLATFORM', platform: 'EBAY', marketplace: null, variantGroupKey: axisStateRef.current, variantGroupValue: bucket, url, position, role: 'GALLERY' })
+      })
+    }
+    const deletes = listingRef.current
+      .filter((i) => i.platform === 'EBAY' && !i.variationId && (i.variantGroupKey == null || i.variantGroupKey === axisStateRef.current))
+      .map((i) => i.id)
     try {
-      const upserts: ListingImageUpsert[] = []
-      for (const [bucket, urls] of buckets.entries()) {
-        urls.forEach((url, position) => {
-          if (bucket === SHARED) {
-            upserts.push({ scope: 'PLATFORM', platform: 'EBAY', marketplace: null, variantGroupKey: null, variantGroupValue: null, url, position, role: position === 0 ? 'MAIN' : 'GALLERY' })
-          } else {
-            upserts.push({ scope: 'PLATFORM', platform: 'EBAY', marketplace: null, variantGroupKey: axis, variantGroupValue: bucket, url, position, role: 'GALLERY' })
-          }
-        })
-      }
-      // Replace the Default + this-axis colour rows; leave per-SKU + other-axis rows alone.
-      const deletes = listingImages
-        .filter((i) => i.platform === 'EBAY' && !i.variationId && (i.variantGroupKey == null || i.variantGroupKey === axis))
-        .map((i) => i.id)
-
-      const saveRes = await beFetch(`/api/products/${productId}/images-workspace/bulk-save`, {
+      const res = await beFetch(`/api/products/${productId}/images-workspace/bulk-save`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ upserts, deletes }),
       })
-      if (!saveRes.ok) { setPublishResult({ success: false, message: `Save failed: ${await saveRes.text()}` }); return }
-
-      const pubRes = await beFetch(`/api/products/${productId}/ebay-images/publish`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
-      })
-      const body = await pubRes.json().catch(() => ({} as { message?: string; success?: boolean }))
-      const ok = pubRes.ok && (body as { success?: boolean }).success !== false
-      setPublishResult({ success: ok, message: (body as { message?: string }).message ?? (ok ? 'Published to eBay' : `Publish failed (${pubRes.status})`) })
-      if (ok) { onToast?.('eBay images published'); onReload?.() }
+      if (!res.ok) { onToast?.(`eBay save failed: ${await res.text()}`); return false }
+      await onReload?.()  // refresh listingImages → buckets re-init to saved (dirty → 0)
+      return true
     } catch (err) {
-      setPublishResult({ success: false, message: String(err) })
-    } finally {
-      setPublishing(false)
+      onToast?.(`eBay save failed: ${String(err)}`)
+      return false
     }
-  }
+  }, [productId, onReload, onToast])
+
+  // discard — drop local edits, snap back to the saved baseline.
+  const discard = useCallback(() => { setBuckets(cloneBuckets(baselineRef.current)) }, [])
+
+  // Report dirty + register the controller with the parent.
+  useEffect(() => { onEbayDirtyChange?.(dirtyCount) }, [dirtyCount, onEbayDirtyChange])
+  useEffect(() => {
+    registerController?.({ flush, discard })
+    return () => registerController?.(null)
+  }, [registerController, flush, discard])
 
   // ── Render ───────────────────────────────────────────────────────────
   return (
@@ -337,22 +383,10 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
           </div>
         )}
 
-        <div className="ml-auto">
-          <Button size="sm" disabled={publishing} onClick={handlePublish} className="gap-1.5">
-            {publishing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-            {publishing ? 'Publishing…' : 'Publish'}
-          </Button>
-        </div>
+        {/* Phase 1 — no panel Publish button. Save / Discard / Publish all live
+            in the shared bottom action bar (one source of truth). */}
+        <span className="ml-auto text-[11px] text-tertiary hidden sm:inline">Save &amp; publish from the bar below ↓</span>
       </div>
-
-      {/* Publish result banner */}
-      {publishResult && (
-        <div className={cn('flex items-center gap-2 px-4 py-2 text-xs border-b border-subtle', publishResult.success ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300' : 'bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300')}>
-          {publishResult.success ? <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" /> : <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />}
-          <span>{publishResult.message}</span>
-          <button type="button" onClick={() => setPublishResult(null)} className="ml-auto opacity-60 hover:opacity-100" aria-label="Dismiss"><X className="w-3 h-3" /></button>
-        </div>
-      )}
 
       {/* Master photo strip — drag a photo onto any cell, or click a cell to pick */}
       {masterImages.length > 0 && (
