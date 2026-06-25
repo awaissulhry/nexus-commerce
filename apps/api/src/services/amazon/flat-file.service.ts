@@ -1938,23 +1938,44 @@ export class AmazonFlatFileService {
     toCreate.sort((a, b) => parentageRank(a) - parentageRank(b))
     for (const row of toCreate) {
       const sku = String(row.item_sku).trim()
-      if (!String(row.item_name ?? '').trim()) {
+      const isChildRow = String(row.parentage_level ?? '').toLowerCase() === 'child'
+
+      // Parent / standalone rows need an explicit title; child rows typically omit
+      // item_name in Amazon flat-files (it is inherited from the parent). Blocking
+      // child creation here caused new variant rows to silently disappear after save.
+      if (!String(row.item_name ?? '').trim() && !isChildRow) {
         result.errors.push({ sku, error: 'New product needs a Title (item_name) before it can be created.' })
         continue
       }
+
+      // For child rows without item_name, inject the parent's title from this batch
+      // so the DB record gets a meaningful name. buildProductCreateInput falls back
+      // to SKU if item_name is still blank, so creation never fails on a missing title.
+      let rowForCreate: FlatFileRow = row
+      if (isChildRow && !String(row.item_name ?? '').trim()) {
+        const parentSkuVal = String(row.parent_sku ?? '').trim()
+        const parentRow = parentSkuVal
+          ? validRows.find(
+              (r) =>
+                String(r.item_sku ?? '').trim() === parentSkuVal &&
+                String(r.parentage_level ?? '').toLowerCase() === 'parent',
+            )
+          : undefined
+        const inheritedName = parentRow ? String(parentRow.item_name ?? '').trim() : ''
+        if (inheritedName) rowForCreate = { ...row, item_name: inheritedName }
+      }
+
       try {
-        const parentSku = String(row.parent_sku ?? '').trim()
+        const parentSku = String(rowForCreate.parent_sku ?? '').trim()
         const parentId =
-          String(row.parentage_level ?? '').toLowerCase() === 'child' && parentSku
-            ? (parentIdBySku.get(parentSku) ?? null)
-            : null
+          isChildRow && parentSku ? (parentIdBySku.get(parentSku) ?? null) : null
         const created = await this.prisma.product.create({
-          data: { ...buildProductCreateInput(row, { languageTag, parentId }), importedAt: new Date() } as any,
+          data: { ...buildProductCreateInput(rowForCreate, { languageTag, parentId }), importedAt: new Date() } as any,
           select: { id: true, sku: true, isParent: true, parentId: true, productType: true },
         })
         productBySku.set(sku, created)
-        if (String(row.parentage_level ?? '').toLowerCase() === 'parent') parentIdBySku.set(sku, created.id)
-        await this.createProductImagesFromRow(created.id, row)
+        if (String(rowForCreate.parentage_level ?? '').toLowerCase() === 'parent') parentIdBySku.set(sku, created.id)
+        await this.createProductImagesFromRow(created.id, rowForCreate)
         result.created++
       } catch (err) {
         result.errors.push({ sku, error: `Create failed: ${err instanceof Error ? err.message : String(err)}` })

@@ -35,6 +35,7 @@ import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidatio
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { IconButton } from '@/components/ui/IconButton'
+import { TagInput } from '@/design-system/primitives/TagInput'
 import { ChannelStrip } from '../ebay-flat-file/ChannelStrip'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import type { FlatFileAiChange } from '@/components/flat-file/FlatFileGrid.types'
@@ -346,6 +347,68 @@ function makeGhostRow(): Row {
 }
 function makeGhostRows(n: number): Row[] {
   return Array.from({ length: n }, () => makeGhostRow())
+}
+
+// ── Variation-family helpers (Add-variation wizard) ─────────────────────
+// Mirrors the API-side ffcParseThemeAxes / ffcExtractVariantAxes in
+// apps/api/src/services/amazon/flat-file.service.ts so the rows the wizard
+// generates carry the SAME axis columns + variation_theme the manifest, the
+// product-create importer, and the SP-API push all expect.
+
+/** Amazon variation_theme (e.g. "SIZE_COLOR", "Color/Size", "SizeName-ColorName")
+ *  → friendly axis names. Same rule as ffcParseThemeAxes on the API. */
+function parseThemeAxes(theme: string | null | undefined): string[] {
+  if (!theme) return []
+  return theme
+    .split(/[_/\s,-]+/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .map((t) => {
+      const lc = t.toLowerCase()
+      if (lc.includes('colour') || lc.includes('color')) return 'Color'
+      if (lc.includes('size')) return 'Size'
+      // Strip a trailing "name"/"_name" token so "StyleName" → "Style".
+      const cleaned = t.replace(/[_-]?name$/i, '') || t
+      return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase()
+    })
+}
+
+/** Candidate child-row COLUMN ids that can hold an axis value, most-preferred
+ *  first. Mirrors the columns ffcExtractVariantAxes reads on the API so the
+ *  importer/push pick the value back up. Used to pick whichever column the
+ *  active manifest actually exposes for the product type. */
+function axisColumnCandidates(axis: string): string[] {
+  const lc = axis.toLowerCase()
+  if (lc === 'color' || lc === 'colour') return ['color', 'color_name']
+  if (lc === 'size') return ['size', 'apparel_size', 'shirt_size', 'shoe_size', 'size_name']
+  // Generic axis (Style, Material, …): try `<snake>` then `<snake>_name`.
+  const snake = lc.replace(/\s+/g, '_')
+  return [snake, `${snake}_name`]
+}
+
+/** Pick the manifest column id that should hold an axis value: the first
+ *  candidate present in the manifest, else the first candidate (still valid for
+ *  the importer/push, which read the same bare names). */
+function resolveAxisColumnId(axis: string, columnIds: Set<string>): string {
+  const candidates = axisColumnCandidates(axis)
+  return candidates.find((c) => columnIds.has(c)) ?? candidates[0]
+}
+
+function cartesianProduct<T>(arrays: T[][]): T[][] {
+  if (!arrays.length) return [[]]
+  return arrays.reduce<T[][]>(
+    (acc, arr) => acc.flatMap((prev) => arr.map((v) => [...prev, v])),
+    [[]],
+  )
+}
+
+/** Default child item_sku, e.g. PARENT-BLACK-M (uppercased, space→dash). */
+function buildChildSku(parentSku: string, comboValues: string[]): string {
+  const suffix = comboValues
+    .map((v) => v.trim().toUpperCase().replace(/\s+/g, '-'))
+    .filter(Boolean)
+    .join('-')
+  return suffix ? `${parentSku}-${suffix}` : parentSku
 }
 
 // ── Storage key helpers ────────────────────────────────────────────────
@@ -754,8 +817,11 @@ export default function AmazonFlatFileClient({
   // a sync-to-DB / fromDB load / discard, when grid == DB again.
   const localDivergedRef = useRef(false)
 
-  // On mount: if localStorage has a draft with dirty rows from a previous
-  // session, offer to restore it rather than silently discarding it.
+  // On mount: reconcile localStorage draft with the SSR DB snapshot.
+  // P.3 — _isNew rows not yet in the DB (creation failed in a previous session)
+  // are auto-injected into the grid immediately, so they reappear without a
+  // manual "Restore" click. Other dirty rows (failed updates) still show the
+  // restore banner so the operator can choose whether to re-apply them.
   useEffect(() => {
     if (!initialProductType) return
     try {
@@ -764,7 +830,25 @@ export default function AmazonFlatFileClient({
       const raw = localStorage.getItem(key)
       if (!raw) return
       const saved = JSON.parse(raw) as Row[]
-      if (Array.isArray(saved) && saved.length > 0 && saved.some((r) => r._dirty)) {
+      if (!Array.isArray(saved) || saved.length === 0) return
+
+      // Auto-inject new rows that were never persisted to the DB.
+      const dbSkus = new Set(
+        (initialRows ?? []).map((r: any) => String(r.item_sku ?? '').trim()).filter(Boolean),
+      )
+      const unpersistedNew = saved.filter(
+        (r) => r._isNew && String(r.item_sku ?? '').trim() && !dbSkus.has(String(r.item_sku ?? '').trim()),
+      )
+      if (unpersistedNew.length > 0) {
+        setRows((prev) => {
+          const existingSkus = new Set(prev.map((r) => String(r.item_sku ?? '').trim()).filter(Boolean))
+          const toAdd = unpersistedNew.filter((r) => !existingSkus.has(String(r.item_sku ?? '').trim()))
+          return toAdd.length ? [...prev, ...mergeAsinCache(toAdd, initialMarketplace)] : prev
+        })
+      }
+
+      // Restore banner: only show when there are dirty rows (sync failures).
+      if (saved.some((r) => r._dirty)) {
         setDraftBanner(saved)
       }
     } catch {}
@@ -2273,6 +2357,63 @@ export default function AmazonFlatFileClient({
     if (firstNew) setTimeout(() => setActiveCell({ rowId: firstNew._rowId as string, colId: 'item_sku' }), 30)
   }, [productType, marketplace, pushSnapshot])
 
+  // Add-variation wizard — insert a whole family (1 parent + the Cartesian
+  // product of the axis values as children) in one go. Reuses makeEmptyRow for
+  // row shaping and the SAME position-splice logic as handleAddRows.
+  const handleAddVariationFamily = useCallback((params: {
+    parentSku: string
+    productType: string
+    variationTheme: string
+    axes: Array<{ name: string; columnId: string; values: string[] }>
+    position: 'end' | 'above' | 'below'
+  }) => {
+    const { parentSku, productType: pt, variationTheme, axes, position } = params
+    const parent = parentSku.trim()
+    if (!parent || axes.length === 0) return
+
+    // Parent row: parentage_level=parent, carries the variation_theme + item_sku.
+    const parentRow = makeEmptyRow(pt, marketplace, 'parent')
+    parentRow.item_sku = parent
+    parentRow.variation_theme = variationTheme
+
+    // Children: Cartesian product of the per-axis value lists.
+    const valueLists = axes.map((a) => a.values.map((v) => v.trim()).filter(Boolean))
+    const combos = cartesianProduct(valueLists)
+    const childRows: Row[] = combos.map((combo) => {
+      const child = makeEmptyRow(pt, marketplace, 'child')
+      child.item_sku = buildChildSku(parent, combo)
+      child.parent_sku = parent
+      // Children don't carry the theme; the axis columns carry the values.
+      child.variation_theme = ''
+      axes.forEach((axis, i) => { child[axis.columnId] = combo[i] ?? '' })
+      return child
+    })
+
+    const newRows: Row[] = [parentRow, ...childRows]
+
+    pushSnapshot()
+    setRows((prev) => {
+      if (position === 'end') return [...prev, ...newRows]
+      const displayed = displayRowsRef.current
+      const anchorRi = selAnchorRef.current?.ri ?? 0
+      const endRi = selEndRef.current?.ri ?? anchorRi
+      const targetRi = position === 'above'
+        ? Math.min(anchorRi, endRi)
+        : Math.max(anchorRi, endRi)
+      const targetRow = displayed[targetRi]
+      if (!targetRow) return [...prev, ...newRows]
+      const idx = prev.findIndex((r) => r._rowId === targetRow._rowId)
+      if (idx === -1) return [...prev, ...newRows]
+      const insertAt = position === 'above' ? idx : idx + 1
+      const next = [...prev]
+      next.splice(insertAt, 0, ...newRows)
+      return next
+    })
+
+    setAddRowsPanel(null)
+    setTimeout(() => setActiveCell({ rowId: parentRow._rowId as string, colId: 'item_sku' }), 30)
+  }, [marketplace, pushSnapshot])
+
   // GX.5 — editing a ghost (blank canvas) row materializes it into a real new
   // row; the buffer effect then re-adds a fresh ghost below (auto-grow).
   // Fills the infra fields a real row needs (the ghost was fully blank). Spread
@@ -2563,23 +2704,29 @@ export default function AmazonFlatFileClient({
       if (!res.ok) throw new Error(data.error ?? 'Sync failed')
       setSyncStatus('synced')
       localDivergedRef.current = false // FFX.2 — grid is now persisted to the DB
-      // A3 — refresh _version from the save so a legitimate second save (same
-      // operator, no re-pull) doesn't hit a false optimistic-concurrency conflict.
-      const newVersions: Record<string, number> =
-        data?.versions && typeof data.versions === 'object' ? data.versions : {}
-      if (Object.keys(newVersions).length) {
-        setRows((prev) => prev.map((r) => {
-          const v = newVersions[String(r.item_sku ?? '')]
-          return v != null ? { ...r, _version: v } : r
-        }))
-      }
-      setTimeout(() => setSyncStatus('idle'), 4000)
       // FFA.6 — surface per-SKU sync failures instead of silently reporting "synced".
       const syncErrors: Array<{ sku: string; error: string }> = Array.isArray(data?.errors) ? data.errors : []
       if (syncErrors.length) {
         const sample = syncErrors.slice(0, 3).map((e) => e.sku).filter(Boolean).join(', ')
         toast.warning(`${syncErrors.length} row${syncErrors.length === 1 ? '' : 's'} didn't save${sample ? `: ${sample}${syncErrors.length > 3 ? '…' : ''}` : ''} — ${syncErrors[0]?.error ?? 'see details'}`)
       }
+      // A3 — refresh _version from the save so a legitimate second save (same
+      // operator, no re-pull) doesn't hit a false optimistic-concurrency conflict.
+      // P.2 — also clear _dirty for successfully-synced rows so the draft banner
+      // never appears on reload for data that is already in the DB. Rows that had
+      // sync errors keep _dirty=true and will trigger the banner on reload.
+      const newVersions: Record<string, number> =
+        data?.versions && typeof data.versions === 'object' ? data.versions : {}
+      const errorSkus = new Set(syncErrors.map((e) => String(e.sku ?? '')).filter(Boolean))
+      setRows((prev) => prev.map((r) => {
+        const sku = String(r.item_sku ?? '')
+        const v = newVersions[sku]
+        const withVersion = v != null ? { ...r, _version: v } : r
+        return !r._ghost && !errorSkus.has(sku) && withVersion._dirty
+          ? { ...withVersion, _dirty: false }
+          : withVersion
+      }))
+      setTimeout(() => setSyncStatus('idle'), 4000)
       // FFC — surface newly-created products (new SKUs become real Nexus products).
       const createdCount: number = typeof data?.created === 'number' ? data.created : 0
       if (createdCount > 0) {
@@ -4616,7 +4763,10 @@ export default function AmazonFlatFileClient({
           hasSelection={!!normSel}
           productType={productType}
           marketplace={marketplace}
+          variationThemes={effectiveManifest?.variationThemes ?? []}
+          manifestColumnIds={manifestColumns.map((c) => c.id)}
           onAdd={handleAddRows}
+          onAddFamily={handleAddVariationFamily}
           onClose={() => setAddRowsPanel(null)}
         />
       )}
@@ -7081,6 +7231,14 @@ interface AddRowsParams {
   parentSku?: string
 }
 
+interface VariationFamilyParams {
+  parentSku: string
+  productType: string
+  variationTheme: string
+  axes: Array<{ name: string; columnId: string; values: string[] }>
+  position: 'end' | 'above' | 'below'
+}
+
 interface AddRowsPanelProps {
   initialType: 'row' | 'parent' | 'variant'
   initialPosition: 'end' | 'above' | 'below'
@@ -7088,16 +7246,116 @@ interface AddRowsPanelProps {
   hasSelection: boolean
   productType: string
   marketplace: string
+  /** Valid Amazon variation_theme enum values for the active product type
+   *  (from the manifest); used by the variation wizard. */
+  variationThemes: string[]
+  /** All column ids in the active manifest; lets the wizard target the real
+   *  axis column the product type exposes (e.g. size vs apparel_size). */
+  manifestColumnIds: string[]
   onAdd: (params: AddRowsParams) => void
+  onAddFamily: (params: VariationFamilyParams) => void
   onClose: () => void
 }
 
-function AddRowsPanel({ initialType, initialPosition, rows, hasSelection, productType: _productType, marketplace: _marketplace, onAdd, onClose }: AddRowsPanelProps) {
+// Preset axis suggestions when the manifest has nothing better to offer.
+const VARIATION_AXIS_SUGGESTIONS: Record<string, string[]> = {
+  Color:  ['Black', 'White', 'Blue', 'Red', 'Yellow', 'Green', 'Grey', 'Brown', 'Navy', 'Orange'],
+  Size:   ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'],
+}
+
+function AddRowsPanel({ initialType, initialPosition, rows, hasSelection, productType, marketplace: _marketplace, variationThemes, manifestColumnIds, onAdd, onAddFamily, onClose }: AddRowsPanelProps) {
+  // Top-level mode: the existing blank-row adder vs the new variation wizard.
+  const [mode, setMode] = useState<'rows' | 'variation'>('rows')
   const [type, setType] = useState<'row' | 'parent' | 'variant'>(initialType)
   const [count, setCount] = useState(1)
   const [position, setPosition] = useState<'end' | 'above' | 'below'>(initialPosition)
   const [replicateFromId, setReplicateFromId] = useState('')
   const [parentSku, setParentSku] = useState('')
+
+  // ── Variation-wizard state ─────────────────────────────────────────────
+  const columnIdSet = useMemo(() => new Set(manifestColumnIds), [manifestColumnIds])
+  // Axis names offered by the live themes (e.g. SIZE_COLOR → Size, Color),
+  // plus the universal Size/Color presets, deduped + order-stable.
+  const themeAxisNames = useMemo(() => {
+    const fromThemes = variationThemes.flatMap((t) => parseThemeAxes(t))
+    const ordered = ['Size', 'Color', ...fromThemes]
+    return Array.from(new Set(ordered))
+  }, [variationThemes])
+
+  const [wizParentSku, setWizParentSku] = useState('')
+  const [selectedAxes, setSelectedAxes] = useState<string[]>(['Size', 'Color'])
+  const [axisValues, setAxisValues] = useState<Record<string, string[]>>({})
+  const [customAxisName, setCustomAxisName] = useState('')
+  const [customAxes, setCustomAxes] = useState<string[]>([])
+  // Optional explicit theme override; '' = auto-derive from selected axes.
+  const [themeOverride, setThemeOverride] = useState('')
+
+  const displayWizAxes = useMemo(
+    () => Array.from(new Set([...themeAxisNames, ...customAxes])),
+    [themeAxisNames, customAxes],
+  )
+
+  function toggleAxis(name: string) {
+    setSelectedAxes((prev) =>
+      prev.includes(name) ? prev.filter((a) => a !== name) : [...prev, name],
+    )
+  }
+  function addCustomAxis() {
+    const name = customAxisName.trim()
+    if (!name || displayWizAxes.some((a) => a.toLowerCase() === name.toLowerCase())) return
+    setCustomAxes((prev) => [...prev, name])
+    setSelectedAxes((prev) => [...prev, name])
+    setCustomAxisName('')
+  }
+
+  // Try to match the chosen axes to a real theme enum (any order). Falls back
+  // to a synthesised UPPERCASE_SNAKE theme (Amazon's own format) when the PT
+  // has no enum or none matches — still a valid value on the parent row.
+  const derivedTheme = useMemo(() => {
+    if (!selectedAxes.length) return ''
+    const want = [...selectedAxes].map((a) => a.toLowerCase()).sort()
+    const match = variationThemes.find((t) => {
+      const got = parseThemeAxes(t).map((a) => a.toLowerCase()).sort()
+      return got.length === want.length && got.every((v, i) => v === want[i])
+    })
+    if (match) return match
+    return selectedAxes.map((a) => a.toUpperCase().replace(/\s+/g, '_')).join('_')
+  }, [selectedAxes, variationThemes])
+
+  const effectiveTheme = themeOverride || derivedTheme
+
+  // Per-axis target column (what the manifest exposes for this product type).
+  const axisColumnFor = (axis: string) => resolveAxisColumnId(axis, columnIdSet)
+
+  // Preview: parent + Cartesian product of the value lists.
+  const activeAxisValueLists = selectedAxes
+    .map((a) => (axisValues[a] ?? []).filter((v) => v.trim()))
+    .filter((vals) => vals.length > 0)
+  const variantCount = selectedAxes.length > 0 && activeAxisValueLists.length === selectedAxes.length
+    ? activeAxisValueLists.reduce((n, vals) => n * vals.length, 1)
+    : 0
+  const sampleChildSku = wizParentSku.trim() && variantCount > 0
+    ? buildChildSku(wizParentSku.trim(), selectedAxes.map((a) => (axisValues[a] ?? [])[0] ?? ''))
+    : ''
+
+  const canConfirmFamily = wizParentSku.trim().length > 0
+    && selectedAxes.length > 0
+    && variantCount > 0
+    && !!effectiveTheme
+
+  function handleAddFamily() {
+    onAddFamily({
+      parentSku: wizParentSku.trim().toUpperCase(),
+      productType,
+      variationTheme: effectiveTheme,
+      axes: selectedAxes.map((name) => ({
+        name,
+        columnId: axisColumnFor(name),
+        values: (axisValues[name] ?? []).map((v) => v.trim()).filter(Boolean),
+      })),
+      position,
+    })
+  }
 
   // Source rows for replication picker
   const parentRows = useMemo(() => rows.filter((r) => r.parentage_level === 'parent' && r.item_sku), [rows])
@@ -7125,22 +7383,43 @@ function AddRowsPanel({ initialType, initialPosition, rows, hasSelection, produc
 
   const selectCls = 'w-full text-xs border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500'
 
+  const modeTabCls = (m: typeof mode) => cn(
+    'flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+    mode === m
+      ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 shadow-sm'
+      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700',
+  )
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-[1px]"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-sm mx-4">
+      <div className={cn(
+        'bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full mx-4 flex flex-col max-h-[90vh]',
+        mode === 'variation' ? 'max-w-md' : 'max-w-sm',
+      )}>
 
         {/* Header */}
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <Plus className="w-4 h-4 text-blue-500" />Add rows
+            {mode === 'variation'
+              ? <><GitFork className="w-4 h-4 text-blue-500" />Add variation listing</>
+              : <><Plus className="w-4 h-4 text-blue-500" />Add rows</>}
           </h2>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="px-4 py-4 space-y-4">
+        {/* Mode toggle: existing blank-row adder vs guided variation wizard */}
+        <div className="px-4 pt-3 flex-shrink-0">
+          <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 gap-0.5">
+            <button type="button" onClick={() => setMode('rows')} className={modeTabCls('rows')}>Blank rows</button>
+            <button type="button" onClick={() => setMode('variation')} className={modeTabCls('variation')}>Variation listing</button>
+          </div>
+        </div>
+
+        {mode === 'rows' && (
+        <div className="px-4 py-4 space-y-4 overflow-y-auto">
 
           {/* Row type */}
           <div>
@@ -7241,20 +7520,181 @@ function AddRowsPanel({ initialType, initialPosition, rows, hasSelection, produc
             </div>
           )}
         </div>
+        )}
+
+        {/* ── Variation wizard body ──────────────────────────────────────── */}
+        {mode === 'variation' && (
+        <div className="px-4 py-4 space-y-4 overflow-y-auto">
+          <p className="text-[11px] text-slate-400 leading-snug">
+            Generates one non-buyable parent plus a child row for every combination of the axis values below — like the eBay variation builder.
+          </p>
+
+          {/* Parent SKU */}
+          <div>
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Parent SKU</label>
+            <input
+              type="text"
+              value={wizParentSku}
+              onChange={(e) => setWizParentSku(e.target.value.toUpperCase())}
+              placeholder="e.g. GALE-JACKET"
+              className="w-full text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Product type (defaults to the editor's current type) */}
+          <div>
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Product type</label>
+            <div className="text-xs font-mono px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300">
+              {productType || '—'}
+            </div>
+          </div>
+
+          {/* Variation axes */}
+          <div>
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 block">Variation axes</label>
+            <div className="space-y-2">
+              {displayWizAxes.map((name) => {
+                const selected = selectedAxes.includes(name)
+                const vals = axisValues[name] ?? []
+                return (
+                  <div key={name}
+                    className={cn(
+                      'rounded-lg border transition-colors',
+                      selected
+                        ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50'
+                        : 'border-transparent',
+                    )}>
+                    <label className="flex items-center gap-2 px-3 py-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => toggleAxis(name)}
+                        className="w-3.5 h-3.5 rounded accent-blue-600"
+                      />
+                      <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{name}</span>
+                      {selected && (
+                        <span className="ml-auto text-[10px] text-slate-400 font-mono">→ {axisColumnFor(name)}</span>
+                      )}
+                    </label>
+                    {selected && (
+                      <div className="px-3 pb-2">
+                        <TagInput
+                          value={vals}
+                          onChange={(tags) => setAxisValues((prev) => ({ ...prev, [name]: tags }))}
+                          suggestions={VARIATION_AXIS_SUGGESTIONS[name] ?? []}
+                          placeholder={`Add ${name.toLowerCase()} values… (Enter or comma)`}
+                          aria-label={`${name} values`}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {/* Custom axis input */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={customAxisName}
+                  onChange={(e) => setCustomAxisName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomAxis() } }}
+                  placeholder="+ Add custom axis…"
+                  className="flex-1 text-xs bg-transparent border border-dashed border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-slate-600 dark:text-slate-400 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                {customAxisName.trim() && (
+                  <Button size="sm" variant="ghost" onClick={addCustomAxis}>
+                    <Plus className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Variation theme (derived, overridable from the live enum) */}
+          <div>
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">
+              Variation theme
+              <span className="ml-1 font-normal opacity-70">(value written on the parent row)</span>
+            </label>
+            {variationThemes.length > 0 ? (
+              <select value={themeOverride} onChange={(e) => setThemeOverride(e.target.value)}
+                className={selectCls}>
+                <option value="">Auto from axes — {derivedTheme || '…'}</option>
+                {variationThemes.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            ) : (
+              <div className="text-xs font-mono px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300">
+                {derivedTheme || '—'}
+              </div>
+            )}
+          </div>
+
+          {/* Position */}
+          <div>
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Where</label>
+            <div className="flex gap-1.5">
+              {(['end', 'above', 'below'] as const).map((p) => {
+                const label = p === 'end' ? 'End of table' : p === 'above' ? 'Above selection' : 'Below selection'
+                const disabled = (p === 'above' || p === 'below') && !hasSelection
+                return (
+                  <button key={p} type="button" disabled={disabled}
+                    onClick={() => setPosition(p)}
+                    className={cn(
+                      'flex-1 text-xs px-2 py-1.5 rounded-lg border transition-colors',
+                      position === p
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : disabled
+                        ? 'border-slate-100 dark:border-slate-800 text-slate-300 dark:text-slate-700 cursor-not-allowed'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400',
+                    )}>
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {sampleChildSku && (
+            <div className="text-[10px] text-slate-400">
+              Example child SKU: <span className="font-mono text-slate-600 dark:text-slate-300">{sampleChildSku}</span>
+            </div>
+          )}
+        </div>
+        )}
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-800/30 rounded-b-xl">
-          <span className="text-[11px] text-slate-400">
-            {count} {type === 'parent' ? `parent row${count !== 1 ? 's' : ''}` : type === 'variant' ? `variant${count !== 1 ? 's' : ''}` : `row${count !== 1 ? 's' : ''}`}
-            {' · '}{position === 'end' ? 'end of table' : position === 'above' ? 'above selection' : 'below selection'}
-          </span>
-          <div className="flex gap-2">
-            <Button size="sm" variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button size="sm" onClick={handleAdd}>
-              <Plus className="w-3.5 h-3.5 mr-1" />Add {count > 1 ? `${count} ` : ''}row{count !== 1 ? 's' : ''}
-            </Button>
+        {mode === 'rows' ? (
+          <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-800/30 rounded-b-xl flex-shrink-0">
+            <span className="text-[11px] text-slate-400">
+              {count} {type === 'parent' ? `parent row${count !== 1 ? 's' : ''}` : type === 'variant' ? `variant${count !== 1 ? 's' : ''}` : `row${count !== 1 ? 's' : ''}`}
+              {' · '}{position === 'end' ? 'end of table' : position === 'above' ? 'above selection' : 'below selection'}
+            </span>
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" onClick={onClose}>Cancel</Button>
+              <Button size="sm" onClick={handleAdd}>
+                <Plus className="w-3.5 h-3.5 mr-1" />Add {count > 1 ? `${count} ` : ''}row{count !== 1 ? 's' : ''}
+              </Button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-800/30 rounded-b-xl flex-shrink-0">
+            <span className="text-[11px] text-slate-400">
+              {variantCount > 0
+                ? <>1 parent + <strong className="text-slate-600 dark:text-slate-300">{variantCount}</strong> variant{variantCount !== 1 ? 's' : ''}</>
+                : selectedAxes.length > 0
+                ? <span className="text-amber-500">Add values to every selected axis</span>
+                : <span className="text-amber-500">Select at least one axis</span>}
+            </span>
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" onClick={onClose}>Cancel</Button>
+              <Button size="sm" disabled={!canConfirmFamily} onClick={handleAddFamily}>
+                <Plus className="w-3.5 h-3.5 mr-1" />Add family
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
