@@ -50,6 +50,9 @@ interface Props {
   productId: string
   /** Filter to a single channel. Omit to show all three. */
   channel?: Channel
+  /** Bump/change to force a refetch (e.g. after a publish completes). Optional —
+   *  callers that don't pass it keep the fetch-on-mount + manual-refresh behavior. */
+  refreshKey?: string | number
 }
 
 // IR.15 — pending statuses Amazon SP-API actually progresses through.
@@ -109,7 +112,7 @@ function successRate(jobs: UnifiedJob[]): { ok: number; total: number; pct: numb
   }
 }
 
-export default function ImagePublishHistory({ productId, channel }: Props) {
+export default function ImagePublishHistory({ productId, channel, refreshKey }: Props) {
   const { t } = useTranslations()
   const [jobs, setJobs] = useState<UnifiedJob[]>([])
   const [loading, setLoading] = useState(false)
@@ -145,7 +148,8 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
     }
   }, [productId])
 
-  useEffect(() => { void fetchJobs() }, [fetchJobs])
+  // Refetch on mount, and whenever refreshKey changes (e.g. a publish landed).
+  useEffect(() => { void fetchJobs() }, [fetchJobs, refreshKey])
 
   async function refreshFromAmazon(jobId: string) {
     setRefreshingId(jobId)

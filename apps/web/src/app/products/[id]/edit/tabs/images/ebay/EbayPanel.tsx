@@ -10,12 +10,13 @@
 // and the publish de-dupes per-colour against the Default set as a safety net.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ShoppingBag, Star } from 'lucide-react'
+import { ChevronDown, Clock, ShoppingBag, Star } from 'lucide-react'
 import { PLATFORM_RULES } from '@nexus/shared/image-validation'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { beFetch } from '../api'
 import ImagePickerModal from '../ImagePickerModal'
+import ImagePublishHistory from '../ImagePublishHistory'
 import ChannelImageGrid, { type ImageGridColumn, type ImageGridRow, type GridCellDisplay } from '../ChannelImageGrid'
 import type { ListingImage, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
 
@@ -178,6 +179,14 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
   const [buckets, setBuckets] = useState<Buckets>(() => cloneBuckets(baseline))
   useEffect(() => { setBuckets(cloneBuckets(baseline)) }, [baseline])
   const dirtyCount = useMemo(() => bucketsDiff(buckets, baseline), [buckets, baseline])
+
+  // Publish history (shared panel). The signature changes when eBay rows get a
+  // new publishStatus/publishedAt (i.e. a publish landed) → history auto-refreshes.
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const ebayPublishSig = useMemo(
+    () => listingImages.filter((i) => i.platform === 'EBAY').map((i) => `${i.id}:${i.publishStatus}:${i.publishedAt ?? ''}`).join('|'),
+    [listingImages],
+  )
 
   // Assign a URL to a bucket cell. No-overlap: the photo is removed from every
   // OTHER bucket first, so it can never appear twice.
@@ -440,6 +449,26 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
             ariaLabel={`eBay photos grouped by ${axis}`}
             rowHeaderLabel={axis}
           />
+        )}
+      </div>
+
+      {/* Publish history (shared component) — per-publish status / errors / retry */}
+      <div className="border-t border-subtle dark:border-slate-800">
+        <button
+          type="button"
+          onClick={() => setHistoryOpen((p) => !p)}
+          className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+          aria-expanded={historyOpen}
+        >
+          <Clock className="w-3.5 h-3.5 text-tertiary" />
+          <span className="font-medium">Publish history</span>
+          <span className="text-tertiary ml-1">— eBay publishes + retry</span>
+          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-tertiary transition-transform', historyOpen && 'rotate-180')} />
+        </button>
+        {historyOpen && (
+          <div className="px-4 pb-4">
+            <ImagePublishHistory productId={productId} channel="EBAY" refreshKey={ebayPublishSig} />
+          </div>
         )}
       </div>
 
