@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, Loader2, Plus, RefreshCw, RotateCcw, Search, Send, X,
+  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, Loader2, Plus, RefreshCw, RotateCcw, Search, Send, Upload, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -14,6 +14,7 @@ import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImport
 import { Modal } from '@/design-system/components/Modal'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { AddListingPopover } from './AddListingPopover'
+import { EbayImportWizard } from './EbayImportWizard'
 import { AspectsPanel } from './AspectsPanel'
 import { ChannelStrip } from './ChannelStrip'
 import { EbayPushHistoryPanel } from './EbayPushHistoryPanel'
@@ -454,6 +455,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [cascadeRow, setCascadeRow] = useState<BaseRow | null>(null)
 
   const [addListingOpen, setAddListingOpen] = useState(false)
+  const [importWizardOpen, setImportWizardOpen] = useState(false)
   const [aspectsPanelRowId, setAspectsPanelRowId] = useState<string | null>(null)
   const [incompleteBefore, setIncompleteBefore] = useState<Array<{ sku: string; count: number }>>([])
   const [blockingErrors, setBlockingErrors] = useState<Array<{ level: 'error' | 'warn'; sku: string; field: string; msg: string }>>([])
@@ -1209,6 +1211,41 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     }
   }, [BACKEND, exportColumns, marketplace, toast])
 
+  // ── IE.2 — merge imported rows into the grid (fill-missing | overwrite) ──
+  const handleImport = useCallback((
+    imported: Record<string, unknown>[],
+    mode: 'fill-missing' | 'overwrite',
+    allRows: BaseRow[],
+    setRows: (rows: BaseRow[]) => void,
+    pushHistory: (rows: BaseRow[]) => void,
+  ) => {
+    const bySku = new Map(allRows.map((r) => [String(r.sku ?? '').trim(), r]))
+    const next = [...allRows]
+    let added = 0, updated = 0
+    for (const imp of imported) {
+      const sku = String(imp.sku ?? '').trim()
+      const existing = sku ? bySku.get(sku) : undefined
+      if (existing) {
+        const idx = next.findIndex((r) => r._rowId === existing._rowId)
+        if (idx === -1) continue
+        const merged = { ...next[idx] } as Record<string, unknown>
+        for (const [k, v] of Object.entries(imp)) {
+          if (mode === 'overwrite') merged[k] = v
+          else if (merged[k] == null || merged[k] === '') merged[k] = v
+        }
+        merged._dirty = true
+        next[idx] = merged as BaseRow
+        updated++
+      } else {
+        next.push({ ...makeBlankRow(), ...imp, _isNew: true, _dirty: true } as BaseRow)
+        added++
+      }
+    }
+    pushHistory(next)
+    setRows(next)
+    toast.success(`Imported ${imported.length} row${imported.length === 1 ? '' : 's'} — ${added} added, ${updated} updated`)
+  }, [toast])
+
   const renderToolbarFetch = useCallback(({ rows, selectedRows, setRows, pushHistory }: ToolbarFetchCtx) => (
     <>
       {/* Add listing row generator */}
@@ -1295,6 +1332,22 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         ]}
       />
 
+      {/* IE.2 — Import from file (CSV / Excel / JSON) with guided column mapping */}
+      <SharedTbBtn
+        icon={<Upload className="w-3.5 h-3.5" />}
+        title="Import from file — CSV, Excel or JSON, with guided column mapping"
+        onClick={() => setImportWizardOpen(true)}
+        active={importWizardOpen}
+      />
+      <EbayImportWizard
+        open={importWizardOpen}
+        onClose={() => setImportWizardOpen(false)}
+        columns={exportColumns}
+        existingSkus={new Set(rows.map((r) => String(r.sku ?? '').trim()).filter(Boolean))}
+        marketplace={marketplace}
+        onImport={(imported, mode) => handleImport(imported, mode, rows, setRows, pushHistory)}
+      />
+
       {/* Inline progress / result indicator */}
       {pullProgress && (
         <span className="text-[11px] flex items-center gap-1 flex-shrink-0 text-blue-600 dark:text-blue-400 ml-1">
@@ -1312,7 +1365,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       )}
     </>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, pullHistoryOpen, addListingOpen, variantAxisNames, exportEbay])
+  ), [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, pullHistoryOpen, addListingOpen, variantAxisNames, exportEbay, importWizardOpen, handleImport, exportColumns])
 
   // ── Slot: import button ────────────────────────────────────────────────
 

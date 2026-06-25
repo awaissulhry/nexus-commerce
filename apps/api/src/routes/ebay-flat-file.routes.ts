@@ -40,6 +40,7 @@ import { pushVariationGroup, buildPackageWeightAndSize, toListingLanguage, CONDI
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields } from '../services/ebay-variation-push.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
 import { renderExport } from '../services/export/renderers.js';
+import { parseCsv, parseFile, sniffDelimiter, detectFileKind, type ParsedFile } from '../services/import/parsers.js';
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
 
@@ -1119,6 +1120,34 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     } catch (err: unknown) {
       request.log.error(err, 'ebay/flat-file/export failed');
       return reply.code(500).send({ error: err instanceof Error ? err.message : 'Export failed' });
+    }
+  });
+
+  // ── POST /api/ebay/flat-file/parse ──────────────────────────────────
+  // IE.2 — parse an uploaded CSV/TSV/XLSX/JSON into { headers, rows } for the
+  // import wizard, reusing the shared parsers. Text for csv/tsv/json; base64 for
+  // xlsx. Header→eBay-column mapping happens client-side in the wizard.
+  fastify.post<{
+    Body: { content?: string; base64?: string; filename?: string; kind?: 'csv' | 'xlsx' | 'json' }
+  }>('/ebay/flat-file/parse', async (request, reply) => {
+    const { content, base64, filename, kind } = request.body ?? {};
+    const fileKind = kind ?? detectFileKind(filename);
+    try {
+      let result: ParsedFile;
+      if (fileKind === 'xlsx') {
+        if (!base64) return reply.code(400).send({ error: 'xlsx upload needs base64 bytes' });
+        result = await parseFile('xlsx', { bytes: new Uint8Array(Buffer.from(base64, 'base64')) });
+      } else {
+        const text = content ?? (base64 ? Buffer.from(base64, 'base64').toString('utf-8') : '');
+        if (!text.trim()) return reply.code(400).send({ error: 'empty file' });
+        result = fileKind === 'json'
+          ? await parseFile('json', { text })
+          : parseCsv(text, sniffDelimiter(filename, text)); // csv + tsv (delimiter sniffed)
+      }
+      return reply.send({ headers: result.headers, rows: result.rows, kind: fileKind });
+    } catch (err: unknown) {
+      request.log.error(err, 'ebay/flat-file/parse failed');
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Parse failed' });
     }
   });
 
