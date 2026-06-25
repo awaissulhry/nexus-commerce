@@ -1905,7 +1905,7 @@ export class AmazonFlatFileService {
     // Bulk parent-SKU → parentId lookup for child rows
     const parentSkus = [...new Set(
       validRows
-        .filter((r) => String(r.parentage_level ?? '').toLowerCase() === 'child' && r.parent_sku)
+        .filter((r) => (String(r.parentage_level ?? '').toLowerCase() === 'child' || String(r.parent_sku ?? '').trim().length > 0) && r.parent_sku)
         .map((r) => String(r.parent_sku).trim()),
     )]
     const parentProducts = parentSkus.length
@@ -1939,6 +1939,7 @@ export class AmazonFlatFileService {
     for (const row of toCreate) {
       const sku = String(row.item_sku).trim()
       const isChildRow = String(row.parentage_level ?? '').toLowerCase() === 'child'
+        || String(row.parent_sku ?? '').trim().length > 0
 
       // Parent / standalone rows need an explicit title; child rows typically omit
       // item_name in Amazon flat-files (it is inherited from the parent). Blocking
@@ -1993,7 +1994,7 @@ export class AmazonFlatFileService {
       try {
         const parentageLevel = String(row.parentage_level ?? '').toLowerCase()
         const isParentRow = parentageLevel === 'parent'
-        const isChildRow  = parentageLevel === 'child'
+        const isChildRow  = parentageLevel === 'child' || String(row.parent_sku ?? '').trim().length > 0
         const parentSku   = String(row.parent_sku ?? '').trim()
         const parentId    = isChildRow && parentSku ? (parentIdBySku.get(parentSku) ?? null) : undefined
         const productType = String(row.product_type ?? '').toUpperCase() || undefined

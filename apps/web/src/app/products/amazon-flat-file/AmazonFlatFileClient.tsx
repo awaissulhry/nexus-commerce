@@ -2723,8 +2723,8 @@ export default function AmazonFlatFileClient({
         const sku = String(r.item_sku ?? '')
         const v = newVersions[sku]
         const withVersion = v != null ? { ...r, _version: v } : r
-        return !r._ghost && !errorSkus.has(sku) && withVersion._dirty
-          ? { ...withVersion, _dirty: false }
+        return !r._ghost && !errorSkus.has(sku) && (withVersion._dirty || withVersion._isNew)
+          ? { ...withVersion, _dirty: false, _isNew: false }
           : withVersion
       }))
       setTimeout(() => setSyncStatus('idle'), 4000)
@@ -2738,6 +2738,7 @@ export default function AmazonFlatFileClient({
       emitInvalidation({ type: 'product.updated', meta: { source: 'amazon-flat-file', marketplace } })
     } catch {
       setSyncStatus('error')
+      toast.error('Save failed — check your connection and try again')
       setTimeout(() => setSyncStatus('idle'), 6000)
     }
   }, [manifest, marketplace, productType, toast])
