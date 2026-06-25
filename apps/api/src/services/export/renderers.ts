@@ -6,7 +6,7 @@
  * in W9.2.
  */
 
-export type ExportFormat = 'csv' | 'xlsx' | 'json' | 'pdf'
+export type ExportFormat = 'csv' | 'tsv' | 'xlsx' | 'json' | 'pdf'
 
 export interface ColumnSpec {
   /** Field id on the row. Resolves dot-paths
@@ -93,6 +93,20 @@ function renderCsv(input: RenderInput): RenderOutput {
   return {
     bytes: new TextEncoder().encode(text),
     contentType: 'text/csv',
+  }
+}
+
+function renderTsv(input: RenderInput): RenderOutput {
+  // Tab-delimited. Embedded tabs/newlines collapse to a space so one record never
+  // splits across physical lines (the flat-file single-line convention).
+  const clean = (s: string) => s.replace(/[\t\r\n]+/g, ' ')
+  const lines: string[] = [input.columns.map((c) => clean(c.label)).join('\t')]
+  for (const row of input.rows) {
+    lines.push(input.columns.map((c) => clean(formatCell(readPath(row, c.id), c.format))).join('\t'))
+  }
+  return {
+    bytes: new TextEncoder().encode(lines.join('\n') + '\n'),
+    contentType: 'text/tab-separated-values',
   }
 }
 
@@ -191,6 +205,7 @@ async function renderPdf(input: RenderInput): Promise<RenderOutput> {
 
 export async function renderExport(input: RenderInput): Promise<RenderOutput> {
   if (input.format === 'csv') return renderCsv(input)
+  if (input.format === 'tsv') return renderTsv(input)
   if (input.format === 'json') {
     const out = input.rows.map((row) => {
       const o: Record<string, unknown> = {}

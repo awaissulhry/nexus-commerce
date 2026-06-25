@@ -20,6 +20,13 @@ import { EbayPushHistoryPanel } from './EbayPushHistoryPanel'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import { CascadeModal } from '../_shared/CascadeModal'
 import { SyncHelpPanel } from '../_shared/SyncHelpPanel'
+import { Menu } from '@/design-system/components'
+// IE.1 — load the H10 design-system CSS so DS components (Menu, the import wizard)
+// render styled on this page (namespaced --h10-*/.h10-ds-* — inert for the rest).
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '@/design-system/styles/patterns.css'
 import { FlatFileAiPanel } from '../_shared/FlatFileAiPanel'
 import type { AiPanelCtx } from '@/components/flat-file/FlatFileGrid.types'
 import {
@@ -1164,6 +1171,44 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── Slot: fetch button ─────────────────────────────────────────────────
 
+  // ── IE.1 — Export (TSV / CSV / XLSX) reusing the shared renderExport ───
+  const exportColumns = useMemo(() => {
+    const seen = new Set<string>()
+    const out: Array<{ id: string; label: string }> = []
+    for (const g of columnGroups) for (const c of g.columns) {
+      if (!seen.has(c.id)) { seen.add(c.id); out.push({ id: c.id, label: c.label }) }
+    }
+    return out
+  }, [columnGroups])
+
+  const exportEbay = useCallback(async (
+    format: 'tsv' | 'csv' | 'xlsx',
+    scope: 'all' | 'selected' | 'template',
+    allRows: BaseRow[],
+    selected: Set<string>,
+  ) => {
+    const rowsOut = scope === 'template' ? []
+      : scope === 'selected' ? allRows.filter((r) => selected.has(r._rowId))
+      : allRows
+    try {
+      const res = await fetch(`${BACKEND}/api/ebay/flat-file/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: rowsOut, columns: exportColumns, format, marketplace }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `ebay_${marketplace.toLowerCase()}${scope === 'template' ? '_template' : ''}.${format}`
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+      toast.success(scope === 'template' ? 'Blank template downloaded' : `Exported ${rowsOut.length} row${rowsOut.length === 1 ? '' : 's'} as ${format.toUpperCase()}`)
+    } catch (e) {
+      toast.error('Export failed: ' + (e instanceof Error ? e.message : String(e)))
+    }
+  }, [BACKEND, exportColumns, marketplace, toast])
+
   const renderToolbarFetch = useCallback(({ rows, selectedRows, setRows, pushHistory }: ToolbarFetchCtx) => (
     <>
       {/* Add listing row generator */}
@@ -1236,6 +1281,20 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         onClick={() => void importFromAmazon({ setRows, pushHistory })}
       />
 
+      {/* IE.1 — Export to TSV / CSV / XLSX (+ a blank template to fill & re-import) */}
+      <Menu
+        label={<><Download className="w-3.5 h-3.5 mr-1.5" />Export</>}
+        items={[
+          { id: 'all-csv', label: 'All rows · CSV', onSelect: () => void exportEbay('csv', 'all', rows, selectedRows) },
+          { id: 'all-xlsx', label: 'All rows · Excel (.xlsx)', onSelect: () => void exportEbay('xlsx', 'all', rows, selectedRows) },
+          { id: 'all-tsv', label: 'All rows · TSV', onSelect: () => void exportEbay('tsv', 'all', rows, selectedRows) },
+          ...(selectedRows.size > 0
+            ? [{ id: 'sel-csv', label: `${selectedRows.size} selected · CSV`, onSelect: () => void exportEbay('csv', 'selected', rows, selectedRows) }]
+            : []),
+          { id: 'template', label: 'Blank template · CSV', onSelect: () => void exportEbay('csv', 'template', rows, selectedRows) },
+        ]}
+      />
+
       {/* Inline progress / result indicator */}
       {pullProgress && (
         <span className="text-[11px] flex items-center gap-1 flex-shrink-0 text-blue-600 dark:text-blue-400 ml-1">
@@ -1253,7 +1312,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       )}
     </>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, pullHistoryOpen, addListingOpen, variantAxisNames])
+  ), [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, pullHistoryOpen, addListingOpen, variantAxisNames, exportEbay])
 
   // ── Slot: import button ────────────────────────────────────────────────
 

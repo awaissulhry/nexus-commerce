@@ -39,6 +39,7 @@ import {
 import { pushVariationGroup, buildPackageWeightAndSize, toListingLanguage, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields } from '../services/ebay-variation-push.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
+import { renderExport } from '../services/export/renderers.js';
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
 
@@ -1074,6 +1075,51 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       take: limit,
     });
     return reply.send({ pushes });
+  });
+
+  // ── POST /api/ebay/flat-file/export ─────────────────────────────────
+  // IE.1 — export the current grid to a downloadable file (tsv / csv / xlsx),
+  // reusing the shared renderExport. The client sends the column list (id+label,
+  // derived from its eBay column model) + the rows to export (all or a subset),
+  // so partial export and a blank template (zero rows) are just a smaller `rows`.
+  fastify.post<{
+    Body: { rows?: Record<string, unknown>[]; columns: { id: string; label: string }[]; format?: 'tsv' | 'csv' | 'xlsx'; marketplace?: string }
+  }>('/ebay/flat-file/export', async (request, reply) => {
+    const { rows = [], columns = [], format = 'csv', marketplace = '' } = request.body ?? {};
+    if (!Array.isArray(columns) || columns.length === 0) {
+      return reply.code(400).send({ error: 'columns required' });
+    }
+    if (format !== 'tsv' && format !== 'csv' && format !== 'xlsx') {
+      return reply.code(400).send({ error: `Unsupported export format "${format}"` });
+    }
+    const mp = String(marketplace || 'all').toLowerCase();
+    const stamp = Date.now();
+    try {
+      // Collapse embedded tabs/newlines so one record never splits across lines.
+      const flatRows = (rows as Record<string, unknown>[]).map((r) => {
+        const o: Record<string, unknown> = {};
+        for (const k of Object.keys(r)) {
+          const v = r[k];
+          o[k] = typeof v === 'string' ? v.replace(/[\t\r\n]+/g, ' ').replace(/ {2,}/g, ' ').trim() : v;
+        }
+        return o;
+      });
+      const { bytes, contentType } = await renderExport({ format, columns, rows: flatRows, filename: `ebay_${mp}` });
+      let outBytes = bytes;
+      if (format === 'csv') {
+        // UTF-8 BOM so Numbers/Excel open as UTF-8 (Italian accents render correctly).
+        const bom = new Uint8Array([0xef, 0xbb, 0xbf]);
+        outBytes = new Uint8Array(bom.length + bytes.length);
+        outBytes.set(bom);
+        outBytes.set(bytes, bom.length);
+      }
+      reply.header('Content-Type', format === 'csv' ? 'text/csv; charset=utf-8' : contentType);
+      reply.header('Content-Disposition', `attachment; filename="ebay_${mp}_${stamp}.${format}"`);
+      return reply.send(Buffer.from(outBytes));
+    } catch (err: unknown) {
+      request.log.error(err, 'ebay/flat-file/export failed');
+      return reply.code(500).send({ error: err instanceof Error ? err.message : 'Export failed' });
+    }
   });
 
   // ── POST /api/ebay/flat-file/publish ────────────────────────────────
