@@ -816,7 +816,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             singleAspectMap.set(singleTargetBrand.toLowerCase(), v)
             singleAspectNames.set(singleTargetBrand.toLowerCase(), singleTargetBrand)
           } else if (!existingBrandLk) {
-            let brandVal = (row._brand as string | undefined ?? '').trim()
+            // Prefer operator-typed brand column; fall back to _brand (DB copy) then DB lookup.
+            let brandVal = (row.brand as string | undefined ?? '').trim()
+              || (row._brand as string | undefined ?? '').trim()
             if (!brandVal) {
               try {
                 const brandProd = await prisma.product.findFirst({ where: { sku }, select: { brand: true } })

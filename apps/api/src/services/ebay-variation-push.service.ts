@@ -335,9 +335,11 @@ export async function pushVariationGroup(
       aspectsMap.delete(existingBrandKey)
       aspectsMap.set(targetBrandAspect, v)
     } else if (!existingBrandKey) {
-      // Look up brand by SKU — sku is always preserved through the frontend round-trip
-      // unlike _productId/_brand which are underscore-prefixed internal fields.
-      const brandVal = (brandBySku.get(sku) ?? '').trim()
+      // Prefer operator-typed brand column over DB value so the flat-file is
+      // the authoritative source. Fall back to brandBySku (Product.brand) when
+      // the column is blank.
+      const brandVal = (row.brand as string | undefined ?? '').trim()
+        || (brandBySku.get(sku) ?? '').trim()
       if (brandVal) aspectsMap.set(targetBrandAspect, [brandVal])
     }
 
