@@ -15,6 +15,7 @@ const TAB_TO_HREF: Record<string, string> = {
   matrix: '/pricing',
   rules: '/pricing/rules',
   promotions: '/pricing/promotions',
+  volumePricing: '/pricing/volume-pricing',
   buybox: '/pricing/buybox',
   alerts: '/pricing/alerts',
 }
@@ -22,6 +23,7 @@ const TAB_TO_HREF: Record<string, string> = {
 function activeTabFromPath(pathname: string): string {
   if (pathname.startsWith('/pricing/rules')) return 'rules'
   if (pathname.startsWith('/pricing/promotions')) return 'promotions'
+  if (pathname.startsWith('/pricing/volume-pricing')) return 'volumePricing'
   if (pathname.startsWith('/pricing/buybox')) return 'buybox'
   if (pathname.startsWith('/pricing/alerts')) return 'alerts'
   return 'matrix'
@@ -36,6 +38,7 @@ export default function PricingTabs() {
     { id: 'matrix', label: t('pricing.tabs.matrix') },
     { id: 'rules', label: t('pricing.tabs.rules') },
     { id: 'promotions', label: t('pricing.tabs.promotions') },
+    { id: 'volumePricing', label: t('pricing.tabs.volumePricing') },
     { id: 'buybox', label: t('pricing.tabs.buybox') },
     { id: 'alerts', label: t('pricing.tabs.alerts') },
   ]

@@ -1510,6 +1510,7 @@
   "pricing.tabs.matrix": "Matrix",
   "pricing.tabs.rules": "Rules",
   "pricing.tabs.promotions": "Promotions",
+  "pricing.tabs.volumePricing": "Volume Pricing",
   "pricing.tabs.buybox": "Buy Box",
   "pricing.tabs.alerts": "Alerts",
   "pricing.matrix.loading": "Loading snapshots…",
