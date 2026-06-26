@@ -94,6 +94,25 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         buildFlatRow(p as Parameters<typeof buildFlatRow>[0]),
       );
 
+      // Propagate ebay_item_id to new variants that haven't been pushed yet.
+      // All variants in a variation group share the same eBay listing ID once
+      // the group is live. When a new size/colour is added (never pushed), its
+      // ebay_item_id is empty — fill it from a sibling that already has one so
+      // operators can see the family membership at a glance.
+      const familyItemId = new Map<string, string>()
+      for (const row of rows) {
+        const fk = String(row.platformProductId ?? row._productId ?? '')
+        const id = String(row.ebay_item_id ?? '').trim()
+        if (id && !familyItemId.has(fk)) familyItemId.set(fk, id)
+      }
+      for (const row of rows) {
+        if (!String(row.ebay_item_id ?? '').trim()) {
+          const fk = String(row.platformProductId ?? row._productId ?? '')
+          const inherited = familyItemId.get(fk)
+          if (inherited) row.ebay_item_id = inherited
+        }
+      }
+
       return reply.send({ rows });
     } catch (err: unknown) {
       request.log.error(err, 'ebay/flat-file/rows failed');
