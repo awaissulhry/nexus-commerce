@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, Loader2, Plus, RefreshCw, RotateCcw, Search, Send, Upload, X,
+  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, Loader2, Plus, RefreshCw, RotateCcw, Search, Send, Upload, X, Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -274,10 +274,13 @@ const ALL_MARKETS = [
   { code: 'UK', label: 'UK (eBay.co.uk)' },
 ]
 
-function PublishPanel({ selectedCount, publishTargets, onChangeTargets, onPublish, pushing, onClose }: {
+function PublishPanel({ selectedCount, publishTargets, onChangeTargets, onPublish, pushing, onQuickUpdate, quickUpdating, onClose }: {
   selectedCount: number; publishTargets: string[]; onChangeTargets: (t: string[]) => void
-  onPublish: () => void; pushing: boolean; onClose: () => void
+  onPublish: () => void; pushing: boolean
+  onQuickUpdate: () => void; quickUpdating: boolean
+  onClose: () => void
 }) {
+  const busy = pushing || quickUpdating
   return (
     <div className="absolute right-0 top-full mt-1 z-50 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-3 space-y-3">
       <div className="flex items-center justify-between">
@@ -299,9 +302,15 @@ function PublishPanel({ selectedCount, publishTargets, onChangeTargets, onPublis
       <p className="text-[10px] text-slate-400">
         {selectedCount > 0 ? `${selectedCount} selected rows` : 'All rows'} will be pushed.
       </p>
-      <Button size="sm" className="w-full" disabled={!publishTargets.length || pushing} loading={pushing} onClick={onPublish}>
-        <Send className="w-3.5 h-3.5 mr-1.5" />Push to {publishTargets.length > 0 ? publishTargets.join(', ') : 'markets'}
+      <Button size="sm" className="w-full" disabled={!publishTargets.length || busy} loading={pushing} onClick={onPublish}>
+        <Send className="w-3.5 h-3.5 mr-1.5" />Full Publish{publishTargets.length > 0 ? ` → ${publishTargets.join(', ')}` : ''}
       </Button>
+      <div className="border-t border-slate-200 dark:border-slate-700 pt-2 space-y-1.5">
+        <p className="text-[10px] text-slate-400">Price &amp; quantity only — goes live instantly, no re-publish</p>
+        <Button size="sm" variant="ghost" className="w-full" disabled={!publishTargets.length || busy} loading={quickUpdating} onClick={onQuickUpdate}>
+          <Zap className="w-3.5 h-3.5 mr-1.5" />Quick Update
+        </Button>
+      </div>
     </div>
   )
 }
@@ -388,6 +397,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── eBay-specific UI state ─────────────────────────────────────────────
   const [pushing, setPushing]                 = useState(false)
+  const [quickUpdating, setQuickUpdating]     = useState(false)
   const [feedStatus, setFeedStatus]           = useState<FeedStatus | null>(null)
   const [publishPanelOpen, setPublishPanelOpen] = useState(false)
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false)
@@ -716,6 +726,47 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       toast.error('Push failed: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setPushing(false)
+      setPublishPanelOpen(false)
+    }
+  }
+
+  async function quickUpdateToEbay(rows: BaseRow[], selectedRows: Set<string>) {
+    const toPush = selectedRows.size > 0
+      ? rows.filter((r) => selectedRows.has(r._rowId))
+      : rows.filter((r) => r._dirty)
+    if (!toPush.length) { toast({ title: 'Nothing to update', tone: 'info' }); return }
+    const dirty = rows.filter((r) => r._dirty)
+    if (dirty.length > 0) {
+      try { await onSave(dirty) } catch (err) {
+        toast.error('Save failed before update: ' + (err instanceof Error ? err.message : String(err)))
+        return
+      }
+    }
+    setQuickUpdating(true)
+    try {
+      const res = await fetch(`${BACKEND}/api/ebay/flat-file/push`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: toPush, markets: publishTargets, strategy: 'offers-only' }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json() as { results?: PushResult[] }
+      setHistoryRefreshKey((k) => k + 1)
+      if (json.results) {
+        const errors = json.results.filter((r) => r.status === 'ERROR')
+        if (errors.length) {
+          const first = errors[0]
+          const more = errors.length > 1 ? ` (+${errors.length - 1} more)` : ''
+          toast.error(`${first.sku}: ${first.message}${more}`)
+          setHistoryPanelOpen(true)
+        } else {
+          toast.success(`Updated ${json.results.length} offer${json.results.length !== 1 ? 's' : ''} — live on eBay`)
+        }
+      }
+    } catch (err) {
+      toast.error('Quick update failed: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setQuickUpdating(false)
       setPublishPanelOpen(false)
     }
   }
@@ -1144,7 +1195,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           <History className="w-3.5 h-3.5 mr-1.5" />
           History
         </Button>
-        <Button size="sm" onClick={() => setPublishPanelOpen((o) => !o)} disabled={pushing} loading={pushing}>
+        <Button size="sm" onClick={() => setPublishPanelOpen((o) => !o)} disabled={pushing || quickUpdating} loading={pushing || quickUpdating}>
           <Send className="w-3.5 h-3.5 mr-1.5" />
           Push to eBay
         </Button>
@@ -1156,6 +1207,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           onChangeTargets={setPublishTargets}
           onPublish={() => void pushToEbay(rows, selectedRows)}
           pushing={pushing}
+          onQuickUpdate={() => void quickUpdateToEbay(rows, selectedRows)}
+          quickUpdating={quickUpdating}
           onClose={() => { setPublishPanelOpen(false); setIncompleteBefore([]); setBlockingErrors([]) }}
         />
       )}
@@ -1164,7 +1217,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       )}
     </div>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [pushing, publishPanelOpen, publishTargets, incompleteBefore, blockingErrors, historyPanelOpen, historyRefreshKey])
+  ), [pushing, quickUpdating, publishPanelOpen, publishTargets, incompleteBefore, blockingErrors, historyPanelOpen, historyRefreshKey])
 
   // ── Slot: feed banner ──────────────────────────────────────────────────
 

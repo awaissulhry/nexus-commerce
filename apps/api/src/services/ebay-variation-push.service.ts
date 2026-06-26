@@ -96,6 +96,57 @@ async function ebayFetchRetry(
   return res
 }
 
+// ── P1: Offer-ID cache helpers ─────────────────────────────────────────────
+// Persists per-SKU eBay offer IDs to ChannelListing.platformAttributes.__offerIds.
+// Eliminates one GET /offer per variant on every subsequent push.
+
+async function loadCachedOfferIds(
+  skus: string[],
+  region: string,
+  marketplaceId: string,
+): Promise<Map<string, string>> {
+  const cache = new Map<string, string>()
+  if (skus.length === 0) return cache
+  try {
+    const listings = await prisma.channelListing.findMany({
+      where: { product: { sku: { in: skus } }, channel: 'EBAY', region },
+      select: { platformAttributes: true, product: { select: { sku: true } } },
+    })
+    for (const l of listings) {
+      const sku = l.product?.sku
+      if (!sku) continue
+      const pa = (l.platformAttributes ?? {}) as Record<string, unknown>
+      const offerIds = ((pa.__offerIds ?? {}) as Record<string, string>)
+      const offerId = offerIds[marketplaceId]
+      if (offerId) cache.set(sku, offerId)
+    }
+  } catch { /* non-fatal */ }
+  return cache
+}
+
+async function saveOfferIds(
+  skuOfferIds: Map<string, string>,
+  region: string,
+  marketplaceId: string,
+): Promise<void> {
+  await Promise.all([...skuOfferIds.entries()].map(async ([sku, offerId]) => {
+    try {
+      const listing = await prisma.channelListing.findFirst({
+        where: { product: { sku }, channel: 'EBAY', region },
+        select: { id: true, platformAttributes: true },
+      })
+      if (!listing) return
+      const pa = (listing.platformAttributes ?? {}) as Record<string, unknown>
+      const existing = ((pa.__offerIds ?? {}) as Record<string, string>)
+      if (existing[marketplaceId] === offerId) return
+      await prisma.channelListing.update({
+        where: { id: listing.id },
+        data: { platformAttributes: { ...pa, __offerIds: { ...existing, [marketplaceId]: offerId } } },
+      })
+    } catch { /* non-fatal */ }
+  }))
+}
+
 export async function pushVariationGroup(
   groupKey: string,
   rows: Array<Record<string, unknown>>,
@@ -680,6 +731,10 @@ export async function pushVariationGroup(
   // Seed from Step-1 errors: if any inventory_item PUT already failed, skip
   // publish_by_group — eBay would reject it because the group's variantSKUs
   // includes SKUs without valid inventory_items.
+  const region = mp === 'UK' ? 'GB' : mp
+  const variantSkusList = variantRows.map(r => r.sku as string).filter(Boolean)
+  const cachedOfferIds = await loadCachedOfferIds(variantSkusList, region, marketplaceId)
+  const collectedOfferIds = new Map<string, string>()
   let anyOfferFailed = results.some(r => r.status === 'ERROR')
   for (const row of variantRows) {
     const sku   = row.sku as string
@@ -714,14 +769,16 @@ export async function pushVariationGroup(
       quantityLimitPerBuyer: 10,
     }
 
-    const getOfferRes = await fetch(
-      `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
-      { headers: headers },
-    )
-    let offerId: string | null = null
-    if (getOfferRes.ok) {
-      const od = await getOfferRes.json() as { offers?: Array<{ offerId: string }> }
-      offerId = od.offers?.[0]?.offerId ?? null
+    let offerId: string | null = cachedOfferIds.get(sku) ?? null
+    if (!offerId) {
+      const getOfferRes = await fetch(
+        `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
+        { headers: headers },
+      )
+      if (getOfferRes.ok) {
+        const od = await getOfferRes.json() as { offers?: Array<{ offerId: string }> }
+        offerId = od.offers?.[0]?.offerId ?? null
+      }
     }
 
     if (offerId) {
@@ -737,6 +794,7 @@ export async function pushVariationGroup(
         anyOfferFailed = true
         continue
       }
+      collectedOfferIds.set(sku, offerId)
     } else {
       const cre = await fetch(`${apiBase}/sell/inventory/v1/offer`, {
         method: 'POST', headers: headers, body: JSON.stringify(offerBody),
@@ -750,6 +808,8 @@ export async function pushVariationGroup(
         anyOfferFailed = true
         continue
       }
+      const creBody = await cre.json().catch(() => ({})) as { offerId?: string }
+      if (creBody.offerId) collectedOfferIds.set(sku, creBody.offerId)
     }
   }
 
@@ -775,6 +835,7 @@ export async function pushVariationGroup(
 
   const pubData = await publishRes.json().catch(() => ({})) as { listingId?: string }
   let listingId = pubData.listingId
+  if (collectedOfferIds.size > 0) void saveOfferIds(collectedOfferIds, region, marketplaceId)
 
   // Re-publishing an already-active listing returns no listingId in the publish body.
   // Fall back to GET offer for the first variant — the offer's listing.listingId is
@@ -815,7 +876,6 @@ export async function pushVariationGroup(
     }).catch(() => null)
     parentProductId = first?.parentId ?? null
   }
-  const region = mp === 'UK' ? 'GB' : mp
   // Include the parent product ID so its ChannelListing transitions to ACTIVE too.
   const allIds = [...new Set([...productIds, ...(parentProductId ? [parentProductId] : [])])]
   if (allIds.length > 0) {
@@ -861,6 +921,127 @@ export async function pushVariationGroup(
   // Preserve step-1 errors even on successful publish — a SKU that failed
   // inventory_item PUT was not actually pushed, even though the group published.
   return results.map(r => r.status === 'ERROR' ? r : { ...r, status: 'PUSHED' as const, message: 'pushed as variation group', itemId: listingId })
+}
+
+// ── P2: Offer-only fast path ───────────────────────────────────────────
+// Updates price + quantity on existing eBay offers without touching inventory
+// items, item groups, or triggering re-publish. Price changes go live instantly.
+
+export async function pushOffersOnly(
+  rows: Array<Record<string, unknown>>,
+  mp: string,
+  token: string,
+  connectionId: string,
+  connectionMeta: Record<string, unknown>,
+  apiBase: string,
+  marketplaceId: string,
+  capToFbm: (pid: string | undefined, sku: string, requested: number, market?: string) => number,
+): Promise<Array<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string }>> {
+  const region = mp === 'UK' ? 'GB' : mp
+  const currency = mp === 'UK' ? 'GBP' : 'EUR'
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    'Content-Language': toListingLanguage(marketplaceId),
+    'Accept-Language': toListingLanguage(marketplaceId),
+    Accept: 'application/json',
+    'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
+  }
+
+  const parentRow = rows.find(r => r._isParent === true) ?? rows[0] ?? {}
+  const variantRows = rows.filter(r => r._isParent !== true)
+
+  const configured = ((connectionMeta.ebayPolicies ?? {}) as {
+    fulfillmentPolicyId?: string
+    paymentPolicyId?: string
+    returnPolicyId?: string
+    merchantLocationKey?: string
+  })
+  let fulfillmentPolicyId = (parentRow.fulfillment_policy_id as string | undefined) || configured.fulfillmentPolicyId || ''
+  let paymentPolicyId     = (parentRow.payment_policy_id     as string | undefined) || configured.paymentPolicyId     || ''
+  let returnPolicyId      = (parentRow.return_policy_id      as string | undefined) || configured.returnPolicyId      || ''
+  let merchantLocationKey = (parentRow.merchant_location_key as string | undefined) || configured.merchantLocationKey || ''
+
+  if (!fulfillmentPolicyId || !paymentPolicyId || !returnPolicyId || !merchantLocationKey) {
+    try {
+      const snapshot = await ebayAccountService.getSnapshot(connectionId, marketplaceId)
+      if (!fulfillmentPolicyId) fulfillmentPolicyId = snapshot.fulfillmentPolicies[0]?.id ?? ''
+      if (!paymentPolicyId)     paymentPolicyId     = snapshot.paymentPolicies[0]?.id     ?? ''
+      if (!returnPolicyId)      returnPolicyId      = snapshot.returnPolicies[0]?.id      ?? ''
+      if (!merchantLocationKey) merchantLocationKey = snapshot.locations[0]?.key           ?? ''
+    } catch (err) {
+      const msg = `Could not fetch seller policies: ${err instanceof Error ? err.message : String(err)}`
+      return rows.map(r => ({ sku: (r.sku ?? '') as string, market: mp, status: 'ERROR' as const, message: msg }))
+    }
+  }
+
+  if (!merchantLocationKey) {
+    const msg = 'Missing merchantLocation — configure in eBay Seller Hub > Inventory > Locations'
+    return rows.map(r => ({ sku: (r.sku ?? '') as string, market: mp, status: 'ERROR' as const, message: msg }))
+  }
+
+  const variantSkusList = variantRows.map(r => r.sku as string).filter(Boolean)
+  const cachedOfferIds = await loadCachedOfferIds(variantSkusList, region, marketplaceId)
+  const collectedOfferIds = new Map<string, string>()
+  const results: Array<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string }> = []
+
+  for (const row of variantRows) {
+    const sku   = row.sku as string
+    const price = Number(row[`${mp.toLowerCase()}_price`] ?? row.price ?? 0)
+    const qty   = capToFbm(row._productId as string | undefined, sku, Number(row[`${mp.toLowerCase()}_qty`] ?? row.quantity ?? 0), mp)
+
+    if (!price || price <= 0) {
+      results.push({ sku, market: mp, status: 'ERROR', message: `No ${mp} price set for ${sku}` })
+      continue
+    }
+
+    let offerId: string | null = cachedOfferIds.get(sku) ?? null
+    if (!offerId) {
+      const getRes = await fetch(
+        `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
+        { headers },
+      )
+      if (getRes.ok) {
+        const od = await getRes.json() as { offers?: Array<{ offerId: string }> }
+        offerId = od.offers?.[0]?.offerId ?? null
+      }
+    }
+
+    if (!offerId) {
+      results.push({ sku, market: mp, status: 'ERROR', message: `No existing offer for ${sku} on ${mp} — run Full Publish first` })
+      continue
+    }
+
+    const offerBody: Record<string, unknown> = {
+      sku,
+      marketplaceId,
+      format: 'FIXED_PRICE',
+      availableQuantity: qty,
+      pricingSummary: { price: { value: price.toFixed(2), currency } },
+      listingPolicies: {
+        ...(fulfillmentPolicyId ? { fulfillmentPolicyId } : {}),
+        ...(paymentPolicyId     ? { paymentPolicyId }     : {}),
+        ...(returnPolicyId      ? { returnPolicyId }      : {}),
+      },
+      ...(merchantLocationKey ? { merchantLocationKey } : {}),
+      quantityLimitPerBuyer: 10,
+    }
+
+    const upd = await fetch(`${apiBase}/sell/inventory/v1/offer/${offerId}`, {
+      method: 'PUT', headers, body: JSON.stringify(offerBody),
+    })
+    if (!upd.ok) {
+      const err = await upd.text().catch(() => '')
+      results.push({ sku, market: mp, status: 'ERROR', message: `offer update ${upd.status}: ${err.slice(0, 300)}` })
+      continue
+    }
+
+    collectedOfferIds.set(sku, offerId)
+    results.push({ sku, market: mp, status: 'PUSHED', message: 'offer updated (price/qty only — live immediately)' })
+  }
+
+  if (collectedOfferIds.size > 0) void saveOfferIds(collectedOfferIds, region, marketplaceId)
+  return results
 }
 
 // ── Market constants ───────────────────────────────────────────────────

@@ -36,7 +36,7 @@ import {
   startEbayPullPreviewJob,
   getEbayPullPreviewJobStatus,
 } from '../services/ebay-flat-file-pull-preview.service.js';
-import { pushVariationGroup, buildPackageWeightAndSize, toListingLanguage, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
+import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, toListingLanguage, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields } from '../services/ebay-variation-push.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
 import { renderExport } from '../services/export/renderers.js';
@@ -491,6 +491,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       markets?: string[];
       marketplace?: string;
       mode?: 'api' | 'feed';
+      strategy?: 'full' | 'offers-only';
     }
   }>('/ebay/flat-file/push', async (request, reply) => {
     const {
@@ -498,6 +499,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       markets,
       marketplace = 'IT',
       mode = 'api',
+      strategy = 'full',
     } = request.body;
 
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -728,6 +730,20 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       const marketplaceId = toMarketplaceId(mp);
 
       for (const [familyKey, familyRows] of families) {
+        if (strategy === 'offers-only') {
+          const offerResults = await pushOffersOnly(
+            familyRows,
+            mp,
+            token,
+            connection.id,
+            (connection.connectionMetadata ?? {}) as Record<string, unknown>,
+            EBAY_API_BASE,
+            marketplaceId,
+            capToFbm,
+          )
+          perRowResults.push(...offerResults)
+          continue
+        }
         if (familyRows.length > 1) {
           // Multi-SKU family — push as variation group.
           // Use the parent row's SKU as the inventoryItemGroupKey so that eBay
