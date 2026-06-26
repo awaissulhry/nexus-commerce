@@ -57,6 +57,28 @@ export function buildPackageWeightAndSize(
   return Object.keys(out).length ? out : undefined;
 }
 
+// Known variation-axis synonym groups: axes within the same group represent
+// the same physical dimension expressed in different locales or Amazon naming
+// conventions. The FIRST name encountered in a family's rows wins as the
+// canonical spec name (eBay market-locale names come from itemSpecifics and
+// are written first by buildFlatRow, so Italian "Colore" wins over Amazon
+// English "Color" for EBAY_IT). Used in synonym dedup during push + in
+// buildFlatRow to prevent Amazon aliases from polluting pushed-variant rows.
+export const AXIS_SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
+  ['colore', 'color', 'colour', 'color name', 'color_name', 'couleur', 'farbe', 'kleur', 'colour name', 'colori'],
+  ['taglia', 'size', 'size name', 'size_name', 'misura', 'größe', 'grosse', 'taille', 'maat', 'maten', 'koko'],
+  ['stile', 'style', 'style name', 'style_name'],
+  ['materiale', 'material', 'material name', 'material_name'],
+  ['genere', 'gender', 'department', 'target audience', 'target_audience'],
+]
+export function axisSynonymKey(name: string): string {
+  const lk = name.toLowerCase().trim()
+  for (let i = 0; i < AXIS_SYNONYM_GROUPS.length; i++) {
+    if ((AXIS_SYNONYM_GROUPS[i] as string[]).includes(lk)) return `__dim${i}__`
+  }
+  return lk
+}
+
 // Maps eBay marketplace short-code to the BCP-47 language tag that eBay's
 // Inventory API requires for Content-Language / Accept-Language headers.
 // eBay stores aspect names in the locale used at write time — sending en-US
@@ -320,10 +342,27 @@ export async function pushVariationGroup(
 
   const isVarAxis = (name: string) => effectiveVarAxes.includes(name)
 
+  // Synonym dedup: collapse variation axis aliases to the first canonical name.
+  // "Colore"/"Color"/"color name" are the same physical dimension (colour).
+  // buildFlatRow writes eBay itemSpecifics keys (Italian "Colore") in Pass 1
+  // and Amazon variation keys (English "Color"/"color name") in Pass 2. Both
+  // survive effectiveVarAxes because they carry different-language values
+  // (NERO vs Black) with non-identical fingerprints. Without synonym dedup the
+  // push would require BOTH from every variant, and new variants that only have
+  // one of the two would fail validation — even if the operator filled the
+  // correct eBay column.
+  const seenSynonymDims = new Set<string>()
+  const effectiveVarAxesDeDuped = effectiveVarAxes.filter(axis => {
+    const sk = axisSynonymKey(axis)
+    if (seenSynonymDims.has(sk)) return false
+    seenSynonymDims.add(sk)
+    return true
+  })
+
   const COLOR_AXIS_NAMES_PRE = new Set(['colore', 'color', 'farbe', 'couleur', 'colour', 'kleur'])
-  const colorAxisRawName = effectiveVarAxes.find(n => COLOR_AXIS_NAMES_PRE.has(n.toLowerCase()))
+  const colorAxisRawName = effectiveVarAxesDeDuped.find(n => COLOR_AXIS_NAMES_PRE.has(n.toLowerCase()))
   const pictureAxis = (pictureAxisOverride
-    && effectiveVarAxes.find(a => a.toLowerCase() === pictureAxisOverride.toLowerCase()))
+    && effectiveVarAxesDeDuped.find(a => a.toLowerCase() === pictureAxisOverride.toLowerCase()))
     || colorAxisRawName
 
   // Build variesBy specifications here (before Step 1) so we can:
@@ -331,13 +370,11 @@ export async function pushVariationGroup(
   //      touching the eBay API, and
   //   b) reuse the already-computed values in the group PUT below.
   //
-  // Deduplicate by nmLabel: two aspect_* raw keys that share a label (e.g. "color"
-  // from Amazon import + "Colore" from eBay IT schema) merge into one entry so
-  // the group gets exactly one specification per physical axis.
-  // Key by lowercase so "Colore"/"colore" duplicates (buildFlatRow writes both)
-  // collapse to one entry with the title-case name.
+  // Use effectiveVarAxesDeDuped (synonym-collapsed) so "Colore" and "Color"
+  // become a single spec. Values are merged from ALL synonym aliases so the
+  // spec carries the full value set even when variants use different locale keys.
   const specificationsMap = new Map<string, { name: string; values: Set<string> }>()
-  for (const rawName of effectiveVarAxes) {
+  for (const rawName of effectiveVarAxesDeDuped) {
     const label = nmLabel(rawName)
     if (!label) continue // guard: skip axes whose label resolves to empty
     const mapKey = label.toLowerCase()
@@ -345,8 +382,23 @@ export async function pushVariationGroup(
       specificationsMap.set(mapKey, { name: label, values: new Set() })
     }
     const entry = specificationsMap.get(mapKey)!
+    // Collect values from the canonical axis name
     for (const v of (allAspectValueSets.get(rawName) ?? [])) {
       entry.values.add(vlLabel(rawName, v))
+    }
+    // Also collect values stored under synonym aliases: a new variant might
+    // only have aspect_Color (English, from Amazon categoryAttributes) while
+    // existing variants use aspect_Colore (Italian, from eBay itemSpecifics).
+    // Both carry the same physical value — include them all in the spec so the
+    // group PUT has the full value set.
+    const dimKey = axisSynonymKey(rawName)
+    for (const [candidateName] of allAspectValueSets) {
+      if (candidateName === rawName) continue
+      if (axisSynonymKey(candidateName) === dimKey) {
+        for (const v of (allAspectValueSets.get(candidateName) ?? [])) {
+          entry.values.add(vlLabel(candidateName, v))
+        }
+      }
     }
   }
   // Fingerprint dedup: axes that carry identical value sets are the same physical
@@ -1253,11 +1305,19 @@ export function buildFlatRow(
     row[colId] = val;
   }
 
-  // EV.5b — variation axis values from categoryAttributes.variations,
-  // under both the case-preserved key (the dynamic UI columns) and the
-  // lowercased key the variation publish's variesBy build reads.
+  // EV.5b — variation axis values from categoryAttributes.variations.
+  // Skip any axis whose physical dimension is already covered by itemSpecifics:
+  // a pushed variant has "Colore"/"Taglia" in itemSpecifics (Italian, correct
+  // for EBAY_IT) — writing also "Color"/"color_name" from Amazon's variation
+  // theme would pollute the row with English aliases that survive the push
+  // service's old fingerprint dedup when values are in different languages
+  // (NERO ≠ Black), forcing the group to require BOTH axes from every variant.
+  const itemSpecificsDims = new Set(
+    Object.keys(itemSpecifics).map(k => axisSynonymKey(k))
+  )
   for (const [axis, val] of Object.entries(variationValues)) {
     if (!axis || !val) continue; // guard: skip empty axis name or empty value
+    if (itemSpecificsDims.has(axisSynonymKey(axis))) continue; // covered by itemSpecifics
     row[`aspect_${axis.replace(/\s+/g, '_')}`] = val;
     row[`aspect_${axis.toLowerCase().replace(/\s+/g, '_')}`] = val;
   }
