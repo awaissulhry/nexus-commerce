@@ -320,35 +320,79 @@ export async function pushVariationGroup(
 
   const isVarAxis = (name: string) => effectiveVarAxes.includes(name)
 
-  // Pre-flight validation: every variant must have a non-empty value for every
-  // variation axis. eBay publish_by_inventory_item_group validates each variantSKU's
-  // inventory_item aspects against the group's specifications — a variant missing any
-  // spec axis causes error 25013 "missing name in variant specifications".
-  // Deduplicate axes to canonical (first-seen, title-case) names so we check once
-  // per physical axis (e.g. "Colore" and "colore" collapse to "Colore").
-  const canonicalAxesMap = new Map<string, string>()
-  for (const a of effectiveVarAxes) {
-    const lk = a.toLowerCase()
-    if (!canonicalAxesMap.has(lk)) canonicalAxesMap.set(lk, a) // first-seen wins (title-case)
+  const COLOR_AXIS_NAMES_PRE = new Set(['colore', 'color', 'farbe', 'couleur', 'colour', 'kleur'])
+  const colorAxisRawName = effectiveVarAxes.find(n => COLOR_AXIS_NAMES_PRE.has(n.toLowerCase()))
+  const pictureAxis = (pictureAxisOverride
+    && effectiveVarAxes.find(a => a.toLowerCase() === pictureAxisOverride.toLowerCase()))
+    || colorAxisRawName
+
+  // Build variesBy specifications here (before Step 1) so we can:
+  //   a) pre-flight-validate variants against the FINAL spec names before
+  //      touching the eBay API, and
+  //   b) reuse the already-computed values in the group PUT below.
+  //
+  // Deduplicate by nmLabel: two aspect_* raw keys that share a label (e.g. "color"
+  // from Amazon import + "Colore" from eBay IT schema) merge into one entry so
+  // the group gets exactly one specification per physical axis.
+  // Key by lowercase so "Colore"/"colore" duplicates (buildFlatRow writes both)
+  // collapse to one entry with the title-case name.
+  const specificationsMap = new Map<string, { name: string; values: Set<string> }>()
+  for (const rawName of effectiveVarAxes) {
+    const label = nmLabel(rawName)
+    if (!label) continue // guard: skip axes whose label resolves to empty
+    const mapKey = label.toLowerCase()
+    if (!specificationsMap.has(mapKey)) {
+      specificationsMap.set(mapKey, { name: label, values: new Set() })
+    }
+    const entry = specificationsMap.get(mapKey)!
+    for (const v of (allAspectValueSets.get(rawName) ?? [])) {
+      entry.values.add(vlLabel(rawName, v))
+    }
   }
-  const canonicalAxes = [...canonicalAxesMap.values()]
-  if (canonicalAxes.length > 0) {
+  // Fingerprint dedup: axes that carry identical value sets are the same physical
+  // attribute expressed under different names (e.g. "Color"/"Colore" both hold
+  // {NERO,BLU,…}). Keep the first occurrence (eBay market-locale name wins because
+  // itemSpecifics are written before variationValues in buildFlatRow).
+  const specFingerprintsSeen = new Set<string>()
+  const specificationsRaw = [...specificationsMap.values()]
+  const deduplicatedSpecs = specificationsRaw.filter(spec => {
+    const fp = [...spec.values].map(v => v.toLowerCase()).sort().join('|')
+    if (specFingerprintsSeen.has(fp)) return false
+    specFingerprintsSeen.add(fp)
+    return true
+  })
+  const validSpecs = deduplicatedSpecs.filter(e => e.name && e.values.size > 0)
+  const specifications = validSpecs.length > 0
+    ? validSpecs.map(e => ({ name: e.name, values: [...e.values].filter(Boolean) }))
+    : [{ name: 'Custom Bundle', values: variantRows.map(r => r.sku as string).filter(Boolean) }]
+  const pictureSpec = pictureAxis
+    ? deduplicatedSpecs.find(s => s.name.toLowerCase() === pictureAxis.toLowerCase()
+        || (COLOR_AXIS_NAMES_PRE.has(s.name.toLowerCase()) && COLOR_AXIS_NAMES_PRE.has(pictureAxis.toLowerCase())))
+    : undefined
+  const imageVariesByAxes = (pictureSpec ? [pictureSpec.name] : validSpecs.slice(0, 1).map(e => e.name)).filter(Boolean)
+
+  // Pre-flight: every variant must have a non-empty value for every FINAL spec name.
+  // Using final spec names (after fingerprint dedup) avoids false positives from
+  // duplicate data sources — e.g. "Colore" (eBay flat-file) + "color name" (Amazon
+  // categoryAttributes) both appear in effectiveVarAxes with >1 distinct value, but
+  // fingerprint dedup collapses them to one spec "Colore". Validating against raw
+  // effectiveVarAxes would incorrectly flag every variant as missing "color name".
+  const isCustomBundleFallback = specifications.length === 1 && specifications[0].name === 'Custom Bundle'
+  if (!isCustomBundleFallback) {
     const missingAxisErrors: Array<{ sku: string; axes: string[] }> = []
     for (const row of variantRows) {
       const missingForRow: string[] = []
-      for (const axis of canonicalAxes) {
-        const key1 = `aspect_${axis.replace(/\s+/g, '_')}`
-        const key2 = `aspect_${axis.toLowerCase().replace(/\s+/g, '_')}`
+      for (const spec of specifications) {
+        const key1 = `aspect_${spec.name.replace(/\s+/g, '_')}`
+        const key2 = `aspect_${spec.name.toLowerCase().replace(/\s+/g, '_')}`
         const val = String((row[key1] ?? row[key2]) ?? '').trim()
-        if (!val) missingForRow.push(axis)
+        if (!val) missingForRow.push(spec.name)
       }
       if (missingForRow.length > 0) missingAxisErrors.push({ sku: row.sku as string, axes: missingForRow })
     }
     if (missingAxisErrors.length > 0) {
       const detail = missingAxisErrors.map(e => `${e.sku}: missing ${e.axes.join(', ')}`).join('; ')
-      console.log('[ebay-push] 25013 pre-check failed — variants missing axes: %s', detail)
-      // results is still empty at this stage (before Step 1) — build per-variant error entries
-      // from variantRows so the UI shows exactly which SKUs need to be fixed.
+      console.log('[ebay-push] 25013 pre-check: %s', detail)
       return variantRows.map(r => {
         const rowError = missingAxisErrors.find(e => e.sku === (r.sku as string))
         const msg = rowError
@@ -371,14 +415,6 @@ export async function pushVariationGroup(
   //
   // Falls back to per-SKU images when no colour axis is present (single-colour
   // products, bundles, etc.).
-  const COLOR_AXIS_NAMES_PRE = new Set(['colore', 'color', 'farbe', 'couleur', 'colour', 'kleur'])
-  const colorAxisRawName = effectiveVarAxes.find(n => COLOR_AXIS_NAMES_PRE.has(n.toLowerCase()))
-  // P4 — operator-chosen picture axis (the aspect eBay varies images by). Resolve
-  // the requested name against the real variation axes; fall back to the colour
-  // axis. With no override this IS colorAxisRawName, so behaviour is unchanged.
-  const pictureAxis = (pictureAxisOverride
-    && effectiveVarAxes.find(a => a.toLowerCase() === pictureAxisOverride.toLowerCase()))
-    || colorAxisRawName
   const colorRepImages = new Map<string, string[]>() // pictureAxisValue.toLowerCase() → [url, ...]
   if (pictureAxis) {
     const axisKey = `aspect_${pictureAxis.replace(/ /g, '_')}`
@@ -554,59 +590,7 @@ export async function pushVariationGroup(
   // random SKUs (the exact SKU varies each run — it is eBay-side, not data-driven).
   await new Promise(r => setTimeout(r, 1500))
 
-  // Step 2: Build variesBy specifications from the detected variation axes.
-  // Deduplicate by nmLabel output: two different aspect_* raw keys (e.g. "color"
-  // imported from Amazon + "Colore" set up on eBay) can both have >1 distinct value
-  // and therefore both appear in effectiveVarAxes, then nmLabel maps both to the
-  // same Italian label → two specs entries with identical name → eBay error 25013
-  // ("Duplicate names in variant specifications"). Merge values across raw keys that
-  // share a label so the group sees exactly one specification entry per axis.
-  // Key by lowercase label so "Colore" and "colore" (buildFlatRow writes both
-  // the original-case and a lowercase duplicate of each variation axis) collapse
-  // into a single specifications entry. Without this, both pass the vals.size > 1
-  // filter and produce two entries with identical display names → eBay 25013.
-  const specificationsMap = new Map<string, { name: string; values: Set<string> }>()
-  for (const rawName of effectiveVarAxes) {
-    const label = nmLabel(rawName)
-    if (!label) continue // guard: skip axes whose label resolves to empty
-    const mapKey = label.toLowerCase()
-    if (!specificationsMap.has(mapKey)) {
-      specificationsMap.set(mapKey, { name: label, values: new Set() })
-    }
-    const entry = specificationsMap.get(mapKey)!
-    for (const v of (allAspectValueSets.get(rawName) ?? [])) {
-      entry.values.add(vlLabel(rawName, v))
-    }
-  }
-  // Deduplicate specifications by value-set fingerprint: axes with the same set of
-  // values are the same physical attribute (e.g. "Color" from Amazon's variation
-  // theme and "Colore" from eBay IT's category schema both carry {BLACK, YELLOW}).
-  // buildFlatRow writes variation values under both names so both appear in
-  // allAspectValueSets with >1 distinct value → without dedup eBay shows 4 selectors
-  // instead of 2. First occurrence wins — itemSpecifics keys (written first in
-  // buildFlatRow) are in the correct market locale (Colore, Taglia for EBAY_IT).
-  const specFingerprintsSeen = new Set<string>()
-  const specificationsRaw = [...specificationsMap.values()]
-  const deduplicatedSpecs = specificationsRaw.filter(spec => {
-    const fp = [...spec.values].map(v => v.toLowerCase()).sort().join('|')
-    if (specFingerprintsSeen.has(fp)) return false
-    specFingerprintsSeen.add(fp)
-    return true
-  })
-  const validSpecs = deduplicatedSpecs.filter(e => e.name && e.values.size > 0)
-  const specifications = validSpecs.length > 0
-    ? validSpecs.map(e => ({ name: e.name, values: [...e.values].filter(Boolean) }))
-    : [{ name: 'Custom Bundle', values: variantRows.map(r => r.sku as string).filter(Boolean) }]
-  // imageVariesByAxes names the spec eBay switches photos by — the operator's
-  // chosen picture axis (default = the colour axis). Match it to the normalised
-  // spec so the value lines up after eBay's locale normalisation.
-  const pictureSpec = pictureAxis
-    ? deduplicatedSpecs.find(s => s.name.toLowerCase() === pictureAxis.toLowerCase()
-        || (COLOR_AXIS_NAMES_PRE.has(s.name.toLowerCase()) && COLOR_AXIS_NAMES_PRE.has(pictureAxis.toLowerCase())))
-    : undefined
-  const imageVariesByAxes = (pictureSpec ? [pictureSpec.name] : validSpecs.slice(0, 1).map(e => e.name)).filter(Boolean)
-
-  // Step 3: Create/update the inventory_item_group.
+  // Step 3: (specifications + imageVariesByAxes computed above before Step 1) Create/update the inventory_item_group.
   // variantSKUs is the correct field name (plain string array, not objects).
   let parentTitle = String(parentRow.title ?? '').trim()
   if (!parentTitle) {
