@@ -20,8 +20,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
-  AlertCircle, ArrowUpDown, Check, ChevronDown, Copy, GripVertical, Layers,
-  Loader2, Percent, Plus, Redo2, RefreshCw, Send, Trash2, Undo2,
+  AlertCircle, ArrowRight, ArrowUpDown, Check, ChevronDown, Copy, GripVertical,
+  Layers, Link2, Loader2, Percent, Plus, Redo2, RefreshCw, Search, Send,
+  Trash2, Undo2, Unlink, UserPlus, Users,
 } from 'lucide-react'
 import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
@@ -1061,11 +1062,12 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
 
   // ── Render ───────────────────────────────────────────────────────────
 
-  // Non-parent products have no variant grid — show the channel
-  // pricing + inventory sections which handle their own fetching.
+  // Non-parent products have no variant grid — show family controls
+  // + channel pricing + inventory sections.
   if (!product.isParent) {
     return (
       <div className="space-y-4">
+        <FamilySection product={product} backend={backend} />
         <ChannelPricingSection productId={product.id} isParent={false} />
         <ChannelInventorySection productId={product.id} isParent={false} />
       </div>
@@ -1080,6 +1082,9 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
 
   return (
     <div className="space-y-3">
+      {/* Family structure controls — always at the top for parents */}
+      <FamilySection product={product} backend={backend} />
+
       {/* PIM B.4 — Variant divergence summary (read-only insight) */}
       {children.length > 0 && (
         <VariantDivergencePanel
@@ -1563,6 +1568,479 @@ function VariantFormModal({
         <Button variant="primary" disabled={!canSave} loading={saving} onClick={handleSubmit}>
           {mode === 'create' ? 'Add variant' : 'Save'}
         </Button>
+      </ModalFooter>
+    </Modal>
+  )
+}
+
+// ── FamilySection ──────────────────────────────────────────────────────────
+// Renders role-aware family controls at the top of the Matrix tab for every
+// product type: standalone, child, or parent. Fetches its own family data
+// and manages all structural modals inline. After any structural operation
+// the page reloads so product.isParent / product.parentId are fresh.
+
+interface FamilyData {
+  role: 'parent' | 'child' | 'standalone'
+  self: { id: string; sku: string; name?: string | null; isParent: boolean; parentId?: string | null; variationTheme?: string | null }
+  parent: { id: string; sku: string; name?: string | null; variationTheme?: string | null } | null
+  children: Array<{ id: string; sku: string; name?: string | null }>
+  siblings: Array<{ id: string; sku: string; name?: string | null }>
+}
+
+function FamilySection({ product, backend }: { product: any; backend: string }) {
+  const [data, setData]         = useState<FamilyData | null>(null)
+  const [loading, setLoading]   = useState(true)
+  const [busy, setBusy]         = useState(false)
+  const [err, setErr]           = useState<string | null>(null)
+
+  const [attachOpen,    setAttachOpen]    = useState(false)
+  const [promoteOpen,   setPromoteOpen]   = useState(false)
+  const [detachConfirm, setDetachConfirm] = useState(false)
+  const [moveOpen,      setMoveOpen]      = useState(false)
+  const [demoteConfirm, setDemoteConfirm] = useState(false)
+  const [addChildOpen,  setAddChildOpen]  = useState(false)
+
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch(`${backend}/api/pim/family/${product.id}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setData(await res.json())
+    } catch (e: any) {
+      setErr(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [backend, product.id])
+
+  useEffect(() => { void fetchData() }, [fetchData])
+
+  const reload = () => { window.location.reload() }
+
+  async function detachFromParent() {
+    setBusy(true); setErr(null)
+    try {
+      const res = await fetch(`${backend}/api/amazon/pim/unlink-child`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: product.id }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+      reload()
+    } catch (e: any) {
+      setErr(e.message); setBusy(false); setDetachConfirm(false)
+    }
+  }
+
+  async function demoteParent(force = false) {
+    setBusy(true); setErr(null)
+    try {
+      const res = await fetch(`${backend}/api/pim/demote-parent`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: product.id, force }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+      reload()
+    } catch (e: any) {
+      setErr(e.message); setBusy(false)
+    }
+  }
+
+  if (loading) return (
+    <div className="flex items-center gap-2 text-xs text-tertiary py-2">
+      <Loader2 className="w-3 h-3 animate-spin" /> Loading family…
+    </div>
+  )
+
+  const role = data?.role ?? (product.isParent ? 'parent' : product.parentId ? 'child' : 'standalone')
+
+  // ── Standalone ─────────────────────────────────────────────────────
+  if (role === 'standalone') {
+    return (
+      <div className="flex items-center flex-wrap gap-3 px-3 py-2.5 bg-slate-50 dark:bg-slate-800/40 border border-default dark:border-slate-700 rounded-lg">
+        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 flex-1 min-w-0">
+          <Users className="w-3.5 h-3.5 flex-shrink-0" />
+          <span>Standalone — not part of a variation family</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" icon={<Link2 className="w-3.5 h-3.5" />} onClick={() => setAttachOpen(true)}>
+            Attach to parent
+          </Button>
+          <Button size="sm" variant="ghost" icon={<Users className="w-3.5 h-3.5" />} onClick={() => setPromoteOpen(true)}>
+            Promote to parent
+          </Button>
+        </div>
+        {err && <p className="w-full text-xs text-red-500">{err}</p>}
+        {attachOpen && (
+          <ParentPickerModal
+            backend={backend} title="Attach to parent"
+            description="This product will become a child of the selected parent."
+            onClose={() => setAttachOpen(false)}
+            onPick={async (parentId) => {
+              setBusy(true); setErr(null)
+              try {
+                const res = await fetch(`${backend}/api/pim/attach-to-parent`, {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ parentId, productIds: [product.id] }),
+                })
+                if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+                reload()
+              } catch (e: any) { setErr(e.message); setBusy(false) }
+              setAttachOpen(false)
+            }}
+          />
+        )}
+        {promoteOpen && (
+          <PromoteModal backend={backend} productId={product.id}
+            onClose={() => setPromoteOpen(false)} onDone={reload} />
+        )}
+      </div>
+    )
+  }
+
+  // ── Child ─────────────────────────────────────────────────────────
+  if (role === 'child') {
+    const parent = data?.parent
+    const siblings = data?.siblings ?? []
+    return (
+      <div className="px-3 py-2.5 bg-slate-50 dark:bg-slate-800/40 border border-default dark:border-slate-700 rounded-lg space-y-2">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2 text-sm">
+            <Users className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+            <span className="text-slate-500 dark:text-slate-400">Parent:</span>
+            {parent ? (
+              <a href={`/products/${parent.id}/edit?tab=matrix`}
+                className="font-mono font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                {parent.sku}
+              </a>
+            ) : (
+              <span className="text-tertiary">—</span>
+            )}
+            {parent?.variationTheme && (
+              <span className="text-xs text-tertiary">· {parent.variationTheme}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" variant="ghost" icon={<ArrowRight className="w-3.5 h-3.5" />} onClick={() => setMoveOpen(true)}>
+              Move to parent
+            </Button>
+            <button type="button" disabled={busy} onClick={() => setDetachConfirm(true)}
+              className="px-2 py-1 text-xs rounded border bg-white dark:bg-slate-800 border-default dark:border-slate-700 text-red-500 dark:text-red-400 hover:border-red-300 dark:hover:border-red-700 transition-colors disabled:opacity-50">
+              <Unlink className="w-3 h-3 inline mr-1" />Detach
+            </button>
+          </div>
+        </div>
+        {siblings.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-tertiary">Siblings ({siblings.length}):</span>
+            {siblings.slice(0, 5).map((s) => (
+              <a key={s.id} href={`/products/${s.id}/edit`}
+                className="px-1.5 py-0.5 text-xs font-mono bg-white dark:bg-slate-800 border border-default dark:border-slate-700 rounded hover:border-blue-400 text-slate-600 dark:text-slate-300 transition-colors">
+                {s.sku}
+              </a>
+            ))}
+            {siblings.length > 5 && (
+              <span className="text-xs text-tertiary">+{siblings.length - 5} more</span>
+            )}
+          </div>
+        )}
+        {err && <p className="text-xs text-red-500">{err}</p>}
+        {detachConfirm && (
+          <Modal title="Detach from parent" onClose={() => setDetachConfirm(false)} open>
+            <p className="text-sm text-slate-700 dark:text-slate-300">
+              Detach <span className="font-mono font-medium">{product.sku}</span> from its parent?
+              This product will become standalone.
+            </p>
+            <ModalFooter>
+              <Button variant="ghost" onClick={() => setDetachConfirm(false)}>Cancel</Button>
+              <Button variant="danger" loading={busy} onClick={detachFromParent}>Detach</Button>
+            </ModalFooter>
+          </Modal>
+        )}
+        {moveOpen && (
+          <ParentPickerModal
+            backend={backend} title="Move to different parent"
+            description="Select the new parent. The old parent's family flag will be cleared if this was its last child."
+            excludeId={data?.parent?.id}
+            onClose={() => setMoveOpen(false)}
+            onPick={async (newParentId) => {
+              setBusy(true); setErr(null)
+              try {
+                const res = await fetch(`${backend}/api/pim/reparent`, {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ productId: product.id, newParentId }),
+                })
+                if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+                reload()
+              } catch (e: any) { setErr(e.message); setBusy(false) }
+              setMoveOpen(false)
+            }}
+          />
+        )}
+      </div>
+    )
+  }
+
+  // ── Parent ─────────────────────────────────────────────────────────
+  const childCount = data?.children.length ?? 0
+  return (
+    <div className="flex items-center flex-wrap gap-3 px-3 py-2.5 bg-slate-50 dark:bg-slate-800/40 border border-default dark:border-slate-700 rounded-lg">
+      <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 flex-1 min-w-0">
+        <Users className="w-3.5 h-3.5 flex-shrink-0" />
+        <span>Parent product</span>
+        {data?.self.variationTheme && (
+          <span className="text-xs px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-slate-600 dark:text-slate-300">
+            {data.self.variationTheme}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="ghost" icon={<UserPlus className="w-3.5 h-3.5" />} onClick={() => setAddChildOpen(true)}>
+          Add existing
+        </Button>
+        <button type="button" disabled={busy} onClick={() => setDemoteConfirm(true)}
+          className={cn(
+            'px-2 py-1 text-xs rounded border bg-white dark:bg-slate-800 transition-colors disabled:opacity-50',
+            childCount > 0
+              ? 'border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:border-amber-400'
+              : 'border-default dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-400',
+          )}
+          title={childCount > 0 ? `${childCount} children will be orphaned` : 'Convert to standalone product'}
+        >
+          Demote
+        </button>
+      </div>
+      {err && <p className="w-full text-xs text-red-500">{err}</p>}
+      {demoteConfirm && (
+        <Modal title="Demote to standalone" onClose={() => setDemoteConfirm(false)} open>
+          <div className="space-y-3">
+            <p className="text-sm text-slate-700 dark:text-slate-300">
+              Remove parent status from <span className="font-mono font-medium">{product.sku}</span>?
+            </p>
+            {childCount > 0 && (
+              <div className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 rounded-md px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+                <AlertCircle className="w-3.5 h-3.5 inline mr-1" />
+                {childCount} child product{childCount !== 1 ? 's' : ''} will be orphaned (no parent).
+              </div>
+            )}
+          </div>
+          <ModalFooter>
+            <Button variant="ghost" onClick={() => setDemoteConfirm(false)}>Cancel</Button>
+            <Button variant={childCount > 0 ? 'danger' : 'primary'} loading={busy}
+              onClick={() => demoteParent(true)}>
+              {childCount > 0 ? 'Demote anyway' : 'Demote'}
+            </Button>
+          </ModalFooter>
+        </Modal>
+      )}
+      {addChildOpen && (
+        <StandalonePickerModal
+          backend={backend} title="Add existing products as children"
+          description="Search for standalone products to attach to this parent."
+          onClose={() => setAddChildOpen(false)}
+          onPick={async (productIds) => {
+            setBusy(true); setErr(null)
+            try {
+              const res = await fetch(`${backend}/api/pim/attach-to-parent`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ parentId: product.id, productIds }),
+              })
+              if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+              reload()
+            } catch (e: any) { setErr(e.message); setBusy(false) }
+            setAddChildOpen(false)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── ParentPickerModal ──────────────────────────────────────────────────────
+// Search /pim/parents-overview, pick one, return its id via onPick.
+
+function ParentPickerModal({ backend, title, description, excludeId, onClose, onPick }: {
+  backend: string; title: string; description: string
+  excludeId?: string | null
+  onClose: () => void; onPick: (parentId: string) => Promise<void>
+}) {
+  const [search, setSearch]   = useState('')
+  const [results, setResults] = useState<Array<{ id: string; sku: string; name?: string | null; childCount?: number }>>([])
+  const [fetching, setFetching] = useState(false)
+  const [selected, setSelected] = useState<string | null>(null)
+  const [busy, setBusy]         = useState(false)
+
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      setFetching(true)
+      try {
+        const res = await fetch(`${backend}/api/pim/parents-overview?search=${encodeURIComponent(search)}&limit=20`)
+        if (!res.ok) return
+        const d = await res.json()
+        setResults((d.items ?? []).filter((p: any) => p.id !== excludeId))
+      } finally {
+        setFetching(false)
+      }
+    }, 200)
+    return () => clearTimeout(t)
+  }, [search, backend, excludeId])
+
+  return (
+    <Modal title={title} onClose={onClose} open>
+      <div className="space-y-3">
+        <p className="text-sm text-slate-600 dark:text-slate-400">{description}</p>
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tertiary pointer-events-none" />
+          <input autoFocus type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by SKU or name…"
+            className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-400"
+          />
+        </div>
+        <div className="max-h-52 overflow-y-auto border border-default dark:border-slate-700 rounded divide-y divide-slate-100 dark:divide-slate-800">
+          {fetching && <div className="py-4 text-center text-xs text-tertiary">Loading…</div>}
+          {!fetching && results.length === 0 && (
+            <div className="py-4 text-center text-xs text-tertiary">No parent products found</div>
+          )}
+          {results.map((p) => (
+            <button key={p.id} type="button" onClick={() => setSelected(p.id === selected ? null : p.id)}
+              className={cn('w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left transition-colors',
+                selected === p.id ? 'bg-blue-50 dark:bg-blue-950/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800')}>
+              <span className="font-mono text-slate-700 dark:text-slate-300">{p.sku}</span>
+              {p.name && <span className="text-xs text-tertiary truncate max-w-[8rem]">{p.name}</span>}
+              {selected === p.id && <Check className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />}
+            </button>
+          ))}
+        </div>
+      </div>
+      <ModalFooter>
+        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button variant="primary" disabled={!selected} loading={busy}
+          onClick={async () => { if (!selected) return; setBusy(true); await onPick(selected) }}>
+          Attach
+        </Button>
+      </ModalFooter>
+    </Modal>
+  )
+}
+
+// ── StandalonePickerModal ──────────────────────────────────────────────────
+// Search /pim/standalones, pick one or more, return ids[] via onPick.
+
+function StandalonePickerModal({ backend, title, description, onClose, onPick }: {
+  backend: string; title: string; description: string
+  onClose: () => void; onPick: (productIds: string[]) => Promise<void>
+}) {
+  const [search, setSearch]     = useState('')
+  const [results, setResults]   = useState<Array<{ id: string; sku: string; name?: string | null }>>([])
+  const [fetching, setFetching] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [busy, setBusy]         = useState(false)
+
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      setFetching(true)
+      try {
+        const res = await fetch(`${backend}/api/pim/standalones?search=${encodeURIComponent(search)}&limit=20`)
+        if (!res.ok) return
+        const d = await res.json()
+        setResults(d.items ?? [])
+      } finally {
+        setFetching(false)
+      }
+    }, 200)
+    return () => clearTimeout(t)
+  }, [search, backend])
+
+  const toggle = (id: string) => setSelected((s) => {
+    const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n
+  })
+
+  return (
+    <Modal title={title} onClose={onClose} open>
+      <div className="space-y-3">
+        <p className="text-sm text-slate-600 dark:text-slate-400">{description}</p>
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tertiary pointer-events-none" />
+          <input autoFocus type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by SKU or name…"
+            className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-400"
+          />
+        </div>
+        <div className="max-h-52 overflow-y-auto border border-default dark:border-slate-700 rounded divide-y divide-slate-100 dark:divide-slate-800">
+          {fetching && <div className="py-4 text-center text-xs text-tertiary">Loading…</div>}
+          {!fetching && results.length === 0 && (
+            <div className="py-4 text-center text-xs text-tertiary">No standalone products found</div>
+          )}
+          {results.map((p) => (
+            <button key={p.id} type="button" onClick={() => toggle(p.id)}
+              className={cn('w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left transition-colors',
+                selected.has(p.id) ? 'bg-blue-50 dark:bg-blue-950/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800')}>
+              <span className="font-mono text-slate-700 dark:text-slate-300">{p.sku}</span>
+              {p.name && <span className="text-xs text-tertiary truncate max-w-[8rem]">{p.name}</span>}
+              {selected.has(p.id) && <Check className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />}
+            </button>
+          ))}
+        </div>
+        {selected.size > 0 && (
+          <p className="text-xs text-blue-600 dark:text-blue-400">
+            {selected.size} product{selected.size !== 1 ? 's' : ''} selected
+          </p>
+        )}
+      </div>
+      <ModalFooter>
+        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button variant="primary" disabled={selected.size === 0} loading={busy}
+          onClick={async () => { if (!selected.size) return; setBusy(true); await onPick(Array.from(selected)) }}>
+          Add {selected.size > 0 ? `(${selected.size})` : ''}
+        </Button>
+      </ModalFooter>
+    </Modal>
+  )
+}
+
+// ── PromoteModal ───────────────────────────────────────────────────────────
+// Set isParent=true on a standalone, with optional variation theme + axes.
+
+function PromoteModal({ backend, productId, onClose, onDone }: {
+  backend: string; productId: string; onClose: () => void; onDone: () => void
+}) {
+  const [theme, setTheme]   = useState('')
+  const [axes, setAxes]     = useState('')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr]       = useState<string | null>(null)
+
+  async function handleSubmit() {
+    setSaving(true); setErr(null)
+    try {
+      const parsedAxes = axes.split(',').map((s) => s.trim()).filter(Boolean)
+      const res = await fetch(`${backend}/api/pim/promote-to-parent`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId,
+          variationTheme: theme.trim() || undefined,
+          variationAxes: parsedAxes.length ? parsedAxes : undefined,
+        }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+      onDone()
+    } catch (e: any) {
+      setErr(e.message); setSaving(false)
+    }
+  }
+
+  return (
+    <Modal title="Promote to parent" onClose={onClose} open>
+      <div className="space-y-3">
+        {err && <p className="text-sm text-red-600">{err}</p>}
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          This product becomes a parent. Use "Add existing" in the Matrix tab to attach children.
+        </p>
+        <Input label="Variation theme (optional)" value={theme} onChange={(e) => setTheme(e.target.value)}
+          placeholder="e.g. Color/Size" />
+        <Input label="Variation axes (comma-separated, optional)" value={axes} onChange={(e) => setAxes(e.target.value)}
+          placeholder="e.g. Color, Size" />
+      </div>
+      <ModalFooter>
+        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button variant="primary" loading={saving} onClick={handleSubmit}>Promote</Button>
       </ModalFooter>
     </Modal>
   )

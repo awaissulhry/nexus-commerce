@@ -43,8 +43,11 @@ import {
   ExternalLink,
   GripVertical,
   Layers,
+  Link2,
   Pencil,
   Sparkles,
+  Unlink,
+  Users,
   X,
   XCircle,
 } from 'lucide-react'
@@ -365,6 +368,26 @@ function RowContextMenuContent({
       onClose()
     }
   }
+  const detachFromParent = async () => {
+    setBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/amazon/pim/unlink-child`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: product.id }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+      emitInvalidation({
+        type: 'product.updated',
+        meta: { productIds: [product.id], source: 'row-context-menu' },
+      })
+      onChanged()
+    } finally {
+      setBusy(false)
+      onClose()
+    }
+  }
+
   const item = (
     icon: React.ReactNode,
     label: string,
@@ -420,6 +443,21 @@ function RowContextMenuContent({
         )}
       <div className="my-1 border-t border-subtle dark:border-slate-800" />
       {item(<Copy size={14} />, 'Duplicate', duplicate)}
+      <div className="my-1 border-t border-subtle dark:border-slate-800" />
+      {product.isParent &&
+        item(<Users size={14} />, 'Manage variants', () => {
+          window.location.href = `/products/${product.id}/edit?tab=matrix`
+        })}
+      {!product.isParent && !product.parentId &&
+        item(<Link2 size={14} />, 'Attach to parent…', () => {
+          window.location.href = `/products/${product.id}/edit?tab=matrix`
+        })}
+      {product.parentId &&
+        item(<Users size={14} />, 'View family', () => {
+          window.location.href = `/products/${product.id}/edit?tab=matrix`
+        })}
+      {product.parentId &&
+        item(<Unlink size={14} />, 'Detach from parent', detachFromParent)}
     </>
   )
 }
