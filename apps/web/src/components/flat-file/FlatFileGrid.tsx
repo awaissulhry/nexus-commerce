@@ -1690,24 +1690,39 @@ export default function FlatFileGrid({
               {(() => {
                 const rendered: React.ReactNode[] = []
                 const GROUP_BAND_COLORS = ['bg-blue-50/30 dark:bg-blue-950/10', 'bg-violet-50/30 dark:bg-violet-950/10', 'bg-emerald-50/30 dark:bg-emerald-950/10', 'bg-amber-50/30 dark:bg-amber-950/10', 'bg-rose-50/30 dark:bg-rose-950/10', 'bg-cyan-50/30 dark:bg-cyan-950/10']
-                let bandIdx = 0; let displayIdx = 0
 
-                rowGroups.forEach((groupRows, groupKey) => {
-                  const bandClass = GROUP_BAND_COLORS[bandIdx++ % GROUP_BAND_COLORS.length]
+                // Render in displayRows order (same as displayRowsRef.current) so that
+                // the ri index assigned here matches the index used by pointer/keyboard
+                // handlers when they do displayRowsRef.current[ri]. Iterating rowGroups
+                // (insertion order) while displayRows is sorted caused a mismatch:
+                // clicking ri=5 activated the sorted-position-5 row, not the visual-5 row.
+                const groupBandIdx = new Map<string, number>()
+                const renderedGroupHeaders = new Set<string>()
+                let bandCounter = 0
+                let displayIdx = 0
+
+                displayRows.forEach((row) => {
+                  const groupKey   = resolvedGetGroupKey(row)
+                  const groupRows  = rowGroups.get(groupKey) ?? [row]
                   const isCollapsed = collapsedRowGroups.has(groupKey)
 
-                  if (groupRows.length > 1) {
-                    rendered.push(
-                      <GroupHeader key={`hdr-${groupKey}`} row={groupRows[0]} bandClass={bandClass}
-                        isExpanded={!isCollapsed} showImage={showRowImages} imageSize={imageSize}
-                        colSpan={allColumns.length + 2}
-                        onToggle={() => setCollapsedRowGroups((prev) => { const n = new Set(prev); n.has(groupKey) ? n.delete(groupKey) : n.add(groupKey); return n })} />
-                    )
+                  if (!renderedGroupHeaders.has(groupKey)) {
+                    renderedGroupHeaders.add(groupKey)
+                    if (!groupBandIdx.has(groupKey)) groupBandIdx.set(groupKey, bandCounter++)
+                    if (groupRows.length > 1) {
+                      const bandClass = GROUP_BAND_COLORS[groupBandIdx.get(groupKey)! % GROUP_BAND_COLORS.length]
+                      rendered.push(
+                        <GroupHeader key={`hdr-${groupKey}`} row={groupRows[0]} bandClass={bandClass}
+                          isExpanded={!isCollapsed} showImage={showRowImages} imageSize={imageSize}
+                          colSpan={allColumns.length + 2}
+                          onToggle={() => setCollapsedRowGroups((prev) => { const n = new Set(prev); n.has(groupKey) ? n.delete(groupKey) : n.add(groupKey); return n })} />
+                      )
+                    }
                   }
 
-                  if (isCollapsed) return
+                  // Collapsed groups: no rows (displayRows already excludes them via useMemo)
 
-                  groupRows.filter((r) => filteredRows.some((fr) => fr._rowId === r._rowId)).forEach((row) => {
+                  {
                     const ri         = displayIdx++
                     const isRowSel   = selectedRows.has(row._rowId)
                     const isDragging = draggingRowId === row._rowId
@@ -1719,7 +1734,7 @@ export default function FlatFileGrid({
                       : row._status === 'pending' ? 'bg-amber-50/70 dark:bg-amber-950/20'
                       : row._isNew  ? 'bg-sky-50/40 dark:bg-sky-950/10'
                       : row._dirty  ? 'bg-yellow-50/40 dark:bg-yellow-950/10'
-                      : groupRows.length > 1 ? bandClass : ''
+                      : groupRows.length > 1 ? GROUP_BAND_COLORS[groupBandIdx.get(groupKey)! % GROUP_BAND_COLORS.length] : ''
 
                     const frozenBg = row._status === 'pushed'  ? 'bg-emerald-50 dark:bg-emerald-950/60'
                       : row._status === 'error'   ? 'bg-red-50 dark:bg-red-950/60'
@@ -1820,7 +1835,7 @@ export default function FlatFileGrid({
                         })}
                       </tr>
                     )
-                  })
+                  }
                 })
                 return rendered
               })()}
