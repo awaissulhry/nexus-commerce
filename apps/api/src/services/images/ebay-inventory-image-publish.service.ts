@@ -193,6 +193,7 @@ export async function publishEbayImagesViaInventory(
       pictureAxis,
       imageOverrideBySku.size > 0 ? imageOverrideBySku : undefined,
       sharedUrls.length > 0 ? sharedUrls : undefined,
+      { skipOffersOnNoPrice: true },
     )
     allResults.push(...groupResults)
   }

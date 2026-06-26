@@ -255,6 +255,10 @@ export async function pushVariationGroup(
   // provided it REPLACES the parent-derived group images (up to 12). The caller
   // de-dupes the per-variant sets against this so nothing shows twice on eBay.
   groupImageOverride?: string[],
+  // When true, variants with no price are silently skipped in the offer step
+  // instead of failing the whole push. Used by the images tab which only needs
+  // inventory_item + group updates — not offer updates — to deliver images.
+  opts?: { skipOffersOnNoPrice?: boolean },
 ): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
   const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
 
@@ -942,6 +946,10 @@ export async function pushVariationGroup(
     const qty   = capToFbm(row._productId as string | undefined, sku, Number(row[`${mp.toLowerCase()}_qty`] ?? row.quantity ?? 0), mp)
 
     if (!price || price <= 0) {
+      if (opts?.skipOffersOnNoPrice) {
+        // Images-only push: skip offer update without blocking the group publish.
+        continue
+      }
       const msg = `No ${mp} price set for ${sku} — enter a price before pushing`
       const idx = results.findIndex(r => r.sku === sku)
       if (idx >= 0) results[idx] = { ...results[idx], status: 'ERROR', message: msg }
