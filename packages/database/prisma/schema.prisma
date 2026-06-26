@@ -11396,6 +11396,26 @@ model EbayVolumePromotion {
   @@index([marketplace, status])
 }
 
+/// VP.3 — reusable named volume-pricing tier ladder. A library template the
+/// operator can apply to many promotions without re-keying the tier structure.
+/// `tiers` is the same [{ minQty, percentOff }] shape as EbayVolumePromotion.tiers
+/// (validated by validateVolumeTiers). Apply semantics are COPY — there is no FK
+/// from EbayVolumePromotion: creating a promotion from a template copies the
+/// template's tiers in, so the two diverge freely afterward.
+model EbayVolumeTierTemplate {
+  id String @id @default(cuid())
+
+  name        String
+  description String?
+
+  // Quantity tiers — [{ minQty: Int, percentOff: Float }], same shape + rules as
+  // EbayVolumePromotion.tiers (1-3 entries, fixed buy-2/3/4, strictly-increasing).
+  tiers Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // F.3 — defer a Product mutation to a future timestamp.
 //
 // Use case: an operator wants to flip a SKU's status to ACTIVE at
