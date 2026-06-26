@@ -347,7 +347,15 @@ export async function pushVariationGroup(
     if (missingAxisErrors.length > 0) {
       const detail = missingAxisErrors.map(e => `${e.sku}: missing ${e.axes.join(', ')}`).join('; ')
       console.log('[ebay-push] 25013 pre-check failed — variants missing axes: %s', detail)
-      return results.map(r => ({ ...r, status: 'ERROR' as const, message: `Variant data incomplete — fill in variation aspects before pushing. Details: ${detail}` }))
+      // results is still empty at this stage (before Step 1) — build per-variant error entries
+      // from variantRows so the UI shows exactly which SKUs need to be fixed.
+      return variantRows.map(r => {
+        const rowError = missingAxisErrors.find(e => e.sku === (r.sku as string))
+        const msg = rowError
+          ? `Missing variation aspects: ${rowError.axes.join(', ')} — fill in the flat-file before pushing`
+          : `Blocked: another variant in this group is missing variation aspects (${detail})`
+        return { sku: r.sku as string, market: mp, status: 'ERROR' as const, message: msg }
+      })
     }
   }
 
