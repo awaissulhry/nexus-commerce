@@ -1100,6 +1100,15 @@ export async function pushVariationGroup(
       const existingSet = new Set(existing.map(e => e.productId))
       const missing = allIds.filter(id => !existingSet.has(id))
       if (missing.length > 0) {
+        // Persist the price we just sent to eBay so a reload doesn't show 0.
+        const pricePrefix = mp.toLowerCase()
+        const priceByProductId = new Map<string, number>()
+        for (const r of variantRows) {
+          const pid = r._productId as string | undefined
+          if (!pid) continue
+          const p = Number(r[`${pricePrefix}_price`] ?? r.price ?? 0)
+          if (p > 0) priceByProductId.set(pid, p)
+        }
         await prisma.channelListing.createMany({
           data: missing.map(productId => ({
             productId,
@@ -1109,6 +1118,7 @@ export async function pushVariationGroup(
             marketplace: region,
             listingStatus: 'ACTIVE' as const,
             ...(listingId ? { externalListingId: listingId } : {}),
+            ...(priceByProductId.has(productId) ? { price: priceByProductId.get(productId) } : {}),
           })),
           skipDuplicates: true,
         })
