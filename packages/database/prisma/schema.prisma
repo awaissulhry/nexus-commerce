@@ -11362,6 +11362,40 @@ model EbayMarkdown {
   @@index([status, endDate])
 }
 
+/// VP.1 — eBay Volume Pricing promotion (multi-buy tiers). Promotion-centric:
+/// one row = a tier structure (buy 2 → 5%, 3 → 10%, 4+ → 15%) applied to a set
+/// of SKUs (≤500), per marketplace. Maps 1:1 to eBay's Sell Marketing API
+/// createItemPromotion (volume pricing). Sibling of EbayMarkdown.
+model EbayVolumePromotion {
+  id String @id @default(cuid())
+
+  name        String
+  marketplace String // IT | DE | FR | ES | UK
+
+  // Quantity tiers — [{ minQty: Int, percentOff: Float }], 2-4 entries, with
+  // strictly-increasing percentOff (eBay requires deeper discounts at higher qty).
+  tiers Json
+
+  // Inventory selection — explicit SKU list (≤500) for now; rule-based in VP.3.
+  skus Json?
+
+  // ── Lifecycle (mirrors EbayMarkdown) ───────────────────────────────
+  // 'DRAFT' | 'SCHEDULED' | 'ACTIVE' | 'ENDED' | 'CANCELLED' | 'FAILED'
+  status    String    @default("DRAFT")
+  startDate DateTime?
+  endDate   DateTime?
+
+  externalPromotionId String? // null until pushed to eBay
+  lastSyncedAt        DateTime?
+  lastSyncStatus      String? // 'SUCCESS' | 'FAILED' | 'PENDING'
+  lastSyncError       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([marketplace, status])
+}
+
 // F.3 — defer a Product mutation to a future timestamp.
 //
 // Use case: an operator wants to flip a SKU's status to ACTIVE at
