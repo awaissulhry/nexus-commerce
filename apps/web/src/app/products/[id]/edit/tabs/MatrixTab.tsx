@@ -1704,7 +1704,7 @@ function FamilySection({ product, backend }: { product: any; backend: string }) 
       <div className="px-3 py-2.5 bg-slate-50 dark:bg-slate-800/40 border border-default dark:border-slate-700 rounded-lg space-y-2">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2 text-sm">
-            <Users className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+            <Users className="w-3.5 h-3.5 text-tertiary flex-shrink-0" />
             <span className="text-slate-500 dark:text-slate-400">Parent:</span>
             {parent ? (
               <a href={`/products/${parent.id}/edit?tab=matrix`}
