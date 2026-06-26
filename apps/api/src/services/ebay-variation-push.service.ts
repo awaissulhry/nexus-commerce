@@ -656,6 +656,8 @@ export async function pushVariationGroup(
   // SKU key by ending the listing in eBay Seller Hub, then re-pushing.
   let effectiveGroupKey = groupKey
 
+  console.log('[ebay-push][debug] group_put groupKey=%s variesBy=%j aspects=%j variantCount=%d',
+    effectiveGroupKey, groupBody.variesBy, groupBody.aspects, variantRows.length)
   let groupRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(effectiveGroupKey)}`, {
     method: 'PUT', headers, body: JSON.stringify({ ...groupBody, inventoryItemGroupKey: effectiveGroupKey }),
   })
@@ -831,6 +833,8 @@ export async function pushVariationGroup(
 
   // Step 4: Publish the variation listing.
   // Use effectiveGroupKey (may be old UUID if 25703 triggered in-place update).
+  console.log('[ebay-push][debug] publish_by_group groupKey=%s specs=%j imageVariesBy=%j',
+    effectiveGroupKey, specifications, imageVariesByAxes)
   const publishRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/offer/publish_by_inventory_item_group`, {
     method: 'POST', headers,
     body: JSON.stringify({ inventoryItemGroupKey: effectiveGroupKey, marketplaceId }),
@@ -1218,7 +1222,7 @@ export function buildFlatRow(
   // under both the case-preserved key (the dynamic UI columns) and the
   // lowercased key the variation publish's variesBy build reads.
   for (const [axis, val] of Object.entries(variationValues)) {
-    if (!val) continue;
+    if (!axis || !val) continue; // guard: skip empty axis name or empty value
     row[`aspect_${axis.replace(/\s+/g, '_')}`] = val;
     row[`aspect_${axis.toLowerCase().replace(/\s+/g, '_')}`] = val;
   }
