@@ -480,7 +480,7 @@ export async function pushVariationGroup(
         values: sortAxisValues(
           [...e.values].filter(Boolean),
           e.name,
-          valueOrder[e.name] ?? valueOrder[e.name.toLowerCase()],
+          valueOrder[axisSynonymKey(e.name)] ?? valueOrder[e.name] ?? valueOrder[e.name.toLowerCase()],
         ),
       }))
     : [{ name: 'Custom Bundle', values: variantRows.map(r => r.sku as string).filter(Boolean) }]

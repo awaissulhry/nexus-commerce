@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -25,31 +25,98 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { useToast } from '@/components/ui/Toast'
 import type { EbayRow } from './EbayFlatFileClient'
 
-// Clothing/shoe sizes in canonical small→large order
-const STANDARD_SIZE_ORDER: string[] = [
-  'XXXS','XXS','XS','S','M','L','XL','XXL','XXXL','2XL','3XL','4XL','5XL','6XL',
-  '30','32','34','36','38','40','42','44','46','48','50','52','54','56','58','60','62','64',
-  '33','34','35','35.5','36','36.5','37','37.5','38','38.5','39','39.5',
-  '40','40.5','41','41.5','42','42.5','43','43.5','44','44.5','45','45.5','46','46.5','47','48',
+// ── Synonym groups (kept in sync with ebay-variation-push.service.ts) ─────
+// Maps axis name aliases across languages to a stable key (__dim0__, __dim1__, …).
+// Add new rows here as new axes are introduced; the modal will auto-detect them.
+const AXIS_SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
+  ['colore', 'color', 'colour', 'color name', 'color_name', 'couleur', 'farbe', 'kleur', 'colour name', 'colori'],
+  ['taglia', 'size', 'size name', 'size_name', 'misura', 'größe', 'grosse', 'taille', 'maat', 'maten', 'koko'],
+  ['stile', 'style', 'style name', 'style_name'],
+  ['materiale', 'material', 'material name', 'material_name'],
+  ['genere', 'gender', 'department', 'target audience', 'target_audience'],
 ]
 
+function axisSynonymKey(name: string): string {
+  const lk = name.toLowerCase().trim()
+  for (let i = 0; i < AXIS_SYNONYM_GROUPS.length; i++) {
+    if ((AXIS_SYNONYM_GROUPS[i] as string[]).includes(lk)) return `__dim${i}__`
+  }
+  return lk
+}
+
+// Clothing/shoe sizes in canonical small→large order (mirrors push service)
+const STANDARD_SIZE_ORDER_MAP = new Map<string, number>(
+  [
+    'XXXS','XXS','XS','S','M','L','XL','XXL','XXXL','2XL','3XL','4XL','5XL','6XL','7XL',
+    '30','32','34','36','38','40','42','44','46','48','50','52','54','56','58','60','62','64',
+    '33','34','35','35.5','36','36.5','37','37.5','38','38.5','39','39.5',
+    '40','40.5','41','41.5','42','42.5','43','43.5','44','44.5','45','45.5','46','46.5','47','48',
+    '1','1.5','2','2.5','3','3.5','4','4.5','5','5.5','6','6.5','7','7.5',
+    '8','8.5','9','9.5','10','10.5','11','11.5','12','12.5','13','14','15',
+  ].map((v, i) => [v.toUpperCase(), i] as [string, number]),
+)
+
 function sortClothing(values: string[]): string[] {
-  const order = new Map(STANDARD_SIZE_ORDER.map((v, i) => [v.toUpperCase(), i]))
   return [...values].sort((a, b) => {
-    const ai = order.get(a.toUpperCase()) ?? 9999
-    const bi = order.get(b.toUpperCase()) ?? 9999
+    const ai = STANDARD_SIZE_ORDER_MAP.get(a.toUpperCase()) ?? 9999
+    const bi = STANDARD_SIZE_ORDER_MAP.get(b.toUpperCase()) ?? 9999
     return ai !== bi ? ai - bi : a.localeCompare(b)
   })
 }
 
-// ── Sortable item ─────────────────────────────────────────────────────────
+// ── Axis detection ────────────────────────────────────────────────────────
 
-interface SortableItemProps {
-  id: string
-  label: string
+interface AxisEntry {
+  /** Stable storage key: __dim0__ / __dim1__ / … or lowercase name for custom axes */
+  key: string
+  /** Human label — first axis name found in actual row data for this dimension */
+  displayName: string
+  /** All distinct values collected from all synonym aliases */
+  values: string[]
 }
 
-function SortableItem({ id, label }: SortableItemProps) {
+/**
+ * Scan variant rows for aspect_* columns, collapse synonym aliases into one
+ * entry per semantic dimension. Returns one AxisEntry per dimension that has
+ * more than one distinct value (i.e. it is actually a variation axis).
+ * Automatically detects any new axes — no hardcoding required.
+ */
+function deriveAxes(rows: EbayRow[]): AxisEntry[] {
+  const variantRows = rows.filter((r) => r._isParent === false)
+
+  // synonymKey → { firstNameFound, all values }
+  const groups = new Map<string, { displayName: string; values: Set<string> }>()
+
+  for (const row of variantRows) {
+    for (const [k, v] of Object.entries(row)) {
+      if (!k.startsWith('aspect_') || !v) continue
+      // Convert column key back to axis name: aspect_Taglia → "Taglia"
+      const rawName = k.slice('aspect_'.length).replace(/_/g, ' ').trim()
+      if (!rawName) continue
+      const val = String(v).trim()
+      if (!val) continue
+
+      const sk = axisSynonymKey(rawName)
+      if (!groups.has(sk)) {
+        groups.set(sk, { displayName: rawName, values: new Set() })
+      }
+      groups.get(sk)!.values.add(val)
+    }
+  }
+
+  // Only keep dimensions with >1 distinct value (the true variation axes)
+  const result: AxisEntry[] = []
+  for (const [key, entry] of groups.entries()) {
+    if (entry.values.size > 1) {
+      result.push({ key, displayName: entry.displayName, values: [...entry.values] })
+    }
+  }
+  return result
+}
+
+// ── Sortable item ─────────────────────────────────────────────────────────
+
+function SortableItem({ id, label }: { id: string; label: string }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   return (
     <div
@@ -78,12 +145,13 @@ function SortableItem({ id, label }: SortableItemProps) {
 // ── Axis panel ────────────────────────────────────────────────────────────
 
 interface AxisPanelProps {
-  axisName: string
+  axisKey: string
+  displayName: string
   values: string[]
   onChange: (values: string[]) => void
 }
 
-function AxisPanel({ axisName, values, onChange }: AxisPanelProps) {
+function AxisPanel({ displayName, values, onChange }: AxisPanelProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -98,10 +166,10 @@ function AxisPanel({ axisName, values, onChange }: AxisPanelProps) {
   }, [values, onChange])
 
   return (
-    <div className="mb-5">
+    <div className="mb-5 last:mb-0">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-          {axisName}
+          {displayName}
         </span>
         <div className="flex gap-1">
           <button
@@ -160,31 +228,6 @@ export interface VariationValueOrderModalProps {
   onSaved?: () => void
 }
 
-/** Derive axes with >1 distinct value across variant rows */
-function deriveAxes(rows: EbayRow[]): Record<string, string[]> {
-  const variantRows = rows.filter((r) => r._isParent === false)
-  const axisValues: Record<string, Set<string>> = {}
-
-  for (const row of variantRows) {
-    for (const [k, v] of Object.entries(row)) {
-      if (!k.startsWith('aspect_') || !v) continue
-      const axisName = k.slice('aspect_'.length).replace(/_/g, ' ')
-      if (!axisName) continue
-      const val = String(v).trim()
-      if (!val) continue
-      if (!axisValues[axisName]) axisValues[axisName] = new Set()
-      axisValues[axisName].add(val)
-    }
-  }
-
-  // Keep only axes with >1 distinct value (the variation axes)
-  const result: Record<string, string[]> = {}
-  for (const [axis, vals] of Object.entries(axisValues)) {
-    if (vals.size > 1) result[axis] = [...vals]
-  }
-  return result
-}
-
 export function VariationValueOrderModal({
   open,
   onClose,
@@ -196,18 +239,24 @@ export function VariationValueOrderModal({
   const { toast } = useToast()
   const BACKEND = getBackendUrl()
 
-  const initialAxes = useMemo(() => deriveAxes(rows), [rows])
-  const [axisOrder, setAxisOrder] = useState<Record<string, string[]>>(() => initialAxes)
+  // Derived from current rows — one entry per semantic dimension, synonyms collapsed
+  const axes = useMemo(() => deriveAxes(rows), [rows])
+
+  // axisOrder keyed by axis.key (__dim0__ / __dim1__ / raw-lowercase for custom axes)
+  const [axisOrder, setAxisOrder] = useState<Record<string, string[]>>(() =>
+    Object.fromEntries(axes.map((a) => [a.key, a.values])),
+  )
   const [saving, setSaving] = useState(false)
 
-  // Reset state when modal opens with fresh data
-  const axes = useMemo(() => {
-    if (!open) return {}
-    return initialAxes
-  }, [open, initialAxes])
+  // Re-initialise when modal reopens (fresh rows may have changed)
+  useEffect(() => {
+    if (open) {
+      setAxisOrder(Object.fromEntries(axes.map((a) => [a.key, a.values])))
+    }
+  }, [open, axes])
 
-  const handleAxisChange = useCallback((axisName: string, newValues: string[]) => {
-    setAxisOrder((prev) => ({ ...prev, [axisName]: newValues }))
+  const handleAxisChange = useCallback((key: string, newValues: string[]) => {
+    setAxisOrder((prev) => ({ ...prev, [key]: newValues }))
   }, [])
 
   const handleSave = useCallback(async () => {
@@ -237,14 +286,12 @@ export function VariationValueOrderModal({
     }
   }, [parentProductId, marketplace, axisOrder, BACKEND, toast, onSaved, onClose])
 
-  const axisNames = Object.keys(axes)
-
   return (
     <Modal
       open={open}
       onClose={onClose}
       title="Variation value order"
-      subtitle="Drag values to set the order they appear in the eBay listing. Changes apply on next push."
+      subtitle="Drag values to set the order they appear on the eBay listing. Applies on next push."
       size="md"
       footer={
         <div className="flex justify-end gap-2">
@@ -257,20 +304,21 @@ export function VariationValueOrderModal({
         </div>
       }
     >
-      {axisNames.length === 0 ? (
+      {axes.length === 0 ? (
         <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">
-          No variation axes detected in the current rows.
+          No variation axes detected.
           <br />
-          Make sure variant rows are loaded with aspect values filled.
+          Load the family rows and make sure aspect values are filled in.
         </p>
       ) : (
         <div className="py-2">
-          {axisNames.map((axisName) => (
+          {axes.map((axis) => (
             <AxisPanel
-              key={axisName}
-              axisName={axisName}
-              values={axisOrder[axisName] ?? axes[axisName] ?? []}
-              onChange={(newValues) => handleAxisChange(axisName, newValues)}
+              key={axis.key}
+              axisKey={axis.key}
+              displayName={axis.displayName}
+              values={axisOrder[axis.key] ?? axis.values}
+              onChange={(newValues) => handleAxisChange(axis.key, newValues)}
             />
           ))}
         </div>
