@@ -298,6 +298,7 @@ export async function pushVariationGroup(
     for (const [k, v] of Object.entries(row)) {
       if (k.startsWith('aspect_') && typeof v === 'string' && v) {
         const name = k.slice('aspect_'.length).replace(/_/g, ' ')
+        if (!name) continue // guard: skip aspect_ with empty suffix
         if (!allAspectValueSets.has(name)) allAspectValueSets.set(name, new Set())
         allAspectValueSets.get(name)!.add(v)
       }
@@ -361,6 +362,7 @@ export async function pushVariationGroup(
     for (const [k, v] of Object.entries(row)) {
       if (k.startsWith('aspect_') && v) {
         const aspectName = k.slice('aspect_'.length).replace(/_/g, ' ')
+        if (!aspectName) continue // guard: skip aspect_ with empty suffix
         if (isVarAxis(aspectName)) {
           aspectsMap.set(nmLabel(aspectName), [vlLabel(aspectName, String(v))])
         } else {
@@ -511,6 +513,7 @@ export async function pushVariationGroup(
   const specificationsMap = new Map<string, { name: string; values: Set<string> }>()
   for (const rawName of effectiveVarAxes) {
     const label = nmLabel(rawName)
+    if (!label) continue // guard: skip axes whose label resolves to empty
     const mapKey = label.toLowerCase()
     if (!specificationsMap.has(mapKey)) {
       specificationsMap.set(mapKey, { name: label, values: new Set() })
@@ -535,9 +538,10 @@ export async function pushVariationGroup(
     specFingerprintsSeen.add(fp)
     return true
   })
-  const specifications = deduplicatedSpecs.length > 0
-    ? deduplicatedSpecs.map(e => ({ name: e.name, values: [...e.values] }))
-    : [{ name: 'Custom Bundle', values: variantRows.map(r => r.sku as string) }]
+  const validSpecs = deduplicatedSpecs.filter(e => e.name && e.values.size > 0)
+  const specifications = validSpecs.length > 0
+    ? validSpecs.map(e => ({ name: e.name, values: [...e.values].filter(Boolean) }))
+    : [{ name: 'Custom Bundle', values: variantRows.map(r => r.sku as string).filter(Boolean) }]
   // imageVariesByAxes names the spec eBay switches photos by — the operator's
   // chosen picture axis (default = the colour axis). Match it to the normalised
   // spec so the value lines up after eBay's locale normalisation.
@@ -545,7 +549,7 @@ export async function pushVariationGroup(
     ? deduplicatedSpecs.find(s => s.name.toLowerCase() === pictureAxis.toLowerCase()
         || (COLOR_AXIS_NAMES_PRE.has(s.name.toLowerCase()) && COLOR_AXIS_NAMES_PRE.has(pictureAxis.toLowerCase())))
     : undefined
-  const imageVariesByAxes = pictureSpec ? [pictureSpec.name] : deduplicatedSpecs.slice(0, 1).map(e => e.name)
+  const imageVariesByAxes = (pictureSpec ? [pictureSpec.name] : validSpecs.slice(0, 1).map(e => e.name)).filter(Boolean)
 
   // Step 3: Create/update the inventory_item_group.
   // variantSKUs is the correct field name (plain string array, not objects).
@@ -1197,6 +1201,7 @@ export function buildFlatRow(
   // Dynamic item specifics from first listing
   const itemSpecifics = (firstAttrs.itemSpecifics as Record<string, string> | undefined) ?? {};
   for (const [key, val] of Object.entries(itemSpecifics)) {
+    if (!key) continue; // guard: skip empty-key entry
     const colId = `aspect_${key.replace(/\s+/g, '_')}`;
     row[colId] = val;
   }
@@ -1289,6 +1294,7 @@ export function packSharedFields(row: Record<string, unknown>): {
   for (const [key, val] of Object.entries(row)) {
     if (key.startsWith('aspect_') && typeof val === 'string' && val) {
       const aspectName = key.slice('aspect_'.length).replace(/_/g, ' ');
+      if (!aspectName) continue; // guard: skip aspect_ with empty suffix
       const lk = aspectName.toLowerCase();
       if (!seenAspectLower.has(lk)) {
         seenAspectLower.add(lk);
