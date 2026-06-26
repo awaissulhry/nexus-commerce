@@ -206,7 +206,7 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       {
         id: 'subtitle',
         label: 'Subtitle',
-        description: 'Optional subtitle (55 characters max, paid feature)',
+        description: 'Optional subtitle shown under listing title (55 chars max). Sent to eBay on publish.',
         required: false,
         kind: 'text',
         maxLength: 55,
@@ -226,7 +226,7 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       {
         id: 'listing_duration',
         label: 'Duration',
-        description: 'Listing duration. Fixed-price listings are GTC (Good ’Til Cancelled).',
+        description: 'Listing duration. Stored locally — eBay Inventory API enforces GTC for fixed-price; this field does not affect the live listing.',
         required: false,
         kind: 'enum',
         options: [...EBAY_LISTING_DURATIONS],
@@ -267,7 +267,7 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       {
         id: 'best_offer_enabled',
         label: 'Best Offer',
-        description: 'Enable Best Offer on this listing',
+        description: 'Enable Best Offer on this listing. Stored locally — not yet sent to eBay (coming soon).',
         required: false,
         kind: 'boolean',
         width: 100,
@@ -275,7 +275,7 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       {
         id: 'best_offer_floor',
         label: 'BO Floor (EUR)',
-        description: 'Minimum Best Offer price (auto-decline below this)',
+        description: 'Auto-decline threshold for Best Offer. Stored locally — not yet sent to eBay (coming soon).',
         required: false,
         kind: 'number',
         width: 110,
@@ -283,7 +283,7 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       {
         id: 'best_offer_ceiling',
         label: 'BO Ceiling (EUR)',
-        description: 'Auto-accept Best Offer price (auto-accept above this)',
+        description: 'Auto-accept threshold for Best Offer. Stored locally — not yet sent to eBay (coming soon).',
         required: false,
         kind: 'number',
         width: 120,
@@ -291,7 +291,7 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       {
         id: 'vat_rate',
         label: 'VAT %',
-        description: 'VAT percentage applied to the listing (offer tax). Pick a common rate or type your own.',
+        description: 'VAT percentage for local tax calculation. Stored locally — eBay manages tax independently; this does not affect your eBay listing.',
         required: false,
         kind: 'enum',
         options: [...EBAY_VAT_RATES],
@@ -316,7 +316,7 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       {
         id: 'handling_time',
         label: 'Handling Days',
-        description: 'Business days to ship after payment',
+        description: 'Handling time stored locally. On eBay, handling time is set via your Fulfillment Policy — it is not sent directly through the Inventory API.',
         required: false,
         kind: 'number',
         width: 100,
@@ -331,7 +331,7 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       {
         id: 'item_location_country',
         label: 'Location',
-        description: 'Country the item ships from (ISO code). Pick or type any.',
+        description: 'Stored locally for reference. The country shown on eBay is determined by your Merchant Location (set in eBay Seller Hub › Inventory › Locations), not this field.',
         required: false,
         kind: 'enum',
         options: [...EBAY_ITEM_LOCATION_COUNTRIES],

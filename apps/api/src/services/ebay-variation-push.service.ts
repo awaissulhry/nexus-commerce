@@ -754,12 +754,14 @@ export async function pushVariationGroup(
       continue
     }
 
+    const subtitle = (parentRow.subtitle as string | undefined)?.trim() ?? ''
     const offerBody: Record<string, unknown> = {
       sku,
       marketplaceId,
       format: 'FIXED_PRICE',
       // listingDescription intentionally omitted — comes from group description
       ...(catId ? { categoryId: catId } : {}),
+      ...(subtitle ? { subtitle } : {}),
       availableQuantity: qty,
       pricingSummary: { price: { value: price.toFixed(2), currency } },
       listingPolicies: {

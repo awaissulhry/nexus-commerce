@@ -470,6 +470,20 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           }
         }
 
+        // P1 — brand write-back: if operator typed a brand in the flat-file, persist to Product.brand
+        const brandOverride = ((row.brand as string | undefined) ?? '').trim()
+        // P2 — variation_theme save: persist axis names back to Product.variationTheme
+        const variationThemeOverride = ((row.variation_theme as string | undefined) ?? '').trim()
+        if (brandOverride || variationThemeOverride) {
+          await prisma.product.update({
+            where: { id: productId },
+            data: {
+              ...(brandOverride ? { brand: brandOverride } : {}),
+              ...(variationThemeOverride ? { variationTheme: variationThemeOverride } : {}),
+            },
+          })
+        }
+
         saved++;
       }
 
