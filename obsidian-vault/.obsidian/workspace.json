@@ -11,10 +11,14 @@
             "id": "235ea0015377a2b4",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "type": "markdown",
+              "state": {
+                "file": "09 - Design System.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "09 - Design System"
             }
           }
         ]
@@ -49,7 +53,7 @@
             "state": {
               "type": "search",
               "state": {
-                "query": "",
+                "query": "desi",
                 "matchingCase": false,
                 "explainSearch": false,
                 "collapseAll": false,
@@ -70,7 +74,8 @@
               "title": "Bookmarks"
             }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "horizontal",
@@ -90,12 +95,13 @@
             "state": {
               "type": "outline",
               "state": {
+                "file": "09 - Design System.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline"
+              "title": "Outline of 09 - Design System"
             }
           },
           {
@@ -104,6 +110,7 @@
             "state": {
               "type": "backlink",
               "state": {
+                "file": "09 - Design System.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -113,7 +120,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks"
+              "title": "Backlinks for 09 - Design System"
             }
           },
           {
@@ -122,11 +129,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
+                "file": "09 - Design System.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links"
+              "title": "Outgoing links from 09 - Design System"
             }
           },
           {
@@ -179,7 +187,6 @@
   "active": "235ea0015377a2b4",
   "lastOpenFiles": [
     "00 - Nexus Commerce MOC.md",
-    "09 - Design System.md",
     "02 - Monorepo Structure.md",
     "03 - Deployment Architecture.md",
     "01 - System Architecture Overview.md",
