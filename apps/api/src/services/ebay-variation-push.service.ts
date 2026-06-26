@@ -423,6 +423,32 @@ export async function pushVariationGroup(
     : undefined
   const imageVariesByAxes = (pictureSpec ? [pictureSpec.name] : validSpecs.slice(0, 1).map(e => e.name)).filter(Boolean)
 
+  // Row normalisation: write the canonical spec key to any row that only has a
+  // synonym alias. Without this, families where existing variants were pushed
+  // before the Accept-Language fix (so their itemSpecifics uses English "Color"/
+  // "Size") and a new variant was filled in Italian ("Colore"/"Taglia") will fail
+  // pre-flight — the check looks for aspect_Color, finds nothing, blocks the push.
+  // After normalisation every row carries the canonical key; the pre-flight lookup,
+  // Step 1 aspect building, and colorRepImages all find the value in one place.
+  // In-memory only — no DB writes; persisted on the next Save.
+  for (const spec of validSpecs) {
+    const dimKey = axisSynonymKey(spec.name)
+    if (!dimKey.startsWith('__dim')) continue // only known synonym dimensions
+    const canonKey = `aspect_${spec.name.replace(/\s+/g, '_')}`
+    const canonLower = `aspect_${spec.name.toLowerCase().replace(/\s+/g, '_')}`
+    for (const vRow of variantRows) {
+      if (vRow[canonKey] || vRow[canonLower]) continue // already present
+      for (const [rk, rv] of Object.entries(vRow)) {
+        if (!rk.startsWith('aspect_') || !rv) continue
+        const axisName = rk.slice('aspect_'.length).replace(/_/g, ' ')
+        if (axisSynonymKey(axisName) === dimKey) {
+          ;(vRow as Record<string, unknown>)[canonKey] = rv
+          break
+        }
+      }
+    }
+  }
+
   // Pre-flight: every variant must have a non-empty value for every FINAL spec name.
   // Using final spec names (after fingerprint dedup) avoids false positives from
   // duplicate data sources — e.g. "Colore" (eBay flat-file) + "color name" (Amazon
@@ -491,28 +517,37 @@ export async function pushVariationGroup(
   for (const row of variantRows) {
     const sku = row.sku as string
 
-    // Deduplicate aspects by canonical (lowercased) key so that buildFlatRow's
-    // duplicate writes (aspect_Colore + aspect_colore) collapse into a single
-    // entry. First-seen wins, preserving the title-case name that matches the
-    // group's specifications. Without this dedup, variants get BOTH 'Colore' AND
-    // 'colore' in their aspects while the group spec only lists 'Colore' → eBay
-    // 25013 "invalid data in inventory item group — missing name in variant specs".
-    const aspectsDedup = new Map<string, { name: string; values: string[] }>() // mapKey(lowercase) → {name, values}
-    for (const [k, v] of Object.entries(row)) {
-      if (k.startsWith('aspect_') && v) {
-        const aspectName = k.slice('aspect_'.length).replace(/_/g, ' ')
-        if (!aspectName) continue // guard: skip aspect_ with empty suffix
-        const label = isVarAxis(aspectName) ? nmLabel(aspectName) : aspectName
-        if (!label) continue
-        const mapKey = label.toLowerCase()
-        if (!aspectsDedup.has(mapKey)) { // first-seen wins (title-case preferred by buildFlatRow ordering)
-          aspectsDedup.set(mapKey, { name: label, values: [vlLabel(aspectName, String(v))] })
+    // Build variation aspects using canonical spec names (must match the group's
+    // specifications exactly). Synonym matching finds the value regardless of
+    // what key the row uses — "Colore", "color name", or "Color" all resolve to
+    // the same canonical spec name. After row normalisation above, the canonical
+    // key is usually already present (fast path); the synonym scan is a fallback.
+    const aspectsMap = new Map<string, string[]>()
+    for (const spec of validSpecs) {
+      const dimKey = axisSynonymKey(spec.name)
+      const canonKey = `aspect_${spec.name.replace(/\s+/g, '_')}`
+      const canonLower = `aspect_${spec.name.toLowerCase().replace(/\s+/g, '_')}`
+      let foundVal = String((row[canonKey] ?? row[canonLower]) ?? '').trim()
+      if (!foundVal && dimKey.startsWith('__dim')) {
+        for (const [rk, rv] of Object.entries(row)) {
+          if (!rk.startsWith('aspect_') || !rv) continue
+          const an = rk.slice('aspect_'.length).replace(/_/g, ' ')
+          if (axisSynonymKey(an) === dimKey) { foundVal = String(rv).trim(); break }
         }
       }
+      if (foundVal) aspectsMap.set(spec.name, [vlLabel(spec.name, foundVal)])
     }
-    const aspectsMap = new Map<string, string[]>(
-      [...aspectsDedup.values()].map(e => [e.name, e.values])
-    )
+    // Non-variation aspects: operator item-specifics not in the synonym dict.
+    // Skip known synonym dimensions (already added above under canonical name).
+    for (const [k, v] of Object.entries(row)) {
+      if (!k.startsWith('aspect_') || !v) continue
+      const aspectName = k.slice('aspect_'.length).replace(/_/g, ' ')
+      if (!aspectName) continue
+      if (axisSynonymKey(aspectName).startsWith('__dim')) continue // handled above
+      const label = isVarAxis(aspectName) ? nmLabel(aspectName) : aspectName
+      if (!label) continue
+      if (!aspectsMap.has(label)) aspectsMap.set(label, [vlLabel(aspectName, String(v))])
+    }
     if (row.ean) aspectsMap.set('EAN', [String(row.ean)])
     if (row.mpn) aspectsMap.set('MPN', [String(row.mpn)])
 
