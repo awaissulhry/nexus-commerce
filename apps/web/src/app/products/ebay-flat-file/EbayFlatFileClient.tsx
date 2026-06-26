@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, Loader2, Plus, RefreshCw, RotateCcw, Search, Send, Upload, X, Zap,
+  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, Loader2, ListOrdered, Plus, RefreshCw, RotateCcw, Search, Send, Upload, X, Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -41,6 +41,7 @@ import { PullHistoryDrawer } from '../_shared/PullHistoryDrawer'
 import { PendingPullBanner } from '../_shared/PendingPullBanner'
 import { TbBtn as SharedTbBtn } from '../_shared/FlatFileIconToolbar'
 import { PULL_GROUPS, pullFieldGroup, type PullGroupId } from '../_shared/pull-field-groups'
+import { VariationValueOrderModal } from './VariationValueOrderModal'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -470,6 +471,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [aspectsPanelRowId, setAspectsPanelRowId] = useState<string | null>(null)
   const [incompleteBefore, setIncompleteBefore] = useState<Array<{ sku: string; count: number }>>([])
   const [blockingErrors, setBlockingErrors] = useState<Array<{ level: 'error' | 'warn'; sku: string; field: string; msg: string }>>([])
+  const [valueOrderOpen, setValueOrderOpen] = useState(false)
 
   // IN.1 — Override badges toggle (default on, persisted to localStorage)
   const [showOverrideBadges, setShowOverrideBadges] = useState<boolean>(() => {
@@ -1445,6 +1447,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         active={showCascadeButtons}
       />
 
+      {/* VAVO — Variation value order */}
+      <SharedTbBtn
+        icon={<ListOrdered className="w-3.5 h-3.5" />}
+        title="Value order — set the display order of variation axis values (Size, Color) on the eBay listing"
+        onClick={() => setValueOrderOpen(true)}
+      />
+
       {/* IN.2 — Reset all visible overrides back to master */}
       <SharedTbBtn
         icon={<RotateCcw className="w-3.5 h-3.5" />}
@@ -1475,7 +1484,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       />
     </>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [showOverrideBadges, showCascadeButtons])
+  ), [showOverrideBadges, showCascadeButtons, valueOrderOpen])
 
   // ── Slot: Bar3 left ────────────────────────────────────────────────────
 
@@ -1488,6 +1497,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const renderModals = useCallback(({ rows, setRows, pushHistory }: ModalsCtx) => {
     const desc = descModal ? rows.find((r) => r._rowId === descModal.rowId) : null
     const aspectsRow = aspectsPanelRowId ? rows.find((r) => r._rowId === aspectsPanelRowId) ?? null : null
+    const parentRow = (rows as EbayRow[]).find((r) => r._isParent === true)
+    const parentProductId = String(parentRow?._productId ?? parentRow?.platformProductId ?? familyId ?? '')
     return (
       <>
         {/* EFF.4 — Aspects side panel */}
@@ -1528,6 +1539,17 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             onClose={() => { setCategorySearchOpen(false); setCategorySearchRowId(null) }}
           />
         )}
+        {/* VAVO — Variation value order modal */}
+        {valueOrderOpen && (
+          <VariationValueOrderModal
+            open={valueOrderOpen}
+            onClose={() => setValueOrderOpen(false)}
+            rows={rows as EbayRow[]}
+            parentProductId={parentProductId || null}
+            marketplace={marketplace}
+          />
+        )}
+
         {/* Phase 3 — Pull diff preview */}
         {pullDiffData && pullDiffOpen && (
           <PullDiffModal
@@ -1551,7 +1573,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       </>
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [descModal, categorySearchOpen, categorySearchRowId, marketplace, loadCategorySchema, pullDiffData, pullDiffOpen, makePullDiffApplyHandler, aspectsPanelRowId, categoryColumns])
+  }, [descModal, categorySearchOpen, categorySearchRowId, marketplace, loadCategorySchema, pullDiffData, pullDiffOpen, makePullDiffApplyHandler, aspectsPanelRowId, categoryColumns, valueOrderOpen, familyId])
 
   // ── Group key for eBay variations ──────────────────────────────────────
 

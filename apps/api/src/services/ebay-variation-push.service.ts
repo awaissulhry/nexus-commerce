@@ -64,6 +64,64 @@ export function buildPackageWeightAndSize(
 // are written first by buildFlatRow, so Italian "Colore" wins over Amazon
 // English "Color" for EBAY_IT). Used in synonym dedup during push + in
 // buildFlatRow to prevent Amazon aliases from polluting pushed-variant rows.
+// Standard clothing / shoe size order used as a built-in fallback when no
+// custom _axisValueOrder is configured. Values are matched case-insensitively.
+// Covers EU/IT alphanumeric general sizes + EU numeric clothing + EU shoe sizes.
+export const STANDARD_SIZE_ORDER_MAP = new Map<string, number>(
+  [
+    // Alpha general sizes (smallest to largest)
+    'XXXS','XXS','XS','S','M','L','XL','XXL','XXXL','2XL','3XL','4XL','5XL','6XL','7XL',
+    // Abbreviated numeric waist/chest (EU clothing)
+    '30','32','34','36','38','40','42','44','46','48','50','52','54','56','58','60','62','64',
+    // EU shoe sizes
+    '33','34','35','35.5','36','36.5','37','37.5','38','38.5','39','39.5',
+    '40','40.5','41','41.5','42','42.5','43','43.5','44','44.5','45','45.5','46','46.5','47','48',
+    // UK/US shoe sizes
+    '1','1.5','2','2.5','3','3.5','4','4.5','5','5.5','6','6.5','7','7.5',
+    '8','8.5','9','9.5','10','10.5','11','11.5','12','12.5','13','14','15',
+  ].map((v, i) => [v.toUpperCase(), i] as [string, number])
+)
+
+/**
+ * Sort spec values for one axis.
+ * Priority: custom order → built-in standard size order → numeric → as-is.
+ */
+export function sortAxisValues(
+  values: string[],
+  axisName: string,
+  customOrder: string[] | undefined,
+): string[] {
+  if (values.length <= 1) return values
+
+  if (customOrder && customOrder.length > 0) {
+    const pos = new Map(customOrder.map((v, i) => [v.toLowerCase(), i]))
+    return [...values].sort((a, b) => {
+      const ai = pos.get(a.toLowerCase()) ?? Number.MAX_SAFE_INTEGER
+      const bi = pos.get(b.toLowerCase()) ?? Number.MAX_SAFE_INTEGER
+      return ai !== bi ? ai - bi : a.localeCompare(b)
+    })
+  }
+
+  // Built-in: standard clothing/shoe size order for known size dimensions
+  if (axisSynonymKey(axisName) === '__dim1__') {
+    // Check if any value matches the standard size vocabulary
+    const anyStandard = values.some(v => STANDARD_SIZE_ORDER_MAP.has(v.toUpperCase()))
+    if (anyStandard) {
+      return [...values].sort((a, b) => {
+        const ai = STANDARD_SIZE_ORDER_MAP.get(a.toUpperCase()) ?? Number.MAX_SAFE_INTEGER
+        const bi = STANDARD_SIZE_ORDER_MAP.get(b.toUpperCase()) ?? Number.MAX_SAFE_INTEGER
+        return ai !== bi ? ai - bi : a.localeCompare(b)
+      })
+    }
+    // All-numeric sizes (e.g. EU waist measurements) — sort numerically
+    if (values.every(v => /^\d+(\.\d+)?$/.test(v.trim()))) {
+      return [...values].sort((a, b) => parseFloat(a) - parseFloat(b))
+    }
+  }
+
+  return values
+}
+
 export const AXIS_SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
   ['colore', 'color', 'colour', 'color name', 'color_name', 'couleur', 'farbe', 'kleur', 'colour name', 'colori'],
   ['taglia', 'size', 'size name', 'size_name', 'misura', 'größe', 'grosse', 'taille', 'maat', 'maten', 'koko'],
@@ -238,6 +296,7 @@ export async function pushVariationGroup(
   // that React state may drop; sku is always present in the push body.
   let nameLabels: Record<string, string> = {}
   let valueLabels: Record<string, Record<string, string>> = {}
+  let valueOrder: Record<string, string[]> = {}
   const brandBySku = new Map<string, string>()
   try {
     const skus = rows.map((r) => r.sku as string).filter(Boolean)
@@ -258,6 +317,7 @@ export async function pushVariationGroup(
       const pa = (pl?.platformAttributes ?? {}) as Record<string, unknown>
       nameLabels = (pa._axisNameLabels ?? {}) as Record<string, string>
       valueLabels = (pa._axisValueLabels ?? {}) as Record<string, Record<string, string>>
+      valueOrder  = (pa._axisValueOrder  ?? {}) as Record<string, string[]>
     }
   } catch (err) {
     console.warn('[ebay-push] brand/label fetch failed — proceeding without renames', err)
@@ -415,7 +475,14 @@ export async function pushVariationGroup(
   })
   const validSpecs = deduplicatedSpecs.filter(e => e.name && e.values.size > 0)
   const specifications = validSpecs.length > 0
-    ? validSpecs.map(e => ({ name: e.name, values: [...e.values].filter(Boolean) }))
+    ? validSpecs.map(e => ({
+        name: e.name,
+        values: sortAxisValues(
+          [...e.values].filter(Boolean),
+          e.name,
+          valueOrder[e.name] ?? valueOrder[e.name.toLowerCase()],
+        ),
+      }))
     : [{ name: 'Custom Bundle', values: variantRows.map(r => r.sku as string).filter(Boolean) }]
   const pictureSpec = pictureAxis
     ? deduplicatedSpecs.find(s => s.name.toLowerCase() === pictureAxis.toLowerCase()

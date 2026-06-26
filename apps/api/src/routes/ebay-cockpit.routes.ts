@@ -554,6 +554,7 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       axisSortOrder?: Record<string, string[]>
       axisNameLabels?: Record<string, string>
       axisValueLabels?: Record<string, Record<string, string>>
+      axisValueOrder?: Record<string, string[]>
       cells?: Array<{
         childProductId: string
         priceOverride?: number | null
@@ -565,7 +566,7 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
     if (!body || typeof body !== 'object') {
       return reply.code(400).send({ error: 'Body is required' })
     }
-    const { parentProductId, marketplace, pickedAxes, axisSortOrder, axisNameLabels, axisValueLabels, cells } = body
+    const { parentProductId, marketplace, pickedAxes, axisSortOrder, axisNameLabels, axisValueLabels, axisValueOrder, cells } = body
 
     if (!parentProductId || !marketplace) {
       return reply.code(400).send({ error: 'parentProductId, marketplace are required' })
@@ -576,7 +577,8 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       pickedAxes !== undefined ||
       axisSortOrder !== undefined ||
       axisNameLabels !== undefined ||
-      axisValueLabels !== undefined
+      axisValueLabels !== undefined ||
+      axisValueOrder !== undefined
     ) {
       const parentListing = await prisma.channelListing.findFirst({
         where: { productId: parentProductId, channel: 'EBAY', marketplace },
@@ -596,6 +598,9 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       }
       if (axisValueLabels !== undefined) {
         nextPlatform._axisValueLabels = axisValueLabels
+      }
+      if (axisValueOrder !== undefined) {
+        nextPlatform._axisValueOrder = axisValueOrder
       }
 
       if (parentListing) {
