@@ -196,8 +196,18 @@ export async function pushVariationGroup(
   // (_isParent). The parent is not a sellable variant: it must not get
   // its own inventory_item nor be a group member. It IS the right source
   // for the group-level title/description/images.
-  const parentRow = rows.find((r) => r._isParent) ?? rows[0]
-  const variantRowsAll = rows.filter((r) => !r._isParent)
+  //
+  // Fallback: if React strips underscore-prefixed fields during the round-trip
+  // (_isParent becomes undefined), identify the parent by the invariant
+  // platformProductId === _productId (parent's own id is its "group" key;
+  // children have platformProductId = parentId ≠ _productId).
+  const isParentRow = (r: Record<string, unknown>) =>
+    r._isParent === true ||
+    (r._productId != null && r.platformProductId != null &&
+      String(r._productId) === String(r.platformProductId))
+
+  const parentRow = rows.find(isParentRow) ?? rows[0]
+  const variantRowsAll = rows.filter((r) => !isParentRow(r))
   const variantRows = variantRowsAll.length > 0 ? variantRowsAll : rows
 
   // EV.6b — name/value renames from parent ChannelListing platformAttributes.
@@ -309,6 +319,37 @@ export async function pushVariationGroup(
     .map(([name]) => name)
 
   const isVarAxis = (name: string) => effectiveVarAxes.includes(name)
+
+  // Pre-flight validation: every variant must have a non-empty value for every
+  // variation axis. eBay publish_by_inventory_item_group validates each variantSKU's
+  // inventory_item aspects against the group's specifications — a variant missing any
+  // spec axis causes error 25013 "missing name in variant specifications".
+  // Deduplicate axes to canonical (first-seen, title-case) names so we check once
+  // per physical axis (e.g. "Colore" and "colore" collapse to "Colore").
+  const canonicalAxesMap = new Map<string, string>()
+  for (const a of effectiveVarAxes) {
+    const lk = a.toLowerCase()
+    if (!canonicalAxesMap.has(lk)) canonicalAxesMap.set(lk, a) // first-seen wins (title-case)
+  }
+  const canonicalAxes = [...canonicalAxesMap.values()]
+  if (canonicalAxes.length > 0) {
+    const missingAxisErrors: Array<{ sku: string; axes: string[] }> = []
+    for (const row of variantRows) {
+      const missingForRow: string[] = []
+      for (const axis of canonicalAxes) {
+        const key1 = `aspect_${axis.replace(/\s+/g, '_')}`
+        const key2 = `aspect_${axis.toLowerCase().replace(/\s+/g, '_')}`
+        const val = String((row[key1] ?? row[key2]) ?? '').trim()
+        if (!val) missingForRow.push(axis)
+      }
+      if (missingForRow.length > 0) missingAxisErrors.push({ sku: row.sku as string, axes: missingForRow })
+    }
+    if (missingAxisErrors.length > 0) {
+      const detail = missingAxisErrors.map(e => `${e.sku}: missing ${e.axes.join(', ')}`).join('; ')
+      console.log('[ebay-push] 25013 pre-check failed — variants missing axes: %s', detail)
+      return results.map(r => ({ ...r, status: 'ERROR' as const, message: `Variant data incomplete — fill in variation aspects before pushing. Details: ${detail}` }))
+    }
+  }
 
   // ── Colour-representative image sets ─────────────────────────────────────
   // eBay with aspectsImageVariesBy=['Color'] aggregates images from EVERY variant
@@ -686,7 +727,8 @@ export async function pushVariationGroup(
 
   if (!groupRes.ok && groupRes.status !== 204) {
     const err = await groupRes.text().catch(() => '')
-    return results.map(r => ({ ...r, status: 'ERROR' as const, message: `inventory_item_group PUT ${groupRes.status}: ${err.slice(0, 300)}` }))
+    console.log('[ebay-push][debug] inventory_item_group PUT FAILED status=%d body=%s', groupRes.status, err.slice(0, 2000))
+    return results.map(r => ({ ...r, status: 'ERROR' as const, message: `inventory_item_group PUT ${groupRes.status}: ${err.slice(0, 500)}` }))
   }
 
   // Step 3.5: Create/update one offer per variant.
@@ -842,7 +884,8 @@ export async function pushVariationGroup(
 
   if (!publishRes.ok) {
     const err = await publishRes.text().catch(() => '')
-    const pubMsg = `publish_by_group ${publishRes.status}: ${err.slice(0, 300)}`
+    console.log('[ebay-push][debug] publish_by_group FAILED status=%d body=%s', publishRes.status, err.slice(0, 2000))
+    const pubMsg = `publish_by_group ${publishRes.status}: ${err.slice(0, 1000)}`
     // Preserve per-SKU step-1 errors — only stamp publish failure on rows that
     // made it through to the offer stage (status 'PUSHED'). Overwriting step-1
     // errors with "Manca Marca" masks the real root cause (e.g. imageUrls empty).
