@@ -354,22 +354,28 @@ export async function pushVariationGroup(
   for (const row of variantRows) {
     const sku = row.sku as string
 
-    // Deduplicate aspects by nmLabel key: buildFlatRow writes both the
-    // case-preserved key (aspect_Colore) and lowercased key (aspect_color),
-    // and Amazon import can add English equivalents. Using a Map keyed by
-    // nmLabel ensures each logical axis appears exactly once in the item.
-    const aspectsMap = new Map<string, string[]>()
+    // Deduplicate aspects by canonical (lowercased) key so that buildFlatRow's
+    // duplicate writes (aspect_Colore + aspect_colore) collapse into a single
+    // entry. First-seen wins, preserving the title-case name that matches the
+    // group's specifications. Without this dedup, variants get BOTH 'Colore' AND
+    // 'colore' in their aspects while the group spec only lists 'Colore' → eBay
+    // 25013 "invalid data in inventory item group — missing name in variant specs".
+    const aspectsDedup = new Map<string, { name: string; values: string[] }>() // mapKey(lowercase) → {name, values}
     for (const [k, v] of Object.entries(row)) {
       if (k.startsWith('aspect_') && v) {
         const aspectName = k.slice('aspect_'.length).replace(/_/g, ' ')
         if (!aspectName) continue // guard: skip aspect_ with empty suffix
-        if (isVarAxis(aspectName)) {
-          aspectsMap.set(nmLabel(aspectName), [vlLabel(aspectName, String(v))])
-        } else {
-          aspectsMap.set(aspectName, [String(v)])
+        const label = isVarAxis(aspectName) ? nmLabel(aspectName) : aspectName
+        if (!label) continue
+        const mapKey = label.toLowerCase()
+        if (!aspectsDedup.has(mapKey)) { // first-seen wins (title-case preferred by buildFlatRow ordering)
+          aspectsDedup.set(mapKey, { name: label, values: [vlLabel(aspectName, String(v))] })
         }
       }
     }
+    const aspectsMap = new Map<string, string[]>(
+      [...aspectsDedup.values()].map(e => [e.name, e.values])
+    )
     if (row.ean) aspectsMap.set('EAN', [String(row.ean)])
     if (row.mpn) aspectsMap.set('MPN', [String(row.mpn)])
 
