@@ -44,6 +44,7 @@
 
 import type { PrismaClient } from '@prisma/client'
 import { logger } from '../utils/logger.js'
+import { postEbayMarketing } from './ebay-marketing-dispatch.service.js'
 
 export interface PushMarkdownResult {
   ok: boolean
@@ -192,32 +193,45 @@ export async function pushMarkdownToEbay(
     }
   }
 
-  // Live path — placeholder for the real eBay Selling API call.
-  // The actual dispatch needs an authenticated client tied to the
-  // ChannelConnection row's OAuth token. Until that wiring lands
-  // (separate engagement: connection-aware eBay API client), live
-  // mode logs an explicit not-implemented and marks the row failed
-  // so the operator gets a clear signal instead of silent success.
-  logger.warn(
-    'E.3 eBay markdown LIVE mode set but ChannelConnection-based eBay API client is not yet wired',
-    { markdownId, marketplace: markdown.channelListing.marketplace },
+  // Live path — dispatch via the connection-aware Sell-Marketing client (VP.0).
+  const result = await postEbayMarketing(
+    '/sell/marketing/v1/item_price_markdown_promotion',
+    payload,
   )
+  if (!result.ok) {
+    await prisma.ebayMarkdown.update({
+      where: { id: markdownId },
+      data: {
+        lastSyncStatus: 'FAILED',
+        lastSyncedAt: new Date(),
+        lastSyncError: `${result.errorId ?? result.status}: ${result.errorMessage ?? 'dispatch failed'}`,
+      },
+    })
+    return {
+      ok: false,
+      markdownId,
+      liveMode: true,
+      warnings,
+      error: `eBay dispatch failed (${result.errorId ?? result.status}): ${result.errorMessage ?? 'unknown'}`,
+      durationMs: Date.now() - startedAt,
+    }
+  }
   await prisma.ebayMarkdown.update({
     where: { id: markdownId },
     data: {
-      lastSyncStatus: 'FAILED',
+      status: markdown.startDate <= new Date() ? 'ACTIVE' : 'SCHEDULED',
+      externalPromotionId: result.promotionId ?? null,
+      lastSyncStatus: 'OK',
       lastSyncedAt: new Date(),
-      lastSyncError:
-        'eBay Selling API client (ChannelConnection-aware) not yet wired — payload validated, dispatch deferred',
+      lastSyncError: null,
     },
   })
   return {
-    ok: false,
+    ok: true,
     markdownId,
     liveMode: true,
+    externalPromotionId: result.promotionId,
     warnings,
-    error:
-      'eBay Selling API client not yet wired. Payload was built and validated; row marked FAILED so the operator can re-push after creds land.',
     durationMs: Date.now() - startedAt,
   }
 }
