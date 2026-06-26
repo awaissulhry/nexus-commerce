@@ -75,13 +75,24 @@ export async function publishEbayImagesViaInventory(
   const childProductIds = variantRows.map((r) => r._productId as string).filter(Boolean)
   const childListings = await prisma.channelListing.findMany({
     where: { productId: { in: childProductIds }, channel: 'EBAY' },
-    select: { region: true, price: true },
+    select: { region: true, price: true, productId: true },
   })
   const markets = [...new Set(
     childListings
       .filter((l) => l.price != null && Number(l.price) > 0)
       .map((l) => (l.region === 'GB' ? 'UK' : l.region)),
   )].filter((m): m is Market => (MARKETS as readonly string[]).includes(m))
+
+  // Build per-market set of productIds that have an eBay listing (any price).
+  // Variants with NO listing haven't been set up for eBay yet — they carry
+  // incomplete/corrupted aspect data and must not be included in the group PUT
+  // or they'll create duplicate variation value collisions with existing variants.
+  const listedByMarket = new Map<string, Set<string>>()
+  for (const l of childListings) {
+    const mp = l.region === 'GB' ? 'UK' : l.region
+    if (!listedByMarket.has(mp)) listedByMarket.set(mp, new Set())
+    listedByMarket.get(mp)!.add(l.productId)
+  }
 
   if (markets.length === 0) {
     return { success: false, message: 'No eBay market has priced variant listings for this product yet', pictureCount: 0, colorSetCount: 0, error: 'No priced eBay markets' }
@@ -166,9 +177,11 @@ export async function publishEbayImagesViaInventory(
 
   const allResults: Array<{ sku: string; market: string; status: string; message: string }> = []
   for (const mp of markets) {
+    const listedIds = listedByMarket.get(mp) ?? new Set<string>()
+    const marketRows = rows.filter((r) => r._isParent || listedIds.has(r._productId as string))
     const groupResults = await pushVariationGroup(
       groupKey,
-      rows,
+      marketRows,
       mp,
       token,
       connection.id,
