@@ -10,7 +10,7 @@
  */
 
 export interface VolumeTier {
-  /** Minimum quantity that unlocks this tier (≥2). */
+  /** Minimum quantity that unlocks this tier — eBay fixes these at 2, 3, 4. */
   minQty: number
   /** Percentage off at this tier (0 < x < 100). */
   percentOff: number
@@ -36,26 +36,31 @@ function round2(n: number): number {
 }
 
 /**
- * Validate eBay's volume-pricing rules: 2-4 tiers, ascending minQty (each ≥2),
- * strictly-increasing percentOff (deeper discount at higher qty), 0 < % < 100.
- * eBay also recommends ≥5% on the first (buy-2) tier — surfaced as a warning.
+ * Validate eBay's volume-pricing rules. eBay's Volume Pricing offer is FIXED at
+ * the buyer tiers "buy 2", "buy 3", "buy 4" — 1 to 3 of them, in that order. So
+ * after sorting by minQty, tier i must be exactly minQty === i+2 (2, then 3,
+ * then 4); anything else (a buy-5 tier, a gap, a duplicate) is rejected. Each
+ * percentOff must be in (0,100) and strictly increase (deeper discount at higher
+ * qty). eBay also recommends ≥5% on the first (buy-2) tier — surfaced as a warning.
  */
 export function validateVolumeTiers(tiers: VolumeTier[]): TierValidation {
   const errors: string[] = []
   const warnings: string[] = []
 
-  if (!Array.isArray(tiers) || tiers.length < 2) errors.push('At least 2 quantity tiers are required.')
-  if (Array.isArray(tiers) && tiers.length > 4) errors.push('At most 4 quantity tiers are allowed.')
+  if (!Array.isArray(tiers) || tiers.length < 1) errors.push('At least 1 quantity tier is required.')
+  if (Array.isArray(tiers) && tiers.length > 3) errors.push('At most 3 quantity tiers are allowed (eBay supports buy 2, 3 and 4).')
 
   const sorted = [...(tiers ?? [])].sort((a, b) => a.minQty - b.minQty)
   for (let i = 0; i < sorted.length; i++) {
     const t = sorted[i]
     const n = i + 1
-    if (!Number.isInteger(t.minQty) || t.minQty < 2) errors.push(`Tier ${n}: minimum quantity must be a whole number ≥ 2.`)
+    const expectedQty = i + 2 // eBay's fixed ladder: tier 1 → 2, tier 2 → 3, tier 3 → 4
+    if (t.minQty !== expectedQty) {
+      errors.push(`Tier ${n}: quantity must be ${expectedQty} — eBay volume pricing uses fixed buy-2, buy-3, buy-4 tiers.`)
+    }
     if (!(t.percentOff > 0) || !(t.percentOff < 100)) errors.push(`Tier ${n}: discount must be between 0% and 100%.`)
-    if (i > 0) {
-      if (t.minQty <= sorted[i - 1].minQty) errors.push(`Tier ${n}: quantity must be greater than the previous tier.`)
-      if (t.percentOff <= sorted[i - 1].percentOff) errors.push(`Tier ${n}: discount must increase — eBay requires deeper discounts at higher quantities.`)
+    if (i > 0 && t.percentOff <= sorted[i - 1].percentOff) {
+      errors.push(`Tier ${n}: discount must increase — eBay requires deeper discounts at higher quantities.`)
     }
   }
   if (sorted.length > 0 && sorted[0].percentOff > 0 && sorted[0].percentOff < 5) {

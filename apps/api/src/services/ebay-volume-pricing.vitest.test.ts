@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { validateVolumeTiers, computeTiers, findMarginViolations } from './ebay-volume-pricing.service.js'
 
 describe('VP.1 — validateVolumeTiers (eBay rules)', () => {
-  it('accepts a valid 3-tier ladder', () => {
+  it('accepts a valid 3-tier ladder (buy 2/3/4)', () => {
     const r = validateVolumeTiers([
       { minQty: 2, percentOff: 5 },
       { minQty: 3, percentOff: 10 },
@@ -11,19 +11,29 @@ describe('VP.1 — validateVolumeTiers (eBay rules)', () => {
     expect(r.ok).toBe(true)
     expect(r.errors).toEqual([])
   })
-  it('rejects fewer than 2 tiers', () => {
-    expect(validateVolumeTiers([{ minQty: 2, percentOff: 5 }]).ok).toBe(false)
+  it('accepts a single buy-2 tier', () => {
+    const r = validateVolumeTiers([{ minQty: 2, percentOff: 10 }])
+    expect(r.ok).toBe(true)
+    expect(r.errors).toEqual([])
   })
-  it('rejects more than 4 tiers', () => {
-    const t = [2, 3, 4, 5, 6].map((q, i) => ({ minQty: q, percentOff: (i + 1) * 5 }))
+  it('rejects an empty tier list', () => {
+    expect(validateVolumeTiers([]).ok).toBe(false)
+  })
+  it('rejects more than 3 tiers', () => {
+    const t = [2, 3, 4, 5].map((q, i) => ({ minQty: q, percentOff: (i + 1) * 5 }))
     expect(validateVolumeTiers(t).ok).toBe(false)
+  })
+  it('rejects non-sequential quantities (2 then 5)', () => {
+    const r = validateVolumeTiers([{ minQty: 2, percentOff: 5 }, { minQty: 5, percentOff: 10 }])
+    expect(r.ok).toBe(false)
+    expect(r.errors.some((e) => /quantity must be 3/.test(e))).toBe(true)
   })
   it('rejects a non-increasing discount', () => {
     const r = validateVolumeTiers([{ minQty: 2, percentOff: 10 }, { minQty: 3, percentOff: 10 }])
     expect(r.ok).toBe(false)
     expect(r.errors.some((e) => /discount must increase/.test(e))).toBe(true)
   })
-  it('rejects minQty < 2', () => {
+  it('rejects a tier that does not start at buy-2', () => {
     expect(validateVolumeTiers([{ minQty: 1, percentOff: 5 }, { minQty: 2, percentOff: 10 }]).ok).toBe(false)
   })
   it('warns when the buy-2 tier is below 5%', () => {
