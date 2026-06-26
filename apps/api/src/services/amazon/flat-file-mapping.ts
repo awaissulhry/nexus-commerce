@@ -92,6 +92,19 @@ const AMAZON_ALIAS_MAP: Record<string, string[]> = {
   imageurl: ['main_image_url', 'main_product_image_locator'],
   mainimage: ['main_image_url', 'main_product_image_locator'],
   keywords: ['generic_keywords', 'search_terms'],
+  // ── Structural / variation columns ──────────────────────────────────────
+  // Amazon's own downloaded flat-file templates use "parentage" (not
+  // "parentage_level"), so tier-3 normalized matching misses them.
+  parentage: ['parentage_level'],
+  // "parent-sku" / "parent sku" / "parent_sku" all normalize to "parentsku"
+  // which matches the column id via tier 3, but the Amazon column name
+  // "child_parent_sku_relationship" does not — add both directions.
+  childparentskurelationship: ['child_parent_sku_relationship', 'parent_sku'],
+  parentitemsku: ['parent_sku', 'child_parent_sku_relationship'],
+  // "variation_theme" already matches via tier 3, but supplier files often
+  // write it as "variation type" or "variant type".
+  variationtype: ['variation_theme'],
+  varianttype: ['variation_theme'],
 }
 
 function norm(s: string): string {

@@ -3128,9 +3128,23 @@ export default function AmazonFlatFileClient({
       if (idx == null) continue
       next[idx] = { ...next[idx], ...u.cells, _dirty: true }
     }
+    // F.1 — family mode: when the operator is viewing a specific parent's family
+    // (?familyId=xxx) and imports a file that doesn't carry parent_sku /
+    // parentage_level on every row (common for supplier CSV dumps or simple SKU
+    // lists), stamp those structural fields onto every new row whose parent_sku
+    // is still blank. The parent SKU is resolved from the parent row already in
+    // the grid (the row with parentage_level='parent'). Without this, new rows
+    // save to DB with parentId=null and never appear in the Matrix tab.
+    const familyParentSku = familyId
+      ? String(prev.find((r) => r.parentage_level === 'parent' && r.item_sku)?.item_sku ?? '')
+      : ''
     for (const n of result.newRows) {
       const row = makeEmptyRow(productType, marketplace)
       Object.assign(row, n.cells, { _dirty: true, _isNew: true })
+      if (familyId && familyParentSku && !String(row.parent_sku ?? '').trim()) {
+        row.parent_sku = familyParentSku
+        row.parentage_level = 'child'
+      }
       next.push(row)
     }
     setRows(next)
@@ -3141,7 +3155,7 @@ export default function AmazonFlatFileClient({
       `${newCount ? ` · creating ${newCount} product${newCount === 1 ? '' : 's'}` : ''} · saving…`,
     )
     void syncToPlatform(next.filter((r) => !r._ghost), false)
-  }, [pushSnapshot, productType, marketplace, syncToPlatform])
+  }, [pushSnapshot, productType, marketplace, syncToPlatform, familyId])
 
   // FX.1 — export the grid to TSV (Amazon template), CSV, or XLSX. Uses
   // effectiveManifest so a multi-category (MT) union sheet exports every column;
