@@ -21,6 +21,7 @@ import {
   pushVariationGroup,
   toMarketplaceId,
   MARKETS,
+  axisSynonymKey,
   type Market,
 } from '../ebay-variation-push.service.js'
 import { logger } from '../../utils/logger.js'
@@ -145,7 +146,7 @@ export async function publishEbayImagesViaInventory(
       if (!sku) continue
       if (!imageOverrideBySku.has(sku)) imageOverrideBySku.set(sku, [])
       imageOverrideBySku.get(sku)!.push(r.url)
-    } else if (r.variantGroupKey && r.variantGroupKey === pictureAxis) {
+    } else if (r.variantGroupKey && axisSynonymKey(r.variantGroupKey) === axisSynonymKey(pictureAxis)) {
       const key = String(r.variantGroupValue ?? '').toLowerCase()
       if (!key) continue
       if (!imageOverrideByColor.has(key)) imageOverrideByColor.set(key, [])

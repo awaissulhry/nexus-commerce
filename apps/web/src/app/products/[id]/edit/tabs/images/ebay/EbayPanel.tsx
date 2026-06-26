@@ -22,8 +22,24 @@ import type { ListingImage, ProductImage, VariantSummary, WorkspaceProduct } fro
 
 const EBAY_MAX = PLATFORM_RULES.EBAY.maxImages ?? 24
 const MIN_COLS = 12
-// Bucket key for the shared "Default (cover & common)" gallery row.
 const SHARED = '__shared__'
+
+// Synonym groups kept in sync with VariationValueOrderModal + push service.
+const AXIS_SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
+  ['colore', 'color', 'colour', 'color name', 'color_name', 'couleur', 'farbe', 'kleur', 'colour name', 'colori'],
+  ['taglia', 'size', 'size name', 'size_name', 'misura', 'größe', 'grosse', 'taille', 'maat', 'maten', 'koko'],
+  ['stile', 'style', 'style name', 'style_name'],
+  ['materiale', 'material', 'material name', 'material_name'],
+  ['genere', 'gender', 'department', 'target audience', 'target_audience'],
+]
+
+function axisSynonymKey(name: string): string {
+  const lk = name.toLowerCase().trim()
+  for (let i = 0; i < AXIS_SYNONYM_GROUPS.length; i++) {
+    if ((AXIS_SYNONYM_GROUPS[i] as string[]).includes(lk)) return `__dim${i}__`
+  }
+  return lk
+}
 
 // Phase-1 — imperative handle the panel hands to ImagesTab so the ONE shared
 // bottom action bar (Save / Discard / Publish) drives eBay too. eBay edits live
@@ -81,27 +97,39 @@ type Buckets = Map<string, string[]>
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// Deduplicate axes by synonym key so "Colore"/"Color" appear once (first name wins).
 function availableAxes(variants: VariantSummary[]): string[] {
-  const seen = new Set<string>()
+  const seenSynonym = new Set<string>()
   const out: string[] = []
-  for (const v of variants) for (const k of Object.keys(v.variantAttributes ?? {})) if (!seen.has(k)) { seen.add(k); out.push(k) }
+  for (const v of variants) {
+    for (const k of Object.keys(v.variantAttributes ?? {})) {
+      const sk = axisSynonymKey(k)
+      if (!seenSynonym.has(sk)) { seenSynonym.add(sk); out.push(k) }
+    }
+  }
   return out
 }
 
+// Collect values for an axis including all synonym aliases (e.g. both 'Colore' and 'Color' rows).
 function getAxisValues(variants: VariantSummary[], axis: string): string[] {
+  const targetKey = axisSynonymKey(axis)
   const seen = new Set<string>()
   const out: string[] = []
   for (const v of variants) {
-    const val = (v.variantAttributes as Record<string, string> | null)?.[axis]
-    if (val && !seen.has(val)) { seen.add(val); out.push(val) }
+    const attrs = v.variantAttributes as Record<string, string> | null
+    if (!attrs) continue
+    for (const [k, val] of Object.entries(attrs)) {
+      if (axisSynonymKey(k) === targetKey && val && !seen.has(val)) { seen.add(val); out.push(val) }
+    }
   }
   return out
 }
 
 function defaultAxis(product: WorkspaceProduct, axes: string[]): string {
   const pref = product.imageAxisPreference
-  if (pref) { const m = axes.find((a) => a.toLowerCase() === pref.toLowerCase()); if (m) return m }
-  return axes.find((a) => a.toLowerCase() === 'color') ?? axes[0] ?? 'Color'
+  if (pref) { const m = axes.find((a) => axisSynonymKey(a) === axisSynonymKey(pref)); if (m) return m }
+  // Find the colour axis (dim0) — matches Colore, Color, Couleur, etc.
+  return axes.find((a) => axisSynonymKey(a) === '__dim0__') ?? axes[0] ?? 'Color'
 }
 
 function initBuckets(listingImages: ListingImage[], axis: string, values: string[]): Buckets {

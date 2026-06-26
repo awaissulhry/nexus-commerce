@@ -1296,6 +1296,7 @@ export function buildFlatRow(
     parentId?: string | null;
     variationTheme?: string | null;
     categoryAttributes?: unknown;
+    variantAttributes?: unknown;
     brand?: string | null;
     images?: Array<{ url: string; sortOrder: number; type: string }>;
     channelListings: Array<{
@@ -1350,8 +1351,14 @@ export function buildFlatRow(
     .split(/[/,|]/)
     .map((s) => s.trim())
     .filter(Boolean);
-  const variationValues =
-    ((product.categoryAttributes as { variations?: Record<string, string> } | null)?.variations) ?? {};
+  // variantAttributes is the canonical per-variant field (set during product creation);
+  // categoryAttributes.variations is the legacy bulk-create fallback. Merge both so
+  // newly-added variants (which may have variantAttributes but empty categoryAttributes)
+  // still have aspect data for the pushVariationGroup synonym normalisation to work with.
+  // catVars keys (Italian/eBay-locale) win on collision via spread order.
+  const catVars = ((product.categoryAttributes as { variations?: Record<string, string> } | null)?.variations) ?? {}
+  const variantAttrs = (product.variantAttributes as Record<string, string> | null) ?? {}
+  const variationValues: Record<string, string> = { ...variantAttrs, ...catVars }
 
   const row: Record<string, unknown> = {
     _rowId: product.id,
