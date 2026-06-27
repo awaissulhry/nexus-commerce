@@ -5,6 +5,7 @@ import { logger } from '../utils/logger.js'
 import { handleMovementStockoutTransition } from './stockout-detector.service.js'
 import { consumeLayersInTx, receiveLayerInTx } from './cost-layers.service.js'
 import { computeAvailableToPublish } from './available-to-publish.service.js'
+import { enqueueSharedTradingFanout } from './ebay-shared-fanout.service.js'
 
 // S.20 — reasons that consume cost layers (decrease quantity AND
 // realise COGS). Manual-adjustment subtractions also consume; the
@@ -710,6 +711,32 @@ async function cascadeQuantityToListings(
       select: { id: true },
     })
     queuedSyncIds = justEnqueued.map((r) => r.id)
+  }
+
+  // Phase 3 — shared-SKU eBay fan-out. Every SharedListingMembership for this
+  // product (one row per ItemID that contains the variant SKU) gets a Trading-API
+  // quantity push enqueued in THIS tx, so a single stock change updates all the
+  // shared eBay listings via the existing queue+worker. channelListingId is null
+  // on these rows (the shared SKU is not a ChannelListing); the worker routes
+  // them by payload.pushVia:'TRADING'. Best-effort: a failure here must not roll
+  // back the stock movement — the ChannelListing cascade above is the source of
+  // truth and these rows are also healed by the next backstop drain.
+  try {
+    const sharedIds = await enqueueSharedTradingFanout(
+      tx as unknown as Parameters<typeof enqueueSharedTradingFanout>[0],
+      {
+        productId,
+        warehouseAvailable,
+        stockBuffer: 0, // shared listings have no per-listing ChannelListing buffer (yet)
+        holdUntil,
+      },
+    )
+    if (sharedIds.length > 0) queuedSyncIds = [...queuedSyncIds, ...sharedIds]
+  } catch (err) {
+    logger.warn('cascadeQuantityToListings: shared eBay fan-out enqueue failed (non-fatal)', {
+      productId,
+      err: err instanceof Error ? err.message : String(err),
+    })
   }
 
   return { cascadedListingIds, snapshottedListingIds, queuedSyncIds }
