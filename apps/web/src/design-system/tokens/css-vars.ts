@@ -157,6 +157,33 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // ── Type ─────────────────────────────────────────────────────────
   { section: 'Type', name: '--h10-font-sans', value: "var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" },
   { name: '--h10-font-smoothing', value: 'auto' },
+
+  // ── Platform-semantic aliases (components consume THESE; bridge to globals.css) ──
+  { section: 'Platform-semantic aliases', name: '--text-primary', value: 'var(--h10-text)' },
+  { name: '--text-secondary', value: 'var(--h10-text-2)' },
+  { name: '--text-tertiary', value: 'var(--h10-text-3)' },
+  { name: '--text-disabled', value: 'var(--h10-text-disabled)' },
+  { name: '--text-link', value: 'var(--h10-text-link)' },
+  { name: '--surface-canvas', value: 'var(--h10-bg)' },
+  { name: '--surface-card', value: 'var(--h10-surface)' },
+  { name: '--surface-sunken', value: 'var(--h10-surface-sunken)' },
+  { name: '--border-default', value: 'var(--h10-border)' },
+  { name: '--border-subtle', value: 'var(--h10-border-subtle)' },
+  { name: '--border-strong', value: 'var(--h10-border-strong)' },
+  { name: '--color-primary', value: 'var(--h10-primary)' },
+  { name: '--color-primary-soft', value: 'var(--h10-primary-soft)' },
+  { name: '--status-success-soft', value: 'var(--h10-success-soft)' },
+  { name: '--status-success-line', value: 'var(--h10-success)' },
+  { name: '--status-success-strong', value: 'var(--h10-success-strong)' },
+  { name: '--status-warning-soft', value: 'var(--h10-warning-soft)' },
+  { name: '--status-warning-line', value: 'var(--h10-warning)' },
+  { name: '--status-warning-strong', value: 'var(--h10-warning-strong)' },
+  { name: '--status-danger-soft', value: 'var(--h10-danger-soft)' },
+  { name: '--status-danger-line', value: 'var(--h10-danger)' },
+  { name: '--status-danger-strong', value: 'var(--h10-danger-strong)' },
+  { name: '--status-info-soft', value: 'var(--h10-info-soft)' },
+  { name: '--status-info-line', value: 'var(--h10-info)' },
+  { name: '--status-info-strong', value: 'var(--h10-blue-700)' },
 ]
 
 /** Dark-mode overrides (the `.dark` block). Provisional inversions; their only home. */

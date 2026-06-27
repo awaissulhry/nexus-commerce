@@ -140,6 +140,33 @@
   /* ── Type ── */
   --h10-font-sans: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --h10-font-smoothing: auto;
+
+  /* ── Platform-semantic aliases ── */
+  --text-primary: var(--h10-text);
+  --text-secondary: var(--h10-text-2);
+  --text-tertiary: var(--h10-text-3);
+  --text-disabled: var(--h10-text-disabled);
+  --text-link: var(--h10-text-link);
+  --surface-canvas: var(--h10-bg);
+  --surface-card: var(--h10-surface);
+  --surface-sunken: var(--h10-surface-sunken);
+  --border-default: var(--h10-border);
+  --border-subtle: var(--h10-border-subtle);
+  --border-strong: var(--h10-border-strong);
+  --color-primary: var(--h10-primary);
+  --color-primary-soft: var(--h10-primary-soft);
+  --status-success-soft: var(--h10-success-soft);
+  --status-success-line: var(--h10-success);
+  --status-success-strong: var(--h10-success-strong);
+  --status-warning-soft: var(--h10-warning-soft);
+  --status-warning-line: var(--h10-warning);
+  --status-warning-strong: var(--h10-warning-strong);
+  --status-danger-soft: var(--h10-danger-soft);
+  --status-danger-line: var(--h10-danger);
+  --status-danger-strong: var(--h10-danger-strong);
+  --status-info-soft: var(--h10-info-soft);
+  --status-info-line: var(--h10-info);
+  --status-info-strong: var(--h10-blue-700);
 }
 
 .dark {
