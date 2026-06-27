@@ -40,6 +40,30 @@ describe('buildSharedListingInput', () => {
   it('UK market uses GBP', () => {
     expect(buildSharedListingInput(parent, [{ sku: 'X', uk_price: 9, uk_qty: 1, aspect_Size: 'M' }], 'UK').currency).toBe('GBP')
   })
+
+  it('C1: deduplicates dual-written aspect keys case-insensitively (first-cased-wins)', () => {
+    // buildFlatRow dual-writes both `aspect_Colore` and `aspect_colore` with the same value
+    const dualWriteVariants = [
+      { sku: 'X-NERO-M', it_price: 39.9, it_qty: 2, aspect_Colore: 'Nero', aspect_colore: 'Nero', aspect_Taglia: 'M', aspect_taglia: 'M' },
+      { sku: 'X-BIANCO-M', it_price: 39.9, it_qty: 2, aspect_Colore: 'Bianco', aspect_colore: 'Bianco', aspect_Taglia: 'M', aspect_taglia: 'M' },
+    ]
+    const result = buildSharedListingInput(parent, dualWriteVariants, 'IT')
+    // Only Colore varies; there should be exactly ONE entry for it (not both "Colore" and "colore")
+    const colorAxes = result.variationSpecificNames.filter(n => n.toLowerCase() === 'colore')
+    expect(colorAxes).toHaveLength(1)
+    // Taglia is same across both variants → not a variationSpecificName at all
+    const tagliaAxes = result.variationSpecificNames.filter(n => n.toLowerCase() === 'taglia')
+    expect(tagliaAxes).toHaveLength(0)
+    // Each variation's specifics should have exactly one entry per axis (no duplicate keys)
+    for (const v of result.variations) {
+      const keys = Object.keys(v.specifics)
+      const uniqueLower = new Set(keys.map(k => k.toLowerCase()))
+      expect(uniqueLower.size).toBe(keys.length)
+    }
+    // The varying axis (Colore) should be present; Taglia (same across variants) not in variationSpecificNames
+    expect(result.variationSpecificNames).toContain('Colore')
+    expect(result.variationSpecificNames).not.toContain('colore')
+  })
 })
 
 function mockDb(existing: unknown = null) {
@@ -75,6 +99,21 @@ describe('createSharedListing', () => {
     expect(res.status).toBe('SKIPPED_EXISTS')
     expect(addFn).not.toHaveBeenCalled()
     expect(db.created).toHaveLength(0)
+  })
+
+  it('I1: resolves productId by SKU, not array index, for each membership', async () => {
+    // Give variants distinct _productId values and assert each membership got the right one
+    const variantsDistinct = [
+      { sku: 'LNR-BLK-M', it_price: 49.9, it_qty: 5, aspect_Size: 'M', _productId: 'pid-M' },
+      { sku: 'LNR-BLK-L', it_price: 49.9, it_qty: 3, aspect_Size: 'L', _productId: 'pid-L' },
+    ]
+    const db = mockDb(null)
+    const addFn = vi.fn(async () => ({ itemId: '999888777' }))
+    await createSharedListing(parent, variantsDistinct, { ...ctx0, db, addFixedPriceItemFn: addFn })
+    const bySkuM = db.created.find((m: any) => m.sku === 'LNR-BLK-M')
+    const bySkuL = db.created.find((m: any) => m.sku === 'LNR-BLK-L')
+    expect(bySkuM?.productId).toBe('pid-M')
+    expect(bySkuL?.productId).toBe('pid-L')
   })
 
   it('returns ERROR (no throw) when the eBay call fails', async () => {

@@ -18,14 +18,22 @@ export function buildSharedListingInput(
   const prefix = mkt.toLowerCase()
 
   // Axis detection: aspect_* keys with >1 distinct value across variants.
-  const valueSets = new Map<string, Set<string>>()
+  // Case-insensitive dedup: first-seen casing wins for the canonical name.
+  const canonicalByLower = new Map<string, string>()   // lower → first-seen canonical
+  const valueSets = new Map<string, Set<string>>()      // canonical → value set
   for (const row of variantRows) {
     for (const [k, v] of Object.entries(row)) {
       if (k.startsWith('aspect_') && typeof v === 'string' && v) {
-        const name = k.slice('aspect_'.length).replace(/_/g, ' ')
-        if (!name) continue
-        if (!valueSets.has(name)) valueSets.set(name, new Set())
-        valueSets.get(name)!.add(v)
+        const rawName = k.slice('aspect_'.length).replace(/_/g, ' ')
+        if (!rawName) continue
+        const lower = rawName.toLowerCase()
+        // first-cased-wins: record canonical on first encounter
+        if (!canonicalByLower.has(lower)) {
+          canonicalByLower.set(lower, rawName)
+          valueSets.set(rawName, new Set())
+        }
+        const canonical = canonicalByLower.get(lower)!
+        valueSets.get(canonical)!.add(v)
       }
     }
   }
@@ -36,9 +44,17 @@ export function buildSharedListingInput(
     const rawQty = num(row[`${prefix}_qty`] ?? row.quantity)
     const quantity = capQty ? capQty(row._productId as string | undefined, sku, rawQty, mkt) : rawQty
     const specifics: Record<string, string> = {}
+    // Build a lowercase→value map from the row's aspect_* keys for case-insensitive lookup.
+    const rowKeyLower = new Map<string, string>()
+    for (const [k, v] of Object.entries(row)) {
+      if (k.startsWith('aspect_') && typeof v === 'string') {
+        rowKeyLower.set(k.toLowerCase(), v)
+      }
+    }
     for (const name of variationSpecificNames) {
-      const key = `aspect_${name.replace(/ /g, '_')}`
-      const val = str(row[key])
+      // Canonical name may have spaces; convert to underscored lowercase for key lookup.
+      const lowerKey = `aspect_${name.replace(/ /g, '_').toLowerCase()}`
+      const val = rowKeyLower.get(lowerKey) ?? ''
       if (val) specifics[name] = val
     }
     return { sku, price: num(row[`${prefix}_price`] ?? row.price), quantity, specifics }
@@ -110,16 +126,22 @@ export async function createSharedListing(
     const input = buildSharedListingInput(parentRow, variantRows, market, ctx.capQty)
     const { itemId } = await addFn(input, { oauthToken: ctx.oauthToken, market })
 
+    // Build a SKU→productId map so writeback is correct even if the mapper filters/reorders variations.
+    const productIdBySku = new Map<string, string | undefined>()
+    for (const row of variantRows) {
+      const sku = str(row.sku)
+      if (sku) productIdBySku.set(sku, row._productId as string | undefined)
+    }
+
     let count = 0
-    for (let i = 0; i < input.variations.length; i++) {
-      const v = input.variations[i]
+    for (const v of input.variations) {
       await db.sharedListingMembership.create({
         data: {
           marketplace: market,
           sku: v.sku,
           itemId,
           parentSku,
-          productId: (variantRows[i]?._productId as string | undefined) ?? null,
+          productId: productIdBySku.get(v.sku) ?? null,
           variationSpecifics: v.specifics,
           lastQtyPushed: v.quantity,
           lastPushedAt: new Date(),
