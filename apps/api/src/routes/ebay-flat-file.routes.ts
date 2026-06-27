@@ -37,6 +37,7 @@ import {
   getEbayPullPreviewJobStatus,
 } from '../services/ebay-flat-file-pull-preview.service.js';
 import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, toListingLanguage, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
+import { pushSharedListings, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields } from '../services/ebay-variation-push.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
 import { renderExport } from '../services/export/renderers.js';
@@ -778,6 +779,27 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           continue
         }
         if (familyRows.length > 1) {
+          // Phase 4 — shared-SKU listing routing. A genuinely-different-products
+          // family that legitimately shares stock can publish as a Trading-API
+          // multi-variation listing (same variant SKU may repeat across parents),
+          // instead of the unique-SKU Inventory-API group. Flag lives on the parent.
+          const sharedParent = familyRows.find((r) => r._isParent) ?? familyRows[0]
+          if (sharedParent?.shared_sku_listing === true) {
+            const sharedResults: SharedListingResult[] = await pushSharedListings(
+              familyRows as Array<Record<string, unknown>>,
+              { oauthToken: token, market: mp, capQty: capToFbm },
+            )
+            for (const r of sharedResults) {
+              perRowResults.push({
+                sku: r.parentSku,
+                market: mp,
+                status: r.status === 'ERROR' ? 'ERROR' : 'PUSHED',
+                message: r.itemId ? `${r.message} (ItemID ${r.itemId})` : r.message,
+                itemId: r.itemId,
+              })
+            }
+            continue
+          }
           // Multi-SKU family — push as variation group.
           // Use the parent row's SKU as the inventoryItemGroupKey so that eBay
           // Seller Hub shows the parent SKU as "Etichetta personalizzata" (Custom Label)
