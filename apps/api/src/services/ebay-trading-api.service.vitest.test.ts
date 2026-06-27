@@ -138,3 +138,37 @@ describe('callTradingApi', () => {
     await expect(callTradingApi('AddFixedPriceItem', '<x/>', ctx)).rejects.toThrow(/Bad category/)
   })
 })
+
+import { addFixedPriceItem, reviseInventoryStatus } from './ebay-trading-api.service.js'
+
+describe('addFixedPriceItem / reviseInventoryStatus (dry-run composition)', () => {
+  const base = { oauthToken: 'OAUTH', market: 'IT' }
+  beforeEach(() => { process.env.NEXUS_EBAY_REAL_API = 'false'; process.env.NODE_ENV = 'test' })
+
+  it('addFixedPriceItem returns the dry-run ItemID', async () => {
+    const { itemId } = await addFixedPriceItem(
+      {
+        title: 'X', description: 'x', categoryId: '1', conditionId: '1000',
+        country: 'IT', currency: 'EUR', variationSpecificNames: ['Size'],
+        variations: [{ sku: 'A-M', price: 9.9, quantity: 1, specifics: { Size: 'M' } }],
+      },
+      base,
+    )
+    expect(itemId).toMatch(/^DRYRUN-/)
+  })
+
+  it('reviseInventoryStatus resolves without throwing in dry-run', async () => {
+    await expect(
+      reviseInventoryStatus({ itemId: '110', sku: 'A-M', quantity: 4 }, base),
+    ).resolves.toBeUndefined()
+  })
+
+  it('addFixedPriceItem rejects an unknown market', async () => {
+    await expect(
+      addFixedPriceItem(
+        { title: 'X', description: 'x', categoryId: '1', conditionId: '1000', country: 'IT', currency: 'EUR', variationSpecificNames: ['Size'], variations: [{ sku: 'A', price: 1, quantity: 1, specifics: { Size: 'M' } }] },
+        { oauthToken: 'O', market: 'ZZ' },
+      ),
+    ).rejects.toThrow(/unknown eBay market/i)
+  })
+})

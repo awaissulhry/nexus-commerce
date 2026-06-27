@@ -216,3 +216,23 @@ export async function callTradingApi(
   }
   return { ack, itemId, errors, raw }
 }
+
+export async function addFixedPriceItem(
+  input: AddFixedPriceItemInput,
+  ctx: { oauthToken: string; market: string },
+): Promise<{ itemId: string }> {
+  const siteId = siteIdForMarket(ctx.market)
+  const xml = buildAddFixedPriceItemXml(input)
+  const res = await callTradingApi('AddFixedPriceItem', xml, { oauthToken: ctx.oauthToken, siteId })
+  if (!res.itemId) throw new Error('eBay AddFixedPriceItem succeeded but returned no ItemID')
+  return { itemId: res.itemId }
+}
+
+export async function reviseInventoryStatus(
+  input: { itemId: string; sku: string; quantity: number },
+  ctx: { oauthToken: string; market: string },
+): Promise<void> {
+  const siteId = siteIdForMarket(ctx.market)
+  const xml = buildReviseInventoryStatusXml(input)
+  await callTradingApi('ReviseInventoryStatus', xml, { oauthToken: ctx.oauthToken, siteId })
+}
