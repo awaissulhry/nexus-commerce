@@ -1,21 +1,16 @@
 /**
- * H10 design tokens as CSS custom properties — the runtime source of truth for
- * every `var(--h10-*)` the design system uses. Mirrors ../tokens/colors.ts etc.
+ * GENERATED — do not edit by hand.
+ * Source: tokens/css-vars.ts (+ tokens/colors.ts). Regenerate: `npm run tokens:gen`.
  *
- * Namespaced `--h10-*` so it does NOT collide with the app's existing
- * globals.css tokens (--text-primary, --surface-*, …). Convergence (pointing
- * those names at these values) happens deliberately in the migration phase; see
- * ../docs/TOKEN-RECONCILIATION.md.
- *
- * Not imported app-wide yet — the Phase 2 catalog imports it; the ads.css
- * migration (post-harness) imports it in the ads layout. Defining unused custom
- * properties is inert, so this is safe to land ahead of consumers.
+ * `--h10-*` namespaced so it never collides with the app's globals.css tokens.
+ * The platform-semantic aliases (--text-*/--surface-*/--border-*/--status-*/
+ * --color-primary) point AT these values; components consume the aliases.
  */
 
 :root {
-  /* ── Tier 1: primitive ramps ───────────────────────────────────── */
-  --h10-white: #ffffff;
 
+  /* ── Tier 1: primitive ramps ── */
+  --h10-white: #ffffff;
   --h10-blue-50: #eef5ff;
   --h10-blue-100: #e7f0fd;
   --h10-blue-200: #cfe0fb;
@@ -23,7 +18,6 @@
   --h10-blue-700: #1a60c4;
   --h10-blue-800: #134da3;
   --h10-blue-900: #0a4ba8;
-
   --h10-grey-25: #f7f9fb;
   --h10-grey-50: #f4f6f9;
   --h10-grey-75: #f1f4f8;
@@ -38,10 +32,8 @@
   --h10-grey-700: #3a4452;
   --h10-grey-800: #2b3440;
   --h10-grey-900: #1c2530;
-
   --h10-rail-surface: #f1f3f5;
   --h10-rail-line: #e3e7ec;
-
   --h10-green-soft: #dcfce7;
   --h10-green-500: #1e9e62;
   --h10-green-600: #15a34a;
@@ -60,12 +52,10 @@
   --h10-cyan-bg: #e0f2fe;
   --h10-cyan-700: #0e7490;
   --h10-amazon: #232f3e;
-
-  /* shadow base + focus accent, as "R G B" triples for rgb(var() / <a>) */
   --h10-shadow-rgb: 20 28 38;
   --h10-focus-rgb: 31 111 222;
 
-  /* ── Tier 2: semantic roles (components consume these) ──────────── */
+  /* ── Tier 2: semantic roles ── */
   --h10-text: var(--h10-grey-900);
   --h10-text-2: var(--h10-grey-600);
   --h10-text-3: var(--h10-grey-500);
@@ -73,7 +63,6 @@
   --h10-text-disabled: var(--h10-grey-400);
   --h10-text-inverse: var(--h10-white);
   --h10-text-link: var(--h10-blue-600);
-
   --h10-bg: var(--h10-grey-50);
   --h10-surface: var(--h10-white);
   --h10-surface-raised: var(--h10-grey-25);
@@ -81,18 +70,15 @@
   --h10-surface-hover: var(--h10-grey-75);
   --h10-wash-primary: var(--h10-blue-50);
   --h10-rail-bg: var(--h10-rail-surface);
-
   --h10-border: var(--h10-grey-200);
   --h10-border-subtle: var(--h10-grey-150);
   --h10-border-strong: var(--h10-grey-300);
   --h10-rail-border: var(--h10-rail-line);
-
   --h10-primary: var(--h10-blue-600);
   --h10-primary-hover: var(--h10-blue-700);
   --h10-primary-dark: var(--h10-blue-800);
   --h10-primary-soft: var(--h10-blue-100);
   --h10-primary-ghost-border: var(--h10-blue-200);
-
   --h10-success-soft: var(--h10-green-soft);
   --h10-success: var(--h10-green-600);
   --h10-success-strong: var(--h10-green-700);
@@ -106,7 +92,7 @@
   --h10-info-soft: var(--h10-blue-100);
   --h10-info: var(--h10-blue-600);
 
-  /* status pills */
+  /* ── status pills ── */
   --h10-pill-ok-fg: var(--h10-blue-900);
   --h10-pill-ok-bg: #d2e6fc;
   --h10-pill-warn-fg: var(--h10-amber-text);
@@ -116,7 +102,7 @@
   --h10-pill-err-fg: var(--h10-danger-strong);
   --h10-pill-err-bg: var(--h10-danger-soft);
 
-  /* ── Tier 3: program / targeting chips ─────────────────────────── */
+  /* ── Tier 3: program / targeting chips ── */
   --h10-badge-sp-fg: var(--h10-purple-700);
   --h10-badge-sp-bg: var(--h10-purple-bg);
   --h10-badge-sd-fg: var(--h10-cyan-700);
@@ -126,7 +112,7 @@
   --h10-targeting-auto: var(--h10-blue-800);
   --h10-targeting-manual: var(--h10-purple-600);
 
-  /* ── Radius ────────────────────────────────────────────────────── */
+  /* ── Radius ── */
   --h10-radius-pill: 4px;
   --h10-radius-sm: 6px;
   --h10-radius-md: 7px;
@@ -136,7 +122,7 @@
   --h10-radius-3xl: 14px;
   --h10-radius-round: 999px;
 
-  /* ── Elevation + focus ─────────────────────────────────────────── */
+  /* ── Elevation + focus ── */
   --h10-shadow-card: 0 6px 22px rgb(var(--h10-shadow-rgb) / 0.16);
   --h10-shadow-menu: 0 12px 30px rgb(var(--h10-shadow-rgb) / 0.16);
   --h10-shadow-pop: 0 16px 40px rgb(var(--h10-shadow-rgb) / 0.2);
@@ -145,35 +131,28 @@
   --h10-shadow-tip: 0 10px 26px rgb(var(--h10-shadow-rgb) / 0.3);
   --h10-focus-ring: 0 0 0 2px rgb(var(--h10-focus-rgb) / 0.12);
 
-  /* ── Structural dimensions ─────────────────────────────────────── */
+  /* ── Structural dimensions ── */
   --h10-rail-collapsed: 66px;
   --h10-rail-expanded: 344px;
   --h10-row-nav: 46px;
   --h10-icon-zone: 50px;
 
-  /* ── Type ──────────────────────────────────────────────────────── */
+  /* ── Type ── */
   --h10-font-sans: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --h10-font-smoothing: auto;
 }
 
-/**
- * Dark-ready scaffold. H10 ships light-first; these are PROVISIONAL inversions
- * of the semantic layer so we never paint into a corner. Finalized + enabled
- * per-surface in Phase 6 (no surface opts in yet, so this block is dormant).
- */
 .dark {
   --h10-text: #e7ebf1;
   --h10-text-2: #aab6c2;
   --h10-text-3: #8a94a6;
   --h10-text-disabled: #5b6b7b;
   --h10-text-inverse: #14223a;
-
   --h10-bg: #14223a;
   --h10-surface: #18263b;
   --h10-surface-raised: #1f2c3d;
   --h10-surface-sunken: #1a2330;
   --h10-rail-bg: #18263b;
-
   --h10-border: #2f3a4a;
   --h10-border-subtle: #26323f;
   --h10-border-strong: #46505f;
