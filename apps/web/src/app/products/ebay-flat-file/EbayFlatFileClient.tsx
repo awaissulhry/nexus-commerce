@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, Loader2, ListOrdered, Plus, RefreshCw, RotateCcw, Search, Send, Upload, X, Zap,
+  AlertCircle, ArrowRightLeft, CheckCircle2, Columns, Download, ExternalLink, GitBranch, GitFork, History, Loader2, ListOrdered, Plus, RefreshCw, RotateCcw, Search, Send, Upload, X, Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -43,6 +43,9 @@ import { PendingPullBanner } from '../_shared/PendingPullBanner'
 import { TbBtn as SharedTbBtn } from '../_shared/FlatFileIconToolbar'
 import { PULL_GROUPS, pullFieldGroup, type PullGroupId } from '../_shared/pull-field-groups'
 import { VariationValueOrderModal } from './VariationValueOrderModal'
+import { useFlatFileCore } from '@/components/flat-file/useFlatFileCore'
+import { ColumnGroupModal } from '@/components/flat-file/ColumnGroupModal'
+import { EBAY_FILTER_DEFAULT, type EbayFilterDims } from '../_shared/flat-file-filter.types'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -592,6 +595,29 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       ...patch(marketGroups),
     ] : base
   }, [categoryColumns, policyOptions, conditionOptions, variantAxisNames, marketplace])
+
+  // ── Shared flat-file core (columns modal state, filter state) ─────────
+  // initialGroups: the static base groups without category columns or policy
+  // patches — the computed `columnGroups` useMemo is passed to FlatFileGrid
+  // directly; core only manages visibility/reorder UX state on top of whatever
+  // groups come in, so we start from the same base and sync on changes.
+  const core = useFlatFileCore<EbayRow, EbayFilterDims>({
+    storageKey: `ff-ebay-${marketplace}`,
+    initialRows,
+    makeBlankRow,
+    initialFilter: EBAY_FILTER_DEFAULT,
+    initialGroups: columnGroups,
+  })
+  const {
+    columnsOpen, setColumnsOpen,
+    closedGroups: coreClosedGroups, applyGroupSettings: coreApplyGroupSettings,
+    columnGroups: coreColumnGroups, setColumnGroups: setCoreColumnGroups,
+  } = core
+
+  // Keep core column groups in sync when marketplace / policy / category changes
+  useEffect(() => {
+    setCoreColumnGroups(columnGroups)
+  }, [columnGroups, setCoreColumnGroups])
 
   // ── Category schema loading ────────────────────────────────────────────
 
@@ -1460,11 +1486,19 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         active={showCascadeButtons}
       />
 
-      {/* VAVO — Variation value order */}
+      {/* VAVO — Variation value order (eBay-specific — no Amazon equivalent) */}
       <SharedTbBtn
         icon={<ListOrdered className="w-3.5 h-3.5" />}
         title="Value order — set the display order of variation axis values (Size, Color) on the eBay listing"
         onClick={() => setValueOrderOpen(true)}
+      />
+
+      {/* Columns — open ColumnGroupModal to show/hide/reorder column groups */}
+      <SharedTbBtn
+        icon={<Columns className="w-3.5 h-3.5" />}
+        title="Column groups — show, hide, and reorder column groups (⌘G)"
+        onClick={() => setColumnsOpen((o) => !o)}
+        active={columnsOpen}
       />
 
       {/* IN.2 — Reset all visible overrides back to master */}
@@ -1497,7 +1531,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       />
     </>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [showOverrideBadges, showCascadeButtons, valueOrderOpen])
+  ), [showOverrideBadges, showCascadeButtons, valueOrderOpen, columnsOpen, setColumnsOpen])
 
   // ── Slot: Bar3 left ────────────────────────────────────────────────────
 
@@ -1701,6 +1735,24 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           onSuccess={(n) => { if (n > 0) void onReload() }}
         />
       )}
+      {/* ColumnGroupModal — controlled by useFlatFileCore columnsOpen state */}
+      <ColumnGroupModal
+        open={columnsOpen}
+        onClose={() => setColumnsOpen(false)}
+        groups={coreColumnGroups.map((g) => ({
+          id: g.id,
+          label: g.label,
+          color: g.color,
+          columns: g.columns.map((c) => c.id),
+          visible: !coreClosedGroups.has(g.id),
+        }))}
+        onGroupsChange={(updated) => {
+          const nextClosed = new Set(updated.filter((g) => !g.visible).map((g) => g.id))
+          const nextOrder = updated.map((g) => g.id)
+          coreApplyGroupSettings(nextClosed, nextOrder)
+        }}
+      />
+
     <FlatFileGrid
       channel="ebay"
       title="eBay Flat File"
