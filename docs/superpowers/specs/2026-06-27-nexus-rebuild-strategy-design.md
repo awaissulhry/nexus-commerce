@@ -125,6 +125,32 @@ For each module:
 
 The DS grows with every module and stays the single source of truth. Coordinate continuously with the in-flight DS-hardening session to avoid forking.
 
+### 8.1 Parity & No-Regression Guarantee (evidence-gated)
+
+The chosen safeguard. **Before any code is edited**, build a **parity baseline harness** capturing the current observable behavior of every kept surface:
+- **API golden outputs** — record→replay of request/response for kept endpoints.
+- **UI baselines** — Playwright screenshots + DOM snapshots of the real pages.
+- **Data invariants** — golden values (available-to-sell per SKU, order totals, the profit figure).
+- **Channel push payloads** — exactly what is currently sent to Amazon/eBay/Shopify.
+
+Then, on every cutover: the new path runs **shadow / side-by-side** vs the old, outputs are **diffed**, and the old surface is retired only when the new matches **feature-for-feature**. The route toggle gives **instant revert**.
+
+- **Proof-before-delete:** nothing is removed without evidence it is dead (0 rows / 0 callers / gated-off / 0 events over N days).
+- **The one intentional behavior change** is the real-time inventory speed-up (§6) — isolated, flagged, reversible. Everything else is held to strict parity.
+- The baseline doubles as the **"current visual" library** for the per-page reviews (§8.2).
+
+### 8.2 Per-Page Workflow (visual approval gates)
+
+Every page follows this loop, with an **approval gate before any code is written**:
+1. **Show current** — live screenshot(s) of the existing page + its kept/cut feature list.
+2. **Show target** — the new design composed from the DS (mockup → then the real built component) + what is kept / merged / cut + the parity plan.
+3. **Approval gate** — the owner approves or redirects. No code is written for the page until then.
+4. **Build** on the DS, extending it with any missing shared components.
+5. **Verify** — parity vs the baseline (§8.1) + visual self-verify (screenshot-diff our render vs the approved target at native resolution; alignment/borders/spacing measured numerically — see [[feedback_ui_self_verify]]).
+6. **Show result**, cut over behind the route toggle, retire the old page only after parity passes.
+
+Pure-infra steps with no user-facing "before" (parity harness, schema scaffolding, real-time spine) get **plan-level approval** instead of a visual before/after.
+
 ---
 
 ## 9. Open Decisions (owner's call, resolved per module)
@@ -154,4 +180,9 @@ These are genuine business calls, not engineering defaults. Default shown; confi
 
 ## 11. Next Step
 
-Brainstorm **Module 0 · Foundation** in detail (its own design → spec → plan): the exact component contracts, the clean schema migration strategy, the real-time spine implementation, and the Bulk Grid. Nothing in the modules can be built consistently until the Foundation exists.
+Both gated on the owner's go-ahead; nothing is edited before approval:
+
+1. **Stand up the parity baseline harness** (§8.1) — additive, no behavior change; it also produces the "current visual" library for every page.
+2. **Run the per-page loop (§8.2) on the first pilot page** — recommended: the **Products / Catalog grid** (Module 1), because it forces the highest-leverage component (the virtualized DataGrid) into the DS and is a high-value, representative page. I show its current visual + a target design *before* any code is written.
+
+In parallel, the **Module 0 · Foundation** pieces (clean schema, real-time spine, shared components) are brainstormed into their own spec → plan. Components are built on demand as the first pages need them, so we are never building infrastructure with no visible consumer.
