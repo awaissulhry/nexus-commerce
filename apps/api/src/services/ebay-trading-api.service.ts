@@ -29,3 +29,18 @@ export function escapeXml(s: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;')
 }
+
+export function buildReviseInventoryStatusXml(input: {
+  itemId: string
+  sku: string
+  quantity: number
+}): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<ReviseInventoryStatusRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <InventoryStatus>
+    <ItemID>${escapeXml(input.itemId)}</ItemID>
+    <SKU>${escapeXml(input.sku)}</SKU>
+    <Quantity>${Math.max(0, Math.trunc(input.quantity))}</Quantity>
+  </InventoryStatus>
+</ReviseInventoryStatusRequest>`
+}
