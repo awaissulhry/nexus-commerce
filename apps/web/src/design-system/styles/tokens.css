@@ -111,6 +111,11 @@
   --h10-badge-sb-bg: #fef3c7;
   --h10-targeting-auto: var(--h10-blue-800);
   --h10-targeting-manual: var(--h10-purple-600);
+  --h10-imgup-surface: #f7faff;
+  --h10-imgup-hover: #f0f6ff;
+  --h10-imgup-drag: #e9f2ff;
+  --h10-imgup-spin-track: #cdd5df;
+  --h10-imgup-err: #cc1100;
 
   /* ── Radius ── */
   --h10-radius-pill: 4px;

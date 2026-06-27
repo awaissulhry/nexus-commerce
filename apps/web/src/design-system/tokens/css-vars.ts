@@ -129,6 +129,13 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--h10-targeting-auto', value: 'var(--h10-blue-800)' },
   { name: '--h10-targeting-manual', value: 'var(--h10-purple-600)' },
 
+  // ImageUpload component tokens (bespoke washes — exact legacy values, were raw hex)
+  { name: '--h10-imgup-surface', value: '#f7faff' },
+  { name: '--h10-imgup-hover', value: '#f0f6ff' },
+  { name: '--h10-imgup-drag', value: '#e9f2ff' },
+  { name: '--h10-imgup-spin-track', value: '#cdd5df' },
+  { name: '--h10-imgup-err', value: '#cc1100' },
+
   // ── Radius ───────────────────────────────────────────────────────
   { section: 'Radius', name: '--h10-radius-pill', value: '4px' },
   { name: '--h10-radius-sm', value: '6px' },

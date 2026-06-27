@@ -11,8 +11,8 @@
   min-height: 100%;
   overflow: hidden;
   padding-left: 66px;
-  background: var(--h10-bg);
-  color: var(--h10-text);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
 }
 .h10-ds-rail {
   position: absolute;
@@ -48,7 +48,7 @@
   width: 28px;
   height: 28px;
   border-radius: 7px;
-  background: var(--h10-primary);
+  background: var(--color-primary);
   color: var(--h10-text-inverse);
   font-weight: 800;
   font-size: 15px;
@@ -83,7 +83,7 @@
   font-family: inherit;
   font-size: 14px;
   font-weight: 600;
-  color: var(--h10-text-2);
+  color: var(--text-secondary);
   text-decoration: none;
   cursor: pointer;
   overflow: hidden;
@@ -94,7 +94,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--h10-text-3);
+  color: var(--text-tertiary);
 }
 .h10-ds-navitem .lbl {
   white-space: nowrap;
@@ -105,14 +105,14 @@
   opacity: 1;
 }
 .h10-ds-navitem:hover {
-  background: var(--h10-grey-150);
-  color: var(--h10-text);
+  background: var(--border-subtle);
+  color: var(--text-primary);
 }
 .h10-ds-navitem:hover .ico {
-  color: var(--h10-text-2);
+  color: var(--text-secondary);
 }
 .h10-ds-navitem.on {
-  background: var(--h10-primary);
+  background: var(--color-primary);
   color: var(--h10-text-inverse);
 }
 .h10-ds-navitem.on .ico {
@@ -126,7 +126,7 @@
   height: 16px;
   padding: 0 4px;
   border-radius: 8px;
-  background: var(--h10-danger);
+  background: var(--status-danger-line);
   color: var(--h10-text-inverse);
   font-size: 10px;
   font-weight: 800;
@@ -142,7 +142,7 @@
   margin-left: auto;
   margin-right: 16px;
   flex-shrink: 0;
-  color: var(--h10-text-3);
+  color: var(--text-tertiary);
   opacity: 0;
   transition: opacity 0.14s ease, transform 0.18s ease;
 }
@@ -169,7 +169,7 @@
   text-align: left;
   white-space: nowrap;
   font-size: 12.5px;
-  color: var(--h10-text-2);
+  color: var(--text-secondary);
   text-decoration: none;
   padding: 6px 10px;
   border-radius: var(--h10-radius-sm);
@@ -177,10 +177,10 @@
 }
 .h10-ds-subitem:hover {
   background: var(--h10-surface-hover);
-  color: var(--h10-text);
+  color: var(--text-primary);
 }
 .h10-ds-subitem.on {
-  color: var(--h10-primary);
+  color: var(--color-primary);
   font-weight: 600;
 }
 
@@ -188,7 +188,7 @@
   white-space: nowrap;
   padding: 12px 16px;
   font-size: 10px;
-  color: var(--h10-text-disabled);
+  color: var(--text-disabled);
   opacity: 0;
   transition: opacity 0.14s ease;
   flex-shrink: 0;
@@ -216,20 +216,20 @@
 .h10-ds-pagehdr .eyebrow {
   font-size: 12px;
   font-weight: 600;
-  color: var(--h10-text-3);
+  color: var(--text-tertiary);
   margin-bottom: 2px;
 }
 .h10-ds-pagehdr h1 {
   margin: 0;
   font-size: 27px;
   font-weight: 800;
-  color: var(--h10-text);
+  color: var(--text-primary);
   letter-spacing: -0.02em;
 }
 .h10-ds-pagehdr .sub {
   margin: 4px 0 0;
   font-size: 13.5px;
-  color: var(--h10-text-2);
+  color: var(--text-secondary);
 }
 .h10-ds-pagehdr-actions {
   display: flex;
@@ -253,7 +253,7 @@
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--h10-primary);
+  color: var(--color-primary);
   cursor: pointer;
 }
 .h10-ds-detailhdr-row {
@@ -273,14 +273,14 @@
   margin: 0;
   font-size: 22px;
   font-weight: 800;
-  color: var(--h10-text);
+  color: var(--text-primary);
   letter-spacing: -0.01em;
 }
 
 /* ── FilterPanel ─────────────────────────────────────────────────── */
 .h10-ds-fpanel {
-  background: var(--h10-surface);
-  border: 1px solid var(--h10-border);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
   border-radius: var(--h10-radius-2xl);
   padding: 14px 18px 16px;
 }
@@ -302,7 +302,7 @@
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: var(--h10-text);
+  color: var(--text-primary);
   letter-spacing: -0.01em;
 }
 .h10-ds-fpanel-toggle {
@@ -314,7 +314,7 @@
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--h10-text-2);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 .h10-ds-fpanel-toggle svg {
@@ -394,8 +394,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--h10-surface);
-  border: 1px solid var(--h10-border);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
   border-radius: var(--h10-radius-xl);
   padding: 11px 16px;
   box-shadow: var(--h10-shadow-card);
@@ -405,7 +405,7 @@
   color: var(--h10-text-strong);
 }
 .h10-ds-actionbar .lbl b {
-  color: var(--h10-text);
+  color: var(--text-primary);
   font-weight: 700;
 }
 .h10-ds-actionbar .grow {
@@ -422,14 +422,14 @@
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--h10-text-2);
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 6px 8px;
   border-radius: var(--h10-radius-md);
 }
 .h10-ds-actionbar-clear:hover {
   background: var(--h10-surface-hover);
-  color: var(--h10-text);
+  color: var(--text-primary);
 }
 
 /* ── Builder (full-screen wizard + scroll-spy) ───────────────────── */
@@ -439,8 +439,8 @@
   z-index: 120;
   display: flex;
   flex-direction: column;
-  background: var(--h10-bg);
-  color: var(--h10-text);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
 }
 .h10-ds-builder-top {
   display: flex;
@@ -449,26 +449,26 @@
   height: 56px;
   padding: 0 18px;
   flex-shrink: 0;
-  background: var(--h10-surface);
-  border-bottom: 1px solid var(--h10-border);
+  background: var(--surface-card);
+  border-bottom: 1px solid var(--border-default);
 }
 .h10-ds-builder-top .x {
   display: inline-flex;
   border: none;
   background: none;
-  color: var(--h10-text-3);
+  color: var(--text-tertiary);
   cursor: pointer;
   padding: 6px;
   border-radius: var(--h10-radius-sm);
 }
 .h10-ds-builder-top .x:hover {
   background: var(--h10-surface-hover);
-  color: var(--h10-text);
+  color: var(--text-primary);
 }
 .h10-ds-builder-top .ttl {
   font-size: 15px;
   font-weight: 700;
-  color: var(--h10-text);
+  color: var(--text-primary);
 }
 .h10-ds-builder-top .grow {
   flex: 1;
@@ -483,7 +483,7 @@
   flex-shrink: 0;
   padding: 20px 12px;
   overflow-y: auto;
-  border-right: 1px solid var(--h10-border);
+  border-right: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -495,18 +495,18 @@
   font: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: var(--h10-text-2);
+  color: var(--text-secondary);
   padding: 9px 12px;
   border-radius: var(--h10-radius-md);
   cursor: pointer;
 }
 .h10-ds-builder-navitem:hover {
   background: var(--h10-surface-hover);
-  color: var(--h10-text);
+  color: var(--text-primary);
 }
 .h10-ds-builder-navitem.on {
   background: var(--h10-wash-primary);
-  color: var(--h10-primary);
+  color: var(--color-primary);
 }
 .h10-ds-builder-content {
   position: relative;
@@ -523,7 +523,7 @@
   margin: 0 0 12px;
   font-size: 18px;
   font-weight: 700;
-  color: var(--h10-text);
+  color: var(--text-primary);
   letter-spacing: -0.01em;
 }
 
@@ -551,15 +551,15 @@
   display: inline-flex;
   border: none;
   background: none;
-  color: var(--h10-text-3);
+  color: var(--text-tertiary);
   cursor: pointer;
   padding: 0;
   line-height: 1;
 }
 .h10-ds-colcust-row .grip button:hover:not(:disabled) {
-  color: var(--h10-text);
+  color: var(--text-primary);
 }
 .h10-ds-colcust-row .grip button:disabled {
-  color: var(--h10-text-disabled);
+  color: var(--text-disabled);
   cursor: default;
 }
