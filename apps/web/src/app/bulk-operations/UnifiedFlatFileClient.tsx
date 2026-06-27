@@ -15,7 +15,8 @@ import type {
   ToolbarImportCtx,
 } from '@/components/flat-file/FlatFileGrid.types'
 import { getBackendUrl } from '@/lib/backend-url'
-import { FFFilterPanel, type FFFilterState, FF_FILTER_DEFAULT } from '@/app/products/_shared/FFFilterPanel'
+import { FFFilterPanel, type FFFilterState } from '@/app/products/_shared/FFFilterPanel'
+import { AMAZON_FILTER_DEFAULT as FF_FILTER_DEFAULT } from '@/app/products/_shared/flat-file-filter.types'
 import { FFSavedViews, type FFViewState } from '@/app/products/_shared/FFSavedViews'
 import { UnifiedFilterExtras, type UnifiedFilterState, UNIFIED_FILTER_DEFAULT, unifiedFilterActiveCount } from './UnifiedFilterExtras'
 
@@ -119,8 +120,8 @@ export default function UnifiedFlatFileClient({
       if (unifiedFilter.productTypes.length) params.set('productTypes', unifiedFilter.productTypes.join(','))
       if (unifiedFilter.status.length)      params.set('status', unifiedFilter.status.join(','))
       if (unifiedFilter.stockLevel !== 'all') params.set('stockLevel', unifiedFilter.stockLevel)
-      if (ffFilter.parentage !== 'any')     params.set('parentage', ffFilter.parentage)
-      if (ffFilter.hasAsin !== 'any')       params.set('hasAsin', ffFilter.hasAsin)
+      if (ffFilter.channel.parentage !== 'any')     params.set('parentage', ffFilter.channel.parentage)
+      if (ffFilter.channel.hasAsin !== 'any')       params.set('hasAsin', ffFilter.channel.hasAsin)
       for (const bn of unifiedFilter.browseNodeIds) params.append('browseNodeId', bn)
       if (unifiedFilter.ebayCategory)       params.set('ebayCategory', unifiedFilter.ebayCategory)
       if (cursor) params.set('cursor', cursor)
@@ -206,6 +207,9 @@ export default function UnifiedFlatFileClient({
 
   // ── renderBar3Left ────────────────────────────────────────────────
   // Matches eBay's pattern — shown in Bar 3 left slot
+  const [unifiedFilterOpen, setUnifiedFilterOpen] = useState(false)
+  const unifiedActiveCount = unifiedFilterActiveCount(unifiedFilter)
+
   const renderBar3Left = useCallback(() => (
     <div className="flex items-center gap-2">
       <FFFilterPanel
@@ -213,18 +217,34 @@ export default function UnifiedFlatFileClient({
         onOpenChange={setFilterOpen}
         value={ffFilter}
         onChange={setFfFilter}
-        extraActiveCount={unifiedFilterActiveCount(unifiedFilter)}
-        extraDimensions={
-          <UnifiedFilterExtras value={unifiedFilter} onChange={setUnifiedFilter} />
-        }
       />
+      {/* Unified (cross-channel) filter trigger */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setUnifiedFilterOpen((o) => !o)}
+          className={[
+            'inline-flex items-center gap-1.5 h-7 px-2 text-xs border rounded-md transition-colors',
+            unifiedActiveCount > 0
+              ? 'border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700',
+          ].join(' ')}
+        >
+          More filters{unifiedActiveCount > 0 && <span className="ml-1 text-[10px] bg-blue-600 text-white rounded px-1 py-0.5">{unifiedActiveCount}</span>}
+        </button>
+        {unifiedFilterOpen && (
+          <div className="absolute left-0 top-full mt-1 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-30 p-3 space-y-3">
+            <UnifiedFilterExtras value={unifiedFilter} onChange={setUnifiedFilter} />
+          </div>
+        )}
+      </div>
       <FFSavedViews
         currentState={currentViewState}
         onApply={handleApplyView}
         storageKey="unified-bulk-ops-views"
       />
     </div>
-  ), [filterOpen, ffFilter, unifiedFilter, currentViewState, handleApplyView])
+  ), [filterOpen, ffFilter, unifiedFilter, unifiedFilterOpen, unifiedActiveCount, currentViewState, handleApplyView])
 
   // ── renderPushExtras ──────────────────────────────────────────────
   // Sub-page links in Bar 1 (right side, after Save button)

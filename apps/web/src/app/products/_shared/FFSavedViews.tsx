@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Bookmark, BookMarked, Check, ChevronDown, Plus, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { FFFilterState } from './FFFilterPanel'
+import { AMAZON_FILTER_DEFAULT } from './flat-file-filter.types'
 import type { ConditionalRule } from '@/app/_shared/bulk-edit/conditional-format'
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -41,29 +42,27 @@ function saveViews(storageKey: string, views: FFSavedView[]) {
 
 // ── Built-in views ─────────────────────────────────────────────────────
 
-const FF_FILTER_DEFAULT: FFFilterState = { parentage: 'any', hasAsin: 'any', missingRequired: false }
-
 const BUILT_IN_VIEWS: FFSavedView[] = [
   {
     id: 'builtin-default',
     name: 'Default',
     isBuiltIn: true,
     createdAt: 0,
-    state: { closedGroups: [], ffFilter: FF_FILTER_DEFAULT, sortConfig: [], cfRules: [], frozenColCount: 1 },
+    state: { closedGroups: [], ffFilter: AMAZON_FILTER_DEFAULT, sortConfig: [], cfRules: [], frozenColCount: 1 },
   },
   {
     id: 'builtin-missing',
     name: 'Missing required fields',
     isBuiltIn: true,
     createdAt: 0,
-    state: { closedGroups: [], ffFilter: { parentage: 'any', hasAsin: 'any', missingRequired: true }, sortConfig: [], cfRules: [], frozenColCount: 1 },
+    state: { closedGroups: [], ffFilter: { missingRequired: true, channel: { parentage: 'any', hasAsin: 'any' } }, sortConfig: [], cfRules: [], frozenColCount: 1 },
   },
   {
     id: 'builtin-parents',
     name: 'Parents only',
     isBuiltIn: true,
     createdAt: 0,
-    state: { closedGroups: [], ffFilter: { parentage: 'parent', hasAsin: 'any', missingRequired: false }, sortConfig: [], cfRules: [], frozenColCount: 1 },
+    state: { closedGroups: [], ffFilter: { missingRequired: false, channel: { parentage: 'parent', hasAsin: 'any' } }, sortConfig: [], cfRules: [], frozenColCount: 1 },
   },
 ]
 

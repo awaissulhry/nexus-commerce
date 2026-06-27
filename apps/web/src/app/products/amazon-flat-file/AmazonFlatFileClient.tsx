@@ -14,7 +14,8 @@ import {
 import dynamic from 'next/dynamic'
 import { evaluateRule, TONE_CLASSES, type ConditionalRule } from '@/app/_shared/bulk-edit/conditional-format'
 import { type FindCell } from '@/app/_shared/bulk-edit/find-replace'
-import { FF_FILTER_DEFAULT, type FFFilterState } from '../_shared/FFFilterPanel'
+import { type FFFilterState } from '../_shared/FFFilterPanel'
+import { AMAZON_FILTER_DEFAULT as FF_FILTER_DEFAULT } from '../_shared/flat-file-filter.types'
 import { FFSavedViews, type FFViewState } from '../_shared/FFSavedViews'
 import { type PullDiffApplyResult } from './PullDiffModal'
 import { type ImportApplyResult } from './ImportWizardModal'
@@ -1166,15 +1167,15 @@ export default function AmazonFlatFileClient({
       })
     }
     // BF.3 — extended row filter
-    if (ffFilter.parentage !== 'any') {
+    if (ffFilter.channel.parentage !== 'any') {
       result = result.filter((row) => {
-        if (ffFilter.parentage === 'parent') return row.parentage_level === 'parent'
+        if (ffFilter.channel.parentage === 'parent') return row.parentage_level === 'parent'
         return row.parentage_level === 'child'
       })
     }
-    if (ffFilter.hasAsin !== 'any') {
+    if (ffFilter.channel.hasAsin !== 'any') {
       result = result.filter((row) =>
-        ffFilter.hasAsin === 'yes' ? !!row._asin : !row._asin,
+        ffFilter.channel.hasAsin === 'yes' ? !!row._asin : !row._asin,
       )
     }
     if (ffFilter.missingRequired && manifest) {
@@ -1223,7 +1224,7 @@ export default function AmazonFlatFileClient({
     // GX.5 — re-append the blank canvas at the bottom, but only in the default
     // (unfiltered) view; a search / row-filter result shouldn't be padded.
     const isDefaultView = !(searchQuery && searchMode === 'rows')
-      && ffFilter.parentage === 'any' && ffFilter.hasAsin === 'any' && !ffFilter.missingRequired
+      && ffFilter.channel.parentage === 'any' && ffFilter.channel.hasAsin === 'any' && !ffFilter.missingRequired
     if (isDefaultView) result = result === baseRows ? [...baseRows, ...ghostRows] : [...result, ...ghostRows]
 
     displayRowsRef.current = result
