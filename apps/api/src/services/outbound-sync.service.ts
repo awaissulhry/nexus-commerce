@@ -1028,7 +1028,12 @@ export class OutboundSyncService {
       };
     }
 
-    // 5. Dry-run short-circuit (parity with syncToEbay — no membership writeback on a no-op)
+    // 5. Dry-run short-circuit.
+    //    INTENTIONAL divergence from the Inventory-API sibling (syncToEbay):
+    //    we treat `sandbox` the same as `dry-run` here because `callTradingApi`
+    //    (Phase 1) has its own NEXUS_EBAY_REAL_API / EBAY_SANDBOX gate and would
+    //    otherwise return a fake "DRYRUN-" success that we'd mis-mark as a real
+    //    push.  Collapsing both modes here avoids that false-green.
     if (mode === "dry-run" || mode === "sandbox") {
       recordEbayOutcome(connection.id, marketplaceId, true);
       writeAttemptLog({

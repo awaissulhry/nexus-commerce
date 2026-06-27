@@ -137,6 +137,14 @@ export async function enqueueSharedTradingFanout(
 
   await db.outboundSyncQueue.createMany({ data: rows })
 
+  // Re-read the rows we just enqueued so we can return their DB ids to the
+  // caller for BullMQ dispatch.
+  // `channelListingId: null` is essential: the same transaction may have also
+  // enqueued ChannelListing rows for this product; keeping this scope to null
+  // isolates the shared-SKU rows and prevents id collisions.
+  // A same-millisecond `createdAt` tie across rows is harmless — BullMQ
+  // deduplicates by jobId and the push is idempotent; the backstop drain
+  // heals any row that is missed here.
   const justEnqueued = (await db.outboundSyncQueue.findMany({
     where: {
       productId: args.productId,

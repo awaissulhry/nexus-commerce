@@ -99,6 +99,6 @@ describe('syncToEbay TRADING branch', () => {
     const res = await (svc as any).syncToEbay(queueItem)
     expect(spy).not.toHaveBeenCalled()
     expect(res.success).toBe(true) // dry-run reports success-but-dryRun
-    expect(res.dryRun ?? res.status === 'SUCCESS').toBeTruthy()
+    expect(res.dryRun).toBe(true)
   })
 })
