@@ -26,7 +26,8 @@ inconsistencies. The good parts first, as the baseline we must not regress:
 
 | # | Severity | Finding | Evidence |
 |---|---|---|---|
-| 1 | Structural | **Semantic token tier documented but never built.** `NAMING.md`, `GOVERNANCE.md`, `TOKEN-RECONCILIATION.md` say components consume a *semantic* layer (`--text-primary`, `--surface-card`, `--status-*`). Reality: components consume `--h10-*` directly, which governance explicitly forbids. | `styles/tokens.css` = **116 `--h10-*` vars, 1 semantic var**. |
+| 1 | Structural | **Semantic tier exists but is `--h10-`-named, not platform-named.** `NAMING.md`, `GOVERNANCE.md`, `TOKEN-RECONCILIATION.md` say components consume the platform's semantic names (`--text-primary`, `--surface-card`, `--status-*`). Reality: an internal semantic Tier 2 exists (`--h10-text`, `--h10-bg`, `--h10-border`, `--h10-primary`, `--h10-success-soft`…) and components mostly consume *that* — so "consume semantic, not primitive" is largely honored — but under the `--h10-` prefix, never the platform names. Convergence with the ~290 platform pages is therefore not wired. | `styles/tokens.css` `:root` is explicitly 3-tiered (ramps → semantic roles → component tokens); **124 distinct `--h10-*`** are consumed by component CSS; **0** platform-semantic names are. |
+| 1b | Mechanical | **~13 genuine raw-ramp reaches.** A handful of component CSS rules skip the semantic tier and consume Tier-1 ramps directly — e.g. `.h10-ds-tag.{neutral,info,positive,danger}` use `var(--h10-green-700)`, `var(--h10-blue-700)`, `var(--h10-grey-700)` (`primitives.css:147-151`), plus ~8 more `var(--h10-grey-NNN)` reaches in `primitives/components/patterns.css`. *This* is the real "consume primitive" violation to fix. | 13 hits across the 3 component stylesheets. |
 | 2 | Structural | **Two parallel token sources, no generator.** `tokens/*.ts` (JS API) and `styles/tokens.css` (render source) are hand-maintained separately; governance claims "TS generates CSS". | No generator exists (only a lint). Values agree today (`#1f6fde` both) but nothing enforces it. |
 | 3 | Mechanical | **One outlier component.** `TagInput.tsx` bypasses the system — raw Tailwind palette + hand-rolled `dark:`, no `.h10-ds-*`. | 8 raw-palette hits (`bg-blue-100`, `text-slate-800`…), 7 `dark:` variants; it is the *only* such file. |
 | 4 | Mechanical | **Status/color-role API uses three value vocabularies + a mislabeled component.** | Pill `ok\|warn\|arch\|err`, Tag `neutral\|info\|positive\|warning\|danger`, Toast `info\|success\|error`, Banner `info\|warning\|error\|success`. Badge `BadgeTone = sp\|sd\|sb\|auto\|manual` is the **ad-program badge**, not a tone. `Kbd` exported without its type. `size` scales differ. |
@@ -142,8 +143,10 @@ becomes lint:
 
 Extend `tools/token-guard.mjs` and CI:
 
-- **D1.** Fail on `--h10-*` consumed inside component CSS (force semantic), with a
-  documented allowlist for genuine raw-scale needs.
+- **D1.** Fail on **raw-ramp** usage inside component CSS —
+  `var(--h10-{grey,blue,green,red,amber,purple,cyan}-NNN)` — forcing the semantic
+  or platform tier. DS-specific `--h10-*` component tokens (radius/shadow/focus/
+  pill/badge/rail) remain allowed; this guard targets only the numbered ramps.
 - **D2.** Fail on raw Tailwind palette classes in DS `.tsx` (would have caught
   TagInput).
 - **D3.** API-consistency check: every component exports its types; `tone`/`size`
@@ -210,8 +213,10 @@ screenshot-diff → human visual review → commit & push`. Commit with
 - Contract C1–C6 holds for every primitive/component/pattern, enforced by lint
   where feasible.
 - One token source (TS); `tokens.css` generated; zero possible drift.
-- Components consume semantic tokens; zero `--h10-*` consumed directly (allowlist
-  aside); zero raw Tailwind palette in DS `.tsx`.
+- Components consume **platform-semantic** names for the core color roles
+  (text/surface/border/status/primary); **never the raw ramps** (`--h10-*-NNN`)
+  directly; DS-specific `--h10-*` component tokens (radius/shadow/focus/pill/
+  badge/rail) remain legitimate. Zero raw Tailwind palette in DS `.tsx`.
 - One `tone` vocabulary; Badge correctly named; `size` standardized; all types
   exported.
 - Docs match code; `docs/AUDIT.md` maps the whole system.
