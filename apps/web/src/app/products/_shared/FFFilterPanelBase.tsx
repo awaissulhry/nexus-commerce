@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { type ReactNode, useEffect, useRef } from 'react'
 import { Button } from '@/design-system/primitives/Button'
 import { cn } from '@/lib/utils'
 
@@ -34,16 +34,42 @@ export interface FFFilterPanelBaseProps {
 
 export function FFFilterPanelBase({
   open,
-  onOpenChange: _onOpenChange,
+  onOpenChange,
   missingRequired,
   onMissingRequiredChange,
   children,
   onReset,
   activeCount,
 }: FFFilterPanelBaseProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+
+    function handleMouseDown(e: MouseEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) {
+        onOpenChange(false)
+      }
+    }
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        onOpenChange(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleMouseDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open, onOpenChange])
+
   if (!open) return null
   return (
     <div
+      ref={containerRef}
       role="dialog"
       aria-label="Filter rows"
       className="absolute left-3 top-10 z-30 w-72 rounded-xl border border-default bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"

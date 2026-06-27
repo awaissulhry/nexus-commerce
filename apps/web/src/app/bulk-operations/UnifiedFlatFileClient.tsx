@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useSearchParams } from 'next/navigation'
 import { CalendarClock, Download, History as HistoryIcon, Layers, Upload, Wand2 } from 'lucide-react'
@@ -209,6 +209,30 @@ export default function UnifiedFlatFileClient({
   // Matches eBay's pattern — shown in Bar 3 left slot
   const [unifiedFilterOpen, setUnifiedFilterOpen] = useState(false)
   const unifiedActiveCount = unifiedFilterActiveCount(unifiedFilter)
+  const unifiedFilterRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!unifiedFilterOpen) return
+
+    function handleMouseDown(e: MouseEvent) {
+      if (!unifiedFilterRef.current?.contains(e.target as Node)) {
+        setUnifiedFilterOpen(false)
+      }
+    }
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setUnifiedFilterOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleMouseDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [unifiedFilterOpen])
 
   const renderBar3Left = useCallback(() => (
     <div className="flex items-center gap-2">
@@ -219,7 +243,7 @@ export default function UnifiedFlatFileClient({
         onChange={setFfFilter}
       />
       {/* Unified (cross-channel) filter trigger */}
-      <div className="relative">
+      <div ref={unifiedFilterRef} className="relative">
         <button
           type="button"
           onClick={() => setUnifiedFilterOpen((o) => !o)}
