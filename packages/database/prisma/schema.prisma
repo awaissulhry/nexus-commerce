@@ -13421,3 +13421,25 @@ model AmazonReportRun {
   @@index([marketplace, reportType])
   @@index([status, requestedAt(sort: Desc)])
 }
+
+/// Maps one shared variant SKU to every eBay listing (ItemID) that contains it,
+/// so a stock change can fan out to all of them. See docs/superpowers/specs/2026-06-27-ebay-shared-variant-sku-sync-design.md
+model SharedListingMembership {
+  id                 String    @id @default(cuid())
+  marketplace        String // 'IT' | 'DE' | 'FR' | 'ES' | 'UK'
+  sku                String // shared variant SKU (eBay Custom Label)
+  itemId             String // eBay ItemID of the listing containing this variant
+  parentSku          String // parent listing grouping (operator-facing)
+  productId          String? // Nexus product whose StockLevel feeds this SKU
+  variationSpecifics Json // { "Size": "M", "Color": "Nero" }
+  status             String    @default("ACTIVE") // ACTIVE | ENDED
+  lastQtyPushed      Int?
+  lastPushedAt       DateTime?
+  lastError          String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([marketplace, itemId, sku])
+  @@index([sku, marketplace])
+  @@index([productId])
+}
