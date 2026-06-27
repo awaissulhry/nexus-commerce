@@ -65,6 +65,8 @@ export interface UseFlatFileCoreReturn<TRow extends BaseRow, TFilterDims> {
 
   // ── Sort ───────────────────────────────────────────────────────────────
   sortConfig: SortLevel[]
+  /** Raw state setter — does NOT write to localStorage. */
+  setSortConfig: Dispatch<SetStateAction<SortLevel[]>>
   /** Persist and update sort levels. */
   persistSort: (next: SortLevel[]) => void
   sortPanelOpen: boolean
@@ -72,6 +74,8 @@ export interface UseFlatFileCoreReturn<TRow extends BaseRow, TFilterDims> {
 
   // ── Conditional formatting ─────────────────────────────────────────────
   cfRules: ConditionalRule[]
+  /** Raw state setter — does NOT write to localStorage. */
+  setCfRules: Dispatch<SetStateAction<ConditionalRule[]>>
   /** Persist and update CF rules. */
   persistCfRules: (next: ConditionalRule[]) => void
   conditionalOpen: boolean
@@ -80,6 +84,8 @@ export interface UseFlatFileCoreReturn<TRow extends BaseRow, TFilterDims> {
   // ── Filter ─────────────────────────────────────────────────────────────
   ffFilter: GenericFFFilterState<TFilterDims>
   setFfFilter: Dispatch<SetStateAction<GenericFFFilterState<TFilterDims>>>
+  filterOpen: boolean
+  setFilterOpen: Dispatch<SetStateAction<boolean>>
 
   // ── Smart paste ────────────────────────────────────────────────────────
   smartPasteEnabled: boolean
@@ -104,8 +110,8 @@ export interface UseFlatFileCoreReturn<TRow extends BaseRow, TFilterDims> {
   /** Persisted display order of group IDs (empty = natural order from template). */
   groupOrder: string[]
   applyGroupSettings: (nextClosed: Set<string>, nextOrder: string[]) => void
-  columnGroupModalOpen: boolean
-  setColumnGroupModalOpen: Dispatch<SetStateAction<boolean>>
+  columnsOpen: boolean
+  setColumnsOpen: Dispatch<SetStateAction<boolean>>
 
   // ── Panel open states ──────────────────────────────────────────────────
   findReplaceOpen: boolean
@@ -207,6 +213,7 @@ export function useFlatFileCore<TRow extends BaseRow, TFilterDims>({
 
   // ── Filter ────────────────────────────────────────────────────────────
   const [ffFilter, setFfFilter] = useState<GenericFFFilterState<TFilterDims>>(initialFilter)
+  const [filterOpen, setFilterOpen] = useState(false)
 
   // ── Smart paste ───────────────────────────────────────────────────────
   const [smartPasteEnabled, setSmartPasteEnabled] = useState(() => {
@@ -260,7 +267,7 @@ export function useFlatFileCore<TRow extends BaseRow, TFilterDims>({
       localStorage.setItem(`${storageKey}-group-order`, JSON.stringify(nextOrder))
     } catch { /* ignore */ }
   }, [storageKey])
-  const [columnGroupModalOpen, setColumnGroupModalOpen] = useState(false)
+  const [columnsOpen, setColumnsOpen] = useState(false)
 
   // ── Panel open states ─────────────────────────────────────────────────
   const [findReplaceOpen, setFindReplaceOpen] = useState(false)
@@ -293,14 +300,14 @@ export function useFlatFileCore<TRow extends BaseRow, TFilterDims>({
   return {
     rows, setRows, updateCell, realRows, dirtyRows, hasDirty, pushSnapshot,
     canUndo, canRedo, handleUndo, handleRedo,
-    sortConfig, persistSort, sortPanelOpen, setSortPanelOpen,
-    cfRules, persistCfRules, conditionalOpen, setConditionalOpen,
-    ffFilter, setFfFilter,
+    sortConfig, setSortConfig, persistSort, sortPanelOpen, setSortPanelOpen,
+    cfRules, setCfRules, persistCfRules, conditionalOpen, setConditionalOpen,
+    ffFilter, setFfFilter, filterOpen, setFilterOpen,
     smartPasteEnabled, toggleSmartPaste,
     showRowImages, rowImageSize, toggleRowImages, changeImageSize,
     columnGroups, setColumnGroups,
     closedGroups, groupOrder, applyGroupSettings,
-    columnGroupModalOpen, setColumnGroupModalOpen,
+    columnsOpen, setColumnsOpen,
     findReplaceOpen, setFindReplaceOpen,
     validationOpen, setValidationOpen,
     aiPanelOpen, setAiPanelOpen,
