@@ -83,21 +83,25 @@
   padding: 3px 9px;
   white-space: nowrap;
 }
-.h10-ds-pill.ok {
-  color: var(--h10-pill-ok-fg);
-  background: var(--h10-pill-ok-bg);
+.h10-ds-pill.success {
+  color: var(--h10-pill-success-fg);
+  background: var(--h10-pill-success-bg);
 }
-.h10-ds-pill.warn {
-  color: var(--h10-pill-warn-fg);
-  background: var(--h10-pill-warn-bg);
+.h10-ds-pill.warning {
+  color: var(--h10-pill-warning-fg);
+  background: var(--h10-pill-warning-bg);
 }
-.h10-ds-pill.arch {
-  color: var(--h10-pill-arch-fg);
-  background: var(--h10-pill-arch-bg);
+.h10-ds-pill.neutral {
+  color: var(--h10-pill-neutral-fg);
+  background: var(--h10-pill-neutral-bg);
 }
-.h10-ds-pill.err {
-  color: var(--h10-pill-err-fg);
-  background: var(--h10-pill-err-bg);
+.h10-ds-pill.danger {
+  color: var(--h10-pill-danger-fg);
+  background: var(--h10-pill-danger-bg);
+}
+.h10-ds-pill.info {
+  color: var(--status-info-strong);
+  background: var(--status-info-soft);
 }
 
 /* ── Program / targeting badge ───────────────────────────────────── */
@@ -146,9 +150,44 @@
 }
 .h10-ds-tag.neutral { color: var(--h10-text-strong); background: var(--surface-sunken); }
 .h10-ds-tag.info { color: var(--status-info-strong); background: var(--status-info-soft); }
-.h10-ds-tag.positive { color: var(--status-success-strong); background: var(--status-success-soft); }
+.h10-ds-tag.success { color: var(--status-success-strong); background: var(--status-success-soft); }
 .h10-ds-tag.warning { color: var(--h10-amber-text); background: var(--status-warning-soft); }
 .h10-ds-tag.danger { color: var(--status-danger-strong); background: var(--status-danger-soft); }
+
+/* ── TagInput (tag-based free entry + suggestion menu) ───────────── */
+.h10-ds-taginput { position: relative; }
+.h10-ds-taginput-field {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  min-height: 36px; padding: 6px 8px; cursor: text;
+  background: var(--surface-card); border: 1px solid var(--border-strong);
+  border-radius: var(--h10-radius-lg);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-taginput-field:focus-within { border-color: var(--color-primary); box-shadow: var(--h10-focus-ring); }
+.h10-ds-taginput.disabled .h10-ds-taginput-field { opacity: .6; pointer-events: none; }
+.h10-ds-taginput-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px;
+  font-size: 12px; font-weight: 550; border-radius: var(--h10-radius-md);
+  color: var(--text-link); background: var(--color-primary-soft);
+}
+.h10-ds-taginput-chip button { color: var(--text-link); display: inline-flex; border: none; background: none; padding: 0; cursor: pointer; }
+.h10-ds-taginput-chip button:hover { color: var(--h10-primary-hover); }
+.h10-ds-taginput-field > input {
+  flex: 1; min-width: 80px; border: 0; outline: none; background: transparent;
+  font: inherit; font-size: 12px; color: var(--text-primary);
+}
+.h10-ds-taginput-field > input::placeholder { color: var(--text-tertiary); }
+.h10-ds-taginput-menu {
+  position: absolute; z-index: 50; left: 0; right: 0; top: 100%; margin-top: 4px;
+  max-height: 160px; overflow-y: auto; padding: 4px 0; margin: 4px 0 0; list-style: none;
+  background: var(--surface-card); border: 1px solid var(--border-default);
+  border-radius: var(--h10-radius-lg); box-shadow: var(--h10-shadow-menu);
+}
+.h10-ds-taginput-menu button {
+  display: block; width: 100%; text-align: left; padding: 6px 12px; border: none;
+  font: inherit; font-size: 12px; color: var(--text-secondary); background: transparent; cursor: pointer;
+}
+.h10-ds-taginput-menu button:hover { background: var(--surface-sunken); }
 
 /* ── Text field (Input: plain / search / € / %) ──────────────────── */
 .h10-ds-field {

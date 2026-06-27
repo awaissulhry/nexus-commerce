@@ -44,8 +44,8 @@ import {
   Kbd,
   Divider,
   SegmentedControl,
-  type BadgeTone,
-  type PillStatus,
+  type AdProgram,
+  type Tone,
 } from '@/design-system/primitives'
 import {
   Card as DSCard,
@@ -175,20 +175,20 @@ const HEAT_DATA = DAYS.map((_, d) =>
 interface GridRow {
   id: string
   name: string
-  status: PillStatus
-  program: BadgeTone
+  status: Tone
+  program: AdProgram
   spend: number
   sales: number
   acos: number
 }
 const GRID_ROWS: GridRow[] = [
-  { id: '1', name: 'Helmets · Auto', status: 'ok', program: 'sp', spend: 1284, sales: 8640, acos: 14.9 },
-  { id: '2', name: 'Brand Defense', status: 'ok', program: 'sb', spend: 642, sales: 3120, acos: 20.6 },
-  { id: '3', name: 'Retargeting', status: 'warn', program: 'sd', spend: 318, sales: 1090, acos: 29.2 },
-  { id: '4', name: 'Gloves · Manual', status: 'arch', program: 'sp', spend: 96, sales: 410, acos: 23.4 },
+  { id: '1', name: 'Helmets · Auto', status: 'success', program: 'sp', spend: 1284, sales: 8640, acos: 14.9 },
+  { id: '2', name: 'Brand Defense', status: 'success', program: 'sb', spend: 642, sales: 3120, acos: 20.6 },
+  { id: '3', name: 'Retargeting', status: 'warning', program: 'sd', spend: 318, sales: 1090, acos: 29.2 },
+  { id: '4', name: 'Gloves · Manual', status: 'neutral', program: 'sp', spend: 96, sales: 410, acos: 23.4 },
 ]
 const gridSum = (k: 'spend' | 'sales') => GRID_ROWS.reduce((s, r) => s + r[k], 0)
-const STATUS_LABEL: Record<PillStatus, string> = { ok: 'Active', warn: 'Paused', arch: 'Archived', err: 'Error' }
+const STATUS_LABEL: Record<Tone, string> = { success: 'Active', warning: 'Paused', neutral: 'Archived', danger: 'Error', info: 'Info' }
 const GRID_COLS: Column<GridRow>[] = [
   {
     key: 'name',
@@ -199,12 +199,12 @@ const GRID_COLS: Column<GridRow>[] = [
     sortValue: (r) => r.name,
     render: (r) => (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-        <Badge tone={r.program}>{r.program.toUpperCase()}</Badge>
+        <Badge program={r.program}>{r.program.toUpperCase()}</Badge>
         <span style={{ fontWeight: 600 }}>{r.name}</span>
       </span>
     ),
   },
-  { key: 'status', label: 'Status', render: (r) => <Pill status={r.status}>{STATUS_LABEL[r.status]}</Pill> },
+  { key: 'status', label: 'Status', render: (r) => <Pill tone={r.status}>{STATUS_LABEL[r.status]}</Pill> },
   { key: 'spend', label: 'Spend', align: 'right', sortable: true, sortValue: (r) => r.spend, render: (r) => `€${r.spend.toLocaleString('en-IE')}`, total: `€${gridSum('spend').toLocaleString('en-IE')}` },
   { key: 'sales', label: 'Sales', align: 'right', sortable: true, sortValue: (r) => r.sales, render: (r) => `€${r.sales.toLocaleString('en-IE')}`, total: `€${gridSum('sales').toLocaleString('en-IE')}` },
   { key: 'acos', label: 'ACOS', align: 'right', sortable: true, sortValue: (r) => r.acos, render: (r) => `${r.acos}%` },
@@ -322,18 +322,18 @@ export function TokenCatalog() {
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Status pill</div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <Pill status="ok">Active</Pill>
-            <Pill status="warn">Paused</Pill>
-            <Pill status="arch">Archived</Pill>
+            <Pill tone="success">Active</Pill>
+            <Pill tone="warning">Paused</Pill>
+            <Pill tone="neutral">Archived</Pill>
           </div>
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Program / targeting badge</div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <Badge tone="sp">SP</Badge>
-            <Badge tone="sd">SD</Badge>
-            <Badge tone="sb">SB</Badge>
-            <Badge tone="auto">A</Badge>
-            <Badge tone="manual">M</Badge>
+            <Badge program="sp">SP</Badge>
+            <Badge program="sd">SD</Badge>
+            <Badge program="sb">SB</Badge>
+            <Badge program="auto">A</Badge>
+            <Badge program="manual">M</Badge>
           </div>
         </Card>
 
@@ -706,7 +706,7 @@ export function TokenCatalog() {
           <DetailHeader
             backLabel="Back to Ad Manager"
             onBack={() => {}}
-            badge={<Badge tone="auto">A</Badge>}
+            badge={<Badge program="auto">A</Badge>}
             title="Helmets · Auto"
             actions={<Button variant="primary">Edit</Button>}
           />

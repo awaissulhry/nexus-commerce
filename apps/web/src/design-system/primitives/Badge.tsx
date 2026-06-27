@@ -1,8 +1,14 @@
 import type { ReactNode } from 'react'
 
-/** Program (Sponsored Products/Display/Brands) + targeting (Auto/Manual) chips. */
-export type BadgeTone = 'sp' | 'sd' | 'sb' | 'auto' | 'manual'
+/** Ad program (Sponsored Products/Display/Brands) + targeting (Auto/Manual). */
+export type AdProgram = 'sp' | 'sd' | 'sb' | 'auto' | 'manual'
 
-export function Badge({ tone, children }: { tone: BadgeTone; children: ReactNode }) {
-  return <span className={`h10-ds-badge ${tone}`}>{children}</span>
+export interface BadgeProps {
+  program: AdProgram
+  className?: string
+  children: ReactNode
+}
+
+export function Badge({ program, className, children }: BadgeProps) {
+  return <span className={`h10-ds-badge ${program}${className ? ` ${className}` : ''}`}>{children}</span>
 }

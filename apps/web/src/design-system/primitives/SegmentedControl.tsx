@@ -7,6 +7,7 @@
  * `role="radiogroup"` with ArrowLeft/Right roving selection. Requires `styles/primitives.css`.
  */
 import { useRef, type ReactNode, type KeyboardEvent } from 'react'
+import type { Size } from './size'
 
 export interface SegmentedOption {
   value: string
@@ -17,7 +18,7 @@ export interface SegmentedControlProps {
   options: SegmentedOption[]
   value: string
   onChange: (value: string) => void
-  size?: 'sm' | 'md'
+  size?: Extract<Size, 'sm' | 'md'>
   disabled?: boolean
 }
 

@@ -2,17 +2,16 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-
-export type ToastVariant = 'info' | 'success' | 'error'
+import type { Tone } from '../primitives/tone'
 
 interface ToastItem {
   id: number
   message: ReactNode
-  variant: ToastVariant
+  tone: Tone
 }
 
-interface ToastApi {
-  toast: (message: ReactNode, variant?: ToastVariant) => void
+export interface ToastApi {
+  toast: (message: ReactNode, tone?: Tone) => void
 }
 
 const ToastCtx = createContext<ToastApi | null>(null)
@@ -28,9 +27,9 @@ export function ToastProvider({ children, duration = 4000 }: { children: ReactNo
   useEffect(() => setMounted(true), [])
 
   const toast = useCallback(
-    (message: ReactNode, variant: ToastVariant = 'info') => {
+    (message: ReactNode, tone: Tone = 'info') => {
       const id = nextId++
-      setItems((xs) => [...xs, { id, message, variant }])
+      setItems((xs) => [...xs, { id, message, tone }])
       setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), duration)
     },
     [duration],
@@ -43,7 +42,7 @@ export function ToastProvider({ children, duration = 4000 }: { children: ReactNo
         createPortal(
           <div className="h10-ds-toasts">
             {items.map((t) => (
-              <div key={t.id} className={`h10-ds-toast ${t.variant}`} role="status">
+              <div key={t.id} className={`h10-ds-toast ${t.tone}`} role="status">
                 <span className="dot" />
                 <span>{t.message}</span>
               </div>

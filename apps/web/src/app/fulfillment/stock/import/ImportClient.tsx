@@ -146,8 +146,8 @@ const TIER_LABEL: Record<ResolutionTier, string> = {
   UNRESOLVED: 'Unresolved',
 }
 
-const TIER_TONE: Record<ResolutionTier, 'positive' | 'info' | 'warning' | 'danger' | 'neutral'> = {
-  EXACT: 'positive',
+const TIER_TONE: Record<ResolutionTier, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
+  EXACT: 'success',
   ALIAS: 'info',
   FUZZY_NAME: 'warning',
   BARCODE: 'info',
@@ -342,10 +342,10 @@ function ImportWizardInner() {
     if (!parsedFile) return
     const idCol = Object.entries(colMap).find(([, v]) => v === 'identifier')?.[0]
     const qtyCol = Object.entries(colMap).find(([, v]) => v === 'quantity')?.[0]
-    if (!idCol || !qtyCol) { toast('Please map at least the Identifier and Quantity columns', 'error'); return }
+    if (!idCol || !qtyCol) { toast('Please map at least the Identifier and Quantity columns', 'danger'); return }
 
     const rows = buildRowsFromFile({ ...parsedFile, _fullRows: fullRows } as any, colMap)
-    if (rows.length === 0) { toast('No valid rows found after mapping', 'error'); return }
+    if (rows.length === 0) { toast('No valid rows found after mapping', 'danger'); return }
 
     setBusy(true)
     try {
@@ -359,7 +359,7 @@ function ImportWizardInner() {
       setResolvedRows(data.rows)
       setStep('RESOLVE')
     } catch (err) {
-      toast(err instanceof Error ? err.message : String(err), 'error')
+      toast(err instanceof Error ? err.message : String(err), 'danger')
     } finally {
       setBusy(false)
     }
@@ -402,7 +402,7 @@ function ImportWizardInner() {
       setPreviewRows(data.rows)
       setStep('PREVIEW')
     } catch (err) {
-      toast(err instanceof Error ? err.message : String(err), 'error')
+      toast(err instanceof Error ? err.message : String(err), 'danger')
     } finally {
       setBusy(false)
     }
@@ -430,7 +430,7 @@ function ImportWizardInner() {
       setApplyResult(data)
       setStep('APPLY')
     } catch (err) {
-      toast(err instanceof Error ? err.message : String(err), 'error')
+      toast(err instanceof Error ? err.message : String(err), 'danger')
     } finally {
       setBusy(false)
     }
@@ -942,11 +942,11 @@ function ImportWizardInner() {
                     {
                       key: 'status', label: t('stock.import.preview.colStatus'), width: 120,
                       render: (r) => r.error
-                        ? <Pill status="err"><span className="truncate max-w-[100px] block" title={r.error}>{r.error.slice(0, 30)}</span></Pill>
+                        ? <Pill tone="danger"><span className="truncate max-w-[100px] block" title={r.error}>{r.error.slice(0, 30)}</span></Pill>
                         : r.warnings?.length > 0
-                        ? <Pill status="warn">Warning</Pill>
-                        : r.productId ? <Pill status="ok">Ready</Pill>
-                        : <Pill status="arch">Skipped</Pill>,
+                        ? <Pill tone="warning">Warning</Pill>
+                        : r.productId ? <Pill tone="success">Ready</Pill>
+                        : <Pill tone="neutral">Skipped</Pill>,
                     },
                   ]}
                 />
@@ -1040,7 +1040,7 @@ function ImportWizardInner() {
                   {
                     key: 'source', label: t('stock.import.aliases.colSource'), width: 100,
                     render: (r) => (
-                      <Tag tone={r.source === 'MANUAL' ? 'info' : r.source === 'IMPORT' ? 'positive' : 'neutral'}>
+                      <Tag tone={r.source === 'MANUAL' ? 'info' : r.source === 'IMPORT' ? 'success' : 'neutral'}>
                         {r.source}
                       </Tag>
                     ),
@@ -1116,7 +1116,7 @@ function ImportWizardInner() {
                   {
                     key: 'status', label: 'Status', width: 100,
                     render: (r) => (
-                      <Pill status={r.status === 'APPLIED' ? 'ok' : r.status === 'PARTIAL' ? 'warn' : r.status === 'FAILED' ? 'err' : 'arch'}>
+                      <Pill tone={r.status === 'APPLIED' ? 'success' : r.status === 'PARTIAL' ? 'warning' : r.status === 'FAILED' ? 'danger' : 'neutral'}>
                         {r.status}
                       </Pill>
                     ),

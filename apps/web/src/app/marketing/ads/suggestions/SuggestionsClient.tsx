@@ -59,7 +59,7 @@ const ENTITY_LABEL: Record<string, string> = { CAMPAIGN: 'Campaign', AD_TARGET: 
 const ENTITY_TONE: Record<string, TagTone> = { CAMPAIGN: 'info', AD_TARGET: 'neutral', SEARCH_TERM: 'neutral', MARKETPLACE: 'neutral' }
 const ACTION_LABEL: Record<string, string> = { budget_apply: 'Budget', placement_apply: 'Placement', bid_apply: 'Bid', dayparting_apply: 'Dayparting', add_negative_exact: 'Add negative', promote_to_exact: 'Promote to exact', harvest_and_negate: 'Harvest & negate' }
 // Proposed-action sentiment → Tag tone. promote/harvest are wins (positive); negate/down are guarding (warning).
-const ACTION_TONE: Record<string, TagTone> = { promote_to_exact: 'positive', harvest_and_negate: 'positive', add_negative_exact: 'warning', bid_apply: 'info', budget_apply: 'info', placement_apply: 'info', dayparting_apply: 'info' }
+const ACTION_TONE: Record<string, TagTone> = { promote_to_exact: 'success', harvest_and_negate: 'success', add_negative_exact: 'warning', bid_apply: 'info', budget_apply: 'info', placement_apply: 'info', dayparting_apply: 'info' }
 const ago = (iso: string) => { const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)}m ago` : s < 86400 ? `${Math.floor(s / 3600)}h ago` : `${Math.floor(s / 86400)}d ago` }
 
 const srcOf = (s: Suggestion): SuggestionSource => s.source ?? { href: null, label: s.entityName ?? s.entityId, marketplace: s.marketplace }
@@ -348,8 +348,8 @@ function SuggestionsInner() {
     clear(); setBulkBusy(false); setBulkProg(null)
     const verb = kind === 'apply' ? 'Approved' : kind === 'restore' ? 'Restored' : 'Dismissed'
     const base = `${verb} ${okIds.length} ${okIds.length === 1 ? 'suggestion' : 'suggestions'}${fail ? ` · ${fail} failed` : ''}`
-    if (kind === 'dismiss' && okIds.length) toast(<>{base} · <button type="button" className="h10-sug-undo" onClick={() => void restore(okIds)}>Undo</button></>, fail ? 'error' : 'info')
-    else toast(base, fail ? 'error' : 'success')
+    if (kind === 'dismiss' && okIds.length) toast(<>{base} · <button type="button" className="h10-sug-undo" onClick={() => void restore(okIds)}>Undo</button></>, fail ? 'danger' : 'info')
+    else toast(base, fail ? 'danger' : 'success')
   }, [bulkBusy, post, toast, restore])
 
   // Summary tiles — addressable impact at a glance.

@@ -110,14 +110,14 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--h10-info', value: 'var(--h10-blue-600)' },
 
   // status pills
-  { section: 'status pills', name: '--h10-pill-ok-fg', value: 'var(--h10-blue-900)' },
-  { name: '--h10-pill-ok-bg', value: pill.ok.bg },
-  { name: '--h10-pill-warn-fg', value: 'var(--h10-amber-text)' },
-  { name: '--h10-pill-warn-bg', value: 'var(--h10-amber-soft)' },
-  { name: '--h10-pill-arch-fg', value: pill.arch.fg },
-  { name: '--h10-pill-arch-bg', value: 'var(--h10-grey-100)' },
-  { name: '--h10-pill-err-fg', value: 'var(--h10-danger-strong)' },
-  { name: '--h10-pill-err-bg', value: 'var(--h10-danger-soft)' },
+  { section: 'status pills (tone-named: success/warning/neutral/danger)', name: '--h10-pill-success-fg', value: 'var(--h10-blue-900)' },
+  { name: '--h10-pill-success-bg', value: pill.ok.bg },
+  { name: '--h10-pill-warning-fg', value: 'var(--h10-amber-text)' },
+  { name: '--h10-pill-warning-bg', value: 'var(--h10-amber-soft)' },
+  { name: '--h10-pill-neutral-fg', value: pill.arch.fg },
+  { name: '--h10-pill-neutral-bg', value: 'var(--h10-grey-100)' },
+  { name: '--h10-pill-danger-fg', value: 'var(--h10-danger-strong)' },
+  { name: '--h10-pill-danger-bg', value: 'var(--h10-danger-soft)' },
 
   // ── Tier 3: program / targeting chips ────────────────────────────
   { section: 'Tier 3: program / targeting chips', name: '--h10-badge-sp-fg', value: 'var(--h10-purple-700)' },

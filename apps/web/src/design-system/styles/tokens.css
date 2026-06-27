@@ -92,15 +92,15 @@
   --h10-info-soft: var(--h10-blue-100);
   --h10-info: var(--h10-blue-600);
 
-  /* ── status pills ── */
-  --h10-pill-ok-fg: var(--h10-blue-900);
-  --h10-pill-ok-bg: #d2e6fc;
-  --h10-pill-warn-fg: var(--h10-amber-text);
-  --h10-pill-warn-bg: var(--h10-amber-soft);
-  --h10-pill-arch-fg: #6b7480;
-  --h10-pill-arch-bg: var(--h10-grey-100);
-  --h10-pill-err-fg: var(--h10-danger-strong);
-  --h10-pill-err-bg: var(--h10-danger-soft);
+  /* ── status pills (tone-named: success/warning/neutral/danger) ── */
+  --h10-pill-success-fg: var(--h10-blue-900);
+  --h10-pill-success-bg: #d2e6fc;
+  --h10-pill-warning-fg: var(--h10-amber-text);
+  --h10-pill-warning-bg: var(--h10-amber-soft);
+  --h10-pill-neutral-fg: #6b7480;
+  --h10-pill-neutral-bg: var(--h10-grey-100);
+  --h10-pill-danger-fg: var(--h10-danger-strong);
+  --h10-pill-danger-bg: var(--h10-danger-soft);
 
   /* ── Tier 3: program / targeting chips ── */
   --h10-badge-sp-fg: var(--h10-purple-700);

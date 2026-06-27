@@ -71,7 +71,7 @@ const BLANK_FORM: FormState = {
 
 const TYPE_TONE: Record<LocationType, TagTone> = {
   WAREHOUSE: 'info',
-  AMAZON_FBA: 'positive',
+  AMAZON_FBA: 'success',
   CHANNEL_RESERVED: 'warning',
   SHOPIFY_LOCATION: 'neutral',
 }
@@ -107,7 +107,7 @@ function LocationsInner() {
       const data = await res.json()
       setLocations(data.locations ?? [])
     } catch (err) {
-      toast(t('stock.locations.errorLoad'), 'error')
+      toast(t('stock.locations.errorLoad'), 'danger')
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -213,7 +213,7 @@ function LocationsInner() {
       setDeactivatingLoc(null)
       await fetchLocations()
     } catch (err) {
-      toast(err instanceof Error ? err.message : String(err), 'error')
+      toast(err instanceof Error ? err.message : String(err), 'danger')
     } finally {
       setDeactivating(false)
     }
@@ -284,7 +284,7 @@ function LocationsInner() {
       label: t('stock.locations.col.status'),
       width: 90,
       render: (row) => (
-        <Pill status={row.isActive ? 'ok' : 'arch'}>
+        <Pill tone={row.isActive ? 'success' : 'neutral'}>
           {row.isActive ? t('stock.locations.status.active') : t('stock.locations.status.inactive')}
         </Pill>
       ),

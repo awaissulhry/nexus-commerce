@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { Tone } from './tone'
 
 /**
  * Tag — the neutral / semantic metadata chip the console was missing.
@@ -7,8 +8,18 @@ import type { ReactNode } from 'react'
  * marketplace, entity type, a rule trigger, a proposed-action sentiment, a filter chip.
  * Requires `styles/primitives.css`.
  */
-export type TagTone = 'neutral' | 'info' | 'positive' | 'warning' | 'danger'
 
-export function Tag({ tone = 'neutral', children }: { tone?: TagTone; children: ReactNode }) {
-  return <span className={`h10-ds-tag ${tone}`}>{children}</span>
+/** @deprecated use 'success' */
+export type LegacyTagTone = 'positive'
+export type TagTone = Tone | LegacyTagTone   // 'positive' retained for the untouchable flat-file consumer
+
+export interface TagProps {
+  tone?: TagTone
+  className?: string
+  children: ReactNode
+}
+
+export function Tag({ tone = 'neutral', className, children }: TagProps) {
+  const t = tone === 'positive' ? 'success' : tone   // normalize legacy
+  return <span className={`h10-ds-tag ${t}${className ? ` ${className}` : ''}`}>{children}</span>
 }

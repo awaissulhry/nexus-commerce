@@ -394,8 +394,14 @@
 .h10-ds-toast.success .dot {
   background: var(--h10-live);
 }
-.h10-ds-toast.error .dot {
+.h10-ds-toast.danger .dot {
   background: var(--status-danger-line);
+}
+.h10-ds-toast.warning .dot {
+  background: var(--status-warning-line);
+}
+.h10-ds-toast.neutral .dot {
+  background: var(--text-tertiary);
 }
 @keyframes h10-ds-toastin {
   from {
@@ -1040,11 +1046,16 @@
   background: var(--status-warning-soft);
 }
 .h10-ds-banner.warning .h10-ds-banner-icon { color: var(--status-warning-strong); }
-.h10-ds-banner.error {
+.h10-ds-banner.danger {
   border-left-color: var(--status-danger-line);
   background: var(--status-danger-soft);
 }
-.h10-ds-banner.error .h10-ds-banner-icon { color: var(--status-danger-strong); }
+.h10-ds-banner.danger .h10-ds-banner-icon { color: var(--status-danger-strong); }
+.h10-ds-banner.neutral {
+  border-left-color: var(--border-strong);
+  background: var(--surface-sunken);
+}
+.h10-ds-banner.neutral .h10-ds-banner-icon { color: var(--text-secondary); }
 
 /* ── Stepper (horizontal step progress) ────────────────────────────────── */
 .h10-ds-stepper {

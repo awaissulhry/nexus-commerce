@@ -44,7 +44,8 @@ import { Input } from '@/design-system/primitives/Input'
 import { Textarea } from '@/design-system/primitives/Textarea'
 import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
 import { Tag, type TagTone } from '@/design-system/primitives/Tag'
-import { Pill, type PillStatus } from '@/design-system/primitives/Pill'
+import { Pill } from '@/design-system/primitives/Pill'
+import { type Tone } from '@/design-system/primitives/tone'
 import { Spinner } from '@/design-system/primitives/Spinner'
 import { Divider } from '@/design-system/primitives/Divider'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -127,22 +128,22 @@ interface PushResult {
 
 // ── Status → Pill / Tag mapping ──────────────────────────────────────────────
 
-const STATUS_PILL: Record<string, PillStatus> = {
-  DRAFT: 'arch',
-  SCHEDULED: 'warn',
-  ACTIVE: 'ok',
-  PUSHED: 'ok',
-  ENDED: 'arch',
-  FAILED: 'err',
-  ERROR: 'err',
+const STATUS_PILL: Record<string, Tone> = {
+  DRAFT: 'neutral',
+  SCHEDULED: 'warning',
+  ACTIVE: 'success',
+  PUSHED: 'success',
+  ENDED: 'neutral',
+  FAILED: 'danger',
+  ERROR: 'danger',
 }
 
-function statusPill(status: string): PillStatus {
-  return STATUS_PILL[status.toUpperCase()] ?? 'arch'
+function statusPill(status: string): Tone {
+  return STATUS_PILL[status.toUpperCase()] ?? 'neutral'
 }
 
 const MARKET_TONE: Record<string, TagTone> = {
-  IT: 'positive',
+  IT: 'success',
   DE: 'info',
   FR: 'info',
   ES: 'warning',
@@ -247,7 +248,7 @@ function VolumePricingInner() {
         const res = await fetch(api(`/ebay/volume-promotions/${p.id}/push`), { method: 'POST' })
         const data = (await res.json()) as PushResult
         if (!res.ok || !data.ok) {
-          toast(data.error ?? data.message ?? 'Push failed', 'error')
+          toast(data.error ?? data.message ?? 'Push failed', 'danger')
         } else if (data.dryRun) {
           toast(`Dry run OK — “${p.name}” validated, not sent live`, 'info')
         } else {
@@ -258,7 +259,7 @@ function VolumePricingInner() {
         }
         await load()
       } catch (err) {
-        toast(err instanceof Error ? err.message : 'Push failed', 'error')
+        toast(err instanceof Error ? err.message : 'Push failed', 'danger')
       } finally {
         setPushingId(null)
       }
@@ -277,7 +278,7 @@ function VolumePricingInner() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Delete failed', 'error')
+      toast(err instanceof Error ? err.message : 'Delete failed', 'danger')
     } finally {
       setDeleting(false)
     }
@@ -312,7 +313,7 @@ function VolumePricingInner() {
         align: 'center',
         sortable: true,
         sortValue: (r) => r.status,
-        render: (r) => <Pill status={statusPill(r.status)}>{r.status}</Pill>,
+        render: (r) => <Pill tone={statusPill(r.status)}>{r.status}</Pill>,
       },
       {
         key: 'tiers',
@@ -397,7 +398,7 @@ function VolumePricingInner() {
       {loadError && (
         <div style={{ marginBottom: 12 }}>
           <Banner
-            variant="error"
+            tone="danger"
             title="Couldn’t load volume promotions"
             action={
               <Button size="sm" variant="secondary" onClick={() => void load()}>
@@ -662,14 +663,14 @@ function PromotionEditor({ promotion, onClose, onSaved, onPushed }: EditorProps)
       })
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null
-        toast(body?.error ?? `Resolve failed (HTTP ${res.status})`, 'error')
+        toast(body?.error ?? `Resolve failed (HTTP ${res.status})`, 'danger')
         return
       }
       const data = (await res.json()) as ResolveSkusResult
       setResolved(data)
       toast(`Matched ${data.matched} SKU(s) — ${data.count} selected`, 'info')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Resolve failed', 'error')
+      toast(err instanceof Error ? err.message : 'Resolve failed', 'danger')
     } finally {
       setResolving(false)
     }
@@ -705,7 +706,7 @@ function PromotionEditor({ promotion, onClose, onSaved, onPushed }: EditorProps)
           | { promotion?: VolumePromotion; error?: string; validation?: TierValidation }
           | null
         if (!res.ok) {
-          toast(data?.validation?.errors?.[0] ?? data?.error ?? 'Save failed', 'error')
+          toast(data?.validation?.errors?.[0] ?? data?.error ?? 'Save failed', 'danger')
           return null
         }
         return promotion.id
@@ -719,12 +720,12 @@ function PromotionEditor({ promotion, onClose, onSaved, onPushed }: EditorProps)
         | { promotion?: VolumePromotion; error?: string; validation?: TierValidation }
         | null
       if (!res.ok || !data?.promotion) {
-        toast(data?.validation?.errors?.[0] ?? data?.error ?? 'Create failed', 'error')
+        toast(data?.validation?.errors?.[0] ?? data?.error ?? 'Create failed', 'danger')
         return null
       }
       return data.promotion.id
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Save failed', 'error')
+      toast(err instanceof Error ? err.message : 'Save failed', 'danger')
       return null
     }
   }, [isEdit, promotion, name, marketplace, tiers, effectiveSkus, startDate, endDate, toast])
@@ -750,7 +751,7 @@ function PromotionEditor({ promotion, onClose, onSaved, onPushed }: EditorProps)
       const res = await fetch(api(`/ebay/volume-promotions/${id}/push`), { method: 'POST' })
       const data = (await res.json()) as PushResult
       if (!res.ok || !data.ok) {
-        toast(data.error ?? data.message ?? 'Push failed', 'error')
+        toast(data.error ?? data.message ?? 'Push failed', 'danger')
       } else if (data.dryRun) {
         toast('Saved — dry run OK (not sent live)', 'info')
       } else {
@@ -760,7 +761,7 @@ function PromotionEditor({ promotion, onClose, onSaved, onPushed }: EditorProps)
       await onPushed()
       onClose()
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Push failed', 'error')
+      toast(err instanceof Error ? err.message : 'Push failed', 'danger')
     } finally {
       setSaving(false)
     }
@@ -910,7 +911,7 @@ function PromotionEditor({ promotion, onClose, onSaved, onPushed }: EditorProps)
 
         {/* ── Validation banners ──────────────────────────────────────────── */}
         {valid && valid.errors.length > 0 && (
-          <Banner variant="error" title="Fix these before pushing">
+          <Banner tone="danger" title="Fix these before pushing">
             <ul style={{ margin: 0, paddingLeft: 18 }}>
               {valid.errors.map((e, i) => (
                 <li key={i}>{e}</li>
@@ -919,7 +920,7 @@ function PromotionEditor({ promotion, onClose, onSaved, onPushed }: EditorProps)
           </Banner>
         )}
         {valid && valid.ok && valid.warnings.length > 0 && (
-          <Banner variant="warning" title="Heads up">
+          <Banner tone="warning" title="Heads up">
             <ul style={{ margin: 0, paddingLeft: 18 }}>
               {valid.warnings.map((w, i) => (
                 <li key={i}>{w}</li>
@@ -1079,7 +1080,7 @@ function PromotionEditor({ promotion, onClose, onSaved, onPushed }: EditorProps)
                 <div style={{ marginTop: 12 }}>
                   {resolved.truncated && (
                     <div style={{ marginBottom: 8 }}>
-                      <Banner variant="warning" title="Result truncated">
+                      <Banner tone="warning" title="Result truncated">
                         {resolved.matched} SKUs matched but only the first {resolved.count} were kept
                         (eBay caps a promotion at 500 SKUs). Tighten the rule to narrow the set.
                       </Banner>

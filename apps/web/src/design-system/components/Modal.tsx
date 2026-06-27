@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
+import type { Size } from '../primitives/size'
 
 export interface ModalProps {
   open: boolean
@@ -12,7 +13,7 @@ export interface ModalProps {
   /** footer slot, right-aligned (e.g. Cancel / Save buttons) */
   footer?: ReactNode
   /** 440 / 560 / 660 / 920 px (H10 modal widths) */
-  size?: 'sm' | 'md' | 'lg' | 'xl'
+  size?: Size
   children?: ReactNode
 }
 
