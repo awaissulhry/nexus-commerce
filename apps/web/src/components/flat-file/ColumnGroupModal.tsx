@@ -42,7 +42,7 @@ function SortableRow({ group, visible, onToggle, canHide }: SortableRowProps) {
         {...listeners}
         tabIndex={-1}
         aria-label={`Drag to reorder ${group.label}`}
-        className="flex-shrink-0 cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing dark:text-slate-600 dark:hover:text-slate-400"
+        className="flex-shrink-0 cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing dark:text-slate-600 dark:hover:text-tertiary"
       >
         <GripVertical size={16} />
       </button>
@@ -51,10 +51,10 @@ function SortableRow({ group, visible, onToggle, canHide }: SortableRowProps) {
         aria-hidden
       />
       <div className="min-w-0 flex-1">
-        <span className={`text-sm font-medium ${visible ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'}`}>
+        <span className={`text-sm font-medium ${visible ? 'text-slate-800 dark:text-slate-100' : 'text-tertiary dark:text-slate-500'}`}>
           {group.label}
         </span>
-        <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">
+        <span className="ml-2 text-xs text-tertiary dark:text-slate-500">
           {group.columns.length} {group.columns.length === 1 ? 'column' : 'columns'}
         </span>
       </div>
@@ -157,7 +157,7 @@ export function ColumnGroupModal({ open, onClose, groups, closedGroups, groupOrd
         </SortableContext>
       </DndContext>
       {!canHide && (
-        <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
+        <p className="mt-3 text-xs text-tertiary dark:text-slate-500">
           At least one group must remain visible.
         </p>
       )}
