@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button'
 import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
 import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx, RenderCellContent } from '@/components/flat-file/FlatFileGrid.types'
 import { Modal } from '@/design-system/components/Modal'
+import { Banner } from '@/design-system/components/Banner'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { AddListingPopover } from './AddListingPopover'
 import { EbayImportWizard } from './EbayImportWizard'
@@ -363,6 +364,7 @@ const PARENT_NOT_NEEDED = new Set([
 // Listing-level fields defined once on the parent; not needed per variant.
 const VARIANT_NOT_NEEDED = new Set([
   'variation_theme', 'category_id', 'subtitle', 'listing_format', 'listing_duration',
+  'shared_sku_listing',
 ])
 
 // ── Row completeness ─────────────────────────────────────────────────────────
@@ -1195,16 +1197,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         </div>
       )}
       {publishPanelOpen && rows.some((r) => (r as EbayRow)._isParent && (r as EbayRow).shared_sku_listing) && (
-        <div className="absolute bottom-full mb-1.5 right-0 w-80 rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 px-3 py-2 shadow-sm z-50">
-          <p className="text-xs font-semibold text-blue-800 dark:text-blue-300 mb-1">
-            Shared-SKU listing (Trading API)
-          </p>
-          <p className="text-[10px] text-blue-700 dark:text-blue-400">
+        <div className="absolute bottom-full mb-28 right-0 w-80 z-50">
+          <Banner variant="warning" title="Shared-SKU listing (Trading API)">
             One or more families publish as Trading-API multi-variation listings whose variant SKUs may
             also appear in other listings. Use this ONLY for genuinely-different products that legitimately
-            share stock. Listing the <span className="font-semibold">same item</span> as multiple listings
-            violates eBay&rsquo;s duplicate-listing policy.
-          </p>
+            share stock. Listing the same item as multiple listings violates eBay&rsquo;s duplicate-listing policy.
+          </Banner>
         </div>
       )}
       <div className="flex items-center gap-2">
