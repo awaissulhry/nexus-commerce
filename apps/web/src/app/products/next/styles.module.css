@@ -154,9 +154,9 @@
 }
 
 .chipActive {
-  background: var(--h10-grey-900);
-  border-color: var(--h10-grey-900);
-  color: var(--h10-text-inverse);
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+  color: var(--surface-card);
 }
 
 .chipWarn {
@@ -273,7 +273,7 @@
 .ckbOn {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: var(--h10-text-inverse);
+  color: var(--h10-grey-25);
 }
 
 /* ── Product column cell ─────────────────────────────────── */
