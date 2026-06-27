@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { buildSharedListingInput, createSharedListing } from './ebay-shared-listing-push.service.js'
+import { buildSharedListingInput, createSharedListing, pushSharedListings } from './ebay-shared-listing-push.service.js'
 
 const parent = {
   sku: 'LNR-BLK', _isParent: true, title: 'Inner Liner', description: '<p>x</p>',
@@ -84,5 +84,24 @@ describe('createSharedListing', () => {
     expect(res.status).toBe('ERROR')
     expect(res.message).toMatch(/Bad category/)
     expect(db.created).toHaveLength(0)
+  })
+})
+
+describe('pushSharedListings', () => {
+  it('groups rows into families and creates one listing per family', async () => {
+    const db = mockDb(null)
+    const addFn = vi.fn(async () => ({ itemId: 'IT-' + Math.random().toString(36).slice(2, 6) }))
+    const rows = [
+      { sku: 'A', _isParent: true, platformProductId: 'A', title: 'A', category_id: '1', condition: '1000' },
+      { sku: 'A-M', platformProductId: 'A', it_price: 5, it_qty: 1, aspect_Size: 'M', _productId: 'a1' },
+      { sku: 'A-L', platformProductId: 'A', it_price: 5, it_qty: 1, aspect_Size: 'L', _productId: 'a2' },
+      { sku: 'B', _isParent: true, platformProductId: 'B', title: 'B', category_id: '1', condition: '1000' },
+      { sku: 'B-M', platformProductId: 'B', it_price: 7, it_qty: 2, aspect_Size: 'M', _productId: 'b1' },
+    ]
+    const results = await pushSharedListings(rows, { oauthToken: 'O', market: 'IT', db, addFixedPriceItemFn: addFn })
+    expect(results).toHaveLength(2)
+    expect(results.every((r) => r.status === 'CREATED')).toBe(true)
+    expect(addFn).toHaveBeenCalledTimes(2)
+    expect(db.created).toHaveLength(3) // A: 2 variants, B: 1 variant
   })
 })
