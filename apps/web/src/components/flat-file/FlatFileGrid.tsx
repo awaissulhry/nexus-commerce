@@ -6,7 +6,7 @@ import {
 } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  AlertCircle, AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronLeft,
+  AlertCircle, AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   Image as ImageIcon, Keyboard, Loader2, Pin, Plus,
   Search, Trash2, Undo2, Redo2, X,
 } from 'lucide-react'
@@ -785,6 +785,8 @@ export default function FlatFileGrid({
     try { return JSON.parse(localStorage.getItem(`${storageKey}-group-order`) ?? '[]') } catch { return [] }
   })
 
+  const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null)
+
   // Derive from controlled prop if available, else fall back to internal state
   const closedGroups: Set<string> = columnGroupState
     ? new Set(columnGroupState.filter((g) => !g.visible).map((g) => g.id))
@@ -1492,6 +1494,47 @@ export default function FlatFileGrid({
           <FFSavedViews
             currentState={{ closedGroups: [...closedGroups], ffFilter: filterState, cfRules, frozenColCount, sortConfig: [] } satisfies FFViewState}
             onApply={(state: FFViewState) => { const nextClosed = new Set(state.closedGroups); setClosedGroups(nextClosed); setFilterState(state.ffFilter); setCfRules(state.cfRules); onGroupStateChange?.(nextClosed, internalGroupOrder) }} />
+          <div className="flex items-center gap-1 flex-wrap ml-auto">
+            <span className="text-xs text-slate-400 mr-1">Columns:</span>
+            {orderedGroups.map((g) => {
+              const open = openGroups.has(g.id); const isDragging = draggingGroupId === g.id
+              return (
+                <button key={g.id} type="button" draggable
+                  onDragStart={(e) => { setDraggingGroupId(g.id); e.dataTransfer.effectAllowed = 'move' }}
+                  onDragEnd={() => setDraggingGroupId(null)}
+                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    if (!draggingGroupId || draggingGroupId === g.id) return
+                    const ids = orderedGroups.map((x) => x.id)
+                    const from = ids.indexOf(draggingGroupId); const to = ids.indexOf(g.id)
+                    const next = [...ids]; next.splice(from, 1); next.splice(to, 0, draggingGroupId)
+                    setGroupOrder(next); try { localStorage.setItem(`${storageKey}-group-order`, JSON.stringify(next)) } catch {}
+                    onGroupStateChange?.(internalClosedGroups, next)
+                    setDraggingGroupId(null)
+                  }}
+                  onClick={() => setClosedGroups((prev) => {
+                    if (open && orderedGroups.filter((x) => !prev.has(x.id)).length <= 1) return prev
+                    const n = new Set(prev); open ? n.add(g.id) : n.delete(g.id)
+                    try { localStorage.setItem(`${storageKey}-closed-groups`, JSON.stringify([...n])) } catch {}
+                    onGroupStateChange?.(n, internalGroupOrder)
+                    return n
+                  })}
+                  title={g.label}
+                  className={cn('inline-flex items-center gap-1 h-5 px-1.5 text-xs rounded border transition-all cursor-grab active:cursor-grabbing select-none',
+                    gColor(g.color).badge, open ? 'opacity-100' : 'opacity-40 hover:opacity-65',
+                    isDragging && 'opacity-30 scale-95')}>
+                  <ChevronRight className={cn('w-2.5 h-2.5 transition-transform', open && 'rotate-90')} />
+                  <span className="font-medium">{g.label}</span>
+                  <span className="opacity-60 tabular-nums">{g.columns.length}</span>
+                </button>
+              )
+            })}
+            {(groupOrder.length > 0 || closedGroups.size > 0) && (
+              <button type="button" onClick={() => { setGroupOrder([]); setClosedGroups(new Set()); try { localStorage.removeItem(`${storageKey}-group-order`); localStorage.removeItem(`${storageKey}-closed-groups`) } catch {} onGroupStateChange?.(new Set(), []) }}
+                className="text-xs text-slate-400 hover:text-slate-600 px-1" title="Reset group order and visibility">↺</button>
+            )}
+          </div>
         </div>
       </header>
 
