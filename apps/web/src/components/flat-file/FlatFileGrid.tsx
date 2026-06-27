@@ -1494,7 +1494,7 @@ export default function FlatFileGrid({
           <FFSavedViews
             currentState={{ closedGroups: [...closedGroups], ffFilter: filterState, cfRules, frozenColCount, sortConfig: [] } satisfies FFViewState}
             onApply={(state: FFViewState) => { const nextClosed = new Set(state.closedGroups); setClosedGroups(nextClosed); setFilterState(state.ffFilter); setCfRules(state.cfRules); onGroupStateChange?.(nextClosed, internalGroupOrder) }} />
-          <div className="flex items-center gap-1 flex-wrap ml-auto">
+          <div className="flex items-center gap-1 flex-wrap">
             <span className="text-xs text-slate-400 mr-1">Columns:</span>
             {orderedGroups.map((g) => {
               const open = openGroups.has(g.id); const isDragging = draggingGroupId === g.id
