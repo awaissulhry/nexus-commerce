@@ -18,8 +18,8 @@ const HEAD = `/**
  * GENERATED — do not edit by hand.
  * Source: tokens/css-vars.ts (+ tokens/colors.ts). Regenerate: \`npm run tokens:gen\`.
  *
- * \`--h10-*\` namespaced so it never collides with the app's globals.css tokens.
- * The platform-semantic aliases (--text-*/--surface-*/--border-*/--status-*/
+ * \`--h10-\` namespaced so it never collides with the app's globals.css tokens.
+ * The platform-semantic aliases (--text-, --surface-, --border-, --status-,
  * --color-primary) point AT these values; components consume the aliases.
  */`
 
