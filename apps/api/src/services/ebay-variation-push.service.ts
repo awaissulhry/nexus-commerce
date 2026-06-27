@@ -1381,6 +1381,8 @@ export function buildFlatRow(
     condition: (firstAttrs.conditionId as string | undefined) ?? 'NEW',
     category_id: (firstAttrs.categoryId as string | undefined) ?? '',
     subtitle: (firstAttrs.subtitle as string | undefined) ?? '',
+    // Phase 4 — shared-SKU listing flag (parent-level), read back from platformAttributes.
+    shared_sku_listing: (firstAttrs.sharedSkuListing as boolean | undefined) ?? false,
     description: first?.description ?? '',
     price: first?.price?.toNumber() ?? 0,
     best_offer_enabled: (firstAttrs.bestOffer as boolean | undefined) ?? false,
@@ -1547,6 +1549,9 @@ export function packSharedFields(row: Record<string, unknown>): {
       conditionId: (row.condition as string) ?? 'NEW',
       categoryId: (row.category_id as string) ?? '',
       subtitle: (row.subtitle as string) ?? '',
+      // Phase 4 — shared-SKU listing routing flag (Trading-API multi-variation,
+      // shared variant SKUs across parents). Round-trips via existing JSON; no migration.
+      sharedSkuListing: Boolean(row.shared_sku_listing),
       imageUrls,
       itemSpecifics,
       handlingTime: Number(row.handling_time ?? 1),
