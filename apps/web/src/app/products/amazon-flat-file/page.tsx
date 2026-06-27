@@ -25,7 +25,7 @@ export default async function AmazonFlatFilePage({ searchParams }: PageProps) {
   const [manifestRes, rowsRes] = await Promise.all([
     fetch(
       `${backend}/api/amazon/flat-file/template?marketplace=${marketplace}&productType=${productType}`,
-      { cache: 'no-store' },
+      { next: { revalidate: 1800 } },
     ).catch(() => null),
     fetch(
       `${backend}/api/amazon/flat-file/rows?${rowsQs}`,

@@ -1075,14 +1075,18 @@ export default function AmazonFlatFileClient({
     // Map FlatFileColumnGroup → local ColumnGroup shape (label → labelEn/labelLocal).
     // Falls back to effectiveManifest groups (already the correct shape) when no
     // columnGroups have been loaded yet.
+    const manifestById = new Map((effectiveManifest?.groups ?? []).map((mg) => [mg.id, mg]))
     const groups: ColumnGroup[] = columnGroups.length > 0
-      ? columnGroups.map((g) => ({
-          id: g.id,
-          labelEn: (g as any).labelEn ?? g.label,
-          labelLocal: (g as any).labelLocal ?? g.label,
-          color: g.color,
-          columns: g.columns as unknown as Column[],
-        }))
+      ? columnGroups.map((g) => {
+          const mg = manifestById.get(g.id)
+          return {
+            id: g.id,
+            labelEn: mg?.labelEn ?? (g as any).labelEn ?? g.label ?? g.id,
+            labelLocal: mg?.labelLocal ?? (g as any).labelLocal ?? g.label ?? g.id,
+            color: g.color,
+            columns: mg?.columns ?? [],
+          }
+        })
       : (effectiveManifest?.groups ?? [])
     if (!groupOrder.length) return groups
     const byId = new Map(groups.map((g) => [g.id, g]))

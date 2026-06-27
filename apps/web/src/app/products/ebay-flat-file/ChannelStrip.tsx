@@ -9,6 +9,7 @@
  * file while preserving the current ?marketplace= param.
  */
 
+import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { ShoppingCart, Tag } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -42,6 +43,14 @@ const CHANNELS = [
 export function ChannelStrip({ channel, marketplace, familyId }: Props) {
   const router   = useRouter()
   const pathname = usePathname()
+
+  // Pre-warm the opposite channel's JS bundles so the first switch is faster.
+  useEffect(() => {
+    if (pathname.startsWith('/bulk-operations')) return
+    const otherPath = channel === 'amazon' ? '/products/ebay-flat-file' : '/products/amazon-flat-file'
+    router.prefetch(`${otherPath}?marketplace=${marketplace}`)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function go(next: 'amazon' | 'ebay') {
     if (next === channel) return
