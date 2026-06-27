@@ -1663,6 +1663,7 @@ export default function AmazonFlatFileClient({
       if (mod && e.key === 'y' && !isEditingRef.current)                { e.preventDefault(); redo(); return }
       // BF.1 — Find & Replace
       if (mod && e.key === 'f') { e.preventDefault(); setFindReplaceOpen(true); return }
+      if (mod && e.key === 'g') { e.preventDefault(); setColumnsOpen(true); return }
       // PE: '?' opens the shortcuts modal (no modifier — ignore when typing in an input)
       if (e.key === '?' && !mod && !isEditingRef.current) {
         const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase()

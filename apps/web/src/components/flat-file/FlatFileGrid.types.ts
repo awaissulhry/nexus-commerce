@@ -221,6 +221,12 @@ export interface FlatFileGridProps {
    * becomes the sole driver of group visibility and order.
    */
   columnGroupState?: import('@/design-system/components/ColumnGroupModal').ColumnGroupProps[]
+  /**
+   * Called when the user performs a group visibility/order action inside the grid
+   * (reset order, show all, saved-view apply, column header toggle).
+   * In controlled mode the parent must update columnGroupState in response.
+   */
+  onGroupStateChange?: (closed: Set<string>, order: string[]) => void
 }
 
 // ── A4.1 — AI panel context ───────────────────────────────────────────────

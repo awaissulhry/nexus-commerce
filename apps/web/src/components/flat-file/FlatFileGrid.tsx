@@ -636,7 +636,7 @@ export default function FlatFileGrid({
   renderToolbarFetch, renderToolbarImport, renderBar3Left,
   renderAiPanel, renderEmptyAction,
   onColumnsClick, columnsActive, toolbarTrailing,
-  columnGroupState,
+  columnGroupState, onGroupStateChange,
 }: FlatFileGridProps) {
   const router = useRouter()
   const { toast } = useToast()
@@ -1383,8 +1383,8 @@ export default function FlatFileGrid({
             { label: 'Undo', icon: <Undo2 className="w-3.5 h-3.5" />, onClick: undo, disabled: !history.length, shortcut: '⌘Z' },
             { label: 'Redo', icon: <Redo2 className="w-3.5 h-3.5" />, onClick: redo, disabled: !future.length, shortcut: '⌘⇧Z' },
             { separator: true },
-            { label: 'Reset column group order', onClick: () => { setGroupOrder([]); try { localStorage.removeItem(`${storageKey}-group-order`) } catch {} }, disabled: !groupOrder.length },
-            { label: 'Show all column groups', onClick: () => { setClosedGroups(new Set()); try { localStorage.removeItem(`${storageKey}-closed-groups`) } catch {} }, disabled: !closedGroups.size },
+            { label: 'Reset column group order', onClick: () => { setGroupOrder([]); try { localStorage.removeItem(`${storageKey}-group-order`) } catch {} onGroupStateChange?.(internalClosedGroups, []) }, disabled: !groupOrder.length },
+            { label: 'Show all column groups', onClick: () => { setClosedGroups(new Set()); try { localStorage.removeItem(`${storageKey}-closed-groups`) } catch {} onGroupStateChange?.(new Set(), internalGroupOrder) }, disabled: !closedGroups.size },
           ]} />
           <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
           {titleIcon}
@@ -1491,7 +1491,7 @@ export default function FlatFileGrid({
           <FFFilterPanel open={showFilter} onOpenChange={setShowFilter} value={filterState} onChange={setFilterState} />
           <FFSavedViews
             currentState={{ closedGroups: [...closedGroups], ffFilter: filterState, cfRules, frozenColCount, sortConfig: [] } satisfies FFViewState}
-            onApply={(state: FFViewState) => { setClosedGroups(new Set(state.closedGroups)); setFilterState(state.ffFilter); setCfRules(state.cfRules) }} />
+            onApply={(state: FFViewState) => { const nextClosed = new Set(state.closedGroups); setClosedGroups(nextClosed); setFilterState(state.ffFilter); setCfRules(state.cfRules); onGroupStateChange?.(nextClosed, internalGroupOrder) }} />
         </div>
       </header>
 
@@ -1614,7 +1614,7 @@ export default function FlatFileGrid({
                 {visibleGroups.map((g) => (
                   <th key={g.id} colSpan={g.columns.length}
                     className={cn('px-2 py-1 text-xs font-bold border-b border-r border-slate-200 dark:border-slate-700 text-left whitespace-nowrap', gColor(g.color).header)}>
-                    <button onClick={() => setClosedGroups((prev) => { const n = new Set(prev); n.has(g.id) ? n.delete(g.id) : n.add(g.id); return n })} className="flex items-center gap-1">
+                    <button onClick={() => setClosedGroups((prev) => { const n = new Set(prev); n.has(g.id) ? n.delete(g.id) : n.add(g.id); onGroupStateChange?.(n, internalGroupOrder); return n })} className="flex items-center gap-1">
                       <ChevronDown className={cn('h-3 w-3 transition-transform', closedGroups.has(g.id) && '-rotate-90')} />
                       {g.label}
                     </button>

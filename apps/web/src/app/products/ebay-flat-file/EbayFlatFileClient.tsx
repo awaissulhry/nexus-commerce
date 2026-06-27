@@ -1753,6 +1753,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         columns: g.columns.map((c) => c.id),
         visible: !coreClosedGroups.has(g.id),
       }))}
+      onGroupStateChange={(closed, order) => coreApplyGroupSettings(closed, order)}
       initialRows={initialRows as BaseRow[]}
       makeBlankRow={makeBlankRow}
       minRows={15}
