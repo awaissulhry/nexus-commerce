@@ -72,6 +72,8 @@ export interface EbayRow extends BaseRow {
   platformProductId?: string
   /** true on the family container (no parentId); false on variant children. */
   _isParent?: boolean
+  /** Phase 4 — publish this family via the Trading-API shared-SKU path (parent-level). */
+  shared_sku_listing?: boolean
   it_price?: number | null; it_qty?: number | null; it_item_id?: string | null
   it_status?: string | null; it_listing_id?: string | null
   de_price?: number | null; de_qty?: number | null; de_item_id?: string | null
@@ -1190,6 +1192,19 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             ))}
           </ul>
           <p className="text-[10px] text-amber-600 dark:text-amber-500 mt-1">eBay may reject these rows. Push anyway?</p>
+        </div>
+      )}
+      {publishPanelOpen && rows.some((r) => (r as EbayRow)._isParent && (r as EbayRow).shared_sku_listing) && (
+        <div className="absolute bottom-full mb-1.5 right-0 w-80 rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 px-3 py-2 shadow-sm z-50">
+          <p className="text-xs font-semibold text-blue-800 dark:text-blue-300 mb-1">
+            Shared-SKU listing (Trading API)
+          </p>
+          <p className="text-[10px] text-blue-700 dark:text-blue-400">
+            One or more families publish as Trading-API multi-variation listings whose variant SKUs may
+            also appear in other listings. Use this ONLY for genuinely-different products that legitimately
+            share stock. Listing the <span className="font-semibold">same item</span> as multiple listings
+            violates eBay&rsquo;s duplicate-listing policy.
+          </p>
         </div>
       )}
       <div className="flex items-center gap-2">
