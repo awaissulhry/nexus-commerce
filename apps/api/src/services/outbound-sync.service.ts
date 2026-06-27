@@ -27,6 +27,13 @@ import { ebayAuthService } from "./ebay-auth.service.js";
 import { listingPublishService } from "./listing-publish.service.js";
 import { resolveComplianceById, buildShopifyComplianceMetafields } from "./compliance-resolver.service.js";
 import { computeAvailableToPublish } from "./available-to-publish.service.js";
+import { reviseInventoryStatus as ebayReviseInventoryStatus } from "./ebay-trading-api.service.js";
+
+// Phase 3 — test seam for the Trading-API network call.
+// Overridable in unit tests; defaults to the real Phase-1 fn.
+export const __ebayTrading = {
+  reviseInventoryStatus: ebayReviseInventoryStatus,
+}
 
 // Advertising mutations (bids/budgets/state) ride the same OutboundSyncQueue
 // table but are owned exclusively by the dedicated ads-sync worker
@@ -671,6 +678,13 @@ export class OutboundSyncService {
    * (same flags as the wizard publish path, C.7).
    */
   private async syncToEbay(queueItem: any): Promise<SyncResult> {
+    // Phase 3 — shared-SKU Trading-API quantity fan-out. These rows have no
+    // ChannelListing and must use ReviseInventoryStatus (multi-listing shared
+    // SKU), NOT the Inventory-API GET-merge-PUT path below.
+    if (queueItem?.payload?.pushVia === 'TRADING') {
+      return this.syncSharedTradingQuantity(queueItem);
+    }
+
     const { product, payload, id: queueId } = queueItem;
     const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
     const marketplaceId = payload?.marketplaceId ?? "EBAY_IT";
@@ -943,6 +957,138 @@ export class OutboundSyncService {
       channel: "EBAY",
       status: "SUCCESS",
       message: `Product ${sku} synced to eBay`,
+    };
+  }
+
+  /**
+   * Phase 3 — shared-SKU quantity fan-out via Trading API ReviseInventoryStatus.
+   * These OutboundSyncQueue rows carry payload.pushVia:'TRADING' and have no
+   * ChannelListing; the SKU lives in MANY listings (one membership per ItemID),
+   * which the multi-variation shared listing model needs (the Inventory API
+   * forces unique SKUs and can't address a shared SKU). Reuses the eBay gate +
+   * connection + circuit + rate-limit + dry-run scaffolding from syncToEbay.
+   */
+  private async syncSharedTradingQuantity(queueItem: any): Promise<SyncResult> {
+    const { payload, id: queueId } = queueItem;
+    const sku: string = payload?.sku ?? "(unknown sku)";
+    const itemId: string = payload?.itemId ?? queueItem.externalListingId ?? "";
+    const market: string = payload?.market ?? "IT";
+    const marketplaceId: string = payload?.marketplaceId ?? `EBAY_${market}`;
+    const quantity: number = Math.max(0, Math.trunc(Number(payload?.quantity ?? 0)));
+    const digest = digestPayload({ quantity });
+
+    const writeMembership = async (data: Record<string, unknown>) => {
+      try {
+        await prisma.sharedListingMembership.updateMany({
+          where: { marketplace: market, itemId, sku },
+          data,
+        });
+      } catch { /* writeback is best-effort */ }
+    };
+
+    // 1. Feature flag
+    const mode = getEbayPublishMode();
+    if (mode === "gated") {
+      return {
+        success: false, queueId, channel: "EBAY", status: "FAILED",
+        message: "eBay outbound sync gated",
+        error: "NEXUS_ENABLE_EBAY_PUBLISH=false — set true to enable eBay outbound sync.",
+      };
+    }
+
+    // 2. Connection lookup
+    const connection = await prisma.channelConnection.findFirst({
+      where: { channelType: "EBAY", isActive: true },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (!connection) {
+      return {
+        success: false, queueId, channel: "EBAY", status: "FAILED",
+        message: "No active eBay connection",
+        error: "No active eBay connection — link an eBay account in Settings first.",
+      };
+    }
+
+    // 3. Circuit breaker
+    const circuit = checkEbayCircuit(connection.id, marketplaceId);
+    if (!circuit.ok) {
+      return {
+        success: false, queueId, channel: "EBAY", status: "FAILED",
+        message: "Circuit open", error: circuit.error ?? "Circuit open",
+      };
+    }
+
+    // 4. Rate limiter
+    const t0 = Date.now();
+    const acquired = await acquireEbayPublishToken(connection.id, marketplaceId);
+    if (!acquired.ok) {
+      return {
+        success: false, queueId, channel: "EBAY", status: "FAILED",
+        message: "Rate limited", error: acquired.error ?? "Rate limited",
+      };
+    }
+
+    // 5. Dry-run short-circuit (parity with syncToEbay — no membership writeback on a no-op)
+    if (mode === "dry-run" || mode === "sandbox") {
+      recordEbayOutcome(connection.id, marketplaceId, true);
+      writeAttemptLog({
+        channel: "EBAY", marketplace: marketplaceId, sellerId: connection.id, sku,
+        productId: payload?.productId ?? null, mode, outcome: "success",
+        payloadDigest: digest, durationMs: Date.now() - t0,
+      });
+      return {
+        success: true, queueId, channel: "EBAY", status: "SUCCESS",
+        message: `Shared ${sku}@${itemId} ${mode} (ReviseInventoryStatus)`, dryRun: true,
+      };
+    }
+
+    // 6. Auth
+    let token: string;
+    try {
+      token = await ebayAuthService.getValidToken(connection.id);
+    } catch (err) {
+      const message = `Could not obtain eBay token: ${err instanceof Error ? err.message : String(err)}`;
+      recordEbayOutcome(connection.id, marketplaceId, false);
+      await writeMembership({ lastError: message });
+      return { success: false, queueId, channel: "EBAY", status: "FAILED", message: "eBay auth failed", error: message };
+    }
+
+    // 7. Guard: never call ReviseInventoryStatus with an empty ItemID
+    if (!itemId) {
+      const message = `shared Trading row missing itemId (sku ${sku})`;
+      await writeMembership({ lastError: message });
+      return { success: false, queueId, channel: "EBAY", status: "FAILED", message, error: message };
+    }
+
+    // 8. The Trading-API call (Phase 1)
+    try {
+      await __ebayTrading.reviseInventoryStatus({ itemId, sku, quantity }, { oauthToken: token, market });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      recordEbayOutcome(connection.id, marketplaceId, false);
+      writeAttemptLog({
+        channel: "EBAY", marketplace: marketplaceId, sellerId: connection.id, sku,
+        productId: payload?.productId ?? null, mode, outcome: "failed",
+        payloadDigest: digest, errorMessage: message.slice(0, 500), durationMs: Date.now() - t0,
+      });
+      await writeMembership({ lastError: message.slice(0, 500) });
+      return {
+        success: false, queueId, channel: "EBAY", status: "FAILED",
+        message: "Failed to sync to eBay (Trading)", error: message,
+      };
+    }
+
+    // 9. Success — record outcome, log, write back the membership
+    recordEbayOutcome(connection.id, marketplaceId, true);
+    writeAttemptLog({
+      channel: "EBAY", marketplace: marketplaceId, sellerId: connection.id, sku,
+      productId: payload?.productId ?? null, mode, outcome: "success",
+      payloadDigest: digest, durationMs: Date.now() - t0,
+    });
+    await writeMembership({ lastQtyPushed: quantity, lastPushedAt: new Date(), lastError: null });
+    return {
+      success: true, queueId, channel: "EBAY", status: "SUCCESS",
+      message: `Shared ${sku} qty ${quantity} pushed to ItemID ${itemId} (${market})`,
     };
   }
 
