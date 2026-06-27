@@ -1809,7 +1809,7 @@ export default function FlatFileGrid({
                           const guidanceLevel = getCellGuidanceRef.current?.(col, row) ?? null
 
                           return (
-                            <SpreadsheetCell key={col.id}
+                            <SpreadsheetCell key={`${row._rowId}-${col.id}`}
                               col={col} row={row} value={row[col.id]}
                               isActive={isActive} cellBg={cellBg} width={w} cellHeight={rowHeight}
                               ri={ri} ci={ci}
