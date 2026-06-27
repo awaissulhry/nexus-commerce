@@ -13,7 +13,7 @@
 
 import { useState, useCallback, useRef, useMemo } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import type { BaseRow, SortLevel, ConditionalRule, ValidationIssue } from './FlatFileGrid.types'
+import type { BaseRow, FlatFileColumnGroup, SortLevel, ConditionalRule, ValidationIssue } from './FlatFileGrid.types'
 import type { GenericFFFilterState } from '@/app/products/_shared/flat-file-filter.types'
 
 const MAX_HISTORY = 50
@@ -29,6 +29,13 @@ export interface UseFlatFileCoreOptions<TRow extends BaseRow, TFilterDims> {
   makeBlankRow: () => TRow
   /** Minimum trailing ghost rows to pad to (default: 8). */
   minGhostRows?: number
+  /**
+   * Column group definitions supplied by the caller. These are NEVER hardcoded
+   * in this hook — they are derived from the channel template API response for
+   * the current market+productType combination. The hook only manages
+   * visibility/reorder STATE on top of whatever groups come in here.
+   */
+  initialGroups: FlatFileColumnGroup[]
   /** Channel-specific initial filter state. */
   initialFilter: GenericFFFilterState<TFilterDims>
   /** Optional validation function; called on every non-ghost row change. */
@@ -84,8 +91,17 @@ export interface UseFlatFileCoreReturn<TRow extends BaseRow, TFilterDims> {
   toggleRowImages: () => void
   changeImageSize: (sz: 24 | 32 | 48 | 64 | 96) => void
 
-  // ── Column group visibility / order ────────────────────────────────────
+  // ── Column groups ──────────────────────────────────────────────────────
+  /**
+   * Active column groups — caller-supplied definitions, updated whenever the
+   * template API response changes (market or productType switch). The hook
+   * NEVER defines group names/structure; it only stores what the caller sets.
+   */
+  columnGroups: FlatFileColumnGroup[]
+  setColumnGroups: Dispatch<SetStateAction<FlatFileColumnGroup[]>>
+  /** IDs of groups the operator has collapsed. */
   closedGroups: Set<string>
+  /** Persisted display order of group IDs (empty = natural order from template). */
   groupOrder: string[]
   applyGroupSettings: (nextClosed: Set<string>, nextOrder: string[]) => void
   columnGroupModalOpen: boolean
@@ -118,6 +134,7 @@ export function useFlatFileCore<TRow extends BaseRow, TFilterDims>({
   initialRows,
   makeBlankRow,
   minGhostRows = 8,
+  initialGroups,
   initialFilter,
   validate,
 }: UseFlatFileCoreOptions<TRow, TFilterDims>): UseFlatFileCoreReturn<TRow, TFilterDims> {
@@ -222,6 +239,12 @@ export function useFlatFileCore<TRow extends BaseRow, TFilterDims>({
     try { localStorage.setItem(`${storageKey}-image-size`, String(sz)) } catch { /* ignore */ }
   }, [storageKey])
 
+  // ── Column groups ─────────────────────────────────────────────────────
+  // The caller owns the group DEFINITIONS (derived from the template API for
+  // the current market+productType). This hook only manages the runtime state
+  // so callers can call setColumnGroups when the market or product type changes.
+  const [columnGroups, setColumnGroups] = useState<FlatFileColumnGroup[]>(initialGroups)
+
   // ── Column group visibility / order ───────────────────────────────────
   const [closedGroups, setClosedGroups] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem(`${storageKey}-closed-groups`) ?? '[]') as string[]) } catch { return new Set() }
@@ -275,6 +298,7 @@ export function useFlatFileCore<TRow extends BaseRow, TFilterDims>({
     ffFilter, setFfFilter,
     smartPasteEnabled, toggleSmartPaste,
     showRowImages, rowImageSize, toggleRowImages, changeImageSize,
+    columnGroups, setColumnGroups,
     closedGroups, groupOrder, applyGroupSettings,
     columnGroupModalOpen, setColumnGroupModalOpen,
     findReplaceOpen, setFindReplaceOpen,
