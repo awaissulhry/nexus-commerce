@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { buildSharedListingInput } from './ebay-shared-listing-push.service.js'
+import { buildSharedListingInput, createSharedListing } from './ebay-shared-listing-push.service.js'
 
 const parent = {
   sku: 'LNR-BLK', _isParent: true, title: 'Inner Liner', description: '<p>x</p>',
@@ -39,5 +39,50 @@ describe('buildSharedListingInput', () => {
   })
   it('UK market uses GBP', () => {
     expect(buildSharedListingInput(parent, [{ sku: 'X', uk_price: 9, uk_qty: 1, aspect_Size: 'M' }], 'UK').currency).toBe('GBP')
+  })
+})
+
+function mockDb(existing: unknown = null) {
+  const created: any[] = []
+  return {
+    created,
+    sharedListingMembership: {
+      findFirst: vi.fn(async () => existing),
+      create: vi.fn(async ({ data }: any) => { created.push(data); return data }),
+    },
+  }
+}
+
+describe('createSharedListing', () => {
+  const ctx0 = { oauthToken: 'O', market: 'IT' as const }
+
+  it('creates the listing and one membership per variant', async () => {
+    const db = mockDb(null)
+    const addFn = vi.fn(async () => ({ itemId: '110556677' }))
+    const res = await createSharedListing(parent, variants, { ...ctx0, db, addFixedPriceItemFn: addFn })
+    expect(res.status).toBe('CREATED')
+    expect(res.itemId).toBe('110556677')
+    expect(res.memberships).toBe(2)
+    expect(db.created).toHaveLength(2)
+    expect(db.created[0]).toMatchObject({ marketplace: 'IT', sku: 'LNR-BLK-M', itemId: '110556677', parentSku: 'LNR-BLK', variationSpecifics: { Size: 'M' } })
+    expect(addFn).toHaveBeenCalledOnce()
+  })
+
+  it('is idempotent: skips creation when a membership already exists', async () => {
+    const db = mockDb({ id: 'x' })
+    const addFn = vi.fn(async () => ({ itemId: 'NEW' }))
+    const res = await createSharedListing(parent, variants, { ...ctx0, db, addFixedPriceItemFn: addFn })
+    expect(res.status).toBe('SKIPPED_EXISTS')
+    expect(addFn).not.toHaveBeenCalled()
+    expect(db.created).toHaveLength(0)
+  })
+
+  it('returns ERROR (no throw) when the eBay call fails', async () => {
+    const db = mockDb(null)
+    const addFn = vi.fn(async () => { throw new Error('eBay AddFixedPriceItem Failure: Bad category') })
+    const res = await createSharedListing(parent, variants, { ...ctx0, db, addFixedPriceItemFn: addFn })
+    expect(res.status).toBe('ERROR')
+    expect(res.message).toMatch(/Bad category/)
+    expect(db.created).toHaveLength(0)
   })
 })
