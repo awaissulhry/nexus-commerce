@@ -12,7 +12,7 @@
  */
 
 import { useState, type ReactNode } from 'react'
-import { Search, Inbox, Home, Megaphone, BarChart3, Settings } from 'lucide-react'
+import { Search, Inbox, Home, Megaphone, BarChart3, Settings, Filter, Download, Trash2, Columns } from 'lucide-react'
 import {
   palette,
   color,
@@ -44,6 +44,8 @@ import {
   Kbd,
   Divider,
   SegmentedControl,
+  ToolbarButton,
+  ToolbarDivider,
   type AdProgram,
   type Tone,
 } from '@/design-system/primitives'
@@ -64,6 +66,7 @@ import {
   PerformanceGraph,
   Heatmap,
   DataGrid,
+  ImageUpload,
   Banner,
   Stepper,
   FileDropzone,
@@ -156,6 +159,17 @@ function ToastDemo() {
     </ToastProvider>
   )
 }
+
+// A deterministic inline SVG so the ImageUpload "filled" preview renders without
+// a network fetch (SSR + client match; no flaky asset dependency).
+const SAMPLE_IMG =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><rect width='160' height='160' fill='%23e7f0fd'/><circle cx='80' cy='62' r='30' fill='%231f6fde'/><rect x='28' y='104' width='104' height='30' rx='8' fill='%231a60c4'/></svg>",
+  )
+
+// Resolves immediately to the sample image — the catalog owns the UX, not transport.
+const demoUpload = (_file: File): Promise<string> => Promise.resolve(SAMPLE_IMG)
 
 // Deterministic sample data (Math.sin, no random) so SSR + client match.
 const CHART_DATA = Array.from({ length: 14 }, (_, i) => ({
@@ -476,6 +490,11 @@ export function TokenCatalog() {
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>FileDropzone</div>
           <div style={{ maxWidth: 420 }}>
             <FileDropzone accept=".csv,.tsv,.xlsx,.xls,.json" maxBytes={10 * 1024 * 1024} onFiles={() => {}} />
+          </div>
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>ImageUpload</div>
+          <div style={{ maxWidth: 180 }}>
+            <ImageUpload value={null} onChange={() => {}} onUpload={demoUpload} />
           </div>
         </DSCard>
       </section>
@@ -862,6 +881,20 @@ export function TokenCatalog() {
         />
         <ColumnCustomizer open={colCustOpen} onClose={() => setColCustOpen(false)} columns={colCustCols} onApply={setColCustCols} />
       </section>
+
+      <Section title="ToolbarButton" desc="Square 28×28 toolbar button with DS Tooltip + Kbd shortcut chip, badge, and pressed state. Use ToolbarDivider to separate button groups.">
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 0' }}>
+            <ToolbarButton icon={<Filter size={14} />} label="Filter" description="Filter rows by condition" shortcut="⌘K" />
+            <ToolbarButton icon={<Download size={14} />} label="Export" description="Download as CSV or XLSX" />
+            <ToolbarDivider />
+            <ToolbarButton icon={<Trash2 size={14} />} label="Delete" description="Delete selected rows" active />
+            <ToolbarDivider />
+            <ToolbarButton icon={<Columns size={14} />} label="Columns" description="Show, hide and reorder columns" shortcut="⌘G" badge={3} />
+            <ToolbarButton icon={<Trash2 size={14} />} label="Disabled" description="Cannot do this right now" disabled />
+          </div>
+        </Card>
+      </Section>
 
       <Section title="Typography" desc="Inter via --font-sans, rendered with H10's heavier (auto) smoothing.">
         <Card>
