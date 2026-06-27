@@ -39,7 +39,6 @@ import { Badge } from '@/components/ui/Badge'
 import { IconButton } from '@/components/ui/IconButton'
 import { TagInput } from '@/design-system/primitives/TagInput'
 import { ChannelStrip } from '../ebay-flat-file/ChannelStrip'
-import { SyncHelpPanel } from '../_shared/SyncHelpPanel'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import type { FlatFileAiChange } from '@/components/flat-file/FlatFileGrid.types'
 
@@ -296,6 +295,14 @@ interface ValidationIssue { level: 'error' | 'warn'; msg: string }
 // ── Constants ──────────────────────────────────────────────────────────
 
 const MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK']
+
+// ── Module-level SWR cache ─────────────────────────────────────────────
+// Keyed by "MP:PT". Lives at module scope so it survives component
+// unmount/remount (navigating Amazon → eBay → Amazon reuses the cache).
+const SWR_TTL_MS = 5 * 60 * 1000
+type Snapshot = { manifest: Manifest; rows: Row[]; fetchedAt: number }
+const _swr = new Map<string, Snapshot>()
+const _prefetchInFlight = new Set<string>()
 
 const GROUP_COLORS: Record<string, {
   band: string; header: string; text: string; cell: string; badge: string
@@ -2038,17 +2045,10 @@ export default function AmazonFlatFileClient({
   const loadReqIdRef = useRef(0)
   const loadAbortRef = useRef<AbortController | null>(null)
 
-  // FF-MS.4 — Stale-while-revalidate client cache. Keyed by (MP:PT), survives
-  // for the component's lifetime (a full reload re-hydrates from SSR). The
-  // 5-min freshness window matches the backend TtlCache so cache hits and
-  // server hits agree on what "stale" means. On a hit we paint the field
-  // grid immediately and skip the loading skeleton; a background fetch then
-  // revalidates and writes through.
-  const SWR_TTL_MS = 5 * 60 * 1000
+  // FF-MS.4 — Stale-while-revalidate client cache. Keyed by "MP:PT".
+  // Cache lives at module scope (see _swr above) so it survives navigating
+  // away (Amazon → eBay → Amazon) without a round-trip.
   const cacheKey = (mp: string, pt: string) => `${mp.toUpperCase()}:${pt.toUpperCase()}`
-  type Snapshot = { manifest: Manifest; rows: Row[]; fetchedAt: number }
-  const cacheRef = useRef<Map<string, Snapshot>>(new Map())
-  const prefetchInFlightRef = useRef<Set<string>>(new Set())
 
   // FF-MS.9 — Switch-latency telemetry. navigateTo() stamps {from, to,
   // startedAt}; loadData() reads it back the moment the new manifest is
@@ -2079,7 +2079,7 @@ export default function AmazonFlatFileClient({
   // is already warm. Subsequent switches back to it are instant.
   useEffect(() => {
     if (initialManifest && initialMarketplace && initialProductType) {
-      cacheRef.current.set(
+      _swr.set(
         cacheKey(initialMarketplace, initialProductType),
         { manifest: initialManifest, rows: initialRows ?? [], fetchedAt: Date.now() },
       )
@@ -2103,7 +2103,7 @@ export default function AmazonFlatFileClient({
     // the cache because the caller explicitly wants server-fresh data.
     let paintedFromCache = false
     if (!force && !fromDB) {
-      const snap = cacheRef.current.get(cacheKey(mp, pt))
+      const snap = _swr.get(cacheKey(mp, pt))
       if (snap && (Date.now() - snap.fetchedAt) < SWR_TTL_MS) {
         setManifest(snap.manifest)
         const saved = loadSavedRows(mp, pt)
@@ -2132,8 +2132,8 @@ export default function AmazonFlatFileClient({
         const manifest: Manifest = await mRes.json()
         setManifest(manifest)
         // Refresh the cached manifest without disturbing the cached rows.
-        const prev = cacheRef.current.get(cacheKey(mp, pt))
-        cacheRef.current.set(cacheKey(mp, pt), { manifest, rows: prev?.rows ?? [], fetchedAt: Date.now() })
+        const prev = _swr.get(cacheKey(mp, pt))
+        _swr.set(cacheKey(mp, pt), { manifest, rows: prev?.rows ?? [], fetchedAt: Date.now() })
       } else {
         // Full load — fetch manifest + rows in parallel.
         // fromDB=true: always use DB rows (called on external invalidation or
@@ -2167,7 +2167,7 @@ export default function AmazonFlatFileClient({
         }
         if (fromDB) { setDraftBanner(null); localDivergedRef.current = false } // FFX.2 — grid == DB
         // FF-MS.4 — Write through to the SWR cache so next visit is instant.
-        cacheRef.current.set(cacheKey(mp, pt), { manifest, rows: freshRows, fetchedAt: Date.now() })
+        _swr.set(cacheKey(mp, pt), { manifest, rows: freshRows, fetchedAt: Date.now() })
         // FF-MS.9 — Only record fetch-source telemetry if cache didn't already
         // resolve this switch — otherwise we'd double-log a cache+fetch pair.
         if (!paintedFromCache) recordSwitchPerf(mp, pt, 'fetch')
@@ -2197,10 +2197,10 @@ export default function AmazonFlatFileClient({
   const prefetch = useCallback(async (mp: string, pt: string) => {
     if (!pt.trim()) return
     const key = cacheKey(mp, pt)
-    const cached = cacheRef.current.get(key)
+    const cached = _swr.get(key)
     if (cached && (Date.now() - cached.fetchedAt) < SWR_TTL_MS) return
-    if (prefetchInFlightRef.current.has(key)) return
-    prefetchInFlightRef.current.add(key)
+    if (_prefetchInFlight.has(key)) return
+    _prefetchInFlight.add(key)
     try {
       const backend = getBackendUrl()
       const qs = new URLSearchParams({ marketplace: mp.toUpperCase(), productType: pt.toUpperCase() })
@@ -2213,9 +2213,9 @@ export default function AmazonFlatFileClient({
       if (!mRes.ok) return
       const manifest: Manifest = await mRes.json()
       const rows: Row[] = rRes.ok ? mergeAsinCache((await rRes.json()).rows ?? [], mp) : []
-      cacheRef.current.set(key, { manifest, rows, fetchedAt: Date.now() })
+      _swr.set(key, { manifest, rows, fetchedAt: Date.now() })
     } catch { /* prefetch is best-effort */ }
-    finally { prefetchInFlightRef.current.delete(key) }
+    finally { _prefetchInFlight.delete(key) }
   }, [familyId])
 
   // ── FF-MS.1 — URL is the source of truth for (marketplace, productType) ──
@@ -2289,6 +2289,22 @@ export default function AmazonFlatFileClient({
     void loadData(mpUpper, ptUpper)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlMpRaw, urlPtRaw])
+
+  // Eager background prefetch — after the initial market finishes loading,
+  // silently warm every other market so switching is instant. Uses
+  // requestIdleCallback so it doesn't compete with the first render, and
+  // the existing prefetch() dedup guard means no double-fetches.
+  useEffect(() => {
+    if (loading || !manifest || !productType) return
+    const currentMp = marketplace.toUpperCase()
+    const others = MARKETPLACES.filter((m) => m !== currentMp)
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(() => { others.forEach((m) => void prefetch(m, productType)) }, { timeout: 4000 })
+    } else {
+      setTimeout(() => { others.forEach((m) => void prefetch(m, productType)) }, 1500)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manifest, productType])
 
   // FF-MS.7 — Alt+1..5 (Option+1..5 on Mac) switches between IT/DE/FR/ES/UK.
   // We match by `e.code` (Digit1..Digit5) because Option+digit on Mac produces
@@ -4111,11 +4127,6 @@ export default function AmazonFlatFileClient({
           </div>
         )}
       </header>
-
-      {/* G.4 — inventory & image sync explainer (collapsed by default) */}
-      <div className="px-3 pt-2">
-        <SyncHelpPanel channel="amazon" />
-      </div>
 
       {/* ── Empty / loading states ────────────────────────────── */}
       {!manifest && !loading && (

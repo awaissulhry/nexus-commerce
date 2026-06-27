@@ -21,7 +21,6 @@ import { ChannelStrip } from './ChannelStrip'
 import { EbayPushHistoryPanel } from './EbayPushHistoryPanel'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import { CascadeModal } from '../_shared/CascadeModal'
-import { SyncHelpPanel } from '../_shared/SyncHelpPanel'
 import { Menu } from '@/design-system/components'
 // IE.1 — load the H10 design-system CSS so DS components (Menu, the import wizard)
 // render styled on this page (namespaced --h10-*/.h10-ds-* — inert for the rest).
@@ -1180,10 +1179,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── Slot: channel strip ────────────────────────────────────────────────
 
   const renderChannelStrip = useCallback(() => (
-    <div className="space-y-2">
-      <SyncHelpPanel channel="ebay" />
-      <ChannelStrip channel="ebay" marketplace={marketplace} familyId={familyId} />
-    </div>
+    <ChannelStrip channel="ebay" marketplace={marketplace} familyId={familyId} />
   ), [marketplace, familyId])
 
   // ── Slot: push extras (after Save button) ─────────────────────────────

@@ -58,7 +58,7 @@ const flatFileService = new AmazonFlatFileService(prisma, schemaService)
 // built manifest in-process for 5 min. force=1 still bypasses both
 // caches and re-fetches from SP-API.
 const manifestCache = new TtlCache<unknown>({
-  ttlMs: 5 * 60_000,
+  ttlMs: 30 * 60_000,
   maxEntries: 200,
 })
 
