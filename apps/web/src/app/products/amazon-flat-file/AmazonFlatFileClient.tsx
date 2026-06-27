@@ -1,4 +1,8 @@
 'use client'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '@/design-system/styles/patterns.css'
 
 import {
   useCallback, useEffect, useRef, useState, useMemo, memo,
@@ -930,6 +934,7 @@ export default function AmazonFlatFileClient({
   useEffect(() => { isEditingRef.current = isEditing }, [isEditing])
 
   const [draggingRowId, setDraggingRowId] = useState<string | null>(null)
+  const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ rowId: string; half: 'top' | 'bottom' } | null>(null)
   const [history, setHistory] = useState<Row[][]>([])
   const [future, setFuture] = useState<Row[][]>([])
@@ -3800,6 +3805,51 @@ export default function AmazonFlatFileClient({
             </>
           }
         />
+
+        {/* ── Badge bar: column group chips (drag-to-reorder, click-to-toggle) ── */}
+        {orderedGroups.length > 0 && (
+          <div className="px-3 py-1 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1 flex-wrap">
+            <span className="text-xs text-slate-400 mr-1">Columns:</span>
+            {orderedGroups.map((g) => {
+              const open = !closedGroups.has(g.id)
+              const isDragging = draggingGroupId === g.id
+              const c = gColor(g.color)
+              return (
+                <button key={g.id} type="button" draggable
+                  onDragStart={(e) => { setDraggingGroupId(g.id); e.dataTransfer.effectAllowed = 'move' }}
+                  onDragEnd={() => setDraggingGroupId(null)}
+                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    if (!draggingGroupId || draggingGroupId === g.id) return
+                    const ids = orderedGroups.map((x) => x.id)
+                    const from = ids.indexOf(draggingGroupId); const to = ids.indexOf(g.id)
+                    const next = [...ids]; next.splice(from, 1); next.splice(to, 0, draggingGroupId)
+                    applyGroupSettings(closedGroups, next)
+                    setDraggingGroupId(null)
+                  }}
+                  onClick={() => {
+                    if (open && orderedGroups.filter((x) => !closedGroups.has(x.id)).length <= 1) return
+                    const n = new Set(closedGroups); open ? n.add(g.id) : n.delete(g.id)
+                    applyGroupSettings(n, groupOrder)
+                  }}
+                  title={g.labelEn}
+                  className={cn('inline-flex items-center gap-1 h-5 px-1.5 text-xs rounded border transition-all cursor-grab active:cursor-grabbing select-none',
+                    c.badge, open ? 'opacity-100' : 'opacity-40 hover:opacity-65',
+                    isDragging && 'opacity-30 scale-95')}>
+                  <ChevronRight className={cn('w-2.5 h-2.5 transition-transform', open && 'rotate-90')} />
+                  <span className="font-medium">{g.labelEn}</span>
+                  <span className="opacity-60 tabular-nums">{g.columns.length}</span>
+                </button>
+              )
+            })}
+            {(groupOrder.length > 0 || closedGroups.size > 0) && (
+              <button type="button"
+                onClick={() => applyGroupSettings(new Set(), [])}
+                className="text-xs text-slate-400 hover:text-slate-600 px-1" title="Reset group order and visibility">↺</button>
+            )}
+          </div>
+        )}
 
         {/* ── Bar 3: Marketplace · Product type · Search ────── */}
         <div className="px-3 py-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3 flex-wrap">
