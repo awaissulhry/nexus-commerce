@@ -204,6 +204,14 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
         width: 200,
       },
       {
+        id: 'shared_sku_listing',
+        label: 'Shared-SKU (Trading API)',
+        description: 'Publish this family as an eBay Trading-API multi-variation listing whose variant SKUs may also appear in OTHER listings (shared stock across genuinely-different products). Leave OFF for normal unique-SKU listings. Only set on the parent row. WARNING: never use to clone the SAME item into multiple listings — eBay prohibits duplicate listings.',
+        required: false,
+        kind: 'boolean',
+        width: 150,
+      },
+      {
         id: 'subtitle',
         label: 'Subtitle',
         description: 'Optional subtitle shown under listing title (55 chars max). Sent to eBay on publish.',
