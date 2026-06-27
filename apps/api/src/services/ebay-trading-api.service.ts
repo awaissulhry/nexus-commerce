@@ -153,3 +153,66 @@ ${setXml}
   </Item>
 </AddFixedPriceItemRequest>`
 }
+
+export interface TradingCallContext {
+  oauthToken: string
+  siteId: string
+}
+export interface TradingCallResult {
+  ack: string
+  itemId?: string
+  errors: string[]
+  raw: string
+}
+
+function tradingEndpoint(): string {
+  return process.env.EBAY_SANDBOX === 'true'
+    ? 'https://api.sandbox.ebay.com/ws/api.dll'
+    : 'https://api.ebay.com/ws/api.dll'
+}
+
+export async function callTradingApi(
+  callName: string,
+  xml: string,
+  ctx: TradingCallContext,
+): Promise<TradingCallResult> {
+  const realApiOptIn = process.env.NEXUS_EBAY_REAL_API === 'true'
+  const isProduction = process.env.NODE_ENV === 'production'
+
+  if (!realApiOptIn) {
+    if (isProduction) {
+      throw new Error(
+        `eBay ${callName} not invoked: NEXUS_EBAY_REAL_API not enabled in production. ` +
+          `Refusing to fake-success — would cause overselling.`,
+      )
+    }
+    return { ack: 'Success', itemId: `DRYRUN-${callName}`, errors: [], raw: '' }
+  }
+
+  const res = await fetch(tradingEndpoint(), {
+    method: 'POST',
+    headers: {
+      'X-EBAY-API-CALL-NAME': callName,
+      'X-EBAY-API-COMPATIBILITY-LEVEL': process.env.EBAY_COMPAT_LEVEL || '1193',
+      'X-EBAY-API-DEV-NAME': process.env.EBAY_DEV_ID || '',
+      'X-EBAY-API-APP-NAME': process.env.EBAY_APP_ID || '',
+      'X-EBAY-API-CERT-NAME': process.env.EBAY_CERT_ID || '',
+      'X-EBAY-API-SITEID': ctx.siteId,
+      'X-EBAY-API-IAF-TOKEN': ctx.oauthToken,
+      'Content-Type': 'text/xml',
+    },
+    body: xml,
+  })
+
+  if (!res.ok) throw new Error(`eBay ${callName} HTTP ${res.status}`)
+  const raw = await res.text()
+  const ack = raw.match(/<Ack>([^<]+)<\/Ack>/)?.[1] ?? 'Unknown'
+  const itemId = raw.match(/<ItemID>([^<]+)<\/ItemID>/)?.[1]
+  const errors = [...raw.matchAll(/<(?:ShortMessage|LongMessage)>([^<]+)<\/(?:ShortMessage|LongMessage)>/g)].map(
+    (m) => m[1],
+  )
+  if (ack === 'Failure') {
+    throw new Error(`eBay ${callName} Failure: ${errors[0] ?? 'unknown'}`)
+  }
+  return { ack, itemId, errors, raw }
+}

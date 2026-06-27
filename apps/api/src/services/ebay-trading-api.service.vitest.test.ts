@@ -90,3 +90,51 @@ describe('buildAddFixedPriceItemXml', () => {
     expect(xml).toContain('<Title>Inner Liner &amp; Pad</Title>')
   })
 })
+
+import { callTradingApi } from './ebay-trading-api.service.js'
+
+describe('callTradingApi', () => {
+  const ctx = { oauthToken: 'OAUTH123', siteId: '101' }
+  const OLD = { ...process.env }
+  beforeEach(() => { vi.restoreAllMocks() })
+  afterEach(() => { process.env = { ...OLD } })
+
+  it('dry-run (no real-API) returns simulated success without calling fetch (non-prod)', async () => {
+    process.env.NEXUS_EBAY_REAL_API = 'false'
+    process.env.NODE_ENV = 'test'
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    const res = await callTradingApi('AddFixedPriceItem', '<x/>', ctx)
+    expect(res.ack).toBe('Success')
+    expect(res.itemId).toMatch(/^DRYRUN-/)
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('production without real-API throws (fail-loud)', async () => {
+    process.env.NEXUS_EBAY_REAL_API = 'false'
+    process.env.NODE_ENV = 'production'
+    await expect(callTradingApi('AddFixedPriceItem', '<x/>', ctx)).rejects.toThrow(/NEXUS_EBAY_REAL_API/)
+  })
+
+  it('real call sends IAF token + site id headers and parses ItemID', async () => {
+    process.env.NEXUS_EBAY_REAL_API = 'true'
+    process.env.EBAY_APP_ID = 'APP'; process.env.EBAY_DEV_ID = 'DEV'; process.env.EBAY_CERT_ID = 'CERT'
+    const body = '<AddFixedPriceItemResponse><Ack>Success</Ack><ItemID>110556677</ItemID></AddFixedPriceItemResponse>'
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(body, { status: 200 }),
+    )
+    const res = await callTradingApi('AddFixedPriceItem', '<x/>', ctx)
+    expect(res.ack).toBe('Success')
+    expect(res.itemId).toBe('110556677')
+    const headers = (fetchSpy.mock.calls[0][1] as RequestInit).headers as Record<string, string>
+    expect(headers['X-EBAY-API-IAF-TOKEN']).toBe('OAUTH123')
+    expect(headers['X-EBAY-API-SITEID']).toBe('101')
+    expect(headers['X-EBAY-API-CALL-NAME']).toBe('AddFixedPriceItem')
+  })
+
+  it('real call throws on Ack=Failure with the short message', async () => {
+    process.env.NEXUS_EBAY_REAL_API = 'true'
+    const body = '<R><Ack>Failure</Ack><Errors><ShortMessage>Bad category</ShortMessage></Errors></R>'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status: 200 }))
+    await expect(callTradingApi('AddFixedPriceItem', '<x/>', ctx)).rejects.toThrow(/Bad category/)
+  })
+})
