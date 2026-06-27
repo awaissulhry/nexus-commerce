@@ -9,8 +9,9 @@ import '@/design-system/styles/patterns.css'
 import { useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Search } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronsUpDown, Search } from 'lucide-react'
 
+import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import type { ProductRow } from '@/app/products/_types'
 
@@ -105,6 +106,78 @@ function lensCount(rows: ProductRow[], key: LensKey): number {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Expansion helpers
+// ─────────────────────────────────────────────────────────────────
+
+/** Sentinel row inserted in displayRows while children are being fetched. */
+function makeLoadingRow(parentId: string): ProductRow {
+  return {
+    id: `__loading_${parentId}`,
+    sku: '',
+    name: '__loading__',
+    brand: null,
+    basePrice: 0,
+    totalStock: 0,
+    lowStockThreshold: 0,
+    status: 'ACTIVE',
+    syncChannels: [],
+    imageUrl: null,
+    amazonAsin: null,
+    isParent: false,
+    parentId,
+    productType: null,
+    fulfillmentMethod: null,
+    family: null,
+    workflowStage: null,
+    photoCount: 0,
+    channelCount: 0,
+    variantCount: 0,
+    childCount: 0,
+    coverage: null,
+    updatedAt: '',
+    createdAt: '',
+  }
+}
+
+function isLoadingRow(row: ProductRow) {
+  return row.id.startsWith('__loading_')
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Sort header (used as column label for manually-sorted columns)
+// ─────────────────────────────────────────────────────────────────
+
+interface SortHeaderProps {
+  label: string
+  colKey: string
+  sortKey: string
+  sortDir: 'asc' | 'desc'
+  onSort: (key: string) => void
+}
+
+function SortHeader({ label, colKey, sortKey, sortDir, onSort }: SortHeaderProps) {
+  const active = sortKey === colKey
+  return (
+    <button
+      type="button"
+      className={`${styles.sortHeaderBtn}${active ? ' ' + styles.sortHeaderBtnActive : ''}`}
+      onClick={() => onSort(colKey)}
+    >
+      {label}
+      {active ? (
+        sortDir === 'asc' ? (
+          <ChevronDown size={13} style={{ color: 'var(--color-primary)' }} />
+        ) : (
+          <ChevronDown size={13} style={{ color: 'var(--color-primary)', transform: 'rotate(180deg)' }} />
+        )
+      ) : (
+        <ChevronsUpDown size={13} style={{ color: 'var(--text-disabled)' }} />
+      )}
+    </button>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Sub-components (module-level so they don't re-mount on each render)
 // ─────────────────────────────────────────────────────────────────
 
@@ -149,10 +222,56 @@ function Ckb({ checked, indeterminate, onChange, label }: CkbProps) {
   )
 }
 
-/** Product column cell: thumb + name + sku + category tag + variation count */
-function ProductCell({ row }: { row: ProductRow }) {
+/** Product column cell: chevron + thumb + name + sku + category tag + variation count */
+interface ProductCellProps {
+  row: ProductRow
+  /** True when this row is a child (indents the whole cell) */
+  isChild?: boolean
+  /** True when this parent row has expandable children */
+  hasChildren?: boolean
+  /** True when this parent is currently expanded */
+  isExpanded?: boolean
+  /** True while children are being fetched (shows spinner instead of chevron) */
+  isLoadingExpand?: boolean
+  /** Called when the chevron is clicked */
+  onExpand?: () => void
+}
+
+function ProductCell({
+  row,
+  isChild,
+  hasChildren,
+  isExpanded,
+  isLoadingExpand,
+  onExpand,
+}: ProductCellProps) {
   return (
-    <div className={styles.productCell}>
+    <div
+      className={[styles.productCell, isChild ? styles.productCellChild : '']
+        .filter(Boolean)
+        .join(' ')}
+    >
+      {/* Chevron affordance — only shown on parent rows */}
+      {hasChildren ? (
+        <button
+          type="button"
+          className={styles.expandBtn}
+          onClick={onExpand}
+          aria-label={isExpanded ? 'Collapse variations' : 'Expand variations'}
+          aria-expanded={isExpanded}
+        >
+          {isLoadingExpand ? (
+            <span className={styles.expandSpinner} />
+          ) : isExpanded ? (
+            <ChevronDown size={14} />
+          ) : (
+            <ChevronRight size={14} />
+          )}
+        </button>
+      ) : (
+        /* invisible placeholder keeps thumb column aligned across all rows */
+        <span className={styles.expandPlaceholder} aria-hidden />
+      )}
       <div className={styles.thumb}>
         {row.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -168,7 +287,7 @@ function ProductCell({ row }: { row: ProductRow }) {
           {row.productType && (
             <span className={styles.typeTag}>{row.productType}</span>
           )}
-          {(row.variantCount ?? 0) > 0 && (
+          {!isChild && (row.variantCount ?? 0) > 0 && (
             <span className={styles.varCount}>{row.variantCount} variations</span>
           )}
         </div>
@@ -250,6 +369,16 @@ function ProductsNextInner() {
   const [density, setDensity] = useState<DensityMode>('cozy')
   const [activeTile, setActiveTile] = useState<KpiTileKey>(null)
 
+  // Variation expansion — children are lazy-fetched on first expand and
+  // cached; collapsing re-hides without evicting the cache.
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
+  const [childrenByParent, setChildrenByParent] = useState<Record<string, ProductRow[]>>({})
+  const [loadingChildren, setLoadingChildren] = useState<Set<string>>(new Set())
+
+  // Manual sort state (DataGrid re-sort is disabled so children stay grouped)
+  const [sortKey, setSortKey] = useState<string>('product')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
   // ── Data ──────────────────────────────────────────────────────
   const { data, loading } = usePolledList<{
     products: ProductRow[]
@@ -312,8 +441,55 @@ function ProductsNextInner() {
     return rows
   }, [products, activeTile, lens, search])
 
+  // ── Sorted + interleaved display rows ─────────────────────────
+  // Only top-level rows (parentId === null) are shown by default.
+  // When a parent is expanded, its fetched children are interleaved
+  // immediately after it. DataGrid receives this pre-ordered array
+  // WITHOUT initialSort so it never re-sorts and scatters children.
+  const displayRows = useMemo(() => {
+    const topLevel = filtered.filter((r) => r.parentId === null)
+
+    // Sort parents by active sort key
+    const sorted = [...topLevel].sort((a, b) => {
+      let av: string | number
+      let bv: string | number
+      if (sortKey === 'available') {
+        av = a.totalStock
+        bv = b.totalStock
+      } else if (sortKey === 'price') {
+        av = a.basePrice
+        bv = b.basePrice
+      } else {
+        // default: sort by name (product column)
+        av = a.name.toLowerCase()
+        bv = b.name.toLowerCase()
+      }
+      const dir = sortDir === 'asc' ? 1 : -1
+      return av < bv ? -dir : av > bv ? dir : 0
+    })
+
+    // Interleave children / loading sentinels under each expanded parent
+    const result: ProductRow[] = []
+    for (const parent of sorted) {
+      result.push(parent)
+      if (expandedParents.has(parent.id)) {
+        if (loadingChildren.has(parent.id)) {
+          result.push(makeLoadingRow(parent.id))
+        } else {
+          result.push(...(childrenByParent[parent.id] ?? []))
+        }
+      }
+    }
+    return result
+  }, [filtered, sortKey, sortDir, expandedParents, loadingChildren, childrenByParent])
+
   // ── Selection ─────────────────────────────────────────────────
-  const allKeys = useMemo(() => filtered.map((r) => r.id), [filtered])
+  // allKeys includes visible children (when expanded) but excludes
+  // loading sentinels so select-all doesn't try to select a phantom row.
+  const allKeys = useMemo(
+    () => displayRows.filter((r) => !isLoadingRow(r)).map((r) => r.id),
+    [displayRows],
+  )
   const allSelected = selected.size > 0 && allKeys.every((k) => selected.has(k))
   const someSelected = selected.size > 0 && !allSelected
 
@@ -334,7 +510,65 @@ function ProductsNextInner() {
     [toast],
   )
 
+  // ── Variation expansion ───────────────────────────────────────
+  const fetchChildrenFor = useCallback(async (parentId: string) => {
+    if (childrenByParent[parentId] !== undefined) return // cache hit
+    setLoadingChildren((prev) => {
+      const next = new Set(prev)
+      next.add(parentId)
+      return next
+    })
+    try {
+      const url = `${getBackendUrl()}/api/products?parentId=${encodeURIComponent(parentId)}&includeCoverage=true&includeTags=true`
+      const res = await fetch(url, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`${res.status}`)
+      const data = (await res.json()) as { products?: ProductRow[] }
+      setChildrenByParent((prev) => ({ ...prev, [parentId]: data.products ?? [] }))
+    } catch {
+      // Mark as fetched but empty so re-expand shows nothing rather than spinning
+      setChildrenByParent((prev) => ({ ...prev, [parentId]: [] }))
+    } finally {
+      setLoadingChildren((prev) => {
+        const next = new Set(prev)
+        next.delete(parentId)
+        return next
+      })
+    }
+  }, [childrenByParent])
+
+  const toggleExpand = useCallback((parentId: string) => {
+    setExpandedParents((prev) => {
+      const next = new Set(prev)
+      if (next.has(parentId)) {
+        next.delete(parentId)
+      } else {
+        next.add(parentId)
+        void fetchChildrenFor(parentId)
+      }
+      return next
+    })
+  }, [fetchChildrenFor])
+
+  // ── Manual column sort (keeps children grouped under their parent) ─
+  // DataGrid's built-in sort is disabled (no initialSort passed) so the
+  // pre-ordered displayRows array is rendered as-is. Toggling a sort
+  // header only updates local state which drives displayRows below.
+  const handleColumnSort = useCallback((key: string) => {
+    setSortKey((prev) => {
+      if (prev === key) {
+        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+        return prev
+      }
+      setSortDir('asc')
+      return key
+    })
+  }, [])
+
   // ── Column definitions ────────────────────────────────────────
+  // NOTE: sortable/sortValue are intentionally omitted from all columns.
+  // DataGrid's built-in sort is disabled (no initialSort) so the
+  // pre-ordered displayRows array is not re-sorted. Sort headers are
+  // custom SortHeader elements that update local sortKey/sortDir state.
   const columns = useMemo(
     (): Column<ProductRow>[] => [
       {
@@ -349,93 +583,163 @@ function ProductsNextInner() {
         ),
         width: 40,
         align: 'center',
-        render: (row) => (
-          <Ckb
-            checked={selected.has(row.id)}
-            onChange={() => toggleRow(row.id)}
-          />
-        ),
+        render: (row) => {
+          if (isLoadingRow(row)) return null
+          return (
+            <Ckb
+              checked={selected.has(row.id)}
+              onChange={() => toggleRow(row.id)}
+            />
+          )
+        },
       },
       {
         key: 'product',
-        label: 'Product',
-        sortable: true,
-        sortValue: (r) => r.name,
-        render: (row) => <ProductCell row={row} />,
+        label: (
+          <SortHeader
+            label="Product"
+            colKey="product"
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={handleColumnSort}
+          />
+        ),
+        render: (row) => {
+          if (isLoadingRow(row)) {
+            return (
+              <div className={styles.childLoadingRow}>
+                <span className={styles.expandSpinner} />
+                Loading variations…
+              </div>
+            )
+          }
+          const isChild = row.parentId !== null
+          const hasChildren = row.isParent || (row.childCount ?? 0) > 0
+          return (
+            <ProductCell
+              row={row}
+              isChild={isChild}
+              hasChildren={!isChild && hasChildren}
+              isExpanded={expandedParents.has(row.id)}
+              isLoadingExpand={loadingChildren.has(row.id)}
+              onExpand={() => toggleExpand(row.id)}
+            />
+          )
+        },
       },
       {
         key: 'channels',
         label: 'Channels',
         width: 110,
-        render: (row) => (
-          <div className={styles.chcell}>
-            {CHANNELS.map((ch) => {
-              const cov = getCov(row, ch)
-              const state =
-                cov && cov.live > 0
-                  ? 'on'
-                  : cov && cov.error > 0
-                    ? 'iss'
-                    : 'off'
-              const stateClass =
-                state === 'on'
-                  ? styles.chOn
-                  : state === 'iss'
-                    ? styles.chIss
-                    : styles.chOff
-              const tipLabel = cov
-                ? `${cov.live} live · ${cov.error} errors`
-                : 'not listed'
-              return (
-                <Tooltip key={ch} label={`${ch}: ${tipLabel}`}>
-                  <span className={`${styles.ch} ${stateClass}`}>
-                    {ch[0]}
-                  </span>
-                </Tooltip>
-              )
-            })}
-          </div>
-        ),
+        render: (row) => {
+          if (isLoadingRow(row)) return null
+          return (
+            <div className={styles.chcell}>
+              {CHANNELS.map((ch) => {
+                const cov = getCov(row, ch)
+                const state =
+                  cov && cov.live > 0
+                    ? 'on'
+                    : cov && cov.error > 0
+                      ? 'iss'
+                      : 'off'
+                const stateClass =
+                  state === 'on'
+                    ? styles.chOn
+                    : state === 'iss'
+                      ? styles.chIss
+                      : styles.chOff
+                const tipLabel = cov
+                  ? `${cov.live} live · ${cov.error} errors`
+                  : 'not listed'
+                return (
+                  <Tooltip key={ch} label={`${ch}: ${tipLabel}`}>
+                    <span className={`${styles.ch} ${stateClass}`}>
+                      {ch[0]}
+                    </span>
+                  </Tooltip>
+                )
+              })}
+            </div>
+          )
+        },
       },
       {
         key: 'status',
         label: 'Status',
         width: 96,
-        render: (row) => (
-          <Pill tone={getStatusTone(row.status)}>
-            {getStatusLabel(row.status)}
-          </Pill>
-        ),
+        render: (row) => {
+          if (isLoadingRow(row)) return null
+          return (
+            <Pill tone={getStatusTone(row.status)}>
+              {getStatusLabel(row.status)}
+            </Pill>
+          )
+        },
       },
       {
         key: 'available',
-        label: 'Available',
+        label: (
+          <SortHeader
+            label="Available"
+            colKey="available"
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={handleColumnSort}
+          />
+        ),
         width: 120,
-        sortable: true,
-        sortValue: (r) => r.totalStock,
-        render: (row) => <AvailableCell row={row} />,
+        render: (row) => {
+          if (isLoadingRow(row)) return null
+          return <AvailableCell row={row} />
+        },
       },
       {
         key: 'price',
-        label: 'Price',
+        label: (
+          <SortHeader
+            label="Price"
+            colKey="price"
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={handleColumnSort}
+          />
+        ),
         width: 96,
         align: 'right',
-        sortable: true,
-        sortValue: (r) => r.basePrice,
-        render: (row) => (
-          <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-            {fmtEur(row.basePrice)}
-          </span>
-        ),
+        render: (row) => {
+          if (isLoadingRow(row)) return null
+          return (
+            <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {fmtEur(row.basePrice)}
+            </span>
+          )
+        },
       },
       {
         key: 'actions',
         label: '',
         width: 120,
-        render: (row) => <RowActions row={row} onMore={comingSoon} />,
+        render: (row) => {
+          if (isLoadingRow(row)) return null
+          return <RowActions row={row} onMore={comingSoon} />
+        },
       },
     ],
-    [allSelected, someSelected, selected, toggleAll, toggleRow, comingSoon],
+    [
+      allSelected,
+      someSelected,
+      selected,
+      toggleAll,
+      toggleRow,
+      comingSoon,
+      sortKey,
+      sortDir,
+      handleColumnSort,
+      expandedParents,
+      loadingChildren,
+      toggleExpand,
+    ],
   )
 
   // ── KPI tile config ────────────────────────────────────────────
@@ -657,10 +961,9 @@ function ProductsNextInner() {
       >
         <DataGrid<ProductRow>
           columns={columns}
-          rows={filtered}
+          rows={displayRows}
           rowKey={(r) => r.id}
           selected={selected}
-          initialSort={{ key: 'product', dir: 'asc' }}
           emptyState={
             loading ? (
               <span style={{ color: 'var(--text-tertiary)' }}>Loading…</span>

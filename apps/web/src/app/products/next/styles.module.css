@@ -9,6 +9,14 @@
 .wrap {
   padding: 18px 24px 28px;
   min-height: 100vh;
+  /*
+   * DS success tone renders blue (--h10-pill-success-bg is #d2e6fc,
+   * --h10-pill-success-fg is --h10-blue-900). Override to green locally
+   * so the Active status pill reads as green on this page.
+   * Promote to DS success token when coordinating with the DS session.
+   */
+  --h10-pill-success-bg: var(--h10-green-soft);
+  --h10-pill-success-fg: var(--h10-green-700);
 }
 
 /* ── Header actions row ──────────────────────────────────── */
@@ -412,4 +420,89 @@
   margin-left: 4px;
   padding-left: 12px;
   border-left: 1px solid var(--border-default);
+}
+
+/* ── Variation expand chevron ────────────────────────────── */
+.expandBtn {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.expandBtn:hover {
+  background: var(--h10-surface-hover);
+  color: var(--text-primary);
+}
+
+.expandBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--h10-focus-ring);
+}
+
+/* Invisible placeholder keeps column alignment on non-parent rows */
+.expandPlaceholder {
+  width: 20px;
+  flex: none;
+}
+
+/* Child rows are indented so their thumb sits past the chevron area */
+.productCellChild {
+  padding-left: 32px;
+}
+
+/* Loading row shown while fetching children */
+.childLoadingRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 32px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* CSS-only spinner for the loading state inside the chevron button */
+@keyframes nexus-spin {
+  to { transform: rotate(360deg); }
+}
+.expandSpinner {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--border-default);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: nexus-spin 0.6s linear infinite;
+  display: block;
+  flex: none;
+}
+
+/* ── Sort header button (used in column labels for manual sort) ── */
+.sortHeaderBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.sortHeaderBtn:hover {
+  color: var(--text-primary);
+}
+
+.sortHeaderBtnActive {
+  color: var(--color-primary);
 }
