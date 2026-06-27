@@ -25,4 +25,4 @@ migration.sql generated at `packages/database/prisma/migrations/20260627_shared_
 NO modifications to: ebay-variation-push.service.ts, ebay-flat-file.routes.ts, ebay.provider.ts, or any other file.
 
 ## CONCERNS
-none
+- Push to remote was rejected by the pre-push hook due to a pre-existing `apps/web` build failure (module-not-found errors in design-system components: DateRangePicker, Drawer, FileDropzone, Modal, MultiSelect, Pagination, Stepper, AppShell, Builder, ColumnCustomizer, DetailHeader, FilterPanel, Select, TagInput). This is NOT caused by Phase 2 changes (confirmed: zero design-system files in `git diff --name-only ca58c64f..HEAD`). The failure existed at the base commit `ca58c64f`. The 5 phase-2 commits exist locally in the worktree and are ready for review / gated merge when the pre-existing build issue is resolved.
