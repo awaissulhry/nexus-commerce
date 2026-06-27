@@ -725,9 +725,13 @@ export function isBlankFeedValue(val: unknown): boolean {
 // (lossless content) with the live structured columns overlaid from the DB
 // (price/qty/title/desc/bullets, so repricer/stock changes show) + the internal
 // row metadata. Everything else comes from the snapshot exactly as saved.
+// Flat file is the authoritative source of truth for all content.
+// Only operational values legitimately managed outside the flat file
+// (live price from repricer, live qty from stock system) overlay the
+// snapshot. Content fields (title, description, bullets) must NEVER
+// override the snapshot — doing so silently discards flat file edits
+// before they reach the editor or Amazon.
 const SNAPSHOT_LIVE_OVERLAY = [
-  'item_name', 'product_description',
-  'bullet_point_2', 'bullet_point_3', 'bullet_point_4', 'bullet_point_5',
   'purchasable_offer__our_price', 'purchasable_offer__sale_price',
   'fulfillment_availability__quantity',
 ]
@@ -747,11 +751,11 @@ export function applySnapshotOverlay(snapshot: Record<string, any>, liveRow: Fla
   return {
     ...snapshot,
     ...overlay,
-    // Bullets: slot 1 is bullet_point_1 everywhere; the bare bullet_point is only
-    // the generic-loop sentinel. Resolve slot 1 (live override > snapshot _1 >
-    // legacy bare) and blank the bare key so no consumer reads a stale slot-1.
+    // Bullets: slot 1 lives in bullet_point_1; the bare bullet_point is a blank
+    // sentinel so the generic loop skips attrs.bullet_point. Snapshot wins for
+    // content — the live DB value is only a fallback when no snapshot exists yet.
     bullet_point: '',
-    bullet_point_1: (liveRow as any)['bullet_point_1'] || snapshot['bullet_point_1'] || snapshot['bullet_point'] || '',
+    bullet_point_1: snapshot['bullet_point_1'] || snapshot['bullet_point'] || (liveRow as any)['bullet_point_1'] || '',
     ...(isFba ? { fulfillment_availability__quantity: '' } : {}),
     item_sku: liveRow.item_sku ?? snapshot.item_sku,
     _rowId: liveRow._rowId,
