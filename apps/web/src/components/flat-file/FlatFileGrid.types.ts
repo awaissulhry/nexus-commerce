@@ -78,6 +78,34 @@ export interface ValidationIssue {
   msg: string
 }
 
+// ── Sort ──────────────────────────────────────────────────────────────────
+
+/** Multi-level sort configuration entry (mirrors SortPanel.SortLevel). */
+export interface SortLevel {
+  id: string
+  colId: string
+  mode: 'asc' | 'desc' | 'custom'
+  customOrder: string[]
+}
+
+// ── Conditional formatting ─────────────────────────────────────────────────
+
+export type RuleOp =
+  | 'lt' | 'lte' | 'gt' | 'gte' | 'eq' | 'neq'
+  | 'contains' | 'startsWith' | 'endsWith' | 'empty' | 'notEmpty'
+
+export type RuleTone = 'red' | 'amber' | 'green' | 'blue' | 'slate'
+
+/** Conditional-format rule (mirrors bulk-edit ConditionalRule). */
+export interface ConditionalRule {
+  id: string
+  columnId: string
+  op: RuleOp
+  value: unknown
+  tone: RuleTone
+  enabled: boolean
+}
+
 // ── Slot context types ────────────────────────────────────────────────────
 
 export interface PushExtrasCtx {
