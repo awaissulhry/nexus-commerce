@@ -58,6 +58,7 @@ export const FLAT_FILE_SHORTCUTS: ShortcutGroup[] = [
       { keys: ['⌘', '⇧', 'Z'], label: 'Redo' },
       { keys: ['⌘', 'F'], label: 'Find & Replace' },
       { keys: ['?'], label: 'Show this shortcuts modal' },
+      { keys: ['⌘', 'G'], label: 'Open / close Columns modal' },
     ],
   },
 ]
