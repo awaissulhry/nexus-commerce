@@ -635,6 +635,7 @@ export default function FlatFileGrid({
   renderChannelStrip, renderPushExtras, renderFeedBanner, renderModals,
   renderToolbarFetch, renderToolbarImport, renderBar3Left,
   renderAiPanel, renderEmptyAction,
+  onColumnsClick, columnsActive, toolbarTrailing,
 }: FlatFileGridProps) {
   const router = useRouter()
   const { toast } = useToast()
@@ -1461,6 +1462,9 @@ export default function FlatFileGrid({
 
           slotAfterReplicate={renderToolbarFetch?.(toolbarFetchCtx)}
           slotAfterSmartPaste={renderToolbarImport?.(toolbarImportCtx)}
+          onColumnsClick={onColumnsClick}
+          columnsActive={columnsActive}
+          trailing={toolbarTrailing}
         />
 
         {/* Bar 3: search + filter + saved views + column pills */}

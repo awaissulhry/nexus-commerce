@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowRightLeft, CheckCircle2, Columns, Download, ExternalLink, GitBranch, GitFork, History, Loader2, ListOrdered, Plus, RefreshCw, RotateCcw, Search, Send, Upload, X, Zap,
+  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, Loader2, ListOrdered, Plus, RefreshCw, RotateCcw, Search, Send, Upload, X, Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -1486,21 +1486,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         active={showCascadeButtons}
       />
 
-      {/* VAVO — Variation value order (eBay-specific — no Amazon equivalent) */}
-      <SharedTbBtn
-        icon={<ListOrdered className="w-3.5 h-3.5" />}
-        title="Value order — set the display order of variation axis values (Size, Color) on the eBay listing"
-        onClick={() => setValueOrderOpen(true)}
-      />
-
-      {/* Columns — open ColumnGroupModal to show/hide/reorder column groups */}
-      <SharedTbBtn
-        icon={<Columns className="w-3.5 h-3.5" />}
-        title="Column groups — show, hide, and reorder column groups (⌘G)"
-        onClick={() => setColumnsOpen((o) => !o)}
-        active={columnsOpen}
-      />
-
       {/* IN.2 — Reset all visible overrides back to master */}
       <SharedTbBtn
         icon={<RotateCcw className="w-3.5 h-3.5" />}
@@ -1531,7 +1516,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       />
     </>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [showOverrideBadges, showCascadeButtons, valueOrderOpen, columnsOpen, setColumnsOpen])
+  ), [showOverrideBadges, showCascadeButtons])
 
   // ── Slot: Bar3 left ────────────────────────────────────────────────────
 
@@ -1785,6 +1770,15 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       renderToolbarFetch={renderToolbarFetch}
       renderToolbarImport={renderToolbarImport}
       renderBar3Left={renderBar3Left}
+      onColumnsClick={() => setColumnsOpen((o) => !o)}
+      columnsActive={columnsOpen}
+      toolbarTrailing={
+        <SharedTbBtn
+          icon={<ListOrdered className="w-3.5 h-3.5" />}
+          title="Value order — set the display order of variation axis values (Size, Color) on the eBay listing"
+          onClick={() => setValueOrderOpen(true)}
+        />
+      }
       renderAiPanel={(ctx: AiPanelCtx) => (
         <FlatFileAiPanel {...ctx} channel="ebay" />
       )}

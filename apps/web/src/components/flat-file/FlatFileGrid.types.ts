@@ -205,6 +205,14 @@ export interface FlatFileGridProps {
   renderAiPanel?: (ctx: AiPanelCtx) => React.ReactNode
   /** G.2 — beginner empty-state CTA (launches the editor's add flow). */
   renderEmptyAction?: () => React.ReactNode
+
+  // ── Toolbar passthrough props (wired directly to FlatFileToolbar) ─────
+  /** Open the Columns/Group modal. When provided, the Columns button appears in the toolbar. */
+  onColumnsClick?: () => void
+  /** Whether the Columns modal is currently open (highlights the toolbar button). */
+  columnsActive?: boolean
+  /** Channel-specific button(s) appended before the Columns + AI Assistant group. */
+  toolbarTrailing?: React.ReactNode
 }
 
 // ── A4.1 — AI panel context ───────────────────────────────────────────────
