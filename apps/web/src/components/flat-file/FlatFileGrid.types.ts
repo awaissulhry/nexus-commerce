@@ -54,7 +54,7 @@ export interface BaseRow {
   _productId?: string
   _dirty?: boolean
   _isNew?: boolean
-  _status?: 'idle' | 'pending' | 'pushed' | 'error'
+  _status?: 'idle' | 'pending' | 'pushed' | 'success' | 'error'
   _feedMessage?: string
   [key: string]: unknown
 }

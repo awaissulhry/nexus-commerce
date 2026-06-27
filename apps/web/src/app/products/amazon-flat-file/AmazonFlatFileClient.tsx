@@ -14,18 +14,15 @@ import {
 import dynamic from 'next/dynamic'
 import { evaluateRule, TONE_CLASSES, type ConditionalRule } from '@/app/_shared/bulk-edit/conditional-format'
 import { type FindCell } from '@/app/_shared/bulk-edit/find-replace'
-import { type FFFilterState } from '../_shared/FFFilterPanel'
-import { AMAZON_FILTER_DEFAULT as FF_FILTER_DEFAULT } from '../_shared/flat-file-filter.types'
+import { useFlatFileCore } from '@/components/flat-file/useFlatFileCore'
+import { AMAZON_FILTER_DEFAULT, type AmazonFFFilterState, type AmazonFilterDims } from '../_shared/flat-file-filter.types'
 import { FFSavedViews, type FFViewState } from '../_shared/FFSavedViews'
 import { type PullDiffApplyResult } from './PullDiffModal'
 import { type ImportApplyResult } from './ImportWizardModal'
 import { PendingPullBanner } from '../_shared/PendingPullBanner'
 import { FLAT_FILE_SHORTCUTS } from '../_shared/flat-file-shortcuts'
-import {
-  FlatFileIconToolbar,
-  TbBtn as SharedTbBtn,
-  type RowImageSize as SharedRowImageSize,
-} from '../_shared/FlatFileIconToolbar'
+import { FlatFileToolbar as FlatFileIconToolbar, TbBtn as SharedTbBtn } from '@/components/flat-file/FlatFileToolbar'
+import { ColumnGroupModal } from '@/design-system/components/ColumnGroupModal'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { PublishModeBadge } from '@/components/PublishModeBadge'
@@ -55,8 +52,8 @@ const ConditionalFormatBar = dynamic(
   () => import('@/app/_shared/bulk-edit/components/ConditionalFormatBar').then((m) => m.ConditionalFormatBar),
   { ssr: false },
 )
-const FFFilterPanel = dynamic(
-  () => import('../_shared/FFFilterPanel').then((m) => m.FFFilterPanel),
+const AmazonFFFilterPanelLazy = dynamic(
+  () => import('../_shared/AmazonFFFilterPanel').then((m) => m.AmazonFFFilterPanel),
   { ssr: false },
 )
 const AIBulkModal = dynamic(
@@ -164,7 +161,7 @@ interface Row {
   /** GX.5 — a trailing blank "canvas" row (Sheets-style). Never counted, saved,
    *  submitted or exported; materializes into a real row on first edit. */
   _ghost?: boolean
-  _status?: 'idle' | 'pending' | 'success' | 'error'
+  _status?: 'idle' | 'pending' | 'pushed' | 'success' | 'error'
   _feedMessage?: string
   _productId?: string
   [key: string]: unknown
@@ -544,7 +541,6 @@ export default function AmazonFlatFileClient({
   // the user switched. Now writes track the active market.
   const mp = marketplace.toUpperCase()
   const rowOrderKey = `ff-amazon-${mp}-row-order`
-  const sortKey     = `ff-amazon-${mp}-sort`
 
   // ── Market sync state ──────────────────────────────────────────────────
   // Each market has a boolean: when true it receives auto-propagation from
@@ -629,14 +625,59 @@ export default function AmazonFlatFileClient({
   type LoadError = { message: string; status?: number; mp?: string; pt?: string; at: number }
   const [loadError, setLoadError] = useState<LoadError | null>(null)
 
-  // Groups the user has explicitly CLOSED — persisted in localStorage.
-  // Everything not in this set is open by default (including new groups
-  // that appear after a schema refresh). This way the user's choices survive
-  // refreshes without any explicit reset.
-  const [closedGroups, setClosedGroups] = useState<Set<string>>(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('ff-closed-groups') ?? '[]')) }
-    catch { return new Set() }
+  // ── useFlatFileCore — shared state hook ───────────────────────────────
+  // Manages sort, CF rules, filter, smart paste, row images, column groups,
+  // panel open states, selection, and undo/redo in a single hook that is
+  // shared with EbayFlatFileClient.
+  const core = useFlatFileCore<Row, AmazonFilterDims>({
+    storageKey: `ff-amazon-${initialMarketplace.toUpperCase()}-${initialProductType?.toUpperCase() ?? 'UNKNOWN'}`,
+    initialRows: [],
+    makeBlankRow: makeGhostRow,
+    initialGroups: (initialManifest?.groups ?? []).map((g) => ({
+      id: g.id,
+      label: g.labelEn,
+      color: g.color,
+      columns: g.columns.map((c) => ({
+        id: c.id,
+        label: c.labelEn,
+        kind: c.kind as any,
+        description: c.description,
+        required: c.required,
+        options: c.options,
+        guidance: c.guidance,
+        maxLength: c.maxLength,
+        width: c.width,
+      })),
+    })),
+    initialFilter: AMAZON_FILTER_DEFAULT,
   })
+
+  const {
+    sortConfig, setSortConfig: _setSortCoreConfig, persistSort,
+    sortPanelOpen, setSortPanelOpen,
+    cfRules, setCfRules, persistCfRules,
+    conditionalOpen: cfOpen, setConditionalOpen: setCfOpen,
+    ffFilter, setFfFilter: setFFFilter,
+    filterOpen: filterPanelOpen, setFilterOpen: setFilterPanelOpen,
+    smartPasteEnabled, toggleSmartPaste,
+    showRowImages, rowImageSize: imageSize, toggleRowImages, changeImageSize: setImageSizeCore,
+    columnGroups, setColumnGroups,
+    closedGroups, groupOrder, applyGroupSettings,
+    columnsOpen, setColumnsOpen,
+    findReplaceOpen, setFindReplaceOpen,
+    validationOpen: showValidPanel, setValidationOpen: setShowValidPanel,
+    aiPanelOpen, setAiPanelOpen,
+    aiModalOpen, setAiModalOpen,
+    selectedRows, setSelectedRows,
+  } = core
+
+  // Wrapper: persistSort + propagate across synced markets
+  const setSortConfig = useCallback((levels: SortLevel[]) => {
+    persistSort(levels)
+    propagateSort(levels)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persistSort])
+
 
   // Derived: open = all manifest groups minus whatever the user has closed
   const openGroups = useMemo(
@@ -644,31 +685,35 @@ export default function AmazonFlatFileClient({
     [effectiveManifest, closedGroups],
   )
 
-  // User-defined group order — persisted in localStorage
-  const [groupOrder, setGroupOrder] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem('ff-group-order') ?? '[]') } catch { return [] }
-  })
-  const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null)
-
-  const [sortConfig, setSortConfig] = useState<SortLevel[]>(() => {
-    try {
-      const raw = localStorage.getItem(sortKey) ?? localStorage.getItem('ff-amazon-sort')
-      return JSON.parse(raw ?? '[]')
-    } catch { return [] }
-  })
-  const [sortPanelOpen, setSortPanelOpen] = useState(false)
+  // Sync columnGroups when effectiveManifest changes (market or productType switch)
   useEffect(() => {
-    try { localStorage.setItem(sortKey, JSON.stringify(sortConfig)) } catch {}
-    propagateSort(sortConfig)
+    if (!effectiveManifest) return
+    setColumnGroups(
+      effectiveManifest.groups.map((g) => ({
+        id: g.id,
+        label: g.labelEn,
+        color: g.color,
+        columns: g.columns.map((c) => ({
+          id: c.id,
+          label: c.labelEn,
+          kind: c.kind as any,
+          description: c.description,
+          required: c.required,
+          options: c.options,
+          guidance: c.guidance,
+          maxLength: c.maxLength,
+          width: c.width,
+        })),
+      })),
+    )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortConfig])
+  }, [effectiveManifest])
 
   // Search
   const [searchQuery, setSearchQuery] = useState('')
   const [searchMode, setSearchMode] = useState<'rows' | 'columns'>('rows')
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [activeCell, setActiveCell] = useState<{ rowId: string; colId: string } | null>(null)
   const [selAnchor, setSelAnchor] = useState<{ ri: number; ci: number } | null>(null)
   const [selEnd,    setSelEnd]    = useState<{ ri: number; ci: number } | null>(null)
@@ -682,20 +727,10 @@ export default function AmazonFlatFileClient({
     type: 'row' | 'parent' | 'variant'
     position: 'end' | 'above' | 'below'
   } | null>(null)
-  const [smartPasteEnabled, setSmartPasteEnabled] = useState(() => {
-    try { return localStorage.getItem('ff-smart-paste') === '1' } catch { return false }
-  })
 
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
   const [frozenColCount, setFrozenColCount] = useState<number>(() => {
     try { return parseInt(localStorage.getItem('ff-frozen-cols') ?? '1', 10) || 1 } catch { return 1 }
-  })
-  const [showValidPanel, setShowValidPanel] = useState(false)
-  const [showRowImages, setShowRowImages] = useState<boolean>(() => {
-    try { return localStorage.getItem('ff-show-images') === '1' } catch { return false }
-  })
-  const [imageSize, setImageSize] = useState<number>(() => {
-    try { return parseInt(localStorage.getItem('ff-image-size') ?? '48', 10) || 48 } catch { return 48 }
   })
   const [imagesByAsin, setImagesByAsin] = useState<Record<string, string | null>>(() => {
     try {
@@ -737,21 +772,9 @@ export default function AmazonFlatFileClient({
   const [versionPanelOpen, setVersionPanelOpen] = useState(false)
 
   // BF.1 — Find & Replace
-  const [findReplaceOpen, setFindReplaceOpen] = useState(false)
   const [matchKeys, setMatchKeys] = useState<Set<string>>(new Set())
 
-  // BF.2 — Conditional formatting
-  const [cfRules, setCfRules] = useState<ConditionalRule[]>([])
-  const [cfOpen, setCfOpen] = useState(false)
-
-  // BF.3 — Extended row filter
-  const [ffFilter, setFFFilter] = useState<FFFilterState>(FF_FILTER_DEFAULT)
-  const [filterPanelOpen, setFilterPanelOpen] = useState(false)
-
-  // BF.4 — AI bulk actions
-  const [aiModalOpen, setAiModalOpen] = useState(false)
-  // A4.1 — AI assistant panel
-  const [aiPanelOpen, setAiPanelOpen] = useState(false)
+  // BF.4 — AI bulk actions (open states now from useFlatFileCore above)
 
   // BM.2 — Replicate modal
   const [replicateOpen, setReplicateOpen] = useState(false)
@@ -905,7 +928,6 @@ export default function AmazonFlatFileClient({
   useEffect(() => { selAnchorRef.current = selAnchor }, [selAnchor])
   useEffect(() => { selEndRef.current = selEnd }, [selEnd])
   useEffect(() => { isEditingRef.current = isEditing }, [isEditing])
-  useEffect(() => { try { localStorage.setItem('ff-smart-paste', smartPasteEnabled ? '1' : '0') } catch {} }, [smartPasteEnabled])
 
   const [draggingRowId, setDraggingRowId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ rowId: string; half: 'top' | 'bottom' } | null>(null)
@@ -974,10 +996,6 @@ export default function AmazonFlatFileClient({
   useEffect(() => { try { localStorage.setItem('ff-show-cascade', showCascadeButtons ? '1' : '0') } catch {} }, [showCascadeButtons])
   const [cascadeRow, setCascadeRow] = useState<Row | null>(null)
 
-  // Persist image preferences
-  useEffect(() => { try { localStorage.setItem('ff-show-images', showRowImages ? '1' : '0') } catch {} }, [showRowImages])
-  useEffect(() => { try { localStorage.setItem('ff-image-size', String(imageSize)) } catch {} }, [imageSize])
-
   // Auto row height when images toggled on or size changed
   useEffect(() => {
     if (showRowImages) {
@@ -1038,15 +1056,19 @@ export default function AmazonFlatFileClient({
 
   // ── Derived ────────────────────────────────────────────────────────
 
-  // Respect saved drag order; fall back to Amazon's order for new groups
+  // Respect saved drag order; fall back to Amazon's order for new groups.
+  // Uses columnGroups from useFlatFileCore (synced to effectiveManifest) +
+  // groupOrder from core for the user-defined reorder.
   const orderedGroups = useMemo<ColumnGroup[]>(() => {
-    const groups = effectiveManifest?.groups ?? []
+    // columnGroups are FlatFileColumnGroup; ColumnGroup is the local interface.
+    // They are structurally compatible — both have id, labelEn/label, color, columns.
+    const groups = (columnGroups.length > 0 ? columnGroups : effectiveManifest?.groups ?? []) as unknown as ColumnGroup[]
     if (!groupOrder.length) return groups
     const byId = new Map(groups.map((g) => [g.id, g]))
     const ordered = groupOrder.map((id) => byId.get(id)).filter(Boolean) as ColumnGroup[]
     const rest = groups.filter((g) => !groupOrder.includes(g.id))
     return [...ordered, ...rest]
-  }, [effectiveManifest, groupOrder])
+  }, [columnGroups, effectiveManifest, groupOrder])
 
   const visibleGroups = useMemo(
     () => orderedGroups.filter((g) => openGroups.has(g.id)),
@@ -3602,13 +3624,13 @@ export default function AmazonFlatFileClient({
           validationDisabled={!manifest}
 
           smartPasteEnabled={smartPasteEnabled}
-          onSmartPasteToggle={() => setSmartPasteEnabled((o) => !o)}
+          onSmartPasteToggle={toggleSmartPaste}
 
           showRowImages={showRowImages}
-          rowImageSize={imageSize as SharedRowImageSize}
+          rowImageSize={imageSize as 24 | 32 | 48 | 64 | 96}
           rowImagesDisabled={!manifest}
-          onRowImagesToggle={() => setShowRowImages((o) => !o)}
-          onRowImageSizeChange={(s) => setImageSize(s)}
+          onRowImagesToggle={toggleRowImages}
+          onRowImageSizeChange={(s) => setImageSizeCore(s as 24 | 32 | 48 | 64 | 96)}
 
           sortLevelCount={sortConfig.length}
           sortPanelOpen={sortPanelOpen}
@@ -3675,8 +3697,11 @@ export default function AmazonFlatFileClient({
 
           conditionalEnabledCount={cfRules.filter((r) => r.enabled).length}
           conditionalOpen={cfOpen}
-          onConditionalClick={() => setCfOpen((o) => !o)}
+          onConditionalClick={() => setCfOpen((o: boolean) => !o)}
           conditionalDisabled={!manifest}
+
+          onColumnsClick={() => setColumnsOpen(true)}
+          columnsActive={columnsOpen}
 
           aiBulkSelectedCount={selectedRows.size}
           aiBulkDisabled={!manifest}
@@ -3884,10 +3909,10 @@ export default function AmazonFlatFileClient({
               )}
               {/* BF.3 — extended row filter */}
               {filterPanelMounted && (
-                <FFFilterPanel
+                <AmazonFFFilterPanelLazy
                   open={filterPanelOpen}
                   onOpenChange={setFilterPanelOpen}
-                  value={ffFilter}
+                  value={ffFilter as AmazonFFFilterState}
                   onChange={setFFFilter}
                 />
               )}
@@ -3901,7 +3926,7 @@ export default function AmazonFlatFileClient({
                   frozenColCount,
                 }}
                 onApply={(state: FFViewState) => {
-                  setClosedGroups(new Set(state.closedGroups))
+                  applyGroupSettings(new Set(state.closedGroups), groupOrder)
                   setFFFilter(state.ffFilter)
                   setSortConfig(state.sortConfig)
                   setCfRules(state.cfRules)
@@ -3911,66 +3936,23 @@ export default function AmazonFlatFileClient({
             </div>
           )}
 
-          {/* Group toggles — draggable to reorder */}
-          {manifest && (
-            <div className="flex items-center gap-1 flex-wrap ml-auto">
-              <span className="text-xs text-slate-400 mr-1">Columns:</span>
-              {orderedGroups.map((g) => {
-                const c = gColor(g.color)
-                const open = openGroups.has(g.id)
-                const isDragging = draggingGroupId === g.id
-                return (
-                  <button key={g.id} type="button"
-                    draggable
-                    onDragStart={(e) => { setDraggingGroupId(g.id); e.dataTransfer.effectAllowed = 'move' }}
-                    onDragEnd={() => setDraggingGroupId(null)}
-                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      if (!draggingGroupId || draggingGroupId === g.id) return
-                      const ids = orderedGroups.map((x) => x.id)
-                      const from = ids.indexOf(draggingGroupId)
-                      const to = ids.indexOf(g.id)
-                      const next = [...ids]
-                      next.splice(from, 1)
-                      next.splice(to, 0, draggingGroupId)
-                      setGroupOrder(next)
-                      try { localStorage.setItem('ff-group-order', JSON.stringify(next)) } catch {}
-                      setDraggingGroupId(null)
-                    }}
-                    onClick={() => setClosedGroups((prev) => {
-                      const n = new Set(prev)
-                      open ? n.add(g.id) : n.delete(g.id)
-                      try { localStorage.setItem('ff-closed-groups', JSON.stringify([...n])) } catch {}
-                      return n
-                    })}
-                    title={g.labelEn !== g.labelLocal ? `${g.labelLocal} — ${g.labelEn}` : g.labelEn}
-                    className={cn('inline-flex items-center gap-1 h-5 px-1.5 text-xs rounded border transition-all cursor-grab active:cursor-grabbing select-none',
-                      c.badge, open ? 'opacity-100' : 'opacity-40 hover:opacity-65',
-                      isDragging && 'opacity-30 scale-95')}>
-                    <ChevronRight className={cn('w-2.5 h-2.5 transition-transform', open && 'rotate-90')} />
-                    <span className="font-medium">{g.labelLocal}</span>
-                    {g.labelEn !== g.labelLocal && (
-                      <span className="opacity-50 font-normal">({g.labelEn})</span>
-                    )}
-                    <span className="opacity-60 tabular-nums">{g.columns.length}</span>
-                  </button>
-                )
-              })}
-              {(groupOrder.length > 0 || closedGroups.size > 0) && (
-                <button type="button"
-                  onClick={() => {
-                    setGroupOrder([])
-                    setClosedGroups(new Set())
-                    try { localStorage.removeItem('ff-group-order'); localStorage.removeItem('ff-closed-groups') } catch {}
-                  }}
-                  className="text-xs text-slate-400 hover:text-slate-600 px-1"
-                  title="Reset group order and visibility to Amazon's default">
-                  ↺
-                </button>
-              )}
-            </div>
-          )}
+          {/* ColumnGroupModal — replaces the old draggable badge bar */}
+          <ColumnGroupModal
+            open={columnsOpen}
+            onClose={() => setColumnsOpen(false)}
+            groups={orderedGroups.map((g) => ({
+              id: g.id,
+              label: (g as any).labelEn ?? (g as any).label ?? g.id,
+              color: g.color,
+              columns: g.columns.map((c) => c.id),
+              visible: !closedGroups.has(g.id),
+            }))}
+            onGroupsChange={(groups) => {
+              const nextClosed = new Set(groups.filter((g) => !g.visible).map((g) => g.id))
+              const nextOrder = groups.map((g) => g.id)
+              applyGroupSettings(nextClosed, nextOrder)
+            }}
+          />
         </div>
 
         {/* Error — FF-MS.6: when a load failed, identifies the failed market,
@@ -4604,7 +4586,7 @@ export default function AmazonFlatFileClient({
             open={cfOpen}
             onClose={() => setCfOpen(false)}
             rules={cfRules}
-            onChange={setCfRules}
+            onChange={persistCfRules}
             visibleColumns={allColumnsRef.current.map((c) => ({ id: c.id, label: c.labelEn }))}
           />
         </div>
