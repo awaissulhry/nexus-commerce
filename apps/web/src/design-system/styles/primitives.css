@@ -476,6 +476,17 @@
   opacity: 1;
 }
 
+/* Light variant: white bubble with dark text (for use on light-theme toolbars) */
+.h10-ds-tooltip--light > .tip {
+  background: var(--surface-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--h10-shadow-menu);
+}
+.h10-ds-tooltip--light > .tip::after {
+  border-top-color: var(--border-default);
+}
+
 /* ── Spinner ─────────────────────────────────────────────────────── */
 .h10-ds-spinner {
   display: inline-block;
