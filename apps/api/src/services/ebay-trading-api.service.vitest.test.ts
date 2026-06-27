@@ -43,6 +43,10 @@ describe('buildReviseInventoryStatusXml', () => {
   it('is a ReviseInventoryStatusRequest', () => {
     expect(xml).toContain('<ReviseInventoryStatusRequest')
   })
+  it('floors negative quantity to 0', () => {
+    const xmlNeg = buildReviseInventoryStatusXml({ itemId: '1', sku: 'S', quantity: -3 })
+    expect(xmlNeg).toContain('<Quantity>0</Quantity>')
+  })
 })
 
 import { buildAddFixedPriceItemXml } from './ebay-trading-api.service.js'
@@ -89,6 +93,51 @@ describe('buildAddFixedPriceItemXml', () => {
   it('escapes the title', () => {
     expect(xml).toContain('<Title>Inner Liner &amp; Pad</Title>')
   })
+
+  it('CDATA: escapes ]]> in description so the CDATA stays well-formed', () => {
+    const xmlWithCdata = buildAddFixedPriceItemXml({
+      title: 'T', description: 'a]]>b', categoryId: '1', conditionId: '1000',
+      country: 'IT', currency: 'EUR', variationSpecificNames: ['Size'],
+      variations: [{ sku: 'A-M', price: 9.9, quantity: 1, specifics: { Size: 'M' } }],
+    })
+    // The raw closing sequence followed immediately by 'b' must not appear
+    expect(xmlWithCdata).not.toContain(']]>b')
+    // The split marker must be present
+    expect(xmlWithCdata).toContain(']]]]><![CDATA[>')
+  })
+
+  it('emits <Pictures> block when variationPictures is provided', () => {
+    const xmlWithPics = buildAddFixedPriceItemXml({
+      title: 'T', description: 'x', categoryId: '1', conditionId: '1000',
+      country: 'IT', currency: 'EUR',
+      variationSpecificNames: ['Color'],
+      variations: [{ sku: 'A-BLK', price: 49.9, quantity: 2, specifics: { Color: 'Nero' } }],
+      variationPictures: { axisName: 'Color', byValue: { Nero: ['https://img/n1.jpg'] } },
+    })
+    expect(xmlWithPics).toContain('<Pictures>')
+    expect(xmlWithPics).toContain('<VariationSpecificName>Color</VariationSpecificName>')
+    expect(xmlWithPics).toContain('<VariationSpecificPictureSet>')
+    expect(xmlWithPics).toContain('<VariationSpecificValue>Nero</VariationSpecificValue>')
+    expect(xmlWithPics).toContain('<PictureURL>https://img/n1.jpg</PictureURL>')
+  })
+
+  it('floors negative variation quantity to 0', () => {
+    const xmlNeg = buildAddFixedPriceItemXml({
+      title: 'T', description: 'x', categoryId: '1', conditionId: '1000',
+      country: 'IT', currency: 'EUR', variationSpecificNames: ['Size'],
+      variations: [{ sku: 'A-M', price: 9.9, quantity: -5, specifics: { Size: 'M' } }],
+    })
+    expect(xmlNeg).toContain('<Quantity>0</Quantity>')
+  })
+
+  it('truncates fractional variation quantity (floor)', () => {
+    const xmlFrac = buildAddFixedPriceItemXml({
+      title: 'T', description: 'x', categoryId: '1', conditionId: '1000',
+      country: 'IT', currency: 'EUR', variationSpecificNames: ['Size'],
+      variations: [{ sku: 'A-M', price: 9.9, quantity: 2.9, specifics: { Size: 'M' } }],
+    })
+    expect(xmlFrac).toContain('<Quantity>2</Quantity>')
+  })
 })
 
 import { callTradingApi } from './ebay-trading-api.service.js'
@@ -129,6 +178,8 @@ describe('callTradingApi', () => {
     expect(headers['X-EBAY-API-IAF-TOKEN']).toBe('OAUTH123')
     expect(headers['X-EBAY-API-SITEID']).toBe('101')
     expect(headers['X-EBAY-API-CALL-NAME']).toBe('AddFixedPriceItem')
+    // Body must never embed an eBayAuthToken — auth is header-only (IAF)
+    expect((fetchSpy.mock.calls[0][1] as RequestInit).body).not.toContain('eBayAuthToken')
   })
 
   it('real call throws on Ack=Failure with the short message', async () => {

@@ -138,7 +138,7 @@ ${sets}
   <WarningLevel>High</WarningLevel>
   <Item>
     <Title>${escapeXml(input.title)}</Title>
-    <Description><![CDATA[${input.description}]]></Description>
+    <Description><![CDATA[${input.description.replace(/]]>/g, ']]]]><![CDATA[>')}]]></Description>
     <PrimaryCategory><CategoryID>${escapeXml(input.categoryId)}</CategoryID></PrimaryCategory>
     <ConditionID>${escapeXml(input.conditionId)}</ConditionID>
     <Country>${escapeXml(input.country)}</Country>
