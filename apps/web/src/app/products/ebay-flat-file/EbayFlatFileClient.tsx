@@ -1746,6 +1746,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       familyId={familyId}
       storageKey="eff"
       columnGroups={columnGroups}
+      columnGroupState={coreColumnGroups.map((g) => ({
+        id: g.id,
+        label: g.label,
+        color: g.color,
+        columns: g.columns.map((c) => c.id),
+        visible: !coreClosedGroups.has(g.id),
+      }))}
       initialRows={initialRows as BaseRow[]}
       makeBlankRow={makeBlankRow}
       minRows={15}

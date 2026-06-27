@@ -1060,9 +1060,18 @@ export default function AmazonFlatFileClient({
   // Uses columnGroups from useFlatFileCore (synced to effectiveManifest) +
   // groupOrder from core for the user-defined reorder.
   const orderedGroups = useMemo<ColumnGroup[]>(() => {
-    // columnGroups are FlatFileColumnGroup; ColumnGroup is the local interface.
-    // They are structurally compatible — both have id, labelEn/label, color, columns.
-    const groups = (columnGroups.length > 0 ? columnGroups : effectiveManifest?.groups ?? []) as unknown as ColumnGroup[]
+    // Map FlatFileColumnGroup → local ColumnGroup shape (label → labelEn/labelLocal).
+    // Falls back to effectiveManifest groups (already the correct shape) when no
+    // columnGroups have been loaded yet.
+    const groups: ColumnGroup[] = columnGroups.length > 0
+      ? columnGroups.map((g) => ({
+          id: g.id,
+          labelEn: (g as any).labelEn ?? g.label,
+          labelLocal: (g as any).labelLocal ?? g.label,
+          color: g.color,
+          columns: g.columns as unknown as Column[],
+        }))
+      : (effectiveManifest?.groups ?? [])
     if (!groupOrder.length) return groups
     const byId = new Map(groups.map((g) => [g.id, g]))
     const ordered = groupOrder.map((id) => byId.get(id)).filter(Boolean) as ColumnGroup[]

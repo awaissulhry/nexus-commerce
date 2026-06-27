@@ -6,7 +6,7 @@ import {
 } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  AlertCircle, AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
+  AlertCircle, AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronLeft,
   Image as ImageIcon, Keyboard, Loader2, Pin, Plus,
   Search, Trash2, Undo2, Redo2, X,
 } from 'lucide-react'
@@ -636,6 +636,7 @@ export default function FlatFileGrid({
   renderToolbarFetch, renderToolbarImport, renderBar3Left,
   renderAiPanel, renderEmptyAction,
   onColumnsClick, columnsActive, toolbarTrailing,
+  columnGroupState,
 }: FlatFileGridProps) {
   const router = useRouter()
   const { toast } = useToast()
@@ -777,13 +778,21 @@ export default function FlatFileGrid({
   const [imageSize, setImageSize]         = useState<24 | 32 | 48 | 64 | 96>(48)
 
   // ── Column group UI ────────────────────────────────────────────────────
-  const [closedGroups, setClosedGroups] = useState<Set<string>>(() => {
+  const [internalClosedGroups, setClosedGroups] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem(`${storageKey}-closed-groups`) ?? '[]')) } catch { return new Set() }
   })
-  const [groupOrder, setGroupOrder] = useState<string[]>(() => {
+  const [internalGroupOrder, setGroupOrder] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem(`${storageKey}-group-order`) ?? '[]') } catch { return [] }
   })
-  const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null)
+
+  // Derive from controlled prop if available, else fall back to internal state
+  const closedGroups: Set<string> = columnGroupState
+    ? new Set(columnGroupState.filter((g) => !g.visible).map((g) => g.id))
+    : internalClosedGroups
+
+  const groupOrder: string[] = columnGroupState
+    ? columnGroupState.map((g) => g.id)
+    : internalGroupOrder
 
   // ── Row collapse ───────────────────────────────────────────────────────
   const [collapsedRowGroups, setCollapsedRowGroups] = useState<Set<string>>(new Set())
@@ -1124,6 +1133,7 @@ export default function FlatFileGrid({
       if (mod && e.key === 'z' &&  e.shiftKey) { e.preventDefault(); redo(); return }
       if (mod && e.key === 'y')                { e.preventDefault(); redo(); return }
       if (mod && e.key === 'f') { e.preventDefault(); setShowFindReplace(true); return }
+      if (mod && e.key === 'g') { e.preventDefault(); onColumnsClick?.(); return }
       // PE: '?' opens the shortcuts modal (no modifier — skip when typing in an input)
       if (e.key === '?' && !mod && !isEditingRef.current) {
         const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase()
@@ -1212,7 +1222,7 @@ export default function FlatFileGrid({
     }
     document.addEventListener('keydown', handle)
     return () => document.removeEventListener('keydown', handle)
-  }, [undo, redo, normSel, handleCopy, handleCut, handlePaste, handleFillDown, handleDeleteCells, handleSelectAll, moveSelection])
+  }, [undo, redo, normSel, handleCopy, handleCut, handlePaste, handleFillDown, handleDeleteCells, handleSelectAll, moveSelection, onColumnsClick])
 
   // ── Row ops ────────────────────────────────────────────────────────────
 
@@ -1482,45 +1492,6 @@ export default function FlatFileGrid({
           <FFSavedViews
             currentState={{ closedGroups: [...closedGroups], ffFilter: filterState, cfRules, frozenColCount, sortConfig: [] } satisfies FFViewState}
             onApply={(state: FFViewState) => { setClosedGroups(new Set(state.closedGroups)); setFilterState(state.ffFilter); setCfRules(state.cfRules) }} />
-          <div className="flex items-center gap-1 flex-wrap ml-auto">
-            <span className="text-xs text-slate-400 mr-1">Columns:</span>
-            {orderedGroups.map((g) => {
-              const open = openGroups.has(g.id); const isDragging = draggingGroupId === g.id
-              return (
-                <button key={g.id} type="button" draggable
-                  onDragStart={(e) => { setDraggingGroupId(g.id); e.dataTransfer.effectAllowed = 'move' }}
-                  onDragEnd={() => setDraggingGroupId(null)}
-                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    if (!draggingGroupId || draggingGroupId === g.id) return
-                    const ids = orderedGroups.map((x) => x.id)
-                    const from = ids.indexOf(draggingGroupId); const to = ids.indexOf(g.id)
-                    const next = [...ids]; next.splice(from, 1); next.splice(to, 0, draggingGroupId)
-                    setGroupOrder(next); try { localStorage.setItem(`${storageKey}-group-order`, JSON.stringify(next)) } catch {}
-                    setDraggingGroupId(null)
-                  }}
-                  onClick={() => setClosedGroups((prev) => {
-                    if (open && orderedGroups.filter((x) => !prev.has(x.id)).length <= 1) return prev
-                    const n = new Set(prev); open ? n.add(g.id) : n.delete(g.id)
-                    try { localStorage.setItem(`${storageKey}-closed-groups`, JSON.stringify([...n])) } catch {}
-                    return n
-                  })}
-                  title={g.label}
-                  className={cn('inline-flex items-center gap-1 h-5 px-1.5 text-xs rounded border transition-all cursor-grab active:cursor-grabbing select-none',
-                    gColor(g.color).badge, open ? 'opacity-100' : 'opacity-40 hover:opacity-65',
-                    isDragging && 'opacity-30 scale-95')}>
-                  <ChevronRight className={cn('w-2.5 h-2.5 transition-transform', open && 'rotate-90')} />
-                  <span className="font-medium">{g.label}</span>
-                  <span className="opacity-60 tabular-nums">{g.columns.length}</span>
-                </button>
-              )
-            })}
-            {(groupOrder.length > 0 || closedGroups.size > 0) && (
-              <button type="button" onClick={() => { setGroupOrder([]); setClosedGroups(new Set()); try { localStorage.removeItem(`${storageKey}-group-order`); localStorage.removeItem(`${storageKey}-closed-groups`) } catch {} }}
-                className="text-xs text-slate-400 hover:text-slate-600 px-1" title="Reset group order and visibility">↺</button>
-            )}
-          </div>
         </div>
       </header>
 

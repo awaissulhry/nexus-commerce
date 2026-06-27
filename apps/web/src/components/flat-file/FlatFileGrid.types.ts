@@ -213,6 +213,14 @@ export interface FlatFileGridProps {
   columnsActive?: boolean
   /** Channel-specific button(s) appended before the Columns + AI Assistant group. */
   toolbarTrailing?: React.ReactNode
+
+  /**
+   * Controlled column group state from the parent (useFlatFileCore).
+   * When provided, the grid derives closedGroups and groupOrder from this
+   * instead of managing them internally. The ColumnGroupModal in the parent
+   * becomes the sole driver of group visibility and order.
+   */
+  columnGroupState?: import('@/design-system/components/ColumnGroupModal').ColumnGroupProps[]
 }
 
 // ── A4.1 — AI panel context ───────────────────────────────────────────────
