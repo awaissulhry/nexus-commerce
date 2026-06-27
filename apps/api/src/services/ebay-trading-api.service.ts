@@ -44,3 +44,112 @@ export function buildReviseInventoryStatusXml(input: {
   </InventoryStatus>
 </ReviseInventoryStatusRequest>`
 }
+
+export interface TradingVariation {
+  sku: string
+  price: number
+  quantity: number
+  specifics: Record<string, string>
+}
+export interface AddFixedPriceItemInput {
+  title: string
+  description: string
+  categoryId: string
+  conditionId: string
+  country: string
+  currency: string
+  listingDuration?: string
+  variationSpecificNames: string[]
+  variations: TradingVariation[]
+  pictureUrls?: string[]
+  variationPictures?: { axisName: string; byValue: Record<string, string[]> }
+  policies?: { fulfillmentPolicyId?: string; paymentPolicyId?: string; returnPolicyId?: string }
+}
+
+function nameValueList(name: string, values: string[]): string {
+  const vals = values.map((v) => `<Value>${escapeXml(v)}</Value>`).join('')
+  return `<NameValueList><Name>${escapeXml(name)}</Name>${vals}</NameValueList>`
+}
+
+export function buildAddFixedPriceItemXml(input: AddFixedPriceItemInput): string {
+  const duration = input.listingDuration ?? 'GTC'
+
+  const variationsXml = input.variations
+    .map((v) => {
+      const specifics = input.variationSpecificNames
+        .map((n) => nameValueList(n, [v.specifics[n] ?? '']))
+        .join('')
+      return `      <Variation>
+        <SKU>${escapeXml(v.sku)}</SKU>
+        <StartPrice>${v.price}</StartPrice>
+        <Quantity>${Math.max(0, Math.trunc(v.quantity))}</Quantity>
+        <VariationSpecifics>${specifics}</VariationSpecifics>
+      </Variation>`
+    })
+    .join('\n')
+
+  // VariationSpecificsSet: distinct values per axis, preserving first-seen order.
+  const setXml = input.variationSpecificNames
+    .map((n) => {
+      const seen: string[] = []
+      for (const v of input.variations) {
+        const val = v.specifics[n]
+        if (val != null && !seen.includes(val)) seen.push(val)
+      }
+      return `        ${nameValueList(n, seen)}`
+    })
+    .join('\n')
+
+  const galleryXml = (input.pictureUrls ?? []).length
+    ? `    <PictureDetails>\n${(input.pictureUrls ?? [])
+        .map((u) => `      <PictureURL>${escapeXml(u)}</PictureURL>`)
+        .join('\n')}\n    </PictureDetails>\n`
+    : ''
+
+  let picturesXml = ''
+  if (input.variationPictures && Object.keys(input.variationPictures.byValue).length) {
+    const sets = Object.entries(input.variationPictures.byValue)
+      .filter(([, urls]) => urls.length > 0)
+      .map(([value, urls]) => {
+        const pics = urls.map((u) => `          <PictureURL>${escapeXml(u)}</PictureURL>`).join('\n')
+        return `        <VariationSpecificPictureSet>
+          <VariationSpecificValue>${escapeXml(value)}</VariationSpecificValue>
+${pics}
+        </VariationSpecificPictureSet>`
+      })
+      .join('\n')
+    picturesXml = `      <Pictures>
+        <VariationSpecificName>${escapeXml(input.variationPictures.axisName)}</VariationSpecificName>
+${sets}
+      </Pictures>\n`
+  }
+
+  const profilesXml = input.policies
+    ? `    <SellerProfiles>
+      ${input.policies.fulfillmentPolicyId ? `<SellerShippingProfile><ShippingProfileID>${escapeXml(input.policies.fulfillmentPolicyId)}</ShippingProfileID></SellerShippingProfile>` : ''}
+      ${input.policies.paymentPolicyId ? `<SellerPaymentProfile><PaymentProfileID>${escapeXml(input.policies.paymentPolicyId)}</PaymentProfileID></SellerPaymentProfile>` : ''}
+      ${input.policies.returnPolicyId ? `<SellerReturnProfile><ReturnProfileID>${escapeXml(input.policies.returnPolicyId)}</ReturnProfileID></SellerReturnProfile>` : ''}
+    </SellerProfiles>\n`
+    : ''
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<AddFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <Item>
+    <Title>${escapeXml(input.title)}</Title>
+    <Description><![CDATA[${input.description}]]></Description>
+    <PrimaryCategory><CategoryID>${escapeXml(input.categoryId)}</CategoryID></PrimaryCategory>
+    <ConditionID>${escapeXml(input.conditionId)}</ConditionID>
+    <Country>${escapeXml(input.country)}</Country>
+    <Currency>${escapeXml(input.currency)}</Currency>
+    <ListingDuration>${escapeXml(duration)}</ListingDuration>
+${galleryXml}${profilesXml}    <Variations>
+${variationsXml}
+${picturesXml}      <VariationSpecificsSet>
+${setXml}
+      </VariationSpecificsSet>
+    </Variations>
+  </Item>
+</AddFixedPriceItemRequest>`
+}

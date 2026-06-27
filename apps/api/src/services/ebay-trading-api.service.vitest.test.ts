@@ -44,3 +44,49 @@ describe('buildReviseInventoryStatusXml', () => {
     expect(xml).toContain('<ReviseInventoryStatusRequest')
   })
 })
+
+import { buildAddFixedPriceItemXml } from './ebay-trading-api.service.js'
+
+describe('buildAddFixedPriceItemXml', () => {
+  const xml = buildAddFixedPriceItemXml({
+    title: 'Inner Liner & Pad',
+    description: '<p>Liner</p>',
+    categoryId: '57988',
+    conditionId: '1000',
+    country: 'IT',
+    currency: 'EUR',
+    variationSpecificNames: ['Size'],
+    variations: [
+      { sku: 'LNR-BLK-M', price: 49.9, quantity: 5, specifics: { Size: 'M' } },
+      { sku: 'LNR-BLK-L', price: 49.9, quantity: 3, specifics: { Size: 'L' } },
+    ],
+    policies: { fulfillmentPolicyId: 'F1', paymentPolicyId: 'P1', returnPolicyId: 'R1' },
+  })
+
+  it('is an AddFixedPriceItemRequest with a GTC fixed-price item', () => {
+    expect(xml).toContain('<AddFixedPriceItemRequest')
+    expect(xml).toContain('<ListingDuration>GTC</ListingDuration>')
+    expect(xml).toContain('<PrimaryCategory><CategoryID>57988</CategoryID></PrimaryCategory>')
+  })
+  it('NEVER sets InventoryTrackingMethod to SKU (keeps default ItemID)', () => {
+    expect(xml).not.toContain('InventoryTrackingMethod')
+  })
+  it('emits one Variation per row with SKU + price + quantity + specifics', () => {
+    expect(xml).toContain('<SKU>LNR-BLK-M</SKU>')
+    expect(xml).toContain('<SKU>LNR-BLK-L</SKU>')
+    expect(xml).toContain('<StartPrice>49.9</StartPrice>')
+    expect(xml).toContain('<Quantity>5</Quantity>')
+    expect(xml).toContain('<NameValueList><Name>Size</Name><Value>M</Value></NameValueList>')
+  })
+  it('aggregates distinct axis values in VariationSpecificsSet', () => {
+    expect(xml).toMatch(/<VariationSpecificsSet>[\s\S]*<Name>Size<\/Name>[\s\S]*<Value>M<\/Value>[\s\S]*<Value>L<\/Value>[\s\S]*<\/VariationSpecificsSet>/)
+  })
+  it('wires seller profiles when policies are provided', () => {
+    expect(xml).toContain('<ShippingProfileID>F1</ShippingProfileID>')
+    expect(xml).toContain('<PaymentProfileID>P1</PaymentProfileID>')
+    expect(xml).toContain('<ReturnProfileID>R1</ReturnProfileID>')
+  })
+  it('escapes the title', () => {
+    expect(xml).toContain('<Title>Inner Liner &amp; Pad</Title>')
+  })
+})
