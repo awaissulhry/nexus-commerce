@@ -14,6 +14,7 @@ import { ChevronDown, ChevronRight, ChevronsUpDown, Search } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import type { ProductRow } from '@/app/products/_types'
+import { Thumbnail, DensityContext, type Density } from '@/app/_shared/grid-lens'
 
 // DS Primitives
 import {
@@ -85,12 +86,11 @@ function fmtEur(price: number): string {
   return `€${price.toFixed(2)}`
 }
 
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('')
+/** Maps the page's local density modes to the shared DS Density type. */
+function mapDensity(d: DensityMode): Density {
+  if (d === 'compact') return 'compact'
+  if (d === 'spacious') return 'spacious'
+  return 'comfortable' // 'cozy' → 'comfortable'
 }
 
 function getCov(row: ProductRow, ch: Channel) {
@@ -272,14 +272,7 @@ function ProductCell({
         /* invisible placeholder keeps thumb column aligned across all rows */
         <span className={styles.expandPlaceholder} aria-hidden />
       )}
-      <div className={styles.thumb}>
-        {row.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={row.imageUrl} alt="" className={styles.thumbImg} />
-        ) : (
-          getInitials(row.name)
-        )}
-      </div>
+      <Thumbnail src={row.imageUrl} photoCount={row.photoCount} alt={row.name} />
       <div className={styles.pmeta}>
         <div className={styles.ptitle}>{row.name}</div>
         <div className={styles.psub}>
@@ -949,32 +942,36 @@ function ProductsNextInner() {
         ))}
       </div>
 
-      {/* Data grid */}
-      <div
-        className={
-          density === 'compact'
-            ? styles.densityCompact
-            : density === 'spacious'
-              ? styles.densitySpacious
-              : undefined
-        }
-      >
-        <DataGrid<ProductRow>
-          columns={columns}
-          rows={displayRows}
-          rowKey={(r) => r.id}
-          selected={selected}
-          emptyState={
-            loading ? (
-              <span style={{ color: 'var(--text-tertiary)' }}>Loading…</span>
-            ) : (
-              <span style={{ color: 'var(--text-tertiary)' }}>
-                No products match this filter.
-              </span>
-            )
+      {/* Data grid — DensityContext.Provider makes the shared Thumbnail
+          size-aware, matching /products exactly (compact 32 / comfortable 40 /
+          spacious 56). mapDensity bridges the page's 'cozy' to 'comfortable'. */}
+      <DensityContext.Provider value={mapDensity(density)}>
+        <div
+          className={
+            density === 'compact'
+              ? styles.densityCompact
+              : density === 'spacious'
+                ? styles.densitySpacious
+                : undefined
           }
-        />
-      </div>
+        >
+          <DataGrid<ProductRow>
+            columns={columns}
+            rows={displayRows}
+            rowKey={(r) => r.id}
+            selected={selected}
+            emptyState={
+              loading ? (
+                <span style={{ color: 'var(--text-tertiary)' }}>Loading…</span>
+              ) : (
+                <span style={{ color: 'var(--text-tertiary)' }}>
+                  No products match this filter.
+                </span>
+              )
+            }
+          />
+        </div>
+      </DensityContext.Provider>
 
       {/*
        * Bulk staging bar.
