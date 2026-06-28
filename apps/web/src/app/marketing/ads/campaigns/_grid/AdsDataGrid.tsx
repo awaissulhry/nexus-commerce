@@ -37,7 +37,7 @@ export interface GridColumn<T> {
 
 export interface GridRangeFilter { key: string; label: string; kind: 'range'; unit?: '€' | '%' | ''; tip?: string; value?: (row: unknown) => number }
 export interface GridSelectFilter { key: string; label: string; kind: 'select'; options: Array<{ value: string; label: string }>; placeholder?: string; wide?: boolean; searchable?: boolean; value?: (row: unknown) => string }
-export interface GridMultiSelectFilter { key: string; label: string; kind: 'multiselect'; options: Array<{ value: string; label: string }>; placeholder?: string; wide?: boolean; value?: (row: unknown) => string }
+export interface GridMultiSelectFilter { key: string; label: string; kind: 'multiselect'; options: Array<{ value: string; label: string }>; placeholder?: string; wide?: boolean; value?: (row: unknown) => string; anyOf?: boolean }
 export type GridFilter = GridRangeFilter | GridSelectFilter | GridMultiSelectFilter
 
 /** One inline-editable field (H10 "Edit Groups"). `key` is a column key, or '__first'
@@ -209,7 +209,13 @@ export function AdsDataGrid<T>({
           if (vals.length === 0) continue
           const acc = f.value as ((row: T) => string) | undefined
           if (!acc) continue
-          if (!vals.includes(acc(row))) return false
+          const rowVal = acc(row)
+          if (f.anyOf) {
+            // rowVal is comma-separated; passes if ANY selected value appears in it
+            if (!vals.some((v) => rowVal.split(',').includes(v))) return false
+          } else {
+            if (!vals.includes(rowVal)) return false
+          }
         } else {
           const val = st as string | undefined
           if (!val) continue

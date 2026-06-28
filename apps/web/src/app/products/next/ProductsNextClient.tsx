@@ -8,35 +8,17 @@ import '@/design-system/styles/patterns.css'
 
 import { useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { ChevronDown, ChevronRight, ChevronsUpDown, Search } from 'lucide-react'
 
-import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import type { ProductRow } from '@/app/products/_types'
-import { Thumbnail, DensityContext, type Density } from '@/app/_shared/grid-lens'
+import { Thumbnail, DensityContext } from '@/app/_shared/grid-lens'
+import type { Density } from '@/app/_shared/grid-lens'
 
-// DS Primitives
-import {
-  Button,
-  Input,
-  Pill,
-  SegmentedControl,
-  Tooltip,
-  type SegmentedOption,
-  type Tone,
-} from '@/design-system/primitives'
-// DS Components
-import {
-  DataGrid,
-  Menu,
-  ToastProvider,
-  useToast,
-  type Column,
-  type MenuItemDef,
-} from '@/design-system/components'
-// DS Patterns
-import { BulkActionBar, ColumnCustomizer, PageHeader, type CustomizableColumn } from '@/design-system/patterns'
+import { Pill, Tooltip, type Tone } from '@/design-system/primitives'
+import { ToastProvider, useToast } from '@/design-system/components'
+import { PageHeader } from '@/design-system/patterns'
+
+import { AdsDataGrid, type GridColumn, type GridFilter } from '@/app/marketing/ads/campaigns/_grid/AdsDataGrid'
 
 import styles from './styles.module.css'
 
@@ -47,73 +29,10 @@ import styles from './styles.module.css'
 const POLL_URL =
   '/api/products?page=1&limit=200&includeCoverage=true&includeTags=true'
 
-const DENSITY_OPTIONS: SegmentedOption[] = [
-  { value: 'compact', label: 'Compact' },
-  { value: 'cozy', label: 'Cozy' },
-  { value: 'spacious', label: 'Spacious' },
-]
-
 const CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY'] as const
 type Channel = (typeof CHANNELS)[number]
 
-type DensityMode = 'compact' | 'cozy' | 'spacious'
-type LensKey = 'all' | 'attention' | 'amazon' | 'ebay' | 'shopify'
 type KpiTileKey = 'active' | 'out-of-stock' | 'attention' | null
-
-// ─────────────────────────────────────────────────────────────────
-// Column-preferences model
-// ─────────────────────────────────────────────────────────────────
-
-const COL_PREFS_KEY = 'products-next:columns'
-
-/**
- * Catalog of customizable columns (stable keys + display labels).
- * _sel, product, and actions are LOCKED — they're not in this catalog.
- */
-const COL_CATALOG: Array<{ key: string; label: string }> = [
-  { key: 'channels', label: 'Channels' },
-  { key: 'status', label: 'Status' },
-  { key: 'available', label: 'Available' },
-  { key: 'price', label: 'Price' },
-]
-
-/** Load + reconcile column prefs from localStorage. */
-function loadColPrefs(): CustomizableColumn[] {
-  try {
-    const raw = typeof window !== 'undefined' && localStorage.getItem(COL_PREFS_KEY)
-    if (raw) {
-      const saved = JSON.parse(raw) as Array<{ key: string; visible: boolean }>
-      // Drop unknown keys, preserve saved order
-      const valid = saved.filter((s) => COL_CATALOG.some((c) => c.key === s.key))
-      // Append newly-added catalog columns (forward-compat: new columns are visible by default)
-      const savedKeys = new Set(valid.map((s) => s.key))
-      const appended = COL_CATALOG.filter((c) => !savedKeys.has(c.key)).map((c) => ({
-        key: c.key,
-        visible: true,
-      }))
-      return [...valid, ...appended].map((s) => ({
-        key: s.key,
-        label: COL_CATALOG.find((c) => c.key === s.key)!.label,
-        visible: s.visible,
-      }))
-    }
-  } catch {
-    // ignore parse / storage errors
-  }
-  return COL_CATALOG.map((c) => ({ key: c.key, label: c.label, visible: true }))
-}
-
-/** Persist column prefs to localStorage. */
-function saveColPrefs(cols: CustomizableColumn[]): void {
-  try {
-    localStorage.setItem(
-      COL_PREFS_KEY,
-      JSON.stringify(cols.map((c) => ({ key: c.key, visible: c.visible }))),
-    )
-  } catch {
-    // ignore storage errors (private mode, quota exceeded, etc.)
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────
 // Pure helpers
@@ -141,266 +60,13 @@ function fmtEur(price: number): string {
   return `€${price.toFixed(2)}`
 }
 
-/** Maps the page's local density modes to the shared DS Density type. */
-function mapDensity(d: DensityMode): Density {
-  if (d === 'compact') return 'compact'
-  if (d === 'spacious') return 'spacious'
-  return 'comfortable' // 'cozy' → 'comfortable'
-}
-
 function getCov(row: ProductRow, ch: Channel) {
   return row.coverage?.[ch] ?? null
 }
 
-function lensCount(rows: ProductRow[], key: LensKey): number {
-  if (key === 'all') return rows.length
-  if (key === 'attention') return rows.filter((r) => r.photoCount === 0).length
-  if (key === 'amazon') return rows.filter((r) => (getCov(r, 'AMAZON')?.total ?? 0) > 0).length
-  if (key === 'ebay') return rows.filter((r) => (getCov(r, 'EBAY')?.total ?? 0) > 0).length
-  return rows.filter((r) => (getCov(r, 'SHOPIFY')?.total ?? 0) > 0).length
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Expansion helpers
-// ─────────────────────────────────────────────────────────────────
-
-/** Sentinel row inserted in displayRows while children are being fetched. */
-function makeLoadingRow(parentId: string): ProductRow {
-  return {
-    id: `__loading_${parentId}`,
-    sku: '',
-    name: '__loading__',
-    brand: null,
-    basePrice: 0,
-    totalStock: 0,
-    lowStockThreshold: 0,
-    status: 'ACTIVE',
-    syncChannels: [],
-    imageUrl: null,
-    amazonAsin: null,
-    isParent: false,
-    parentId,
-    productType: null,
-    fulfillmentMethod: null,
-    family: null,
-    workflowStage: null,
-    photoCount: 0,
-    channelCount: 0,
-    variantCount: 0,
-    childCount: 0,
-    coverage: null,
-    updatedAt: '',
-    createdAt: '',
-  }
-}
-
-function isLoadingRow(row: ProductRow) {
-  return row.id.startsWith('__loading_')
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Sort header (used as column label for manually-sorted columns)
-// ─────────────────────────────────────────────────────────────────
-
-interface SortHeaderProps {
-  label: string
-  colKey: string
-  sortKey: string
-  sortDir: 'asc' | 'desc'
-  onSort: (key: string) => void
-}
-
-function SortHeader({ label, colKey, sortKey, sortDir, onSort }: SortHeaderProps) {
-  const active = sortKey === colKey
-  return (
-    <button
-      type="button"
-      className={`${styles.sortHeaderBtn}${active ? ' ' + styles.sortHeaderBtnActive : ''}`}
-      onClick={() => onSort(colKey)}
-    >
-      {label}
-      {active ? (
-        sortDir === 'asc' ? (
-          <ChevronDown size={13} style={{ color: 'var(--color-primary)' }} />
-        ) : (
-          <ChevronDown size={13} style={{ color: 'var(--color-primary)', transform: 'rotate(180deg)' }} />
-        )
-      ) : (
-        <ChevronsUpDown size={13} style={{ color: 'var(--text-disabled)' }} />
-      )}
-    </button>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Sub-components (module-level so they don't re-mount on each render)
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Centered SVG checkbox. Renders as an inline-flex button so the check
- * mark is guaranteed centred via flexbox — no browser-native checkbox
- * styling needed, no DS file edits required.
- */
-interface CkbProps {
-  checked: boolean
-  indeterminate?: boolean
-  onChange: () => void
-  label?: string
-}
-function Ckb({ checked, indeterminate, onChange, label }: CkbProps) {
-  const on = checked || indeterminate
-  return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={indeterminate ? 'mixed' : checked}
-      aria-label={label ?? 'Select row'}
-      onClick={onChange}
-      className={`${styles.ckb}${on ? ' ' + styles.ckbOn : ''}`}
-    >
-      {on && (
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ display: 'block' }}>
-          {indeterminate ? (
-            <path d="M2.5 5h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          ) : (
-            <path
-              d="M2 5.2L4.2 7.4L8 3"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          )}
-        </svg>
-      )}
-    </button>
-  )
-}
-
-/** Product column cell: chevron + thumb + name + sku + category tag + variation count */
-interface ProductCellProps {
-  row: ProductRow
-  /** True when this row is a child (indents the whole cell) */
-  isChild?: boolean
-  /** True when this parent row has expandable children */
-  hasChildren?: boolean
-  /** True when this parent is currently expanded */
-  isExpanded?: boolean
-  /** True while children are being fetched (shows spinner instead of chevron) */
-  isLoadingExpand?: boolean
-  /** Called when the chevron is clicked */
-  onExpand?: () => void
-}
-
-function ProductCell({
-  row,
-  isChild,
-  hasChildren,
-  isExpanded,
-  isLoadingExpand,
-  onExpand,
-}: ProductCellProps) {
-  return (
-    <div
-      className={[styles.productCell, isChild ? styles.productCellChild : '']
-        .filter(Boolean)
-        .join(' ')}
-    >
-      {/* Chevron affordance — only shown on parent rows */}
-      {hasChildren ? (
-        <button
-          type="button"
-          className={styles.expandBtn}
-          onClick={onExpand}
-          aria-label={isExpanded ? 'Collapse variations' : 'Expand variations'}
-          aria-expanded={isExpanded}
-        >
-          {isLoadingExpand ? (
-            <span className={styles.expandSpinner} />
-          ) : isExpanded ? (
-            <ChevronDown size={14} />
-          ) : (
-            <ChevronRight size={14} />
-          )}
-        </button>
-      ) : (
-        /* invisible placeholder keeps thumb column aligned across all rows */
-        <span className={styles.expandPlaceholder} aria-hidden />
-      )}
-      <Thumbnail src={row.imageUrl} photoCount={row.photoCount} alt={row.name} />
-      <div className={styles.pmeta}>
-        <div className={styles.ptitle}>{row.name}</div>
-        <div className={styles.psub}>
-          <span className={styles.skuTag}>{row.sku}</span>
-          {row.productType && (
-            <span className={styles.typeTag}>{row.productType}</span>
-          )}
-          {!isChild && (row.variantCount ?? 0) > 0 && (
-            <span className={styles.varCount}>{row.variantCount} variations</span>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/** Available (stock) cell: colour-coded unit count + optional FBA/FBM tooltip */
-function AvailableCell({ row }: { row: ProductRow }) {
-  const stockEl = (
-    <div className={styles.availCell}>
-      <span
-        className={styles.availNum}
-        style={{ color: getStockColor(row.totalStock, row.lowStockThreshold) }}
-      >
-        {row.totalStock}
-      </span>
-      <span className={styles.availUnit}>units</span>
-    </div>
-  )
-
-  if (row.fbaStock != null || row.fbmStock != null) {
-    const tip = [
-      row.fbaStock != null ? `FBA ${row.fbaStock}` : null,
-      row.fbmStock != null ? `FBM ${row.fbmStock}` : null,
-    ]
-      .filter(Boolean)
-      .join(' · ')
-    return <Tooltip label={tip}>{stockEl}</Tooltip>
-  }
-
-  return stockEl
-}
-
-/** Row action cluster: Edit link + ⋯ DS Menu */
-function RowActions({ row, onMore }: { row: ProductRow; onMore: () => void }) {
-  const router = useRouter()
-  const menuItems: MenuItemDef[] = [
-    {
-      id: 'edit',
-      label: 'Edit',
-      onSelect: () => router.push(`/products/${row.id}/edit`),
-    },
-    { id: 'duplicate', label: 'Duplicate', onSelect: onMore },
-    {
-      id: 'open-new',
-      label: 'Open in new tab',
-      onSelect: () => window.open(`/products/${row.id}/edit`, '_blank'),
-    },
-  ]
-
-  return (
-    <div className={styles.rowacts}>
-      <Link href={`/products/${row.id}/edit`} className={styles.editLink}>
-        Edit
-      </Link>
-      <Menu
-        label="⋯"
-        items={menuItems}
-        align="right"
-        triggerProps={{ className: styles.menuTrigger }}
-      />
-    </div>
-  )
+/** Returns comma-separated channels where coverage.total > 0; used by anyOf channel filter. */
+function rowChannels(row: ProductRow): string {
+  return CHANNELS.filter((ch) => (getCov(row, ch)?.total ?? 0) > 0).join(',')
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -410,26 +76,8 @@ function RowActions({ row, onMore }: { row: ProductRow; onMore: () => void }) {
 function ProductsNextInner() {
   const { toast } = useToast()
 
-  // ── State ─────────────────────────────────────────────────────
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [search, setSearch] = useState('')
-  const [lens, setLens] = useState<LensKey>('all')
-  const [density, setDensity] = useState<DensityMode>('spacious')
+  // ── KPI tile pre-filter ───────────────────────────────────────
   const [activeTile, setActiveTile] = useState<KpiTileKey>(null)
-
-  // Variation expansion — children are lazy-fetched on first expand and
-  // cached; collapsing re-hides without evicting the cache.
-  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
-  const [childrenByParent, setChildrenByParent] = useState<Record<string, ProductRow[]>>({})
-  const [loadingChildren, setLoadingChildren] = useState<Set<string>>(new Set())
-
-  // Manual sort state (DataGrid re-sort is disabled so children stay grouped)
-  const [sortKey, setSortKey] = useState<string>('product')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
-
-  // Column visibility + order (persisted to localStorage)
-  const [colCustomizerOpen, setColCustomizerOpen] = useState(false)
-  const [customCols, setCustomCols] = useState<CustomizableColumn[]>(loadColPrefs)
 
   // ── Data ──────────────────────────────────────────────────────
   const { data, loading } = usePolledList<{
@@ -458,364 +106,206 @@ function ProductsNextInner() {
   const products = data?.products ?? []
   const stats = data?.stats
 
-  // ── Derived counts ─────────────────────────────────────────────
   const needsAttentionCount = useMemo(
     () => products.filter((r) => r.photoCount === 0).length,
     [products],
   )
 
-  // ── Client-side filter (200 rows max — fits in memory) ─────────
-  const filtered = useMemo(() => {
-    let rows = products
+  // ── KPI pre-filter (orthogonal to AdsDataGrid's own filter panel) ──
+  const filteredByTile = useMemo(() => {
+    if (activeTile === 'active') return products.filter((r) => r.status === 'ACTIVE')
+    if (activeTile === 'out-of-stock') return products.filter((r) => r.totalStock === 0)
+    if (activeTile === 'attention') return products.filter((r) => r.photoCount === 0)
+    return products
+  }, [products, activeTile])
 
-    // KPI tile filter
-    if (activeTile === 'active') rows = rows.filter((r) => r.status === 'ACTIVE')
-    else if (activeTile === 'out-of-stock') rows = rows.filter((r) => r.totalStock === 0)
-    else if (activeTile === 'attention') rows = rows.filter((r) => r.photoCount === 0)
+  const comingSoon = useCallback(() => toast('Coming soon', 'neutral'), [toast])
 
-    // Quick-lens filter
-    if (lens === 'attention') rows = rows.filter((r) => r.photoCount === 0)
-    else if (lens === 'amazon') rows = rows.filter((r) => (getCov(r, 'AMAZON')?.total ?? 0) > 0)
-    else if (lens === 'ebay') rows = rows.filter((r) => (getCov(r, 'EBAY')?.total ?? 0) > 0)
-    else if (lens === 'shopify') rows = rows.filter((r) => (getCov(r, 'SHOPIFY')?.total ?? 0) > 0)
-
-    // Text search
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      rows = rows.filter(
-        (r) =>
-          r.name.toLowerCase().includes(q) ||
-          r.sku.toLowerCase().includes(q) ||
-          (r.productType?.toLowerCase().includes(q) ?? false),
-      )
-    }
-
-    return rows
-  }, [products, activeTile, lens, search])
-
-  // ── Sorted + interleaved display rows ─────────────────────────
-  // Only top-level rows (parentId === null) are shown by default.
-  // When a parent is expanded, its fetched children are interleaved
-  // immediately after it. DataGrid receives this pre-ordered array
-  // WITHOUT initialSort so it never re-sorts and scatters children.
-  const displayRows = useMemo(() => {
-    const topLevel = filtered.filter((r) => r.parentId === null)
-
-    // Sort parents by active sort key
-    const sorted = [...topLevel].sort((a, b) => {
-      let av: string | number
-      let bv: string | number
-      if (sortKey === 'available') {
-        av = a.totalStock
-        bv = b.totalStock
-      } else if (sortKey === 'price') {
-        av = a.basePrice
-        bv = b.basePrice
-      } else {
-        // default: sort by name (product column)
-        av = a.name.toLowerCase()
-        bv = b.name.toLowerCase()
-      }
-      const dir = sortDir === 'asc' ? 1 : -1
-      return av < bv ? -dir : av > bv ? dir : 0
-    })
-
-    // Interleave children / loading sentinels under each expanded parent
-    const result: ProductRow[] = []
-    for (const parent of sorted) {
-      result.push(parent)
-      if (expandedParents.has(parent.id)) {
-        if (loadingChildren.has(parent.id)) {
-          result.push(makeLoadingRow(parent.id))
-        } else {
-          result.push(...(childrenByParent[parent.id] ?? []))
-        }
-      }
-    }
-    return result
-  }, [filtered, sortKey, sortDir, expandedParents, loadingChildren, childrenByParent])
-
-  // ── Selection ─────────────────────────────────────────────────
-  // allKeys includes visible children (when expanded) but excludes
-  // loading sentinels so select-all doesn't try to select a phantom row.
-  const allKeys = useMemo(
-    () => displayRows.filter((r) => !isLoadingRow(r)).map((r) => r.id),
-    [displayRows],
-  )
-  const allSelected = selected.size > 0 && allKeys.every((k) => selected.has(k))
-  const someSelected = selected.size > 0 && !allSelected
-
-  const toggleAll = useCallback(() => {
-    setSelected(allSelected ? new Set() : new Set(allKeys))
-  }, [allSelected, allKeys])
-
-  const toggleRow = useCallback((id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }, [])
-
-  const comingSoon = useCallback(
-    () => toast('Coming soon', 'neutral'),
-    [toast],
+  // ── Derived filter options (computed from full product list) ──
+  const typeOptions = useMemo(
+    () =>
+      Array.from(new Set(products.map((r) => r.productType).filter((t): t is string => !!t)))
+        .sort()
+        .map((t) => ({ value: t, label: t })),
+    [products],
   )
 
-  // ── Variation expansion ───────────────────────────────────────
-  const fetchChildrenFor = useCallback(async (parentId: string) => {
-    if (childrenByParent[parentId] !== undefined) return // cache hit
-    setLoadingChildren((prev) => {
-      const next = new Set(prev)
-      next.add(parentId)
-      return next
-    })
-    try {
-      const url = `${getBackendUrl()}/api/products?parentId=${encodeURIComponent(parentId)}&includeCoverage=true&includeTags=true`
-      const res = await fetch(url, { cache: 'no-store' })
-      if (!res.ok) throw new Error(`${res.status}`)
-      const data = (await res.json()) as { products?: ProductRow[] }
-      setChildrenByParent((prev) => ({ ...prev, [parentId]: data.products ?? [] }))
-    } catch {
-      // Mark as fetched but empty so re-expand shows nothing rather than spinning
-      setChildrenByParent((prev) => ({ ...prev, [parentId]: [] }))
-    } finally {
-      setLoadingChildren((prev) => {
-        const next = new Set(prev)
-        next.delete(parentId)
-        return next
+  const brandOptions = useMemo(
+    () =>
+      Array.from(new Set(products.map((r) => r.brand).filter((b): b is string => !!b)))
+        .sort()
+        .map((b) => ({ value: b, label: b })),
+    [products],
+  )
+
+  // ── AdsDataGrid columns ───────────────────────────────────────
+  const columns = useMemo(
+    (): GridColumn<ProductRow>[] => [
+      {
+        key: 'channels',
+        label: 'Channels',
+        metric: false,
+        sortable: false,
+        render: (row) => (
+          <div className={styles.chcell}>
+            {CHANNELS.map((ch) => {
+              const cov = getCov(row, ch)
+              const state =
+                cov && cov.live > 0
+                  ? 'on'
+                  : cov && cov.error > 0
+                    ? 'iss'
+                    : 'off'
+              const stateClass =
+                state === 'on' ? styles.chOn : state === 'iss' ? styles.chIss : styles.chOff
+              const tipLabel = cov ? `${cov.live} live · ${cov.error} errors` : 'not listed'
+              return (
+                <Tooltip key={ch} label={`${ch}: ${tipLabel}`}>
+                  <span className={`${styles.ch} ${stateClass}`}>{ch[0]}</span>
+                </Tooltip>
+              )
+            })}
+          </div>
+        ),
+      },
+      {
+        key: 'status',
+        label: 'Status',
+        metric: false,
+        sortable: false,
+        render: (row) => (
+          <Pill tone={getStatusTone(row.status)}>{getStatusLabel(row.status)}</Pill>
+        ),
+      },
+      {
+        key: 'available',
+        label: 'Available',
+        metric: true,
+        render: (row) => {
+          const stockEl = (
+            <div className={styles.availCell}>
+              <span
+                className={styles.availNum}
+                style={{ color: getStockColor(row.totalStock, row.lowStockThreshold) }}
+              >
+                {row.totalStock}
+              </span>
+              <span className={styles.availUnit}>units</span>
+            </div>
+          )
+          if (row.fbaStock != null || row.fbmStock != null) {
+            const tip = [
+              row.fbaStock != null ? `FBA ${row.fbaStock}` : null,
+              row.fbmStock != null ? `FBM ${row.fbmStock}` : null,
+            ]
+              .filter((v): v is string => v !== null)
+              .join(' · ')
+            return <Tooltip label={tip}>{stockEl}</Tooltip>
+          }
+          return stockEl
+        },
+        sortValue: (row) => row.totalStock,
+        filterValue: (row) => row.totalStock,
+      },
+      {
+        key: 'price',
+        label: 'Price',
+        metric: true,
+        render: (row) => (
+          <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtEur(row.basePrice)}</span>
+        ),
+        sortValue: (row) => row.basePrice,
+        filterValue: (row) => row.basePrice,
+      },
+      {
+        key: 'actions',
+        label: 'Actions',
+        metric: false,
+        sortable: false,
+        render: (row) => (
+          <div className={styles.rowacts}>
+            <Link href={`/products/${row.id}/edit`} className={styles.editLink}>
+              Edit
+            </Link>
+          </div>
+        ),
+      },
+    ],
+    [],
+  )
+
+  // ── AdsDataGrid filters ───────────────────────────────────────
+  // These appear in the expandable filter panel and REPLACE the old lens chips.
+  // Status + Channel use multiselect; type + brand use single-select (derived from
+  // loaded rows); Price + Stock use range fields that match the 'price'/'available'
+  // column filterValue accessors by key.
+  const filters = useMemo((): GridFilter[] => {
+    const base: GridFilter[] = [
+      {
+        key: 'status',
+        label: 'Status',
+        kind: 'multiselect',
+        options: [
+          { value: 'ACTIVE', label: 'Active' },
+          { value: 'DRAFT', label: 'Draft' },
+          { value: 'INACTIVE', label: 'Inactive' },
+        ],
+        value: (row) => (row as ProductRow).status,
+      },
+      {
+        key: 'channel',
+        label: 'Channel',
+        kind: 'multiselect',
+        options: [
+          { value: 'AMAZON', label: 'Amazon' },
+          { value: 'EBAY', label: 'eBay' },
+          { value: 'SHOPIFY', label: 'Shopify' },
+        ],
+        // value returns comma-separated channels; anyOf: true ⇒ ANY selected value passes
+        value: (row) => rowChannels(row as ProductRow),
+        anyOf: true,
+      },
+    ]
+
+    if (typeOptions.length > 0) {
+      base.push({
+        key: 'type',
+        label: 'Product Type',
+        kind: 'select',
+        options: typeOptions,
+        value: (row) => (row as ProductRow).productType ?? '',
       })
     }
-  }, [childrenByParent])
 
-  const toggleExpand = useCallback((parentId: string) => {
-    setExpandedParents((prev) => {
-      const next = new Set(prev)
-      if (next.has(parentId)) {
-        next.delete(parentId)
-      } else {
-        next.add(parentId)
-        void fetchChildrenFor(parentId)
-      }
-      return next
-    })
-  }, [fetchChildrenFor])
+    if (brandOptions.length > 0) {
+      base.push({
+        key: 'brand',
+        label: 'Brand',
+        kind: 'select',
+        options: brandOptions,
+        value: (row) => (row as ProductRow).brand ?? '',
+      })
+    }
 
-  // ── Manual column sort (keeps children grouped under their parent) ─
-  // DataGrid's built-in sort is disabled (no initialSort passed) so the
-  // pre-ordered displayRows array is rendered as-is. Toggling a sort
-  // header only updates local state which drives displayRows below.
-  const handleColumnSort = useCallback((key: string) => {
-    setSortKey((prev) => {
-      if (prev === key) {
-        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-        return prev
-      }
-      setSortDir('asc')
-      return key
-    })
-  }, [])
+    base.push(
+      {
+        key: 'price',
+        label: 'Price',
+        kind: 'range',
+        unit: '€',
+        // key matches column key 'price' so AdsDataGrid uses column.filterValue
+      },
+      {
+        key: 'available',
+        label: 'Stock',
+        kind: 'range',
+        unit: '',
+        // key matches column key 'available' so AdsDataGrid uses column.filterValue
+      },
+    )
 
-  // ── Column definitions ────────────────────────────────────────
-  // NOTE: sortable/sortValue are intentionally omitted from all columns.
-  // DataGrid's built-in sort is disabled (no initialSort) so the
-  // pre-ordered displayRows array is not re-sorted. Sort headers are
-  // custom SortHeader elements that update local sortKey/sortDir state.
-  //
-  // Structure:
-  //   [_sel (locked)] [product (locked)] [...visible customizable cols in user order] [actions (locked)]
-  // Customizable cols (channels · status · available · price) are driven by
-  // `customCols` state (visibility + order) which is persisted to localStorage.
-  const columns = useMemo(
-    (): Column<ProductRow>[] => {
-      // ── Locked: selection checkbox ──────────────────────────
-      const selCol: Column<ProductRow> = {
-        key: '_sel',
-        label: (
-          <Ckb
-            checked={allSelected}
-            indeterminate={someSelected}
-            onChange={toggleAll}
-            label="Select all rows"
-          />
-        ),
-        width: 40,
-        align: 'center',
-        render: (row) => {
-          if (isLoadingRow(row)) return null
-          return (
-            <Ckb
-              checked={selected.has(row.id)}
-              onChange={() => toggleRow(row.id)}
-            />
-          )
-        },
-      }
-
-      // ── Locked: product name / thumb ────────────────────────
-      const productCol: Column<ProductRow> = {
-        key: 'product',
-        label: (
-          <SortHeader
-            label="Product"
-            colKey="product"
-            sortKey={sortKey}
-            sortDir={sortDir}
-            onSort={handleColumnSort}
-          />
-        ),
-        render: (row) => {
-          if (isLoadingRow(row)) {
-            return (
-              <div className={styles.childLoadingRow}>
-                <span className={styles.expandSpinner} />
-                Loading variations…
-              </div>
-            )
-          }
-          const isChild = row.parentId !== null
-          const hasChildren = row.isParent || (row.childCount ?? 0) > 0
-          return (
-            <ProductCell
-              row={row}
-              isChild={isChild}
-              hasChildren={!isChild && hasChildren}
-              isExpanded={expandedParents.has(row.id)}
-              isLoadingExpand={loadingChildren.has(row.id)}
-              onExpand={() => toggleExpand(row.id)}
-            />
-          )
-        },
-      }
-
-      // ── Locked: row actions ─────────────────────────────────
-      const actionsCol: Column<ProductRow> = {
-        key: 'actions',
-        label: '',
-        width: 120,
-        render: (row) => {
-          if (isLoadingRow(row)) return null
-          return <RowActions row={row} onMore={comingSoon} />
-        },
-      }
-
-      // ── All customizable column defs (keyed by catalog key) ─
-      const customColDefs: Record<string, Column<ProductRow>> = {
-        channels: {
-          key: 'channels',
-          label: 'Channels',
-          width: 110,
-          render: (row) => {
-            if (isLoadingRow(row)) return null
-            return (
-              <div className={styles.chcell}>
-                {CHANNELS.map((ch) => {
-                  const cov = getCov(row, ch)
-                  const state =
-                    cov && cov.live > 0
-                      ? 'on'
-                      : cov && cov.error > 0
-                        ? 'iss'
-                        : 'off'
-                  const stateClass =
-                    state === 'on'
-                      ? styles.chOn
-                      : state === 'iss'
-                        ? styles.chIss
-                        : styles.chOff
-                  const tipLabel = cov
-                    ? `${cov.live} live · ${cov.error} errors`
-                    : 'not listed'
-                  return (
-                    <Tooltip key={ch} label={`${ch}: ${tipLabel}`}>
-                      <span className={`${styles.ch} ${stateClass}`}>
-                        {ch[0]}
-                      </span>
-                    </Tooltip>
-                  )
-                })}
-              </div>
-            )
-          },
-        },
-        status: {
-          key: 'status',
-          label: 'Status',
-          width: 96,
-          render: (row) => {
-            if (isLoadingRow(row)) return null
-            return (
-              <Pill tone={getStatusTone(row.status)}>
-                {getStatusLabel(row.status)}
-              </Pill>
-            )
-          },
-        },
-        available: {
-          key: 'available',
-          label: (
-            <SortHeader
-              label="Available"
-              colKey="available"
-              sortKey={sortKey}
-              sortDir={sortDir}
-              onSort={handleColumnSort}
-            />
-          ),
-          width: 120,
-          render: (row) => {
-            if (isLoadingRow(row)) return null
-            return <AvailableCell row={row} />
-          },
-        },
-        price: {
-          key: 'price',
-          label: (
-            <SortHeader
-              label="Price"
-              colKey="price"
-              sortKey={sortKey}
-              sortDir={sortDir}
-              onSort={handleColumnSort}
-            />
-          ),
-          width: 96,
-          align: 'right',
-          render: (row) => {
-            if (isLoadingRow(row)) return null
-            return (
-              <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                {fmtEur(row.basePrice)}
-              </span>
-            )
-          },
-        },
-      }
-
-      // ── Derive ordered visible customizable columns ─────────
-      const visibleCustom = customCols
-        .filter((c) => c.visible)
-        .map((c) => customColDefs[c.key])
-        .filter((c): c is Column<ProductRow> => !!c)
-
-      return [selCol, productCol, ...visibleCustom, actionsCol]
-    },
-    [
-      allSelected,
-      someSelected,
-      selected,
-      toggleAll,
-      toggleRow,
-      comingSoon,
-      sortKey,
-      sortDir,
-      handleColumnSort,
-      expandedParents,
-      loadingChildren,
-      toggleExpand,
-      customCols,
-    ],
-  )
+    return base
+  }, [typeOptions, brandOptions])
 
   // ── KPI tile config ────────────────────────────────────────────
   const kpis: Array<{
@@ -855,27 +345,6 @@ function ProductsNextInner() {
     },
   ]
 
-  // ── Lens config ────────────────────────────────────────────────
-  const mainLenses: Array<{
-    key: LensKey
-    label: string
-    count: number
-    warn?: boolean
-  }> = [
-    { key: 'all', label: 'All', count: products.length },
-    {
-      key: 'attention',
-      label: 'Needs attention',
-      count: needsAttentionCount,
-      warn: true,
-    },
-  ]
-  const channelLenses: Array<{ key: LensKey; label: string; count: number }> = [
-    { key: 'amazon', label: 'Amazon', count: lensCount(products, 'amazon') },
-    { key: 'ebay', label: 'eBay', count: lensCount(products, 'ebay') },
-    { key: 'shopify', label: 'Shopify', count: lensCount(products, 'shopify') },
-  ]
-
   // ── Render ────────────────────────────────────────────────────
   return (
     <div className={styles.wrap}>
@@ -885,54 +354,41 @@ function ProductsNextInner() {
         subtitle={`${stats?.total ?? '—'} products · synced live across Amazon, eBay & Shopify`}
         actions={
           <div className={styles.acts}>
-            <Button size="sm" onClick={comingSoon}>
-              Import{' '}
-              <span style={{ color: 'var(--text-tertiary)', fontWeight: 700 }}>
-                ▾
-              </span>
-            </Button>
-            <Button size="sm" aria-label="More options" onClick={comingSoon}>
+            <button type="button" className="h10-am-btn" onClick={comingSoon}>
+              Import ▾
+            </button>
+            <button type="button" className="h10-am-btn" onClick={comingSoon}>
               ⋯
-            </Button>
-            <Button size="sm" variant="primary" onClick={comingSoon}>
+            </button>
+            <Link href="/products/new" className="h10-am-btn primary">
               + New product
-            </Button>
+            </Link>
           </div>
         }
       />
 
-      {/* KPI tiles — click to filter rows client-side */}
+      {/* KPI tiles — click to pre-filter rows passed to the grid */}
       <div className={styles.kpis}>
         {kpis.map((kpi) => (
           <div
             key={kpi.tileKey ?? '_total'}
-            className={[
-              styles.kpiTile,
-              activeTile === kpi.tileKey ? styles.kpiTileActive : '',
-            ]
+            className={[styles.kpiTile, activeTile === kpi.tileKey ? styles.kpiTileActive : '']
               .filter(Boolean)
               .join(' ')}
             role="button"
             tabIndex={0}
             onClick={() =>
-              setActiveTile((prev) =>
-                prev === kpi.tileKey ? null : kpi.tileKey,
-              )
+              setActiveTile((prev) => (prev === kpi.tileKey ? null : kpi.tileKey))
             }
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault()
-                setActiveTile((prev) =>
-                  prev === kpi.tileKey ? null : kpi.tileKey,
-                )
+                setActiveTile((prev) => (prev === kpi.tileKey ? null : kpi.tileKey))
               }
             }}
           >
             <div className={styles.kpiLabel}>
-              <span
-                className={styles.kpiDot}
-                style={{ background: kpi.color }}
-              />
+              <span className={styles.kpiDot} style={{ background: kpi.color }} />
               {kpi.label}
             </div>
             <div className={styles.kpiValue}>{kpi.value}</div>
@@ -941,172 +397,103 @@ function ProductsNextInner() {
         ))}
       </div>
 
-      {/* ONE toolbar row */}
-      <div className={styles.tbar}>
-        <span className={styles.searchField}>
-          <Input
-            leadingIcon={
-              <Search size={13} style={{ color: 'var(--text-tertiary)' }} />
-            }
-            placeholder="Search products…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ width: '100%' }}
-          />
-        </span>
-        <Button size="sm" onClick={comingSoon}>
-          Filter
-        </Button>
-        <Button size="sm" onClick={comingSoon}>
-          ↕ Sort
-        </Button>
-        <Button size="sm" onClick={() => setColCustomizerOpen(true)}>
-          ⊞ Columns
-        </Button>
-        <span className={styles.spacer} />
-        <SegmentedControl
-          options={DENSITY_OPTIONS}
-          value={density}
-          onChange={(v) => setDensity(v as DensityMode)}
-          size="sm"
-        />
-        <span className={styles.liveChip}>
-          <span className={styles.liveDot} />
-          {loading ? 'Syncing…' : 'Live'}
-        </span>
-      </div>
-
-      {/* Quick-lens chips */}
-      <div className={styles.lenses}>
-        {mainLenses.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={[
-              styles.chip,
-              lens === item.key ? styles.chipActive : '',
-              item.warn && lens !== item.key ? styles.chipWarn : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            onClick={() => setLens(item.key)}
-          >
-            {item.label}
-            {item.count > 0 && (
-              <span
-                className={
-                  item.warn && lens !== item.key
-                    ? styles.chipWarnCount
-                    : styles.chipCount
-                }
-              >
-                {item.count}
-              </span>
-            )}
-          </button>
-        ))}
-        <span className={styles.vline} role="separator" />
-        {channelLenses.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={[
-              styles.chip,
-              lens === item.key ? styles.chipActive : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            onClick={() => setLens(item.key)}
-          >
-            {item.label}
-            <span className={styles.chipCount}>{item.count}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Data grid — DensityContext.Provider makes the shared Thumbnail
-          size-aware, matching /products exactly (compact 32 / comfortable 40 /
-          spacious 56). mapDensity bridges the page's 'cozy' to 'comfortable'. */}
-      <DensityContext.Provider value={mapDensity(density)}>
-        <div
-          className={
-            density === 'compact'
-              ? styles.densityCompact
-              : density === 'spacious'
-                ? styles.densitySpacious
-                : undefined
-          }
-        >
-          <DataGrid<ProductRow>
-            columns={columns}
-            rows={displayRows}
-            rowKey={(r) => r.id}
-            selected={selected}
-            emptyState={
-              loading ? (
-                <span style={{ color: 'var(--text-tertiary)' }}>Loading…</span>
-              ) : (
-                <span style={{ color: 'var(--text-tertiary)' }}>
-                  No products match this filter.
-                </span>
-              )
-            }
-          />
-        </div>
-      </DensityContext.Provider>
-
       {/*
-       * Bulk staging bar.
-       * "Preview diff" / "Apply all" are visually present but no-op today
-       * (coming soon toast). Full diff wiring is a future task.
-       * TODO: wire staging model (diff computation + apply mutations).
-       * TODO: Sales 30d column — needs a backend field on ProductRow (no
-       *       such field exists today; omitted to avoid fabricating data).
+       * AdsDataGrid — shared H10-fidelity grid.
+       * DensityContext wraps it so Thumbnail renders at the 'comfortable'
+       * image size (40px) without needing a density toggle.
+       *
+       * EXPANSION NOTE: AdsDataGrid has no parent/child expansion model
+       * (campaigns grid doesn't need it). The variation-expand feature from
+       * the previous custom grid has been DEFERRED here. Two options for the
+       * next session:
+       *   A) Extend AdsDataGrid with optional `expandable` / `getHasChildren`
+       *      / `fetchChildren` props that inject child rows after their parent
+       *      in the sort pipeline — requires modifying sorted+paged logic but
+       *      can be done without touching default behavior.
+       *   B) Variation drawer: clicking a parent row opens a slide-over that
+       *      lists its children (reuses the AdsDataGrid in a drawer, no grid
+       *      surgery needed).
+       * For now, only top-level products (parentId === null are returned by
+       * the API by default at /api/products) are shown flat.
        */}
-      <BulkActionBar
-        count={selected.size}
-        onClear={() => setSelected(new Set())}
-      >
-        <Button size="sm" onClick={comingSoon}>
-          Set field ▾
-        </Button>
-        <Button size="sm" onClick={comingSoon}>
-          Publish ▾
-        </Button>
-        <Button size="sm" onClick={comingSoon}>
-          Activate
-        </Button>
-        <Button size="sm" onClick={comingSoon}>
-          Tag ▾
-        </Button>
-        <span className={styles.stageExtra}>
-          <Button size="sm" onClick={comingSoon}>
-            Preview diff
-          </Button>
-          <Button size="sm" variant="primary" onClick={comingSoon}>
-            Apply all
-          </Button>
-        </span>
-      </BulkActionBar>
-
-      {/* Column customizer modal — driven by the Columns toolbar button */}
-      <ColumnCustomizer
-        open={colCustomizerOpen}
-        onClose={() => setColCustomizerOpen(false)}
-        columns={customCols}
-        onApply={(next) => {
-          setCustomCols(next)
-          saveColPrefs(next)
-        }}
-      />
+      <DensityContext.Provider value={'comfortable' as Density}>
+        <AdsDataGrid<ProductRow>
+          rows={filteredByTile}
+          loading={loading}
+          rowId={(p) => p.id}
+          noun="Product"
+          firstColLabel="Product"
+          renderFirst={(p) => (
+            <div className={styles.productCell}>
+              <Thumbnail src={p.imageUrl} photoCount={p.photoCount} alt={p.name} />
+              <div className={styles.pmeta}>
+                <div className={styles.ptitle}>{p.name}</div>
+                <div className={styles.psub}>
+                  <span className={styles.skuTag}>{p.sku}</span>
+                  {p.productType && (
+                    <span className={styles.typeTag}>{p.productType}</span>
+                  )}
+                  {(p.variantCount ?? 0) > 0 && (
+                    <span className={styles.varCount}>{p.variantCount} variations</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          firstSortValue={(p) => p.name}
+          columns={columns}
+          filters={filters}
+          filtersDefaultOpen
+          selectable
+          selectionActions={(_ids, clear) => (
+            <>
+              <button
+                type="button"
+                className="h10-am-btn"
+                onClick={() => { comingSoon(); clear() }}
+              >
+                Publish
+              </button>
+              <button
+                type="button"
+                className="h10-am-btn"
+                onClick={() => { comingSoon(); clear() }}
+              >
+                Activate
+              </button>
+              <button
+                type="button"
+                className="h10-am-btn"
+                onClick={() => { comingSoon(); clear() }}
+              >
+                Draft
+              </button>
+              <button
+                type="button"
+                className="h10-am-btn"
+                onClick={() => { comingSoon(); clear() }}
+              >
+                Tag
+              </button>
+            </>
+          )}
+          toolbarRight={
+            <Link href="/products/new" className="h10-am-btn primary">
+              + New product
+            </Link>
+          }
+          storageKey="nexus-products-next-cols"
+          defaultSort={{ key: '__first', dir: 'asc' }}
+          exportable
+          onExport={comingSoon}
+        />
+      </DensityContext.Provider>
     </div>
   )
 }
 
 // ─────────────────────────────────────────────────────────────────
 // Exported wrapper — provides DS ToastProvider for this subtree
-// (the root layout's ToastProvider is from the old component
-// library; DS toast needs its own context boundary).
 // ─────────────────────────────────────────────────────────────────
 
 export function ProductsNextClient() {
