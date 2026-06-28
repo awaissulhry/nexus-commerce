@@ -36,7 +36,7 @@ import {
   type MenuItemDef,
 } from '@/design-system/components'
 // DS Patterns
-import { BulkActionBar, PageHeader } from '@/design-system/patterns'
+import { BulkActionBar, ColumnCustomizer, PageHeader, type CustomizableColumn } from '@/design-system/patterns'
 
 import styles from './styles.module.css'
 
@@ -59,6 +59,61 @@ type Channel = (typeof CHANNELS)[number]
 type DensityMode = 'compact' | 'cozy' | 'spacious'
 type LensKey = 'all' | 'attention' | 'amazon' | 'ebay' | 'shopify'
 type KpiTileKey = 'active' | 'out-of-stock' | 'attention' | null
+
+// ─────────────────────────────────────────────────────────────────
+// Column-preferences model
+// ─────────────────────────────────────────────────────────────────
+
+const COL_PREFS_KEY = 'products-next:columns'
+
+/**
+ * Catalog of customizable columns (stable keys + display labels).
+ * _sel, product, and actions are LOCKED — they're not in this catalog.
+ */
+const COL_CATALOG: Array<{ key: string; label: string }> = [
+  { key: 'channels', label: 'Channels' },
+  { key: 'status', label: 'Status' },
+  { key: 'available', label: 'Available' },
+  { key: 'price', label: 'Price' },
+]
+
+/** Load + reconcile column prefs from localStorage. */
+function loadColPrefs(): CustomizableColumn[] {
+  try {
+    const raw = typeof window !== 'undefined' && localStorage.getItem(COL_PREFS_KEY)
+    if (raw) {
+      const saved = JSON.parse(raw) as Array<{ key: string; visible: boolean }>
+      // Drop unknown keys, preserve saved order
+      const valid = saved.filter((s) => COL_CATALOG.some((c) => c.key === s.key))
+      // Append newly-added catalog columns (forward-compat: new columns are visible by default)
+      const savedKeys = new Set(valid.map((s) => s.key))
+      const appended = COL_CATALOG.filter((c) => !savedKeys.has(c.key)).map((c) => ({
+        key: c.key,
+        visible: true,
+      }))
+      return [...valid, ...appended].map((s) => ({
+        key: s.key,
+        label: COL_CATALOG.find((c) => c.key === s.key)!.label,
+        visible: s.visible,
+      }))
+    }
+  } catch {
+    // ignore parse / storage errors
+  }
+  return COL_CATALOG.map((c) => ({ key: c.key, label: c.label, visible: true }))
+}
+
+/** Persist column prefs to localStorage. */
+function saveColPrefs(cols: CustomizableColumn[]): void {
+  try {
+    localStorage.setItem(
+      COL_PREFS_KEY,
+      JSON.stringify(cols.map((c) => ({ key: c.key, visible: c.visible }))),
+    )
+  } catch {
+    // ignore storage errors (private mode, quota exceeded, etc.)
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────
 // Pure helpers
@@ -372,6 +427,10 @@ function ProductsNextInner() {
   const [sortKey, setSortKey] = useState<string>('product')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
+  // Column visibility + order (persisted to localStorage)
+  const [colCustomizerOpen, setColCustomizerOpen] = useState(false)
+  const [customCols, setCustomCols] = useState<CustomizableColumn[]>(loadColPrefs)
+
   // ── Data ──────────────────────────────────────────────────────
   const { data, loading } = usePolledList<{
     products: ProductRow[]
@@ -562,9 +621,15 @@ function ProductsNextInner() {
   // DataGrid's built-in sort is disabled (no initialSort) so the
   // pre-ordered displayRows array is not re-sorted. Sort headers are
   // custom SortHeader elements that update local sortKey/sortDir state.
+  //
+  // Structure:
+  //   [_sel (locked)] [product (locked)] [...visible customizable cols in user order] [actions (locked)]
+  // Customizable cols (channels · status · available · price) are driven by
+  // `customCols` state (visibility + order) which is persisted to localStorage.
   const columns = useMemo(
-    (): Column<ProductRow>[] => [
-      {
+    (): Column<ProductRow>[] => {
+      // ── Locked: selection checkbox ──────────────────────────
+      const selCol: Column<ProductRow> = {
         key: '_sel',
         label: (
           <Ckb
@@ -585,8 +650,10 @@ function ProductsNextInner() {
             />
           )
         },
-      },
-      {
+      }
+
+      // ── Locked: product name / thumb ────────────────────────
+      const productCol: Column<ProductRow> = {
         key: 'product',
         label: (
           <SortHeader
@@ -619,97 +686,10 @@ function ProductsNextInner() {
             />
           )
         },
-      },
-      {
-        key: 'channels',
-        label: 'Channels',
-        width: 110,
-        render: (row) => {
-          if (isLoadingRow(row)) return null
-          return (
-            <div className={styles.chcell}>
-              {CHANNELS.map((ch) => {
-                const cov = getCov(row, ch)
-                const state =
-                  cov && cov.live > 0
-                    ? 'on'
-                    : cov && cov.error > 0
-                      ? 'iss'
-                      : 'off'
-                const stateClass =
-                  state === 'on'
-                    ? styles.chOn
-                    : state === 'iss'
-                      ? styles.chIss
-                      : styles.chOff
-                const tipLabel = cov
-                  ? `${cov.live} live · ${cov.error} errors`
-                  : 'not listed'
-                return (
-                  <Tooltip key={ch} label={`${ch}: ${tipLabel}`}>
-                    <span className={`${styles.ch} ${stateClass}`}>
-                      {ch[0]}
-                    </span>
-                  </Tooltip>
-                )
-              })}
-            </div>
-          )
-        },
-      },
-      {
-        key: 'status',
-        label: 'Status',
-        width: 96,
-        render: (row) => {
-          if (isLoadingRow(row)) return null
-          return (
-            <Pill tone={getStatusTone(row.status)}>
-              {getStatusLabel(row.status)}
-            </Pill>
-          )
-        },
-      },
-      {
-        key: 'available',
-        label: (
-          <SortHeader
-            label="Available"
-            colKey="available"
-            sortKey={sortKey}
-            sortDir={sortDir}
-            onSort={handleColumnSort}
-          />
-        ),
-        width: 120,
-        render: (row) => {
-          if (isLoadingRow(row)) return null
-          return <AvailableCell row={row} />
-        },
-      },
-      {
-        key: 'price',
-        label: (
-          <SortHeader
-            label="Price"
-            colKey="price"
-            sortKey={sortKey}
-            sortDir={sortDir}
-            onSort={handleColumnSort}
-          />
-        ),
-        width: 96,
-        align: 'right',
-        render: (row) => {
-          if (isLoadingRow(row)) return null
-          return (
-            <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-              {fmtEur(row.basePrice)}
-            </span>
-          )
-        },
-      },
-      {
+      }
+
+      // ── Locked: row actions ─────────────────────────────────
+      const actionsCol: Column<ProductRow> = {
         key: 'actions',
         label: '',
         width: 120,
@@ -717,8 +697,109 @@ function ProductsNextInner() {
           if (isLoadingRow(row)) return null
           return <RowActions row={row} onMore={comingSoon} />
         },
-      },
-    ],
+      }
+
+      // ── All customizable column defs (keyed by catalog key) ─
+      const customColDefs: Record<string, Column<ProductRow>> = {
+        channels: {
+          key: 'channels',
+          label: 'Channels',
+          width: 110,
+          render: (row) => {
+            if (isLoadingRow(row)) return null
+            return (
+              <div className={styles.chcell}>
+                {CHANNELS.map((ch) => {
+                  const cov = getCov(row, ch)
+                  const state =
+                    cov && cov.live > 0
+                      ? 'on'
+                      : cov && cov.error > 0
+                        ? 'iss'
+                        : 'off'
+                  const stateClass =
+                    state === 'on'
+                      ? styles.chOn
+                      : state === 'iss'
+                        ? styles.chIss
+                        : styles.chOff
+                  const tipLabel = cov
+                    ? `${cov.live} live · ${cov.error} errors`
+                    : 'not listed'
+                  return (
+                    <Tooltip key={ch} label={`${ch}: ${tipLabel}`}>
+                      <span className={`${styles.ch} ${stateClass}`}>
+                        {ch[0]}
+                      </span>
+                    </Tooltip>
+                  )
+                })}
+              </div>
+            )
+          },
+        },
+        status: {
+          key: 'status',
+          label: 'Status',
+          width: 96,
+          render: (row) => {
+            if (isLoadingRow(row)) return null
+            return (
+              <Pill tone={getStatusTone(row.status)}>
+                {getStatusLabel(row.status)}
+              </Pill>
+            )
+          },
+        },
+        available: {
+          key: 'available',
+          label: (
+            <SortHeader
+              label="Available"
+              colKey="available"
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={handleColumnSort}
+            />
+          ),
+          width: 120,
+          render: (row) => {
+            if (isLoadingRow(row)) return null
+            return <AvailableCell row={row} />
+          },
+        },
+        price: {
+          key: 'price',
+          label: (
+            <SortHeader
+              label="Price"
+              colKey="price"
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={handleColumnSort}
+            />
+          ),
+          width: 96,
+          align: 'right',
+          render: (row) => {
+            if (isLoadingRow(row)) return null
+            return (
+              <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {fmtEur(row.basePrice)}
+              </span>
+            )
+          },
+        },
+      }
+
+      // ── Derive ordered visible customizable columns ─────────
+      const visibleCustom = customCols
+        .filter((c) => c.visible)
+        .map((c) => customColDefs[c.key])
+        .filter((c): c is Column<ProductRow> => !!c)
+
+      return [selCol, productCol, ...visibleCustom, actionsCol]
+    },
     [
       allSelected,
       someSelected,
@@ -732,6 +813,7 @@ function ProductsNextInner() {
       expandedParents,
       loadingChildren,
       toggleExpand,
+      customCols,
     ],
   )
 
@@ -878,8 +960,8 @@ function ProductsNextInner() {
         <Button size="sm" onClick={comingSoon}>
           ↕ Sort
         </Button>
-        <Button size="sm" onClick={comingSoon}>
-          ▤ Views
+        <Button size="sm" onClick={() => setColCustomizerOpen(true)}>
+          ⊞ Columns
         </Button>
         <span className={styles.spacer} />
         <SegmentedControl
@@ -1006,6 +1088,17 @@ function ProductsNextInner() {
           </Button>
         </span>
       </BulkActionBar>
+
+      {/* Column customizer modal — driven by the Columns toolbar button */}
+      <ColumnCustomizer
+        open={colCustomizerOpen}
+        onClose={() => setColCustomizerOpen(false)}
+        columns={customCols}
+        onApply={(next) => {
+          setCustomCols(next)
+          saveColPrefs(next)
+        }}
+      />
     </div>
   )
 }
