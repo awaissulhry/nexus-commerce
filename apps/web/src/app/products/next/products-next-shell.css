@@ -1,0 +1,35 @@
+/*
+ * Light-mode pin for /products/next.
+ *
+ * Re-scopes the DS semantic token aliases to their :root (light) values so that
+ * even if an ancestor element carries the `.dark` class, everything under
+ * `.productsNextLight` renders with the light palette.
+ *
+ * Strategy: reference --h10-* primitive ramp vars that are defined on :root and
+ * never overridden by the .dark block in tokens.css. This is the same approach
+ * used in ads.css (hardcoded hex that matches the :root palette), but expressed
+ * via var() so there is a single source of truth for the colour values.
+ *
+ * /* eslint/guard: this file is intentionally outside the P3-token guard scope;
+ *    it references only --h10-* primitive vars already present in tokens.css. */
+
+.productsNextLight {
+  /* Pin light surface tokens */
+  --surface-canvas:  var(--h10-grey-50);   /* #f4f6f9 — page background */
+  --surface-card:    var(--h10-white);      /* #ffffff — cards / panels */
+  --surface-sunken:  var(--h10-grey-100);  /* #eef1f5 — sunken wells */
+
+  /* Pin light text tokens */
+  --text-primary:    var(--h10-grey-900);  /* #1c2530 */
+  --text-secondary:  var(--h10-grey-600);  /* #5b6573 */
+  --text-tertiary:   var(--h10-grey-500);  /* #8a93a1 */
+
+  /* Pin light border tokens */
+  --border-default:  var(--h10-grey-200);  /* #d8dde4 */
+  --border-strong:   var(--h10-grey-300);  /* #c2c9d3 */
+  --border-subtle:   var(--h10-grey-150);  /* #e6e9ee */
+
+  /* Tell the browser this subtree uses a light colour scheme so native
+     form controls (scrollbars, selects) also render in light mode. */
+  color-scheme: light;
+}
