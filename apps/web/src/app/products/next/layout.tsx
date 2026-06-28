@@ -22,17 +22,12 @@ import '../../marketing/ads/ads.css'
 import './products-next-shell.css'
 
 import type { ReactNode } from 'react'
-import { AppRail } from '@/app/_shared/AppRail'
-import { PRODUCTS_NAV } from './_shell/nav'
+import { ProductsRail } from './_shell/ProductsRail'
 
 export default function ProductsNextLayout({ children }: { children: ReactNode }) {
   return (
     <div className="h10-shell productsNextLight">
-      <AppRail
-        navItems={PRODUCTS_NAV}
-        brand={{ mark: 'N', name: 'Nexus' }}
-        footer="Products · rebuild"
-      />
+      <ProductsRail />
       <main className="h10-main">{children}</main>
     </div>
   )
