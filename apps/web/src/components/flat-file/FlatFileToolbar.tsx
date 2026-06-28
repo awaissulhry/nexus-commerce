@@ -64,7 +64,7 @@ export function TbBtn({
   )
 
   return (
-    <Tooltip label={tooltipContent ?? <span className="text-xs">{title}</span>}>
+    <Tooltip label={tooltipContent ?? <span className="text-xs">{title}</span>} className="h10-ds-tooltip--light">
       {btn}
     </Tooltip>
   )
@@ -84,12 +84,12 @@ function ToolTip({
   return (
     <div className="flex max-w-[200px] flex-col gap-0.5">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+        <span className="text-xs font-semibold text-slate-900">
           {label}
         </span>
         {shortcut && <Kbd className="text-[9px]">{shortcut}</Kbd>}
       </div>
-      <span className="text-[11px] leading-tight text-slate-500 dark:text-slate-400">
+      <span className="text-[11px] leading-tight text-slate-500">
         {description}
       </span>
     </div>
