@@ -359,7 +359,7 @@ function ProductsNextInner() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
   const [lens, setLens] = useState<LensKey>('all')
-  const [density, setDensity] = useState<DensityMode>('cozy')
+  const [density, setDensity] = useState<DensityMode>('spacious')
   const [activeTile, setActiveTile] = useState<KpiTileKey>(null)
 
   // Variation expansion — children are lazy-fetched on first expand and
