@@ -34,6 +34,21 @@
   --h10-grey-900: #1c2530;
   --h10-rail-surface: #f1f3f5;
   --h10-rail-line: #e3e7ec;
+  /* Rail-specific colours (dedicated so the app-wide rail can follow theme
+     without shifting general --h10-text-* used elsewhere). Light values; the
+     .dark block overrides them, and .h10-shell pins them light for the
+     deliberately-light standalone shells (ads cockpit + /products/next). */
+  --h10-rail-text: #4a5462;
+  --h10-rail-text-2: #5b6573;
+  --h10-rail-text-strong: #1c2530;
+  --h10-rail-icon: #8a93a1;
+  --h10-rail-chev: #98a2b3;
+  --h10-rail-item-hover: #e6eaf0;
+  --h10-rail-item-hover-2: #f1f4f8;
+  --h10-rail-chip-bg: #e8ebf0;
+  --h10-rail-chip-active-bg: #dce8fb;
+  --h10-rail-chip-active-fg: #1f6fde;
+  --h10-rail-ft: #aeb6c2;
   --h10-green-soft: #dcfce7;
   --h10-green-500: #1e9e62;
   --h10-green-600: #15a34a;
@@ -189,4 +204,17 @@
   --h10-border-subtle: #26323f;
   --h10-border-strong: #46505f;
   --h10-rail-border: #26323f;
+  /* Dark rail palette (consumed only when the rail is NOT under .h10-shell —
+     i.e. the app-wide rail; standalone shells pin these light). */
+  --h10-rail-text: #aab6c2;
+  --h10-rail-text-2: #97a3b1;
+  --h10-rail-text-strong: #e7ebf1;
+  --h10-rail-icon: #8a94a6;
+  --h10-rail-chev: #6f7b8b;
+  --h10-rail-item-hover: #223247;
+  --h10-rail-item-hover-2: #1d2a3c;
+  --h10-rail-chip-bg: #243345;
+  --h10-rail-chip-active-bg: #1d3a5f;
+  --h10-rail-chip-active-fg: #cfe1fb;
+  --h10-rail-ft: #6f7b8b;
 }

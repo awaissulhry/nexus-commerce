@@ -3,7 +3,20 @@
    must be bounded to the viewport and let .h10-main scroll internally (fixed
    sidebar + scrolling content = the H10 behavior). min-height here would overflow
    the clipped parent and kill all scrolling. */
-.h10-shell { display: flex; height: 100dvh; overflow: hidden; background: #f4f6f9; color: #1c2530; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+.h10-shell {
+  display: flex; height: 100dvh; overflow: hidden; background: #f4f6f9; color: #1c2530;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  /* Pin the rail palette light so this deliberately-light shell (ads cockpit +
+     /products/next) never inherits dark-mode rail colours. Only the app-wide
+     rail (rendered outside .h10-shell) follows the app theme. */
+  --h10-rail-bg: #f1f3f5; --h10-rail-border: #e3e7ec;
+  --h10-rail-text: #4a5462; --h10-rail-text-2: #5b6573; --h10-rail-text-strong: #1c2530;
+  --h10-rail-icon: #8a93a1; --h10-rail-chev: #98a2b3;
+  --h10-rail-item-hover: #e6eaf0; --h10-rail-item-hover-2: #f1f4f8;
+  --h10-rail-chip-bg: #e8ebf0; --h10-rail-chip-active-bg: #dce8fb; --h10-rail-chip-active-fg: #1f6fde;
+  --h10-rail-ft: #aeb6c2;
+  color-scheme: light;
+}
 .h10-main { flex: 1; min-width: 0; min-height: 0; padding: 26px 30px; overflow-y: auto; }
 
 /* left rail — collapsible icon rail that expands on hover (H10 behavior).
@@ -20,36 +33,36 @@
 .h10-rail {
   position: absolute; left: 0; top: 0; height: 100%;
   width: 66px; z-index: 50;
-  background: #f1f3f5; border-right: 1px solid #e3e7ec;
+  background: var(--h10-rail-bg); border-right: 1px solid var(--h10-rail-border);
   display: flex; flex-direction: column;
   overflow: hidden;
   transition: width .18s ease, box-shadow .18s ease;
 }
-.h10-rail:hover { width: 344px; overflow-y: auto; box-shadow: 8px 0 30px rgba(20, 28, 38, 0.13); }
+.h10-rail:hover { width: 344px; overflow-y: auto; box-shadow: var(--h10-shadow-rail); }
 
 /* brand: compact "N" mark when collapsed, full "Nexus Ads" wordmark on hover */
 .h10-brand { display: flex; align-items: center; gap: 12px; height: 66px; padding-left: 19px; flex-shrink: 0; }
-.h10-brand .logo { width: 28px; height: 28px; border-radius: 7px; background: #1f6fde; color: #fff; font-weight: 800; font-size: 15px; letter-spacing: -0.02em; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.h10-brand .logo { width: 28px; height: 28px; border-radius: 7px; background: var(--h10-primary); color: #fff; font-weight: 800; font-size: 15px; letter-spacing: -0.02em; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .h10-brand .word { white-space: nowrap; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; opacity: 0; transition: opacity .14s ease; }
-.h10-brand .word .mk { color: #1c2530; }
-.h10-brand .word b { color: #1f6fde; font-weight: 800; }
+.h10-brand .word .mk { color: var(--h10-rail-text-strong); }
+.h10-brand .word b { color: var(--h10-primary); font-weight: 800; }
 .h10-rail:hover .h10-brand .word { opacity: 1; }
 
 .h10-nav { flex: 1; padding: 4px 0; display: flex; flex-direction: column; gap: 2px; }
 .h10-group { display: flex; flex-direction: column; }
 /* fixed 50px icon zone centres the 20px glyph in the 66px collapsed rail (8px row
    margin + 25px to glyph centre = 33px = rail centre) AND left-aligns it expanded */
-.h10-item { position: relative; display: flex; align-items: center; height: 46px; margin: 1px 8px; border-radius: 10px; font-size: 15px; font-weight: 600; color: #4a5462; text-decoration: none; overflow: hidden; transition: background .12s, color .12s; }
+.h10-item { position: relative; display: flex; align-items: center; height: 46px; margin: 1px 8px; border-radius: 10px; font-size: 15px; font-weight: 600; color: var(--h10-rail-text); text-decoration: none; overflow: hidden; transition: background .12s, color .12s; }
 /* F1 — pending-suggestions count badge (over the icon top-right; visible collapsed + expanded) */
-.h10-nav-badge { position: absolute; left: 31px; top: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #e5484d; color: #fff; font-size: 10px; font-weight: 800; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px #f4f6f9; z-index: 1; }
-.h10-item.on .h10-nav-badge { box-shadow: 0 0 0 2px #1f6fde; }
+.h10-nav-badge { position: absolute; left: 31px; top: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--h10-danger); color: #fff; font-size: 10px; font-weight: 800; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px var(--h10-rail-bg); z-index: 1; }
+.h10-item.on .h10-nav-badge { box-shadow: 0 0 0 2px var(--h10-primary); }
 .h10-item .ico { flex: 0 0 50px; display: flex; align-items: center; justify-content: center; }
-.h10-item .ico svg { color: #8a93a1; transition: color .12s; }
+.h10-item .ico svg { color: var(--h10-rail-icon); transition: color .12s; }
 .h10-item .lbl { white-space: nowrap; margin-left: 10px; opacity: 0; transition: opacity .14s ease; }
 .h10-rail:hover .h10-item .lbl { opacity: 1; }
-.h10-item:hover { background: #e6eaf0; color: #1c2530; }
-.h10-item:hover .ico svg { color: #5b6573; }
-.h10-item.on { background: #1f6fde; color: #fff; }
+.h10-item:hover { background: var(--h10-rail-item-hover); color: var(--h10-rail-text-strong); }
+.h10-item:hover .ico svg { color: var(--h10-rail-text-2); }
+.h10-item.on { background: var(--h10-primary); color: #fff; }
 .h10-item.on .ico svg { color: #fff; }
 /* the active item is ONLY a blue fill + white text — same font size/weight as every
    other item (H10 does not enlarge or embolden the selection) */
@@ -64,18 +77,18 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
    centres 25px from the item's left edge (50px ico zone); the 16px chevron box gets
    margin-right:17px so its centre lands 25px from the right edge (8 + 17 = 25). Both
    affordances are therefore equidistant from their borders — never eyeball one side. */
-.h10-item .chev { margin-left: auto; margin-right: 17px; flex-shrink: 0; color: #98a2b3; opacity: 0; transition: opacity .14s ease, transform .18s ease; }
-.h10-item .ext { margin-left: 8px; flex-shrink: 0; color: #98a2b3; opacity: 0; transition: opacity .14s ease; }
+.h10-item .chev { margin-left: auto; margin-right: 17px; flex-shrink: 0; color: var(--h10-rail-chev); opacity: 0; transition: opacity .14s ease, transform .18s ease; }
+.h10-item .ext { margin-left: 8px; flex-shrink: 0; color: var(--h10-rail-chev); opacity: 0; transition: opacity .14s ease; }
 .h10-rail:hover .h10-item .chev, .h10-rail:hover .h10-item .ext { opacity: 1; }
-.h10-item:hover .chev, .h10-item:hover .ext { color: #5b6573; }
+.h10-item:hover .chev, .h10-item:hover .ext { color: var(--h10-rail-text-2); }
 .h10-item.on .chev { color: #fff; }
 .h10-item .chev.open { transform: rotate(180deg); }
 
 .h10-sub { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 4px 60px; padding-right: 8px; }
 .h10-rail:not(:hover) .h10-sub { display: none; }
-.h10-subitem { white-space: nowrap; font-size: 12.5px; color: #5b6573; text-decoration: none; padding: 6px 10px; border-radius: 6px; }
-.h10-subitem:hover { background: #f1f4f8; color: #1c2530; }
-.h10-subitem.on { color: #1f6fde; font-weight: 600; }
+.h10-subitem { white-space: nowrap; font-size: 12.5px; color: var(--h10-rail-text-2); text-decoration: none; padding: 6px 10px; border-radius: 6px; }
+.h10-subitem:hover { background: var(--h10-rail-item-hover-2); color: var(--h10-rail-text-strong); }
+.h10-subitem.on { color: var(--h10-primary); font-weight: 600; }
 
 /* third-level nav (channel → markets) — additive; only renders when a
    RailSubItem carries `children`. The ads cockpit nav has none, so these
@@ -87,21 +100,21 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
    same height as a plain .h10-subitem. */
 .h10-subitem.h10-subparent { display: flex; align-items: center; padding: 0; }
 .h10-subparent .subname { flex: 1 1 auto; min-width: 0; padding: 6px 4px 6px 10px; color: inherit; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.h10-subparent.on .subname { color: #1f6fde; font-weight: 600; }
-.subchev-btn { appearance: none; -webkit-appearance: none; border: 0; background: transparent; cursor: pointer; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-right: 4px; border-radius: 6px; color: #98a2b3; }
-.subchev-btn:hover { background: #e6eaf0; color: #5b6573; }
+.h10-subparent.on .subname { color: var(--h10-primary); font-weight: 600; }
+.subchev-btn { appearance: none; -webkit-appearance: none; border: 0; background: transparent; cursor: pointer; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-right: 4px; border-radius: 6px; color: var(--h10-rail-chev); }
+.subchev-btn:hover { background: var(--h10-rail-item-hover); color: var(--h10-rail-text-2); }
 .subchev { transition: transform .18s ease; }
 .subchev.open { transform: rotate(180deg); }
 /* market list — indented one notch past the channel, with a faint tree line */
-.h10-subsub { display: flex; flex-direction: column; gap: 1px; margin: 1px 0 4px 12px; padding-left: 8px; border-left: 1px solid #e3e7ec; }
-.h10-subsubitem { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; color: #5b6573; text-decoration: none; padding: 5px 9px; border-radius: 6px; }
-.h10-subsubitem:hover { background: #f1f4f8; color: #1c2530; }
-.h10-subsubitem.on { color: #1f6fde; font-weight: 600; }
-.h10-subsubitem .mcode { flex-shrink: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 700; letter-spacing: .02em; background: #e8ebf0; color: #5b6573; padding: 1px 5px; border-radius: 4px; }
-.h10-subsubitem.on .mcode { background: #dce8fb; color: #1f6fde; }
+.h10-subsub { display: flex; flex-direction: column; gap: 1px; margin: 1px 0 4px 12px; padding-left: 8px; border-left: 1px solid var(--h10-rail-border); }
+.h10-subsubitem { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; color: var(--h10-rail-text-2); text-decoration: none; padding: 5px 9px; border-radius: 6px; }
+.h10-subsubitem:hover { background: var(--h10-rail-item-hover-2); color: var(--h10-rail-text-strong); }
+.h10-subsubitem.on { color: var(--h10-primary); font-weight: 600; }
+.h10-subsubitem .mcode { flex-shrink: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 700; letter-spacing: .02em; background: var(--h10-rail-chip-bg); color: var(--h10-rail-text-2); padding: 1px 5px; border-radius: 4px; }
+.h10-subsubitem.on .mcode { background: var(--h10-rail-chip-active-bg); color: var(--h10-rail-chip-active-fg); }
 .h10-subsubitem .mname { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
-.h10-railft { white-space: nowrap; font-size: 10px; color: #aeb6c2; padding: 12px 16px 16px; opacity: 0; transition: opacity .14s ease; flex-shrink: 0; }
+.h10-railft { white-space: nowrap; font-size: 10px; color: var(--h10-rail-ft); padding: 12px 16px 16px; opacity: 0; transition: opacity .14s ease; flex-shrink: 0; }
 .h10-rail:hover .h10-railft { opacity: 1; }
 
 /* page stub */
