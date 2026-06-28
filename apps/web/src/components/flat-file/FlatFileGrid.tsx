@@ -876,18 +876,43 @@ export default function FlatFileGrid({
   }, [rows, searchQuery])
 
   const displayRows = useMemo(() => {
-    const result: BaseRow[] = []
+    // Build per-group arrays, pinning _isParent=true to index 0 within each group.
+    const groupArrays: BaseRow[][] = []
     rowGroups.forEach((groupRows, groupKey) => {
       if (collapsedRowGroups.has(groupKey)) {
-        // Keep the first row as a header anchor so GroupHeader can still render
-        if (groupRows.length > 1) result.push(groupRows[0])
+        if (groupRows.length > 1) {
+          // Anchor = parent row so GroupHeader shows parent data
+          const parent = groupRows.find((r) => r._isParent === true) ?? groupRows[0]
+          groupArrays.push([parent])
+        }
         return
       }
-      result.push(...groupRows.filter((r) => filteredRows.some((fr) => fr._rowId === r._rowId)))
+      const filtered = groupRows.filter((r) => filteredRows.some((fr) => fr._rowId === r._rowId))
+      if (!filtered.length) return
+      // Guarantee parent row is always first regardless of sort
+      const parentIdx = filtered.findIndex((r) => r._isParent === true)
+      if (parentIdx > 0) {
+        const reordered = [...filtered]
+        const [parent] = reordered.splice(parentIdx, 1)
+        reordered.unshift(parent)
+        groupArrays.push(reordered)
+      } else {
+        groupArrays.push(filtered)
+      }
     })
-    const sorted = applySortLevels(result as Array<Record<string, unknown>>, sortConfig) as BaseRow[]
-    displayRowsRef.current = sorted
-    return sorted
+    let result: BaseRow[]
+    if (sortConfig.length > 0) {
+      // Sort GROUPS by their representative (parent/first) row — not the full flat array.
+      // This preserves intra-group parent-first order while still honouring column sorts.
+      const reps = groupArrays.map((g) => g[0])
+      const sortedReps = applySortLevels(reps as Array<Record<string, unknown>>, sortConfig) as BaseRow[]
+      const repById = new Map(groupArrays.map((g) => [g[0]._rowId, g]))
+      result = sortedReps.flatMap((r) => repById.get(r._rowId) ?? [r])
+    } else {
+      result = groupArrays.flat()
+    }
+    displayRowsRef.current = result
+    return result
   }, [rowGroups, filteredRows, collapsedRowGroups, sortConfig])
 
   const normSel = useMemo<NormSel | null>(() => {

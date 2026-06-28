@@ -324,6 +324,63 @@ function gColor(color: string) {
   return GROUP_COLORS[color] ?? GROUP_COLORS.slate
 }
 
+// ── Per-product-family row banding ─────────────────────────────────────────
+// Cycles through 6 colours. Each family (parent + its children) gets one slot.
+// These are background-only classes to avoid cascading text-color onto cells.
+const FAMILY_PALETTE = ['blue', 'purple', 'emerald', 'orange', 'teal', 'amber'] as const
+type FamilyColor = typeof FAMILY_PALETTE[number]
+
+const FC_PARENT_ROW: Record<FamilyColor, string> = {
+  blue:    'bg-blue-100/80 dark:bg-blue-900/35',
+  purple:  'bg-purple-100/80 dark:bg-purple-900/35',
+  emerald: 'bg-emerald-100/80 dark:bg-emerald-900/35',
+  orange:  'bg-orange-100/80 dark:bg-orange-900/35',
+  teal:    'bg-teal-100/80 dark:bg-teal-900/35',
+  amber:   'bg-amber-100/80 dark:bg-amber-900/35',
+}
+const FC_CHILD_ROW: Record<FamilyColor, string> = {
+  blue:    'bg-blue-50/60 dark:bg-blue-950/20',
+  purple:  'bg-purple-50/60 dark:bg-purple-950/20',
+  emerald: 'bg-emerald-50/60 dark:bg-emerald-950/20',
+  orange:  'bg-orange-50/60 dark:bg-orange-950/20',
+  teal:    'bg-teal-50/60 dark:bg-teal-950/20',
+  amber:   'bg-amber-50/60 dark:bg-amber-950/20',
+}
+// Opaque equivalents for sticky/frozen cells (prevent scroll bleed-through)
+const FC_PARENT_FROZEN: Record<FamilyColor, string> = {
+  blue:    'bg-blue-100 dark:bg-blue-900/60',
+  purple:  'bg-purple-100 dark:bg-purple-900/60',
+  emerald: 'bg-emerald-100 dark:bg-emerald-900/60',
+  orange:  'bg-orange-100 dark:bg-orange-900/60',
+  teal:    'bg-teal-100 dark:bg-teal-900/60',
+  amber:   'bg-amber-100 dark:bg-amber-900/60',
+}
+const FC_CHILD_FROZEN: Record<FamilyColor, string> = {
+  blue:    'bg-blue-50 dark:bg-blue-950/40',
+  purple:  'bg-purple-50 dark:bg-purple-950/40',
+  emerald: 'bg-emerald-50 dark:bg-emerald-950/40',
+  orange:  'bg-orange-50 dark:bg-orange-950/40',
+  teal:    'bg-teal-50 dark:bg-teal-950/40',
+  amber:   'bg-amber-50 dark:bg-amber-950/40',
+}
+// Left-border accent: strong on parent (section-header feel), subtle on children
+const FC_PARENT_BORDER: Record<FamilyColor, string> = {
+  blue:    'border-l-blue-400 dark:border-l-blue-500',
+  purple:  'border-l-purple-400 dark:border-l-purple-500',
+  emerald: 'border-l-emerald-400 dark:border-l-emerald-500',
+  orange:  'border-l-orange-400 dark:border-l-orange-500',
+  teal:    'border-l-teal-400 dark:border-l-teal-500',
+  amber:   'border-l-amber-400 dark:border-l-amber-500',
+}
+const FC_CHILD_BORDER: Record<FamilyColor, string> = {
+  blue:    'border-l-blue-200 dark:border-l-blue-800',
+  purple:  'border-l-purple-200 dark:border-l-purple-800',
+  emerald: 'border-l-emerald-200 dark:border-l-emerald-800',
+  orange:  'border-l-orange-200 dark:border-l-orange-800',
+  teal:    'border-l-teal-200 dark:border-l-teal-800',
+  amber:   'border-l-amber-200 dark:border-l-amber-800',
+}
+
 function makeEmptyRow(productType: string, _marketplace: string, parentage = ''): Row {
   return {
     _rowId: `new-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -1277,6 +1334,38 @@ export default function AmazonFlatFileClient({
     displayRowsRef.current = result
     return result
   }, [rows, searchQuery, searchMode, sortConfig, collapsedParents, ffFilter, manifest, manifestColumns])
+
+  // Family colour assignment: map each rowId → FamilyColor.
+  // Derived purely from displayRows — NOT written onto row objects (no data leakage).
+  const familyColorByRowId = useMemo<Map<string, FamilyColor>>(() => {
+    const m = new Map<string, FamilyColor>()
+    // First pass: assign a colour index to each unique parent SKU
+    const parentColorMap = new Map<string, FamilyColor>()
+    let idx = 0
+    for (const row of displayRows) {
+      if (row._ghost || row.parentage_level !== 'parent') continue
+      const sku = String(row.item_sku ?? row._rowId)
+      if (!parentColorMap.has(sku)) {
+        parentColorMap.set(sku, FAMILY_PALETTE[idx % FAMILY_PALETTE.length])
+        idx++
+      }
+    }
+    // Only colour rows when there are at least 2 distinct families (single-family
+    // sheets look fine with plain white rows — banding adds noise not value).
+    if (parentColorMap.size < 2) return m
+    // Second pass: apply colour to parents and their children
+    for (const row of displayRows) {
+      if (row._ghost) continue
+      if (row.parentage_level === 'parent') {
+        const color = parentColorMap.get(String(row.item_sku ?? row._rowId))
+        if (color) m.set(row._rowId as string, color)
+      } else if (row.parentage_level === 'child') {
+        const color = parentColorMap.get(String(row.parent_sku ?? ''))
+        if (color) m.set(row._rowId as string, color)
+      }
+    }
+    return m
+  }, [displayRows])
 
   // GX.5 — keep a buffer of trailing ghost rows so there's always a blank canvas
   // to type into (auto-grow). Tops up after a ghost materializes or on load.
@@ -4423,6 +4512,7 @@ export default function AmazonFlatFileClient({
                   stickyLeftByColIdx={stickyLeftByColIdx}
                   cellErrors={cellErrors}
                   collapsedParents={collapsedParents}
+                  familyColor={familyColorByRowId.get(row._rowId as string)}
                   matchKeys={matchKeys}
                   toneMap={toneMap}
                   onToggleCollapse={(rowId) => setCollapsedParents((prev) => {
@@ -4955,6 +5045,7 @@ interface RowProps {
   stickyLeftByColIdx: Record<number, number>
   cellErrors: Map<string, ValidationIssue>
   collapsedParents: Set<string>
+  familyColor?: FamilyColor
   matchKeys: Set<string>
   toneMap: Map<string, string>
   onToggleCollapse: (rowId: string) => void
@@ -5011,7 +5102,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
   marketplace, colWidths, rowHeight, rowHeaderWidth, showRowImages, imageSize, imagesByAsin,
   isDraggingRow, dropIndicator,
   normSel, fillTarget, isFillDragging, isEditing, editInitialChar, clipboardRange,
-  stickyLeftByColIdx, cellErrors, collapsedParents, onToggleCollapse,
+  stickyLeftByColIdx, cellErrors, collapsedParents, familyColor, onToggleCollapse,
   matchKeys, toneMap,
   onSelect, onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate, onRowResizeStart,
   onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
@@ -5028,6 +5119,9 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
     : status === 'pending' ? 'bg-amber-50/70 dark:bg-amber-950/20'
     : row._isNew ? 'bg-sky-50/40 dark:bg-sky-950/10'
     : row._dirty ? 'bg-yellow-50/40 dark:bg-yellow-950/10'
+    // Family colour banding — only when ≥2 families present (map is empty otherwise)
+    : isParent && familyColor ? FC_PARENT_ROW[familyColor]
+    : isChild && familyColor ? FC_CHILD_ROW[familyColor]
     : ''
 
   // Solid (opaque) equivalent for sticky cells — prevents content bleed-through on scroll
@@ -5036,6 +5130,8 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
     : status === 'pending' ? 'bg-amber-50 dark:bg-amber-950/60'
     : row._isNew ? 'bg-sky-50 dark:bg-sky-950/40'
     : row._dirty ? 'bg-yellow-50 dark:bg-yellow-950/40'
+    : isParent && familyColor ? FC_PARENT_FROZEN[familyColor]
+    : isChild && familyColor ? FC_CHILD_FROZEN[familyColor]
     : 'bg-white dark:bg-slate-900'
 
   return (
@@ -5080,7 +5176,10 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
         className={cn(
           'sticky left-9 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-0.5 relative group/rowresize select-none',
           frozenBg,
-          isChild && 'border-l-2 border-l-blue-200 dark:border-l-blue-800',
+          isParent && familyColor ? `border-l-2 ${FC_PARENT_BORDER[familyColor]}`
+            : isChild && familyColor ? `border-l-2 ${FC_CHILD_BORDER[familyColor]}`
+            : isChild ? 'border-l-2 border-l-blue-200 dark:border-l-blue-800'
+            : undefined,
           // IN.1 — amber left-border when price is overriding master AND has drifted
           (row._fieldStates as any)?.price === 'OVERRIDE' &&
             (row._masterValues as any)?.price != null &&
