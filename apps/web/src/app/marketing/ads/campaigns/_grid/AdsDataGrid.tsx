@@ -14,7 +14,7 @@
  */
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, Settings2, Download, Pencil, Search, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, ChevronsUpDown, Settings2, Download, Pencil, Search, X } from 'lucide-react'
 import { FilterDropdown, H10Select, HoverCard, MultiSelect } from '../FilterDropdown'
 import { InfoTip } from '../InfoTip'
 
@@ -125,18 +125,6 @@ export interface AdsDataGridProps<T> {
    *  field is focused. Only enable on ONE grid at a time (a document-level listener). */
   keyboardNav?: boolean
   onRowKey?: (row: T, key: string) => void
-  /** Optional parent/child row expansion. All four props default to undefined; when
-   *  unset the grid is byte-for-byte identical to the flat behavior so every existing
-   *  consumer (e.g. /marketing/ads/campaigns) is completely unaffected. */
-  expandable?: boolean
-  /** Returns true when a row should show an expand/collapse chevron. */
-  getHasChildren?: (row: T) => boolean
-  /** Lazy-load a parent's children on expand. Results are cached for the component
-   *  lifetime; collapsing does NOT evict the cache (re-expand is instant). */
-  fetchChildren?: (row: T) => Promise<T[]>
-  /** Returns true for child rows. Used by callers for type-narrowing; the grid uses
-   *  its internal cache to determine child membership, so this prop is optional. */
-  isChildRow?: (row: T) => boolean
 }
 
 function useClickAway<T extends HTMLElement>(onAway: () => void) {
@@ -161,7 +149,6 @@ export function AdsDataGrid<T>({
   reportLabel, emptyLabel = 'No data.', emptyNode, defaultSort, editMode, selectionActions,
   searchable, searchPlaceholder = 'Search…', searchValue, pagerCentered, filtersDefaultOpen = true,
   groupBy, onRowClick, keyboardNav, onRowKey,
-  expandable, getHasChildren, fetchChildren,
 }: AdsDataGridProps<T>) {
   const [filtersOpen, setFiltersOpen] = useState(filtersDefaultOpen)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -196,34 +183,6 @@ export function AdsDataGrid<T>({
   const [selInner, setSelInner] = useState<Set<string>>(new Set())
   const sel = selected ?? selInner
   const setSel = (s: Set<string>) => { if (onSelectedChange) onSelectedChange(s); else setSelInner(s) }
-
-  // ── expandable row expansion (opt-in; zero cost when expandable is falsy) ──
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const [childrenCache, setChildrenCache] = useState<Map<string, T[]>>(new Map())
-  const [childrenLoading, setChildrenLoading] = useState<Set<string>>(new Set())
-
-  const toggleExpand = async (row: T) => {
-    if (!expandable || !fetchChildren) return
-    const id = rowId(row)
-    if (expanded.has(id)) {
-      setExpanded((prev) => { const s = new Set(prev); s.delete(id); return s })
-      return
-    }
-    // Expand immediately so the loading row appears
-    setExpanded((prev) => new Set(prev).add(id))
-    if (!childrenCache.has(id)) {
-      setChildrenLoading((prev) => new Set(prev).add(id))
-      try {
-        const children = await fetchChildren(row)
-        setChildrenCache((prev) => new Map(prev).set(id, children))
-      } catch {
-        // On fetch error, collapse again
-        setExpanded((prev) => { const s = new Set(prev); s.delete(id); return s })
-      } finally {
-        setChildrenLoading((prev) => { const s = new Set(prev); s.delete(id); return s })
-      }
-    }
-  }
 
   // ── filtering ──
   const filterAccessor = useMemo(() => {
@@ -350,20 +309,7 @@ export function AdsDataGrid<T>({
     ? (sort.dir === 'asc' ? <ChevronUp size={13} className="sa on" /> : <ChevronDown size={13} className="sa on" />)
     : <ChevronsUpDown size={13} className="sa" />)
 
-  // When expandable, select-all covers the parent rows on the current page AND their
-  // visible (already-fetched, non-loading) children — matching what the user can see.
-  const pageIds = useMemo(() => {
-    if (!expandable) return paged.map(rowId)
-    const ids: string[] = []
-    for (const row of paged) {
-      const id = rowId(row)
-      ids.push(id)
-      if (expanded.has(id) && !childrenLoading.has(id)) {
-        for (const child of (childrenCache.get(id) ?? [])) ids.push(rowId(child))
-      }
-    }
-    return ids
-  }, [expandable, paged, rowId, expanded, childrenLoading, childrenCache])
+  const pageIds = paged.map(rowId)
   const allSel = pageIds.length > 0 && pageIds.every((id) => sel.has(id))
   const toggleAll = () => { const n = new Set(sel); if (allSel) pageIds.forEach((id) => n.delete(id)); else pageIds.forEach((id) => n.add(id)); setSel(n) }
   const toggle = (id: string) => { const n = new Set(sel); if (n.has(id)) n.delete(id); else n.add(id); setSel(n) }
@@ -555,12 +501,6 @@ export function AdsDataGrid<T>({
                   const ef = editing ? editByKey.get('__first') : undefined
                   const grp = groupBy ? groupBy(row) : null
                   const showGrp = grp != null && (idx === 0 || groupBy?.(paged[idx - 1])?.key !== grp.key)
-                  // ── expansion ──
-                  const hasChildren = expandable ? !!(getHasChildren?.(row)) : false
-                  const isExpanded = expandable ? expanded.has(id) : false
-                  const isLoadingChildren = expandable ? childrenLoading.has(id) : false
-                  const cachedChildren = (expandable && isExpanded && !isLoadingChildren)
-                    ? (childrenCache.get(id) ?? []) : []
                   return (
                     <Fragment key={id}>
                       {showGrp && grp && (
@@ -571,53 +511,12 @@ export function AdsDataGrid<T>({
                         onClick={onRowClick ? (e) => { if (!(e.target as HTMLElement).closest('button, a, input, label, select')) onRowClick(row) } : undefined}
                       >
                         {selectable && <td className="ck"><input type="checkbox" checked={sel.has(id)} onChange={() => toggle(id)} aria-label="Select row" /></td>}
-                        <td className={`nm fz${ef ? ' editing' : ''}`}>
-                          {expandable && (hasChildren ? (
-                            <button
-                              type="button"
-                              aria-expanded={isExpanded}
-                              aria-label={isExpanded ? 'Collapse variations' : 'Expand variations'}
-                              onClick={(e) => { e.stopPropagation(); void toggleExpand(row) }}
-                              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, flexShrink: 0, border: 'none', background: 'none', padding: 0, cursor: 'pointer', color: '#8a93a1', borderRadius: 4 }}
-                            >
-                              {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                            </button>
-                          ) : (
-                            <span aria-hidden="true" style={{ width: 20, height: 20, flexShrink: 0, display: 'inline-block' }} />
-                          ))}
-                          {ef ? ef.render(editVal(row, ef), (v) => setDraft(id, '__first', v), row) : cellWithPencil(row, '__first', renderFirst(row))}
-                        </td>
+                        <td className={`nm fz${ef ? ' editing' : ''}`}>{ef ? ef.render(editVal(row, ef), (v) => setDraft(id, '__first', v), row) : cellWithPencil(row, '__first', renderFirst(row))}</td>
                         {visibleCols.map((c) => {
                           const cf = editing ? editByKey.get(c.key) : undefined
                           return <td key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${cf ? ' editing' : ''}`}>{cf ? cf.render(editVal(row, cf), (v) => setDraft(id, c.key, v), row) : cellWithPencil(row, c.key, c.render(row))}</td>
                         })}
                       </tr>
-                      {/* Loading skeleton while fetching children */}
-                      {isLoadingChildren && (
-                        <tr className="sk">
-                          {selectable && <td className="ck"><span className="skb" style={{ width: 15 }} /></td>}
-                          <td className="nm fz" style={{ paddingLeft: 36 }}><span className="skb" style={{ width: 130 }} /></td>
-                          {visibleCols.map((c) => <td key={c.key} className={c.metric === false ? 'ed' : 'num'}><span className="skb" style={{ width: 52 }} /></td>)}
-                        </tr>
-                      )}
-                      {/* Child rows — rendered directly beneath their parent; excluded from sort/filter/pagination */}
-                      {cachedChildren.map((child) => {
-                        const cid = rowId(child)
-                        return (
-                          <tr
-                            key={cid}
-                            className={`${sel.has(cid) ? 'on' : ''}${onRowClick ? ' clickable' : ''}`}
-                            style={{ background: sel.has(cid) ? undefined : '#fafcff' }}
-                            onClick={onRowClick ? (e) => { if (!(e.target as HTMLElement).closest('button, a, input, label, select')) onRowClick(child) } : undefined}
-                          >
-                            {selectable && <td className="ck"><input type="checkbox" checked={sel.has(cid)} onChange={() => toggle(cid)} aria-label="Select row" /></td>}
-                            <td className="nm fz" style={{ paddingLeft: 38 }}>{renderFirst(child)}</td>
-                            {visibleCols.map((c) => (
-                              <td key={c.key} className={`${c.metric === false ? 'ed' : 'num'}`}>{c.render(child)}</td>
-                            ))}
-                          </tr>
-                        )
-                      })}
                     </Fragment>
                   )
                 })}

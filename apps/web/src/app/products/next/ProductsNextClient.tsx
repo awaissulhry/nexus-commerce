@@ -11,7 +11,6 @@ import Link from 'next/link'
 
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import type { ProductRow } from '@/app/products/_types'
-import { getBackendUrl } from '@/lib/backend-url'
 import { Thumbnail, DensityContext } from '@/app/_shared/grid-lens'
 import type { Density } from '@/app/_shared/grid-lens'
 
@@ -423,17 +422,6 @@ function ProductsNextInner() {
           loading={loading}
           rowId={(p) => p.id}
           noun="Product"
-          expandable
-          getHasChildren={(p) =>
-            p.isParent || (p.variantCount ?? 0) > 0 || (p.childCount ?? 0) > 0
-          }
-          fetchChildren={async (p) => {
-            const r = await fetch(
-              `${getBackendUrl()}/api/products?parentId=${p.id}&includeCoverage=true&includeTags=true`,
-            ).then((x) => x.json())
-            return (r.products ?? []) as ProductRow[]
-          }}
-          isChildRow={(p) => p.parentId != null}
           firstColLabel="Product"
           renderFirst={(p) => (
             <div className={styles.productCell}>
