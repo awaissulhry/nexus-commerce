@@ -77,6 +77,30 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-subitem:hover { background: #f1f4f8; color: #1c2530; }
 .h10-subitem.on { color: #1f6fde; font-weight: 600; }
 
+/* third-level nav (channel → markets) — additive; only renders when a
+   RailSubItem carries `children`. The ads cockpit nav has none, so these
+   classes are inert there. Third-level rows live inside .h10-sub, which is
+   already hidden while the rail is collapsed, so they inherit that behaviour. */
+.h10-subgroup { display: flex; flex-direction: column; }
+/* two-target channel row: label is a Link (navigates), chevron is a button
+   (toggles markets). Padding moves onto .subname so the whole row stays the
+   same height as a plain .h10-subitem. */
+.h10-subitem.h10-subparent { display: flex; align-items: center; padding: 0; }
+.h10-subparent .subname { flex: 1 1 auto; min-width: 0; padding: 6px 4px 6px 10px; color: inherit; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h10-subparent.on .subname { color: #1f6fde; font-weight: 600; }
+.subchev-btn { appearance: none; -webkit-appearance: none; border: 0; background: transparent; cursor: pointer; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-right: 4px; border-radius: 6px; color: #98a2b3; }
+.subchev-btn:hover { background: #e6eaf0; color: #5b6573; }
+.subchev { transition: transform .18s ease; }
+.subchev.open { transform: rotate(180deg); }
+/* market list — indented one notch past the channel, with a faint tree line */
+.h10-subsub { display: flex; flex-direction: column; gap: 1px; margin: 1px 0 4px 12px; padding-left: 8px; border-left: 1px solid #e3e7ec; }
+.h10-subsubitem { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; color: #5b6573; text-decoration: none; padding: 5px 9px; border-radius: 6px; }
+.h10-subsubitem:hover { background: #f1f4f8; color: #1c2530; }
+.h10-subsubitem.on { color: #1f6fde; font-weight: 600; }
+.h10-subsubitem .mcode { flex-shrink: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 700; letter-spacing: .02em; background: #e8ebf0; color: #5b6573; padding: 1px 5px; border-radius: 4px; }
+.h10-subsubitem.on .mcode { background: #dce8fb; color: #1f6fde; }
+.h10-subsubitem .mname { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
 .h10-railft { white-space: nowrap; font-size: 10px; color: #aeb6c2; padding: 12px 16px 16px; opacity: 0; transition: opacity .14s ease; flex-shrink: 0; }
 .h10-rail:hover .h10-railft { opacity: 1; }
 

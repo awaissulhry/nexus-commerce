@@ -55,13 +55,37 @@ export const PRODUCTS_NAV: RailNavItem[] = [
   },
 
   // ── Syndication ───────────────────────────────────────────────
+  // Amazon + eBay expand to a third level of priority markets (mirrors the
+  // live AppSidebar ChannelNav). Static for now — the channel label still
+  // links to the aggregate page; live counts/dots + a "See all markets"
+  // modal for the long tail are a follow-up. Shopify stays a leaf.
   {
     label: 'Listings',
     href: '/listings',
     Icon: Boxes,
     children: [
-      { label: 'Amazon',  href: '/listings/amazon' },
-      { label: 'eBay',    href: '/listings/ebay' },
+      {
+        label: 'Amazon',
+        href: '/listings/amazon',
+        children: [
+          { code: 'IT', label: 'Italy',          href: '/listings/amazon/it' },
+          { code: 'DE', label: 'Germany',        href: '/listings/amazon/de' },
+          { code: 'FR', label: 'France',         href: '/listings/amazon/fr' },
+          { code: 'ES', label: 'Spain',          href: '/listings/amazon/es' },
+          { code: 'UK', label: 'United Kingdom', href: '/listings/amazon/uk' },
+        ],
+      },
+      {
+        label: 'eBay',
+        href: '/listings/ebay',
+        children: [
+          { code: 'IT', label: 'Italy',          href: '/listings/ebay/it' },
+          { code: 'DE', label: 'Germany',        href: '/listings/ebay/de' },
+          { code: 'FR', label: 'France',         href: '/listings/ebay/fr' },
+          { code: 'ES', label: 'Spain',          href: '/listings/ebay/es' },
+          { code: 'UK', label: 'United Kingdom', href: '/listings/ebay/uk' },
+        ],
+      },
       { label: 'Shopify', href: '/listings/shopify' },
     ],
   },

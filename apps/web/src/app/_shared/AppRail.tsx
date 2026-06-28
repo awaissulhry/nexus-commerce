@@ -25,6 +25,24 @@ import { useState } from 'react'
 import { ChevronDown, ExternalLink } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
+/** Third-level item — a market under a channel (e.g. Amazon → IT). */
+export interface RailMarketItem {
+  /** Optional short code rendered as a monospace chip (e.g. 'IT'). */
+  code?: string
+  label: string
+  href: string
+}
+
+/** Second-level item under a top-level nav entry. May itself expand into
+ *  a third level of markets (the channel → markets case). A bare
+ *  `{ label, href }` (no children) renders as a plain leaf link. */
+export interface RailSubItem {
+  label: string
+  href: string
+  /** Markets revealed when this sub-item is expanded (the 3rd level). */
+  children?: RailMarketItem[]
+}
+
 export interface RailNavItem {
   label: string
   /** Absolute href (e.g. '/products', '/fulfillment/stock'). */
@@ -32,8 +50,8 @@ export interface RailNavItem {
   Icon: LucideIcon
   /** Optional count shown as a badge over the icon corner. */
   badge?: number
-  /** Sub-items revealed when this item is expanded. One level only. */
-  children?: { label: string; href: string }[]
+  /** Sub-items revealed when this item is expanded. */
+  children?: RailSubItem[]
   /** When set, the item is an external link (opens in new tab). */
   external?: string
 }
@@ -58,13 +76,26 @@ export function AppRail({ navItems, brand, footer }: AppRailProps) {
   const isActiveHref = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`)
 
-  // Seed collapsible groups: open iff the current pathname is the parent or any child.
+  // Seed collapsible groups: open iff the current pathname is the parent, a
+  // child, or (for channel → markets) a grandchild. Both the top-level group
+  // and the channel sub-group are keyed by their own href so a deep-link to a
+  // market auto-reveals the full Listings → Amazon → IT chain.
   const [open, setOpen] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {}
     for (const it of navItems) {
-      if (it.children?.length) {
-        init[it.href] =
-          isActiveHref(it.href) || it.children.some((c) => isActiveHref(c.href))
+      if (!it.children?.length) continue
+      init[it.href] =
+        isActiveHref(it.href) ||
+        it.children.some(
+          (c) =>
+            isActiveHref(c.href) ||
+            (c.children?.some((m) => isActiveHref(m.href)) ?? false),
+        )
+      for (const c of it.children) {
+        if (c.children?.length) {
+          init[c.href] =
+            isActiveHref(c.href) || c.children.some((m) => isActiveHref(m.href))
+        }
       }
     }
     return init
@@ -146,15 +177,65 @@ export function AppRail({ navItems, brand, footer }: AppRailProps) {
 
               {hasChildren && isOpen && (
                 <div className="h10-sub">
-                  {it.children!.map((c) => (
-                    <Link
-                      key={c.href}
-                      href={c.href}
-                      className={`h10-subitem ${pathname === c.href || pathname.startsWith(`${c.href}/`) ? 'on' : ''}`}
-                    >
-                      {c.label}
-                    </Link>
-                  ))}
+                  {it.children!.map((c) => {
+                    const childActive = isActiveHref(c.href)
+                    const hasMarkets = !!c.children?.length
+
+                    // Plain leaf sub-item (e.g. Shopify) — unchanged.
+                    if (!hasMarkets) {
+                      return (
+                        <Link
+                          key={c.href}
+                          href={c.href}
+                          className={`h10-subitem ${childActive ? 'on' : ''}`}
+                        >
+                          {c.label}
+                        </Link>
+                      )
+                    }
+
+                    // Channel sub-item with markets (Amazon / eBay): a
+                    // two-target row mirroring the live ChannelNav — the
+                    // label LINKS to the channel page, the chevron BUTTON
+                    // toggles the markets without navigating.
+                    const subOpen = !!open[c.href]
+                    return (
+                      <div key={c.href} className="h10-subgroup">
+                        <div className={`h10-subitem h10-subparent ${childActive ? 'on' : ''}`}>
+                          <Link href={c.href} className="subname">
+                            {c.label}
+                          </Link>
+                          <button
+                            type="button"
+                            className="subchev-btn"
+                            aria-expanded={subOpen}
+                            aria-label={subOpen ? `Collapse ${c.label} markets` : `Expand ${c.label} markets`}
+                            onClick={() => toggle(c.href)}
+                          >
+                            <ChevronDown
+                              className={`subchev ${subOpen ? 'open' : ''}`}
+                              size={14}
+                              aria-hidden="true"
+                            />
+                          </button>
+                        </div>
+                        {subOpen && (
+                          <div className="h10-subsub">
+                            {c.children!.map((m) => (
+                              <Link
+                                key={m.href}
+                                href={m.href}
+                                className={`h10-subsubitem ${pathname === m.href || pathname.startsWith(`${m.href}/`) ? 'on' : ''}`}
+                              >
+                                {m.code && <span className="mcode">{m.code}</span>}
+                                <span className="mname">{m.label}</span>
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
