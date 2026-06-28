@@ -878,7 +878,11 @@ export default function FlatFileGrid({
   const displayRows = useMemo(() => {
     const result: BaseRow[] = []
     rowGroups.forEach((groupRows, groupKey) => {
-      if (collapsedRowGroups.has(groupKey)) return
+      if (collapsedRowGroups.has(groupKey)) {
+        // Keep the first row as a header anchor so GroupHeader can still render
+        if (groupRows.length > 1) result.push(groupRows[0])
+        return
+      }
       result.push(...groupRows.filter((r) => filteredRows.some((fr) => fr._rowId === r._rowId)))
     })
     const sorted = applySortLevels(result as Array<Record<string, unknown>>, sortConfig) as BaseRow[]
@@ -1738,7 +1742,8 @@ export default function FlatFileGrid({
                     }
                   }
 
-                  // Collapsed groups: no rows (displayRows already excludes them via useMemo)
+                  // Collapsed groups: skip rendering the anchor data row (header already rendered above)
+                  if (isCollapsed) return
 
                   {
                     const ri         = displayIdx++
