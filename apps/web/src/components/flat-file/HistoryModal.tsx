@@ -249,9 +249,9 @@ function AmazonPushesTab({
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 dark:border-slate-800">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-subtle dark:border-slate-800">
         <span className="text-xs text-slate-500">{jobs.length} submission{jobs.length !== 1 ? 's' : ''} · durable · all devices</span>
-        <button type="button" onClick={load} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 rounded" title="Refresh">
+        <button type="button" onClick={load} className="text-tertiary hover:text-slate-600 dark:hover:text-slate-300 p-1 rounded" title="Refresh">
           <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
         </button>
       </div>
@@ -269,12 +269,12 @@ function AmazonPushesTab({
                 className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50"
               >
                 {isOpen
-                  ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+                  ? <ChevronDown className="w-3.5 h-3.5 text-tertiary shrink-0" />
+                  : <ChevronRight className="w-3.5 h-3.5 text-tertiary shrink-0" />}
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 w-7 shrink-0">{job.marketplace}</span>
                 <Pill tone={amazonJobTone(job)}>{amazonJobPillLabel(job)}</Pill>
                 <span className="text-xs text-slate-500 dark:text-slate-400 truncate flex-1">{job.productType ?? '—'} · {job.skuCount} SKU{job.skuCount === 1 ? '' : 's'}</span>
-                <span className="text-[11px] text-slate-400 shrink-0">{fmtTime(job.submittedAt)}</span>
+                <span className="text-[11px] text-tertiary shrink-0">{fmtTime(job.submittedAt)}</span>
               </button>
 
               {isOpen && (
@@ -298,7 +298,7 @@ function AmazonPushesTab({
                       <span className="text-emerald-600 dark:text-emerald-400">{summary.messagesSuccessful ?? 0} ok</span>
                       {(summary.messagesWithWarning ?? 0) > 0 && <span className="text-amber-600 dark:text-amber-400">{summary.messagesWithWarning} warn</span>}
                       {(summary.messagesWithError ?? 0) > 0 && <span className="text-red-600 dark:text-red-400">{summary.messagesWithError} error</span>}
-                      <span className="font-mono text-slate-400" title={job.feedId}>feed {job.feedId.slice(0, 14)}…</span>
+                      <span className="font-mono text-tertiary" title={job.feedId}>feed {job.feedId.slice(0, 14)}…</span>
                     </div>
                   )}
                   {job.errorMessage && <p className="text-xs text-red-600 dark:text-red-400 mb-2">{job.errorMessage}</p>}
@@ -308,16 +308,16 @@ function AmazonPushesTab({
                       {/* Controls */}
                       <div className="flex items-center gap-2 mb-2">
                         <div className="relative flex-1">
-                          <Search className="w-3 h-3 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2" />
+                          <Search className="w-3 h-3 text-tertiary absolute left-2 top-1/2 -translate-y-1/2" />
                           <input
                             value={query} onChange={e => setQuery(e.target.value)}
                             placeholder="Search SKU / message / code"
-                            className="w-full h-7 pl-7 pr-2 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                            className="w-full h-7 pl-7 pr-2 text-xs border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                           />
                         </div>
                         <select
                           value={filter} onChange={e => setFilter(e.target.value as 'all' | AmazonSkuStatus)}
-                          className="h-7 px-1 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                          className="h-7 px-1 text-xs border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                         >
                           <option value="all">All</option>
                           <option value="error">Errors</option>
@@ -325,12 +325,12 @@ function AmazonPushesTab({
                           <option value="success">OK</option>
                         </select>
                         <button type="button" onClick={() => exportCsv(job)}
-                          className="h-7 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded hover:bg-white dark:hover:bg-slate-800 inline-flex items-center gap-1">
+                          className="h-7 px-2 text-xs border border-default dark:border-slate-700 rounded hover:bg-white dark:hover:bg-slate-800 inline-flex items-center gap-1">
                           <Download className="w-3 h-3" />CSV
                         </button>
                         {errCount > 0 && (
                           <button type="button" onClick={() => copyErrored(job)}
-                            className="h-7 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded hover:bg-white dark:hover:bg-slate-800 inline-flex items-center gap-1">
+                            className="h-7 px-2 text-xs border border-default dark:border-slate-700 rounded hover:bg-white dark:hover:bg-slate-800 inline-flex items-center gap-1">
                             <Copy className="w-3 h-3" />SKUs
                           </button>
                         )}
@@ -347,7 +347,7 @@ function AmazonPushesTab({
                       </div>
 
                       {/* Per-SKU table */}
-                      <div className="max-h-60 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded">
+                      <div className="max-h-60 overflow-y-auto border border-default dark:border-slate-800 rounded">
                         <table className="w-full text-xs">
                           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {filteredSkuRows.map((r, i) => (
@@ -358,19 +358,19 @@ function AmazonPushesTab({
                                     {r.status}
                                   </Pill>
                                 </td>
-                                <td className="px-2 py-1 text-slate-400 whitespace-nowrap">{r.code ?? ''}</td>
+                                <td className="px-2 py-1 text-tertiary whitespace-nowrap">{r.code ?? ''}</td>
                                 <td className="px-2 py-1 text-slate-500 dark:text-slate-400">{r.message ?? ''}</td>
                               </tr>
                             ))}
                             {filteredSkuRows.length === 0 && (
-                              <tr><td colSpan={4} className="px-2 py-3 text-center text-slate-400">No rows match.</td></tr>
+                              <tr><td colSpan={4} className="px-2 py-3 text-center text-tertiary">No rows match.</td></tr>
                             )}
                           </tbody>
                         </table>
                       </div>
                     </>
                   ) : (
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-tertiary">
                       {AMAZON_TERMINAL.has(job.status) ? 'No per-SKU detail in the report.' : 'Still processing — the per-SKU result appears when Amazon finishes.'}
                     </p>
                   )}
@@ -454,9 +454,9 @@ function EbayPushesTab({
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 dark:border-slate-800">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-subtle dark:border-slate-800">
         <span className="text-xs text-slate-500">{jobs.length} push{jobs.length !== 1 ? 'es' : ''} · durable · all devices</span>
-        <button type="button" onClick={load} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 rounded" title="Refresh">
+        <button type="button" onClick={load} className="text-tertiary hover:text-slate-600 dark:hover:text-slate-300 p-1 rounded" title="Refresh">
           <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
         </button>
       </div>
@@ -471,14 +471,14 @@ function EbayPushesTab({
                 className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50"
               >
                 {isOpen
-                  ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+                  ? <ChevronDown className="w-3.5 h-3.5 text-tertiary shrink-0" />
+                  : <ChevronRight className="w-3.5 h-3.5 text-tertiary shrink-0" />}
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 shrink-0 whitespace-nowrap">
                   {(job.markets ?? []).join(', ') || '—'}
                 </span>
                 <Pill tone={ebayJobTone(job)}>{ebayJobPillLabel(job)}</Pill>
                 <span className="text-xs text-slate-500 dark:text-slate-400 truncate flex-1">{job.mode} · {job.skuCount} SKU{job.skuCount === 1 ? '' : 's'}</span>
-                <span className="text-[11px] text-slate-400 shrink-0">{fmtTime(job.submittedAt)}</span>
+                <span className="text-[11px] text-tertiary shrink-0">{fmtTime(job.submittedAt)}</span>
               </button>
 
               {isOpen && (
@@ -488,7 +488,7 @@ function EbayPushesTab({
                     <span>{job.skuCount} row{job.skuCount === 1 ? '' : 's'}</span>
                     <span className="text-emerald-600 dark:text-emerald-400">{job.pushed} pushed</span>
                     {job.failed > 0 && <span className="text-red-600 dark:text-red-400">{job.failed} error{job.failed === 1 ? '' : 's'}</span>}
-                    {job.taskId && <span className="font-mono text-slate-400" title={job.taskId}>task {job.taskId.slice(0, 14)}…</span>}
+                    {job.taskId && <span className="font-mono text-tertiary" title={job.taskId}>task {job.taskId.slice(0, 14)}…</span>}
                   </div>
                   {job.errorMessage && <p className="text-xs text-red-600 dark:text-red-400 mb-2">{job.errorMessage}</p>}
 
@@ -515,28 +515,28 @@ function EbayPushesTab({
                       {/* Controls */}
                       <div className="flex items-center gap-2 mb-2">
                         <div className="relative flex-1">
-                          <Search className="w-3 h-3 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2" />
+                          <Search className="w-3 h-3 text-tertiary absolute left-2 top-1/2 -translate-y-1/2" />
                           <input
                             value={query} onChange={e => setQuery(e.target.value)}
                             placeholder="Search SKU / message / market"
-                            className="w-full h-7 pl-7 pr-2 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                            className="w-full h-7 pl-7 pr-2 text-xs border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                           />
                         </div>
                         <select
                           value={filter} onChange={e => setFilter(e.target.value as 'all' | EbaySkuStatus)}
-                          className="h-7 px-1 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                          className="h-7 px-1 text-xs border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                         >
                           <option value="all">All</option>
                           <option value="ERROR">Errors</option>
                           <option value="PUSHED">Pushed</option>
                         </select>
                         <button type="button" onClick={() => exportCsv(job)}
-                          className="h-7 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded hover:bg-white dark:hover:bg-slate-800 inline-flex items-center gap-1">
+                          className="h-7 px-2 text-xs border border-default dark:border-slate-700 rounded hover:bg-white dark:hover:bg-slate-800 inline-flex items-center gap-1">
                           <Download className="w-3 h-3" />CSV
                         </button>
                         {job.failed > 0 && (
                           <button type="button" onClick={() => copyErrored(job)}
-                            className="h-7 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded hover:bg-white dark:hover:bg-slate-800 inline-flex items-center gap-1">
+                            className="h-7 px-2 text-xs border border-default dark:border-slate-700 rounded hover:bg-white dark:hover:bg-slate-800 inline-flex items-center gap-1">
                             <Copy className="w-3 h-3" />SKUs
                           </button>
                         )}
@@ -553,22 +553,22 @@ function EbayPushesTab({
                       </div>
 
                       {/* Per-SKU table */}
-                      <div className="max-h-60 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded">
+                      <div className="max-h-60 overflow-y-auto border border-default dark:border-slate-800 rounded">
                         <table className="w-full text-xs">
                           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {filteredSkuRows.map((r, i) => (
                               <tr key={`${r.sku}-${i}`} className="hover:bg-white dark:hover:bg-slate-800/40">
                                 <td className="px-2 py-1 font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap">{r.sku}</td>
-                                <td className="px-2 py-1 text-slate-400 whitespace-nowrap">{r.market ?? ''}</td>
+                                <td className="px-2 py-1 text-tertiary whitespace-nowrap">{r.market ?? ''}</td>
                                 <td className="px-2 py-1">
                                   <Pill tone={r.status === 'PUSHED' ? 'success' : 'danger'}>{r.status}</Pill>
                                 </td>
-                                <td className="px-2 py-1 text-slate-400 whitespace-nowrap">{r.listingId ?? ''}</td>
+                                <td className="px-2 py-1 text-tertiary whitespace-nowrap">{r.listingId ?? ''}</td>
                                 <td className="px-2 py-1 text-slate-500 dark:text-slate-400">{r.message ?? ''}</td>
                               </tr>
                             ))}
                             {filteredSkuRows.length === 0 && (
-                              <tr><td colSpan={5} className="px-2 py-3 text-center text-slate-400">No rows match.</td></tr>
+                              <tr><td colSpan={5} className="px-2 py-3 text-center text-tertiary">No rows match.</td></tr>
                             )}
                           </tbody>
                         </table>
@@ -576,7 +576,7 @@ function EbayPushesTab({
                     </>
                   ) : (
                     job.status !== 'SUBMITTED' && (
-                      <p className="text-xs text-slate-400">No per-SKU detail recorded.</p>
+                      <p className="text-xs text-tertiary">No per-SKU detail recorded.</p>
                     )
                   )}
                 </div>
@@ -654,10 +654,10 @@ function PullsTab({
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 dark:border-slate-800">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-subtle dark:border-slate-800">
         <span className="text-xs text-slate-500">Last {records.length} applied pull{records.length !== 1 ? 's' : ''}</span>
         <button type="button" onClick={() => void load()} disabled={loading}
-          className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 rounded" title="Refresh">
+          className="text-tertiary hover:text-slate-600 dark:hover:text-slate-300 p-1 rounded" title="Refresh">
           <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
         </button>
       </div>
@@ -667,12 +667,12 @@ function PullsTab({
           const cols = rec.columnsApplied.filter(c => c !== 'all') as PullGroupId[]
           return (
             <div key={rec.id}
-              className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
+              className="border border-default dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
               {/* Top row */}
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div className="text-xs text-slate-700 dark:text-slate-200">
                   <span className="font-medium">{relativeTime(rec.appliedAt ?? rec.pulledAt)}</span>
-                  <span className="text-slate-400 ml-1.5 text-[11px]">
+                  <span className="text-tertiary ml-1.5 text-[11px]">
                     {new Date(rec.appliedAt ?? rec.pulledAt).toLocaleString()}
                   </span>
                 </div>
@@ -681,7 +681,7 @@ function PullsTab({
                     type="button"
                     onClick={() => onRePull(rec)}
                     title="Re-pull these SKUs with the same scope and columns"
-                    className="text-xs h-6 px-2 inline-flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex-shrink-0"
+                    className="text-xs h-6 px-2 inline-flex items-center gap-1 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex-shrink-0"
                   >
                     <Repeat className="w-3 h-3" />Re-pull
                   </button>
@@ -701,7 +701,7 @@ function PullsTab({
                 {isAllCols ? (
                   <span className="text-[10px] font-medium uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">All columns</span>
                 ) : cols.length === 0 ? (
-                  <span className="text-[10px] italic text-slate-400">no column data</span>
+                  <span className="text-[10px] italic text-tertiary">no column data</span>
                 ) : cols.map(c => (
                   <span key={c} className={cn('text-[10px] font-medium uppercase px-1.5 py-0.5 rounded', GROUP_BADGE_CLASS[c] ?? GROUP_BADGE_CLASS.other)}>
                     {GROUP_LABEL[c] ?? c}
@@ -778,7 +778,7 @@ function VersionsTab({
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 dark:border-slate-800">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-subtle dark:border-slate-800">
         <span className="text-xs text-slate-500">{marketplace} · {productType} · up to 15 versions</span>
         <button type="button" onClick={clearAll}
           className="text-xs text-red-400 hover:text-red-600 dark:hover:text-red-300">
@@ -795,7 +795,7 @@ function VersionsTab({
                 )}
                 <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{v.label}</span>
               </div>
-              <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+              <div className="text-[10px] text-tertiary mt-0.5 flex items-center gap-2">
                 <span>{fmtTime(v.savedAt)}</span>
                 <span>·</span>
                 <span className="text-slate-500 dark:text-slate-400">{diff(v)}</span>
@@ -808,7 +808,7 @@ function VersionsTab({
                   if (!confirm(`Restore to "${v.label}"? Current rows will be replaced (you can undo).`)) return
                   onRestoreVersion(v.rows)
                 }}
-                className="text-xs h-6 px-2 inline-flex items-center border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex-shrink-0"
+                className="text-xs h-6 px-2 inline-flex items-center border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex-shrink-0"
               >
                 Restore
               </button>
@@ -855,7 +855,7 @@ export function HistoryModal({
     <Modal open={open} onClose={onClose} title={title} size="xl">
       <div className="flex flex-col" style={{ minHeight: 480 }}>
         {/* Tab bar */}
-        <div className="border-b border-slate-200 dark:border-slate-700 px-2 pt-1">
+        <div className="border-b border-default dark:border-slate-700 px-2 pt-1">
           <Tabs tabs={tabs} active={activeTab} onChange={setActiveTab} />
         </div>
 
