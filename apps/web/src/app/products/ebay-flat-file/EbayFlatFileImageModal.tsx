@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/Button'
 // Reuse the shared images-tab grid and type definitions directly.
 // [id] is a literal directory name in the filesystem; TypeScript resolves it fine.
 import ChannelImageGrid, { type ImageGridColumn, type ImageGridRow } from '@/app/products/[id]/edit/tabs/images/ChannelImageGrid'
-import type { WorkspaceData, ListingImage, VariantSummary } from '@/app/products/[id]/edit/tabs/images/types'
+import ImagePickerModal from '@/app/products/[id]/edit/tabs/images/ImagePickerModal'
+import type { WorkspaceData, ListingImage, VariantSummary, ProductImage } from '@/app/products/[id]/edit/tabs/images/types'
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -159,6 +160,10 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
 
   // Working bucket state — diverges from baseline as the operator edits.
   const [buckets, setBuckets] = useState<Buckets>(() => cloneBuckets(baseline))
+
+  // Which cell was clicked — drives the ImagePickerModal.
+  // replaceIndex: null = append, number = replace existing url at that position.
+  const [pickerTarget, setPickerTarget] = useState<{ bucket: string; replaceIndex: number | null } | null>(null)
 
   // Snap to the new baseline whenever it changes (after load / reload).
   useEffect(() => { setBuckets(cloneBuckets(baseline)) }, [baseline])
@@ -385,7 +390,12 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
               rows={gridRows}
               columns={columns}
               resolveCell={resolveCell}
-              onCellClick={() => { /* Phase 4: open image picker */ }}
+              onCellClick={(rowKey, colKey) => {
+                const bucket = rowKey ?? SHARED
+                const list = buckets.get(bucket) ?? []
+                const idx = Number(colKey) - 1
+                setPickerTarget({ bucket, replaceIndex: idx < list.length ? idx : null })
+              }}
               onCellRemove={handleCellRemove}
               onCellMove={move}
               onCellDrop={(rowKey, colKey, url) => {
@@ -416,6 +426,18 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
             eBay rules: max {EBAY_MAX} images · min 500 px · JPEG/PNG only
           </p>
         </div>
+      )}
+      {/* Image picker — opened when an empty (or occupied) cell is clicked */}
+      {pickerTarget !== null && (
+        <ImagePickerModal
+          productId={productId}
+          masterImages={masterImages as ProductImage[]}
+          onSelect={(url) => {
+            assign(pickerTarget.bucket, pickerTarget.replaceIndex, url)
+            setPickerTarget(null)
+          }}
+          onClose={() => setPickerTarget(null)}
+        />
       )}
     </Modal>
   )
