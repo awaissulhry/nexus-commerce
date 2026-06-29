@@ -11,7 +11,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, Image as ImageIcon, Keyboard, Loader2, Pin, Plus, RefreshCw, RotateCcw,
+  Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, History, Image as ImageIcon, Keyboard, Loader2, Pin, Plus, RefreshCw, RotateCcw,
   Search, Send, Trash2, Upload, X, ArrowRightLeft,
   Undo2, Redo2, GripVertical, Wand2,
 } from 'lucide-react'
@@ -3812,9 +3812,6 @@ export default function AmazonFlatFileClient({
           aiAssistantOpen={aiPanelOpen}
           onAiAssistantClick={manifest ? () => setAiPanelOpen((o) => !o) : undefined}
 
-          historyOpen={historyOpen}
-          onHistoryClick={() => setHistoryOpen(true)}
-
           slotAfterReplicate={
             <>
               {/* Pull from Amazon — full attribute pull (in-memory, undoable via ⌘Z) */}
@@ -3838,6 +3835,13 @@ export default function AmazonFlatFileClient({
                   />
                 )}
               </div>
+              {/* History — same slot/position as eBay */}
+              <SharedTbBtn
+                icon={<History className="w-3.5 h-3.5" />}
+                title="History — push submissions, pull log and version history (⌘H)"
+                onClick={() => setHistoryOpen(true)}
+                active={historyOpen}
+              />
             </>
           }
 
