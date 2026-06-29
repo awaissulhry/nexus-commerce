@@ -426,6 +426,26 @@ export default function ProductEditClient({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product.id])
+  // PERF — same deferral for the variation family banner's parent listings
+  // (child products only): page.tsx no longer blocks SSR on the parent's
+  // all-listings (also up to 9s cold). Fetch it on mount when this product
+  // is a child; the banner shows parent + siblings immediately and the
+  // per-channel parent IDs fill in a beat later.
+  const [clientParentListings, setClientParentListings] =
+    useState<Record<string, any[]>>(parentListings)
+  useEffect(() => {
+    if (!product.parentId) return
+    let alive = true
+    void fetch(`${getBackendUrl()}/api/products/${product.parentId}/all-listings`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (alive && data) setClientParentListings(data)
+      })
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.parentId])
   useInvalidationChannel('channel-pricing.updated', () => {
     void fetch(`${getBackendUrl()}/api/products/${product.id}/all-listings`, { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : null)
@@ -1213,7 +1233,7 @@ export default function ProductEditClient({
             currentParentAsin={product.parentAsin ?? null}
             parentProduct={parentProduct}
             siblings={siblings}
-            parentListings={parentListings}
+            parentListings={clientParentListings}
           />
         )}
 
