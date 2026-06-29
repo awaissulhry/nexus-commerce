@@ -44,6 +44,9 @@ export interface RailSubItem {
   /** Trailing status: red dot (action), amber dot (warning), or a
    *  "Connect" affordance (disconnected). */
   indicator?: 'action' | 'warning' | 'disconnected'
+  /** Total markets this channel supports. When greater than the inline
+   *  children, a "See all N markets" row opens the full markets modal. */
+  moreMarketsCount?: number
 }
 
 export interface RailNavItem {
@@ -87,9 +90,11 @@ export interface AppRailProps {
   footer?: ReactNode
   /** When true the rail stays expanded (docked) instead of hover-collapsing. */
   pinned?: boolean
+  /** Opens the "all markets" modal for a channel sub-item (Amazon/eBay). */
+  onSeeAllMarkets?: (sub: RailSubItem) => void
 }
 
-export function AppRail({ navItems, brand, header, footer, pinned }: AppRailProps) {
+export function AppRail({ navItems, brand, header, footer, pinned, onSeeAllMarkets }: AppRailProps) {
   const pathname = usePathname() || ''
 
   const isActiveHref = (href: string) =>
@@ -139,7 +144,20 @@ export function AppRail({ navItems, brand, header, footer, pinned }: AppRailProp
       <nav className="h10-nav" aria-label="Application navigation">
         {navItems.map((it) => {
           const hasChildren = !!it.children?.length
-          const active = !it.external && isActiveHref(it.href)
+          // A parent is "section-active" (subtle highlight) when you're on one
+          // of its children (so the collapsed icon still shows which section
+          // you're in); "exact-active" (full fill) only on its own page.
+          const childRouteActive =
+            hasChildren &&
+            it.children!.some(
+              (c) =>
+                isActiveHref(c.href) ||
+                (c.children?.some((m) => isActiveHref(m.href)) ?? false),
+            )
+          const exactActive =
+            !it.external && isActiveHref(it.href) && !childRouteActive
+          const sectionActive = childRouteActive
+          const active = exactActive
           const isOpen = hasChildren && !!open[it.href]
 
           const bodyInner = (
@@ -175,7 +193,7 @@ export function AppRail({ navItems, brand, header, footer, pinned }: AppRailProp
                 // sub-rows): the wrapper carries the active fill; the Link
                 // navigates to the page; the chevron button toggles the
                 // sub-items without navigating.
-                <div className={`h10-item h10-parent ${active ? 'on' : ''}`}>
+                <div className={`h10-item h10-parent ${exactActive ? 'on' : sectionActive ? 'section' : ''}`}>
                   <Link
                     href={it.href}
                     className="h10-parent-link"
@@ -270,6 +288,19 @@ export function AppRail({ navItems, brand, header, footer, pinned }: AppRailProp
                                 <span className="mname">{m.label}</span>
                               </Link>
                             ))}
+                            {onSeeAllMarkets &&
+                              c.moreMarketsCount != null &&
+                              c.moreMarketsCount > (c.children?.length ?? 0) && (
+                                <button
+                                  type="button"
+                                  className="h10-subsubitem h10-seeall"
+                                  onClick={() => onSeeAllMarkets(c)}
+                                >
+                                  <span className="mname">
+                                    See all {c.moreMarketsCount} markets
+                                  </span>
+                                </button>
+                              )}
                           </div>
                         )}
                       </div>

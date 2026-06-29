@@ -13,15 +13,22 @@
  * focus + a 300ms-debounced refetch on listing/product mutation events.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Search, Sun, Moon, Monitor, ChevronDown, Pin, PinOff } from 'lucide-react'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTheme } from '@/lib/theme/use-theme'
 import { useRecentlyViewed } from '@/lib/use-recently-viewed'
-import { AppRail } from './AppRail'
-import { buildAppNav, type SidebarCounts, type Connections } from './app-nav'
+import MarketsModal from '@/components/layout/MarketsModal'
+import { AppRail, type RailSubItem } from './AppRail'
+import {
+  buildAppNav,
+  COUNTRY_NAMES,
+  SUPPORTED_MARKETS,
+  type SidebarCounts,
+  type Connections,
+} from './app-nav'
 
 function dispatchCmdK() {
   window.dispatchEvent(new CustomEvent('nexus:open-command-palette'))
@@ -190,6 +197,22 @@ export function AppNavRail() {
     }
   }, [pinned])
 
+  // ── "See all markets" modal ──────────────────────────────────────
+  const [marketsChannel, setMarketsChannel] = useState<RailSubItem | null>(null)
+  const channelKey = marketsChannel
+    ? (marketsChannel.href.split('/').pop() ?? '').toUpperCase()
+    : ''
+  const marketsMap = useMemo(() => {
+    const m = new Map<string, number>()
+    if (!marketsChannel) return m
+    for (const code of SUPPORTED_MARKETS[channelKey] ?? []) m.set(code, 0)
+    const live = counts.listings?.byChannel?.[channelKey]?.markets ?? {}
+    for (const [code, n] of Object.entries(live)) m.set(code, n as number)
+    return m
+  }, [marketsChannel, channelKey, counts])
+  const channelConnected =
+    channelKey === 'AMAZON' ? conn.amazon : channelKey === 'EBAY' ? conn.ebay : false
+
   const header = (
     <>
       <div className="h10-railctl">
@@ -277,12 +300,24 @@ export function AppNavRail() {
   const navItems = buildAppNav(counts, conn)
 
   return (
-    <AppRail
-      navItems={navItems}
-      brand={{ mark: 'N', name: 'Nexus' }}
-      header={header}
-      footer={footer}
-      pinned={pinned}
-    />
+    <>
+      <AppRail
+        navItems={navItems}
+        brand={{ mark: 'N', name: 'Nexus' }}
+        header={header}
+        footer={footer}
+        pinned={pinned}
+        onSeeAllMarkets={setMarketsChannel}
+      />
+      <MarketsModal
+        open={!!marketsChannel}
+        onClose={() => setMarketsChannel(null)}
+        channelLabel={marketsChannel?.label ?? ''}
+        channelPath={marketsChannel?.href ?? ''}
+        markets={marketsMap}
+        countryNames={COUNTRY_NAMES}
+        connectionStatus={channelConnected ? 'connected' : 'not-connected'}
+      />
+    </>
   )
 }
