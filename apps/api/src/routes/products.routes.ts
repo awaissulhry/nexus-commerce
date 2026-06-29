@@ -2456,6 +2456,65 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
+    // Phase 1 — SKU rename safety guard. Product.sku doubles as the
+    // channel seller-SKU, which Amazon/eBay treat as permanent: renaming
+    // a product that's live on a channel would silently desync the live
+    // listing (the channel keeps the old seller-SKU forever). Block only
+    // the sku change — other fields in the same PATCH still apply — until
+    // the channel-safe rename path ships. Drafts/unpublished products
+    // rename freely. "Live" matches the app's own definition:
+    // listingStatus ACTIVE && isPublished (see coverage rollup above).
+    const skuRenameIds = validated
+      .filter((v) => v.field === 'sku' && typeof v.value === 'string')
+      .map((v) => v.id)
+    if (skuRenameIds.length > 0) {
+      const liveListings = await prisma.channelListing.findMany({
+        where: {
+          listingStatus: 'ACTIVE',
+          isPublished: true,
+          OR: [
+            { productId: { in: skuRenameIds } },
+            { product: { parentId: { in: skuRenameIds } } },
+          ],
+        },
+        select: {
+          channel: true,
+          productId: true,
+          product: { select: { parentId: true } },
+        },
+      })
+      const renameIdSet = new Set(skuRenameIds)
+      const liveChannelsByOwner = new Map<string, Set<string>>()
+      for (const l of liveListings) {
+        // A listing blocks the rename of its own product (productId in the
+        // set) or, for a child listing, of the parent being renamed.
+        const owner = renameIdSet.has(l.productId)
+          ? l.productId
+          : l.product?.parentId
+        if (!owner || !renameIdSet.has(owner)) continue
+        const set = liveChannelsByOwner.get(owner) ?? new Set<string>()
+        set.add(l.channel)
+        liveChannelsByOwner.set(owner, set)
+      }
+      for (const [owner, channels] of liveChannelsByOwner) {
+        const idx = validated.findIndex(
+          (v) => v.field === 'sku' && v.id === owner,
+        )
+        if (idx !== -1) {
+          errors.push({
+            id: owner,
+            field: 'sku',
+            error: `Can't change the SKU while this product is live on ${Array.from(
+              channels,
+            ).join(
+              ', ',
+            )} — the channel seller-SKU can't be renamed in place. Unpublish it first, or use the channel-safe rename (coming soon).`,
+          })
+          validated.splice(idx, 1)
+        }
+      }
+    }
+
     // Nothing survived validation — do not open a transaction
     if (validated.length === 0) {
       await prisma.bulkOperation.create({
@@ -3012,6 +3071,29 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             },
           }
         }),
+      )
+
+      // Phase 1 — refresh ProductReadCache synchronously for every product
+      // this PATCH touched, so the /products grid (which reads the cache)
+      // reflects the edit immediately. productEventService.emitMany above
+      // also enqueues a debounced cache:refresh, but that worker only runs
+      // when queue workers are enabled (ENABLE_QUEUE_WORKERS=1 + Redis) —
+      // awaiting the rebuild here makes the edit consistent regardless of
+      // worker health, matching how products-catalog.routes.ts already
+      // refreshes after its direct PATCH. Runs after all post-commit
+      // cascades (price/stock/content) so the cache captures their writes.
+      const cacheRefreshIds = Array.from(
+        new Set<string>([...productIds, ...allAffectedChildIds]),
+      )
+      await Promise.all(
+        cacheRefreshIds.map((id) =>
+          productReadCacheService.refresh(id).catch((err) => {
+            fastify.log.warn(
+              { err, productId: id },
+              '[products/bulk] cache refresh failed',
+            )
+          }),
+        ),
       )
 
       return {
