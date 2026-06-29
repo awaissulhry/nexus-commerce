@@ -109,6 +109,17 @@ export type OrderEvent =
       terminal: boolean
       ts: number
     }
+  // H.5 — eBay feed-mode push job resolved. Any open eBay flat-file tab
+  // refreshes its push-status badge live instead of waiting for a manual poll.
+  | {
+      type: 'ebay_push.status_changed'
+      jobId: string
+      taskId: string
+      status: string   // DONE | PARTIAL | FATAL
+      pushed: number
+      failed: number
+      ts: number
+    }
   // RT.16 — CRITICAL alert. ACCOUNT_STATUS_CHANGED from Amazon —
   // suspension / warning / policy violation. Surfaces as a
   // persistent red banner + browser notification + console.error
