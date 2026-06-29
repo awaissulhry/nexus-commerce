@@ -5165,6 +5165,12 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
         onRowDrop(e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom')
       }}
       style={{
+        // FF-4 (perf) — let the browser skip layout/paint of off-screen rows.
+        // Unlike windowing, every row stays in the DOM, so drag / fill /
+        // selection / scroll-into-view all keep working unchanged. The
+        // intrinsic height keeps the scrollbar accurate for skipped rows.
+        contentVisibility: 'auto',
+        containIntrinsicSize: `0 ${rowHeight}px`,
         borderTop: dropIndicator === 'top' ? '2px solid #3b82f6' : undefined,
         borderBottom: dropIndicator === 'bottom' ? '2px solid #3b82f6' : undefined,
       }}
