@@ -487,11 +487,10 @@
 }
 .invQtyBtn:hover { border-color: var(--border-strong); }
 .invQtyBtn:disabled { opacity: 0.6; cursor: default; }
-.invQtyInput {
-  width: 56px; padding: 2px 6px;
-  background: var(--surface-card); border: 1px solid var(--color-primary);
-  border-radius: 6px; font-variant-numeric: tabular-nums; font-size: 13px;
-}
+/* DS Input inside a matrix/list cell: the .h10-ds-field wrapper owns the
+   border/background/focus; we only constrain width and align the numerals. */
+.invQtyField { width: 76px; }
+.invQtyInput { width: 100%; text-align: right; font-variant-numeric: tabular-nums; }
 .invSpin { color: var(--text-tertiary); animation: invspin 0.8s linear infinite; }
 @keyframes invspin { to { transform: rotate(360deg); } }
 
@@ -503,14 +502,10 @@
 .invModalHead { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .invReasonRow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .invReasonLabel { display: inline-flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--text-secondary); }
-.invReasonSelect, .invNotesInput {
-  padding: 4px 8px; background: var(--surface-card);
-  border: 1px solid var(--border-subtle); border-radius: 6px; font-size: 13px;
-}
-.invNotesInput { flex: 1; min-width: 160px; }
+/* DS Input wrapper for the Notes field — grow to fill the reason row. */
+.invNotesField { flex: 1; min-width: 160px; }
 .invToast { padding: 6px 10px; border-radius: 6px; background: var(--status-danger-soft); color: var(--status-danger-strong); font-size: 12px; }
 .invState { padding: 24px; text-align: center; color: var(--text-secondary); display: flex; flex-direction: column; gap: 10px; align-items: center; }
-.invRetryBtn, .invCloseBtn { padding: 6px 12px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--surface-card); cursor: pointer; }
 .invTable { width: 100%; border-collapse: collapse; font-size: 13px; }
 .invTable th { text-align: left; padding: 6px 8px; color: var(--text-tertiary); font-weight: 600; border-bottom: 1px solid var(--border-subtle); }
 .invTable td { padding: 6px 8px; border-bottom: 1px solid var(--border-subtle); }

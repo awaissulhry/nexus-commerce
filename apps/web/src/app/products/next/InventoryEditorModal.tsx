@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Lock } from 'lucide-react'
 import { Modal } from '@/design-system/components'
+import { Select, Input, Button } from '@/design-system/primitives'
 import type { ProductRow } from '../_types'
 import { useInventoryEditor } from './useInventoryEditor'
 import { LocationQtyInput } from './LocationQtyInput'
@@ -40,12 +41,12 @@ export function InventoryEditorModal({ row, onClose }: { row: ProductRow | null;
       <div className={styles.invReasonRow}>
         <label className={styles.invReasonLabel}>
           Reason
-          <select className={styles.invReasonSelect} value={reason} onChange={(e) => setReason(e.target.value)}>
+          <Select value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Adjustment reason">
             {REASON_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
+          </Select>
         </label>
-        <input
-          className={styles.invNotesInput}
+        <Input
+          fieldClassName={styles.invNotesField}
           placeholder="Notes (optional)"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
@@ -61,7 +62,7 @@ export function InventoryEditorModal({ row, onClose }: { row: ProductRow | null;
       <Link href="/fulfillment/stock" className={styles.invManageLink} target="_blank" rel="noopener noreferrer">
         Manage in Stock →
       </Link>
-      <button type="button" className={styles.invCloseBtn} onClick={onClose}>Close</button>
+      <Button type="button" variant="secondary" size="sm" onClick={onClose}>Close</Button>
     </div>
   )
 
@@ -81,7 +82,7 @@ export function InventoryEditorModal({ row, onClose }: { row: ProductRow | null;
       {!loading && error && (
         <div className={styles.invState}>
           <p>{error}</p>
-          <button type="button" className={styles.invRetryBtn} onClick={() => void reload()}>Retry</button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => void reload()}>Retry</Button>
         </div>
       )}
 
