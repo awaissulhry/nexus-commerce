@@ -197,6 +197,8 @@ export interface FlatFileGridProps {
   renderChannelStrip?: () => React.ReactNode
   renderPushExtras?: (ctx: PushExtrasCtx) => React.ReactNode
   renderFeedBanner?: () => React.ReactNode
+  /** Extra items appended to the File menu in Bar 1. Same shape as MenuDropdown items. */
+  fileMenuItems?: Array<{ label: string; icon?: React.ReactNode; onClick?: () => void; disabled?: boolean; separator?: boolean }>
   renderModals?: (ctx: ModalsCtx) => React.ReactNode
   renderToolbarFetch?: (ctx: ToolbarFetchCtx) => React.ReactNode
   renderToolbarImport?: (ctx: ToolbarImportCtx) => React.ReactNode

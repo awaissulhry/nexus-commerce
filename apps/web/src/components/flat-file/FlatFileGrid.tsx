@@ -638,6 +638,7 @@ export default function FlatFileGrid({
   renderAiPanel, renderEmptyAction,
   onColumnsClick, columnsActive, toolbarTrailing,
   columnGroupState, onGroupStateChange,
+  fileMenuItems,
 }: FlatFileGridProps) {
   const router = useRouter()
   const { toast } = useToast()
@@ -1410,6 +1411,7 @@ export default function FlatFileGrid({
           <MenuDropdown label="File" items={[
             { label: 'Reload from server', icon: <Undo2 className="w-3.5 h-3.5" />, disabled: loading,
               onClick: () => { if (confirm('Reload rows? Unsaved edits will be lost.')) void loadData() } },
+            ...(fileMenuItems ?? []),
           ]} />
           <MenuDropdown label="Edit" items={[
             { label: 'Undo', icon: <Undo2 className="w-3.5 h-3.5" />, onClick: undo, disabled: !history.length, shortcut: '⌘Z' },
