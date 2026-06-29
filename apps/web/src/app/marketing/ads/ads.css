@@ -80,9 +80,15 @@
 .h10-group { display: flex; flex-direction: column; }
 /* fixed 50px icon zone centres the 20px glyph in the 66px collapsed rail (8px row
    margin + 25px to glyph centre = 33px = rail centre) AND left-aligns it expanded */
-.h10-item { position: relative; display: flex; align-items: center; height: 46px; margin: 1px 8px; border-radius: 10px; font-size: 15px; font-weight: 600; color: var(--h10-rail-text); text-decoration: none; overflow: hidden; transition: background .12s, color .12s; }
+/* No overflow:hidden here — it clipped the count badge in the collapsed rail.
+   Horizontal clipping of labels is already handled by the rail's own
+   overflow:hidden (the rail keeps overflow-x:hidden even when hovered). */
+.h10-item { position: relative; display: flex; align-items: center; height: 46px; margin: 1px 8px; border-radius: 10px; font-size: 15px; font-weight: 600; color: var(--h10-rail-text); text-decoration: none; transition: background .12s, color .12s; }
 /* F1 — pending-suggestions count badge (over the icon top-right; visible collapsed + expanded) */
-.h10-nav-badge { position: absolute; left: 31px; top: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--h10-danger); color: #fff; font-size: 10px; font-weight: 800; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px var(--h10-rail-bg); z-index: 1; }
+/* Positioned over the icon's top-right corner. left:29 + max width ("99+",
+   ~25px) + 2px ring lands at ~64px — inside the 66px collapsed rail, so the
+   full count is always visible. */
+.h10-nav-badge { position: absolute; left: 29px; top: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--h10-danger); color: #fff; font-size: 10px; font-weight: 800; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px var(--h10-rail-bg); z-index: 1; }
 .h10-item.on .h10-nav-badge { box-shadow: 0 0 0 2px var(--h10-primary); }
 .h10-item .ico { flex: 0 0 50px; display: flex; align-items: center; justify-content: center; }
 .h10-item .ico svg { color: var(--h10-rail-icon); transition: color .12s; }
@@ -111,6 +117,20 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-item:hover .chev, .h10-item:hover .ext { color: var(--h10-rail-text-2); }
 .h10-item.on .chev { color: #fff; }
 .h10-item .chev.open { transform: rotate(180deg); }
+
+/* Two-target parent row: the .h10-item wrapper carries the active fill + hover;
+   the Link (flex:1) navigates; the chevron button toggles. Collapsed, the
+   chevron button is removed from flow so the icon keeps the full 50px zone. */
+.h10-parent-link { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; height: 100%; color: inherit; text-decoration: none; }
+.h10-parent-chev { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: flex-end; width: 44px; height: 100%; padding-right: 17px; border: 0; background: transparent; cursor: pointer; }
+.h10-rail:not(:hover) .h10-parent-chev { display: none; }
+.h10-parent-chev .chev { margin: 0; }
+
+/* Collapsed: the indicator dot becomes a status dot on the icon's top-right
+   corner instead of floating at the (empty) right edge. Hidden when a count
+   badge is already shown there — the badge conveys the same signal. */
+.h10-rail:not(:hover) .h10-item .h10-dot { position: absolute; left: 39px; top: 9px; margin: 0; }
+.h10-rail:not(:hover) .h10-item .h10-nav-badge ~ .h10-dot { display: none; }
 
 .h10-sub { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 4px 60px; padding-right: 8px; }
 .h10-rail:not(:hover) .h10-sub { display: none; }
