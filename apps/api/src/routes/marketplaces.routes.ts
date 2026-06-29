@@ -219,6 +219,13 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         const listings = await prisma.channelListing.findMany({
           where: { productId: id },
           orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }],
+          // PERF — drop two large JSON columns the edit page never reads
+          // (flatFileSnapshot = verbatim Amazon row, overrideData = raw
+          // override bag; both verified 0 references in apps/web). Trims
+          // payload without a whitelist `select` that could starve a tab
+          // of a field it needs (platformAttributes / bulletPointsOverride
+          // ARE consumed, so they stay).
+          omit: { flatFileSnapshot: true, overrideData: true },
         })
         const grouped = listings.reduce(
           (acc, l) => {

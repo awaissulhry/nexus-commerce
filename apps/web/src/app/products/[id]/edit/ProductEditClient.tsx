@@ -1047,7 +1047,17 @@ export default function ProductEditClient({
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <IconButton
-              onClick={() => router.push('/products')}
+              onClick={() => {
+                // Prefer restoring the previous page (grid scroll +
+                // selection, served from the router cache — instant) over a
+                // fresh, slow grid re-render. Fall back to the list when
+                // there's no in-app history (e.g. opened in a new tab).
+                if (typeof window !== 'undefined' && window.history.length > 1) {
+                  router.back()
+                } else {
+                  router.push('/products')
+                }
+              }}
               aria-label={t('products.edit.back')}
               size="md"
               className="-m-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
