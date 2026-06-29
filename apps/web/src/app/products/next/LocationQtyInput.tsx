@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Lock, Loader2 } from 'lucide-react'
+import { Input } from '@/design-system/primitives'
 import styles from './styles.module.css'
 
 export function LocationQtyInput({
@@ -21,19 +22,15 @@ export function LocationQtyInput({
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(String(value))
-  const inputRef = useRef<HTMLInputElement>(null)
   const committedRef = useRef(false)
 
   useEffect(() => {
     if (!editing) setDraft(String(value))
   }, [value, editing])
 
+  // Reset the double-commit guard each time an edit session begins.
   useEffect(() => {
-    if (editing) {
-      committedRef.current = false
-      inputRef.current?.focus()
-      inputRef.current?.select()
-    }
+    if (editing) committedRef.current = false
   }, [editing])
 
   if (!editable) {
@@ -60,10 +57,12 @@ export function LocationQtyInput({
 
   if (editing) {
     return (
-      <input
-        ref={inputRef}
+      <Input
         type="number"
         min={0}
+        autoFocus
+        onFocus={(e) => e.currentTarget.select()}
+        fieldClassName={styles.invQtyField}
         className={styles.invQtyInput}
         disabled={saving}
         value={draft}

@@ -68,29 +68,19 @@ describe('editorModeForRow', () => {
 })
 
 describe('variationLabel', () => {
-  const parent = { name: 'XAVIA AIR-MESH Giacca Da Moto (estiva)', sku: 'AIR-MESH-JACKET-MEN' }
-  it('prefers the trailing parenthetical from the child name', () => {
+  const parent = { name: 'XAVIA AIR-MESH Giacca Da Moto', sku: 'AIR-MESH-JACKET-MEN' }
+  it('labels by the child SKU with the parent prefix stripped', () => {
     expect(variationLabel(
-      { name: 'XAVIA AIR-MESH Giacca Da Moto Per Uomo (L, Nero)', sku: 'AIR-MESH-JACKET-MEN-L-BLACK' },
+      { name: 'XAVIA AIR-MESH … (L, Nero)', sku: 'AIR-MESH-JACKET-MEN-L-BLACK' },
       parent,
-    )).toBe('L, Nero')
+    )).toBe('L-BLACK')
   })
-  it('falls back to the child SKU with the parent SKU prefix stripped', () => {
-    expect(variationLabel(
-      { name: 'No parenthetical here', sku: 'AIR-MESH-JACKET-MEN-XL-RED' },
-      parent,
-    )).toBe('XL-RED')
+  it('disambiguates variations whose product names collide (data errors)', () => {
+    // Real case: the XXL child is mis-named "(XS, Nero)"; SKUs stay distinct.
+    expect(variationLabel({ name: 'x (XS, Nero)', sku: 'AIR-MESH-JACKET-MEN-XS-BLACK' }, parent)).toBe('XS-BLACK')
+    expect(variationLabel({ name: 'x (XS, Nero)', sku: 'AIR-MESH-JACKET-MEN-XXL-BLACK' }, parent)).toBe('XXL-BLACK')
   })
-  it('falls back to the full SKU when nothing else distinguishes it', () => {
-    expect(variationLabel(
-      { name: 'Plain name', sku: 'STANDALONE-SKU-1' },
-      parent,
-    )).toBe('STANDALONE-SKU-1')
-  })
-  it('ignores a non-trailing parenthetical, using the SKU suffix instead', () => {
-    expect(variationLabel(
-      { name: 'Jacket (waterproof) something', sku: 'AIR-MESH-JACKET-MEN-S-BLUE' },
-      parent,
-    )).toBe('S-BLUE')
+  it('falls back to the full SKU when there is no parent prefix', () => {
+    expect(variationLabel({ name: 'Plain', sku: 'STANDALONE-SKU-1' }, parent)).toBe('STANDALONE-SKU-1')
   })
 })
