@@ -264,9 +264,43 @@ export default function MasterDataTab({
           })
           return
         }
-        throw new Error(body?.error ?? `HTTP ${res.status}`)
+        // Surface per-field rejections (e.g. the live-listing SKU guard)
+        // rather than a bare "HTTP 400" — the bulk endpoint returns
+        // { errors: [{ field, error }] } when nothing survived validation.
+        const detail =
+          body?.error ??
+          (Array.isArray(body?.errors) && body.errors.length > 0
+            ? body.errors
+                .map((e: any) => e?.error)
+                .filter(Boolean)
+                .join(' · ')
+            : null)
+        throw new Error(detail ?? `HTTP ${res.status}`)
       }
       const respBody = await res.json().catch(() => null)
+      // Partial apply — some fields saved but others were rejected (e.g. a
+      // SKU change blocked by the live-listing guard). Don't claim "saved":
+      // surface the reason so the operator isn't misled into thinking the
+      // SKU changed. The fields that did save are already committed; the
+      // grid still refreshes for them via the invalidation below.
+      if (Array.isArray(respBody?.errors) && respBody.errors.length > 0) {
+        if (typeof respBody?.currentVersion === 'number') {
+          setVersion(respBody.currentVersion)
+        }
+        setStatus('error')
+        setError(
+          respBody.errors
+            .map((e: any) => e?.error)
+            .filter(Boolean)
+            .join(' · '),
+        )
+        emitInvalidation({
+          type: 'product.updated',
+          id: product.id,
+          meta: { source: 'master-data-tab' },
+        })
+        return
+      }
       if (typeof respBody?.currentVersion === 'number') {
         setVersion(respBody.currentVersion)
       } else if (typeof version === 'number') {
