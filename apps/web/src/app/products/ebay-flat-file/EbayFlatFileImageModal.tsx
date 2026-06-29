@@ -1,11 +1,12 @@
 'use client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ImageIcon } from 'lucide-react'
+import { ImageIcon, Loader2 } from 'lucide-react'
 import { Modal } from '@/design-system/components/Modal'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { Banner } from '@/design-system/components/Banner'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button } from '@/components/ui/Button'
+import { useToast } from '@/components/ui/Toast'
 // Reuse the shared images-tab grid and type definitions directly.
 // [id] is a literal directory name in the filesystem; TypeScript resolves it fine.
 import ChannelImageGrid, { type ImageGridColumn, type ImageGridRow } from '@/app/products/[id]/edit/tabs/images/ChannelImageGrid'
@@ -96,6 +97,25 @@ function bucketsDiff(a: Buckets, b: Buckets): number {
   return diff
 }
 
+// ── Backend fetch helper ───────────────────────────────────────────────────
+
+function beFetch(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(`${getBackendUrl()}${path}`, init)
+}
+
+// ── ListingImageUpsert (mirrors EbayPanel.tsx) ────────────────────────────
+
+interface ListingImageUpsert {
+  scope: 'PLATFORM'
+  platform: 'EBAY'
+  marketplace: null
+  variantGroupKey: string | null
+  variantGroupValue: string | null
+  url: string
+  position: number
+  role: 'MAIN' | 'GALLERY'
+}
+
 // ── Props ─────────────────────────────────────────────────────────────────
 
 export interface EbayFlatFileImageModalProps {
@@ -108,7 +128,7 @@ export interface EbayFlatFileImageModalProps {
 // ── Component ─────────────────────────────────────────────────────────────
 
 export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFileImageModalProps) {
-  const BACKEND = getBackendUrl()
+  const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [workspaceData, setWorkspaceData] = useState<WorkspaceData | null>(null)
@@ -117,7 +137,7 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
     if (!productId) return
     setLoading(true)
     setError(null)
-    fetch(`${BACKEND}/api/products/${productId}/images-workspace`)
+    beFetch(`/api/products/${productId}/images-workspace`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json() as Promise<WorkspaceData>
@@ -125,7 +145,7 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
       .then(setWorkspaceData)
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false))
-  }, [productId, BACKEND])
+  }, [productId])
 
   useEffect(() => {
     if (open) load()
@@ -268,6 +288,48 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
     return url ? { url, origin: 'own' as const } : null
   }, [buckets])
 
+  // ── Save ─────────────────────────────────────────────────────────────
+
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  const flush = useCallback(async () => {
+    if (!productId) return
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const upserts: ListingImageUpsert[] = []
+      for (const [bucket, urls] of buckets.entries()) {
+        urls.forEach((url, position) => {
+          if (bucket === SHARED) {
+            upserts.push({ scope: 'PLATFORM', platform: 'EBAY', marketplace: null, variantGroupKey: null, variantGroupValue: null, url, position, role: position === 0 ? 'MAIN' : 'GALLERY' })
+          } else {
+            upserts.push({ scope: 'PLATFORM', platform: 'EBAY', marketplace: null, variantGroupKey: axis, variantGroupValue: bucket, url, position, role: 'GALLERY' })
+          }
+        })
+      }
+      const deletes = listingImages
+        .filter((i) => i.platform === 'EBAY' && !i.variationId && (i.variantGroupKey == null || i.variantGroupKey === axis))
+        .map((i) => i.id)
+      const res = await beFetch(`/api/products/${productId}/images-workspace/bulk-save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ upserts, deletes }),
+      })
+      if (!res.ok) {
+        const body = await res.text()
+        throw new Error(`Save failed (${res.status}): ${body}`)
+      }
+      toast.success('Images saved')
+      load()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setSaveError(msg)
+    } finally {
+      setSaving(false)
+    }
+  }, [productId, buckets, axis, listingImages, load, toast])
+
   // ── Subtitle ──────────────────────────────────────────────────────────
 
   const sku = product?.sku ?? productId
@@ -297,19 +359,36 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
       title={`eBay Images · ${sku}`}
       subtitle={subtitle}
       size="xl"
-      footer={hasDirty ? (
-        <>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setBuckets(cloneBuckets(baseline))}
-          >
-            Discard
-          </Button>
-          <Button size="sm" disabled title="Save coming in next phase">
-            Save
-          </Button>
-        </>
+      footer={hasDirty || saveError ? (
+        <div className="flex w-full flex-col gap-2">
+          {saveError && (
+            <Banner variant="danger" title="Save failed" className="w-full">
+              {saveError}
+            </Banner>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => { setBuckets(cloneBuckets(baseline)); setSaveError(null) }}
+              disabled={saving}
+            >
+              Discard
+            </Button>
+            <Button
+              size="sm"
+              onClick={flush}
+              disabled={saving || !hasDirty}
+            >
+              {saving ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Saving…
+                </span>
+              ) : 'Save'}
+            </Button>
+          </div>
+        </div>
       ) : null}
     >
       {loading && (
