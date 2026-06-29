@@ -39,6 +39,8 @@ import {
 import { BulkActionBar, ColumnCustomizer, PageHeader, type CustomizableColumn } from '@/design-system/patterns'
 
 import styles from './styles.module.css'
+import { InventoryCell } from './InventoryCell'
+import { InventoryEditorModal } from './InventoryEditorModal'
 
 // ─────────────────────────────────────────────────────────────────
 // Constants
@@ -119,11 +121,6 @@ function saveColPrefs(cols: CustomizableColumn[]): void {
 // Pure helpers
 // ─────────────────────────────────────────────────────────────────
 
-function getStockColor(totalStock: number, threshold: number): string {
-  if (totalStock === 0) return 'var(--status-danger-line)'
-  if (totalStock <= threshold) return 'var(--status-warning-line)'
-  return 'var(--status-success-line)'
-}
 
 function getStatusTone(status: string): Tone {
   if (status === 'ACTIVE') return 'success'
@@ -344,32 +341,6 @@ function ProductCell({
   )
 }
 
-/** Available (stock) cell: colour-coded unit count + optional FBA/FBM tooltip */
-function AvailableCell({ row }: { row: ProductRow }) {
-  const stockEl = (
-    <div className={styles.availCell}>
-      <span
-        className={styles.availNum}
-        style={{ color: getStockColor(row.totalStock, row.lowStockThreshold) }}
-      >
-        {row.totalStock}
-      </span>
-      <span className={styles.availUnit}>units</span>
-    </div>
-  )
-
-  if (row.fbaStock != null || row.fbmStock != null) {
-    const tip = [
-      row.fbaStock != null ? `FBA ${row.fbaStock}` : null,
-      row.fbmStock != null ? `FBM ${row.fbmStock}` : null,
-    ]
-      .filter(Boolean)
-      .join(' · ')
-    return <Tooltip label={tip}>{stockEl}</Tooltip>
-  }
-
-  return stockEl
-}
 
 /** Row action cluster: Edit link + ⋯ DS Menu */
 function RowActions({ row, onMore }: { row: ProductRow; onMore: () => void }) {
@@ -430,6 +401,9 @@ function ProductsNextInner() {
   // Column visibility + order (persisted to localStorage)
   const [colCustomizerOpen, setColCustomizerOpen] = useState(false)
   const [customCols, setCustomCols] = useState<CustomizableColumn[]>(loadColPrefs)
+
+  // Inventory editor modal
+  const [modalRow, setModalRow] = useState<ProductRow | null>(null)
 
   // ── Data ──────────────────────────────────────────────────────
   const { data, loading } = usePolledList<{
@@ -765,7 +739,7 @@ function ProductsNextInner() {
           width: 120,
           render: (row) => {
             if (isLoadingRow(row)) return null
-            return <AvailableCell row={row} />
+            return <InventoryCell row={row} onOpen={setModalRow} />
           },
         },
         price: {
@@ -1099,6 +1073,9 @@ function ProductsNextInner() {
           saveColPrefs(next)
         }}
       />
+
+      {/* Inventory editor modal — opened by clicking the Available cell */}
+      <InventoryEditorModal row={modalRow} onClose={() => setModalRow(null)} />
     </div>
   )
 }
