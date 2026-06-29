@@ -3362,7 +3362,17 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const duplicateAsin = [...productsByAsin.entries()]
         .filter(([, prods]) => prods.size > 1)
-        .map(([asin, prods]) => ({ asin, productCount: prods.size }))
+        .map(([asin]) => ({
+          asin,
+          skus: [
+            ...new Set(
+              live
+                .filter((l) => l.externalListingId === asin)
+                .map((l) => l.product?.sku)
+                .filter(Boolean),
+            ),
+          ],
+        }))
 
       const countByProductMarket = new Map<string, number>()
       for (const l of live) {
