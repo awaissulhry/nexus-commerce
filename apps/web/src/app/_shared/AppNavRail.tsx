@@ -14,10 +14,18 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { Search, Sun, Moon, Monitor, ChevronDown } from 'lucide-react'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTheme } from '@/lib/theme/use-theme'
+import { useRecentlyViewed } from '@/lib/use-recently-viewed'
 import { AppRail } from './AppRail'
 import { buildAppNav, type SidebarCounts, type Connections } from './app-nav'
+
+function dispatchCmdK() {
+  window.dispatchEvent(new CustomEvent('nexus:open-command-palette'))
+}
 
 export function AppNavRail() {
   const [counts, setCounts] = useState<SidebarCounts>({})
@@ -110,13 +118,127 @@ export function AppNavRail() {
     debouncedRefetch,
   )
 
+  // ── Chrome: theme toggle, recently-viewed (persisted collapse) ──
+  const { mode, cycleTheme } = useTheme()
+  const ThemeIcon = mode === 'light' ? Sun : mode === 'dark' ? Moon : Monitor
+  const themeLabel =
+    mode === 'light'
+      ? 'Switch to dark mode'
+      : mode === 'dark'
+        ? 'Switch to system theme'
+        : 'Switch to light mode'
+
+  const recent = useRecentlyViewed()
+  // useRecentlyViewed reads localStorage, so it returns [] on the server but
+  // real items on the client's first render — a hydration mismatch. Gate the
+  // list on `mounted` so SSR and first client render agree (show the empty
+  // state), then populate after mount.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+  const [recentCollapsed, setRecentCollapsed] = useState(false)
+  useEffect(() => {
+    try {
+      setRecentCollapsed(
+        localStorage.getItem('nexus.sidebar.recentCollapsed') === '1',
+      )
+    } catch {
+      /* ignore */
+    }
+  }, [])
+  const toggleRecent = useCallback(() => {
+    setRecentCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('nexus.sidebar.recentCollapsed', next ? '1' : '0')
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }, [])
+
+  const header = (
+    <>
+      <div className="h10-railctl">
+        <button
+          type="button"
+          className="h10-railbtn"
+          onClick={cycleTheme}
+          title={themeLabel}
+          aria-label={themeLabel}
+        >
+          <ThemeIcon size={16} />
+        </button>
+        <button
+          type="button"
+          className="h10-railbtn"
+          onClick={dispatchCmdK}
+          title="Search (⌘K)"
+          aria-label="Search"
+        >
+          <Search size={16} />
+        </button>
+      </div>
+      <button type="button" className="h10-ws">
+        <span className="h10-ws-txt">
+          <span className="nm">Xavia Racing</span>
+          <span className="sub">Workspace</span>
+        </span>
+        <ChevronDown size={14} className="h10-ws-chev" aria-hidden="true" />
+      </button>
+    </>
+  )
+
+  const footer = (
+    <>
+      <div className="h10-recent">
+        <button
+          type="button"
+          className="h10-recent-hd"
+          onClick={toggleRecent}
+          aria-expanded={!recentCollapsed}
+        >
+          <span>Recently viewed</span>
+          <ChevronDown
+            size={13}
+            className={`h10-recent-chev ${recentCollapsed ? '' : 'open'}`}
+            aria-hidden="true"
+          />
+        </button>
+        {!recentCollapsed && (
+          <ul className="h10-recent-list">
+            {!mounted || recent.length === 0 ? (
+              <li className="h10-recent-empty">No recent items</li>
+            ) : (
+              recent.map((item) => (
+                <li key={item.id}>
+                  <Link href={item.href} className="h10-recent-link" title={item.label}>
+                    {item.label}
+                  </Link>
+                </li>
+              ))
+            )}
+          </ul>
+        )}
+      </div>
+      <button type="button" className="h10-user">
+        <span className="h10-user-av">A</span>
+        <span className="h10-user-txt">
+          <span className="nm">Awa</span>
+          <span className="sub">Xavia Racing</span>
+        </span>
+      </button>
+    </>
+  )
+
   const navItems = buildAppNav(counts, conn)
 
   return (
     <AppRail
       navItems={navItems}
       brand={{ mark: 'N', name: 'Nexus' }}
-      footer="Products · rebuild"
+      header={header}
+      footer={footer}
     />
   )
 }

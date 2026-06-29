@@ -21,7 +21,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ChevronDown, ExternalLink } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -80,11 +80,14 @@ export interface AppRailProps {
     /** Optional accent word appended in bold after name (e.g. 'Ads'). */
     accent?: string
   }
-  /** Short footer caption visible only when the rail is expanded. */
-  footer?: string
+  /** Chrome rendered directly under the brand (workspace switcher, ⌘K/search,
+   *  theme toggle). Visible only when the rail is expanded. */
+  header?: ReactNode
+  /** Footer chrome (recently-viewed, user profile). Visible only when expanded. */
+  footer?: ReactNode
 }
 
-export function AppRail({ navItems, brand, footer }: AppRailProps) {
+export function AppRail({ navItems, brand, header, footer }: AppRailProps) {
   const pathname = usePathname() || ''
 
   const isActiveHref = (href: string) =>
@@ -128,6 +131,8 @@ export function AppRail({ navItems, brand, footer }: AppRailProps) {
           {brand.accent && <> <b>{brand.accent}</b></>}
         </span>
       </div>
+
+      {header != null && <div className="h10-railhdr-wrap">{header}</div>}
 
       <nav className="h10-nav" aria-label="Application navigation">
         {navItems.map((it) => {
@@ -261,9 +266,7 @@ export function AppRail({ navItems, brand, footer }: AppRailProps) {
         })}
       </nav>
 
-      {footer && (
-        <div className="h10-railft">{footer}</div>
-      )}
+      {footer != null && <div className="h10-railft-wrap">{footer}</div>}
     </aside>
   )
 }
