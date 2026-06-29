@@ -122,7 +122,7 @@ export function AppRail({ navItems, brand, header, footer }: AppRailProps) {
     setOpen((o) => ({ ...o, [href]: !o[href] }))
 
   return (
-    <aside className="h10-rail">
+    <aside className="h10-rail" data-print-hide>
       {/* Brand mark: compact "N" (or custom mark) collapsed; full wordmark on hover */}
       <div className="h10-brand">
         <span className="logo" aria-hidden="true">{brand.mark}</span>

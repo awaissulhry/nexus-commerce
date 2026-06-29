@@ -29,7 +29,7 @@ const mono = JetBrains_Mono({
   display: "swap",
   weight: ["400", "500", "600", "700"],
 });
-import AppSidebar from "@/components/layout/AppSidebar";
+import { AppNavRail } from "@/app/_shared/AppNavRail";
 import AppShell from "@/components/layout/AppShell";
 import CommandPalette from "@/components/CommandPalette";
 import CommandMatrixPanel from "@/components/CommandMatrixPanel";
@@ -86,7 +86,7 @@ export default async function RootLayout({
                 bare full-screen surface for standalone routes (Trading Desk).
                 Slots are server components rendered identically to before. */}
             <AppShell
-              sidebar={<AppSidebar />}
+              sidebar={<AppNavRail />}
               topBar={<MobileTopBar />}
               banners={
                 <>

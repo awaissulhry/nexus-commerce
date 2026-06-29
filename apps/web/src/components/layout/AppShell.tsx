@@ -15,6 +15,11 @@
 
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
+// Rail styles (.h10-rail / .h10-item / .h10-sub* / chrome) live in ads.css.
+// Import here so the app-wide rail is styled on every non-standalone route.
+// ads.css is fully class-scoped (.h10-*), so this adds no global rules.
+// TODO(P7): extract the rail rules into a dedicated _shared/rail.css.
+import '../../app/marketing/ads/ads.css'
 
 /** Route prefixes that render with NO Nexus chrome (full-screen). */
 const STANDALONE_PREFIXES = ['/marketing/ads-console', '/marketing/ads', '/products/next']
@@ -46,9 +51,18 @@ export default function AppShell({
 
   return (
     <>
-      <div className="flex h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden">
+      {/* Rail model: the container is the positioning context and reserves the
+          collapsed rail width via padding-left; the rail (rendered by `sidebar`
+          as an absolutely-positioned .h10-rail at left:0) overlays that strip and
+          hover-expands without shifting content. `--rail-reserve` lets a pinned
+          rail reserve the expanded width (added with the pin follow-up); it
+          defaults to the collapsed width. */}
+      <div
+        className="app-rail-host relative flex h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden"
+        style={{ paddingLeft: 'var(--rail-reserve, 66px)' }}
+      >
         {sidebar}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <div data-print-hide>{topBar}</div>
           <main id="main-content" className="flex-1 overflow-auto" tabIndex={-1}>
             <div data-print-hide>{banners}</div>
