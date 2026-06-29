@@ -3,7 +3,7 @@ import { type ReactNode } from 'react'
 import {
   Undo2, Redo2, Copy, ArrowRightLeft, ShieldAlert,
   ClipboardList, ImageIcon, SlidersHorizontal, Replace,
-  Paintbrush2, Wand2, BrainCircuit, Columns, History,
+  Paintbrush2, Wand2, BrainCircuit, Columns,
 } from 'lucide-react'
 import { Tooltip } from '@/design-system/primitives/Tooltip'
 import { Kbd } from '@/design-system/primitives/Kbd'
@@ -215,7 +215,6 @@ export function FlatFileToolbar({
   aiBulkSelectedCount, onAiBulkClick, aiBulkDisabled,
   aiAssistantOpen, onAiAssistantClick,
   onColumnsClick, columnsActive,
-  historyCount, historyOpen, onHistoryClick,
   slotAfterReplicate, slotAfterSmartPaste, trailing,
 }: FlatFileToolbarProps) {
   const validationBadge = validationErrorCount + validationWarnCount
@@ -490,26 +489,6 @@ export function FlatFileToolbar({
         </>
       )}
 
-      {/* History — unified push + pull + versions */}
-      {onHistoryClick && (
-        <>
-          <TbDivider />
-          <TbBtn
-            icon={<History className="h-3.5 w-3.5" />}
-            title="History"
-            tooltipContent={
-              <ToolTip
-                label="History"
-                description="Push submissions, pull log and version history"
-                shortcut="⌘H"
-              />
-            }
-            onClick={onHistoryClick}
-            active={historyOpen}
-            badge={historyCount || undefined}
-          />
-        </>
-      )}
     </div>
   )
 }
