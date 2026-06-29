@@ -11,7 +11,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, History, Image as ImageIcon, Keyboard, Loader2, Pin, Plus, RefreshCw, RotateCcw,
+  Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, Image as ImageIcon, Keyboard, Loader2, Pin, Plus, RefreshCw, RotateCcw,
   Search, Send, Trash2, Upload, X, ArrowRightLeft,
   Undo2, Redo2, GripVertical, Wand2,
 } from 'lucide-react'
@@ -27,12 +27,13 @@ import { PendingPullBanner } from '../_shared/PendingPullBanner'
 import { FLAT_FILE_SHORTCUTS } from '../_shared/flat-file-shortcuts'
 import { FlatFileToolbar as FlatFileIconToolbar, TbBtn as SharedTbBtn } from '@/components/flat-file/FlatFileToolbar'
 import { ColumnGroupModal } from '@/design-system/components/ColumnGroupModal'
+import { Tooltip } from '@/design-system/primitives/Tooltip'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { PublishModeBadge } from '@/components/PublishModeBadge'
 import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
 import { useToast } from '@/components/ui/Toast'
-import FeedSubmissionsPanel from './FeedSubmissionsPanel'
+import { HistoryModal } from '@/components/flat-file/HistoryModal'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -71,10 +72,7 @@ const PullDiffModal = dynamic(
   () => import('./PullDiffModal').then((m) => m.PullDiffModal),
   { ssr: false },
 )
-const PullHistoryDrawer = dynamic(
-  () => import('../_shared/PullHistoryDrawer').then((m) => m.PullHistoryDrawer),
-  { ssr: false },
-)
+// PullHistoryDrawer removed — merged into HistoryModal (H.1–H.4)
 const KeyboardShortcutsModal = dynamic(
   () => import('../../_shared/grid-lens/KeyboardShortcutsModal').then((m) => m.KeyboardShortcutsModal),
   { ssr: false },
@@ -831,13 +829,10 @@ export default function AmazonFlatFileClient({
       setReviewModal({ data, resolve: (ok) => { setReviewModal(null); resolve(ok) } })
     })
   }, [])
-  const [submissionHistory, setSubmissionHistory] = useState<SubmissionRecord[]>([])
-  // FFS.6/#1 — authoritative submission count from the server (the Submissions
-  // panel's source). Falls back to the local count until it loads, so the badge
-  // never diverges from the panel (incl. feeds submitted on another device).
-  const [serverFeedCount, setServerFeedCount] = useState<number | null>(null)
-  const [submissionPanelOpen, setSubmissionPanelOpen] = useState(false)
-  const [versionPanelOpen, setVersionPanelOpen] = useState(false)
+  // submissionHistory is written to localStorage but no longer displayed (HistoryModal fetches live)
+  const [, setSubmissionHistory] = useState<SubmissionRecord[]>([])
+  const [historyOpen, setHistoryOpen] = useState(false)
+  // versionPanelOpen kept to handle "Version history…" menu — redirects to historyOpen
 
   // BF.1 — Find & Replace
   const [matchKeys, setMatchKeys] = useState<Set<string>>(new Set())
@@ -877,7 +872,6 @@ export default function AmazonFlatFileClient({
     skusReturned: number
     jobId: string
   } | null>(null)
-  const [pullHistoryOpen, setPullHistoryOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
   // EH.5 — Sticky open-once flags for dynamic-imported modals. Each
@@ -890,7 +884,6 @@ export default function AmazonFlatFileClient({
   const filterPanelMounted = useOpenOnce(filterPanelOpen)
   const aiModalMounted = useOpenOnce(aiModalOpen)
   const replicateMounted = useOpenOnce(replicateOpen)
-  const pullHistoryMounted = useOpenOnce(pullHistoryOpen)
   const [pendingPullReview, setPendingPullReview] = useState<{
     jobId: string
     rows: Row[]
@@ -2779,7 +2772,7 @@ export default function AmazonFlatFileClient({
       } else {
         toast.success(`Submitted to ${submitted.join(', ')}${skip}`)
       }
-      setServerFeedCount((c) => (c ?? 0) + submitted.length) // #1 — keep the count live within the session
+      // (serverFeedCount removed — unified HistoryModal fetches live count)
     } else if (skipped.length && !errors.length) {
       toast.warning(`Nothing submitted — ${skipped.join(', ')} had no edited rows to send`)
     }
@@ -2967,7 +2960,7 @@ export default function AmazonFlatFileClient({
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!alive || !Array.isArray(d?.jobs)) return
-        if (typeof d.total === 'number') setServerFeedCount(d.total) // #1 — authoritative count
+        // (serverFeedCount removed — count is fetched inside HistoryModal)
         const inflight = (d.jobs as Array<{ marketplace: string; feedId: string; status: string }>)
           .filter((j) => j.status === 'IN_QUEUE' || j.status === 'IN_PROGRESS')
         if (!inflight.length) return
@@ -3485,7 +3478,7 @@ export default function AmazonFlatFileClient({
                   void loadData(marketplace, productType, false)
                 }},
               { separator: true },
-              { label: 'Version history…', icon: <Clock className="w-3.5 h-3.5" />, onClick: () => setVersionPanelOpen(true), disabled: !manifest },
+              { label: 'Version history…', icon: <Clock className="w-3.5 h-3.5" />, onClick: () => setHistoryOpen(true), disabled: !manifest },
             ]} />
             <MenuDropdown label="Edit" items={[
               { label: 'Undo', icon: <Undo2 className="w-3.5 h-3.5" />, onClick: undo, disabled: !history.length, shortcut: '⌘Z' },
@@ -3698,22 +3691,7 @@ export default function AmazonFlatFileClient({
               </div>
             </div>
           )}
-          {((serverFeedCount ?? 0) > 0 || submissionHistory.length > 0) && (
-            <button
-              type="button"
-              onClick={() => setSubmissionPanelOpen((o) => !o)}
-              className={cn(
-                'flex items-center gap-1 text-xs px-2 py-0.5 rounded transition-colors flex-shrink-0',
-                submissionPanelOpen
-                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                  : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300',
-              )}
-              title="Submissions"
-            >
-              <History className="w-3 h-3" />
-              <span>{serverFeedCount ?? submissionHistory.length}</span>
-            </button>
-          )}
+          {/* History button moved to FlatFileIconToolbar via onHistoryClick */}
           {/* PE: keyboard shortcuts modal trigger */}
           <button
             type="button"
@@ -3834,6 +3812,9 @@ export default function AmazonFlatFileClient({
           aiAssistantOpen={aiPanelOpen}
           onAiAssistantClick={manifest ? () => setAiPanelOpen((o) => !o) : undefined}
 
+          historyOpen={historyOpen}
+          onHistoryClick={() => setHistoryOpen(true)}
+
           slotAfterReplicate={
             <>
               {/* Pull from Amazon — full attribute pull (in-memory, undoable via ⌘Z) */}
@@ -3857,13 +3838,6 @@ export default function AmazonFlatFileClient({
                   />
                 )}
               </div>
-              {/* Pull history — recent applied pulls + one-click re-pull */}
-              <SharedTbBtn
-                icon={<History className="w-3.5 h-3.5" />}
-                title="Pull history — review past pulls and re-run with same scope"
-                onClick={() => setPullHistoryOpen(true)}
-                active={pullHistoryOpen}
-              />
             </>
           }
 
@@ -4799,20 +4773,23 @@ export default function AmazonFlatFileClient({
         />
       )}
 
-      {/* Pull history drawer — Phase 4 */}
-      {pullHistoryMounted && (
-      <PullHistoryDrawer
-        open={pullHistoryOpen}
-        channel="AMAZON"
+      {/* Unified history modal — H.1–H.4 */}
+      <HistoryModal
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        channel="amazon"
         marketplace={marketplace}
         productType={productType}
+        onResubmitErroredSkus={(skus) => {
+          setSelectedRows(new Set(
+            rows.filter(r => skus.includes(String(r.item_sku ?? ''))).map(r => r._rowId as string)
+          ))
+          setHistoryOpen(false)
+        }}
         onRePull={(rec) => {
-          setPullHistoryOpen(false)
+          setHistoryOpen(false)
           const isAllCols = rec.columnsApplied.includes('all') || rec.columnsApplied.length === 0
           const cols = (isAllCols ? 'all' : rec.columnsApplied) as 'all' | PullGroupId[]
-          // Mirror handlePullFromAmazon but feed the rerun's SKU list
-          // straight in as a "selected" scope so we hit exactly the
-          // same rows the audit row covers.
           const skus = rec.skusRequested
           if (!skus.length) return
           void (async () => {
@@ -4848,9 +4825,13 @@ export default function AmazonFlatFileClient({
             }
           })()
         }}
-        onClose={() => setPullHistoryOpen(false)}
+        onRestoreVersion={(restoredRows) => {
+          pushSnapshot()
+          setRows(restoredRows as Row[])
+          setHistoryOpen(false)
+        }}
+        currentRows={rows}
       />
-      )}
 
       {/* Pull diff preview — Phase 2 of in-editor pull */}
       {pullDiffData && (
@@ -4940,27 +4921,7 @@ export default function AmazonFlatFileClient({
         />
       )}
 
-      {submissionPanelOpen && (
-        // FFS.6 — durable, server-backed Submissions panel (survives reload /
-        // tab close / other device) with the full per-SKU drill-down.
-        <FeedSubmissionsPanel
-          onClose={() => setSubmissionPanelOpen(false)}
-        />
-      )}
-
-      {versionPanelOpen && (
-        <VersionHistoryPanel
-          marketplace={marketplace}
-          productType={productType}
-          currentRows={rows}
-          onRestore={(versionRows) => {
-            pushSnapshot()
-            setRows(versionRows)
-            setVersionPanelOpen(false)
-          }}
-          onClose={() => setVersionPanelOpen(false)}
-        />
-      )}
+      {/* FeedSubmissionsPanel + VersionHistoryPanel replaced by HistoryModal above */}
 
       {contextMenu && (
         <ContextMenu
@@ -5166,7 +5127,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
         onMouseUp={() => { canDragRef.current = false }}
       >
         {status === 'success' ? <CheckCircle2 className="w-3 h-3 text-emerald-500 mx-auto" />
-          : status === 'error' ? <span title={row._feedMessage as string | undefined}><AlertCircle className="w-3 h-3 text-red-500 mx-auto" /></span>
+          : status === 'error' ? <Tooltip label={<span className="text-xs">{String(row._feedMessage ?? 'Push error')}</span>} className="h10-ds-tooltip--light"><AlertCircle className="w-3 h-3 text-red-500 mx-auto" /></Tooltip>
           : status === 'pending' ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
           : <input type="checkbox" checked={selected} onChange={(e) => onSelect(e.target.checked)} className="w-3.5 h-3.5 accent-blue-600" />}
       </td>
@@ -7885,124 +7846,7 @@ function AddRowsPanel({ initialType, initialPosition, rows, hasSelection, produc
   )
 }
 
-// ── VersionHistoryPanel ────────────────────────────────────────────────────
-
-interface VersionHistoryPanelProps {
-  marketplace: string
-  productType: string
-  currentRows: Row[]
-  onRestore: (rows: Row[]) => void
-  onClose: () => void
-}
-
-function VersionHistoryPanel({ marketplace, productType, currentRows, onRestore, onClose }: VersionHistoryPanelProps) {
-  const [versions, setVersions] = useState<VersionRecord[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(versionHistoryKey(marketplace, productType)) ?? '[]')
-    } catch { return [] }
-  })
-  const [restoring, setRestoring] = useState<string | null>(null)
-
-  function formatTime(iso: string) {
-    try {
-      const d = new Date(iso)
-      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
-        + ' · ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-    } catch { return iso }
-  }
-
-  function diff(version: VersionRecord) {
-    const currentSkus = new Set(currentRows.map((r) => String(r.item_sku ?? r._rowId)))
-    const versionSkus = new Set(version.rows.map((r) => String(r.item_sku ?? r._rowId)))
-    const added   = currentRows.filter((r) => !versionSkus.has(String(r.item_sku ?? r._rowId))).length
-    const removed = version.rows.filter((r) => !currentSkus.has(String(r.item_sku ?? r._rowId))).length
-    const parts: string[] = []
-    if (added > 0) parts.push(`+${added} row${added !== 1 ? 's' : ''} now`)
-    if (removed > 0) parts.push(`−${removed} row${removed !== 1 ? 's' : ''} then`)
-    if (parts.length === 0) parts.push(`${version.rowCount} rows`)
-    return parts.join(' · ')
-  }
-
-  function clearAll() {
-    if (!confirm('Delete all saved versions? This cannot be undone.')) return
-    try { localStorage.removeItem(versionHistoryKey(marketplace, productType)) } catch {}
-    setVersions([])
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-end pt-16 pr-4" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
-        {/* Header */}
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-violet-500" />
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Version History</h2>
-            <span className="text-xs text-slate-400">{marketplace} · {productType}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {versions.length > 0 && (
-              <button type="button" onClick={clearAll}
-                className="text-xs text-red-400 hover:text-red-600 dark:hover:text-red-300">
-                Clear all
-              </button>
-            )}
-            <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Version list */}
-        <div className="overflow-y-auto flex-1">
-          {versions.length === 0 ? (
-            <div className="px-4 py-8 text-center">
-              <Clock className="w-8 h-8 mx-auto mb-2 text-slate-200 dark:text-slate-700" />
-              <p className="text-sm text-slate-400 italic">No versions saved yet</p>
-              <p className="text-xs text-slate-300 dark:text-slate-600 mt-1">Versions are created automatically on Save, Submit, Import and Discard</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {versions.map((v, i) => (
-                <div key={v.id} className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      {i === 0 && (
-                        <span className="text-[10px] bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-300 px-1.5 py-0.5 rounded font-medium">latest</span>
-                      )}
-                      <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{v.label}</span>
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
-                      <span>{formatTime(v.savedAt)}</span>
-                      <span>·</span>
-                      <span className="text-slate-500 dark:text-slate-400">{diff(v)}</span>
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    loading={restoring === v.id}
-                    onClick={() => {
-                      if (!confirm(`Restore to "${v.label}"? Current rows will be replaced (you can undo).`)) return
-                      setRestoring(v.id)
-                      onRestore(v.rows)
-                    }}
-                    className="text-xs flex-shrink-0"
-                  >
-                    Restore
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 flex-shrink-0">
-          Up to 15 versions saved per marketplace + product type
-        </div>
-      </div>
-    </div>
-  )
-}
+// VersionHistoryPanel removed — merged into HistoryModal (H.1–H.4)
 
 // ── ContextMenu ────────────────────────────────────────────────────────
 

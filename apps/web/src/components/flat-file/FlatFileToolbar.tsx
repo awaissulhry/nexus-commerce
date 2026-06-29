@@ -3,7 +3,7 @@ import { type ReactNode } from 'react'
 import {
   Undo2, Redo2, Copy, ArrowRightLeft, ShieldAlert,
   ClipboardList, ImageIcon, SlidersHorizontal, Replace,
-  Paintbrush2, Wand2, BrainCircuit, Columns,
+  Paintbrush2, Wand2, BrainCircuit, Columns, History,
 } from 'lucide-react'
 import { Tooltip } from '@/design-system/primitives/Tooltip'
 import { Kbd } from '@/design-system/primitives/Kbd'
@@ -182,6 +182,11 @@ export interface FlatFileToolbarProps {
   onColumnsClick?: () => void
   columnsActive?: boolean
 
+  // History (unified push + pull + versions modal)
+  historyCount?: number
+  historyOpen?: boolean
+  onHistoryClick?: () => void
+
   // Channel-specific button slots
   /** e.g. Pull, History buttons (Amazon + eBay) */
   slotAfterReplicate?: ReactNode
@@ -210,6 +215,7 @@ export function FlatFileToolbar({
   aiBulkSelectedCount, onAiBulkClick, aiBulkDisabled,
   aiAssistantOpen, onAiAssistantClick,
   onColumnsClick, columnsActive,
+  historyCount, historyOpen, onHistoryClick,
   slotAfterReplicate, slotAfterSmartPaste, trailing,
 }: FlatFileToolbarProps) {
   const validationBadge = validationErrorCount + validationWarnCount
@@ -480,6 +486,27 @@ export function FlatFileToolbar({
             onClick={onAiAssistantClick}
             active={aiAssistantOpen}
             className={aiAssistantDef.iconColor}
+          />
+        </>
+      )}
+
+      {/* History — unified push + pull + versions */}
+      {onHistoryClick && (
+        <>
+          <TbDivider />
+          <TbBtn
+            icon={<History className="h-3.5 w-3.5" />}
+            title="History"
+            tooltipContent={
+              <ToolTip
+                label="History"
+                description="Push submissions, pull log and version history"
+                shortcut="⌘H"
+              />
+            }
+            onClick={onHistoryClick}
+            active={historyOpen}
+            badge={historyCount || undefined}
           />
         </>
       )}

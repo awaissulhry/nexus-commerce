@@ -18,7 +18,7 @@ import { AddListingPopover } from './AddListingPopover'
 import { EbayImportWizard } from './EbayImportWizard'
 import { AspectsPanel } from './AspectsPanel'
 import { ChannelStrip } from './ChannelStrip'
-import { EbayPushHistoryPanel } from './EbayPushHistoryPanel'
+import { HistoryModal } from '@/components/flat-file/HistoryModal'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import { CascadeModal } from '../_shared/CascadeModal'
 import { Menu } from '@/design-system/components'
@@ -37,7 +37,7 @@ import {
 } from './ebay-columns'
 import { FlatFileMarketStrip } from '@/components/flat-file/FlatFileMarketStrip'
 import { PullDiffModal, type PullDiffApplyResult } from '../amazon-flat-file/PullDiffModal'
-import { PullHistoryDrawer } from '../_shared/PullHistoryDrawer'
+// PullHistoryDrawer removed — merged into HistoryModal (H.1–H.4)
 import { PendingPullBanner } from '../_shared/PendingPullBanner'
 import { TbBtn as SharedTbBtn } from '../_shared/FlatFileIconToolbar'
 import { PULL_GROUPS, pullFieldGroup, type PullGroupId } from '../_shared/pull-field-groups'
@@ -408,7 +408,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [feedStatus, setFeedStatus]           = useState<FeedStatus | null>(null)
   const [publishPanelOpen, setPublishPanelOpen] = useState(false)
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false)
-  const [historyRefreshKey, setHistoryRefreshKey] = useState(0)
+  // historyRefreshKey still incremented after each push (harmless; HistoryModal fetches live on open)
+  const [, setHistoryRefreshKey] = useState(0)
   const [publishTargets, setPublishTargets]   = useState<string[]>(['IT'])
   const [descModal, setDescModal]             = useState<{ rowId: string } | null>(null)
   const [categorySearchOpen, setCategorySearchOpen]   = useState(false)
@@ -426,7 +427,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     skusReturned: number
     jobId: string
   } | null>(null)
-  const [pullHistoryOpen, setPullHistoryOpen] = useState(false)
+  // pullHistoryOpen removed — merged into historyPanelOpen (HistoryModal H.1–H.4)
   const [pendingPullReview, setPendingPullReview] = useState<{
     jobId: string
     rows: BaseRow[]
@@ -1228,10 +1229,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         </div>
       )}
       <div className="flex items-center gap-2">
-        <Button size="sm" variant="ghost" onClick={() => setHistoryPanelOpen(true)} title="Push history — every push and its full per-SKU result, kept durably">
-          <History className="w-3.5 h-3.5 mr-1.5" />
-          History
-        </Button>
         <Button size="sm" onClick={() => setPublishPanelOpen((o) => !o)} disabled={pushing || quickUpdating} loading={pushing || quickUpdating}>
           <Send className="w-3.5 h-3.5 mr-1.5" />
           Push to eBay
@@ -1249,12 +1246,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           onClose={() => { setPublishPanelOpen(false); setIncompleteBefore([]); setBlockingErrors([]) }}
         />
       )}
-      {historyPanelOpen && (
-        <EbayPushHistoryPanel refreshKey={historyRefreshKey} onClose={() => setHistoryPanelOpen(false)} />
-      )}
     </div>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [pushing, quickUpdating, publishPanelOpen, publishTargets, incompleteBefore, blockingErrors, historyPanelOpen, historyRefreshKey])
+  ), [pushing, quickUpdating, publishPanelOpen, publishTargets, incompleteBefore, blockingErrors])
 
   // ── Slot: feed banner ──────────────────────────────────────────────────
 
@@ -1394,12 +1388,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         )}
       </div>
 
-      {/* Pull history — recent applied pulls + one-click re-pull */}
+      {/* History — unified push, pull history + one-click re-pull */}
       <SharedTbBtn
         icon={<History className="w-3.5 h-3.5" />}
-        title="Pull history — review past pulls and re-run with same scope"
-        onClick={() => setPullHistoryOpen(true)}
-        active={pullHistoryOpen}
+        title="History — push submissions, pull log and re-pull"
+        onClick={() => setHistoryPanelOpen(true)}
+        active={historyPanelOpen}
       />
 
       {/* Import from Amazon — pre-fill eBay fields from matching Amazon listings (PC: moved here from renderToolbarImport so all data-fetch actions sit together) */}
@@ -1457,7 +1451,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       )}
     </>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, pullHistoryOpen, addListingOpen, variantAxisNames, exportEbay, importWizardOpen, handleImport, exportColumns, importInitialFile])
+  ), [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, exportEbay, importWizardOpen, handleImport, exportColumns, importInitialFile])
 
   // ── Slot: import button ────────────────────────────────────────────────
 
@@ -1668,19 +1662,23 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         if (f) { setImportInitialFile(f); setImportWizardOpen(true) }
       }}
     >
-      {/* Pull history drawer — Phase 4 */}
-      <PullHistoryDrawer
-        open={pullHistoryOpen}
-        channel="EBAY"
+      {/* Unified history modal — H.1–H.4 */}
+      <HistoryModal
+        open={historyPanelOpen}
+        onClose={() => setHistoryPanelOpen(false)}
+        channel="ebay"
         marketplace={marketplace}
+        onResubmitErroredSkus={(_skus) => {
+          // eBay re-submit: close modal (operator manually pushes after seeing errored SKUs)
+          setHistoryPanelOpen(false)
+        }}
         onRePull={(rec) => {
-          setPullHistoryOpen(false)
+          setHistoryPanelOpen(false)
           const isAllCols = rec.columnsApplied.includes('all') || rec.columnsApplied.length === 0
           const cols = (isAllCols ? 'all' : rec.columnsApplied) as 'all' | PullGroupId[]
           if (!rec.skusRequested.length) return
           void startPullJob({ skus: rec.skusRequested, columns: cols })
         }}
-        onClose={() => setPullHistoryOpen(false)}
       />
 
       {/* P5: completed-while-away banner */}
