@@ -85,9 +85,11 @@ export interface AppRailProps {
   header?: ReactNode
   /** Footer chrome (recently-viewed, user profile). Visible only when expanded. */
   footer?: ReactNode
+  /** When true the rail stays expanded (docked) instead of hover-collapsing. */
+  pinned?: boolean
 }
 
-export function AppRail({ navItems, brand, header, footer }: AppRailProps) {
+export function AppRail({ navItems, brand, header, footer, pinned }: AppRailProps) {
   const pathname = usePathname() || ''
 
   const isActiveHref = (href: string) =>
@@ -122,7 +124,7 @@ export function AppRail({ navItems, brand, header, footer }: AppRailProps) {
     setOpen((o) => ({ ...o, [href]: !o[href] }))
 
   return (
-    <aside className="h10-rail" data-print-hide>
+    <aside className={`h10-rail${pinned ? ' pinned' : ''}`} data-print-hide>
       {/* Brand mark: compact "N" (or custom mark) collapsed; full wordmark on hover */}
       <div className="h10-brand">
         <span className="logo" aria-hidden="true">{brand.mark}</span>

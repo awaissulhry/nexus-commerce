@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Search, Sun, Moon, Monitor, ChevronDown } from 'lucide-react'
+import { Search, Sun, Moon, Monitor, ChevronDown, Pin, PinOff } from 'lucide-react'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTheme } from '@/lib/theme/use-theme'
@@ -157,6 +157,39 @@ export function AppNavRail() {
     })
   }, [])
 
+  // Pin-open: lock the rail expanded (docked) instead of hover-collapsing.
+  // Persisted; reserves the expanded width app-wide via --rail-reserve (read by
+  // AppShell's padding + the standalone .h10-shell). Initial state is false on
+  // both server and client, then hydrated from localStorage after mount, so
+  // there's no hydration mismatch.
+  const [pinned, setPinned] = useState(false)
+  useEffect(() => {
+    try {
+      setPinned(localStorage.getItem('nexus.rail.pinned') === '1')
+    } catch {
+      /* ignore */
+    }
+  }, [])
+  const togglePin = useCallback(() => {
+    setPinned((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('nexus.rail.pinned', next ? '1' : '0')
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }, [])
+  useEffect(() => {
+    const el = document.documentElement
+    if (pinned) el.style.setProperty('--rail-reserve', '344px')
+    else el.style.removeProperty('--rail-reserve')
+    return () => {
+      el.style.removeProperty('--rail-reserve')
+    }
+  }, [pinned])
+
   const header = (
     <>
       <div className="h10-railctl">
@@ -177,6 +210,16 @@ export function AppNavRail() {
           aria-label="Search"
         >
           <Search size={16} />
+        </button>
+        <button
+          type="button"
+          className="h10-railbtn h10-railpin"
+          onClick={togglePin}
+          title={pinned ? 'Unpin sidebar' : 'Pin sidebar open'}
+          aria-label={pinned ? 'Unpin sidebar' : 'Pin sidebar open'}
+          aria-pressed={pinned}
+        >
+          {pinned ? <PinOff size={16} /> : <Pin size={16} />}
         </button>
       </div>
       <button type="button" className="h10-ws">
@@ -239,6 +282,7 @@ export function AppNavRail() {
       brand={{ mark: 'N', name: 'Nexus' }}
       header={header}
       footer={footer}
+      pinned={pinned}
     />
   )
 }
