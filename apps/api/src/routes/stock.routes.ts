@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { applyStockMovement, listStockMovements } from '../services/stock-movement.service.js'
+import { computeLocationAdjustment, LocationAdjustmentError } from '../services/location-adjustment.js'
+import { summarizeProductStock } from '../services/stock-summary.js'
 import {
   resolveRows,
   previewImport,
@@ -2859,6 +2861,86 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       return { ok: true, movement }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/:id] adjust failed')
+      return reply.code(400).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/adjust-location ─────────────────────────────
+  // Set a product's absolute on-hand at ONE location from the products
+  // grid. Reads the current level server-side, derives the delta, and
+  // writes one audited StockMovement via applyStockMovement (which
+  // upserts, so a location with no level yet is created). FBA + Shopify
+  // are read-only. Keyed on productId only (variations are child
+  // Product rows; ProductVariation is deprecated).
+  fastify.post('/stock/adjust-location', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        productId?: string
+        locationId?: string
+        value?: number
+        reason?: string
+        notes?: string
+      }
+      const productId = typeof body.productId === 'string' ? body.productId : ''
+      const locationId = typeof body.locationId === 'string' ? body.locationId : ''
+      const value = Number(body.value)
+      if (!productId || !locationId) {
+        return reply.code(400).send({ error: 'productId and locationId are required', code: 'MISSING_FIELDS' })
+      }
+
+      const ALLOWED_REASONS = ['MANUAL_ADJUSTMENT', 'INVENTORY_COUNT', 'WRITE_OFF']
+      const reason = ALLOWED_REASONS.includes(body.reason ?? '')
+        ? (body.reason as 'MANUAL_ADJUSTMENT' | 'INVENTORY_COUNT' | 'WRITE_OFF')
+        : 'MANUAL_ADJUSTMENT'
+
+      const location = await prisma.stockLocation.findUnique({
+        where: { id: locationId },
+        select: { type: true },
+      })
+      if (!location) return reply.code(404).send({ error: 'Location not found', code: 'NO_LOCATION' })
+
+      // Fresh server-side read → delta derived here, never from the client.
+      const existing = await prisma.stockLevel.findFirst({
+        where: { locationId, productId, variationId: null },
+        select: { quantity: true, reserved: true },
+      })
+      const currentQuantity = existing?.quantity ?? 0
+      const currentReserved = existing?.reserved ?? 0
+
+      const adj = computeLocationAdjustment({
+        locationType: location.type,
+        currentQuantity,
+        currentReserved,
+        value,
+      })
+
+      let movement: unknown = null
+      if (!adj.noop) {
+        movement = await applyStockMovement({
+          productId,
+          locationId,
+          change: adj.change,
+          reason,
+          notes: body.notes,
+          actor: 'products-grid-location-edit',
+        })
+      }
+
+      // Recompute the product's split so the grid cell can reconcile.
+      const levels = await prisma.stockLevel.findMany({
+        where: { productId },
+        select: { quantity: true, location: { select: { type: true } } },
+      })
+      const totals = summarizeProductStock(
+        levels.map((l) => ({ locationType: l.location.type, quantity: l.quantity })),
+      )
+
+      return { ok: true, noop: adj.noop, movement, totals }
+    } catch (error: any) {
+      if (error instanceof LocationAdjustmentError) {
+        return reply.code(400).send({ error: error.message, code: error.code })
+      }
+      fastify.log.error({ err: error }, '[stock/adjust-location] failed')
       return reply.code(400).send({ error: error?.message ?? String(error) })
     }
   })
