@@ -11,7 +11,7 @@
  * the readback the way getExistingRows does.
  */
 import { describe, it, expect } from 'vitest'
-import { AmazonFlatFileService, isBlankFeedValue, applySnapshotOverlay, buildSchemaEnumCodeMap, buildSchemaFieldHints } from './flat-file.service.js'
+import { AmazonFlatFileService, isBlankFeedValue, applySnapshotOverlay, buildSchemaEnumCodeMap, buildSchemaFieldHints, normalizeParentage } from './flat-file.service.js'
 
 const svc = new AmazonFlatFileService({} as any, {} as any)
 // private but pure — call through an any-cast (same args syncRowsToPlatform uses)
@@ -158,10 +158,10 @@ describe('RR — applySnapshotOverlay (lossless grid round-trip)', () => {
     expect(row.material).toBe('Cordura')
     expect(row.fabric_type).toBe('100% Nylon')
   })
-  it('overlays live structured columns (price/title repriced/edited elsewhere)', () => {
+  it('overlays live price (repriced elsewhere); snapshot wins for title (not in SNAPSHOT_LIVE_OVERLAY)', () => {
     const row = applySnapshotOverlay(snapshot, liveRow)
-    expect(row.purchasable_offer__our_price).toBe('199.99')
-    expect(row.item_name).toBe('XAVIA GALE Giacca (live title)')
+    expect(row.purchasable_offer__our_price).toBe('199.99') // live price overlaid
+    expect(row.item_name).toBe('XAVIA GALE Giacca (pulled)') // snapshot title wins — not a live-overlay key
   })
   it('blanks the quantity for FBA rows (Amazon-managed; a merchant qty would flip to FBM)', () => {
     const row = applySnapshotOverlay(snapshot, liveRow)
@@ -303,5 +303,131 @@ describe('feed schema hints — types, localization, parent', () => {
     const m = build({ item_sku: 'P1', parentage_level: 'Parent', variation_theme: 'SIZE', _isNew: true })
     expect(m.attributes.parentage_level[0].value).toBe('parent')
     expect(m.attributes.variation_theme[0].value).toBe('SIZE')
+  })
+})
+
+// ── Phase 6 — Parentage localization end-to-end tests ─────────────────────
+// These lock the three-layer fix: normalizeParentage (canonical lookup),
+// applySnapshotOverlay (read healing), and buildJsonFeedBody (feed emit).
+
+describe('normalizeParentage — label→canonical normalizer', () => {
+  const IT_CODE_MAP = { 'Articolo padre': 'parent', 'Articolo figlio': 'child' }
+
+  it('already canonical codes pass through unchanged', () => {
+    expect(normalizeParentage('parent')).toBe('parent')
+    expect(normalizeParentage('child')).toBe('child')
+  })
+  it('title-case variants normalize regardless of codeMap', () => {
+    expect(normalizeParentage('Parent')).toBe('parent')
+    expect(normalizeParentage('Child')).toBe('child')
+    expect(normalizeParentage('PARENT')).toBe('parent')
+  })
+  it('localized IT labels convert to canonical via codeMap', () => {
+    expect(normalizeParentage('Articolo padre', IT_CODE_MAP)).toBe('parent')
+    expect(normalizeParentage('Articolo figlio', IT_CODE_MAP)).toBe('child')
+  })
+  it('empty string → empty string (no-op)', () => {
+    expect(normalizeParentage('')).toBe('')
+  })
+  it('unknown value without codeMap → empty string', () => {
+    expect(normalizeParentage('something_else')).toBe('')
+  })
+  it('localized label without codeMap → empty string (cannot resolve)', () => {
+    expect(normalizeParentage('Articolo padre')).toBe('')
+  })
+})
+
+describe('applySnapshotOverlay — parentage healing', () => {
+  const baseSnap = { item_sku: 'X', item_name: 'Jacket', size: 'M' }
+  const baseLive: any = {
+    item_sku: 'X', item_name: 'Jacket (live)', parentage_level: 'parent',
+    _rowId: 'r', _productId: 'p', _isNew: false, _status: 'idle',
+    _listingId: 'l', _version: 1, _asin: null, _listingStatus: null,
+    _fieldStates: {}, _masterValues: null,
+  }
+
+  it('Phase 1: localized label in snapshot → healed to canonical on read', () => {
+    const snap = { ...baseSnap, parentage_level: 'Articolo padre' }
+    const row = applySnapshotOverlay(snap, baseLive, { 'Articolo padre': 'parent', 'Articolo figlio': 'child' })
+    expect(row.parentage_level).toBe('parent')
+  })
+  it('Phase 1: title-case "Parent" in snapshot → normalized to "parent"', () => {
+    const snap = { ...baseSnap, parentage_level: 'Parent' }
+    const row = applySnapshotOverlay(snap, baseLive)
+    expect(row.parentage_level).toBe('parent')
+  })
+  it('Phase 3: empty snapshot parentage_level → fills from liveRow (Product.isParent inferred)', () => {
+    const snap = { ...baseSnap, parentage_level: '' }
+    const row = applySnapshotOverlay(snap, baseLive) // liveRow.parentage_level = 'parent'
+    expect(row.parentage_level).toBe('parent')
+  })
+  it('Phase 3: missing parentage_level key in snapshot → fills from liveRow', () => {
+    const row = applySnapshotOverlay(baseSnap, baseLive)
+    expect(row.parentage_level).toBe('parent')
+  })
+  it('Phase 3: both empty → stays empty (no false positive)', () => {
+    const snap = { ...baseSnap, parentage_level: '' }
+    const live = { ...baseLive, parentage_level: '' }
+    const row = applySnapshotOverlay(snap, live)
+    expect(row.parentage_level).toBe('')
+  })
+  it('canonical value already correct → unchanged (no spurious mutation)', () => {
+    const snap = { ...baseSnap, parentage_level: 'parent' }
+    const row = applySnapshotOverlay(snap, baseLive)
+    expect(row.parentage_level).toBe('parent')
+  })
+})
+
+describe('buildJsonFeedBody — parentage + condition_type + variation_theme via enumCodeMap', () => {
+  const svc5 = new AmazonFlatFileService({} as any, {} as any)
+  const build = (row: any, feedSchema: any = {}) =>
+    JSON.parse(svc5.buildJsonFeedBody([row], 'IT', 'SELLER', {}, feedSchema)).messages[0]
+
+  const IT_SCHEMA = {
+    enumCodeMap: {
+      'parentage_level': { 'Articolo padre': 'parent', 'Articolo figlio': 'child' },
+      'purchasable_offer.condition_type': { 'Nuovo': 'new_new', 'Usato': 'used_good' },
+      'variation_theme': { 'Taglia': 'SIZE', 'Colore': 'COLOR' },
+    },
+  }
+
+  it('Phase 1: localized parentage label in row → canonical code in feed', () => {
+    const m = build({ item_sku: 'P1', parentage_level: 'Articolo padre', variation_theme: 'SIZE', _isNew: true }, IT_SCHEMA)
+    expect(m.attributes.parentage_level[0].value).toBe('parent')
+  })
+  it('Phase 1: parent row emits parentage_level (was silently dropped before fix)', () => {
+    const m = build({ item_sku: 'P2', parentage_level: 'parent', variation_theme: 'SIZE', _isNew: true }, IT_SCHEMA)
+    expect(m.attributes.parentage_level).toBeDefined()
+    expect(m.attributes.parentage_level[0].value).toBe('parent')
+  })
+  it('Phase 2: localized condition_type → canonical code in offer', () => {
+    const m = build(
+      { item_sku: 'C1', purchasable_offer__condition_type: 'Nuovo', purchasable_offer__our_price: '99' },
+      IT_SCHEMA,
+    )
+    const offer = m.attributes.purchasable_offer?.[0]
+    expect(offer?.condition_type).toBe('new_new')
+  })
+  it('Phase 2: already-canonical condition_type passes through unchanged', () => {
+    const m = build(
+      { item_sku: 'C2', purchasable_offer__condition_type: 'new_new', purchasable_offer__our_price: '99' },
+      IT_SCHEMA,
+    )
+    expect(m.attributes.purchasable_offer?.[0]?.condition_type).toBe('new_new')
+  })
+  it('Phase 2: localized variation_theme → canonical code in feed', () => {
+    const m = build(
+      { item_sku: 'V1', parentage_level: 'parent', variation_theme: 'Taglia', _isNew: true },
+      IT_SCHEMA,
+    )
+    expect(m.attributes.variation_theme?.[0]?.value).toBe('SIZE')
+  })
+  it('child row emits parentage_level + child_parent_sku_relationship', () => {
+    const m = build(
+      { item_sku: 'CH1', parentage_level: 'child', parent_sku: 'PAR1' },
+      IT_SCHEMA,
+    )
+    expect(m.attributes.parentage_level[0].value).toBe('child')
+    expect(m.attributes.child_parent_sku_relationship[0].parent_sku).toBe('PAR1')
   })
 })
