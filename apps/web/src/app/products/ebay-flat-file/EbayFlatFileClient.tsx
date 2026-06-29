@@ -21,7 +21,6 @@ import { ChannelStrip } from './ChannelStrip'
 import { HistoryModal } from '@/components/flat-file/HistoryModal'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import { CascadeModal } from '../_shared/CascadeModal'
-import { Menu } from '@/design-system/components'
 // IE.1 — load the H10 design-system CSS so DS components (Menu, the import wizard)
 // render styled on this page (namespaced --h10-*/.h10-ds-* — inert for the rest).
 import '@/design-system/styles/tokens.css'
@@ -321,30 +320,6 @@ function PublishPanel({ selectedCount, publishTargets, onChangeTargets, onPublis
   )
 }
 
-// ── Feed status banner ─────────────────────────────────────────────────────
-
-function FeedStatusBanner({ feedStatus, onPoll }: { feedStatus: FeedStatus; onPoll: () => void }) {
-  const done   = ['COMPLETED', 'COMPLETED_WITH_ERROR'].includes(feedStatus.status)
-  const failed = feedStatus.status === 'FAILED'
-  return (
-    <div className={cn('flex items-center gap-3 px-4 py-2 text-sm border-b',
-      done && !failed ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300'
-        : failed ? 'bg-red-50 border-red-200 text-red-800 dark:bg-red-950/30 dark:text-red-300'
-        : 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300')}>
-      {!done && !failed && <Loader2 className="h-4 w-4 animate-spin" />}
-      {done && !failed && <AlertCircle className="h-4 w-4" />}
-      <span className="font-medium">Feed {feedStatus.status}</span>
-      {feedStatus.summaryCount != null && <span className="text-xs">{feedStatus.summaryCount} processed</span>}
-      {feedStatus.failureCount != null && feedStatus.failureCount > 0 && (
-        <span className="text-xs text-red-600">{feedStatus.failureCount} failed</span>
-      )}
-      {!done && !failed && (
-        <button onClick={onPoll} className="ml-auto text-xs underline">Check status</button>
-      )}
-    </div>
-  )
-}
-
 // ── Page props ─────────────────────────────────────────────────────────────
 
 interface Props {
@@ -410,6 +385,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false)
   // historyRefreshKey still incremented after each push (harmless; HistoryModal fetches live on open)
   const [, setHistoryRefreshKey] = useState(0)
+  // Refs so fileMenuItems callbacks can access latest FlatFileGrid ctx without stale closures
+  const latestRowsRef = useRef<BaseRow[]>([])
+  const latestSelectedRowsRef = useRef<Set<string>>(new Set())
+  const latestSetRowsRef = useRef<((rows: BaseRow[]) => void) | null>(null)
+  const latestPushHistoryRef = useRef<((rows: BaseRow[]) => void) | null>(null)
   const [publishTargets, setPublishTargets]   = useState<string[]>(['IT'])
   const [descModal, setDescModal]             = useState<{ rowId: string } | null>(null)
   const [categorySearchOpen, setCategorySearchOpen]   = useState(false)
@@ -932,7 +912,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // setRows + pushHistory, which is all this needs.
 
   async function importFromAmazon(ctx: {
-    setRows: React.Dispatch<React.SetStateAction<BaseRow[]>>
+    setRows: (rows: BaseRow[]) => void
     pushHistory: (rows: BaseRow[]) => void
   }) {
     try {
@@ -946,18 +926,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     } catch (err) {
       toast.error('Import failed: ' + (err instanceof Error ? err.message : String(err)))
     }
-  }
-
-  // ── API: poll feed status ─────────────────────────────────────────────
-
-  async function pollFeedStatus() {
-    if (!feedStatus?.taskId) return
-    try {
-      const res = await fetch(`${BACKEND}/api/ebay/flat-file/feed/${feedStatus.taskId}`)
-      if (!res.ok) return
-      const json = await res.json() as FeedStatus
-      setFeedStatus(json)
-    } catch { /* ignore */ }
   }
 
   // ── onCellChange: trigger category schema load ─────────────────────────
@@ -1229,6 +1197,25 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         </div>
       )}
       <div className="flex items-center gap-2">
+        {feedStatus && (() => {
+          const done = ['COMPLETED', 'COMPLETED_WITH_ERROR'].includes(feedStatus.status)
+          const failed = feedStatus.status === 'FAILED'
+          return (
+            <span className={cn(
+              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium leading-none',
+              !done && !failed ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                : done && !failed ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                : 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300',
+            )}>
+              {!done && !failed && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
+              {feedStatus.status === 'COMPLETED' ? 'Sent'
+                : feedStatus.status === 'FAILED' ? 'Failed'
+                : feedStatus.status === 'COMPLETED_WITH_ERROR' ? 'Partial'
+                : 'Sending…'}
+              {feedStatus.failureCount != null && feedStatus.failureCount > 0 && ` · ${feedStatus.failureCount} err`}
+            </span>
+          )
+        })()}
         <Button size="sm" onClick={() => setPublishPanelOpen((o) => !o)} disabled={pushing || quickUpdating} loading={pushing || quickUpdating}>
           <Send className="w-3.5 h-3.5 mr-1.5" />
           Push to eBay
@@ -1248,13 +1235,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       )}
     </div>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [pushing, quickUpdating, publishPanelOpen, publishTargets, incompleteBefore, blockingErrors])
+  ), [pushing, quickUpdating, publishPanelOpen, publishTargets, incompleteBefore, blockingErrors, feedStatus])
 
   // ── Slot: feed banner ──────────────────────────────────────────────────
 
-  const renderFeedBanner = useCallback(() => feedStatus ? (
-    <FeedStatusBanner feedStatus={feedStatus} onPoll={pollFeedStatus} />
-  ) : null, [feedStatus]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Feed status is shown inline in Bar 1 (renderPushExtras chip) — no longer needed as a banner below the toolbar
+  const renderFeedBanner = useCallback(() => null, [])
 
   // ── Slot: fetch button ─────────────────────────────────────────────────
 
@@ -1331,127 +1317,129 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     toast.success(`Imported ${imported.length} row${imported.length === 1 ? '' : 's'} — ${added} added, ${updated} updated`)
   }, [toast])
 
-  const renderToolbarFetch = useCallback(({ rows, selectedRows, setRows, pushHistory }: ToolbarFetchCtx) => (
-    <>
-      {/* Add listing row generator */}
-      <div className="relative">
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => setAddListingOpen((o) => !o)}
-          title="Add a new listing — generates parent + variant rows in the grid"
-        >
-          <Plus className="w-3.5 h-3.5 mr-1.5" />
-          Add listing
-        </Button>
-        {addListingOpen && (
-          <AddListingPopover
-            categoryAxisNames={variantAxisNames}
-            onConfirm={(newRows) => {
-              const next = [...rows, ...newRows]
-              pushHistory(next)
-              setRows(next)
-            }}
-            onClose={() => setAddListingOpen(false)}
-          />
-        )}
-      </div>
+  // ── File menu items (Export + Import) — injected into FlatFileGrid's File menu ──
+  const fileMenuItems = useMemo(() => [
+    {
+      label: 'Export as CSV',
+      icon: <Download className="w-3.5 h-3.5" />,
+      onClick: () => void exportEbay('csv', 'all', latestRowsRef.current, latestSelectedRowsRef.current),
+    },
+    {
+      label: 'Export as Excel (.xlsx)',
+      icon: <Download className="w-3.5 h-3.5" />,
+      onClick: () => void exportEbay('xlsx', 'all', latestRowsRef.current, latestSelectedRowsRef.current),
+    },
+    {
+      label: 'Export as TSV',
+      icon: <Download className="w-3.5 h-3.5" />,
+      onClick: () => void exportEbay('tsv', 'all', latestRowsRef.current, latestSelectedRowsRef.current),
+    },
+    { separator: true, label: '' },
+    {
+      label: 'Import from Amazon',
+      icon: <ArrowRightLeft className="w-3.5 h-3.5" />,
+      onClick: () => {
+        const s = latestSetRowsRef.current; const p = latestPushHistoryRef.current
+        if (s && p) void importFromAmazon({ setRows: s, pushHistory: p })
+      },
+    },
+    {
+      label: 'Import from file',
+      icon: <Upload className="w-3.5 h-3.5" />,
+      onClick: () => setImportWizardOpen(true),
+    },
+  ], [exportEbay])
 
-      {/* Phase 3 — Pull from eBay (full data, undoable, diff preview) */}
-      <div className="relative">
+  const renderToolbarFetch = useCallback(({ rows, selectedRows, setRows, pushHistory }: ToolbarFetchCtx) => {
+    // Keep refs current so fileMenuItems callbacks always act on the latest rows
+    latestRowsRef.current = rows
+    latestSelectedRowsRef.current = selectedRows
+    latestSetRowsRef.current = setRows
+    latestPushHistoryRef.current = pushHistory
+    return (
+      <>
+        {/* Add listing row generator */}
+        <div className="relative">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setAddListingOpen((o) => !o)}
+            title="Add a new listing — generates parent + variant rows in the grid"
+          >
+            <Plus className="w-3.5 h-3.5 mr-1.5" />
+            Add listing
+          </Button>
+          {addListingOpen && (
+            <AddListingPopover
+              categoryAxisNames={variantAxisNames}
+              onConfirm={(newRows) => {
+                const next = [...rows, ...newRows]
+                pushHistory(next)
+                setRows(next)
+              }}
+              onClose={() => setAddListingOpen(false)}
+            />
+          )}
+        </div>
+
+        {/* Phase 3 — Pull from eBay (full data, undoable, diff preview) */}
+        <div className="relative">
+          <SharedTbBtn
+            icon={pulling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            title={`Pull from eBay ${marketplace} — full listing data with diff preview, undoable with ⌘Z. Does not touch the database until you click Save.`}
+            onClick={() => setPullPanelOpen((o) => !o)}
+            disabled={!rows.length || pulling}
+            active={pullPanelOpen}
+          />
+          {pullPanelOpen && (
+            <PullFromEbayPanel
+              selectedCount={selectedRows.size}
+              totalCount={rows.length}
+              currentMarket={marketplace}
+              pulling={pulling}
+              onPull={(opts) => {
+                let skus: string[]
+                if (opts.scope === 'selected') {
+                  skus = [...selectedRows]
+                    .map((id) => String(rows.find((r) => r._rowId === id)?.sku ?? ''))
+                    .filter(Boolean)
+                } else {
+                  skus = rows.map((r) => String(r.sku ?? '')).filter(Boolean)
+                }
+                return startPullJob({ skus, columns: opts.columns })
+              }}
+              onClose={() => setPullPanelOpen(false)}
+            />
+          )}
+        </div>
+
+        {/* History — unified push, pull history + one-click re-pull */}
         <SharedTbBtn
-          icon={pulling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-          title={`Pull from eBay ${marketplace} — full listing data with diff preview, undoable with ⌘Z. Does not touch the database until you click Save.`}
-          onClick={() => setPullPanelOpen((o) => !o)}
-          disabled={!rows.length || pulling}
-          active={pullPanelOpen}
+          icon={<History className="w-3.5 h-3.5" />}
+          title="History — push submissions, pull log and re-pull"
+          onClick={() => setHistoryPanelOpen(true)}
+          active={historyPanelOpen}
         />
-        {pullPanelOpen && (
-          <PullFromEbayPanel
-            selectedCount={selectedRows.size}
-            totalCount={rows.length}
-            currentMarket={marketplace}
-            pulling={pulling}
-            onPull={(opts) => {
-              let skus: string[]
-              if (opts.scope === 'selected') {
-                skus = [...selectedRows]
-                  .map((id) => String(rows.find((r) => r._rowId === id)?.sku ?? ''))
-                  .filter(Boolean)
-              } else {
-                skus = rows.map((r) => String(r.sku ?? '')).filter(Boolean)
-              }
-              return startPullJob({ skus, columns: opts.columns })
-            }}
-            onClose={() => setPullPanelOpen(false)}
-          />
+
+        {/* Inline progress / result indicator */}
+        {pullProgress && (
+          <span className="text-[11px] flex items-center gap-1 flex-shrink-0 text-blue-600 dark:text-blue-400 ml-1">
+            <RefreshCw className="w-3 h-3 animate-spin" />
+            Pulling {pullProgress.progress}/{pullProgress.total || '?'} from {marketplace}…
+          </span>
         )}
-      </div>
-
-      {/* History — unified push, pull history + one-click re-pull */}
-      <SharedTbBtn
-        icon={<History className="w-3.5 h-3.5" />}
-        title="History — push submissions, pull log and re-pull"
-        onClick={() => setHistoryPanelOpen(true)}
-        active={historyPanelOpen}
-      />
-
-      {/* Import from Amazon — pre-fill eBay fields from matching Amazon listings (PC: moved here from renderToolbarImport so all data-fetch actions sit together) */}
-      <SharedTbBtn
-        icon={<ArrowRightLeft className="w-3.5 h-3.5" />}
-        title="Import from Amazon — pre-fill eBay fields from matching Amazon listings"
-        onClick={() => void importFromAmazon({ setRows, pushHistory })}
-      />
-
-      {/* IE.1 — Export to TSV / CSV / XLSX (+ a blank template to fill & re-import) */}
-      <Menu
-        label={<><Download className="w-3.5 h-3.5 mr-1.5" />Export</>}
-        items={[
-          { id: 'all-csv', label: 'All rows · CSV', onSelect: () => void exportEbay('csv', 'all', rows, selectedRows) },
-          { id: 'all-xlsx', label: 'All rows · Excel (.xlsx)', onSelect: () => void exportEbay('xlsx', 'all', rows, selectedRows) },
-          { id: 'all-tsv', label: 'All rows · TSV', onSelect: () => void exportEbay('tsv', 'all', rows, selectedRows) },
-          ...(selectedRows.size > 0
-            ? [{ id: 'sel-csv', label: `${selectedRows.size} selected · CSV`, onSelect: () => void exportEbay('csv', 'selected', rows, selectedRows) }]
-            : []),
-          { id: 'template', label: 'Blank template · CSV', onSelect: () => void exportEbay('csv', 'template', rows, selectedRows) },
-        ]}
-      />
-
-      {/* IE.2 — Import from file (CSV / Excel / JSON) with guided column mapping */}
-      <SharedTbBtn
-        icon={<Upload className="w-3.5 h-3.5" />}
-        title="Import from file — CSV, Excel or JSON, with guided column mapping"
-        onClick={() => setImportWizardOpen(true)}
-        active={importWizardOpen}
-      />
-      <EbayImportWizard
-        open={importWizardOpen}
-        onClose={() => { setImportWizardOpen(false); setImportInitialFile(null) }}
-        columns={exportColumns}
-        existingSkus={new Set(rows.map((r) => String(r.sku ?? '').trim()).filter(Boolean))}
-        marketplace={marketplace}
-        initialFile={importInitialFile}
-        onImport={(imported, mode) => handleImport(imported, mode, rows, setRows, pushHistory)}
-      />
-
-      {/* Inline progress / result indicator */}
-      {pullProgress && (
-        <span className="text-[11px] flex items-center gap-1 flex-shrink-0 text-blue-600 dark:text-blue-400 ml-1">
-          <RefreshCw className="w-3 h-3 animate-spin" />
-          Pulling {pullProgress.progress}/{pullProgress.total || '?'} from {marketplace}…
-        </span>
-      )}
-      {pullResult && !pullProgress && (
-        <span className="text-[11px] flex items-center gap-1 flex-shrink-0 text-emerald-600 dark:text-emerald-400 ml-1">
-          <CheckCircle2 className="w-3 h-3" />
-          Pulled {pullResult.pulled}
-          {pullResult.skipped > 0 && ` · ${pullResult.skipped} not on ${marketplace}`}
-          {' · ⌘Z to undo'}
-        </span>
-      )}
-    </>
+        {pullResult && !pullProgress && (
+          <span className="text-[11px] flex items-center gap-1 flex-shrink-0 text-emerald-600 dark:text-emerald-400 ml-1">
+            <CheckCircle2 className="w-3 h-3" />
+            Pulled {pullResult.pulled}
+            {pullResult.skipped > 0 && ` · ${pullResult.skipped} not on ${marketplace}`}
+            {' · ⌘Z to undo'}
+          </span>
+        )}
+      </>
+    )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, exportEbay, importWizardOpen, handleImport, exportColumns, importInitialFile])
+  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames])
 
   // ── Slot: import button ────────────────────────────────────────────────
 
@@ -1592,10 +1580,21 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             onClose={() => { setPullDiffOpen(false); setPullDiffData(null) }}
           />
         )}
+
+        {/* IE.2 — Import wizard (moved from renderToolbarFetch to keep toolbar clean) */}
+        <EbayImportWizard
+          open={importWizardOpen}
+          onClose={() => { setImportWizardOpen(false); setImportInitialFile(null) }}
+          columns={exportColumns}
+          existingSkus={new Set(rows.map((r) => String(r.sku ?? '').trim()).filter(Boolean))}
+          marketplace={marketplace}
+          initialFile={importInitialFile}
+          onImport={(imported, mode) => handleImport(imported, mode, rows, setRows, pushHistory)}
+        />
       </>
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [descModal, categorySearchOpen, categorySearchRowId, marketplace, loadCategorySchema, pullDiffData, pullDiffOpen, makePullDiffApplyHandler, aspectsPanelRowId, categoryColumns, valueOrderOpen, familyId])
+  }, [descModal, categorySearchOpen, categorySearchRowId, marketplace, loadCategorySchema, pullDiffData, pullDiffOpen, makePullDiffApplyHandler, aspectsPanelRowId, categoryColumns, valueOrderOpen, familyId, importWizardOpen, importInitialFile, exportColumns, handleImport])
 
   // ── Group key for eBay variations ──────────────────────────────────────
 
@@ -1767,6 +1766,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           <Plus className="w-3.5 h-3.5 mr-1.5" />Add your first listing
         </Button>
       )}
+      fileMenuItems={fileMenuItems}
       renderFeedBanner={renderFeedBanner}
       renderModals={renderModals as (ctx: ModalsCtx) => React.ReactNode}
       renderToolbarFetch={renderToolbarFetch}
