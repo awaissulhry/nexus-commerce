@@ -93,21 +93,34 @@
   margin-top: 1px;
 }
 
-/* ── Toolbar row ─────────────────────────────────────────── */
-.tbar {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-bottom: 11px;
-}
-
+/* ── Toolbar (inside .h10-ds-gridcard) ───────────────────── */
 .searchField {
   flex: 1;
+  min-width: 220px;
   max-width: 340px;
 }
 
-.spacer {
-  flex: 1;
+/* Selection actions cluster (shown in the toolbar left slot when rows picked) */
+.selActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.clearSel {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.clearSel:hover {
+  color: var(--color-primary);
 }
 
 /* ── Live indicator chip ─────────────────────────────────── */
@@ -131,69 +144,9 @@
   background: var(--h10-live);
 }
 
-/* ── Quick-lens chip row ─────────────────────────────────── */
-.lenses {
-  display: flex;
-  gap: 7px;
+/* ── Filter bar wrapper (DS FilterBar spacing) ───────────── */
+.filterBar {
   margin-bottom: 12px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.chip {
-  height: 30px;
-  padding: 0 12px;
-  border-radius: var(--h10-radius-round);
-  border: 1px solid var(--border-strong);
-  background: var(--surface-card);
-  font-weight: 600;
-  font-size: 12px;
-  color: var(--text-secondary);
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  cursor: pointer;
-  transition: background 0.1s ease;
-  font-family: inherit;
-}
-
-.chip:hover {
-  background: var(--h10-surface-hover);
-}
-
-.chipActive {
-  background: var(--text-primary);
-  border-color: var(--text-primary);
-  color: var(--surface-card);
-}
-
-.chipWarn {
-  border-color: var(--h10-amber-soft);
-  background: var(--h10-warning-soft);
-  color: var(--h10-amber-text);
-}
-
-.chipCount {
-  font-size: 11px;
-  opacity: 0.7;
-}
-
-.chipWarnCount {
-  background: var(--h10-warning);
-  color: var(--h10-text-inverse);
-  border-radius: var(--h10-radius-round);
-  padding: 0 6px;
-  opacity: 1;
-  font-weight: 700;
-  font-size: 11px;
-}
-
-.vline {
-  width: 1px;
-  height: 20px;
-  background: var(--border-default);
-  margin: 0 3px;
-  flex: none;
 }
 
 /* ── Grid density wrapper ────────────────────────────────── */
@@ -391,16 +344,6 @@
   font-size: 15px !important;
 }
 
-/* ── Bulk bar extras (staging preview) ───────────────────── */
-.stageExtra {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: 4px;
-  padding-left: 12px;
-  border-left: 1px solid var(--border-default);
-}
-
 /* ── Variation expand chevron ────────────────────────────── */
 .expandBtn {
   width: 20px;
@@ -484,4 +427,49 @@
 
 .sortHeaderBtnActive {
   color: var(--color-primary);
+}
+
+/* ── Inventory cell (FBA/FBM split button) ───────────────────── */
+.invCellBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 2px 4px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+.invCellBtn:hover {
+  background: var(--h10-surface-hover);
+}
+.invCellBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--h10-focus-ring);
+}
+.invSplit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.invLine {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.invNum {
+  font-variant-numeric: tabular-nums;
+  font-weight: 680;
+}
+.invTag {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.invLock {
+  color: var(--text-tertiary);
 }
