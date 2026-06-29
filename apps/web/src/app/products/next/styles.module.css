@@ -494,3 +494,31 @@
 }
 .invSpin { color: var(--text-tertiary); animation: invspin 0.8s linear infinite; }
 @keyframes invspin { to { transform: rotate(360deg); } }
+
+/* ── InventoryEditorModal — list + variation×location matrix ─── */
+/* Tokens substituted: --surface-base→--surface-card,
+   --status-danger-bg→--status-danger-soft,
+   --status-danger-text→--status-danger-strong.
+   --border-subtle, --text-link are real tokens (defined in tokens.css). */
+.invModalHead { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.invReasonRow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.invReasonLabel { display: inline-flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--text-secondary); }
+.invReasonSelect, .invNotesInput {
+  padding: 4px 8px; background: var(--surface-card);
+  border: 1px solid var(--border-subtle); border-radius: 6px; font-size: 13px;
+}
+.invNotesInput { flex: 1; min-width: 160px; }
+.invToast { padding: 6px 10px; border-radius: 6px; background: var(--status-danger-soft); color: var(--status-danger-strong); font-size: 12px; }
+.invState { padding: 24px; text-align: center; color: var(--text-secondary); display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.invRetryBtn, .invCloseBtn { padding: 6px 12px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--surface-card); cursor: pointer; }
+.invTable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.invTable th { text-align: left; padding: 6px 8px; color: var(--text-tertiary); font-weight: 600; border-bottom: 1px solid var(--border-subtle); }
+.invTable td { padding: 6px 8px; border-bottom: 1px solid var(--border-subtle); }
+.invLocCode { font-weight: 600; margin-right: 6px; }
+.invLocType { color: var(--text-tertiary); font-size: 11px; text-transform: capitalize; }
+.invMatrixWrap { overflow-x: auto; }
+.invMatrix { border-collapse: collapse; font-size: 13px; }
+.invMatrix th, .invMatrix td { padding: 6px 8px; border: 1px solid var(--border-subtle); white-space: nowrap; text-align: center; }
+.invMatrixCorner, .invMatrixRowHead { position: sticky; left: 0; background: var(--surface-card); text-align: left; font-weight: 600; z-index: 1; }
+.invModalFoot { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 12px; }
+.invManageLink { color: var(--text-link); font-size: 13px; }
