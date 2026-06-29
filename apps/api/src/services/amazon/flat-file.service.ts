@@ -1812,7 +1812,7 @@ export class AmazonFlatFileService {
             our_price: [{ schedule: [{ value_with_tax: Math.max(0, parseLocaleNumber(poPrice) ?? 0) }] }],
             marketplace_id: marketplaceId,
           }
-          if (poCondition) offer.condition_type = poCondition
+          if (poCondition) offer.condition_type = enumCodeMap['purchasable_offer.condition_type']?.[poCondition] ?? poCondition
           if (poSalePrice !== undefined && poSalePrice !== '') {
             const sp: Record<string, any> = { schedule: [{ value_with_tax: Math.max(0, parseLocaleNumber(poSalePrice) ?? 0) }] }
             if (poSaleFrom) sp.start_at = [{ value: poSaleFrom, marketplace_id: marketplaceId }]
@@ -1854,7 +1854,10 @@ export class AmazonFlatFileService {
           // HIGH-5 — a parent must declare its parentage_level, not just the
           // variation theme, or Amazon won't register it as a variation parent.
           attrs.parentage_level = [{ value: 'parent', marketplace_id: marketplaceId }]
-          if (row.variation_theme) attrs.variation_theme = wrap(String(row.variation_theme))
+          if (row.variation_theme) {
+            const vt = String(row.variation_theme)
+            attrs.variation_theme = wrap(enumCodeMap['variation_theme']?.[vt] ?? vt)
+          }
         }
         if (parentageCode === 'child' && row.parent_sku) {
           attrs.parentage_level              = [{ value: 'child', marketplace_id: marketplaceId }]
@@ -2452,7 +2455,7 @@ export class AmazonFlatFileService {
       const poSaleTo    = String(row['purchasable_offer__sale_end_date'] ?? '')
       const offer: Record<string, any> = { currency: poCurrency, marketplace_id: marketplaceId }
       if (poHasPrice) offer.our_price = [{ schedule: [{ value_with_tax: Math.max(0, parseLocaleNumber(poPrice) ?? 0) }] }]
-      if (poCondition) offer.condition_type = poCondition
+      if (poCondition) offer.condition_type = enumCodeMap['purchasable_offer.condition_type']?.[poCondition] ?? poCondition
       if (poHasSale) {
         const sp: Record<string, any> = { schedule: [{ value_with_tax: Math.max(0, parseLocaleNumber(poSalePrice) ?? 0) }] }
         if (poSaleFrom) sp.start_at = [{ value: poSaleFrom, marketplace_id: marketplaceId }]
@@ -2485,7 +2488,10 @@ export class AmazonFlatFileService {
     const parentageLevel = normalizeParentage(String(row.parentage_level ?? ''), enumCodeMap['parentage_level'] ?? {})
     if (parentageLevel === 'parent') {
       attrs.parentage_level = [{ value: 'parent', marketplace_id: marketplaceId }]
-      if (row.variation_theme) attrs.variation_theme = wrap(String(row.variation_theme))
+      if (row.variation_theme) {
+        const vt = String(row.variation_theme)
+        attrs.variation_theme = wrap(enumCodeMap['variation_theme']?.[vt] ?? vt)
+      }
     }
     if (parentageLevel === 'child' && row.parent_sku) {
       attrs.parentage_level               = [{ value: 'child', marketplace_id: marketplaceId }]
