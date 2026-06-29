@@ -6,7 +6,7 @@ How the design system is versioned, changed, owned, and kept from drifting.
 
 | Layer | Canonical location | Notes |
 |---|---|---|
-| Token **values** | `tokens/` (TS) → generates/wires `styles/tokens.css` + Tailwind | One definition; CSS vars and Tailwind both derive from it |
+| Token **values** | `tokens/` (TS) → **generates** `styles/tokens.css` | `tokens/css-vars.ts` (hex sourced from `tokens/colors.ts`) is the one source; `tools/generate-tokens-css.ts` emits the `:root{}` + `.dark{}` blocks. `tokens.css` is GENERATED — never hand-edited |
 | Primitives | `primitives/` | The existing `components/ui/*` are aliased to these during migration |
 | Components | `components/` | Lifted + generalized from `/marketing/ads` |
 | Patterns | `patterns/` | Composed organisms (shell, builders, filter panels) |
@@ -20,14 +20,15 @@ reconciled, not merged.
 ## Token tiers
 
 1. **Primitive** — raw scale values (`--h10-blue-600: #1f6fde`). No semantics.
-2. **Semantic** — role-based, reusing the platform's existing names
-   (`--text-primary`, `--surface-card`, `--border-default`,
-   `--status-success-{soft,line,strong}`). Components consume **these**.
-3. **Component** — only when a component needs a knob the semantic layer doesn't
-   express (e.g. `--grid-row-height`).
+2. **Semantic** — role-based, under the platform's names (`--text-primary`,
+   `--surface-card`, `--border-default`, `--status-success-{soft,line,strong}`,
+   `--color-primary`). **Live**: these are value-preserving aliases over the
+   `--h10-*` roles, and every component CSS rule consumes **them**.
+3. **Component** — DS-only knobs the semantic layer doesn't express, kept under
+   `--h10-*` (radius/shadow/focus/pill/badge/targeting/rail/structural-dim).
 
-Components reference the **semantic** (or component) tier — never primitives,
-never raw hex.
+Components reference the **semantic** (or DS-only component) tier — never the raw
+`--h10-*-NNN` ramps, never raw hex.
 
 ## Versioning
 
@@ -82,14 +83,33 @@ concurrent sessions.
 - **Defer live WIP**: the actively-changing ads builders (`_rank/`, the B-series
   budget builder) are folded in only after that work is committed.
 
-## Guardrails (automated, Phase 7)
+## Guardrails (automated)
 
-- **Token drift** — `tools/token-guard.mjs` fails on any raw hex in shipped DS
-  code (everything must be a token; `tokens.css` excepted). Passes today. Wire
-  into `.githooks/pre-push` to enforce.
+- **Token generation + sync** — `tools/generate-tokens-css.ts` is the source of
+  truth pipeline: `npm run tokens:gen` writes `styles/tokens.css` from
+  `tokens/css-vars.ts`; **`npm run tokens:check` is the CI guard** — it
+  regenerates in memory and fails if the committed `tokens.css` is stale, so the
+  TS source and the CSS can't drift. `tokens.css` carries a `GENERATED — do not
+  edit by hand` header.
+- **Token drift (hex)** — `tools/token-guard.mjs` fails on any raw hex literal in
+  shipped DS code — `primitives/` · `components/` · `patterns/` · `styles/`
+  (`tokens.css` excepted, since it *defines* the palette; `catalog/` out of
+  scope). Run from repo root: `node apps/web/src/design-system/tools/token-guard.mjs`.
+  Passes today.
+- **Contract intent (not yet a script).** The consistency contract (see
+  `docs/AUDIT.md` §0, spec §3) extends the hex guard to two further rules that are
+  enforced by review today and slated for lint: **(a) no raw ramp** — a
+  `var(--h10-{grey,blue,green,red,amber,purple,cyan}-NNN)` reach in component CSS
+  is a defect (use the semantic alias instead); **(b) no raw Tailwind palette**
+  in DS `.tsx`. A planned `tools/api-guard.mjs` will assert **barrel-export
+  completeness** (every component re-exports its public Props/types) and that the
+  `Tone`/`Size` unions conform — until then, the barrels in
+  `primitives/index.ts` · `components/index.ts` · `patterns/index.ts` are the
+  reviewed contract.
 - **Visual regression** — `catalog/verify.mjs` @2x-captures the catalog + every
   overlay; commit baselines and diff in CI to automate the screenshot-diff rule.
-- **Contrast** — body text uses `--h10-text` / `--h10-text-2`; `--h10-text-3` is
-  secondary/large-only (see `studies/02-contrast-audit.md`).
+- **Contrast** — body text uses `--text-primary` / `--text-secondary`
+  (`--h10-text` / `--h10-text-2`); `--h10-text-3` is secondary/large-only (see
+  `studies/02-contrast-audit.md`).
 - **CODEOWNERS** — deferred for a solo operator (a self-review request adds
   friction with no second reviewer); add when a team forms.

@@ -26,6 +26,7 @@ export interface BannerProps {
   action?: ReactNode
   /** Show a dismiss (×) control and call this when clicked. */
   onDismiss?: () => void
+  className?: string
 }
 
 const DEFAULT_ICON: Record<Tone, ReactNode> = {
@@ -36,10 +37,10 @@ const DEFAULT_ICON: Record<Tone, ReactNode> = {
   success: <CheckCircle2 size={18} aria-hidden />,
 }
 
-export function Banner({ tone, variant, title, children, icon, action, onDismiss }: BannerProps) {
+export function Banner({ tone, variant, title, children, icon, action, onDismiss, className }: BannerProps) {
   const t: Tone = (variant === 'error' ? 'danger' : (tone ?? variant ?? 'info')) as Tone
   return (
-    <div className={`h10-ds-banner ${t}`} role={t === 'danger' ? 'alert' : 'status'}>
+    <div className={`h10-ds-banner ${t}${className ? ` ${className}` : ''}`} role={t === 'danger' ? 'alert' : 'status'}>
       <span className="h10-ds-banner-icon">{icon ?? DEFAULT_ICON[t]}</span>
       <div className="h10-ds-banner-body">
         {title && <div className="h10-ds-banner-title">{title}</div>}

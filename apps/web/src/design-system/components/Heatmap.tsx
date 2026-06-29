@@ -4,14 +4,15 @@ export interface HeatmapProps {
   rowLabels: string[]
   colLabels?: string[]
   format?: (v: number) => string
+  className?: string
 }
 
 /** Intensity heatmap (H10 dayparting): cell opacity scales with value/max. */
-export function Heatmap({ data, rowLabels, colLabels, format }: HeatmapProps) {
+export function Heatmap({ data, rowLabels, colLabels, format, className }: HeatmapProps) {
   const max = Math.max(...data.flat(), 1)
   const cellColor = (v: number) => `rgba(31, 111, 222, ${(0.05 + (v / max) * 0.95).toFixed(3)})`
   return (
-    <div className="h10-ds-heat">
+    <div className={`h10-ds-heat${className ? ` ${className}` : ''}`}>
       {colLabels && (
         <div className="h10-ds-heat-cols">
           {colLabels.map((c, i) => (

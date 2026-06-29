@@ -6,9 +6,18 @@ each feature. Seeded from the `/marketing/ads` surface (the "H10" look,
 pixel-matched to a best-in-class ads console) and on a path to become the
 canonical design language for the **entire** platform.
 
-> **Status:** Phase 0 — scaffolding + governance + inventory. No runtime code
-> yet; this phase establishes the structure, the rules, and the authoritative
-> map of what we're extracting. See `CHANGELOG.md` and the phase plan below.
+> **Status:** Live. **19 primitives + 21 components + 8 patterns** shipped (47+
+> runtime `.tsx`), each rendered in the living catalog. The token layer is
+> **generated from TypeScript** — `styles/tokens.css` is emitted by
+> `tools/generate-tokens-css.ts` from `tokens/css-vars.ts` (`npm run tokens:gen`;
+> `npm run tokens:check` is the CI staleness guard), so CSS can't drift from the
+> source. The **platform-semantic alias layer is live**: components consume
+> `--text-*` / `--surface-*` / `--border-*` / `--status-*` / `--color-primary`,
+> with `--h10-*` as the raw ramp + DS-only component-token tier underneath. The
+> public API runs on **one `Tone` vocabulary** (`neutral · info · success ·
+> warning · danger`). See `CHANGELOG.md`, `docs/AUDIT.md` (the full map), and the
+> phase plan below. Still pending: the `.h10-*`→`.nx-*` rename + the ~290-page
+> migration (Phase 9).
 
 ---
 
@@ -47,18 +56,18 @@ rewritten.
 
 ## Folder map
 
-| Folder | What lives here | Built in |
+| Folder | What lives here | Status |
 |---|---|---|
-| `tokens/` | Primitive → semantic → component tokens (TS) + Tailwind wiring | Phase 1 |
-| `styles/` | `tokens.css` + base CSS; `ads.css` migrates onto vars here | Phase 1 |
-| `primitives/` | Atoms: Button, Input, Select, Checkbox, Badge, Chip, Tooltip… | Phase 3 |
-| `components/` | Molecules: DataGrid, Modal, Drawer, Tabs, Charts, DateRange… | Phase 4 |
-| `patterns/` | Organisms: AppShell, PageHeader, Builder framework, FilterPanel… | Phase 5 |
-| `catalog/` | Living style guide — every token + component, native res | Phase 2 |
-| `studies/` | Per-feature dossiers + cross-platform (Amazon/eBay/Shopify) research | Phase 8 |
-| `docs/` | Governance, contribution, naming, tokens, reconciliation specs | Phase 0 |
+| `tokens/` | Primitive → semantic → component tokens (TS); `css-vars.ts` is the one source that generates `tokens.css` | Shipped |
+| `styles/` | `tokens.css` (GENERATED) + base/primitive/component/pattern CSS + `a11y.css` | Shipped |
+| `primitives/` | Atoms: Button, Input, Select, Checkbox, Badge, Pill, Tag, Tooltip… (19) | Shipped |
+| `components/` | Molecules: DataGrid, Modal, Drawer, Tabs, Charts, DateRange… (21) | Shipped |
+| `patterns/` | Organisms: AppShell, PageHeader, Builder framework, FilterPanel… (8) | Shipped |
+| `catalog/` | Living style guide — every token + component, native res | Shipped |
+| `studies/` | Per-feature dossiers + cross-platform (Amazon/eBay/Shopify) research | Shipped |
+| `docs/` | Governance, contribution, naming, tokens, reconciliation + `AUDIT.md` (the map) | Shipped |
 
-## Using it (once populated)
+## Using it
 
 ```ts
 import { Button, Badge } from '@/design-system/primitives'
@@ -66,7 +75,10 @@ import { DataGrid, Modal } from '@/design-system/components'
 import { tokens } from '@/design-system/tokens'
 ```
 
-CSS lives behind tokens — components reference `var(--token)`, never raw hex.
+CSS lives behind tokens — components render via `.h10-ds-*` classes that resolve
+through the **semantic** aliases (`--text-*` / `--surface-*` / `--border-*` /
+`--status-*` / `--color-primary`), never raw hex and never a raw `--h10-*-NNN`
+ramp.
 
 ## Phase plan
 
@@ -92,6 +104,8 @@ variables, both noted where used.
 
 ## Read next
 
+- `docs/AUDIT.md` — the exhaustive map: every token (tier + semantic alias) and
+  every primitive/component/pattern (props, tone/size, catalog + a11y coverage)
 - `docs/GOVERNANCE.md` — versioning, deprecation, Definition of Done, review gates
 - `docs/CONTRIBUTING.md` — how to add a token / primitive / component / study
 - `docs/NAMING.md` — class prefix policy, token + component naming

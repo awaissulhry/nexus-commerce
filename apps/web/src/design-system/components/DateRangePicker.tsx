@@ -12,6 +12,7 @@ export interface DateRange {
 export interface DateRangePickerProps {
   value: DateRange
   onChange: (range: DateRange) => void
+  className?: string
 }
 
 function sod(d: Date) {
@@ -60,7 +61,7 @@ const PRESETS: Array<{ label: string; get: () => DateRange }> = [
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
-export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
+export function DateRangePicker({ value, onChange, className }: DateRangePickerProps) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState(() => new Date(value.start.getFullYear(), value.start.getMonth(), 1))
   const [draftStart, setDraftStart] = useState<Date | null>(null)
@@ -108,7 +109,7 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
   )
 
   return (
-    <div className="h10-ds-dp" ref={ref}>
+    <div className={`h10-ds-dp${className ? ` ${className}` : ''}`} ref={ref}>
       <button type="button" className="h10-ds-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <Calendar size={15} />
         {fmt(value.start)} – {fmt(value.end)}

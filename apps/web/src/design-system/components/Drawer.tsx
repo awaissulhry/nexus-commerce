@@ -10,10 +10,11 @@ export interface DrawerProps {
   title?: ReactNode
   footer?: ReactNode
   children?: ReactNode
+  className?: string
 }
 
 /** Right-side slide-over panel. Portaled to <body>; Esc + backdrop close. */
-export function Drawer({ open, onClose, title, footer, children }: DrawerProps) {
+export function Drawer({ open, onClose, title, footer, children, className }: DrawerProps) {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -28,7 +29,7 @@ export function Drawer({ open, onClose, title, footer, children }: DrawerProps) 
   return createPortal(
     <>
       <div className="h10-ds-drawer-bd" onClick={onClose} />
-      <div className="h10-ds-drawer" role="dialog" aria-modal="true">
+      <div className={`h10-ds-drawer${className ? ` ${className}` : ''}`} role="dialog" aria-modal="true">
         <div className="h10-ds-drawer-h">
           <span className="t">{title}</span>
           <button type="button" className="h10-ds-modal-x" onClick={onClose} aria-label="Close">

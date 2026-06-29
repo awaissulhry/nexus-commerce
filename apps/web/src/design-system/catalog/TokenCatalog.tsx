@@ -12,7 +12,7 @@
  */
 
 import { useState, type ReactNode } from 'react'
-import { Search, Inbox, Home, Megaphone, BarChart3, Settings, Filter, Download, Trash2, Columns } from 'lucide-react'
+import { Search, Inbox, Home, Megaphone, BarChart3, Settings, Settings2, Filter, Download, Trash2, Columns } from 'lucide-react'
 import {
   palette,
   color,
@@ -80,10 +80,15 @@ import {
   DetailHeader,
   FilterPanel,
   FilterField,
+  FilterBar,
+  type FilterDimension,
+  GridToolbar,
   BulkActionBar,
   EditModeBar,
   Builder,
   ColumnCustomizer,
+  PreferencesModal,
+  type PreferencesValue,
   type CustomizableColumn,
 } from '@/design-system/patterns'
 
@@ -144,6 +149,110 @@ function Swatch({ name, value }: { name: string; value: string }) {
 
 function SwatchGrid({ children }: { children: ReactNode }) {
   return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(108px, 1fr))', gap: 12 }}>{children}</div>
+}
+
+/** Two-panel "Customise" preferences modal (sticky cols + reorder + sort). */
+function PreferencesModalDemo() {
+  const [open, setOpen] = useState(false)
+  const [value, setValue] = useState<PreferencesValue>({
+    visibleColumns: ['spend', 'acos', 'roas'],
+    stickyFirstColumn: true,
+    stickyLastColumn: true,
+    pageSize: 100,
+    sortBy: 'spend',
+    sortDir: 'desc',
+  })
+  return (
+    <>
+      <Button onClick={() => setOpen(true)}>Open Customise…</Button>
+      <PreferencesModal
+        open={open}
+        onClose={() => setOpen(false)}
+        value={value}
+        onConfirm={setValue}
+        allColumns={[
+          { key: 'campaign', label: 'Campaign', locked: true },
+          { key: 'spend', label: 'Spend' },
+          { key: 'acos', label: 'ACoS' },
+          { key: 'roas', label: 'ROAS' },
+          { key: 'orders', label: 'Orders' },
+          { key: 'actions', label: 'Actions', locked: true },
+        ]}
+        defaultVisible={['spend', 'acos', 'roas']}
+        sortFieldOptions={[
+          { value: 'spend', label: 'Spend' },
+          { value: 'acos', label: 'ACoS' },
+        ]}
+      />
+    </>
+  )
+}
+
+/** Config-driven FilterBar — the declarative bar every grid workspace reuses. */
+function FilterBarDemo() {
+  const [filters, setFilters] = useState({
+    channels: [] as string[],
+    status: [] as string[],
+    type: [] as string[],
+    priceMin: '',
+    priceMax: '',
+  })
+  const active =
+    filters.channels.length + filters.status.length + filters.type.length + (filters.priceMin || filters.priceMax ? 1 : 0)
+  const dims: FilterDimension[] = [
+    {
+      key: 'channels',
+      label: 'Channel',
+      kind: 'multiselect',
+      value: filters.channels,
+      onChange: (v) => setFilters((f) => ({ ...f, channels: v })),
+      options: [
+        { value: 'amazon', label: 'Amazon', count: 212 },
+        { value: 'ebay', label: 'eBay', count: 64 },
+        { value: 'shopify', label: 'Shopify', count: 38 },
+      ],
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      kind: 'multiselect',
+      value: filters.status,
+      onChange: (v) => setFilters((f) => ({ ...f, status: v })),
+      options: [
+        { value: 'active', label: 'Active' },
+        { value: 'draft', label: 'Draft' },
+        { value: 'inactive', label: 'Inactive' },
+      ],
+    },
+    {
+      key: 'type',
+      label: 'Product type',
+      kind: 'multiselect',
+      value: filters.type,
+      onChange: (v) => setFilters((f) => ({ ...f, type: v })),
+      options: [
+        { value: 'jacket', label: 'Giacca' },
+        { value: 'helmet', label: 'Casco' },
+        { value: 'gloves', label: 'Guanti' },
+      ],
+    },
+    {
+      key: 'price',
+      label: 'Price',
+      kind: 'range',
+      unit: '€',
+      min: filters.priceMin,
+      max: filters.priceMax,
+      onChange: (min, max) => setFilters((f) => ({ ...f, priceMin: min, priceMax: max })),
+    },
+  ]
+  return (
+    <FilterBar
+      dimensions={dims}
+      activeCount={active}
+      onClear={() => setFilters({ channels: [], status: [], type: [], priceMin: '', priceMax: '' })}
+    />
+  )
 }
 
 function ToastButton() {
@@ -826,6 +935,28 @@ export function TokenCatalog() {
           </FilterField>
         </FilterPanel>
 
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>
+          FilterBar <span style={{ textTransform: 'none', fontWeight: 500 }}>· config-driven (pass `dimensions`); the grid-workspace bar</span>
+        </div>
+        <FilterBarDemo />
+
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>
+          GridToolbar <span style={{ textTransform: 'none', fontWeight: 500 }}>· seated in `.h10-ds-gridcard` above a grid</span>
+        </div>
+        <div className="h10-ds-gridcard">
+          <GridToolbar
+            count={<>Viewing <b>1–16</b> of 16 products</>}
+            right={
+              <>
+                <Button size="sm"><Settings2 size={13} /> Customise</Button>
+                <Button size="sm"><Download size={13} /> Export</Button>
+                <Button size="sm" variant="primary">+ New product</Button>
+              </>
+            }
+          />
+          <div style={{ padding: 24, fontSize: 13, color: 'var(--h10-text-3)', textAlign: 'center' }}>DataGrid renders here (borderless inside the card).</div>
+        </div>
+
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>BulkActionBar</div>
         <BulkActionBar count={3} onClear={() => {}}>
           <Button size="sm">Set status</Button>
@@ -880,6 +1011,11 @@ export function TokenCatalog() {
           ]}
         />
         <ColumnCustomizer open={colCustOpen} onClose={() => setColCustOpen(false)} columns={colCustCols} onApply={setColCustCols} />
+
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>
+          PreferencesModal <span style={{ textTransform: 'none', fontWeight: 500 }}>· two-panel Customise (sticky cols · reorder · sort)</span>
+        </div>
+        <PreferencesModalDemo />
       </section>
 
       <Section title="ToolbarButton" desc="Square 28×28 toolbar button with DS Tooltip + Kbd shortcut chip, badge, and pressed state. Use ToolbarDivider to separate button groups.">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { ChevronsUpDown, ChevronUp, ChevronDown } from 'lucide-react'
 
 export interface Column<T> {
@@ -12,6 +12,8 @@ export interface Column<T> {
   sortValue?: (row: T) => number | string
   /** pin this column to the left (sticky); give a numeric `width` so offsets stack */
   sticky?: boolean
+  /** pin this column to the right (sticky); give a numeric `width` so offsets stack */
+  stickyRight?: boolean
   width?: number
   /** value rendered in the totals row */
   total?: ReactNode
@@ -29,6 +31,7 @@ export interface DataGridProps<T> {
   initialSort?: { key: string; dir: 'asc' | 'desc' }
   /** cap height + scroll (sticky header/footer stay pinned) */
   maxHeight?: number | string
+  className?: string
 }
 
 /**
@@ -47,6 +50,7 @@ export function DataGrid<T>({
   emptyState,
   initialSort,
   maxHeight,
+  className,
 }: DataGridProps<T>) {
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(initialSort ?? null)
 
@@ -89,13 +93,29 @@ export function DataGrid<T>({
       acc += c.width ?? 0
     }
   }
+  // accumulate sticky-right offsets (right-pinned columns stack from the edge in)
+  let accR = 0
+  const rightOf: Record<string, number> = {}
+  for (let i = columns.length - 1; i >= 0; i--) {
+    const c = columns[i]
+    if (c.stickyRight) {
+      rightOf[c.key] = accR
+      accR += c.width ?? 0
+    }
+  }
+  const stickyStyle = (c: Column<T>): CSSProperties | undefined =>
+    c.sticky ? { left: leftOf[c.key], width: c.width }
+    : c.stickyRight ? { right: rightOf[c.key], width: c.width }
+    : c.width != null ? { width: c.width }
+    : undefined
+  const stickyCls = (c: Column<T>) => (c.sticky ? 'sticky' : c.stickyRight ? 'sticky-right' : '')
 
   const alignClass = (a?: 'left' | 'right' | 'center') => (a === 'right' ? 'r' : a === 'center' ? 'c' : '')
   const sortIcon = (key: string) =>
     sort?.key === key ? sort.dir === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} /> : <ChevronsUpDown size={13} />
 
   return (
-    <div className="h10-ds-grid-wrap" style={maxHeight != null ? { maxHeight } : undefined}>
+    <div className={`h10-ds-grid-wrap${className ? ` ${className}` : ''}`} style={maxHeight != null ? { maxHeight } : undefined}>
       <table className="h10-ds-grid">
         <thead>
           <tr>
@@ -114,9 +134,9 @@ export function DataGrid<T>({
             )}
             {columns.map((c) => {
               const sorted = sort?.key === c.key
-              const cls = [alignClass(c.align), c.sticky ? 'sticky' : '', sorted ? 'sorted' : ''].filter(Boolean).join(' ')
+              const cls = [alignClass(c.align), stickyCls(c), sorted ? 'sorted' : ''].filter(Boolean).join(' ')
               return (
-                <th key={c.key} className={cls} style={c.sticky ? { left: leftOf[c.key], width: c.width } : { width: c.width }}>
+                <th key={c.key} className={cls} style={stickyStyle(c)}>
                   {c.sortable ? (
                     <button type="button" className="sortbtn" onClick={() => toggleSort(c.key)}>
                       {c.label}
@@ -149,7 +169,7 @@ export function DataGrid<T>({
                     </td>
                   )}
                   {columns.map((c) => (
-                    <td key={c.key} className={[alignClass(c.align), c.sticky ? 'sticky' : ''].filter(Boolean).join(' ')} style={c.sticky ? { left: leftOf[c.key] } : undefined}>
+                    <td key={c.key} className={[alignClass(c.align), stickyCls(c)].filter(Boolean).join(' ')} style={stickyStyle(c)}>
                       {c.render(row)}
                     </td>
                   ))}
@@ -163,7 +183,7 @@ export function DataGrid<T>({
             <tr className="totals">
               {selectable && <td className="ck sticky" style={{ left: 0 }} />}
               {columns.map((c) => (
-                <td key={c.key} className={[alignClass(c.align), c.sticky ? 'sticky' : ''].filter(Boolean).join(' ')} style={c.sticky ? { left: leftOf[c.key] } : undefined}>
+                <td key={c.key} className={[alignClass(c.align), stickyCls(c)].filter(Boolean).join(' ')} style={stickyStyle(c)}>
                   {c.total}
                 </td>
               ))}

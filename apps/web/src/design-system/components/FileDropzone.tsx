@@ -22,6 +22,7 @@ export interface FileDropzoneProps {
   disabled?: boolean
   /** Secondary line — defaults to the accepted formats + size limit. */
   hint?: ReactNode
+  className?: string
 }
 
 function fmtBytes(bytes: number): string {
@@ -30,7 +31,7 @@ function fmtBytes(bytes: number): string {
   return `${bytes}B`
 }
 
-export function FileDropzone({ onFiles, accept = '', maxBytes, multiple = false, disabled = false, hint }: FileDropzoneProps) {
+export function FileDropzone({ onFiles, accept = '', maxBytes, multiple = false, disabled = false, hint, className }: FileDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [drag, setDrag] = useState(false)
   const [err, setErr] = useState('')
@@ -82,7 +83,7 @@ export function FileDropzone({ onFiles, accept = '', maxBytes, multiple = false,
     : ''
 
   return (
-    <div className="h10-ds-dropzone-wrap">
+    <div className={`h10-ds-dropzone-wrap${className ? ` ${className}` : ''}`}>
       <button
         type="button"
         className={`h10-ds-dropzone ${drag ? 'drag' : ''}`}
