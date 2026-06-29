@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ImageIcon, Loader2 } from 'lucide-react'
+import { CheckCircle2, ImageIcon, Loader2, RefreshCw, XCircle } from 'lucide-react'
 import { Modal } from '@/design-system/components/Modal'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { Banner } from '@/design-system/components/Banner'
@@ -330,6 +330,77 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
     }
   }, [productId, buckets, axis, listingImages, load, toast])
 
+  // ── Publish ───────────────────────────────────────────────────────────
+
+  interface PublishResult {
+    success: boolean
+    message: string
+    pictureCount: number
+    colorSetCount: number
+    markets?: string[]
+    results?: Array<{ sku: string; market: string; status: string; message: string }>
+  }
+
+  const [publishState, setPublishState] = useState<'idle' | 'saving' | 'publishing' | 'done' | 'failed'>('idle')
+  const [publishResult, setPublishResult] = useState<PublishResult | null>(null)
+  const publishing = publishState === 'saving' || publishState === 'publishing'
+
+  const publish = useCallback(async () => {
+    if (!productId) return
+    setPublishResult(null)
+    // 1. Save if dirty
+    if (hasDirty) {
+      setPublishState('saving')
+      setSaving(true)
+      setSaveError(null)
+      try {
+        const upserts: ListingImageUpsert[] = []
+        for (const [bucket, urls] of buckets.entries()) {
+          urls.forEach((url, position) => {
+            if (bucket === SHARED) {
+              upserts.push({ scope: 'PLATFORM', platform: 'EBAY', marketplace: null, variantGroupKey: null, variantGroupValue: null, url, position, role: position === 0 ? 'MAIN' : 'GALLERY' })
+            } else {
+              upserts.push({ scope: 'PLATFORM', platform: 'EBAY', marketplace: null, variantGroupKey: axis, variantGroupValue: bucket, url, position, role: 'GALLERY' })
+            }
+          })
+        }
+        const deletes = listingImages
+          .filter((i) => i.platform === 'EBAY' && !i.variationId && (i.variantGroupKey == null || i.variantGroupKey === axis))
+          .map((i) => i.id)
+        const saveRes = await beFetch(`/api/products/${productId}/images-workspace/bulk-save`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ upserts, deletes }),
+        })
+        if (!saveRes.ok) {
+          const body = await saveRes.text()
+          throw new Error(`Save failed (${saveRes.status}): ${body}`)
+        }
+        load()
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        setSaveError(msg)
+        setSaving(false)
+        setPublishState('idle')
+        return
+      }
+      setSaving(false)
+    }
+    // 2. Publish
+    setPublishState('publishing')
+    try {
+      const res = await beFetch(`/api/products/${productId}/ebay-images/publish`, { method: 'POST' })
+      const body: PublishResult = await res.json()
+      setPublishResult(body)
+      setPublishState(body.success ? 'done' : 'failed')
+      if (body.success) toast.success(`Published ${body.pictureCount} image${body.pictureCount !== 1 ? 's' : ''} to eBay`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setPublishResult({ success: false, message: msg, pictureCount: 0, colorSetCount: 0 })
+      setPublishState('failed')
+    }
+  }, [productId, hasDirty, buckets, axis, listingImages, load, toast])
+
   // ── Subtitle ──────────────────────────────────────────────────────────
 
   const sku = product?.sku ?? productId
@@ -359,7 +430,7 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
       title={`eBay Images · ${sku}`}
       subtitle={subtitle}
       size="xl"
-      footer={hasDirty || saveError ? (
+      footer={hasDirty || saveError || publishResult ? (
         <div className="flex w-full flex-col gap-2">
           {saveError && (
             <Banner variant="danger" title="Save failed" className="w-full">
@@ -371,14 +442,15 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
               size="sm"
               variant="ghost"
               onClick={() => { setBuckets(cloneBuckets(baseline)); setSaveError(null) }}
-              disabled={saving}
+              disabled={saving || publishing}
             >
               Discard
             </Button>
             <Button
               size="sm"
+              variant="secondary"
               onClick={flush}
-              disabled={saving || !hasDirty}
+              disabled={saving || publishing || !hasDirty}
             >
               {saving ? (
                 <span className="flex items-center gap-1.5">
@@ -387,7 +459,30 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
                 </span>
               ) : 'Save'}
             </Button>
+            <Button
+              size="sm"
+              onClick={publish}
+              disabled={publishing}
+            >
+              {publishState === 'saving' ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Saving…
+                </span>
+              ) : publishState === 'publishing' ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Publishing…
+                </span>
+              ) : hasDirty ? 'Save & Publish' : 'Publish'}
+            </Button>
           </div>
+        </div>
+      ) : workspaceData ? (
+        <div className="flex justify-end">
+          <Button size="sm" onClick={publish} disabled={publishing}>
+            Publish
+          </Button>
         </div>
       ) : null}
     >
@@ -497,6 +592,60 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
                   ? 'This product has no variant attributes — only a Default bucket is available.'
                   : `Drag a master photo onto a cell to assign it (or click a cell).`}
               </p>
+            </div>
+          )}
+
+          {/* Publish status */}
+          {(publishState !== 'idle' || publishResult) && (
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-xs">
+              {(publishState === 'saving' || publishState === 'publishing') && (
+                <div className="flex items-center gap-2 text-slate-500">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+                  <span>{publishState === 'saving' ? 'Saving images…' : 'Sending to eBay…'}</span>
+                </div>
+              )}
+              {publishResult && publishState !== 'saving' && publishState !== 'publishing' && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    {publishResult.success
+                      ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                      : <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />}
+                    <span className={publishResult.success ? 'text-green-700 dark:text-green-400 font-medium' : 'text-red-600 dark:text-red-400 font-medium'}>
+                      {publishResult.success
+                        ? `${publishResult.pictureCount} image${publishResult.pictureCount !== 1 ? 's' : ''}, ${publishResult.colorSetCount} colour set${publishResult.colorSetCount !== 1 ? 's' : ''} sent`
+                        : publishResult.message}
+                    </span>
+                    {!publishResult.success && (
+                      <button
+                        type="button"
+                        onClick={publish}
+                        className="ml-auto flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Retry
+                      </button>
+                    )}
+                  </div>
+                  {publishResult.results && publishResult.results.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {publishResult.results.map((r, i) => (
+                        <span
+                          key={i}
+                          className={[
+                            'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                            r.status === 'SUCCESS' || r.status === 'success'
+                              ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                              : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                          ].join(' ')}
+                          title={r.message}
+                        >
+                          {r.market}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
