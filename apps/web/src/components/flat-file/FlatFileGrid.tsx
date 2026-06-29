@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { Tooltip } from '@/design-system/primitives/Tooltip'
 import { FindReplaceBar } from '@/app/bulk-operations/components/FindReplaceBar'
 import { ConditionalFormatBar } from '@/app/bulk-operations/components/ConditionalFormatBar'
 import { evaluateRule, TONE_CLASSES, type ConditionalRule } from '@/app/bulk-operations/lib/conditional-format'
@@ -1804,7 +1805,7 @@ export default function FlatFileGrid({
                         <td className={cn('sticky left-0 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-1.5 w-9 text-center cursor-grab active:cursor-grabbing', frozenBg)}
                           onMouseDown={() => { canDragRef.current = true }} onMouseUp={() => { canDragRef.current = false }}>
                           {row._status === 'pushed'  ? <CheckCircle2 className="w-3 h-3 text-emerald-500 mx-auto" />
-                          : row._status === 'error'   ? <span title={String(row._feedMessage ?? '')}><AlertCircle className="w-3 h-3 text-red-500 mx-auto" /></span>
+                          : row._status === 'error'   ? <Tooltip label={<span className="text-xs">{String(row._feedMessage ?? 'Push error')}</span>} className="h10-ds-tooltip--light"><AlertCircle className="w-3 h-3 text-red-500 mx-auto" /></Tooltip>
                           : row._status === 'pending' ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
                           : <input type="checkbox" className="w-3.5 h-3.5 accent-blue-600" checked={isRowSel}
                               onChange={(e) => setSelectedRows((prev) => { const n = new Set(prev); e.target.checked ? n.add(row._rowId) : n.delete(row._rowId); return n })} />}
