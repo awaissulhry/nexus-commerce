@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/Toast'
 import ChannelImageGrid, { type ImageGridColumn, type ImageGridRow } from '@/app/products/[id]/edit/tabs/images/ChannelImageGrid'
 import ImagePickerModal from '@/app/products/[id]/edit/tabs/images/ImagePickerModal'
 import type { WorkspaceData, ListingImage, VariantSummary, ProductImage } from '@/app/products/[id]/edit/tabs/images/types'
+import { Select } from '@/design-system/primitives/Select'
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -166,8 +167,8 @@ export function EbayFlatFileImageModal({ open, onClose, productId, onSyncColumns
   const variants = workspaceData?.variants ?? []
   const serverAxes = workspaceData?.availableAxes ?? []
 
-  // Pick the active axis: respect imageAxisPreference, fall back to colour dim, then first axis.
-  const axis = useMemo(() => {
+  // Derive the server-recommended axis (respects imageAxisPreference, falls back to colour dim).
+  const defaultAxis = useMemo(() => {
     const pref = product?.imageAxisPreference
     if (pref) {
       const match = serverAxes.find((a) => axisSynonymKey(a) === axisSynonymKey(pref))
@@ -175,6 +176,12 @@ export function EbayFlatFileImageModal({ open, onClose, productId, onSyncColumns
     }
     return serverAxes.find((a) => axisSynonymKey(a) === '__dim0__') ?? serverAxes[0] ?? 'Colore'
   }, [product?.imageAxisPreference, serverAxes])
+
+  // Operator-chosen axis — null means "use defaultAxis".
+  const [axisOverride, setAxisOverride] = useState<string | null>(null)
+  // Snap override back to null whenever a fresh workspace loads.
+  useEffect(() => { setAxisOverride(null) }, [workspaceData])
+  const axis = axisOverride ?? defaultAxis
 
   const colorValues = useMemo(() => getAxisValues(variants, axis), [variants, axis])
 
@@ -530,6 +537,22 @@ export function EbayFlatFileImageModal({ open, onClose, productId, onSyncColumns
 
       {!loading && !error && workspaceData && (
         <div className="flex flex-col gap-4">
+
+          {/* Axis picker — switch grouping dimension */}
+          {serverAxes.length > 1 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500 flex-shrink-0">Group by axis:</span>
+              <Select
+                value={axis}
+                onChange={(e) => setAxisOverride(e.target.value)}
+                className="text-xs"
+              >
+                {serverAxes.map((a) => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </Select>
+            </div>
+          )}
 
           {/* Master gallery strip — Phase 4 will make these draggable */}
           {masterImages.length > 0 ? (

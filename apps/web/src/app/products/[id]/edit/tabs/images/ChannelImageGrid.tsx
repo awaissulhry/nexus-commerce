@@ -168,6 +168,7 @@ function ImageCell({
       tabIndex={isFocused ? 0 : -1}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (cell && onEnlarge) onEnlarge(); else onClick(); return }
+        if ((e.key === 'Delete' || e.key === 'Backspace') && cell) { e.preventDefault(); onRemove?.(); return }
         onKeyDown(e)
       }}
       onFocus={onFocus}
