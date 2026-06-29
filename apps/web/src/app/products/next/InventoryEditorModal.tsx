@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { Lock } from 'lucide-react'
 import { Modal } from '@/design-system/components'
 import type { ProductRow } from '../_types'
 import { useInventoryEditor } from './useInventoryEditor'
@@ -18,6 +19,12 @@ export function InventoryEditorModal({ row, onClose }: { row: ProductRow | null;
   const [notes, setNotes] = useState('')
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+
+  useEffect(() => {
+    setReason(DEFAULT_REASON)
+    setNotes('')
+    setToast(null)
+  }, [row?.id])
 
   const doCommit = async (productId: string, locationId: string, value: number) => {
     const key = `${productId}:${locationId}`
@@ -126,7 +133,7 @@ export function InventoryEditorModal({ row, onClose }: { row: ProductRow | null;
               <tr>
                 <th className={styles.invMatrixCorner}>Variation</th>
                 {matrix.columns.map((c) => (
-                  <th key={c.locationId}>{c.locationCode}{!c.editable && ' 🔒'}</th>
+                  <th key={c.locationId}>{c.locationCode}{!c.editable && <Lock size={11} aria-hidden="true" style={{ marginLeft: 4, verticalAlign: 'middle' }} />}</th>
                 ))}
               </tr>
             </thead>
