@@ -761,6 +761,9 @@ export function isBlankFeedValue(val: unknown): boolean {
 const SNAPSHOT_LIVE_OVERLAY = [
   'purchasable_offer__our_price', 'purchasable_offer__sale_price',
   'fulfillment_availability__quantity',
+  // ASIN columns: sourced from ChannelListing.externalListingId (authoritative).
+  // Live value must always win over a stale snapshot written before the ASIN was known.
+  'external_product_id', 'external_product_id_type',
 ]
 export function applySnapshotOverlay(
   snapshot: Record<string, any>,
@@ -1454,6 +1457,10 @@ export class AmazonFlatFileService {
       if (listing) {
         row._listingId = listing.id
         row._version = (listing as any).version ?? null
+        // Expose the DB-persisted ASIN as the private _asin metadata so the
+        // frontend can use it for image loading, the "open on Amazon" link, and
+        // the local ASIN cache without relying on the visible column value.
+        if (listing.externalListingId) row._asin = listing.externalListingId
         row._fieldStates = {
           price:        ((listing as any).followMasterPrice        ?? true) ? 'INHERITED' : 'OVERRIDE',
           title:        ((listing as any).followMasterTitle        ?? true) ? 'INHERITED' : 'OVERRIDE',
