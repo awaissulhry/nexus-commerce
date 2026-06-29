@@ -1722,11 +1722,10 @@ export class AmazonFlatFileService {
     // Fields with complex/explicit SP-API structure — handled case-by-case below
     const EXPLICIT_KEYS = new Set([
       'item_sku', 'product_type', 'record_action',
-      // Product-identifier columns are display-only for now (populated from
-      // the live ASIN on read). Listed here so the generic loop does NOT emit
-      // them as raw `external_product_id` attributes — the feed handler that
-      // maps them to merchant_suggested_asin / externally_assigned_product_
-      // identifier lands in the next increment.
+      // Product-identifier columns are handled explicitly (the block that emits
+      // merchant_suggested_asin / externally_assigned_product_identifier), so
+      // list them here to keep the generic loop from ALSO emitting them as raw
+      // `external_product_id` attributes (which Amazon would reject).
       'external_product_id', 'external_product_id_type',
       'parentage_level', 'parent_sku', 'variation_theme',
       'item_name', 'brand', 'product_description',
@@ -1778,6 +1777,27 @@ export class AmazonFlatFileService {
         if (row.generic_keyword)     attrs.generic_keyword     = wrapL(String(row.generic_keyword))
         if (row.color)               attrs.color               = wrapL(String(row.color))
         if (row.main_product_image_locator) attrs.main_product_image_locator = [{ media_location: String(row.main_product_image_locator), marketplace_id: marketplaceId }]
+
+        // Product identifier — for a NEW SKU (create/relist) ONLY, attach the
+        // offer to an EXISTING Amazon catalog entry so it keeps that ASIN's
+        // reviews + ranking instead of minting a new one. type=ASIN →
+        // merchant_suggested_asin; EAN/GTIN/UPC → externally_assigned_product_
+        // identifier (Amazon resolves the ASIN from the barcode).
+        // GATED to _isNew on purpose: the column is read-populated with each
+        // existing SKU's ASIN, and re-asserting a (possibly stale/duplicate)
+        // ASIN on a live listing could re-match it to the wrong product — so we
+        // never emit it for an existing-listing update.
+        const epId   = String(row.external_product_id ?? '').trim()
+        const epType = String(row.external_product_id_type ?? '').trim().toUpperCase()
+        if (epId && row._isNew === true) {
+          if (epType === 'ASIN') {
+            attrs.merchant_suggested_asin = wrap(epId)
+          } else if (epType === 'EAN' || epType === 'GTIN' || epType === 'UPC') {
+            attrs.externally_assigned_product_identifier = [
+              { type: epType.toLowerCase(), value: epId, marketplace_id: marketplaceId },
+            ]
+          }
+        }
 
         // purchasable_offer — read from expanded sub-columns, fall back to bare value
         const poPrice = row['purchasable_offer__our_price'] ?? row.purchasable_offer ?? row.standard_price
@@ -2225,7 +2245,18 @@ export class AmazonFlatFileService {
           lastSyncedAt: new Date(),
           lastSyncStatus: opts.isPublished ? 'SUCCESS' : null,
           ...(opts.isPublished ? { isPublished: true, listingStatus: 'ACTIVE' } : {}),
-          ...(row._asin ? { externalListingId: String(row._asin) } : {}),
+          ...((() => {
+            // Link the listing to its ASIN: prefer an imported _asin, else the
+            // typed Product ID column when it holds an ASIN (a relist). Barcode
+            // types (EAN/GTIN/UPC) are left for Amazon/reconciliation to resolve
+            // the ASIN from the identifier.
+            const asin =
+              String(row._asin ?? '').trim() ||
+              (String(row.external_product_id_type ?? '').trim().toUpperCase() === 'ASIN'
+                ? String(row.external_product_id ?? '').trim()
+                : '')
+            return asin ? { externalListingId: asin } : {}
+          })()),
         }
 
         if (existing) {
