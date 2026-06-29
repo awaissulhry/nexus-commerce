@@ -54,12 +54,39 @@ export interface Connections {
 }
 
 const PRIORITY_MARKETS = ['IT', 'DE', 'FR', 'ES', 'UK'] as const
-const COUNTRY_NAMES: Record<string, string> = {
+
+/** Full country-name lookup (used inline + by the "See all markets" modal). */
+export const COUNTRY_NAMES: Record<string, string> = {
   IT: 'Italy',
   DE: 'Germany',
   FR: 'France',
   ES: 'Spain',
   UK: 'United Kingdom',
+  NL: 'Netherlands',
+  SE: 'Sweden',
+  PL: 'Poland',
+  BE: 'Belgium',
+  AT: 'Austria',
+  CH: 'Switzerland',
+  IE: 'Ireland',
+  TR: 'Turkey',
+  US: 'United States',
+  CA: 'Canada',
+  MX: 'Mexico',
+  BR: 'Brazil',
+  AE: 'UAE',
+  SA: 'Saudi Arabia',
+  JP: 'Japan',
+  AU: 'Australia',
+  HK: 'Hong Kong',
+  SG: 'Singapore',
+  MY: 'Malaysia',
+}
+
+/** Full set of marketplaces each channel supports (the modal's long tail). */
+export const SUPPORTED_MARKETS: Record<string, string[]> = {
+  AMAZON: ['IT', 'DE', 'FR', 'ES', 'UK', 'NL', 'SE', 'PL', 'BE', 'TR', 'US', 'CA', 'MX', 'BR', 'AE', 'SA', 'JP', 'AU'],
+  EBAY: ['IT', 'DE', 'FR', 'ES', 'UK', 'NL', 'BE', 'AT', 'CH', 'IE', 'PL', 'US', 'CA', 'AU', 'HK', 'SG', 'MY'],
 }
 
 function markets(channel: 'amazon' | 'ebay'): RailMarketItem[] {
@@ -108,12 +135,14 @@ export function buildAppNav(counts: SidebarCounts, conn: Connections): RailNavIt
           href: '/listings/amazon',
           indicator: conn.amazon ? undefined : 'disconnected',
           children: markets('amazon'),
+          moreMarketsCount: SUPPORTED_MARKETS.AMAZON.length,
         },
         {
           label: 'eBay',
           href: '/listings/ebay',
           indicator: conn.ebay ? undefined : 'disconnected',
           children: markets('ebay'),
+          moreMarketsCount: SUPPORTED_MARKETS.EBAY.length,
         },
         { label: 'Shopify', href: '/listings/shopify' },
       ],
