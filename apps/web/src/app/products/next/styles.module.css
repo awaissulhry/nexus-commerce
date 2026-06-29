@@ -514,6 +514,7 @@
 .invMatrixWrap { overflow-x: auto; }
 .invMatrix { border-collapse: collapse; font-size: 13px; }
 .invMatrix th, .invMatrix td { padding: 6px 8px; border: 1px solid var(--border-subtle); white-space: nowrap; text-align: center; }
-.invMatrixCorner, .invMatrixRowHead { position: sticky; left: 0; background: var(--surface-card); text-align: left; font-weight: 600; z-index: 1; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.invMatrixCorner, .invMatrixRowHead { position: sticky; left: 0; background: var(--surface-card); text-align: left; font-weight: 600; z-index: 1; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.invMatrixRowHead { font-weight: 500; font-variant-numeric: tabular-nums; }
 .invModalFoot { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 12px; }
 .invManageLink { color: var(--text-link); font-size: 13px; }

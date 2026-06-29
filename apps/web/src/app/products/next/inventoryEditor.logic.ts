@@ -113,20 +113,3 @@ export function buildMatrixModel(locations: RawLocation[], children: RawFamilyCh
 export function editorModeForRow(row: { isParent: boolean }): 'matrix' | 'list' {
   return row.isParent ? 'matrix' : 'list'
 }
-
-/**
- * Label for a variation row in the matrix. Labels by SKU — it is unique per
- * variation and accurate even when product names carry data errors (two
- * children can share a wrong name like "(XS, Nero)" but never share a SKU).
- * The parent SKU prefix is stripped to keep it concise (e.g. "XXL-BLACK") so
- * the first column stays narrow and the editable location columns stay visible.
- */
-export function variationLabel(
-  child: { name: string; sku: string },
-  parent: { name: string; sku: string },
-): string {
-  if (parent.sku && child.sku.startsWith(parent.sku + '-')) {
-    return child.sku.slice(parent.sku.length + 1)
-  }
-  return child.sku
-}
