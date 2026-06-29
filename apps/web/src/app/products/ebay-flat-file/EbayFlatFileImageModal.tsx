@@ -1,26 +1,28 @@
 'use client'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, ImageIcon, Loader2, RefreshCw, XCircle } from 'lucide-react'
+import { createRef, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import type { RefObject } from 'react'
+import { CheckCircle2, ChevronDown, ChevronRight, ImageIcon, Loader2, RefreshCw, XCircle } from 'lucide-react'
 import { Modal } from '@/design-system/components/Modal'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { Banner } from '@/design-system/components/Banner'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
-// Reuse the shared images-tab grid and type definitions directly.
 // [id] is a literal directory name in the filesystem; TypeScript resolves it fine.
 import ChannelImageGrid, { type ImageGridColumn, type ImageGridRow } from '@/app/products/[id]/edit/tabs/images/ChannelImageGrid'
 import ImagePickerModal from '@/app/products/[id]/edit/tabs/images/ImagePickerModal'
 import type { WorkspaceData, ListingImage, VariantSummary, ProductImage } from '@/app/products/[id]/edit/tabs/images/types'
 import { Select } from '@/design-system/primitives/Select'
 
-// ── Constants ─────────────────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────────────
 
 const EBAY_MAX = 24
 const MIN_COLS = 6
 const SHARED = '__shared__'
 
-// Axis synonym groups — keep in sync with EbayPanel.tsx + VariationValueOrderModal.
+// ── Axis helpers ────────────────────────────────────────────────────────────
+// Keep in sync with EbayPanel.tsx + VariationValueOrderModal.
+
 const AXIS_SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
   ['colore', 'color', 'colour', 'color name', 'color_name', 'couleur', 'farbe', 'kleur', 'colour name', 'colori'],
   ['taglia', 'size', 'size name', 'size_name', 'misura', 'größe', 'grosse', 'taille', 'maat', 'maten', 'koko'],
@@ -37,7 +39,6 @@ function axisSynonymKey(name: string): string {
   return lk
 }
 
-// Collect unique values for the selected axis across all variants.
 function getAxisValues(variants: VariantSummary[], axis: string): string[] {
   const targetKey = axisSynonymKey(axis)
   const seen = new Set<string>()
@@ -54,7 +55,7 @@ function getAxisValues(variants: VariantSummary[], axis: string): string[] {
   return out
 }
 
-// ── Bucket model ──────────────────────────────────────────────────────────
+// ── Bucket model ────────────────────────────────────────────────────────────
 // Mirrors EbayPanel.tsx initBuckets exactly.
 
 type Buckets = Map<string, string[]>
@@ -63,7 +64,6 @@ function initBuckets(listingImages: ListingImage[], axis: string, colorValues: s
   const map: Buckets = new Map()
   map.set(SHARED, [])
   for (const v of colorValues) map.set(v, [])
-
   const pairsByBucket = new Map<string, Array<{ position: number; url: string }>>()
   for (const img of listingImages) {
     if (img.platform !== 'EBAY' || img.variationId) continue
@@ -76,7 +76,7 @@ function initBuckets(listingImages: ListingImage[], axis: string, colorValues: s
   }
   for (const [bucket, pairs] of pairsByBucket.entries()) {
     pairs.sort((a, b) => a.position - b.position)
-    map.set(bucket, pairs.map((p) => p.url))
+    map.set(bucket, pairs.map(p => p.url))
   }
   return map
 }
@@ -98,13 +98,13 @@ function bucketsDiff(a: Buckets, b: Buckets): number {
   return diff
 }
 
-// ── Backend fetch helper ───────────────────────────────────────────────────
+// ── Backend fetch ────────────────────────────────────────────────────────────
 
 function beFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(`${getBackendUrl()}${path}`, init)
 }
 
-// ── ListingImageUpsert (mirrors EbayPanel.tsx) ────────────────────────────
+// ── Shared types ─────────────────────────────────────────────────────────────
 
 interface ListingImageUpsert {
   scope: 'PLATFORM'
@@ -117,260 +117,205 @@ interface ListingImageUpsert {
   role: 'MAIN' | 'GALLERY'
 }
 
-// ── Props ─────────────────────────────────────────────────────────────────
+interface PublishResult {
+  success: boolean
+  message: string
+  pictureCount: number
+  colorSetCount: number
+  markets?: string[]
+  results?: Array<{ sku: string; market: string; status: string; message: string }>
+}
 
-export interface EbayFlatFileImageModalProps {
-  open: boolean
-  onClose: () => void
-  /** productId (familyId) for the product family being edited */
+// ── FamilySection ─────────────────────────────────────────────────────────────
+// One self-contained panel per product family — manages its own workspace data,
+// buckets, axis preference, save, and publish independently.
+//
+// Cross-family drag semantics: within-family drags use onCellMove (move,
+// removes from source). Cross-family drags only fire onCellDrop on the target
+// (the source's ChannelImageGrid never saw the drag end) → copy semantics.
+
+export interface FamilySectionHandle {
+  /** Persist dirty buckets. No-op + returns true when already clean. Returns false on error. */
+  save: () => Promise<boolean>
+  /** Save if dirty, then push images to all eBay markets. */
+  publish: () => Promise<void>
+}
+
+interface FamilySectionProps {
   productId: string
-  /**
-   * Called after a successful save when the Default bucket has ≥1 URL.
-   * Receives the first 6 URLs from the Default bucket; the caller should
-   * write them into image_1..6 on every flat-file row.
-   */
+  /** Show collapse chevron + independent Save/Publish per section. */
+  collapsible?: boolean
+  /** Mirrors modal open prop — triggers workspace load on open, reset on close. */
+  open: boolean
   onSyncColumns?: (urls: string[]) => void
 }
 
-// ── Component ─────────────────────────────────────────────────────────────
+const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
+  function FamilySection({ productId, collapsible = false, open, onSyncColumns }, ref) {
+    const { toast } = useToast()
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+    const [workspaceData, setWorkspaceData] = useState<WorkspaceData | null>(null)
+    const [collapsed, setCollapsed] = useState(false)
 
-export function EbayFlatFileImageModal({ open, onClose, productId, onSyncColumns }: EbayFlatFileImageModalProps) {
-  const { toast } = useToast()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [workspaceData, setWorkspaceData] = useState<WorkspaceData | null>(null)
+    // ── Load ────────────────────────────────────────────────────────────────
 
-  const load = useCallback(() => {
-    if (!productId) return
-    setLoading(true)
-    setError(null)
-    beFetch(`/api/products/${productId}/images-workspace`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json() as Promise<WorkspaceData>
-      })
-      .then(setWorkspaceData)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false))
-  }, [productId])
-
-  useEffect(() => {
-    if (open) load()
-    else { setWorkspaceData(null); setError(null) }
-  }, [open, load])
-
-  // ── Derive display state ───────────────────────────────────────────────
-
-  const product = workspaceData?.product
-  const masterImages = workspaceData?.master ?? []
-  const listingImages = workspaceData?.listing ?? []
-  const variants = workspaceData?.variants ?? []
-  const serverAxes = workspaceData?.availableAxes ?? []
-
-  // Derive the server-recommended axis (respects imageAxisPreference, falls back to colour dim).
-  const defaultAxis = useMemo(() => {
-    const pref = product?.imageAxisPreference
-    if (pref) {
-      const match = serverAxes.find((a) => axisSynonymKey(a) === axisSynonymKey(pref))
-      if (match) return match
-    }
-    return serverAxes.find((a) => axisSynonymKey(a) === '__dim0__') ?? serverAxes[0] ?? 'Colore'
-  }, [product?.imageAxisPreference, serverAxes])
-
-  // Operator-chosen axis — null means "use defaultAxis".
-  const [axisOverride, setAxisOverride] = useState<string | null>(null)
-  // Snap override back to null whenever a fresh workspace loads.
-  useEffect(() => { setAxisOverride(null) }, [workspaceData])
-  const axis = axisOverride ?? defaultAxis
-
-  const colorValues = useMemo(() => getAxisValues(variants, axis), [variants, axis])
-
-  // Saved server truth. Recomputed when listing images, axis or colorValues change.
-  const baseline = useMemo(
-    () => initBuckets(listingImages, axis, colorValues),
-    [listingImages, axis, colorValues],
-  )
-
-  // Working bucket state — diverges from baseline as the operator edits.
-  const [buckets, setBuckets] = useState<Buckets>(() => cloneBuckets(baseline))
-
-  // Which cell was clicked — drives the ImagePickerModal.
-  // replaceIndex: null = append, number = replace existing url at that position.
-  const [pickerTarget, setPickerTarget] = useState<{ bucket: string; replaceIndex: number | null } | null>(null)
-
-  // Snap to the new baseline whenever it changes (after load / reload).
-  useEffect(() => { setBuckets(cloneBuckets(baseline)) }, [baseline])
-
-  const hasDirty = useMemo(() => bucketsDiff(buckets, baseline) > 0, [buckets, baseline])
-
-  // ── Edit mutations ────────────────────────────────────────────────────
-
-  // Assign a URL to a bucket cell. No cross-bucket overlap: remove the photo
-  // from every other bucket first so it never appears in two rows at once.
-  const assign = useCallback((bucket: string, replaceIndex: number | null, url: string) => {
-    setBuckets((prev) => {
-      const next = new Map(prev)
-      for (const [k, list] of next) {
-        if (k !== bucket && list.includes(url)) next.set(k, list.filter((u) => u !== url))
-      }
-      let list = [...(next.get(bucket) ?? [])]
-      if (replaceIndex != null && replaceIndex < list.length) list[replaceIndex] = url
-      else list.push(url)
-      // In-bucket de-dupe: first occurrence wins.
-      const seen = new Set<string>()
-      list = list.filter((u) => (seen.has(u) ? false : (seen.add(u), true)))
-      next.set(bucket, list)
-      return next
-    })
-  }, [])
-
-  const removeAt = useCallback((bucket: string, positionOneBased: number) => {
-    setBuckets((prev) => {
-      const next = new Map(prev)
-      const list = [...(next.get(bucket) ?? [])]
-      list.splice(positionOneBased - 1, 1)
-      next.set(bucket, list)
-      return next
-    })
-  }, [])
-
-  const handleCellRemove = useCallback((rowKey: string | null, colKey: string) => {
-    removeAt(rowKey ?? SHARED, Number(colKey))
-  }, [removeAt])
-
-  // Move a photo between cells (drag-reorder, incl. cross-bucket).
-  const move = useCallback((
-    from: { rowKey: string | null; columnKey: string; url: string },
-    to: { rowKey: string | null; columnKey: string },
-  ) => {
-    const fromB = from.rowKey ?? SHARED
-    const toB = to.rowKey ?? SHARED
-    setBuckets((prev) => {
-      const next = new Map(prev)
-      const fromList = [...(next.get(fromB) ?? [])]
-      const [moved] = fromList.splice(Number(from.columnKey) - 1, 1)
-      if (moved === undefined) return prev
-      if (fromB === toB) {
-        fromList.splice(Math.min(Number(to.columnKey) - 1, fromList.length), 0, moved)
-        next.set(fromB, fromList)
-      } else {
-        const toList = [...(next.get(toB) ?? [])].filter((u) => u !== moved)
-        toList.splice(Math.min(Number(to.columnKey) - 1, toList.length), 0, moved)
-        next.set(fromB, fromList)
-        next.set(toB, toList)
-      }
-      return next
-    })
-  }, [])
-
-  // ── Grid model ────────────────────────────────────────────────────────
-
-  const colCount = useMemo(() => {
-    let longest = 0
-    for (const list of buckets.values()) longest = Math.max(longest, list.length)
-    return Math.min(EBAY_MAX, Math.max(MIN_COLS, longest + 1))
-  }, [buckets])
-
-  const columns: ImageGridColumn[] = useMemo(
-    () => Array.from({ length: colCount }, (_, i) => ({
-      key: String(i + 1),
-      label: String(i + 1),
-      sublabel: i === 0 ? 'Main' : undefined,
-      isPrimary: i === 0,
-    })),
-    [colCount],
-  )
-
-  const gridRows: ImageGridRow[] = useMemo(() => {
-    const sharedN = (buckets.get(SHARED) ?? []).length
-    return [
-      {
-        key: null,
-        label: 'Default',
-        sublabel: `cover + common · ${sharedN} photo${sharedN === 1 ? '' : 's'}`,
-      },
-      ...colorValues.map((cv) => {
-        const n = (buckets.get(cv) ?? []).length
-        return { key: cv, label: cv, sublabel: `${n} photo${n === 1 ? '' : 's'}` }
-      }),
-    ]
-  }, [colorValues, buckets])
-
-  const resolveCell = useCallback((rowKey: string | null, colKey: string) => {
-    const url = (buckets.get(rowKey ?? SHARED) ?? [])[Number(colKey) - 1]
-    return url ? { url, origin: 'own' as const } : null
-  }, [buckets])
-
-  // ── Save ─────────────────────────────────────────────────────────────
-
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  // URLs to offer for flat-file column sync after a successful save.
-  const [syncUrls, setSyncUrls] = useState<string[] | null>(null)
-
-  const flush = useCallback(async () => {
-    if (!productId) return
-    setSaving(true)
-    setSaveError(null)
-    try {
-      const upserts: ListingImageUpsert[] = []
-      for (const [bucket, urls] of buckets.entries()) {
-        urls.forEach((url, position) => {
-          if (bucket === SHARED) {
-            upserts.push({ scope: 'PLATFORM', platform: 'EBAY', marketplace: null, variantGroupKey: null, variantGroupValue: null, url, position, role: position === 0 ? 'MAIN' : 'GALLERY' })
-          } else {
-            upserts.push({ scope: 'PLATFORM', platform: 'EBAY', marketplace: null, variantGroupKey: axis, variantGroupValue: bucket, url, position, role: 'GALLERY' })
-          }
+    const load = useCallback(() => {
+      if (!productId) return
+      setLoading(true); setError(null)
+      beFetch(`/api/products/${productId}/images-workspace`)
+        .then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`)
+          return r.json() as Promise<WorkspaceData>
         })
+        .then(setWorkspaceData)
+        .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+        .finally(() => setLoading(false))
+    }, [productId])
+
+    useEffect(() => {
+      if (open) load()
+      else { setWorkspaceData(null); setError(null) }
+    }, [open, load])
+
+    // ── Derive workspace fields ──────────────────────────────────────────────
+
+    const product = workspaceData?.product
+    const masterImages = workspaceData?.master ?? []
+    const listingImages = workspaceData?.listing ?? []
+    const variants = workspaceData?.variants ?? []
+    const serverAxes = workspaceData?.availableAxes ?? []
+
+    // Server-recommended axis (respects imageAxisPreference, falls back to colour dim).
+    const defaultAxis = useMemo(() => {
+      const pref = product?.imageAxisPreference
+      if (pref) {
+        const match = serverAxes.find(a => axisSynonymKey(a) === axisSynonymKey(pref))
+        if (match) return match
       }
-      const deletes = listingImages
-        .filter((i) => i.platform === 'EBAY' && !i.variationId && (i.variantGroupKey == null || i.variantGroupKey === axis))
-        .map((i) => i.id)
-      const res = await beFetch(`/api/products/${productId}/images-workspace/bulk-save`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ upserts, deletes }),
+      return serverAxes.find(a => axisSynonymKey(a) === '__dim0__') ?? serverAxes[0] ?? 'Colore'
+    }, [product?.imageAxisPreference, serverAxes])
+
+    // Operator-chosen override — resets to null on each fresh workspace load.
+    const [axisOverride, setAxisOverride] = useState<string | null>(null)
+    useEffect(() => { setAxisOverride(null) }, [workspaceData])
+    const axis = axisOverride ?? defaultAxis
+
+    const colorValues = useMemo(() => getAxisValues(variants, axis), [variants, axis])
+
+    // ── Bucket state ─────────────────────────────────────────────────────────
+
+    const baseline = useMemo(
+      () => initBuckets(listingImages, axis, colorValues),
+      [listingImages, axis, colorValues],
+    )
+    const [buckets, setBuckets] = useState<Buckets>(() => cloneBuckets(baseline))
+    useEffect(() => { setBuckets(cloneBuckets(baseline)) }, [baseline])
+    const hasDirty = useMemo(() => bucketsDiff(buckets, baseline) > 0, [buckets, baseline])
+
+    // ── Picker target ────────────────────────────────────────────────────────
+
+    const [pickerTarget, setPickerTarget] = useState<{ bucket: string; replaceIndex: number | null } | null>(null)
+
+    // ── Edit mutations ────────────────────────────────────────────────────────
+    // No cross-bucket overlap within this family. Cross-family drags only fire
+    // onCellDrop on the target, so the source family's buckets stay untouched.
+
+    const assign = useCallback((bucket: string, replaceIndex: number | null, url: string) => {
+      setBuckets(prev => {
+        const next = new Map(prev)
+        for (const [k, list] of next) {
+          if (k !== bucket && list.includes(url)) next.set(k, list.filter(u => u !== url))
+        }
+        let list = [...(next.get(bucket) ?? [])]
+        if (replaceIndex != null && replaceIndex < list.length) list[replaceIndex] = url
+        else list.push(url)
+        const seen = new Set<string>()
+        list = list.filter(u => seen.has(u) ? false : (seen.add(u), true))
+        next.set(bucket, list)
+        return next
       })
-      if (!res.ok) {
-        const body = await res.text()
-        throw new Error(`Save failed (${res.status}): ${body}`)
-      }
-      toast.success('Images saved')
-      // Offer to sync image_1..6 columns if the Default bucket has images.
-      const shared = buckets.get(SHARED) ?? []
-      if (onSyncColumns && shared.length > 0) setSyncUrls(shared.slice(0, 6))
-      load()
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setSaveError(msg)
-    } finally {
-      setSaving(false)
-    }
-  }, [productId, buckets, axis, listingImages, onSyncColumns, load, toast])
+    }, [])
 
-  // ── Publish ───────────────────────────────────────────────────────────
+    const removeAt = useCallback((bucket: string, posOneBased: number) => {
+      setBuckets(prev => {
+        const next = new Map(prev)
+        const list = [...(next.get(bucket) ?? [])]
+        list.splice(posOneBased - 1, 1)
+        next.set(bucket, list)
+        return next
+      })
+    }, [])
 
-  interface PublishResult {
-    success: boolean
-    message: string
-    pictureCount: number
-    colorSetCount: number
-    markets?: string[]
-    results?: Array<{ sku: string; market: string; status: string; message: string }>
-  }
+    const handleCellRemove = useCallback((rowKey: string | null, colKey: string) => {
+      removeAt(rowKey ?? SHARED, Number(colKey))
+    }, [removeAt])
 
-  const [publishState, setPublishState] = useState<'idle' | 'saving' | 'publishing' | 'done' | 'failed'>('idle')
-  const [publishResult, setPublishResult] = useState<PublishResult | null>(null)
-  const publishing = publishState === 'saving' || publishState === 'publishing'
+    const move = useCallback((
+      from: { rowKey: string | null; columnKey: string; url: string },
+      to: { rowKey: string | null; columnKey: string },
+    ) => {
+      const fromB = from.rowKey ?? SHARED, toB = to.rowKey ?? SHARED
+      setBuckets(prev => {
+        const next = new Map(prev)
+        const fromList = [...(next.get(fromB) ?? [])]
+        const [moved] = fromList.splice(Number(from.columnKey) - 1, 1)
+        if (moved === undefined) return prev
+        if (fromB === toB) {
+          fromList.splice(Math.min(Number(to.columnKey) - 1, fromList.length), 0, moved)
+          next.set(fromB, fromList)
+        } else {
+          const toList = [...(next.get(toB) ?? [])].filter(u => u !== moved)
+          toList.splice(Math.min(Number(to.columnKey) - 1, toList.length), 0, moved)
+          next.set(fromB, fromList); next.set(toB, toList)
+        }
+        return next
+      })
+    }, [])
 
-  const publish = useCallback(async () => {
-    if (!productId) return
-    setPublishResult(null)
-    // 1. Save if dirty
-    if (hasDirty) {
-      setPublishState('saving')
-      setSaving(true)
-      setSaveError(null)
+    // ── Grid model ────────────────────────────────────────────────────────────
+
+    const colCount = useMemo(() => {
+      let longest = 0
+      for (const list of buckets.values()) longest = Math.max(longest, list.length)
+      return Math.min(EBAY_MAX, Math.max(MIN_COLS, longest + 1))
+    }, [buckets])
+
+    const columns: ImageGridColumn[] = useMemo(
+      () => Array.from({ length: colCount }, (_, i) => ({
+        key: String(i + 1), label: String(i + 1),
+        sublabel: i === 0 ? 'Main' : undefined, isPrimary: i === 0,
+      })),
+      [colCount],
+    )
+
+    const gridRows: ImageGridRow[] = useMemo(() => {
+      const sharedN = (buckets.get(SHARED) ?? []).length
+      return [
+        { key: null, label: 'Default', sublabel: `cover + common · ${sharedN} photo${sharedN === 1 ? '' : 's'}` },
+        ...colorValues.map(cv => {
+          const n = (buckets.get(cv) ?? []).length
+          return { key: cv, label: cv, sublabel: `${n} photo${n === 1 ? '' : 's'}` }
+        }),
+      ]
+    }, [colorValues, buckets])
+
+    const resolveCell = useCallback((rowKey: string | null, colKey: string) => {
+      const url = (buckets.get(rowKey ?? SHARED) ?? [])[Number(colKey) - 1]
+      return url ? { url, origin: 'own' as const } : null
+    }, [buckets])
+
+    // ── Save ──────────────────────────────────────────────────────────────────
+
+    const [saving, setSaving] = useState(false)
+    const [saveError, setSaveError] = useState<string | null>(null)
+    const [syncUrls, setSyncUrls] = useState<string[] | null>(null)
+
+    // flush — persist dirty buckets. skipToast=true when publish will show the outcome.
+    // Returns true on success or when already clean; false on error.
+    const flush = useCallback(async (skipToast = false): Promise<boolean> => {
+      if (!productId || !hasDirty) return true
+      setSaving(true); setSaveError(null)
       try {
         const upserts: ListingImageUpsert[] = []
         for (const [bucket, urls] of buckets.entries()) {
@@ -383,334 +328,400 @@ export function EbayFlatFileImageModal({ open, onClose, productId, onSyncColumns
           })
         }
         const deletes = listingImages
-          .filter((i) => i.platform === 'EBAY' && !i.variationId && (i.variantGroupKey == null || i.variantGroupKey === axis))
-          .map((i) => i.id)
-        const saveRes = await beFetch(`/api/products/${productId}/images-workspace/bulk-save`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          .filter(i => i.platform === 'EBAY' && !i.variationId && (i.variantGroupKey == null || i.variantGroupKey === axis))
+          .map(i => i.id)
+        const res = await beFetch(`/api/products/${productId}/images-workspace/bulk-save`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ upserts, deletes }),
         })
-        if (!saveRes.ok) {
-          const body = await saveRes.text()
-          throw new Error(`Save failed (${saveRes.status}): ${body}`)
+        if (!res.ok) {
+          const body = await res.text()
+          throw new Error(`Save failed (${res.status}): ${body}`)
         }
+        if (!skipToast) toast.success('Images saved')
+        const shared = buckets.get(SHARED) ?? []
+        if (onSyncColumns && shared.length > 0) setSyncUrls(shared.slice(0, 6))
         load()
+        return true
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         setSaveError(msg)
+        return false
+      } finally {
         setSaving(false)
-        setPublishState('idle')
-        return
       }
-      setSaving(false)
+    }, [productId, hasDirty, buckets, axis, listingImages, onSyncColumns, load, toast])
+
+    // ── Publish ───────────────────────────────────────────────────────────────
+
+    const [publishState, setPublishState] = useState<'idle' | 'saving' | 'publishing' | 'done' | 'failed'>('idle')
+    const [publishResult, setPublishResult] = useState<PublishResult | null>(null)
+    const publishing = publishState === 'saving' || publishState === 'publishing'
+
+    const publish = useCallback(async () => {
+      if (!productId) return
+      setPublishResult(null)
+      if (hasDirty) {
+        setPublishState('saving')
+        const ok = await flush(true)
+        if (!ok) { setPublishState('idle'); return }
+      }
+      setPublishState('publishing')
+      try {
+        const res = await beFetch(`/api/products/${productId}/ebay-images/publish`, { method: 'POST' })
+        const body: PublishResult = await res.json()
+        setPublishResult(body)
+        setPublishState(body.success ? 'done' : 'failed')
+        if (body.success) toast.success(`Published ${body.pictureCount} image${body.pictureCount !== 1 ? 's' : ''} to eBay`)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        setPublishResult({ success: false, message: msg, pictureCount: 0, colorSetCount: 0 })
+        setPublishState('failed')
+      }
+    }, [productId, hasDirty, flush, toast])
+
+    // ── Imperative handle ─────────────────────────────────────────────────────
+
+    useImperativeHandle(ref, () => ({
+      save: () => flush(false),
+      publish,
+    }), [flush, publish])
+
+    // ── Render ────────────────────────────────────────────────────────────────
+
+    const sku = product?.sku ?? productId
+
+    return (
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+
+        {/* Section header */}
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
+          {collapsible && (
+            <button
+              type="button"
+              aria-label={collapsed ? `Expand ${sku}` : `Collapse ${sku}`}
+              onClick={() => setCollapsed(c => !c)}
+              className="flex-shrink-0 rounded p-0.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 dark:hover:text-slate-200 dark:hover:bg-slate-700 transition-colors"
+            >
+              {collapsed
+                ? <ChevronRight className="w-4 h-4" />
+                : <ChevronDown className="w-4 h-4" />}
+            </button>
+          )}
+          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex-shrink-0 min-w-0 truncate">{sku}</span>
+          {hasDirty && !saving && (
+            <span className="text-[10px] rounded-full px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium flex-shrink-0">
+              unsaved
+            </span>
+          )}
+          {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400 flex-shrink-0" />}
+          {!loading && serverAxes.length > 1 && (
+            <Select value={axis} onChange={e => setAxisOverride(e.target.value)} className="text-xs ml-1 flex-shrink-0">
+              {serverAxes.map(a => <option key={a} value={a}>{a}</option>)}
+            </Select>
+          )}
+          <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+            {hasDirty && (
+              <Button
+                size="sm" variant="ghost"
+                onClick={() => { setBuckets(cloneBuckets(baseline)); setSaveError(null) }}
+                disabled={saving || publishing}
+              >
+                Discard
+              </Button>
+            )}
+            <Button
+              size="sm" variant="secondary"
+              onClick={() => { void flush(false) }}
+              disabled={saving || publishing || !hasDirty}
+            >
+              {saving
+                ? <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Saving…</span>
+                : 'Save'}
+            </Button>
+            <Button size="sm" onClick={() => { void publish() }} disabled={publishing}>
+              {publishState === 'saving'
+                ? <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Saving…</span>
+                : publishState === 'publishing'
+                ? <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Publishing…</span>
+                : hasDirty ? 'Save & Publish' : 'Publish'}
+            </Button>
+          </div>
+        </div>
+
+        {/* Section body */}
+        {!collapsed && (
+          <div className="p-4 flex flex-col gap-4">
+
+            {/* Inline error / sync banners */}
+            {saveError && (
+              <Banner variant="danger" title="Save failed">{saveError}</Banner>
+            )}
+            {syncUrls && onSyncColumns && (
+              <Banner variant="info" title="Sync flat-file columns?">
+                Copy the {syncUrls.length} Default image{syncUrls.length !== 1 ? 's' : ''} into image_1–{syncUrls.length} on the rows for this product?
+                <div className="mt-2 flex gap-2">
+                  <Button size="sm" onClick={() => {
+                    onSyncColumns(syncUrls)
+                    setSyncUrls(null)
+                    toast.success(`Synced ${syncUrls.length} image column${syncUrls.length !== 1 ? 's' : ''}`)
+                  }}>
+                    Yes, sync
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setSyncUrls(null)}>Skip</Button>
+                </div>
+              </Banner>
+            )}
+
+            {/* Loading skeleton */}
+            {loading && (
+              <div className="space-y-3">
+                <Skeleton height={80} radius={8} />
+                <Skeleton height={200} radius={8} />
+              </div>
+            )}
+
+            {/* Load error */}
+            {!loading && error && (
+              <Banner variant="danger" title="Failed to load images">{error}</Banner>
+            )}
+
+            {/* Content */}
+            {!loading && !error && workspaceData && (
+              <>
+                {/* Master gallery */}
+                {masterImages.length > 0 ? (
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                      <span className="font-medium text-slate-700 dark:text-slate-200">Master gallery</span>
+                      {' · '}Drag onto a cell or click any cell to pick.
+                      Dragging to another product copies the photo (source keeps it).
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {masterImages.map(img => (
+                        <div
+                          key={img.id} draggable
+                          onDragStart={e => {
+                            e.dataTransfer.effectAllowed = 'copy'
+                            e.dataTransfer.setData('application/nexus-image-url', img.url)
+                            e.dataTransfer.setData('application/nexus-image-id', img.id)
+                          }}
+                          className="w-12 h-12 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-800 flex-shrink-0 cursor-grab active:cursor-grabbing"
+                          title={img.alt ?? img.url}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={img.url} alt={img.alt ?? ''} draggable={false} className="w-full h-full object-contain" loading="lazy" decoding="async" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-600 px-4 py-5 text-center">
+                    <ImageIcon className="w-6 h-6 mx-auto mb-1.5 text-slate-300 dark:text-slate-600" />
+                    <p className="text-xs text-slate-400">No master images yet — upload from the product Images tab first.</p>
+                  </div>
+                )}
+
+                {/* Bucket grid */}
+                {colorValues.length > 0 || (buckets.get(SHARED) ?? []).length > 0 ? (
+                  <ChannelImageGrid
+                    rows={gridRows} columns={columns} resolveCell={resolveCell}
+                    onCellClick={(rowKey, colKey) => {
+                      const bucket = rowKey ?? SHARED
+                      const list = buckets.get(bucket) ?? []
+                      const idx = Number(colKey) - 1
+                      setPickerTarget({ bucket, replaceIndex: idx < list.length ? idx : null })
+                    }}
+                    onCellRemove={handleCellRemove}
+                    onCellMove={move}
+                    onCellDrop={(rowKey, colKey, url) => {
+                      const bucket = rowKey ?? SHARED
+                      const idx = Number(colKey) - 1
+                      assign(bucket, idx < (buckets.get(bucket) ?? []).length ? idx : null, url)
+                    }}
+                    ariaLabel={`eBay photos for ${sku} grouped by ${axis}`}
+                    rowHeaderLabel={axis}
+                    minDimensionPx={500}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12 gap-2">
+                    <ImageIcon className="w-9 h-9 text-slate-200 dark:text-slate-700" />
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">No curated images yet</p>
+                    <p className="text-xs text-slate-400">
+                      {serverAxes.length === 0
+                        ? 'This product has no variant attributes — only a Default bucket is available.'
+                        : 'Drag a master photo onto a cell or click to pick.'}
+                    </p>
+                  </div>
+                )}
+
+                {/* Publish status */}
+                {(publishState !== 'idle' || publishResult) && (
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-xs">
+                    {(publishState === 'saving' || publishState === 'publishing') && (
+                      <div className="flex items-center gap-2 text-slate-500">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+                        <span>{publishState === 'saving' ? 'Saving images…' : 'Sending to eBay…'}</span>
+                      </div>
+                    )}
+                    {publishResult && publishState !== 'saving' && publishState !== 'publishing' && (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          {publishResult.success
+                            ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                            : <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />}
+                          <span className={publishResult.success ? 'text-green-700 dark:text-green-400 font-medium' : 'text-red-600 dark:text-red-400 font-medium'}>
+                            {publishResult.success
+                              ? `${publishResult.pictureCount} image${publishResult.pictureCount !== 1 ? 's' : ''}, ${publishResult.colorSetCount} colour set${publishResult.colorSetCount !== 1 ? 's' : ''} sent`
+                              : publishResult.message}
+                          </span>
+                          {!publishResult.success && (
+                            <button
+                              type="button"
+                              onClick={() => { void publish() }}
+                              className="ml-auto flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                            >
+                              <RefreshCw className="w-3 h-3" /> Retry
+                            </button>
+                          )}
+                        </div>
+                        {publishResult.results && publishResult.results.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {publishResult.results.map((r, i) => (
+                              <span
+                                key={i} title={r.message}
+                                className={[
+                                  'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                                  r.status === 'SUCCESS' || r.status === 'success'
+                                    ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                    : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                                ].join(' ')}
+                              >
+                                {r.market}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* eBay rules reminder */}
+                <p className="text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
+                  eBay rules: max {EBAY_MAX} images · min 500 px · JPEG/PNG only
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Image picker — scoped to this family's master gallery */}
+        {pickerTarget !== null && (
+          <ImagePickerModal
+            productId={productId}
+            masterImages={masterImages as ProductImage[]}
+            onSelect={url => { assign(pickerTarget.bucket, pickerTarget.replaceIndex, url); setPickerTarget(null) }}
+            onClose={() => setPickerTarget(null)}
+          />
+        )}
+      </div>
+    )
+  },
+)
+
+// ── EbayFlatFileImageModal ────────────────────────────────────────────────────
+// Shell — renders one FamilySection per loaded product family in a scrollable
+// stacked layout. The footer adds "Save All" / "Publish All" when multi-family.
+
+export interface EbayFlatFileImageModalProps {
+  open: boolean
+  onClose: () => void
+  /** IDs of all product families currently loaded in the flat-file editor. */
+  productIds: string[]
+  /**
+   * Called after a successful save when a family's Default bucket has ≥1 URL.
+   * productId identifies which family was saved; urls are the first 6 Default photos.
+   */
+  onSyncColumns?: (productId: string, urls: string[]) => void
+}
+
+export function EbayFlatFileImageModal({ open, onClose, productIds, onSyncColumns }: EbayFlatFileImageModalProps) {
+  const { toast } = useToast()
+
+  // Stable ref map keyed by productId — persists across renders without extra deps.
+  const refsMap = useRef<Map<string, RefObject<FamilySectionHandle>>>(new Map())
+  const getRef = useCallback((pid: string): RefObject<FamilySectionHandle> => {
+    if (!refsMap.current.has(pid)) refsMap.current.set(pid, createRef<FamilySectionHandle>())
+    return refsMap.current.get(pid)!
+  }, [])
+
+  const [busyAll, setBusyAll] = useState(false)
+
+  const saveAll = useCallback(async () => {
+    setBusyAll(true)
+    let failed = 0
+    for (const pid of productIds) {
+      const ok = await refsMap.current.get(pid)?.current?.save() ?? true
+      if (!ok) failed++
     }
-    // 2. Publish
-    setPublishState('publishing')
-    try {
-      const res = await beFetch(`/api/products/${productId}/ebay-images/publish`, { method: 'POST' })
-      const body: PublishResult = await res.json()
-      setPublishResult(body)
-      setPublishState(body.success ? 'done' : 'failed')
-      if (body.success) toast.success(`Published ${body.pictureCount} image${body.pictureCount !== 1 ? 's' : ''} to eBay`)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setPublishResult({ success: false, message: msg, pictureCount: 0, colorSetCount: 0 })
-      setPublishState('failed')
+    setBusyAll(false)
+    if (failed === 0) toast.success('All images saved')
+    else toast.error(`${failed} product${failed !== 1 ? 's' : ''} failed to save`)
+  }, [productIds, toast])
+
+  const publishAll = useCallback(async () => {
+    setBusyAll(true)
+    for (const pid of productIds) {
+      await refsMap.current.get(pid)?.current?.publish()
     }
-  }, [productId, hasDirty, buckets, axis, listingImages, load, toast])
+    setBusyAll(false)
+  }, [productIds])
 
-  // ── Subtitle ──────────────────────────────────────────────────────────
-
-  const sku = product?.sku ?? productId
-  const totalImages = useMemo(
-    () => [...buckets.values()].reduce((sum, arr) => sum + arr.length, 0),
-    [buckets],
-  )
-  const nonEmptyBuckets = useMemo(
-    () => [...buckets.values()].filter((arr) => arr.length > 0).length,
-    [buckets],
-  )
-
-  const subtitle = !loading && workspaceData
-    ? [
-        `${nonEmptyBuckets} bucket${nonEmptyBuckets !== 1 ? 's' : ''}`,
-        `${totalImages} image${totalImages !== 1 ? 's' : ''}`,
-        axis ? `Axis: ${axis}` : null,
-      ].filter(Boolean).join(' · ')
-    : undefined
-
-  // ── Render ────────────────────────────────────────────────────────────
+  const hasProducts = productIds.length > 0
+  const isMulti = productIds.length > 1
 
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title={`eBay Images · ${sku}`}
-      subtitle={subtitle}
+      title="eBay Images"
+      subtitle={hasProducts
+        ? `${productIds.length} product famil${productIds.length !== 1 ? 'ies' : 'y'}`
+        : undefined}
       size="xl"
-      footer={hasDirty || saveError || publishResult ? (
-        <div className="flex w-full flex-col gap-2">
-          {saveError && (
-            <Banner variant="danger" title="Save failed" className="w-full">
-              {saveError}
-            </Banner>
-          )}
-          {syncUrls && onSyncColumns && (
-            <Banner variant="info" title="Sync flat-file columns?" className="w-full">
-              <span>Copy the {syncUrls.length} Default image{syncUrls.length !== 1 ? 's' : ''} into image_1–{syncUrls.length} on every flat-file row?</span>
-              <div className="mt-2 flex gap-2">
-                <Button size="sm" onClick={() => { onSyncColumns(syncUrls); setSyncUrls(null); toast.success(`Synced ${syncUrls.length} image column${syncUrls.length !== 1 ? 's' : ''}`) }}>
-                  Yes, sync
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setSyncUrls(null)}>Skip</Button>
-              </div>
-            </Banner>
-          )}
-          <div className="flex justify-end gap-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => { setBuckets(cloneBuckets(baseline)); setSaveError(null) }}
-              disabled={saving || publishing}
-            >
-              Discard
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={flush}
-              disabled={saving || publishing || !hasDirty}
-            >
-              {saving ? (
-                <span className="flex items-center gap-1.5">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Saving…
-                </span>
-              ) : 'Save'}
-            </Button>
-            <Button
-              size="sm"
-              onClick={publish}
-              disabled={publishing}
-            >
-              {publishState === 'saving' ? (
-                <span className="flex items-center gap-1.5">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Saving…
-                </span>
-              ) : publishState === 'publishing' ? (
-                <span className="flex items-center gap-1.5">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Publishing…
-                </span>
-              ) : hasDirty ? 'Save & Publish' : 'Publish'}
-            </Button>
-          </div>
-        </div>
-      ) : workspaceData ? (
-        <div className="flex justify-end">
-          <Button size="sm" onClick={publish} disabled={publishing}>
-            Publish
+      footer={isMulti ? (
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="secondary" onClick={saveAll} disabled={busyAll}>
+            {busyAll
+              ? <span className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" />Working…</span>
+              : 'Save All'}
+          </Button>
+          <Button size="sm" onClick={publishAll} disabled={busyAll}>
+            {busyAll
+              ? <span className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" />Working…</span>
+              : 'Publish All'}
           </Button>
         </div>
       ) : null}
     >
-      {loading && (
-        <div className="space-y-3 py-2">
-          <Skeleton height={80} radius={8} />
-          <Skeleton height={200} radius={8} />
-          <Skeleton height={140} radius={8} />
-        </div>
-      )}
-
-      {!loading && error && (
-        <Banner variant="danger" title="Failed to load images">
-          {error}
-        </Banner>
-      )}
-
-      {!loading && !error && !productId && (
+      {!hasProducts ? (
         <Banner variant="warning" title="No product">
           Open this from a product&rsquo;s flat file to manage its eBay images.
         </Banner>
-      )}
-
-      {!loading && !error && workspaceData && (
+      ) : (
         <div className="flex flex-col gap-4">
-
-          {/* Axis picker — switch grouping dimension */}
-          {serverAxes.length > 1 && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 flex-shrink-0">Group by axis:</span>
-              <Select
-                value={axis}
-                onChange={(e) => setAxisOverride(e.target.value)}
-                className="text-xs"
-              >
-                {serverAxes.map((a) => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
-              </Select>
-            </div>
-          )}
-
-          {/* Master gallery strip — Phase 4 will make these draggable */}
-          {masterImages.length > 0 ? (
-            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3">
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
-                <span className="font-medium text-slate-700 dark:text-slate-200">
-                  Master gallery
-                </span>
-                {' · '}Drag a photo onto a cell below to assign it, or click any cell to pick.
-              </p>
-              <p className="text-[11px] text-slate-400 mb-2">
-                <strong>Default</strong> = cover + colour-neutral photos (size charts, features) shown
-                before a colour is picked. Each colour row = that colour&rsquo;s photos only.
-                A photo lives in one row only.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {masterImages.map((img) => (
-                  <div
-                    key={img.id}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.effectAllowed = 'copy'
-                      e.dataTransfer.setData('application/nexus-image-url', img.url)
-                      e.dataTransfer.setData('application/nexus-image-id', img.id)
-                    }}
-                    className="w-12 h-12 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-800 flex-shrink-0 cursor-grab active:cursor-grabbing"
-                    title={img.alt ?? img.url}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={img.url}
-                      alt={img.alt ?? ''}
-                      draggable={false}
-                      className="w-full h-full object-contain"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-600 px-4 py-5 text-center">
-              <ImageIcon className="w-6 h-6 mx-auto mb-1.5 text-slate-300 dark:text-slate-600" />
-              <p className="text-xs text-slate-400">
-                No master images yet — upload some from the product Images tab first.
-              </p>
-            </div>
-          )}
-
-          {/* Color bucket grid */}
-          {colorValues.length > 0 || (buckets.get(SHARED) ?? []).length > 0 ? (
-            <ChannelImageGrid
-              rows={gridRows}
-              columns={columns}
-              resolveCell={resolveCell}
-              onCellClick={(rowKey, colKey) => {
-                const bucket = rowKey ?? SHARED
-                const list = buckets.get(bucket) ?? []
-                const idx = Number(colKey) - 1
-                setPickerTarget({ bucket, replaceIndex: idx < list.length ? idx : null })
-              }}
-              onCellRemove={handleCellRemove}
-              onCellMove={move}
-              onCellDrop={(rowKey, colKey, url) => {
-                const bucket = rowKey ?? SHARED
-                const idx = Number(colKey) - 1
-                assign(bucket, idx < (buckets.get(bucket) ?? []).length ? idx : null, url)
-              }}
-              ariaLabel={`eBay photos grouped by ${axis}`}
-              rowHeaderLabel={axis}
-              minDimensionPx={500}
+          {productIds.map(pid => (
+            <FamilySection
+              key={pid}
+              ref={getRef(pid)}
+              productId={pid}
+              collapsible={isMulti}
+              open={open}
+              onSyncColumns={onSyncColumns ? urls => onSyncColumns(pid, urls) : undefined}
             />
-          ) : (
-            <div className="flex flex-col items-center justify-center py-12 gap-2">
-              <ImageIcon className="w-9 h-9 text-slate-200 dark:text-slate-700" />
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                No curated images yet
-              </p>
-              <p className="text-xs text-slate-400">
-                {serverAxes.length === 0
-                  ? 'This product has no variant attributes — only a Default bucket is available.'
-                  : `Drag a master photo onto a cell to assign it (or click a cell).`}
-              </p>
-            </div>
-          )}
-
-          {/* Publish status */}
-          {(publishState !== 'idle' || publishResult) && (
-            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-xs">
-              {(publishState === 'saving' || publishState === 'publishing') && (
-                <div className="flex items-center gap-2 text-slate-500">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
-                  <span>{publishState === 'saving' ? 'Saving images…' : 'Sending to eBay…'}</span>
-                </div>
-              )}
-              {publishResult && publishState !== 'saving' && publishState !== 'publishing' && (
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    {publishResult.success
-                      ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
-                      : <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />}
-                    <span className={publishResult.success ? 'text-green-700 dark:text-green-400 font-medium' : 'text-red-600 dark:text-red-400 font-medium'}>
-                      {publishResult.success
-                        ? `${publishResult.pictureCount} image${publishResult.pictureCount !== 1 ? 's' : ''}, ${publishResult.colorSetCount} colour set${publishResult.colorSetCount !== 1 ? 's' : ''} sent`
-                        : publishResult.message}
-                    </span>
-                    {!publishResult.success && (
-                      <button
-                        type="button"
-                        onClick={publish}
-                        className="ml-auto flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                        Retry
-                      </button>
-                    )}
-                  </div>
-                  {publishResult.results && publishResult.results.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {publishResult.results.map((r, i) => (
-                        <span
-                          key={i}
-                          className={[
-                            'rounded-full px-2 py-0.5 text-[10px] font-medium',
-                            r.status === 'SUCCESS' || r.status === 'success'
-                              ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                              : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-                          ].join(' ')}
-                          title={r.message}
-                        >
-                          {r.market}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* eBay rules reminder */}
-          <p className="text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
-            eBay rules: max {EBAY_MAX} images · min 500 px · JPEG/PNG only
-          </p>
+          ))}
         </div>
-      )}
-      {/* Image picker — opened when an empty (or occupied) cell is clicked */}
-      {pickerTarget !== null && (
-        <ImagePickerModal
-          productId={productId}
-          masterImages={masterImages as ProductImage[]}
-          onSelect={(url) => {
-            assign(pickerTarget.bucket, pickerTarget.replaceIndex, url)
-            setPickerTarget(null)
-          }}
-          onClose={() => setPickerTarget(null)}
-        />
       )}
     </Modal>
   )

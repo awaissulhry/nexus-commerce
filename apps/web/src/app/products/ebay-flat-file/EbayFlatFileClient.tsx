@@ -946,12 +946,18 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     UK: 'https://www.ebay.co.uk/itm/',
   }
 
-  // Stable productId for the image modal — prefer familyId prop, fall back to
-  // the parent row's _productId, then platformProductId.
-  const derivedProductId = useMemo(() => {
-    if (familyId) return familyId
-    const parent = initialRows.find((r) => r._isParent === true)
-    return String(parent?._productId ?? parent?.platformProductId ?? '')
+  // All unique family IDs present in the flat file — one per parent row.
+  // familyId prop (single-family mode) is always included when set.
+  const derivedProductIds = useMemo(() => {
+    const ids = new Set<string>()
+    if (familyId) ids.add(familyId)
+    for (const r of initialRows) {
+      if ((r as EbayRow)._isParent === true) {
+        const id = String((r as EbayRow)._productId ?? (r as EbayRow).platformProductId ?? '')
+        if (id) ids.add(id)
+      }
+    }
+    return [...ids]
   }, [familyId, initialRows])
 
   // Parent ids that actually have variant rows loaded — so the SKU badge
@@ -1432,7 +1438,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         />
 
         {/* Images — curate per-color image sets and push to eBay */}
-        {derivedProductId && (
+        {derivedProductIds.length > 0 && (
           <SharedTbBtn
             icon={<ImageIcon className="w-3.5 h-3.5" />}
             title="Manage eBay images — curate per-color image sets, upload new photos, push to all markets"
@@ -1459,7 +1465,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       </>
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, imageModalOpen, derivedProductId])
+  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, imageModalOpen, derivedProductIds])
 
   // ── Slot: import button ────────────────────────────────────────────────
 
@@ -1685,11 +1691,14 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       <EbayFlatFileImageModal
         open={imageModalOpen}
         onClose={() => setImageModalOpen(false)}
-        productId={derivedProductId}
-        onSyncColumns={(urls) => {
+        productIds={derivedProductIds}
+        onSyncColumns={(productId, urls) => {
           const IMAGE_COLS = ['image_1', 'image_2', 'image_3', 'image_4', 'image_5', 'image_6'] as const
           const cur = latestRowsRef.current
           const next = (cur as EbayRow[]).map((r) => {
+            // Only sync rows belonging to the saved family.
+            const rowProductId = String((r as EbayRow)._productId ?? (r as EbayRow).platformProductId ?? '')
+            if (rowProductId !== productId) return r
             const patch: Partial<EbayRow> = {}
             IMAGE_COLS.forEach((col, i) => { patch[col] = urls[i] ?? '' })
             return { ...r, ...patch, _dirty: true }
