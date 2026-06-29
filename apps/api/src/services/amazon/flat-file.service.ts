@@ -18,6 +18,7 @@ import type { PrismaClient } from '@nexus/database'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
 import { parseLocaleNumber, parseLocaleInt } from '../../lib/parse-locale-number.js'
 import { casUpdateChannelListing, isVersionConflict } from '../channel-listing-cas.js'
+import { productReadCacheService } from '../product-read-cache.service.js'
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -1896,6 +1897,41 @@ export class AmazonFlatFileService {
       const sku = String(r.item_sku ?? '').trim()
       return sku && String(r.record_action ?? '').toLowerCase() !== 'delete'
     })
+
+    // Delete-sync — record_action=delete rows are submitted to Amazon as a
+    // DELETE feed (the offer is withdrawn). Mirror that locally so Nexus
+    // isn't split-brain: soft-delete THIS marketplace's AMAZON listing
+    // (listingStatus ENDED + isPublished=false — reversible by re-publishing).
+    // The Product row is kept so history/links survive. Optimistic w.r.t. the
+    // async feed; the Nexus↔channel reconciliation is the backstop for the
+    // rare Amazon reject. Runs before the empty-validRows early-return so an
+    // all-delete submit is still mirrored locally.
+    const deleteSkus = [
+      ...new Set(
+        rows
+          .filter((r) => String(r.record_action ?? '').toLowerCase() === 'delete')
+          .map((r) => String(r.item_sku ?? '').trim())
+          .filter(Boolean),
+      ),
+    ]
+    if (deleteSkus.length) {
+      const delProducts = await this.prisma.product.findMany({
+        where: { sku: { in: deleteSkus }, deletedAt: null },
+        select: { id: true },
+      })
+      if (delProducts.length) {
+        const delIds = delProducts.map((p) => p.id)
+        await this.prisma.channelListing.updateMany({
+          where: { productId: { in: delIds }, channel: 'AMAZON', marketplace: mp },
+          data: { listingStatus: 'ENDED', isPublished: false },
+        })
+        // Keep the /products grid honest (it reads ProductReadCache).
+        await Promise.all(
+          delIds.map((id) => productReadCacheService.refresh(id).catch(() => undefined)),
+        )
+      }
+    }
+
     if (!validRows.length) return result
 
     // Bulk SKU → product lookup
