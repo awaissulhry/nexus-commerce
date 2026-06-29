@@ -3327,6 +3327,62 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // SKU-LINKAGE — GET /api/admin/listing-integrity
+  // Read-only Nexus self-consistency audit for Amazon listings: catches the
+  // drift that the "1:1, no inconsistency" goal must never have. (Amazon-side
+  // comparison is a later layer; this is the internal-integrity foundation
+  // the reconciliation surface will build on.)
+  //   - activeNoAsin: a live listing with no ASIN linked (broken linkage)
+  //   - duplicateAsin: one ASIN claimed by >1 distinct product (dup listings/parents)
+  //   - multiListingPerMarket: a product with >1 AMAZON listing in one market
+  fastify.get('/admin/listing-integrity', async (_request, reply) => {
+    try {
+      const listings = await prisma.channelListing.findMany({
+        where: { channel: 'AMAZON' },
+        select: {
+          productId: true, marketplace: true, externalListingId: true,
+          listingStatus: true, isPublished: true,
+          product: { select: { sku: true, deletedAt: true } },
+        },
+      })
+      const live = listings.filter(
+        (l) => l.listingStatus === 'ACTIVE' && l.isPublished && !l.product?.deletedAt,
+      )
+
+      const activeNoAsin = live
+        .filter((l) => !l.externalListingId)
+        .map((l) => ({ sku: l.product?.sku ?? null, marketplace: l.marketplace }))
+
+      const productsByAsin = new Map<string, Set<string>>()
+      for (const l of live) {
+        if (!l.externalListingId) continue
+        const set = productsByAsin.get(l.externalListingId) ?? new Set<string>()
+        set.add(l.productId)
+        productsByAsin.set(l.externalListingId, set)
+      }
+      const duplicateAsin = [...productsByAsin.entries()]
+        .filter(([, prods]) => prods.size > 1)
+        .map(([asin, prods]) => ({ asin, productCount: prods.size }))
+
+      const countByProductMarket = new Map<string, number>()
+      for (const l of live) {
+        const k = `${l.productId}::${l.marketplace}`
+        countByProductMarket.set(k, (countByProductMarket.get(k) ?? 0) + 1)
+      }
+      const multiListingPerMarket = [...countByProductMarket.values()].filter((n) => n > 1).length
+
+      return {
+        ok: true,
+        liveAmazonListings: live.length,
+        activeNoAsin: { count: activeNoAsin.length, sample: activeNoAsin.slice(0, 15) },
+        duplicateAsin: { count: duplicateAsin.length, sample: duplicateAsin.slice(0, 15) },
+        multiListingPerMarket,
+      }
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
   // F.1 — POST /api/admin/cleanup-product-orphans
   // One-shot cleanup of FK-orphan rows that point to deleted Products.
   // The bulk-hard-delete cascade now handles these forward, but rows
