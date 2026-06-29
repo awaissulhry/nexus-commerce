@@ -777,6 +777,19 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       const offersByProduct = new Map<string, Set<'FBA' | 'FBM'>>()
       const stockByProduct = new Map<string, { fba: number; non: number }>()
       if (pageProductIds.length > 0) {
+        // Stock lives on the child (variation) products — a parent owns none
+        // directly — so a parent's Available total is the sum across its
+        // children. Pull the children of any parents on this page so their
+        // stock can be rolled up onto the parent row.
+        const childRows = await prisma.product.findMany({
+          where: { parentId: { in: pageProductIds } },
+          select: { id: true, parentId: true },
+        })
+        const childToParent = new Map<string, string>(
+          childRows.map((c) => [c.id, c.parentId as string]),
+        )
+        const stockIds = [...pageProductIds, ...childRows.map((c) => c.id)]
+
         const [offerRows, stockRows] = await Promise.all([
           prisma.offer.findMany({
             where: {
@@ -789,7 +802,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             },
           }),
           prisma.stockLevel.findMany({
-            where: { productId: { in: pageProductIds } },
+            where: { productId: { in: stockIds } },
             select: {
               productId: true,
               quantity: true,
@@ -804,10 +817,13 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           offersByProduct.set(pid, s)
         }
         for (const s of stockRows) {
-          const cur = stockByProduct.get(s.productId) ?? { fba: 0, non: 0 }
+          // A child's stock rolls up to its parent's row; a standalone /
+          // top-level product's own stock stays on itself.
+          const ownerId = childToParent.get(s.productId) ?? s.productId
+          const cur = stockByProduct.get(ownerId) ?? { fba: 0, non: 0 }
           if (s.location.type === 'AMAZON_FBA') cur.fba += s.quantity
           else cur.non += s.quantity
-          stockByProduct.set(s.productId, cur)
+          stockByProduct.set(ownerId, cur)
         }
       }
 
