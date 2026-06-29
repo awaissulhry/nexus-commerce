@@ -2388,7 +2388,7 @@ export default function AmazonFlatFileClient({
     const currentMp = marketplace.toUpperCase()
     const others = MARKETPLACES.filter((m) => m !== currentMp)
     if (typeof requestIdleCallback !== 'undefined') {
-      requestIdleCallback(() => { others.forEach((m) => void prefetch(m, productType)) }, { timeout: 4000 })
+      requestIdleCallback(() => { others.forEach((m) => void prefetch(m, productType)) }, { timeout: 1500 })
     } else {
       setTimeout(() => { others.forEach((m) => void prefetch(m, productType)) }, 1500)
     }
@@ -5066,7 +5066,50 @@ function computeRowCompleteness(row: Row, columns: Column[]): { filled: number; 
   return { filled, total }
 }
 
-function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell,
+// FF-2 (perf) — event-handler props. Their identity changes on every parent
+// render (inline arrows closing over row._rowId), but their BEHAVIOR is stable,
+// so they must not force a row re-render.
+const SPREADSHEET_ROW_CALLBACK_PROPS = new Set<string>([
+  'onToggleCollapse', 'onSelect', 'onDeactivate', 'onChange', 'onLiveChange', 'onPushSnapshot',
+  'onNavigate', 'onRowResizeStart', 'onRowDragStart', 'onRowDragEnd', 'onRowDragOver', 'onRowDrop',
+  'onCellPointerDown', 'onCellDoubleClick', 'onRowSelect', 'onFillHandlePointerDown', 'onFillToBottom',
+  'onFillDrop', 'onCascadeRow',
+])
+
+// FF-2 (perf) — memo comparator so a keystroke (liveUpdateCell → setRows →
+// cellErrors recompute) no longer re-runs all ~500 row bodies. A row re-renders
+// only when something it actually shows changes: any non-callback prop by
+// identity (every one is a state/useMemo value or an inline primitive, so it's
+// stable when unchanged), PLUS this row's own cell-error levels (the cellErrors
+// Map gets a fresh identity on every edit, but a given row's errors usually
+// don't). The on* callbacks are skipped — identity churns, behavior is stable.
+function areRowPropsEqual(prev: RowProps, next: RowProps): boolean {
+  const keys = Object.keys(next) as Array<keyof RowProps>
+  if (keys.length !== Object.keys(prev).length) return false
+  for (const k of keys) {
+    if (k === 'cellErrors') continue
+    if (SPREADSHEET_ROW_CALLBACK_PROPS.has(k as string)) continue
+    if (!Object.is(prev[k], next[k])) return false
+  }
+  // Per-row cell-error levels (the row body renders its own error chip; cells
+  // are separately memoized so their own error styling is handled there).
+  const rowId = next.row._rowId as string
+  const pe = prev.cellErrors as Map<string, { level: string; msg: string }>
+  const ne = next.cellErrors as Map<string, { level: string; msg: string }>
+  for (const col of next.columns) {
+    const key = `${rowId}:${col.id}`
+    const a = pe.get(key)
+    const b = ne.get(key)
+    if ((a?.level ?? null) !== (b?.level ?? null) || (a?.msg ?? null) !== (b?.msg ?? null)) {
+      return false
+    }
+  }
+  return true
+}
+
+const SpreadsheetRow = memo(SpreadsheetRowImpl, areRowPropsEqual)
+
+function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, activeCell,
   marketplace, colWidths, rowHeight, rowHeaderWidth, showRowImages, imageSize, imagesByAsin,
   isDraggingRow, dropIndicator,
   normSel, fillTarget, isFillDragging, isEditing, editInitialChar, clipboardRange,
