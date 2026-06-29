@@ -22,7 +22,7 @@ export function InventoryCell({ row, onOpen }: { row: ProductRow; onOpen: (row: 
             <span className={styles.invLine}>
               <span className={styles.invNum}>{row.fbaStock ?? 0}</span>
               <span className={styles.invTag}>FBA</span>
-              <Lock size={10} className={styles.invLock} aria-label="Amazon-managed, read-only" />
+              <Lock size={10} className={styles.invLock} aria-hidden="true" />
             </span>
             <span className={styles.invLine}>
               <span className={styles.invNum} style={{ color: getStockColor(row.fbmStock ?? 0, row.lowStockThreshold) }}>
