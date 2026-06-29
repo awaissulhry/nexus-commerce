@@ -20,6 +20,7 @@ export interface BuilderProps {
   primaryLabel?: ReactNode
   onPrimary?: () => void
   busy?: boolean
+  className?: string
 }
 
 /**
@@ -27,7 +28,7 @@ export interface BuilderProps {
  * + primary action), a scroll-spy left nav, and a scrolling section body.
  * Portaled to <body>; Esc closes. The spine for the rule/goal/campaign builders.
  */
-export function Builder({ open, onClose, title, sections, primaryLabel = 'Save', onPrimary, busy }: BuilderProps) {
+export function Builder({ open, onClose, title, sections, primaryLabel = 'Save', onPrimary, busy, className }: BuilderProps) {
   const [active, setActive] = useState<string | undefined>(sections[0]?.id)
   const contentRef = useRef<HTMLDivElement>(null)
 
@@ -67,7 +68,7 @@ export function Builder({ open, onClose, title, sections, primaryLabel = 'Save',
   if (!open || typeof document === 'undefined') return null
 
   return createPortal(
-    <div className="h10-ds-builder" role="dialog" aria-modal="true">
+    <div className={`h10-ds-builder${className ? ` ${className}` : ''}`} role="dialog" aria-modal="true">
       <div className="h10-ds-builder-top">
         <button type="button" className="x" onClick={onClose} aria-label="Close">
           <X size={18} />

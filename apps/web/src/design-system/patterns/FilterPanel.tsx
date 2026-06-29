@@ -12,6 +12,10 @@ export interface FilterPanelProps {
   children: ReactNode
   onReset?: () => void
   onApply?: () => void
+  /** Label for the reset button (default "Reset"; pass "Clear" to match the Ad Manager). */
+  resetLabel?: string
+  /** Disable the reset button (e.g. when no filters are active). */
+  resetDisabled?: boolean
   /** extra left-aligned footer slot (e.g. "Save to library") */
   footerExtra?: ReactNode
   defaultOpen?: boolean
@@ -21,7 +25,7 @@ export interface FilterPanelProps {
  * Collapsible filter panel (H10 `.h10-am-fpanel`): header + presets + a
  * responsive 6-col field grid + reset/apply footer. Compose with `FilterField`.
  */
-export function FilterPanel({ title = 'Filters', presets, children, onReset, onApply, footerExtra, defaultOpen = true }: FilterPanelProps) {
+export function FilterPanel({ title = 'Filters', presets, children, onReset, onApply, resetLabel = 'Reset', resetDisabled, footerExtra, defaultOpen = true }: FilterPanelProps) {
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className={['h10-ds-fpanel', open ? '' : 'collapsed'].filter(Boolean).join(' ')}>
@@ -40,7 +44,11 @@ export function FilterPanel({ title = 'Filters', presets, children, onReset, onA
             <div className="h10-ds-fpanel-foot">
               {footerExtra}
               <span className="grow" />
-              {onReset && <Button onClick={onReset}>Reset</Button>}
+              {onReset && (
+                <Button onClick={onReset} disabled={resetDisabled}>
+                  {resetLabel}
+                </Button>
+              )}
               {onApply && (
                 <Button variant="primary" onClick={onApply}>
                   Apply

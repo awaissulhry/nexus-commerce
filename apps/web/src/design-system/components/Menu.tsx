@@ -16,6 +16,7 @@ export interface MenuProps {
   items: MenuItemDef[]
   align?: 'left' | 'right'
   triggerProps?: ButtonHTMLAttributes<HTMLButtonElement>
+  className?: string
 }
 
 /**
@@ -23,7 +24,7 @@ export interface MenuProps {
  * secondary button; the menu closes on outside-click or item select. Requires
  * `styles/primitives.css` (trigger) + `styles/components.css` (menu).
  */
-export function Menu({ label, items, align = 'left', triggerProps }: MenuProps) {
+export function Menu({ label, items, align = 'left', triggerProps, className }: MenuProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -37,7 +38,7 @@ export function Menu({ label, items, align = 'left', triggerProps }: MenuProps) 
   }, [open])
 
   return (
-    <div className="h10-ds-menu-wrap" ref={ref}>
+    <div className={`h10-ds-menu-wrap${className ? ` ${className}` : ''}`} ref={ref}>
       <button type="button" className="h10-ds-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} {...triggerProps}>
         {label}
       </button>

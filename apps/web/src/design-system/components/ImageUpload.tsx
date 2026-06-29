@@ -31,6 +31,7 @@ export interface ImageUploadProps {
   /** Optional "Select from assets" action (DAM browse). */
   onSelectFromAssets?: () => void
   disabled?: boolean
+  className?: string
 }
 
 const DEFAULT_ACCEPT = 'image/png,image/jpeg'
@@ -45,7 +46,7 @@ function readDimensions(file: File): Promise<{ w: number; h: number }> {
   })
 }
 
-export function ImageUpload({ value, onChange, onUpload, label, criteria, accept = DEFAULT_ACCEPT, maxBytes, minWidth, minHeight, aspect = '1 / 1', onSelectFromAssets, disabled }: ImageUploadProps) {
+export function ImageUpload({ value, onChange, onUpload, label, criteria, accept = DEFAULT_ACCEPT, maxBytes, minWidth, minHeight, aspect = '1 / 1', onSelectFromAssets, disabled, className }: ImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [drag, setDrag] = useState(false)
@@ -71,7 +72,7 @@ export function ImageUpload({ value, onChange, onUpload, label, criteria, accept
   const onDrop = (e: React.DragEvent) => { e.preventDefault(); setDrag(false); void handle(e.dataTransfer.files?.[0]) }
 
   return (
-    <div className="h10-ds-imgup">
+    <div className={`h10-ds-imgup${className ? ` ${className}` : ''}`}>
       {label && <span className="h10-ds-imgup-lbl">{label}</span>}
       <div className="h10-ds-imgup-row">
         {value ? (

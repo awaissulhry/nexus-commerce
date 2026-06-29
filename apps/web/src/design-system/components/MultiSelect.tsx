@@ -15,10 +15,11 @@ export interface MultiSelectProps {
   onChange: (next: string[]) => void
   /** label shown when nothing is selected (default "All") */
   placeholder?: string
+  className?: string
 }
 
 /** Checkbox multi-select dropdown (H10 `.h10-ms`): "All" / "N selected" + Select-all. */
-export function MultiSelect({ options, value, onChange, placeholder = 'All' }: MultiSelectProps) {
+export function MultiSelect({ options, value, onChange, placeholder = 'All', className }: MultiSelectProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useClickAway(ref, () => setOpen(false), open)
@@ -29,7 +30,7 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All' }: M
   const toggleAll = () => onChange(allChecked ? [] : options.map((o) => o.value))
 
   return (
-    <div className="h10-ds-ms" ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
+    <div className={`h10-ds-ms${className ? ` ${className}` : ''}`} ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
       <button type="button" className="h10-ds-ms-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <span className={value.length === 0 ? 'ph' : ''}>{label}</span>
         <ChevronDown size={15} aria-hidden />

@@ -4,6 +4,101 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [PREFERENCES] — 2026-06-28 — PreferencesModal pattern (two-panel "Customise") + DataGrid sticky-right
+
+- **`PreferencesModal`** (`patterns/PreferencesModal.tsx`) — the two-panel grid
+  Customise dialog ported to the DS from the live /products workspace. Left:
+  optional rows-per-page · sticky first/last column · optional sort · a
+  `workspaceSlot`; right: every column with a drag handle + DS `Toggle` (locked
+  columns disabled). Draft-then-Save (atomic), Reset to defaults. Pure DS — built
+  on `Modal` + `Button` + `Toggle`, no app i18n/utils. Optional sections collapse
+  on empty option lists. Token-clean `.h10-ds-prefs*`. Title defaults to "Customise".
+- **`DataGrid` gained `stickyRight`** on `Column` — pins a column to the right
+  edge (offsets stack, like sticky-left), with a left edge-shadow. Lets the
+  Customise "Pin last column" toggle actually pin the trailing actions column.
+  Additive; existing grids unaffected.
+- Recorded in the patterns barrel + catalog (Builder & ColumnCustomizer →
+  PreferencesModal). First consumer: `/products/next` Customise button.
+
+## [GRIDTOOLBAR] — 2026-06-28 — GridToolbar pattern + grid-card wrapper (Ad-Manager toolbar)
+
+- **`GridToolbar`** (`patterns/GridToolbar.tsx`) — the Ad-Manager `.h10-am-toolbar`
+  row as a reusable DS pattern: `count` (left) + left-action `children` + flexible
+  spacer + `right` actions. Token-clean `.h10-ds-toolbar` (count `.cnt`, bold
+  numbers, `.grow` spacer).
+- **`.h10-ds-gridcard`** wrapper — seats the toolbar inside the grid card above a
+  `DataGrid` (toolbar gets a bottom divider; the inner `.h10-ds-grid-wrap` drops
+  its own border + radius), matching the campaigns page's one-card layout.
+- Recorded in the patterns barrel + catalog (Filters & action bars → GridToolbar).
+  First consumer: `/products/next` (count · Customise · Export · density · Live).
+
+## [FILTERBAR] — 2026-06-28 — Config-driven FilterBar pattern (one bar for every grid)
+
+The declarative filter bar the grid workspaces were missing — so feature pages
+(products, listings, fulfillment, pricing…) own *configuration*, never filter-bar UI.
+
+- **`FilterBar`** (`patterns/FilterBar.tsx`) — pass a `dimensions: FilterDimension[]`
+  array; the bar renders the collapsible Ad-Manager panel (built on `FilterPanel`)
+  with the right control per dimension: `multiselect` → `MultiSelect`, `select` →
+  `Combobox`, `range` → a min/max field (optional €/% addon), `toggle` → `Toggle`.
+  Options accept an optional facet `count`. Reproduces the campaigns-page
+  `.h10-am-fpanel` through DS tokens. First consumer: `/products/next`.
+- **`FilterPanel` gained `resetLabel` + `resetDisabled`** (additive) — lets the
+  footer read **"Clear"** and disable when no filters are active, matching the
+  Ad Manager. Existing consumers default to "Reset", unchanged.
+- **New CSS** — `.h10-ds-range*` (min/max field; input border uses
+  `--border-strong` = the campaigns input border exactly) + `.h10-ds-ms-count`
+  (muted facet count after an option label). All semantic-token-clean; `token-guard`
+  + `api-guard` green. Rendered in the catalog under Filters → FilterBar.
+- **Known follow-up:** a token-reconciliation pass to lock the remaining DS↔campaigns
+  drift (panel border `#d8dde4`→`#d6dbe2`, multiselect border, grid greys) is tracked
+  separately — values, not structure.
+
+## [DS-HARDEN] — 2026-06-27 — Consistency & hardening: semantic tokens + generated CSS + one API
+
+The DS made internally consistent and self-truthful — no new colour values, a
+consistency pass. Full map in `docs/AUDIT.md`; design at
+`docs/superpowers/specs/2026-06-27-design-system-consistency-hardening-design.md`.
+
+- **Platform-semantic alias layer is now LIVE.** Added the platform's semantic
+  names — `--text-*`, `--surface-*`, `--border-*`,
+  `--status-{success,warning,danger,info}-{soft,line,strong}`, `--color-primary`
+  (+`-soft`) — as **value-preserving aliases** over the existing `--h10-*` roles,
+  and repointed **every** component CSS rule onto them (the ~13 raw-ramp reaches
+  in Tag/Toggle/Tooltip/Skeleton/DataGrid/AppShell are gone). `--h10-*` is now
+  strictly the raw ramp + DS-only component-token tier underneath. No pixels move
+  — the alias values are identical, so the catalog screenshot-diff is a no-op.
+  `/marketing/ads` keeps reading `--h10-*` directly and is unaffected.
+- **`tokens.css` is GENERATED from TypeScript.** `tokens/css-vars.ts` (hex
+  sourced once from `tokens/colors.ts`) is the single source; new
+  `tools/generate-tokens-css.ts` emits the `:root{}` + `.dark{}` blocks.
+  `npm run tokens:gen` writes the stylesheet; **`npm run tokens:check`** is the CI
+  guard that fails on staleness. Closes the old "TS generates CSS" claim that was
+  previously hand-mirrored — drift is now structurally impossible.
+- **API harmonized onto one `Tone` vocabulary.** `type Tone = 'neutral' | 'info'
+  | 'success' | 'warning' | 'danger'` (+ `TONES`), applied via a `tone` prop to
+  **Pill** (`status` `ok/warn/arch/err` → `tone` `success/warning/neutral/danger`),
+  **Tag** (`positive` → `success`), **Toast** + **Banner** (`error` → `danger`;
+  `variant` kept as a deprecated alias on Banner for the untouchable
+  `EbayImportWizard`). **Button** keeps `variant` (`primary/secondary/ghost`) —
+  the emphasis axis, deliberately distinct from tone.
+- **Badge corrected to its real meaning.** `BadgeTone = sp|sd|sb|auto|manual`
+  was never a tone — it's the **ad-program** axis. Renamed to `program: AdProgram`.
+- **Types + sizing exported and standardized.** Every component now re-exports its
+  public Props via the barrel (incl. previously-leaking `KbdProps`, `PillProps`,
+  `TagProps`, and Toast's `ToastApi`). New shared `Size = sm|md|lg|xl`
+  (`primitives/size.ts`); Spinner's numeric `size` is the documented exception.
+- **Outliers conformed.** `TagInput` rebuilt onto `.h10-ds-taginput*` + semantic
+  tokens (dropping the raw Tailwind palette + hand-rolled `dark:` + `@/lib/utils`),
+  props unchanged so its two untouchable consumers need no edits. `ImageUpload`
+  CSS repointed onto the semantic aliases.
+- **Guardrails extended.** `tools/token-guard.mjs` (raw-hex ban across
+  primitives/components/patterns/styles) stays green; the generator's
+  `tokens:check` guards TS↔CSS sync. The consistency contract (no raw ramp in
+  component CSS, no raw Tailwind palette in `.tsx`, barrel-export completeness) is
+  documented in `docs/AUDIT.md` + `docs/GOVERNANCE.md` and enforced by review,
+  with a `tools/api-guard.mjs` lint planned.
+
 ## [P5.1] — 2026-06-23 — Tag primitive (neutral / semantic chip)
 
 - **`Tag`** (`primitives/Tag.tsx` + `.h10-ds-tag` in `styles/primitives.css`) — the

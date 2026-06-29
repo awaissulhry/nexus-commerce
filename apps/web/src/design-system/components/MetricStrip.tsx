@@ -9,12 +9,13 @@ export interface Metric {
 
 export interface MetricStripProps {
   metrics: Metric[]
+  className?: string
 }
 
 /** Row of KPI tiles (H10 metric strip). Auto-fits to the container width. */
-export function MetricStrip({ metrics }: MetricStripProps) {
+export function MetricStrip({ metrics, className }: MetricStripProps) {
   return (
-    <div className="h10-ds-metrics">
+    <div className={`h10-ds-metrics${className ? ` ${className}` : ''}`}>
       {metrics.map((m, i) => (
         <div key={i} className="h10-ds-metric">
           <div className="lbl">{m.label}</div>

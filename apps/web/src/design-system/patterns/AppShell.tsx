@@ -37,6 +37,7 @@ export interface AppShellProps {
   nav: ShellNavEntry[]
   footer?: ReactNode
   children: ReactNode
+  className?: string
 }
 
 const isGroup = (e: ShellNavEntry): e is ShellNavGroup => 'items' in e
@@ -61,7 +62,7 @@ function SubItem({ item }: { item: ShellSubItem }) {
  * via `defaultOpen`). Fills its parent — wrap in a `100dvh` container for a
  * full-page layout.
  */
-export function AppShell({ brand, nav, footer, children }: AppShellProps) {
+export function AppShell({ brand, nav, footer, children, className }: AppShellProps) {
   const [open, setOpen] = useState<Set<string>>(
     () => new Set(nav.filter(isGroup).filter((g) => g.defaultOpen || g.items.some((i) => i.active)).map((g) => g.id)),
   )
@@ -73,7 +74,7 @@ export function AppShell({ brand, nav, footer, children }: AppShellProps) {
     })
 
   return (
-    <div className="h10-ds-shell">
+    <div className={`h10-ds-shell${className ? ` ${className}` : ''}`}>
       <aside className="h10-ds-rail">
         <div className="h10-ds-brand">
           <span className="mark">{brand.mark}</span>
