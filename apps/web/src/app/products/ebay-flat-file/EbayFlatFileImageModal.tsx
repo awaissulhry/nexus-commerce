@@ -123,11 +123,17 @@ export interface EbayFlatFileImageModalProps {
   onClose: () => void
   /** productId (familyId) for the product family being edited */
   productId: string
+  /**
+   * Called after a successful save when the Default bucket has ≥1 URL.
+   * Receives the first 6 URLs from the Default bucket; the caller should
+   * write them into image_1..6 on every flat-file row.
+   */
+  onSyncColumns?: (urls: string[]) => void
 }
 
 // ── Component ─────────────────────────────────────────────────────────────
 
-export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFileImageModalProps) {
+export function EbayFlatFileImageModal({ open, onClose, productId, onSyncColumns }: EbayFlatFileImageModalProps) {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -292,6 +298,8 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
 
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  // URLs to offer for flat-file column sync after a successful save.
+  const [syncUrls, setSyncUrls] = useState<string[] | null>(null)
 
   const flush = useCallback(async () => {
     if (!productId) return
@@ -321,6 +329,9 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
         throw new Error(`Save failed (${res.status}): ${body}`)
       }
       toast.success('Images saved')
+      // Offer to sync image_1..6 columns if the Default bucket has images.
+      const shared = buckets.get(SHARED) ?? []
+      if (onSyncColumns && shared.length > 0) setSyncUrls(shared.slice(0, 6))
       load()
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -328,7 +339,7 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
     } finally {
       setSaving(false)
     }
-  }, [productId, buckets, axis, listingImages, load, toast])
+  }, [productId, buckets, axis, listingImages, onSyncColumns, load, toast])
 
   // ── Publish ───────────────────────────────────────────────────────────
 
@@ -435,6 +446,17 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
           {saveError && (
             <Banner variant="danger" title="Save failed" className="w-full">
               {saveError}
+            </Banner>
+          )}
+          {syncUrls && onSyncColumns && (
+            <Banner variant="info" title="Sync flat-file columns?" className="w-full">
+              <span>Copy the {syncUrls.length} Default image{syncUrls.length !== 1 ? 's' : ''} into image_1–{syncUrls.length} on every flat-file row?</span>
+              <div className="mt-2 flex gap-2">
+                <Button size="sm" onClick={() => { onSyncColumns(syncUrls); setSyncUrls(null); toast.success(`Synced ${syncUrls.length} image column${syncUrls.length !== 1 ? 's' : ''}`) }}>
+                  Yes, sync
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setSyncUrls(null)}>Skip</Button>
+              </div>
             </Banner>
           )}
           <div className="flex justify-end gap-2">

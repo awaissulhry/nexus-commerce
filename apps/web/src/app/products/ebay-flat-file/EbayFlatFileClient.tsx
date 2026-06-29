@@ -1686,6 +1686,17 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         open={imageModalOpen}
         onClose={() => setImageModalOpen(false)}
         productId={derivedProductId}
+        onSyncColumns={(urls) => {
+          const IMAGE_COLS = ['image_1', 'image_2', 'image_3', 'image_4', 'image_5', 'image_6'] as const
+          const cur = latestRowsRef.current
+          const next = (cur as EbayRow[]).map((r) => {
+            const patch: Partial<EbayRow> = {}
+            IMAGE_COLS.forEach((col, i) => { patch[col] = urls[i] ?? '' })
+            return { ...r, ...patch, _dirty: true }
+          })
+          latestPushHistoryRef.current?.(next)
+          latestSetRowsRef.current?.(next)
+        }}
       />
 
       {/* Unified history modal — H.1–H.4 */}
