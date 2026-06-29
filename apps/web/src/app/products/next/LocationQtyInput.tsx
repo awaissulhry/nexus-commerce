@@ -22,6 +22,7 @@ export function LocationQtyInput({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(String(value))
   const inputRef = useRef<HTMLInputElement>(null)
+  const committedRef = useRef(false)
 
   useEffect(() => {
     if (!editing) setDraft(String(value))
@@ -29,6 +30,7 @@ export function LocationQtyInput({
 
   useEffect(() => {
     if (editing) {
+      committedRef.current = false
       inputRef.current?.focus()
       inputRef.current?.select()
     }
@@ -48,6 +50,8 @@ export function LocationQtyInput({
   }
 
   const commit = () => {
+    if (committedRef.current) return
+    committedRef.current = true
     setEditing(false)
     const n = Number(draft)
     if (Number.isFinite(n) && Number.isInteger(n) && n >= 0 && n !== value) onCommit(n)
@@ -61,6 +65,7 @@ export function LocationQtyInput({
         type="number"
         min={0}
         className={styles.invQtyInput}
+        disabled={saving}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
