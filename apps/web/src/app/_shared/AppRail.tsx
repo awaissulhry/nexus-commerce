@@ -140,7 +140,7 @@ export function AppRail({ navItems, brand, header, footer }: AppRailProps) {
           const active = !it.external && isActiveHref(it.href)
           const isOpen = hasChildren && !!open[it.href]
 
-          const body = (
+          const bodyInner = (
             <>
               <span className="ico"><it.Icon size={20} /></span>
               <span className="lbl">{it.label}</span>
@@ -153,16 +153,6 @@ export function AppRail({ navItems, brand, header, footer }: AppRailProps) {
                 </span>
               )}
               <RailIndicator indicator={it.indicator} />
-              {hasChildren && (
-                <ChevronDown
-                  className={`chev ${isOpen ? 'open' : ''}`}
-                  size={16}
-                  aria-hidden="true"
-                />
-              )}
-              {it.external && (
-                <ExternalLink className="ext" size={14} aria-hidden="true" />
-              )}
             </>
           )
 
@@ -175,23 +165,47 @@ export function AppRail({ navItems, brand, header, footer }: AppRailProps) {
                   rel="noopener noreferrer"
                   className="h10-item"
                 >
-                  {body}
+                  {bodyInner}
+                  <ExternalLink className="ext" size={14} aria-hidden="true" />
                 </a>
               ) : hasChildren ? (
-                <button
-                  type="button"
-                  className={`h10-item ${active ? 'on' : ''}`}
-                  aria-expanded={isOpen}
-                  onClick={() => toggle(it.href)}
-                >
-                  {body}
-                </button>
+                // Two-target parent (mirrors the live sidebar + the channel
+                // sub-rows): the wrapper carries the active fill; the Link
+                // navigates to the page; the chevron button toggles the
+                // sub-items without navigating.
+                <div className={`h10-item h10-parent ${active ? 'on' : ''}`}>
+                  <Link
+                    href={it.href}
+                    className="h10-parent-link"
+                    aria-current={active ? 'page' : undefined}
+                  >
+                    {bodyInner}
+                  </Link>
+                  <button
+                    type="button"
+                    className="h10-parent-chev"
+                    aria-label={isOpen ? `Collapse ${it.label}` : `Expand ${it.label}`}
+                    aria-expanded={isOpen}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      toggle(it.href)
+                    }}
+                  >
+                    <ChevronDown
+                      className={`chev ${isOpen ? 'open' : ''}`}
+                      size={16}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </div>
               ) : (
                 <Link
                   href={it.href}
                   className={`h10-item ${active ? 'on' : ''}`}
+                  aria-current={active ? 'page' : undefined}
                 >
-                  {body}
+                  {bodyInner}
                 </Link>
               )}
 
