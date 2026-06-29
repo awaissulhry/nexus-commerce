@@ -10,15 +10,14 @@
  * same way the ads cockpit's AdsSidebar owns ADS_NAV.
  */
 
-import { AppRail } from '@/app/_shared/AppRail'
-import { PRODUCTS_NAV } from './nav'
+import { AppNavRail } from '@/app/_shared/AppNavRail'
 
+/**
+ * Preview bed for the app-wide rail. ProductsRail now renders the full-featured
+ * AppNavRail (live counts + connections + canonical nav) so the rail can be
+ * verified in isolation at /products/next before it replaces AppSidebar
+ * app-wide in Phase 5.
+ */
 export function ProductsRail() {
-  return (
-    <AppRail
-      navItems={PRODUCTS_NAV}
-      brand={{ mark: 'N', name: 'Nexus' }}
-      footer="Products · rebuild"
-    />
-  )
+  return <AppNavRail />
 }

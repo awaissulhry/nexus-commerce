@@ -41,6 +41,9 @@ export interface RailSubItem {
   href: string
   /** Markets revealed when this sub-item is expanded (the 3rd level). */
   children?: RailMarketItem[]
+  /** Trailing status: red dot (action), amber dot (warning), or a
+   *  "Connect" affordance (disconnected). */
+  indicator?: 'action' | 'warning' | 'disconnected'
 }
 
 export interface RailNavItem {
@@ -52,8 +55,19 @@ export interface RailNavItem {
   badge?: number
   /** Sub-items revealed when this item is expanded. */
   children?: RailSubItem[]
+  /** Trailing status: red dot (action), amber dot (warning), or a
+   *  "Connect" affordance (disconnected). */
+  indicator?: 'action' | 'warning' | 'disconnected'
   /** When set, the item is an external link (opens in new tab). */
   external?: string
+}
+
+/** Shared trailing indicator (dot or Connect) for a nav row. */
+function RailIndicator({ indicator }: { indicator?: 'action' | 'warning' | 'disconnected' }) {
+  if (indicator === 'disconnected') return <span className="h10-connect">Connect</span>
+  if (indicator === 'action') return <span className="h10-dot action" aria-hidden="true" />
+  if (indicator === 'warning') return <span className="h10-dot warning" aria-hidden="true" />
+  return null
 }
 
 export interface AppRailProps {
@@ -133,6 +147,7 @@ export function AppRail({ navItems, brand, footer }: AppRailProps) {
                   {it.badge > 99 ? '99+' : it.badge}
                 </span>
               )}
+              <RailIndicator indicator={it.indicator} />
               {hasChildren && (
                 <ChevronDown
                   className={`chev ${isOpen ? 'open' : ''}`}
@@ -181,7 +196,8 @@ export function AppRail({ navItems, brand, footer }: AppRailProps) {
                     const childActive = isActiveHref(c.href)
                     const hasMarkets = !!c.children?.length
 
-                    // Plain leaf sub-item (e.g. Shopify) — unchanged.
+                    // Plain leaf sub-item (e.g. Shopify, Organize) — may carry
+                    // a trailing indicator dot.
                     if (!hasMarkets) {
                       return (
                         <Link
@@ -189,7 +205,8 @@ export function AppRail({ navItems, brand, footer }: AppRailProps) {
                           href={c.href}
                           className={`h10-subitem ${childActive ? 'on' : ''}`}
                         >
-                          {c.label}
+                          <span className="sublbl">{c.label}</span>
+                          <RailIndicator indicator={c.indicator} />
                         </Link>
                       )
                     }
@@ -205,6 +222,7 @@ export function AppRail({ navItems, brand, footer }: AppRailProps) {
                           <Link href={c.href} className="subname">
                             {c.label}
                           </Link>
+                          <RailIndicator indicator={c.indicator} />
                           <button
                             type="button"
                             className="subchev-btn"

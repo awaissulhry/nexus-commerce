@@ -86,9 +86,27 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 
 .h10-sub { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 4px 60px; padding-right: 8px; }
 .h10-rail:not(:hover) .h10-sub { display: none; }
-.h10-subitem { white-space: nowrap; font-size: 12.5px; color: var(--h10-rail-text-2); text-decoration: none; padding: 6px 10px; border-radius: 6px; }
+.h10-subitem { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12.5px; color: var(--h10-rail-text-2); text-decoration: none; padding: 6px 10px; border-radius: 6px; }
 .h10-subitem:hover { background: var(--h10-rail-item-hover-2); color: var(--h10-rail-text-strong); }
 .h10-subitem.on { color: var(--h10-primary); font-weight: 600; }
+.h10-subitem .sublbl { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* trailing status indicators (action/warning dots, disconnected "Connect") */
+.h10-dot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0; }
+.h10-dot.action { background: var(--h10-danger); }
+.h10-dot.warning { background: var(--h10-warning); }
+/* The dot is the ONLY trailing element with margin-left:auto, so it pushes the
+   whole trailing cluster right. When a chevron follows, it hugs the dot with a
+   fixed gap (NOT another auto margin — two autos would split the free space and
+   strand the dot mid-row). A lone dot keeps a right margin off the edge. */
+.h10-item .h10-dot { margin-left: auto; }
+.h10-item .h10-dot:last-child { margin-right: 16px; }
+.h10-item .h10-dot + .chev { margin-left: 6px; }
+.h10-subitem .h10-dot { margin-left: auto; }
+.h10-connect { margin-left: auto; font-size: 11px; color: var(--h10-rail-text-2); opacity: 0; transition: opacity .14s ease; flex-shrink: 0; }
+.h10-item .h10-connect { margin-right: 16px; }
+.h10-item .h10-connect + .chev { margin-left: 6px; }
+.h10-rail:hover .h10-connect { opacity: 1; }
 
 /* third-level nav (channel → markets) — additive; only renders when a
    RailSubItem carries `children`. The ads cockpit nav has none, so these
