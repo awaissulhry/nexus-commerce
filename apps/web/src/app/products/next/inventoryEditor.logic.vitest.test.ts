@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   isLocationEditable, buildListModel, buildMatrixModel, editorModeForRow,
-  variationLabel, REASON_OPTIONS, DEFAULT_REASON,
+  REASON_OPTIONS, DEFAULT_REASON,
 } from './inventoryEditor.logic'
 
 describe('isLocationEditable', () => {
@@ -64,23 +64,5 @@ describe('editorModeForRow', () => {
   it('parents → matrix, leaves → list', () => {
     expect(editorModeForRow({ isParent: true })).toBe('matrix')
     expect(editorModeForRow({ isParent: false })).toBe('list')
-  })
-})
-
-describe('variationLabel', () => {
-  const parent = { name: 'XAVIA AIR-MESH Giacca Da Moto', sku: 'AIR-MESH-JACKET-MEN' }
-  it('labels by the child SKU with the parent prefix stripped', () => {
-    expect(variationLabel(
-      { name: 'XAVIA AIR-MESH … (L, Nero)', sku: 'AIR-MESH-JACKET-MEN-L-BLACK' },
-      parent,
-    )).toBe('L-BLACK')
-  })
-  it('disambiguates variations whose product names collide (data errors)', () => {
-    // Real case: the XXL child is mis-named "(XS, Nero)"; SKUs stay distinct.
-    expect(variationLabel({ name: 'x (XS, Nero)', sku: 'AIR-MESH-JACKET-MEN-XS-BLACK' }, parent)).toBe('XS-BLACK')
-    expect(variationLabel({ name: 'x (XS, Nero)', sku: 'AIR-MESH-JACKET-MEN-XXL-BLACK' }, parent)).toBe('XXL-BLACK')
-  })
-  it('falls back to the full SKU when there is no parent prefix', () => {
-    expect(variationLabel({ name: 'Plain', sku: 'STANDALONE-SKU-1' }, parent)).toBe('STANDALONE-SKU-1')
   })
 })

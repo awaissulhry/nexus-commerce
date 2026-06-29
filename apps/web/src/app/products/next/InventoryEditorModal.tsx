@@ -8,7 +8,7 @@ import { Select, Input, Button } from '@/design-system/primitives'
 import type { ProductRow } from '../_types'
 import { useInventoryEditor } from './useInventoryEditor'
 import { LocationQtyInput } from './LocationQtyInput'
-import { editorModeForRow, variationLabel, REASON_OPTIONS, DEFAULT_REASON } from './inventoryEditor.logic'
+import { editorModeForRow, REASON_OPTIONS, DEFAULT_REASON } from './inventoryEditor.logic'
 import styles from './styles.module.css'
 
 export function InventoryEditorModal({ row, onClose }: { row: ProductRow | null; onClose: () => void }) {
@@ -142,7 +142,7 @@ export function InventoryEditorModal({ row, onClose }: { row: ProductRow | null;
               {matrix.rows.map((r) => (
                 <tr key={r.productId}>
                   <td className={styles.invMatrixRowHead} title={r.name || r.sku}>
-                    {variationLabel({ name: r.name, sku: r.sku }, { name: row?.name ?? '', sku: row?.sku ?? '' })}
+                    {r.sku}
                   </td>
                   {matrix.columns.map((c) => {
                     const cell = r.cells[c.locationId] ?? { quantity: 0, reserved: 0, available: 0 }
