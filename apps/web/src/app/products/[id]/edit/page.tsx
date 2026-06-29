@@ -45,20 +45,22 @@ export default async function ProductEditPage({ params }: PageProps) {
   // can surface per-channel parent IDs (Amazon ASIN, eBay item ID, etc.)
   let parentProduct: any = null
   let siblings: any[] = []
-  let parentListings: Record<string, any[]> = {}
+  const parentListings: Record<string, any[]> = {}
 
   if (product.parentId) {
-    const [parentRes, siblingsRes, parentListingsRes] = await Promise.all([
+    // parentListings (the parent's all-listings) is streamed client-side in
+    // ProductEditClient — same treatment as the product's own all-listings —
+    // so the family banner's parent + siblings render without waiting on the
+    // parent's slowest fetch.
+    const [parentRes, siblingsRes] = await Promise.all([
       fetch(`${backend}/api/products/${product.parentId}`, { cache: 'no-store' }),
       fetch(`${backend}/api/products/${product.parentId}/children`, { cache: 'no-store' }),
-      fetch(`${backend}/api/products/${product.parentId}/all-listings`, { cache: 'no-store' }),
     ])
     if (parentRes.ok) parentProduct = await parentRes.json()
     if (siblingsRes.ok) {
       const json = await siblingsRes.json()
       siblings = json.children ?? []
     }
-    if (parentListingsRes.ok) parentListings = await parentListingsRes.json()
   }
 
   return (

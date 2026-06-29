@@ -318,7 +318,16 @@ export default function CreateProductWizard() {
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => router.push('/products')}
+              onClick={() => {
+                // Cancel = go back where you came from (restored instantly
+                // from the router cache); fall back to the list with no
+                // in-app history.
+                if (typeof window !== 'undefined' && window.history.length > 1) {
+                  router.back()
+                } else {
+                  router.push('/products')
+                }
+              }}
               disabled={busy || quickDraftBusy}
             >
               Cancel
