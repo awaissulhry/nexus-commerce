@@ -21,42 +21,43 @@ export default async function FamilyEditorPage({
   let attributes: AttributeRow[] = []
   let effective: EffectiveAttribute[] = []
 
-  try {
-    const res = await fetch(`${backend}/api/families/${id}`, {
-      cache: 'no-store',
-    })
+  // PERF — these three reads are independent; fetch them in one parallel
+  // round instead of three sequential server round trips (~3x the latency).
+  const [familyRes, attributesRes, effectiveRes] = await Promise.allSettled([
+    fetch(`${backend}/api/families/${id}`, { cache: 'no-store' }),
+    fetch(`${backend}/api/attributes`, { cache: 'no-store' }),
+    fetch(`${backend}/api/families/${id}/effective`, { cache: 'no-store' }),
+  ])
+
+  // family (required — 404s the route if missing)
+  if (familyRes.status === 'fulfilled') {
+    const res = familyRes.value
     if (res.status === 404) notFound()
-    if (!res.ok)
-      errors.push(`Failed to load family (HTTP ${res.status})`)
+    if (!res.ok) errors.push(`Failed to load family (HTTP ${res.status})`)
     else {
       const data = (await res.json()) as { family?: FamilyDetail }
       family = data.family ?? null
     }
-  } catch (err: any) {
-    errors.push(err?.message ?? String(err))
+  } else {
+    errors.push(familyRes.reason?.message ?? String(familyRes.reason))
   }
 
-  try {
-    const res = await fetch(`${backend}/api/attributes`, { cache: 'no-store' })
+  // attribute pool
+  if (attributesRes.status === 'fulfilled') {
+    const res = attributesRes.value
     if (!res.ok) errors.push(`Failed to load attribute pool (HTTP ${res.status})`)
     else {
       const data = (await res.json()) as { attributes?: AttributeRow[] }
       attributes = data.attributes ?? []
     }
-  } catch (err: any) {
-    errors.push(err?.message ?? String(err))
+  } else {
+    errors.push(attributesRes.reason?.message ?? String(attributesRes.reason))
   }
 
-  try {
-    const res = await fetch(`${backend}/api/families/${id}/effective`, {
-      cache: 'no-store',
-    })
-    if (res.ok) {
-      const data = (await res.json()) as { attributes?: EffectiveAttribute[] }
-      effective = data.attributes ?? []
-    }
-  } catch {
-    // Best-effort — inheritance preview is non-critical.
+  // effective inheritance preview (best-effort, non-critical)
+  if (effectiveRes.status === 'fulfilled' && effectiveRes.value.ok) {
+    const data = (await effectiveRes.value.json()) as { attributes?: EffectiveAttribute[] }
+    effective = data.attributes ?? []
   }
 
   if (!family) notFound()
