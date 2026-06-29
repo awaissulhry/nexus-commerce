@@ -18,13 +18,14 @@ export interface ColumnCustomizerProps {
   onClose: () => void
   columns: CustomizableColumn[]
   onApply: (columns: CustomizableColumn[]) => void
+  className?: string
 }
 
 /**
  * Column visibility + reorder, inside a Modal (H10 "Customize columns"). Edits a
  * local draft; Apply commits. Reorder via up/down (no dnd dependency).
  */
-export function ColumnCustomizer({ open, onClose, columns, onApply }: ColumnCustomizerProps) {
+export function ColumnCustomizer({ open, onClose, columns, onApply, className }: ColumnCustomizerProps) {
   const [draft, setDraft] = useState<CustomizableColumn[]>(columns)
   useEffect(() => {
     if (open) setDraft(columns)
@@ -43,6 +44,7 @@ export function ColumnCustomizer({ open, onClose, columns, onApply }: ColumnCust
     <Modal
       open={open}
       onClose={onClose}
+      className={className}
       title="Customize columns"
       subtitle="Toggle visibility and reorder."
       footer={

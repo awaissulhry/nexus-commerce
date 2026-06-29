@@ -6,14 +6,28 @@ import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import '@/design-system/styles/patterns.css'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronDown, ChevronRight, ChevronsUpDown, Search } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronsUpDown,
+  Copy,
+  Download,
+  Plus,
+  Search,
+  Send,
+  SlidersHorizontal,
+  Tag as TagIcon,
+  Trash2,
+  Upload,
+} from 'lucide-react'
 
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
-import type { ProductRow } from '@/app/products/_types'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import type { ProductRow, Tag } from '@/app/products/_types'
 import { Thumbnail, DensityContext, type Density } from '@/app/_shared/grid-lens'
 
 // DS Primitives
@@ -36,7 +50,16 @@ import {
   type MenuItemDef,
 } from '@/design-system/components'
 // DS Patterns
-import { BulkActionBar, ColumnCustomizer, PageHeader, type CustomizableColumn } from '@/design-system/patterns'
+import {
+  FilterBar,
+  GridToolbar,
+  PageHeader,
+  PreferencesModal,
+  type CustomizableColumn,
+  type FilterDimension,
+  type PreferencesColumnSpec,
+  type PreferencesValue,
+} from '@/design-system/patterns'
 
 import styles from './styles.module.css'
 
@@ -44,6 +67,9 @@ import styles from './styles.module.css'
 // Constants
 // ─────────────────────────────────────────────────────────────────
 
+// usePolledList prepends getBackendUrl() for any '/api/' path, so this hits the
+// real backend (rich {products, stats} with coverage/tags), not the local Next
+// stub route handler.
 const POLL_URL =
   '/api/products?page=1&limit=200&includeCoverage=true&includeTags=true'
 
@@ -56,9 +82,58 @@ const DENSITY_OPTIONS: SegmentedOption[] = [
 const CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY'] as const
 type Channel = (typeof CHANNELS)[number]
 
+/** Market names for publish-destination labels. */
+const MARKET_NAMES: Record<string, string> = {
+  IT: 'Italy', DE: 'Germany', FR: 'France', ES: 'Spain', UK: 'United Kingdom',
+}
+/**
+ * Publish destinations offered in the bulk "Publish" menu. Active channels only
+ * (Amazon · eBay · Shopify), matching the platform's channel scope. Each entry
+ * resolves to a `publish(channel, marketplace)` call.
+ */
+const PUBLISH_DESTINATIONS: Array<{ channel: string; marketplace: string; label: string }> = [
+  ...['IT', 'DE', 'FR', 'ES'].map((m) => ({ channel: 'AMAZON', marketplace: m, label: `Amazon ${m} (${MARKET_NAMES[m] ?? m})` })),
+  ...['IT', 'DE', 'FR', 'ES'].map((m) => ({ channel: 'EBAY', marketplace: m, label: `eBay ${m} (${MARKET_NAMES[m] ?? m})` })),
+  { channel: 'SHOPIFY', marketplace: 'GLOBAL', label: 'Shopify' },
+]
+
 type DensityMode = 'compact' | 'cozy' | 'spacious'
-type LensKey = 'all' | 'attention' | 'amazon' | 'ebay' | 'shopify'
 type KpiTileKey = 'active' | 'out-of-stock' | 'attention' | null
+
+/** Client-side filter state driven by the DS FilterBar. */
+interface ProductFilters {
+  channels: string[]
+  status: string[]
+  stock: string[]
+  fulfillment: string[]
+  productTypes: string[]
+  brands: string[]
+  tags: string[]
+  families: string[]
+  workflowStages: string[]
+  missingChannels: string[]
+  priceMin: string
+  priceMax: string
+  stockMin: string
+  stockMax: string
+}
+
+const EMPTY_FILTERS: ProductFilters = {
+  channels: [],
+  status: [],
+  stock: [],
+  fulfillment: [],
+  productTypes: [],
+  brands: [],
+  tags: [],
+  families: [],
+  workflowStages: [],
+  missingChannels: [],
+  priceMin: '',
+  priceMax: '',
+  stockMin: '',
+  stockMax: '',
+}
 
 // ─────────────────────────────────────────────────────────────────
 // Column-preferences model
@@ -115,6 +190,60 @@ function saveColPrefs(cols: CustomizableColumn[]): void {
   }
 }
 
+// ── Layout prefs (sticky columns + sort), driven by the Customise modal ──
+
+const LAYOUT_PREFS_KEY = 'products-next:layout'
+
+/** Full column registry for the Customise modal (locked product + actions frame
+ *  the customizable middle). Order matches the grid: product · …middle… · actions. */
+const PREF_ALL_COLUMNS: PreferencesColumnSpec[] = [
+  { key: 'product', label: 'Product', locked: true },
+  { key: 'channels', label: 'Channels' },
+  { key: 'status', label: 'Status' },
+  { key: 'available', label: 'Available' },
+  { key: 'price', label: 'Price' },
+  { key: 'actions', label: 'Actions', locked: true },
+]
+
+/** Sort fields offered in the Customise modal (the grid's sortable columns). */
+const SORT_FIELD_OPTIONS = [
+  { value: 'product', label: 'Product name' },
+  { value: 'available', label: 'Available stock' },
+  { value: 'price', label: 'Price' },
+]
+
+interface LayoutPrefs {
+  stickyFirst: boolean
+  stickyLast: boolean
+  sortBy: string
+  sortDir: 'asc' | 'desc'
+}
+
+const DEFAULT_LAYOUT: LayoutPrefs = {
+  stickyFirst: true,
+  stickyLast: true,
+  sortBy: 'product',
+  sortDir: 'asc',
+}
+
+function loadLayoutPrefs(): LayoutPrefs {
+  try {
+    const raw = typeof window !== 'undefined' && localStorage.getItem(LAYOUT_PREFS_KEY)
+    if (raw) return { ...DEFAULT_LAYOUT, ...(JSON.parse(raw) as Partial<LayoutPrefs>) }
+  } catch {
+    // ignore
+  }
+  return DEFAULT_LAYOUT
+}
+
+function saveLayoutPrefs(p: LayoutPrefs): void {
+  try {
+    localStorage.setItem(LAYOUT_PREFS_KEY, JSON.stringify(p))
+  } catch {
+    // ignore
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Pure helpers
 // ─────────────────────────────────────────────────────────────────
@@ -141,6 +270,62 @@ function fmtEur(price: number): string {
   return `€${price.toFixed(2)}`
 }
 
+/**
+ * Client-side CSV export of the given rows (mirrors the live /products export).
+ * No API call — builds a quoted CSV and triggers a download.
+ */
+function exportProductsCsv(rows: ProductRow[]): void {
+  const header = [
+    'SKU', 'Name', 'Brand', 'Type', 'Status', 'Price', 'Stock', 'Low @',
+    'Fulfillment', 'Photos', 'Channels listed', 'Channel coverage', 'Tags',
+    'Variants', 'Is parent', 'Parent ID', 'Updated', 'Created', 'ID',
+  ]
+  const matrix: string[][] = [header]
+  for (const p of rows) {
+    if (isLoadingRow(p)) continue
+    const coverageCells = Object.entries(p.coverage ?? {}).map(
+      ([ch, c]) => `${ch}:${c.live}/${c.total}`,
+    )
+    matrix.push([
+      p.sku,
+      p.name,
+      p.brand ?? '',
+      p.productType ?? '',
+      p.status,
+      p.basePrice.toFixed(2),
+      String(p.totalStock),
+      String(p.lowStockThreshold),
+      p.fulfillmentMethod ?? '',
+      String(p.photoCount),
+      String(p.channelCount),
+      coverageCells.join(','),
+      (p.tags ?? []).map((t) => t.name).join('|'),
+      String(p.variantCount),
+      p.isParent ? 'true' : '',
+      p.parentId ?? '',
+      p.updatedAt,
+      p.createdAt,
+      p.id,
+    ])
+  }
+  const csv = matrix
+    .map((r) =>
+      r
+        .map((cell) => (/[",\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell))
+        .join(','),
+    )
+    .join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `products-${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 /** Maps the page's local density modes to the shared DS Density type. */
 function mapDensity(d: DensityMode): Density {
   if (d === 'compact') return 'compact'
@@ -150,14 +335,6 @@ function mapDensity(d: DensityMode): Density {
 
 function getCov(row: ProductRow, ch: Channel) {
   return row.coverage?.[ch] ?? null
-}
-
-function lensCount(rows: ProductRow[], key: LensKey): number {
-  if (key === 'all') return rows.length
-  if (key === 'attention') return rows.filter((r) => r.photoCount === 0).length
-  if (key === 'amazon') return rows.filter((r) => (getCov(r, 'AMAZON')?.total ?? 0) > 0).length
-  if (key === 'ebay') return rows.filter((r) => (getCov(r, 'EBAY')?.total ?? 0) > 0).length
-  return rows.filter((r) => (getCov(r, 'SHOPIFY')?.total ?? 0) > 0).length
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -372,7 +549,7 @@ function AvailableCell({ row }: { row: ProductRow }) {
 }
 
 /** Row action cluster: Edit link + ⋯ DS Menu */
-function RowActions({ row, onMore }: { row: ProductRow; onMore: () => void }) {
+function RowActions({ row, onDuplicate }: { row: ProductRow; onDuplicate: (id: string) => void }) {
   const router = useRouter()
   const menuItems: MenuItemDef[] = [
     {
@@ -380,7 +557,7 @@ function RowActions({ row, onMore }: { row: ProductRow; onMore: () => void }) {
       label: 'Edit',
       onSelect: () => router.push(`/products/${row.id}/edit`),
     },
-    { id: 'duplicate', label: 'Duplicate', onSelect: onMore },
+    { id: 'duplicate', label: 'Duplicate', onSelect: () => onDuplicate(row.id) },
     {
       id: 'open-new',
       label: 'Open in new tab',
@@ -413,9 +590,11 @@ function ProductsNextInner() {
   // ── State ─────────────────────────────────────────────────────
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
-  const [lens, setLens] = useState<LensKey>('all')
+  const [filters, setFilters] = useState<ProductFilters>(EMPTY_FILTERS)
   const [density, setDensity] = useState<DensityMode>('spacious')
   const [activeTile, setActiveTile] = useState<KpiTileKey>(null)
+  // Two-click confirm for the (reversible) bulk soft-delete.
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   // Variation expansion — children are lazy-fetched on first expand and
   // cached; collapsing re-hides without evicting the cache.
@@ -423,12 +602,19 @@ function ProductsNextInner() {
   const [childrenByParent, setChildrenByParent] = useState<Record<string, ProductRow[]>>({})
   const [loadingChildren, setLoadingChildren] = useState<Set<string>>(new Set())
 
+  // Layout prefs (sticky columns + sort) — persisted; seed the sort + sticky state.
+  const initialLayout = useMemo(loadLayoutPrefs, [])
+
   // Manual sort state (DataGrid re-sort is disabled so children stay grouped)
-  const [sortKey, setSortKey] = useState<string>('product')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [sortKey, setSortKey] = useState<string>(initialLayout.sortBy)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(initialLayout.sortDir)
+
+  // Sticky first (product) / last (actions) column, driven by the Customise modal.
+  const [stickyFirst, setStickyFirst] = useState(initialLayout.stickyFirst)
+  const [stickyLast, setStickyLast] = useState(initialLayout.stickyLast)
 
   // Column visibility + order (persisted to localStorage)
-  const [colCustomizerOpen, setColCustomizerOpen] = useState(false)
+  const [customizeOpen, setCustomizeOpen] = useState(false)
   const [customCols, setCustomCols] = useState<CustomizableColumn[]>(loadColPrefs)
 
   // ── Data ──────────────────────────────────────────────────────
@@ -464,6 +650,30 @@ function ProductsNextInner() {
     [products],
   )
 
+  // Distinct filter options derived from the loaded rows (client-side facets).
+  const facetOptions = useMemo(() => {
+    const types = new Set<string>()
+    const brands = new Set<string>()
+    const tags = new Set<string>()
+    const families = new Map<string, string>()
+    const stages = new Map<string, string>()
+    for (const p of products) {
+      if (p.productType) types.add(p.productType)
+      if (p.brand) brands.add(p.brand)
+      for (const t of p.tags ?? []) tags.add(t.name)
+      if (p.family) families.set(p.family.code, p.family.label)
+      if (p.workflowStage) stages.set(p.workflowStage.code, p.workflowStage.label)
+    }
+    const byStr = (a: string, b: string) => a.localeCompare(b)
+    return {
+      types: [...types].sort(byStr),
+      brands: [...brands].sort(byStr),
+      tags: [...tags].sort(byStr),
+      families: [...families.entries()].sort((a, b) => a[1].localeCompare(b[1])),
+      stages: [...stages.entries()].sort((a, b) => a[1].localeCompare(b[1])),
+    }
+  }, [products])
+
   // ── Client-side filter (200 rows max — fits in memory) ─────────
   const filtered = useMemo(() => {
     let rows = products
@@ -473,11 +683,29 @@ function ProductsNextInner() {
     else if (activeTile === 'out-of-stock') rows = rows.filter((r) => r.totalStock === 0)
     else if (activeTile === 'attention') rows = rows.filter((r) => r.photoCount === 0)
 
-    // Quick-lens filter
-    if (lens === 'attention') rows = rows.filter((r) => r.photoCount === 0)
-    else if (lens === 'amazon') rows = rows.filter((r) => (getCov(r, 'AMAZON')?.total ?? 0) > 0)
-    else if (lens === 'ebay') rows = rows.filter((r) => (getCov(r, 'EBAY')?.total ?? 0) > 0)
-    else if (lens === 'shopify') rows = rows.filter((r) => (getCov(r, 'SHOPIFY')?.total ?? 0) > 0)
+    // Filter bar (every dimension narrows independently; multiselects are OR within / AND across)
+    const f = filters
+    rows = rows.filter((r) => {
+      if (f.channels.length && !f.channels.some((ch) => (getCov(r, ch as Channel)?.total ?? 0) > 0)) return false
+      if (f.status.length && !f.status.includes(r.status)) return false
+      if (f.stock.length) {
+        const lvl = r.totalStock === 0 ? 'out' : r.totalStock <= r.lowStockThreshold ? 'low' : 'in'
+        if (!f.stock.includes(lvl)) return false
+      }
+      if (f.fulfillment.length && !(r.fulfillmentMethod && f.fulfillment.includes(r.fulfillmentMethod))) return false
+      if (f.productTypes.length && !(r.productType && f.productTypes.includes(r.productType))) return false
+      if (f.brands.length && !(r.brand && f.brands.includes(r.brand))) return false
+      if (f.tags.length && !(r.tags ?? []).some((t) => f.tags.includes(t.name))) return false
+      if (f.families.length && !(r.family && f.families.includes(r.family.code))) return false
+      if (f.workflowStages.length && !(r.workflowStage && f.workflowStages.includes(r.workflowStage.code))) return false
+      // "Missing channel" = not listed on ANY of the selected channels
+      if (f.missingChannels.length && !f.missingChannels.some((ch) => (getCov(r, ch as Channel)?.total ?? 0) === 0)) return false
+      if (f.priceMin && r.basePrice < Number(f.priceMin)) return false
+      if (f.priceMax && r.basePrice > Number(f.priceMax)) return false
+      if (f.stockMin && r.totalStock < Number(f.stockMin)) return false
+      if (f.stockMax && r.totalStock > Number(f.stockMax)) return false
+      return true
+    })
 
     // Text search
     if (search.trim()) {
@@ -491,7 +719,7 @@ function ProductsNextInner() {
     }
 
     return rows
-  }, [products, activeTile, lens, search])
+  }, [products, activeTile, filters, search])
 
   // ── Sorted + interleaved display rows ─────────────────────────
   // Only top-level rows (parentId === null) are shown by default.
@@ -557,9 +785,180 @@ function ProductsNextInner() {
     })
   }, [])
 
-  const comingSoon = useCallback(
-    () => toast('Coming soon', 'neutral'),
-    [toast],
+  // ── Mutations (real backend calls, mirroring the live /products page) ──
+  const router = useRouter()
+  const [busy, setBusy] = useState(false)
+
+  const selectedIds = useMemo(() => [...selected], [selected])
+
+  // Tags for the bulk "Tag" menu — fetched once (they change rarely).
+  const [allTags, setAllTags] = useState<Tag[]>([])
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${getBackendUrl()}/api/tags`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d: { items?: Tag[] }) => { if (!cancelled) setAllTags(d.items ?? []) })
+      .catch(() => { /* tags are optional; menu shows an empty hint */ })
+    return () => { cancelled = true }
+  }, [])
+
+  /** Run a bulk mutation against the backend, then broadcast so the grid (and
+   *  every other open tab) refetches via the invalidation channel. */
+  const runBulk = useCallback(
+    async (
+      label: string,
+      path: string,
+      body: Record<string, unknown>,
+      ids: string[],
+      source: string,
+      opts?: { clearSelection?: boolean },
+    ) => {
+      if (!ids.length || busy) return
+      setBusy(true)
+      try {
+        const res = await fetch(`${getBackendUrl()}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (!res.ok) {
+          const msg = await res.json().catch(() => ({}))
+          throw new Error((msg as { error?: string }).error ?? `HTTP ${res.status}`)
+        }
+        emitInvalidation({ type: 'product.updated', meta: { productIds: ids, source } })
+        toast(label, 'success')
+        if (opts?.clearSelection !== false) setSelected(new Set())
+      } catch (e) {
+        toast(e instanceof Error ? e.message : 'Action failed', 'danger')
+      } finally {
+        setBusy(false)
+      }
+    },
+    [busy, toast],
+  )
+
+  // Tag: add a tag to the selected products. Selection is kept so the operator
+  // can apply several tags in a row.
+  const tagBulk = useCallback(
+    (tag: Tag) =>
+      runBulk(
+        `Tagged ${selectedIds.length} with “${tag.name}”`,
+        '/api/products/bulk-tag',
+        { productIds: selectedIds, tagIds: [tag.id], mode: 'add' },
+        selectedIds,
+        'bulk-tag',
+        { clearSelection: false },
+      ),
+    [runBulk, selectedIds],
+  )
+
+  // Publish: resolve the selected products to their listings on the target
+  // channel/marketplace, then enqueue a publish bulk-action (2-step, like the
+  // live page). Products with no listing on that channel are reported.
+  const publishBulk = useCallback(
+    async (channel: string, marketplace: string, label: string) => {
+      if (!selectedIds.length || busy) return
+      setBusy(true)
+      try {
+        const params = new URLSearchParams({ channel, marketplace, includeCoverage: 'false', pageSize: '500' })
+        const foundRes = await fetch(`${getBackendUrl()}/api/listings?${params.toString()}`)
+        if (!foundRes.ok) {
+          const b = await foundRes.json().catch(() => ({}))
+          throw new Error((b as { error?: string }).error ?? `Failed to load listings (${foundRes.status})`)
+        }
+        const found = (await foundRes.json()) as { listings?: Array<{ id: string; productId: string }> }
+        const listingIds = (found.listings ?? [])
+          .filter((l) => selectedIds.includes(l.productId))
+          .map((l) => l.id)
+        if (listingIds.length === 0) {
+          throw new Error(`No existing listings on ${label} — create them in the listing wizard first`)
+        }
+        const res = await fetch(`${getBackendUrl()}/api/listings/bulk-action`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'publish', listingIds }),
+        })
+        if (!res.ok) {
+          const b = await res.json().catch(() => ({}))
+          throw new Error((b as { error?: string }).error ?? `HTTP ${res.status}`)
+        }
+        emitInvalidation({ type: 'listing.updated', meta: { listingIds, source: 'products-publish', channel, marketplace } })
+        emitInvalidation({ type: 'bulk-job.completed', meta: { action: 'publish', listingIds } })
+        toast(`Queued publish of ${listingIds.length} to ${label}`, 'success')
+        setSelected(new Set())
+      } catch (e) {
+        toast(e instanceof Error ? e.message : 'Publish failed', 'danger')
+      } finally {
+        setBusy(false)
+      }
+    },
+    [busy, selectedIds, toast],
+  )
+
+  // Menu items for the bulk Tag + Publish dropdowns (DS Menu).
+  const tagMenuItems = useMemo<MenuItemDef[]>(() => {
+    if (allTags.length === 0) return [{ id: '_empty', label: 'No tags yet', disabled: true }]
+    return allTags.map((t) => ({
+      id: t.id,
+      label: (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <span
+            style={{
+              width: 8, height: 8, borderRadius: '50%', flex: 'none',
+              background: t.color ?? 'var(--text-tertiary)',
+            }}
+          />
+          {t.name}
+        </span>
+      ),
+      onSelect: () => void tagBulk(t),
+    }))
+  }, [allTags, tagBulk])
+
+  const publishMenuItems = useMemo<MenuItemDef[]>(
+    () =>
+      PUBLISH_DESTINATIONS.map((d) => ({
+        id: `${d.channel}-${d.marketplace}`,
+        label: d.label,
+        onSelect: () => void publishBulk(d.channel, d.marketplace, d.label),
+      })),
+    [publishBulk],
+  )
+
+  const setStatusBulk = useCallback(
+    (status: 'ACTIVE' | 'DRAFT' | 'INACTIVE') =>
+      runBulk(
+        `Marked ${selectedIds.length} ${status.toLowerCase()}`,
+        '/api/products/bulk-status',
+        { productIds: selectedIds, status },
+        selectedIds,
+        'bulk-status',
+      ),
+    [runBulk, selectedIds],
+  )
+
+  const duplicateBulk = useCallback(
+    (ids: string[]) =>
+      runBulk(
+        `Duplicated ${ids.length} ${ids.length === 1 ? 'product' : 'products'}`,
+        '/api/products/bulk-duplicate',
+        { productIds: ids },
+        ids,
+        'bulk-duplicate',
+      ),
+    [runBulk],
+  )
+
+  const softDeleteBulk = useCallback(
+    () =>
+      runBulk(
+        `Moved ${selectedIds.length} to recycle bin`,
+        '/api/products/bulk-soft-delete',
+        { productIds: selectedIds },
+        selectedIds,
+        'bulk-soft-delete',
+      ),
+    [runBulk, selectedIds],
   )
 
   // ── Variation expansion ───────────────────────────────────────
@@ -695,7 +1094,7 @@ function ProductsNextInner() {
         width: 120,
         render: (row) => {
           if (isLoadingRow(row)) return null
-          return <RowActions row={row} onMore={comingSoon} />
+          return <RowActions row={row} onDuplicate={(id) => void duplicateBulk([id])} />
         },
       }
 
@@ -806,7 +1205,7 @@ function ProductsNextInner() {
       selected,
       toggleAll,
       toggleRow,
-      comingSoon,
+      duplicateBulk,
       sortKey,
       sortDir,
       handleColumnSort,
@@ -855,26 +1254,142 @@ function ProductsNextInner() {
     },
   ]
 
-  // ── Lens config ────────────────────────────────────────────────
-  const mainLenses: Array<{
-    key: LensKey
-    label: string
-    count: number
-    warn?: boolean
-  }> = [
-    { key: 'all', label: 'All', count: products.length },
-    {
-      key: 'attention',
-      label: 'Needs attention',
-      count: needsAttentionCount,
-      warn: true,
+  // ── Filter bar config ──────────────────────────────────────────
+  const setF = useCallback(
+    <K extends keyof ProductFilters>(key: K, value: ProductFilters[K]) => {
+      setFilters((prev) => ({ ...prev, [key]: value }))
     },
+    [],
+  )
+
+  const activeFilterCount = useMemo(() => {
+    const f = filters
+    return (
+      f.channels.length +
+      f.status.length +
+      f.stock.length +
+      f.fulfillment.length +
+      f.productTypes.length +
+      f.brands.length +
+      f.tags.length +
+      f.families.length +
+      f.workflowStages.length +
+      f.missingChannels.length +
+      (f.priceMin || f.priceMax ? 1 : 0) +
+      (f.stockMin || f.stockMax ? 1 : 0)
+    )
+  }, [filters])
+
+  const CHANNEL_OPTS = [
+    { value: 'AMAZON', label: 'Amazon' },
+    { value: 'EBAY', label: 'eBay' },
+    { value: 'SHOPIFY', label: 'Shopify' },
   ]
-  const channelLenses: Array<{ key: LensKey; label: string; count: number }> = [
-    { key: 'amazon', label: 'Amazon', count: lensCount(products, 'amazon') },
-    { key: 'ebay', label: 'eBay', count: lensCount(products, 'ebay') },
-    { key: 'shopify', label: 'Shopify', count: lensCount(products, 'shopify') },
-  ]
+
+  const filterDimensions = useMemo<FilterDimension[]>(() => {
+    const dims: FilterDimension[] = [
+      { key: 'channels', label: 'Channel', kind: 'multiselect', value: filters.channels, onChange: (v) => setF('channels', v), options: CHANNEL_OPTS },
+      {
+        key: 'status',
+        label: 'Status',
+        kind: 'multiselect',
+        value: filters.status,
+        onChange: (v) => setF('status', v),
+        options: [
+          { value: 'ACTIVE', label: 'Active' },
+          { value: 'DRAFT', label: 'Draft' },
+          { value: 'INACTIVE', label: 'Inactive' },
+        ],
+      },
+      {
+        key: 'stock',
+        label: 'Stock',
+        kind: 'multiselect',
+        value: filters.stock,
+        onChange: (v) => setF('stock', v),
+        options: [
+          { value: 'in', label: 'In stock' },
+          { value: 'low', label: 'Low stock' },
+          { value: 'out', label: 'Out of stock' },
+        ],
+      },
+      {
+        key: 'fulfillment',
+        label: 'Fulfilment',
+        kind: 'multiselect',
+        value: filters.fulfillment,
+        onChange: (v) => setF('fulfillment', v),
+        options: [
+          { value: 'FBA', label: 'FBA' },
+          { value: 'FBM', label: 'FBM' },
+        ],
+      },
+    ]
+    if (facetOptions.types.length)
+      dims.push({ key: 'productTypes', label: 'Product type', kind: 'multiselect', value: filters.productTypes, onChange: (v) => setF('productTypes', v), options: facetOptions.types.map((t) => ({ value: t, label: t })) })
+    if (facetOptions.brands.length)
+      dims.push({ key: 'brands', label: 'Brand', kind: 'multiselect', value: filters.brands, onChange: (v) => setF('brands', v), options: facetOptions.brands.map((b) => ({ value: b, label: b })) })
+    if (facetOptions.tags.length)
+      dims.push({ key: 'tags', label: 'Tags', kind: 'multiselect', value: filters.tags, onChange: (v) => setF('tags', v), options: facetOptions.tags.map((t) => ({ value: t, label: t })) })
+    if (facetOptions.families.length)
+      dims.push({ key: 'families', label: 'Family', kind: 'multiselect', value: filters.families, onChange: (v) => setF('families', v), options: facetOptions.families.map(([code, label]) => ({ value: code, label })) })
+    if (facetOptions.stages.length)
+      dims.push({ key: 'workflowStages', label: 'Workflow stage', kind: 'multiselect', value: filters.workflowStages, onChange: (v) => setF('workflowStages', v), options: facetOptions.stages.map(([code, label]) => ({ value: code, label })) })
+    dims.push({ key: 'missingChannels', label: 'Missing channel', kind: 'multiselect', value: filters.missingChannels, onChange: (v) => setF('missingChannels', v), options: CHANNEL_OPTS })
+    dims.push({ key: 'price', label: 'Price', kind: 'range', unit: '€', min: filters.priceMin, max: filters.priceMax, onChange: (min, max) => setFilters((p) => ({ ...p, priceMin: min, priceMax: max })) })
+    dims.push({ key: 'stockUnits', label: 'Stock units', kind: 'range', min: filters.stockMin, max: filters.stockMax, onChange: (min, max) => setFilters((p) => ({ ...p, stockMin: min, stockMax: max })) })
+    return dims
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, facetOptions, setF])
+
+  // ── Toolbar counts (top-level products only; children ride with parents) ──
+  const totalCount = useMemo(() => products.filter((p) => p.parentId === null).length, [products])
+  const shownCount = useMemo(
+    () => displayRows.filter((r) => !isLoadingRow(r) && r.parentId === null).length,
+    [displayRows],
+  )
+
+  // Drop the delete confirmation if the selection is cleared elsewhere.
+  useEffect(() => {
+    if (selected.size === 0 && confirmDelete) setConfirmDelete(false)
+  }, [selected, confirmDelete])
+
+  // ── Customise modal (column visibility/order + sticky + sort) ──
+  const prefsValue = useMemo<PreferencesValue>(
+    () => ({
+      visibleColumns: customCols.filter((c) => c.visible).map((c) => c.key),
+      stickyFirstColumn: stickyFirst,
+      stickyLastColumn: stickyLast,
+      pageSize: 100, // unused — products/next loads all rows client-side
+      sortBy: sortKey,
+      sortDir,
+    }),
+    [customCols, stickyFirst, stickyLast, sortKey, sortDir],
+  )
+
+  const applyPrefs = useCallback((next: PreferencesValue) => {
+    // Rebuild the customizable column list: visible (in chosen order) then hidden.
+    const visibleSet = new Set(next.visibleColumns)
+    const rebuilt: CustomizableColumn[] = [
+      ...next.visibleColumns
+        .map((k) => COL_CATALOG.find((c) => c.key === k))
+        .filter((c): c is (typeof COL_CATALOG)[number] => !!c)
+        .map((c) => ({ key: c.key, label: c.label, visible: true })),
+      ...COL_CATALOG.filter((c) => !visibleSet.has(c.key)).map((c) => ({ key: c.key, label: c.label, visible: false })),
+    ]
+    setCustomCols(rebuilt)
+    saveColPrefs(rebuilt)
+    setStickyFirst(next.stickyFirstColumn)
+    setStickyLast(next.stickyLastColumn)
+    setSortKey(next.sortBy)
+    setSortDir(next.sortDir)
+    saveLayoutPrefs({
+      stickyFirst: next.stickyFirstColumn,
+      stickyLast: next.stickyLastColumn,
+      sortBy: next.sortBy,
+      sortDir: next.sortDir,
+    })
+  }, [])
 
   // ── Render ────────────────────────────────────────────────────
   return (
@@ -885,17 +1400,11 @@ function ProductsNextInner() {
         subtitle={`${stats?.total ?? '—'} products · synced live across Amazon, eBay & Shopify`}
         actions={
           <div className={styles.acts}>
-            <Button size="sm" onClick={comingSoon}>
-              Import{' '}
-              <span style={{ color: 'var(--text-tertiary)', fontWeight: 700 }}>
-                ▾
-              </span>
+            <Button size="sm" onClick={() => router.push('/products/upload')}>
+              <Upload size={13} /> Import
             </Button>
-            <Button size="sm" aria-label="More options" onClick={comingSoon}>
-              ⋯
-            </Button>
-            <Button size="sm" variant="primary" onClick={comingSoon}>
-              + New product
+            <Button size="sm" variant="primary" onClick={() => router.push('/products/new')}>
+              <Plus size={13} /> New product
             </Button>
           </div>
         }
@@ -941,163 +1450,140 @@ function ProductsNextInner() {
         ))}
       </div>
 
-      {/* ONE toolbar row */}
-      <div className={styles.tbar}>
-        <span className={styles.searchField}>
-          <Input
-            leadingIcon={
-              <Search size={13} style={{ color: 'var(--text-tertiary)' }} />
-            }
-            placeholder="Search products…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ width: '100%' }}
-          />
-        </span>
-        <Button size="sm" onClick={comingSoon}>
-          Filter
-        </Button>
-        <Button size="sm" onClick={comingSoon}>
-          ↕ Sort
-        </Button>
-        <Button size="sm" onClick={() => setColCustomizerOpen(true)}>
-          ⊞ Columns
-        </Button>
-        <span className={styles.spacer} />
-        <SegmentedControl
-          options={DENSITY_OPTIONS}
-          value={density}
-          onChange={(v) => setDensity(v as DensityMode)}
-          size="sm"
+      {/* Filter bar — the DS FilterBar (collapsible, ads-manager parity).
+          Hosts every client-side filter dimension; feature page owns only config. */}
+      <div className={styles.filterBar}>
+        <FilterBar
+          dimensions={filterDimensions}
+          activeCount={activeFilterCount}
+          onClear={() => setFilters(EMPTY_FILTERS)}
         />
-        <span className={styles.liveChip}>
-          <span className={styles.liveDot} />
-          {loading ? 'Syncing…' : 'Live'}
-        </span>
       </div>
 
-      {/* Quick-lens chips */}
-      <div className={styles.lenses}>
-        {mainLenses.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={[
-              styles.chip,
-              lens === item.key ? styles.chipActive : '',
-              item.warn && lens !== item.key ? styles.chipWarn : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            onClick={() => setLens(item.key)}
-          >
-            {item.label}
-            {item.count > 0 && (
-              <span
-                className={
-                  item.warn && lens !== item.key
-                    ? styles.chipWarnCount
-                    : styles.chipCount
-                }
+      {/* One card: toolbar + grid share the grid rectangle (Ad-Manager parity).
+          The toolbar's left slot swaps search ⇄ selection actions; the right
+          slot carries density · Customise · Export · Live. */}
+      <div className="h10-ds-gridcard">
+        <GridToolbar
+          count={
+            selected.size > 0 ? (
+              <>Selected <b>{selected.size}</b> {selected.size === 1 ? 'product' : 'products'}</>
+            ) : (
+              <>Viewing <b>{shownCount}</b> of <b>{totalCount}</b> products</>
+            )
+          }
+          right={
+            <>
+              <SegmentedControl
+                options={DENSITY_OPTIONS}
+                value={density}
+                onChange={(v) => setDensity(v as DensityMode)}
+                size="sm"
+              />
+              <Button size="sm" onClick={() => setCustomizeOpen(true)}>
+                <SlidersHorizontal size={13} /> Customise
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => exportProductsCsv(displayRows)}
+                disabled={shownCount === 0}
               >
-                {item.count}
+                <Download size={13} /> Export
+              </Button>
+              <span className={styles.liveChip}>
+                <span className={styles.liveDot} />
+                {loading ? 'Syncing…' : 'Live'}
               </span>
-            )}
-          </button>
-        ))}
-        <span className={styles.vline} role="separator" />
-        {channelLenses.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={[
-              styles.chip,
-              lens === item.key ? styles.chipActive : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            onClick={() => setLens(item.key)}
-          >
-            {item.label}
-            <span className={styles.chipCount}>{item.count}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Data grid — DensityContext.Provider makes the shared Thumbnail
-          size-aware, matching /products exactly (compact 32 / comfortable 40 /
-          spacious 56). mapDensity bridges the page's 'cozy' to 'comfortable'. */}
-      <DensityContext.Provider value={mapDensity(density)}>
-        <div
-          className={
-            density === 'compact'
-              ? styles.densityCompact
-              : density === 'spacious'
-                ? styles.densitySpacious
-                : undefined
+            </>
           }
         >
-          <DataGrid<ProductRow>
-            columns={columns}
-            rows={displayRows}
-            rowKey={(r) => r.id}
-            selected={selected}
-            emptyState={
-              loading ? (
-                <span style={{ color: 'var(--text-tertiary)' }}>Loading…</span>
+          {selected.size > 0 ? (
+            <span className={styles.selActions}>
+              <Button size="sm" disabled={busy} onClick={() => setStatusBulk('ACTIVE')}>Activate</Button>
+              <Button size="sm" disabled={busy} onClick={() => setStatusBulk('DRAFT')}>Draft</Button>
+              <Button size="sm" disabled={busy} onClick={() => setStatusBulk('INACTIVE')}>Inactive</Button>
+              <Menu
+                label={<><TagIcon size={13} /> Tag <ChevronDown size={11} /></>}
+                items={tagMenuItems}
+                triggerProps={{ className: 'h10-ds-btn sm', disabled: busy }}
+              />
+              <Menu
+                label={<><Send size={13} /> Publish <ChevronDown size={11} /></>}
+                items={publishMenuItems}
+                triggerProps={{ className: 'h10-ds-btn sm', disabled: busy }}
+              />
+              <Button size="sm" disabled={busy} onClick={() => duplicateBulk(selectedIds)}>
+                <Copy size={13} /> Duplicate
+              </Button>
+              {confirmDelete ? (
+                <Button size="sm" variant="primary" disabled={busy} onClick={() => { setConfirmDelete(false); void softDeleteBulk() }}>
+                  Confirm delete
+                </Button>
               ) : (
-                <span style={{ color: 'var(--text-tertiary)' }}>
-                  No products match this filter.
-                </span>
-              )
+                <Button size="sm" disabled={busy} onClick={() => setConfirmDelete(true)}>
+                  <Trash2 size={13} /> Delete
+                </Button>
+              )}
+              <button type="button" className={styles.clearSel} onClick={() => { setSelected(new Set()); setConfirmDelete(false) }}>
+                Clear
+              </button>
+            </span>
+          ) : (
+            <span className={styles.searchField}>
+              <Input
+                leadingIcon={<Search size={13} style={{ color: 'var(--text-tertiary)' }} />}
+                placeholder="Search products…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ width: '100%' }}
+              />
+            </span>
+          )}
+        </GridToolbar>
+
+        {/* Data grid — DensityContext.Provider makes the shared Thumbnail
+            size-aware, matching /products exactly (compact 32 / comfortable 40 /
+            spacious 56). mapDensity bridges the page's 'cozy' to 'comfortable'. */}
+        <DensityContext.Provider value={mapDensity(density)}>
+          <div
+            className={
+              density === 'compact'
+                ? styles.densityCompact
+                : density === 'spacious'
+                  ? styles.densitySpacious
+                  : undefined
             }
-          />
-        </div>
-      </DensityContext.Provider>
+          >
+            <DataGrid<ProductRow>
+              columns={columns}
+              rows={displayRows}
+              rowKey={(r) => r.id}
+              selected={selected}
+              emptyState={
+                loading ? (
+                  <span style={{ color: 'var(--text-tertiary)' }}>Loading…</span>
+                ) : (
+                  <span style={{ color: 'var(--text-tertiary)' }}>
+                    No products match this filter.
+                  </span>
+                )
+              }
+            />
+          </div>
+        </DensityContext.Provider>
+      </div>
 
-      {/*
-       * Bulk staging bar.
-       * "Preview diff" / "Apply all" are visually present but no-op today
-       * (coming soon toast). Full diff wiring is a future task.
-       * TODO: wire staging model (diff computation + apply mutations).
-       * TODO: Sales 30d column — needs a backend field on ProductRow (no
-       *       such field exists today; omitted to avoid fabricating data).
-       */}
-      <BulkActionBar
-        count={selected.size}
-        onClear={() => setSelected(new Set())}
-      >
-        <Button size="sm" onClick={comingSoon}>
-          Set field ▾
-        </Button>
-        <Button size="sm" onClick={comingSoon}>
-          Publish ▾
-        </Button>
-        <Button size="sm" onClick={comingSoon}>
-          Activate
-        </Button>
-        <Button size="sm" onClick={comingSoon}>
-          Tag ▾
-        </Button>
-        <span className={styles.stageExtra}>
-          <Button size="sm" onClick={comingSoon}>
-            Preview diff
-          </Button>
-          <Button size="sm" variant="primary" onClick={comingSoon}>
-            Apply all
-          </Button>
-        </span>
-      </BulkActionBar>
-
-      {/* Column customizer modal — driven by the Columns toolbar button */}
-      <ColumnCustomizer
-        open={colCustomizerOpen}
-        onClose={() => setColCustomizerOpen(false)}
-        columns={customCols}
-        onApply={(next) => {
-          setCustomCols(next)
-          saveColPrefs(next)
-        }}
+      {/* Customise modal — two-panel preferences (columns · sticky · sort) */}
+      <PreferencesModal
+        open={customizeOpen}
+        onClose={() => setCustomizeOpen(false)}
+        value={prefsValue}
+        onConfirm={applyPrefs}
+        allColumns={PREF_ALL_COLUMNS}
+        defaultVisible={COL_CATALOG.map((c) => c.key)}
+        sortFieldOptions={SORT_FIELD_OPTIONS}
+        pageSizeChoices={[]}
+        showSticky={false}
       />
     </div>
   )

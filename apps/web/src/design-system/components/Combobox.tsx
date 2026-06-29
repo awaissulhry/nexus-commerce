@@ -14,10 +14,11 @@ export interface ComboboxProps {
   value?: string
   onChange: (value: string) => void
   placeholder?: string
+  className?: string
 }
 
 /** Single-select typeahead (H10 `.h10-combo`): filter-as-you-type + pick. */
-export function Combobox({ options, value, onChange, placeholder = 'Search…' }: ComboboxProps) {
+export function Combobox({ options, value, onChange, placeholder = 'Search…', className }: ComboboxProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
@@ -27,7 +28,7 @@ export function Combobox({ options, value, onChange, placeholder = 'Search…' }
   const filtered = options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()))
 
   return (
-    <div className="h10-ds-combo" ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
+    <div className={`h10-ds-combo${className ? ` ${className}` : ''}`} ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
       <input
         className="h10-ds-combo-in"
         value={open ? query : selected?.label ?? ''}

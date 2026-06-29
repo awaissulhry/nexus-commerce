@@ -20,9 +20,10 @@ export interface SegmentedControlProps {
   onChange: (value: string) => void
   size?: Extract<Size, 'sm' | 'md'>
   disabled?: boolean
+  className?: string
 }
 
-export function SegmentedControl({ options, value, onChange, size = 'md', disabled = false }: SegmentedControlProps) {
+export function SegmentedControl({ options, value, onChange, size = 'md', disabled = false, className }: SegmentedControlProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   const move = (dir: 1 | -1) => {
@@ -41,7 +42,7 @@ export function SegmentedControl({ options, value, onChange, size = 'md', disabl
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); move(-1) }
   }
 
-  const cls = ['h10-ds-seg', size, disabled ? 'disabled' : ''].filter(Boolean).join(' ')
+  const cls = ['h10-ds-seg', size, disabled ? 'disabled' : '', className ?? ''].filter(Boolean).join(' ')
 
   return (
     <div ref={ref} className={cls} role="radiogroup" onKeyDown={onKeyDown}>

@@ -7,16 +7,17 @@ export interface BulkActionBarProps {
   onClear?: () => void
   /** noun after the count (default "selected") */
   noun?: string
+  className?: string
 }
 
 /**
  * Sticky bar for a selection (H10 `.h10-am-editbar`/bulk row). Renders nothing
  * when `count` is 0. Place at the bottom of a scroll container.
  */
-export function BulkActionBar({ count, children, onClear, noun = 'selected' }: BulkActionBarProps) {
+export function BulkActionBar({ count, children, onClear, noun = 'selected', className }: BulkActionBarProps) {
   if (count <= 0) return null
   return (
-    <div className="h10-ds-actionbar" role="region" aria-label="Bulk actions">
+    <div className={`h10-ds-actionbar${className ? ` ${className}` : ''}`} role="region" aria-label="Bulk actions">
       <span className="lbl">
         <b>{count}</b> {noun}
       </span>

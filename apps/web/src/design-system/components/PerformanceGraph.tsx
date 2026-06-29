@@ -17,6 +17,7 @@ export interface PerformanceGraphProps {
   left: ChartSeries
   right: ChartSeries
   height?: number
+  className?: string
 }
 
 function ChartTooltip({
@@ -54,9 +55,9 @@ function ChartTooltip({
  * Dual-axis combo chart (H10 AdManagerGraph): two line series on independent
  * left/right axes, tokenized axes + grid, custom tooltip + legend. Recharts.
  */
-export function PerformanceGraph({ data, xKey, left, right, height = 240 }: PerformanceGraphProps) {
+export function PerformanceGraph({ data, xKey, left, right, height = 240, className }: PerformanceGraphProps) {
   return (
-    <div>
+    <div className={className || undefined}>
       <ResponsiveContainer width="100%" height={height}>
         <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
           <CartesianGrid stroke={color.borderSubtle} vertical={false} />

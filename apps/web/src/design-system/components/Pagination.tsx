@@ -4,6 +4,7 @@ export interface PaginationProps {
   page: number
   pageCount: number
   onPage: (page: number) => void
+  className?: string
 }
 
 /** Windowed page list with first/last + current±1 and ellipses. */
@@ -20,9 +21,9 @@ function pageList(page: number, pageCount: number): Array<number | 'gap'> {
 }
 
 /** Pager (H10 `.h10-am-pager` look). Controlled via `page` / `onPage`. */
-export function Pagination({ page, pageCount, onPage }: PaginationProps) {
+export function Pagination({ page, pageCount, onPage, className }: PaginationProps) {
   return (
-    <div className="h10-ds-pager">
+    <div className={`h10-ds-pager${className ? ` ${className}` : ''}`}>
       <button type="button" className="h10-ds-pgbtn" disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label="Previous page">
         <ChevronLeft size={15} />
       </button>

@@ -6,12 +6,13 @@ export interface EmptyStateProps {
   description?: ReactNode
   /** optional CTA (e.g. a Button) */
   action?: ReactNode
+  className?: string
 }
 
 /** No-data state — centred icon + title + description + optional CTA. */
-export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
+export function EmptyState({ icon, title, description, action, className }: EmptyStateProps) {
   return (
-    <div className="h10-ds-empty">
+    <div className={`h10-ds-empty${className ? ` ${className}` : ''}`}>
       {icon != null && <div className="ico">{icon}</div>}
       <div className="t">{title}</div>
       {description != null && <div className="d">{description}</div>}

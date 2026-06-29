@@ -486,6 +486,13 @@
   height: 15px;
   accent-color: var(--color-primary);
 }
+/* Facet count rendered after an option label (FilterBar `count`). */
+.h10-ds-ms-count {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ── Combobox (typeahead) ────────────────────────────────────────── */
 .h10-ds-combo {
@@ -892,12 +899,20 @@
   text-align: center;
 }
 .h10-ds-grid th.sticky,
-.h10-ds-grid td.sticky {
+.h10-ds-grid td.sticky,
+.h10-ds-grid th.sticky-right,
+.h10-ds-grid td.sticky-right {
   position: sticky;
   z-index: 3;
 }
-.h10-ds-grid thead th.sticky {
+.h10-ds-grid thead th.sticky,
+.h10-ds-grid thead th.sticky-right {
   z-index: 5;
+}
+/* a left edge-shadow separates a right-pinned column from scrolling content */
+.h10-ds-grid td.sticky-right,
+.h10-ds-grid th.sticky-right {
+  box-shadow: inset 1px 0 0 var(--border-subtle);
 }
 .h10-ds-grid .sortbtn {
   display: inline-flex;

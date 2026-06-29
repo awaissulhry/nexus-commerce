@@ -17,11 +17,12 @@ export interface StepperProps {
   steps: StepperStep[]
   /** Index of the active step (0-based). Earlier = done, later = upcoming. */
   current: number
+  className?: string
 }
 
-export function Stepper({ steps, current }: StepperProps) {
+export function Stepper({ steps, current, className }: StepperProps) {
   return (
-    <ol className="h10-ds-stepper">
+    <ol className={`h10-ds-stepper${className ? ` ${className}` : ''}`}>
       {steps.map((step, i) => {
         const state = i < current ? 'done' : i === current ? 'active' : 'upcoming'
         return (
