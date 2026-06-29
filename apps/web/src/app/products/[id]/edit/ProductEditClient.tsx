@@ -408,6 +408,24 @@ export default function ProductEditClient({
   // ensures the Amazon/eBay/Shopify tabs always show current data without
   // needing a full page reload.
   const [clientListings, setClientListings] = useState<Record<string, Listing[]>>(listings)
+  // PERF — page.tsx no longer blocks SSR render on all-listings (the
+  // slowest fetch, up to 9s cold). Hydrate clientListings on mount so the
+  // Amazon/eBay/Shopify tabs populate without gating the initial paint —
+  // the operator lands on the Master tab, so listings stream in before
+  // they switch tabs. Runs once per product; the invalidation effects
+  // below keep it fresh thereafter.
+  useEffect(() => {
+    let alive = true
+    void fetch(`${getBackendUrl()}/api/products/${product.id}/all-listings`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (alive && data) setClientListings(data)
+      })
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.id])
   useInvalidationChannel('channel-pricing.updated', () => {
     void fetch(`${getBackendUrl()}/api/products/${product.id}/all-listings`, { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : null)
