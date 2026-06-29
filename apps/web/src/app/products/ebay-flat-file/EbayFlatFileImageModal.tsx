@@ -5,6 +5,7 @@ import { Modal } from '@/design-system/components/Modal'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { Banner } from '@/design-system/components/Banner'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button } from '@/components/ui/Button'
 // Reuse the shared images-tab grid and type definitions directly.
 // [id] is a literal directory name in the filesystem; TypeScript resolves it fine.
 import ChannelImageGrid, { type ImageGridColumn, type ImageGridRow } from '@/app/products/[id]/edit/tabs/images/ChannelImageGrid'
@@ -77,6 +78,23 @@ function initBuckets(listingImages: ListingImage[], axis: string, colorValues: s
   return map
 }
 
+function cloneBuckets(b: Buckets): Buckets {
+  const out: Buckets = new Map()
+  for (const [k, v] of b) out.set(k, [...v])
+  return out
+}
+
+function bucketsDiff(a: Buckets, b: Buckets): number {
+  const keys = new Set<string>([...a.keys(), ...b.keys()])
+  let diff = 0
+  for (const k of keys) {
+    const la = a.get(k) ?? [], lb = b.get(k) ?? []
+    const n = Math.max(la.length, lb.length)
+    for (let i = 0; i < n; i++) if (la[i] !== lb[i]) diff++
+  }
+  return diff
+}
+
 // ── Props ─────────────────────────────────────────────────────────────────
 
 export interface EbayFlatFileImageModalProps {
@@ -133,11 +151,79 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
 
   const colorValues = useMemo(() => getAxisValues(variants, axis), [variants, axis])
 
-  // Working bucket state — read-only in Phase 2 (edit in Phase 3+).
-  const buckets = useMemo(
+  // Saved server truth. Recomputed when listing images, axis or colorValues change.
+  const baseline = useMemo(
     () => initBuckets(listingImages, axis, colorValues),
     [listingImages, axis, colorValues],
   )
+
+  // Working bucket state — diverges from baseline as the operator edits.
+  const [buckets, setBuckets] = useState<Buckets>(() => cloneBuckets(baseline))
+
+  // Snap to the new baseline whenever it changes (after load / reload).
+  useEffect(() => { setBuckets(cloneBuckets(baseline)) }, [baseline])
+
+  const hasDirty = useMemo(() => bucketsDiff(buckets, baseline) > 0, [buckets, baseline])
+
+  // ── Edit mutations ────────────────────────────────────────────────────
+
+  // Assign a URL to a bucket cell. No cross-bucket overlap: remove the photo
+  // from every other bucket first so it never appears in two rows at once.
+  const assign = useCallback((bucket: string, replaceIndex: number | null, url: string) => {
+    setBuckets((prev) => {
+      const next = new Map(prev)
+      for (const [k, list] of next) {
+        if (k !== bucket && list.includes(url)) next.set(k, list.filter((u) => u !== url))
+      }
+      let list = [...(next.get(bucket) ?? [])]
+      if (replaceIndex != null && replaceIndex < list.length) list[replaceIndex] = url
+      else list.push(url)
+      // In-bucket de-dupe: first occurrence wins.
+      const seen = new Set<string>()
+      list = list.filter((u) => (seen.has(u) ? false : (seen.add(u), true)))
+      next.set(bucket, list)
+      return next
+    })
+  }, [])
+
+  const removeAt = useCallback((bucket: string, positionOneBased: number) => {
+    setBuckets((prev) => {
+      const next = new Map(prev)
+      const list = [...(next.get(bucket) ?? [])]
+      list.splice(positionOneBased - 1, 1)
+      next.set(bucket, list)
+      return next
+    })
+  }, [])
+
+  const handleCellRemove = useCallback((rowKey: string | null, colKey: string) => {
+    removeAt(rowKey ?? SHARED, Number(colKey))
+  }, [removeAt])
+
+  // Move a photo between cells (drag-reorder, incl. cross-bucket).
+  const move = useCallback((
+    from: { rowKey: string | null; columnKey: string; url: string },
+    to: { rowKey: string | null; columnKey: string },
+  ) => {
+    const fromB = from.rowKey ?? SHARED
+    const toB = to.rowKey ?? SHARED
+    setBuckets((prev) => {
+      const next = new Map(prev)
+      const fromList = [...(next.get(fromB) ?? [])]
+      const [moved] = fromList.splice(Number(from.columnKey) - 1, 1)
+      if (moved === undefined) return prev
+      if (fromB === toB) {
+        fromList.splice(Math.min(Number(to.columnKey) - 1, fromList.length), 0, moved)
+        next.set(fromB, fromList)
+      } else {
+        const toList = [...(next.get(toB) ?? [])].filter((u) => u !== moved)
+        toList.splice(Math.min(Number(to.columnKey) - 1, toList.length), 0, moved)
+        next.set(fromB, fromList)
+        next.set(toB, toList)
+      }
+      return next
+    })
+  }, [])
 
   // ── Grid model ────────────────────────────────────────────────────────
 
@@ -206,6 +292,20 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
       title={`eBay Images · ${sku}`}
       subtitle={subtitle}
       size="xl"
+      footer={hasDirty ? (
+        <>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setBuckets(cloneBuckets(baseline))}
+          >
+            Discard
+          </Button>
+          <Button size="sm" disabled title="Save coming in next phase">
+            Save
+          </Button>
+        </>
+      ) : null}
     >
       {loading && (
         <div className="space-y-3 py-2">
@@ -286,6 +386,13 @@ export function EbayFlatFileImageModal({ open, onClose, productId }: EbayFlatFil
               columns={columns}
               resolveCell={resolveCell}
               onCellClick={() => { /* Phase 4: open image picker */ }}
+              onCellRemove={handleCellRemove}
+              onCellMove={move}
+              onCellDrop={(rowKey, colKey, url) => {
+                const bucket = rowKey ?? SHARED
+                const idx = Number(colKey) - 1
+                assign(bucket, idx < (buckets.get(bucket) ?? []).length ? idx : null, url)
+              }}
               ariaLabel={`eBay photos grouped by ${axis}`}
               rowHeaderLabel={axis}
               minDimensionPx={500}
