@@ -91,6 +91,13 @@ export interface FlatFileColumn {
   maxUtf8ByteLength?: number
   minUtf8ByteLength?: number
   width: number
+  /**
+   * For enum fields that use canonical stored values (e.g. 'parent'/'child')
+   * but need to display localized labels in the UI. Maps canonical value →
+   * localized display label for the current market.
+   * e.g. { 'parent': 'Articolo padre', 'child': 'Articolo figlio' } for IT.
+   */
+  optionLabels?: Record<string, string>
 }
 
 export interface FlatFileColumnGroup {
@@ -343,6 +350,25 @@ export function buildSchemaEnumCodeMap(properties: Record<string, any>): Record<
     }
   }
   return result
+}
+
+/**
+ * Normalize a parentage_level cell value to canonical lowercase 'parent'/'child'/''
+ * regardless of whether it's a localized label ("Articolo padre"), legacy title-case
+ * ("Parent"/"Child"), or already canonical ("parent"/"child").
+ * Pass the field's enumCodeMap entry (maps localized label → canonical code).
+ */
+export function normalizeParentage(
+  raw: string,
+  parentageCodeMap: Record<string, string> = {},
+): 'parent' | 'child' | '' {
+  if (!raw) return ''
+  // Try localized-label → canonical code lookup first
+  const mapped = parentageCodeMap[raw] ?? raw
+  const lc = mapped.toLowerCase().trim()
+  if (lc === 'parent') return 'parent'
+  if (lc === 'child') return 'child'
+  return ''
 }
 
 /**
@@ -736,10 +762,26 @@ const SNAPSHOT_LIVE_OVERLAY = [
   'purchasable_offer__our_price', 'purchasable_offer__sale_price',
   'fulfillment_availability__quantity',
 ]
-export function applySnapshotOverlay(snapshot: Record<string, any>, liveRow: FlatFileRow): FlatFileRow {
+export function applySnapshotOverlay(
+  snapshot: Record<string, any>,
+  liveRow: FlatFileRow,
+  /** Optional: maps localized parentage label → canonical code (e.g. 'Articolo padre' → 'parent').
+   *  When provided, heals legacy localized values in existing snapshots to canonical on first read. */
+  parentageCodeMap?: Record<string, string>,
+): FlatFileRow {
   const overlay: Record<string, any> = {}
   for (const k of SNAPSHOT_LIVE_OVERLAY) {
     if (liveRow[k] !== undefined && liveRow[k] !== '') overlay[k] = liveRow[k]
+  }
+  // Normalize parentage_level in the snapshot to canonical 'parent'/'child'/''
+  // Handles: legacy title-case "Parent"/"Child", localized "Articolo padre"/"Articolo figlio"
+  // Falls back to the liveRow's canonical value (derived from DB isParent/parentId flags)
+  // when the snapshot value can't be resolved (non-canonical and no codeMap provided).
+  const snapParentage = String(snapshot.parentage_level ?? '')
+  if (snapParentage) {
+    const canonical = normalizeParentage(snapParentage, parentageCodeMap ?? {})
+    const fallback = String(liveRow.parentage_level ?? '')
+    snapshot = { ...snapshot, parentage_level: canonical || fallback || snapParentage }
   }
   // FBA rows: Amazon owns the stock — never surface a merchant quantity (it both
   // shouldn't show, and a merchant qty would flip FBA→FBM). Force-blank for FBA;
@@ -1048,10 +1090,19 @@ export class AmazonFlatFileService {
     }
 
     // ── Group 2: Variations — all three columns are schema-derived ────────
-    // parentage_level enum, variation_theme enum, and parent_sku (sub-prop of
-    // child_parent_sku_relationship) all come from schemaEnums, so they
-    // automatically reflect the correct values for any marketplace + product type.
-    const parentageOpts = schemaEnums['parentage_level'] ?? ['Child', 'Parent']
+    // parentage_level is a structural field: Amazon always uses 'parent'/'child' as
+    // canonical SP-API codes. We store canonical codes internally and provide
+    // optionLabels for localized display in the UI (e.g. 'parent' → 'Articolo padre'
+    // for IT). This prevents validation mismatches and feed-builder failures caused
+    // by localized labels not matching the English comparison strings.
+    const parentageLocalized = schemaEnums['parentage_level'] ?? []
+    // Build canonical → localized display label map (e.g. { parent: 'Articolo padre' })
+    const PARENTAGE_CODES = ['parent', 'child'] as const
+    const parentageLabelMap: Record<string, string> = {}
+    PARENTAGE_CODES.forEach((code, i) => {
+      const label = parentageLocalized[i]
+      if (label && label !== code) parentageLabelMap[code] = label
+    })
     const variationsGroup: FlatFileColumnGroup = {
       id: 'variations',
       labelEn: 'Variations',
@@ -1064,8 +1115,9 @@ export class AmazonFlatFileService {
           labelEn: 'Parent/Child',
           labelLocal: schemaLabels['parentage_level'] ?? ll('parentage_level', 'Parentage Level'),
           required: false, kind: 'enum', width: 130, selectionOnly: true,
-          options: ['', ...parentageOpts],
-          description: 'Blank = standalone; Parent = non-buyable variation parent; Child = variant',
+          options: ['', 'parent', 'child'],
+          optionLabels: Object.keys(parentageLabelMap).length > 0 ? parentageLabelMap : undefined,
+          description: 'Blank = standalone; parent = non-buyable variation parent; child = variant',
         },
         {
           id: 'parent_sku',
@@ -1277,6 +1329,18 @@ export class AmazonFlatFileService {
     // Build id→sku map so child rows can resolve parent SKU without extra queries
     const idToSku = new Map(products.filter(Boolean).map((p: any) => [p.id as string, p.sku as string]))
 
+    // Fetch parentage_level code map for snapshot normalization.
+    // parentage_level localization is market-specific (not product-type-specific),
+    // so one lookup for any available product type is sufficient. Result is cached.
+    let parentageCodeMap: Record<string, string> = {}
+    const ptForSchema = productType?.toUpperCase() ?? (products.find((p: any) => p.productType) as any)?.productType
+    if (ptForSchema) {
+      try {
+        const hints = await this.getFeedSchemaHints(mp, ptForSchema)
+        parentageCodeMap = hints.enumCodeMap['parentage_level'] ?? {}
+      } catch { /* non-critical; snapshot normalization falls back to title-case only */ }
+    }
+
     return products.map((p) => {
       const listing = (p.channelListings as any[])[0]
       const attrs = ((listing?.platformAttributes as any)?.attributes ?? {}) as Record<string, any>
@@ -1317,7 +1381,8 @@ export class AmazonFlatFileService {
         item_sku:              p.sku,
         product_type:          (p.productType as string | null) ?? productType ?? '',
         record_action:         'full_update',
-        parentage_level:       p.isParent ? 'Parent' : (p as any).parentId ? 'Child' : '',
+        // SP-API stores canonical 'parent'/'child' codes in attrs; fall back to DB flags
+        parentage_level:       String(attrs.parentage_level?.[0]?.value ?? (p.isParent ? 'parent' : (p as any).parentId ? 'child' : '')),
         parent_sku:            parentSku,
         variation_theme:       String(attrs.variation_theme?.[0]?.value ?? ''),
         // Common schema fields pre-populated from DB
@@ -1430,7 +1495,7 @@ export class AmazonFlatFileService {
       // expanded `row` above is the legacy fallback for listings with no snapshot.
       const snapshot = (listing as any)?.flatFileSnapshot as Record<string, any> | null | undefined
       if (snapshot && typeof snapshot === 'object' && Object.keys(snapshot).length > 0) {
-        return applySnapshotOverlay(snapshot, row)
+        return applySnapshotOverlay(snapshot, row, parentageCodeMap)
       }
 
       return row
@@ -1726,13 +1791,16 @@ export class AmazonFlatFileService {
         }
         // blank/unknown faCode → omit fulfillment_availability entirely (fail-closed).
 
-        if (String(row.parentage_level).toLowerCase() === 'parent') {
+        // Normalize: handles canonical ('parent'/'child'), title-case ('Parent'/'Child'),
+        // and localized labels ('Articolo padre') via enumCodeMap before comparison.
+        const parentageCode = normalizeParentage(String(row.parentage_level ?? ''), enumCodeMap['parentage_level'] ?? {})
+        if (parentageCode === 'parent') {
           // HIGH-5 — a parent must declare its parentage_level, not just the
           // variation theme, or Amazon won't register it as a variation parent.
           attrs.parentage_level = [{ value: 'parent', marketplace_id: marketplaceId }]
           if (row.variation_theme) attrs.variation_theme = wrap(String(row.variation_theme))
         }
-        if (String(row.parentage_level).toLowerCase() === 'child' && row.parent_sku) {
+        if (parentageCode === 'child' && row.parent_sku) {
           attrs.parentage_level              = [{ value: 'child', marketplace_id: marketplaceId }]
           attrs.child_parent_sku_relationship = [{ parent_sku: String(row.parent_sku), marketplace_id: marketplaceId }]
         }
@@ -1814,7 +1882,7 @@ export class AmazonFlatFileService {
         // must be omitted — otherwise Amazon re-validates every required attribute
         // and rejects the patch for fields we intentionally didn't resend.
         if (operationType === 'UPDATE') {
-          message.requirements = String(row.parentage_level).toLowerCase() === 'parent' ? 'LISTING_PRODUCT_ONLY' : 'LISTING'
+          message.requirements = normalizeParentage(String(row.parentage_level ?? ''), enumCodeMap['parentage_level'] ?? {}) === 'parent' ? 'LISTING_PRODUCT_ONLY' : 'LISTING'
         }
         return message
       })
@@ -1942,10 +2010,24 @@ export class AmazonFlatFileService {
     })
     const productBySku = new Map(products.map((p) => [p.sku, p]))
 
+    // Fetch enum code maps per unique product type for parentage_level normalization.
+    // parentage_level may be stored as a localized label (e.g., 'Articolo padre' for IT)
+    // when the operator selected from a schema-derived localized dropdown in an earlier
+    // session. This map converts those labels → canonical 'parent'/'child' codes.
+    const productTypeSet = new Set(validRows.map((r) => String(r.product_type ?? '').toUpperCase()).filter(Boolean))
+    const enumCodeMapByProductType = new Map<string, Record<string, Record<string, string>>>()
+    await Promise.all([...productTypeSet].map(async (pt) => {
+      try {
+        enumCodeMapByProductType.set(pt, (await this.getFeedSchemaHints(mp, pt)).enumCodeMap)
+      } catch { /* non-critical; normalizeParentage falls back to direct toLowerCase */ }
+    }))
+    const getParentageCode = (raw: string, productType: string): 'parent' | 'child' | '' =>
+      normalizeParentage(raw, (enumCodeMapByProductType.get(String(productType).toUpperCase()) ?? {})['parentage_level'] ?? {})
+
     // Bulk parent-SKU → parentId lookup for child rows
     const parentSkus = [...new Set(
       validRows
-        .filter((r) => (String(r.parentage_level ?? '').toLowerCase() === 'child' || String(r.parent_sku ?? '').trim().length > 0) && r.parent_sku)
+        .filter((r) => (getParentageCode(String(r.parentage_level ?? ''), String(r.product_type ?? '')) === 'child' || String(r.parent_sku ?? '').trim().length > 0) && r.parent_sku)
         .map((r) => String(r.parent_sku).trim()),
     )]
     const parentProducts = parentSkus.length
@@ -1972,13 +2054,13 @@ export class AmazonFlatFileService {
       (r) => r._isNew === true && !productBySku.has(String(r.item_sku).trim()),
     )
     const parentageRank = (r: FlatFileRow) => {
-      const p = String(r.parentage_level ?? '').toLowerCase()
+      const p = getParentageCode(String(r.parentage_level ?? ''), String(r.product_type ?? ''))
       return p === 'parent' ? 0 : p === 'child' ? 2 : 1
     }
     toCreate.sort((a, b) => parentageRank(a) - parentageRank(b))
     for (const row of toCreate) {
       const sku = String(row.item_sku).trim()
-      const isChildRow = String(row.parentage_level ?? '').toLowerCase() === 'child'
+      const isChildRow = getParentageCode(String(row.parentage_level ?? ''), String(row.product_type ?? '')) === 'child'
         || String(row.parent_sku ?? '').trim().length > 0
 
       // Parent / standalone rows need an explicit title; child rows typically omit
@@ -1999,7 +2081,7 @@ export class AmazonFlatFileService {
           ? validRows.find(
               (r) =>
                 String(r.item_sku ?? '').trim() === parentSkuVal &&
-                String(r.parentage_level ?? '').toLowerCase() === 'parent',
+                getParentageCode(String(r.parentage_level ?? ''), String(r.product_type ?? '')) === 'parent',
             )
           : undefined
         const inheritedName = parentRow ? String(parentRow.item_name ?? '').trim() : ''
@@ -2010,12 +2092,14 @@ export class AmazonFlatFileService {
         const parentSku = String(rowForCreate.parent_sku ?? '').trim()
         const parentId =
           isChildRow && parentSku ? (parentIdBySku.get(parentSku) ?? null) : null
+        // Normalize parentage before passing to buildProductCreateInput (pure fn, no codeMap)
+        const createRow = { ...rowForCreate, parentage_level: getParentageCode(String(rowForCreate.parentage_level ?? ''), String(rowForCreate.product_type ?? '')) }
         const created = await this.prisma.product.create({
-          data: { ...buildProductCreateInput(rowForCreate, { languageTag, parentId }), importedAt: new Date() } as any,
+          data: { ...buildProductCreateInput(createRow, { languageTag, parentId }), importedAt: new Date() } as any,
           select: { id: true, sku: true, isParent: true, parentId: true, productType: true },
         })
         productBySku.set(sku, created)
-        if (String(rowForCreate.parentage_level ?? '').toLowerCase() === 'parent') parentIdBySku.set(sku, created.id)
+        if (getParentageCode(String(rowForCreate.parentage_level ?? ''), String(rowForCreate.product_type ?? '')) === 'parent') parentIdBySku.set(sku, created.id)
         await this.createProductImagesFromRow(created.id, rowForCreate)
         result.created++
       } catch (err) {
@@ -2032,7 +2116,7 @@ export class AmazonFlatFileService {
       }
 
       try {
-        const parentageLevel = String(row.parentage_level ?? '').toLowerCase()
+        const parentageLevel = getParentageCode(String(row.parentage_level ?? ''), String(row.product_type ?? ''))
         const isParentRow = parentageLevel === 'parent'
         const isChildRow  = parentageLevel === 'child' || String(row.parent_sku ?? '').trim().length > 0
         const parentSku   = String(row.parent_sku ?? '').trim()
@@ -2063,7 +2147,8 @@ export class AmazonFlatFileService {
         const qty         = qtyParsed !== null && qtyParsed >= 0 ? qtyParsed : null
 
         // Collapsed attributes (same format getExistingRows reads back)
-        const collapsedAttrs = this.buildCollapsedAttrs(row, expandedFields, mp, marketplaceId, languageTag)
+        const rowEnumCodeMap = enumCodeMapByProductType.get(String(row.product_type ?? '').toUpperCase()) ?? {}
+        const collapsedAttrs = this.buildCollapsedAttrs(row, expandedFields, mp, marketplaceId, languageTag, rowEnumCodeMap)
 
         // ── Upsert ChannelListing ───────────────────────────────────
         const existing = await this.prisma.channelListing.findFirst({
@@ -2093,7 +2178,12 @@ export class AmazonFlatFileService {
           ...(qty !== null && !isNaN(qty)             ? { quantity: qty, followMasterQuantity: false } : {}),
           // RR.1 — verbatim flat row (sans internal _ keys) for lossless grid
           // round-trip; structured fields above stay authoritative on read.
-          flatFileSnapshot: Object.fromEntries(Object.entries(row).filter(([k]) => !k.startsWith('_'))),
+          // Normalize parentage_level to canonical 'parent'/'child' before storing
+          // so the snapshot is always in a form the feed builder can compare directly.
+          flatFileSnapshot: Object.fromEntries(
+            Object.entries({ ...row, parentage_level: parentageLevel || String(row.parentage_level ?? '') })
+              .filter(([k]) => !k.startsWith('_')),
+          ),
           platformAttributes: { attributes: collapsedAttrs },
           syncStatus: opts.isPublished ? 'SYNCED' : 'PENDING',
           lastSyncedAt: new Date(),
@@ -2253,6 +2343,7 @@ export class AmazonFlatFileService {
     mp: string,
     marketplaceId: string,
     languageTag: string,
+    enumCodeMap: Record<string, Record<string, string>> = {},
   ): Record<string, any> {
     const attrs: Record<string, any> = {}
     const wrap  = (v: string) => [{ value: v, marketplace_id: marketplaceId }]
@@ -2323,10 +2414,11 @@ export class AmazonFlatFileService {
       attrs.fulfillment_availability = [fa]
     }
 
-    // Variation structure
-    const parentageLevel = String(row.parentage_level ?? '').toLowerCase()
-    if (parentageLevel === 'parent' && row.variation_theme) {
-      attrs.variation_theme = wrap(String(row.variation_theme))
+    // Variation structure — normalize via enumCodeMap before comparison
+    const parentageLevel = normalizeParentage(String(row.parentage_level ?? ''), enumCodeMap['parentage_level'] ?? {})
+    if (parentageLevel === 'parent') {
+      attrs.parentage_level = [{ value: 'parent', marketplace_id: marketplaceId }]
+      if (row.variation_theme) attrs.variation_theme = wrap(String(row.variation_theme))
     }
     if (parentageLevel === 'child' && row.parent_sku) {
       attrs.parentage_level               = [{ value: 'child', marketplace_id: marketplaceId }]
