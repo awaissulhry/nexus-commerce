@@ -520,3 +520,12 @@
 .invMatrixRowHead { font-weight: 500; font-variant-numeric: tabular-nums; }
 .invModalFoot { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 12px; }
 .invManageLink { color: var(--text-link); font-size: 13px; }
+
+/* ── Grid loading skeleton (shown while the initial product list loads) ── */
+.gridSkel { display: flex; flex-direction: column; gap: 14px; width: 100%; padding: 6px 2px; }
+.gridSkelRow { display: flex; align-items: center; gap: 12px; }
+.gridSkelText { display: flex; flex-direction: column; gap: 7px; flex: 1; }
+.gridSkelThumb { width: 40px; height: 40px; border-radius: 8px; flex-shrink: 0; }
+.gridSkelBar { height: 11px; border-radius: 6px; }
+.gridSkelThumb, .gridSkelBar { background: var(--h10-grey-25); animation: gridSkelPulse 1.25s ease-in-out infinite; }
+@keyframes gridSkelPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }

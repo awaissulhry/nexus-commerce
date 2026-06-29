@@ -64,6 +64,7 @@ import {
 import styles from './styles.module.css'
 import { InventoryCell } from './InventoryCell'
 import { InventoryEditorModal } from './InventoryEditorModal'
+import { ProductsSkeleton } from './ProductsSkeleton'
 
 // ─────────────────────────────────────────────────────────────────
 // Constants
@@ -1532,8 +1533,9 @@ function ProductsNextInner() {
               rowKey={(r) => r.id}
               selected={selected}
               emptyState={
-                loading ? (
-                  <span style={{ color: 'var(--text-tertiary)' }}>Loading…</span>
+                data == null ? (
+                  // Initial load (no response yet) — skeleton, never "no products".
+                  <ProductsSkeleton />
                 ) : (
                   <span style={{ color: 'var(--text-tertiary)' }}>
                     No products match this filter.
