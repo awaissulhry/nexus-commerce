@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   isLocationEditable, buildListModel, buildMatrixModel, editorModeForRow,
-  REASON_OPTIONS, DEFAULT_REASON,
+  variationLabel, REASON_OPTIONS, DEFAULT_REASON,
 } from './inventoryEditor.logic'
 
 describe('isLocationEditable', () => {
@@ -64,5 +64,33 @@ describe('editorModeForRow', () => {
   it('parents → matrix, leaves → list', () => {
     expect(editorModeForRow({ isParent: true })).toBe('matrix')
     expect(editorModeForRow({ isParent: false })).toBe('list')
+  })
+})
+
+describe('variationLabel', () => {
+  const parent = { name: 'XAVIA AIR-MESH Giacca Da Moto (estiva)', sku: 'AIR-MESH-JACKET-MEN' }
+  it('prefers the trailing parenthetical from the child name', () => {
+    expect(variationLabel(
+      { name: 'XAVIA AIR-MESH Giacca Da Moto Per Uomo (L, Nero)', sku: 'AIR-MESH-JACKET-MEN-L-BLACK' },
+      parent,
+    )).toBe('L, Nero')
+  })
+  it('falls back to the child SKU with the parent SKU prefix stripped', () => {
+    expect(variationLabel(
+      { name: 'No parenthetical here', sku: 'AIR-MESH-JACKET-MEN-XL-RED' },
+      parent,
+    )).toBe('XL-RED')
+  })
+  it('falls back to the full SKU when nothing else distinguishes it', () => {
+    expect(variationLabel(
+      { name: 'Plain name', sku: 'STANDALONE-SKU-1' },
+      parent,
+    )).toBe('STANDALONE-SKU-1')
+  })
+  it('ignores a non-trailing parenthetical, using the SKU suffix instead', () => {
+    expect(variationLabel(
+      { name: 'Jacket (waterproof) something', sku: 'AIR-MESH-JACKET-MEN-S-BLUE' },
+      parent,
+    )).toBe('S-BLUE')
   })
 })

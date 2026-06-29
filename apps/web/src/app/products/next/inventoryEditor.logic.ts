@@ -113,3 +113,26 @@ export function buildMatrixModel(locations: RawLocation[], children: RawFamilyCh
 export function editorModeForRow(row: { isParent: boolean }): 'matrix' | 'list' {
   return row.isParent ? 'matrix' : 'list'
 }
+
+/**
+ * Concise label for a variation row in the matrix. Child product names repeat
+ * the full parent title (e.g. "XAVIA AIR-MESH Giacca … (L, Nero)"), which would
+ * blow out the matrix's first column and push the editable location columns
+ * off-screen. Prefer the trailing parenthetical ("L, Nero"); else the child SKU
+ * with the parent SKU prefix stripped ("L-BLACK"); else the full SKU.
+ */
+export function variationLabel(
+  child: { name: string; sku: string },
+  parent: { name: string; sku: string },
+): string {
+  const paren = child.name.match(/\(([^)]+)\)\s*$/)
+  if (paren) return paren[1].trim()
+  if (parent.sku && child.sku.startsWith(parent.sku + '-')) {
+    return child.sku.slice(parent.sku.length + 1)
+  }
+  if (parent.name && child.name.startsWith(parent.name)) {
+    const rest = child.name.slice(parent.name.length).replace(/^[\s\-–—|]+/, '').trim()
+    if (rest) return rest
+  }
+  return child.sku
+}
