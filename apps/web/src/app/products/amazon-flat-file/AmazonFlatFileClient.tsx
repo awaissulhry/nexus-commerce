@@ -136,6 +136,9 @@ interface Column {
   guidance?: string
   maxLength?: number
   width: number
+  /** Maps canonical stored value → localized display label for enum cells.
+   *  e.g. { 'parent': 'Articolo padre', 'child': 'Articolo figlio' } for IT. */
+  optionLabels?: Record<string, string>
 }
 
 interface ColumnGroup {
@@ -5812,12 +5815,14 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
 
   // Enum cell: custom dropdown
   if (col.kind === 'enum' && col.options && col.options.length > 0) {
+    // Localized display label for the stored canonical value (e.g. 'parent' → 'Articolo padre')
+    const displayLabel = (col.optionLabels?.[displayValue] ?? displayValue)
     // A selection-only cell holding a value Amazon doesn't list. Allowed (you
     // can type your own) but flagged, since Amazon may reject it at submit.
     const strictInvalid = !!col.selectionOnly && !!displayValue && !col.options.includes(displayValue)
     return (
       <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}
-        title={strictInvalid ? `"${displayValue}" isn't in Amazon's valid values for this field — Amazon may reject it at submit` : undefined}
+        title={strictInvalid ? `"${displayLabel}" isn't in Amazon's valid values for this field — Amazon may reject it at submit` : undefined}
         onClick={() => { if (isActive) setDropdownOpen(true) }}
         onDoubleClick={(e) => {
           const charPos = getCharIndexFromPoint(e.clientX, e.clientY)
@@ -5832,7 +5837,7 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
             strictInvalid ? 'text-amber-600 dark:text-amber-400'
             : isEmpty ? 'text-slate-300 dark:text-slate-600 italic' : 'text-slate-800 dark:text-slate-200')}>
             {strictInvalid && <AlertCircle className="w-3 h-3 shrink-0" aria-hidden />}
-            <span className="truncate">{displayValue || ((col.required && !isGhost) ? '⚠ required' : col.options[0] ? `e.g. ${col.options[0]}` : '—')}</span>
+            <span className="truncate">{displayLabel || ((col.required && !isGhost) ? '⚠ required' : col.options[0] ? `e.g. ${col.optionLabels?.[col.options[0]] ?? col.options[0]}` : '—')}</span>
           </span>
           <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
         </div>
@@ -5840,6 +5845,7 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
         {isActive && dropdownOpen && (
           <EnumDropdown
             options={col.options}
+            optionLabels={col.optionLabels}
             current={displayValue}
             selectionOnly={col.selectionOnly}
             initialQuery={editInitialChar ?? ''}
@@ -5995,6 +6001,8 @@ const SpreadsheetCell = memo(SpreadsheetCellImpl, areCellPropsEqual)
 
 interface EnumDropdownProps {
   options: string[]
+  /** Maps canonical stored value → localized display label */
+  optionLabels?: Record<string, string>
   current: string
   /** When true the user must pick from the list; typed custom values are not allowed */
   selectionOnly?: boolean
@@ -6005,16 +6013,19 @@ interface EnumDropdownProps {
   onClose: () => void
 }
 
-function EnumDropdown({ options, current, selectionOnly = false, initialQuery = '', onSelect, onClose }: EnumDropdownProps) {
+function EnumDropdown({ options, optionLabels, current, selectionOnly = false, initialQuery = '', onSelect, onClose }: EnumDropdownProps) {
   const [query, setQuery] = useState(initialQuery)
   const [highlighted, setHighlighted] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
+  const getLabel = (opt: string) => optionLabels?.[opt] ?? opt
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase()
-    return options.filter((o) => !q || o.toLowerCase().includes(q))
-  }, [options, query])
+    // Search against both the canonical value AND the localized label
+    return options.filter((o) => !q || o.toLowerCase().includes(q) || getLabel(o).toLowerCase().includes(q))
+  }, [options, optionLabels, query])
 
   // A typed value not in the list is always allowed (you can write your own);
   // for selection-only fields it's flagged, since Amazon may reject it.
@@ -6072,7 +6083,7 @@ function EnumDropdown({ options, current, selectionOnly = false, initialQuery = 
               : opt === current ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium'
               : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50',
             )}>
-            {opt === '' ? <span className="italic opacity-60">— empty —</span> : opt}
+            {opt === '' ? <span className="italic opacity-60">— empty —</span> : getLabel(opt)}
           </div>
         ))}
         {filtered.length === 0 && !hasCustom && (
