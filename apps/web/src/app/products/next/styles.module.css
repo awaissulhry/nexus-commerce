@@ -502,6 +502,8 @@
 .invModalHead { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .invReasonRow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .invReasonLabel { display: inline-flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--text-secondary); }
+/* DS Combobox (custom-rendered dropdown) for the Reason picker. */
+.invReasonCombo { width: 200px; }
 /* DS Input wrapper for the Notes field — grow to fill the reason row. */
 .invNotesField { flex: 1; min-width: 160px; }
 .invToast { padding: 6px 10px; border-radius: 6px; background: var(--status-danger-soft); color: var(--status-danger-strong); font-size: 12px; }
