@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, Loader2, ListOrdered, Plus, RefreshCw, RotateCcw, Search, Send, Upload, X, Zap,
+  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, ImageIcon, Loader2, ListOrdered, Plus, RefreshCw, RotateCcw, Search, Send, Upload, X, Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -16,6 +16,7 @@ import { Banner } from '@/design-system/components/Banner'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { AddListingPopover } from './AddListingPopover'
 import { EbayImportWizard } from './EbayImportWizard'
+import { EbayFlatFileImageModal } from './EbayFlatFileImageModal'
 import { AspectsPanel } from './AspectsPanel'
 import { ChannelStrip } from './ChannelStrip'
 import { HistoryModal } from '@/components/flat-file/HistoryModal'
@@ -385,6 +386,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false)
   // historyRefreshKey still incremented after each push (harmless; HistoryModal fetches live on open)
   const [, setHistoryRefreshKey] = useState(0)
+  const [imageModalOpen, setImageModalOpen] = useState(false)
   // Refs so fileMenuItems callbacks can access latest FlatFileGrid ctx without stale closures
   const latestRowsRef = useRef<BaseRow[]>([])
   const latestSelectedRowsRef = useRef<Set<string>>(new Set())
@@ -944,6 +946,14 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     UK: 'https://www.ebay.co.uk/itm/',
   }
 
+  // Stable productId for the image modal — prefer familyId prop, fall back to
+  // the parent row's _productId, then platformProductId.
+  const derivedProductId = useMemo(() => {
+    if (familyId) return familyId
+    const parent = initialRows.find((r) => r._isParent === true)
+    return String(parent?._productId ?? parent?.platformProductId ?? '')
+  }, [familyId, initialRows])
+
   // Parent ids that actually have variant rows loaded — so the SKU badge
   // shows "Parent" only on a true variation parent, not a standalone product
   // (which also has _isParent=true). Variants' platformProductId is the
@@ -1421,6 +1431,16 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           active={historyPanelOpen}
         />
 
+        {/* Images — curate per-color image sets and push to eBay */}
+        {derivedProductId && (
+          <SharedTbBtn
+            icon={<ImageIcon className="w-3.5 h-3.5" />}
+            title="Manage eBay images — curate per-color image sets, upload new photos, push to all markets"
+            onClick={() => setImageModalOpen(true)}
+            active={imageModalOpen}
+          />
+        )}
+
         {/* Inline progress / result indicator */}
         {pullProgress && (
           <span className="text-[11px] flex items-center gap-1 flex-shrink-0 text-blue-600 dark:text-blue-400 ml-1">
@@ -1439,7 +1459,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       </>
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames])
+  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, imageModalOpen, derivedProductId])
 
   // ── Slot: import button ────────────────────────────────────────────────
 
@@ -1661,6 +1681,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         if (f) { setImportInitialFile(f); setImportWizardOpen(true) }
       }}
     >
+      {/* Image management modal */}
+      <EbayFlatFileImageModal
+        open={imageModalOpen}
+        onClose={() => setImageModalOpen(false)}
+        productId={derivedProductId}
+      />
+
       {/* Unified history modal — H.1–H.4 */}
       <HistoryModal
         open={historyPanelOpen}
