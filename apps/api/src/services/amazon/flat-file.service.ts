@@ -1074,6 +1074,30 @@ export class AmazonFlatFileService {
           labelEn: 'Seller SKU', labelLocal: ll('item_sku', 'SKU'),
           required: true, kind: 'text', width: 180,
         },
+        // Product identifier — the field Amazon's own flat file has and ours
+        // dropped. Lets a new SKU attach to an EXISTING Amazon product (its
+        // ASIN, or its EAN/GTIN/UPC) so a relist keeps that page's reviews +
+        // ranking instead of minting a new ASIN. `::` sentinel fieldRefs:
+        // populated from the live listing on read; the feed handler emits the
+        // right SP-API attribute (merchant_suggested_asin /
+        // externally_assigned_product_identifier) on submit. Sits with the
+        // SKU because it IS the offer's catalog identity.
+        {
+          id: 'external_product_id', fieldRef: '::external_product_id',
+          labelEn: 'Product ID (ASIN / EAN / GTIN / UPC)',
+          labelLocal: ll('external_product_id', 'Product ID (ASIN / EAN / GTIN / UPC)'),
+          required: false, kind: 'text', width: 200,
+          description:
+            "Attach this SKU to an existing Amazon product — enter its ASIN (or EAN/GTIN/UPC) to keep that page's reviews & ranking instead of creating a new one. Leave blank to behave exactly as before.",
+        },
+        {
+          id: 'external_product_id_type', fieldRef: '::external_product_id_type',
+          labelEn: 'Product ID Type',
+          labelLocal: ll('external_product_id_type', 'Product ID Type'),
+          required: false, kind: 'enum', width: 140, selectionOnly: true,
+          options: ['', 'ASIN', 'EAN', 'GTIN', 'UPC'],
+          description: 'Which identifier the Product ID column holds.',
+        },
         {
           id: 'product_type', fieldRef: 'product_type#1.value',
           labelEn: 'Product Type', labelLocal: ll('product_type', 'Product Type'),
@@ -1379,6 +1403,12 @@ export class AmazonFlatFileService {
       const row: FlatFileRow = {
         _rowId: p.id, _productId: p.id, _isNew: false, _status: 'idle',
         item_sku:              p.sku,
+        // Populate the product-identifier column from the live listing's ASIN
+        // (ChannelListing.externalListingId) so operators can SEE which Amazon
+        // product each SKU sits on. Editing it to relist onto a different ASIN
+        // is wired in the feed handler (next increment).
+        external_product_id:      listing?.externalListingId ?? '',
+        external_product_id_type: listing?.externalListingId ? 'ASIN' : '',
         product_type:          (p.productType as string | null) ?? productType ?? '',
         record_action:         'full_update',
         // SP-API stores canonical 'parent'/'child' codes in attrs; fall back to DB flags
@@ -1692,6 +1722,12 @@ export class AmazonFlatFileService {
     // Fields with complex/explicit SP-API structure — handled case-by-case below
     const EXPLICIT_KEYS = new Set([
       'item_sku', 'product_type', 'record_action',
+      // Product-identifier columns are display-only for now (populated from
+      // the live ASIN on read). Listed here so the generic loop does NOT emit
+      // them as raw `external_product_id` attributes — the feed handler that
+      // maps them to merchant_suggested_asin / externally_assigned_product_
+      // identifier lands in the next increment.
+      'external_product_id', 'external_product_id_type',
       'parentage_level', 'parent_sku', 'variation_theme',
       'item_name', 'brand', 'product_description',
       'bullet_point', 'generic_keyword', 'color',
