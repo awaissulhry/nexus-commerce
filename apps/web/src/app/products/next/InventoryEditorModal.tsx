@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Lock } from 'lucide-react'
-import { Modal } from '@/design-system/components'
-import { Select, Input, Button } from '@/design-system/primitives'
+import { Modal, Combobox } from '@/design-system/components'
+import { Input, Button } from '@/design-system/primitives'
 import type { ProductRow } from '../_types'
 import { useInventoryEditor } from './useInventoryEditor'
 import { LocationQtyInput } from './LocationQtyInput'
@@ -41,9 +41,13 @@ export function InventoryEditorModal({ row, onClose }: { row: ProductRow | null;
       <div className={styles.invReasonRow}>
         <label className={styles.invReasonLabel}>
           Reason
-          <Select value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Adjustment reason">
-            {REASON_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </Select>
+          <Combobox
+            options={[...REASON_OPTIONS]}
+            value={reason}
+            onChange={setReason}
+            placeholder="Select reason"
+            className={styles.invReasonCombo}
+          />
         </label>
         <Input
           fieldClassName={styles.invNotesField}
