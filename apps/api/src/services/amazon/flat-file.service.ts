@@ -774,14 +774,17 @@ export function applySnapshotOverlay(
     if (liveRow[k] !== undefined && liveRow[k] !== '') overlay[k] = liveRow[k]
   }
   // Normalize parentage_level in the snapshot to canonical 'parent'/'child'/''
-  // Handles: legacy title-case "Parent"/"Child", localized "Articolo padre"/"Articolo figlio"
-  // Falls back to the liveRow's canonical value (derived from DB isParent/parentId flags)
-  // when the snapshot value can't be resolved (non-canonical and no codeMap provided).
+  // Handles: legacy title-case "Parent"/"Child", localized "Articolo padre"/"Articolo figlio",
+  // AND empty snapshots for rows published before Phase 1 (SP-API returned no parentage
+  // because the old feed builder never emitted it for parent rows). In that case we fall
+  // back to liveRow.parentage_level which is derived from Product.isParent/parentId flags
+  // — always canonical even when the snapshot is empty.
   const snapParentage = String(snapshot.parentage_level ?? '')
-  if (snapParentage) {
-    const canonical = normalizeParentage(snapParentage, parentageCodeMap ?? {})
-    const fallback = String(liveRow.parentage_level ?? '')
-    snapshot = { ...snapshot, parentage_level: canonical || fallback || snapParentage }
+  const liveParentage = String(liveRow.parentage_level ?? '')
+  const canonicalParentage = snapParentage ? normalizeParentage(snapParentage, parentageCodeMap ?? {}) : ''
+  const effectiveParentage = canonicalParentage || liveParentage
+  if (effectiveParentage !== snapParentage) {
+    snapshot = { ...snapshot, parentage_level: effectiveParentage }
   }
   // FBA rows: Amazon owns the stock — never surface a merchant quantity (it both
   // shouldn't show, and a merchant qty would flip FBA→FBM). Force-blank for FBA;
