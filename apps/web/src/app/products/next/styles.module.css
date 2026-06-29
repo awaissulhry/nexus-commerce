@@ -473,3 +473,24 @@
 .invLock {
   color: var(--text-tertiary);
 }
+
+/* ── LocationQtyInput — editable on-hand control ─────────────── */
+/* Tokens substituted: --surface-subtle→--h10-grey-25, --border-subtle→--border-default,
+   --surface-base→--surface-card, --border-focus→--color-primary              */
+.invRoLevel { display: inline-flex; align-items: center; gap: 4px; }
+.invSynced { color: var(--text-tertiary); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+.invQtyBtn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 6px; min-width: 40px;
+  background: var(--h10-grey-25); border: 1px solid var(--border-default);
+  border-radius: 6px; cursor: pointer; font-variant-numeric: tabular-nums;
+}
+.invQtyBtn:hover { border-color: var(--border-strong); }
+.invQtyBtn:disabled { opacity: 0.6; cursor: default; }
+.invQtyInput {
+  width: 56px; padding: 2px 6px;
+  background: var(--surface-card); border: 1px solid var(--color-primary);
+  border-radius: 6px; font-variant-numeric: tabular-nums;
+}
+.invSpin { color: var(--text-tertiary); animation: invspin 0.8s linear infinite; }
+@keyframes invspin { to { transform: rotate(360deg); } }
