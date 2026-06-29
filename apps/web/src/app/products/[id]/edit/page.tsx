@@ -13,12 +13,16 @@ export default async function ProductEditPage({ params }: PageProps) {
   const { id } = await params
   const backend = getBackendUrl()
 
-  // Fetch all four payloads in parallel
-  const [productRes, listingsRes, marketplacesRes, childrenRes] = await Promise.all([
+  // PERF — block render only on what the operator's first view (the Master
+  // tab) actually needs: the product itself, its children (variant badge +
+  // matrix), and the marketplaces list. all-listings is the SLOWEST fetch
+  // (up to 9s cold) and isn't visible until a channel tab is opened, so it
+  // is NOT gated here — ProductEditClient fetches it client-side on mount
+  // into `clientListings`, streaming it in while the operator reads Master.
+  const [productRes, marketplacesRes, childrenRes] = await Promise.all([
     // P2 #21 — moved from legacy /api/inventory/:id to canonical
     // /api/products/:id; same response shape, no per-call change.
     fetch(`${backend}/api/products/${id}`, { cache: 'no-store' }),
-    fetch(`${backend}/api/products/${id}/all-listings`, { cache: 'no-store' }),
     fetch(`${backend}/api/marketplaces/grouped`, { cache: 'no-store' }),
     fetch(`${backend}/api/products/${id}/children`, { cache: 'no-store' }),
   ])
@@ -29,7 +33,9 @@ export default async function ProductEditPage({ params }: PageProps) {
   }
 
   const product = await productRes.json()
-  const listings = listingsRes.ok ? await listingsRes.json() : {}
+  // Streamed client-side on mount (see comment above) — start empty so the
+  // page renders without waiting on all-listings.
+  const listings = {}
   const marketplaces = marketplacesRes.ok ? await marketplacesRes.json() : {}
   const childrenJson = childrenRes.ok ? await childrenRes.json() : { children: [] }
   const childrenList = childrenJson.children ?? []
