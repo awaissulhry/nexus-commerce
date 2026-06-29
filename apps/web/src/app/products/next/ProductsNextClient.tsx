@@ -121,7 +121,6 @@ function saveColPrefs(cols: CustomizableColumn[]): void {
 // Pure helpers
 // ─────────────────────────────────────────────────────────────────
 
-
 function getStatusTone(status: string): Tone {
   if (status === 'ACTIVE') return 'success'
   if (status === 'DRAFT') return 'neutral'
@@ -340,7 +339,6 @@ function ProductCell({
     </div>
   )
 }
-
 
 /** Row action cluster: Edit link + ⋯ DS Menu */
 function RowActions({ row, onMore }: { row: ProductRow; onMore: () => void }) {
