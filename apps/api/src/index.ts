@@ -188,6 +188,7 @@ import { startEbayTokenRefreshCron } from "./jobs/ebay-token-refresh.job.js";
 import { startEbayReturnsPollCron } from "./jobs/ebay-returns-poll.job.js";
 import { startAmazonReturnsPollCron } from "./jobs/amazon-returns-poll.job.js";
 import { startFlatFileFeedPollCron } from "./jobs/amazon-flat-file-feed-poll.job.js";
+import { startEbayFeedPollCron } from "./jobs/ebay-feed-poll.job.js";
 import { startAttrHydrateCron } from "./jobs/amazon-attr-hydrate.job.js";
 import { startRefundRetryCron } from "./jobs/refund-retry.job.js";
 import { startRefundDeadlineTrackerCron } from "./jobs/refund-deadline-tracker.job.js";
@@ -864,6 +865,11 @@ async function start() {
     // (self-guards on Amazon creds + only polls due in-flight jobs); schedule
     // overridable via NEXUS_FLAT_FILE_FEED_POLL_SCHEDULE.
     startFlatFileFeedPollCron();
+
+    // H.5 — eBay feed-mode push poller. Resolves SUBMITTED EbayPushJob rows
+    // by checking eBay Sell Feed API every 2 min. Fires ebay_push.status_changed SSE.
+    markCronStep('ebay-feed-poll')
+    startEbayFeedPollCron()
 
     // F.3 — periodic attribute hydration: pull full Amazon attributes for sparse
     // listings (blank required fields in the flat-file editor) and store ONLY
