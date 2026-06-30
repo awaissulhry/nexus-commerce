@@ -575,7 +575,7 @@ export default function AmazonFlatFileClient({
 
   // Known product types for the current marketplace (from DB cache + catalog)
   const [productTypes, setProductTypes] = useState<Array<{ value: string; source: string }>>([])
-  const [ptLoading, setPtLoading] = useState(false)
+  const [, setPtLoading] = useState(false)
 
   const [manifest, setManifest] = useState<Manifest | null>(initialManifest)
 
@@ -4305,49 +4305,37 @@ export default function AmazonFlatFileClient({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 font-medium">Product Type</span>
-            <ProductTypeDropdown value={productType} options={productTypes} loading={ptLoading || loading}
-              onChange={(pt) => navigateTo(marketplace, pt)} />
-            {productType && (
-              <Button size="sm" variant="ghost"
-                onClick={() => void loadData(marketplace, productType, true)} loading={loading}
+            {/* BN.3.1 — Categories in this sheet: replaces Product Type dropdown + "+ Add category".
+                Chips derived from productTypesInUse(rows); clicking a chip filters columns to that type. */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 font-medium">Categories in this sheet</span>
+              <div className="flex items-center gap-1 flex-wrap">
+                {productTypesInUse(rows).length === 0 ? (
+                  <span className="text-[11px] text-slate-400 italic">none yet — select rows and Set category</span>
+                ) : (
+                  <>
+                    {isUnionMode && (
+                      <button type="button" onClick={() => setFilterType(null)}
+                        className={cn('px-1.5 py-0.5 rounded text-[11px] font-semibold border transition-colors',
+                          !filterType ? 'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-900/40 dark:text-indigo-300' : 'border-slate-200 text-slate-500 hover:border-indigo-400')}>
+                        All
+                      </button>
+                    )}
+                    {productTypesInUse(rows).map((t) => (
+                      <button key={t} type="button" onClick={() => setFilterType((f) => (f === t ? null : t))}
+                        className={cn('px-1.5 py-0.5 rounded text-[11px] font-semibold border transition-colors',
+                          filterType === t ? 'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-900/40 dark:text-indigo-300' : 'border-slate-200 text-slate-500 hover:border-indigo-400')}>
+                        {t}
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => void loadData(marketplace, productType, true)} loading={loading}
                 title="Refresh schema from Amazon — updates columns/groups, keeps row edits">
                 <RefreshCw className="w-3 h-3 mr-1" />Refresh schema
               </Button>
-            )}
-            {/* MT.3 — multi-category: add more product types to edit them in ONE
-                sheet. The dropdown sets the primary type; these chips add the rest
-                (≥2 types ⇒ union mode: the grid shows the union of all columns). */}
-            {productTypes.length > 1 && (
-              <div className="flex items-center gap-1 flex-wrap">
-                {sheetTypes.slice(1).map((t) => (
-                  <span key={t} className="inline-flex items-center gap-1 rounded-md border border-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 text-[11px] font-medium text-indigo-700 dark:text-indigo-300">
-                    {t}
-                    <button onClick={() => setSheetTypes((s) => s.filter((x) => x !== t))} className="hover:text-red-500" title={`Remove ${t}`}>✕</button>
-                  </span>
-                ))}
-                <select
-                  value=""
-                  onChange={(e) => { const v = e.target.value; if (v) setSheetTypes((s) => [...new Set([...s, v])]) }}
-                  className="rounded-md border border-dashed border-slate-300 dark:border-slate-600 bg-transparent px-2 py-0.5 text-[11px] text-slate-500 hover:border-indigo-400 focus:outline-none"
-                  title="Add another category to this sheet (multi-category)"
-                >
-                  <option value="">+ Add category</option>
-                  {productTypes.map((p) => p.value).filter((v) => !sheetTypes.includes(v)).map((v) => (
-                    <option key={v} value={v}>{v}</option>
-                  ))}
-                </select>
-                {isUnionMode && (
-                  <div className="flex items-center gap-0.5 ml-1 text-[10px]" title="Show only one category's columns">
-                    <span className="text-slate-400 font-medium mr-0.5">show:</span>
-                    <button onClick={() => setFilterType(null)} className={cn('px-1.5 py-0.5 rounded font-semibold transition-colors', !filterType ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' : 'text-slate-400 hover:text-slate-600')}>All</button>
-                    {sheetTypes.map((t) => t.toUpperCase()).map((t) => (
-                      <button key={t} onClick={() => setFilterType((f) => (f === t ? null : t))} className={cn('px-1.5 py-0.5 rounded font-semibold transition-colors', filterType === t ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' : 'text-slate-400 hover:text-slate-600')}>{t}</button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            </div>
             {/* BN.2.2 — Set category: bulk-assign product type + browse node to selected rows. */}
             {/* P-1: gate + label on selectedRealCount (non-ghost) so they match the modal's apply count */}
             {selectedRealCount > 0 && (
@@ -6064,149 +6052,7 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
   )
 }
 
-// ── ProductTypeDropdown ────────────────────────────────────────────────
-// Searchable list of known Amazon product types for the selected marketplace.
-// Shows types cached from the schema API and types currently used by products.
-
-interface ProductTypeOption { value: string; source: string }
-
-interface ProductTypeDropdownProps {
-  value: string
-  options: ProductTypeOption[]
-  loading: boolean
-  onChange: (pt: string) => void
-}
-
-function ProductTypeDropdown({ value, options, loading, onChange }: ProductTypeDropdownProps) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const containerRef = useRef<HTMLDivElement>(null)
-  const searchRef = useRef<HTMLInputElement>(null)
-  const [highlighted, setHighlighted] = useState(0)
-
-  const filtered = useMemo(() => {
-    const q = query.toUpperCase()
-    return q ? options.filter((o) => o.value.includes(q)) : options
-  }, [options, query])
-
-  useEffect(() => { setHighlighted(0) }, [filtered])
-
-  useEffect(() => {
-    if (open) setTimeout(() => searchRef.current?.focus(), 30)
-  }, [open])
-
-  useEffect(() => {
-    function handle(e: MouseEvent) {
-      if (!containerRef.current?.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handle, true)
-    return () => document.removeEventListener('mousedown', handle, true)
-  }, [])
-
-  function select(pt: string) {
-    setOpen(false)
-    setQuery('')
-    onChange(pt)
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted((h) => Math.min(h + 1, filtered.length - 1)) }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted((h) => Math.max(h - 1, 0)) }
-    else if (e.key === 'Enter') { e.preventDefault(); if (filtered[highlighted]) select(filtered[highlighted].value) }
-    else if (e.key === 'Escape') setOpen(false)
-  }
-
-  const sourceLabel = (s: string) =>
-    s === 'both' ? 'schema + catalog'
-    : s === 'schema' ? 'schema cached'
-    : 'catalog'
-
-  return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={cn(
-          'inline-flex items-center gap-1.5 text-xs font-mono px-2 py-0.5 border rounded transition-colors',
-          'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100',
-          'border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500',
-          open && 'border-blue-500 ring-1 ring-blue-500',
-        )}
-      >
-        {loading
-          ? <Loader2 className="w-3 h-3 animate-spin text-slate-400" />
-          : <span className="truncate max-w-[120px]">{value || 'Select…'}</span>}
-        <ChevronDown className={cn('w-3 h-3 text-slate-400 transition-transform', open && 'rotate-180')} />
-      </button>
-
-      {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden">
-          {/* Search */}
-          <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-700">
-            <input
-              ref={searchRef}
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Search product types…"
-              className="w-full text-xs px-2 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-
-          {/* Options */}
-          <div className="max-h-56 overflow-y-auto">
-            {filtered.length === 0 ? (
-              <div className="px-3 py-3 text-xs text-slate-400 italic text-center">
-                {options.length === 0 ? 'No cached schemas yet. Type a product type and load it.' : 'No matches'}
-              </div>
-            ) : (
-              filtered.map((opt, i) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onMouseDown={(e) => { e.preventDefault(); select(opt.value) }}
-                  onMouseEnter={() => setHighlighted(i)}
-                  className={cn(
-                    'w-full flex items-center justify-between gap-2 px-3 py-1.5 text-left transition-colors',
-                    i === highlighted
-                      ? 'bg-blue-500 text-white'
-                      : opt.value === value
-                      ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50',
-                  )}
-                >
-                  <span className="text-xs font-mono font-medium">{opt.value}</span>
-                  <span className={cn('text-xs opacity-60 shrink-0', i === highlighted && 'opacity-80')}>
-                    {sourceLabel(opt.source)}
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-
-          {/* Manual entry footer */}
-          <div className="px-2 py-1.5 border-t border-slate-100 dark:border-slate-700">
-            <button
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault()
-                const pt = query.trim().toUpperCase()
-                if (pt) select(pt)
-              }}
-              disabled={!query.trim()}
-              className="w-full text-xs text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-0.5 text-left disabled:opacity-40 disabled:cursor-default"
-            >
-              {query.trim()
-                ? <>Use <span className="font-mono font-medium">{query.trim().toUpperCase()}</span> (new type)</>
-                : 'Type a name to use a custom product type'}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
+// ProductTypeDropdown removed — BN.3.1 replaced it with Categories-in-this-sheet chips.
 
 // ── SpreadsheetCell + EnumDropdown ─────────────────────────────────────
 
