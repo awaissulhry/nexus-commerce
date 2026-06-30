@@ -19,7 +19,36 @@ import { logger } from '../utils/logger.js'
 import { publishOrderEvent } from './order-events.service.js'
 
 export type SkuStatus = 'success' | 'warning' | 'error'
-export interface PerSkuResult { sku: string; status: SkuStatus; code?: string; message?: string }
+export interface PerSkuResult {
+  sku: string
+  status: SkuStatus
+  code?: string
+  message?: string
+  /** Column IDs extracted from the error message — used by the UI to highlight specific cells. */
+  fields?: string[]
+}
+
+/**
+ * P2.1 — Extract column IDs from Amazon SP-API error messages.
+ * Amazon embeds the field name in messages like:
+ *   "Missing required attribute - item_name"
+ *   "Invalid value for attribute: bullet_point_1"
+ *   "Attribute 'brand_name' cannot be updated"
+ */
+function extractFields(message: string): string[] {
+  if (!message) return []
+  const fields: string[] = []
+  // "attribute - field_name" or "attribute: field_name"
+  const m1 = message.match(/attribute\s*[-:]\s*(\w+)/i)
+  if (m1) fields.push(m1[1])
+  // "attribute 'field_name'" or 'attribute "field_name"'
+  const m2 = message.match(/attribute\s+['"](\w+)['"]/i)
+  if (m2 && !fields.includes(m2[1])) fields.push(m2[1])
+  // "for attribute: field_name" or "for attribute field_name"
+  const m3 = message.match(/for\s+attribute[:\s]+['"]?(\w+)['"]?/i)
+  if (m3 && !fields.includes(m3[1])) fields.push(m3[1])
+  return fields
+}
 export interface FeedReportSummary {
   messagesProcessed: number
   messagesSuccessful: number
@@ -85,12 +114,19 @@ export function parseProcessingReport(reportText: string, submittedSkus?: string
       }
       const prev = bySku.get(sku)
       const message = String(iss?.message ?? '')
+      const issFields = extractFields(message)
       if (prev) {
         prev.status = worse(prev.status, status)
         if (message) prev.message = prev.message ? `${prev.message}; ${message}` : message
         if (!prev.code && iss?.code) prev.code = String(iss.code)
+        if (issFields.length) prev.fields = [...new Set([...(prev.fields ?? []), ...issFields])]
       } else {
-        bySku.set(sku, { sku, status, code: iss?.code != null ? String(iss.code) : undefined, message: message || undefined })
+        bySku.set(sku, {
+          sku, status,
+          code: iss?.code != null ? String(iss.code) : undefined,
+          message: message || undefined,
+          fields: issFields.length ? issFields : undefined,
+        })
       }
     }
     // issue-free submitted SKUs = success
