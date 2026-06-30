@@ -1540,6 +1540,9 @@ export default function AmazonFlatFileClient({
     () => rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string)).length,
     [rows, selectedRows],
   )
+  // WARM — prefetch the Set-category modal chunk before first click so it opens instantly.
+  const warmSetCategoryModal = useCallback(() => { void import('./SetCategoryModal') }, [])
+  useEffect(() => { if (selectedRealCount > 0) warmSetCategoryModal() }, [selectedRealCount > 0, warmSetCategoryModal])
 
   // BF.1 — flat list of every visible cell for FindReplaceBar
   const findCells = useMemo<FindCell[]>(() => {
@@ -4361,7 +4364,10 @@ export default function AmazonFlatFileClient({
             {/* BN.2.2 — Set category: bulk-assign product type + browse node to selected rows. */}
             {/* P-1: gate + label on selectedRealCount (non-ghost) so they match the modal's apply count */}
             {selectedRealCount > 0 && (
-              <Button size="sm" variant="secondary" onClick={() => setShowSetCategory(true)}>
+              <Button size="sm" variant="secondary"
+                onMouseEnter={warmSetCategoryModal}
+                onFocus={warmSetCategoryModal}
+                onClick={() => setShowSetCategory(true)}>
                 Set category ({selectedRealCount})
               </Button>
             )}
