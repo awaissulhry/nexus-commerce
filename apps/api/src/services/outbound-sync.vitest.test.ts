@@ -23,6 +23,7 @@ import {
   buildShopifyProductUpdate,
   withTimeout,
   resolveDispatchQuantity,
+  applyOversellClamp,
 } from './outbound-sync.service.js'
 
 describe('Phase 0.1 — eBay sync payload helpers', () => {
@@ -230,5 +231,20 @@ describe('Phase 1 — resolveDispatchQuantity (re-read latest at dispatch)', () 
   it('returns undefined when neither is available', () => {
     expect(resolveDispatchQuantity(null, undefined)).toBeUndefined()
     expect(resolveDispatchQuantity(undefined, null)).toBeUndefined()
+  })
+})
+
+describe('Phase 2 — applyOversellClamp', () => {
+  it('clamps a request above available down to available', () => {
+    expect(applyOversellClamp(50, 12)).toEqual({ quantity: 12, clamped: true })
+  })
+  it('passes through when request is within available', () => {
+    expect(applyOversellClamp(8, 12)).toEqual({ quantity: 8, clamped: false })
+  })
+  it('is a no-op at exact equality', () => {
+    expect(applyOversellClamp(12, 12)).toEqual({ quantity: 12, clamped: false })
+  })
+  it('clamps to 0 when nothing is available', () => {
+    expect(applyOversellClamp(5, 0)).toEqual({ quantity: 0, clamped: true })
   })
 })
