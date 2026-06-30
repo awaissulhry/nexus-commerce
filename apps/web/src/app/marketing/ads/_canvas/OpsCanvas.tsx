@@ -4,22 +4,48 @@ import '@xyflow/react/dist/style.css'
 import './ops-canvas.css'
 import { ObjectNode } from './ObjectNode'
 import { buildGraph } from './buildGraph'
+import { visibleObjects, childParentIds } from './accountGraph'
 import type { OpsObject } from './types'
 
 const nodeTypes = { object: ObjectNode }
 
-export function OpsCanvas({ objects }: { objects: OpsObject[] }) {
-  const { nodes, edges } = buildGraph(objects)
+export function OpsCanvas({
+  objects,
+  expanded,
+  onToggleExpand,
+  selectedId,
+  onSelect,
+}: {
+  objects: OpsObject[]
+  expanded: Set<string>
+  onToggleExpand: (id: string) => void
+  selectedId: string | null
+  onSelect: (id: string) => void
+}) {
+  const visible = visibleObjects(objects, expanded)
+  const parents = childParentIds(objects)
+  const { nodes, edges } = buildGraph(visible)
+  const enriched = nodes.map((n) => ({
+    ...n,
+    data: {
+      ...n.data,
+      hasChildren: parents.has(n.id),
+      expanded: expanded.has(n.id),
+      selected: selectedId === n.id,
+      onToggle: () => onToggleExpand(n.id),
+    },
+  }))
   return (
     <div className="ops-canvas">
       <ReactFlow
-        nodes={nodes as unknown as Node[]}
+        nodes={enriched as unknown as Node[]}
         edges={edges as unknown as Edge[]}
         nodeTypes={nodeTypes}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         nodesConnectable={false}
         minZoom={0.3}
+        onNodeClick={(_, node) => onSelect(node.id)}
       >
         <Background gap={22} color="#dfe4ea" />
         <MiniMap pannable zoomable />
