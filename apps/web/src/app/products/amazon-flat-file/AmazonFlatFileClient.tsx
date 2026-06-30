@@ -1221,8 +1221,14 @@ export default function AmazonFlatFileClient({
       .filter((g) => g.columns.length > 0)
   }, [visibleGroups, searchQuery, searchMode, filterType, sheetTypes])
 
+  // BN.1.1 — override display label only; id/fieldRef stay untouched (row keys + serialization).
+  const withBrowseNodeLabel = (col: Column): Column =>
+    col.id === 'recommended_browse_nodes' || /^recommended_browse_nodes\b/.test(col.fieldRef)
+      ? { ...col, labelEn: 'Browse node', labelLocal: 'Browse node' }
+      : col
+
   const allColumns = useMemo<Column[]>(
-    () => displayGroups.flatMap((g) => g.columns),
+    () => displayGroups.flatMap((g) => g.columns).map(withBrowseNodeLabel),
     [displayGroups],
   )
   useEffect(() => { allColumnsRef.current = allColumns }, [allColumns])
