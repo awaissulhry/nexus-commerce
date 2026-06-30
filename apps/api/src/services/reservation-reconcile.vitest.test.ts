@@ -27,4 +27,14 @@ describe('classifyOpenOrderReconciliation', () => {
   it('skips unknown statuses defensively', () => {
     expect(classifyOpenOrderReconciliation('SOME_NEW_STATUS', 1 * DAY, STALE)).toBe('skip')
   })
+  it('pins the stale boundary to strict > (= staleMs still skips, +1ms alerts)', () => {
+    expect(classifyOpenOrderReconciliation('PROCESSING', STALE, STALE)).toBe('skip')
+    expect(classifyOpenOrderReconciliation('PROCESSING', STALE + 1, STALE)).toBe('alert')
+  })
+  it('covers the remaining NON_TERMINAL members (PARTIALLY_SHIPPED, AWAITING_PAYMENT)', () => {
+    expect(classifyOpenOrderReconciliation('PARTIALLY_SHIPPED', 2 * DAY, STALE)).toBe('skip')
+    expect(classifyOpenOrderReconciliation('PARTIALLY_SHIPPED', 120 * DAY, STALE)).toBe('alert')
+    expect(classifyOpenOrderReconciliation('AWAITING_PAYMENT', 2 * DAY, STALE)).toBe('skip')
+    expect(classifyOpenOrderReconciliation('AWAITING_PAYMENT', 120 * DAY, STALE)).toBe('alert')
+  })
 })
