@@ -220,6 +220,21 @@ export function buildShopifyProductUpdate(
   return has ? { product } : null;
 }
 
+/**
+ * Phase 1 — at dispatch time, the freshest committed quantity is the current
+ * ChannelListing.quantity (the cascade always updates it transactionally to the
+ * latest value). Pushing that instead of the payload snapshot prevents a stale
+ * in-flight job from overwriting a newer value (last-writer-wins). `0` is a real
+ * value (out of stock) and must not be treated as falsy.
+ */
+export function resolveDispatchQuantity(
+  currentListingQty: number | null | undefined,
+  payloadQty: number | null | undefined,
+): number | undefined {
+  if (typeof currentListingQty === 'number') return currentListingQty
+  return payloadQty ?? undefined
+}
+
 // ── Data Structures ──────────────────────────────────────────────────────
 
 interface SyncPayload {
