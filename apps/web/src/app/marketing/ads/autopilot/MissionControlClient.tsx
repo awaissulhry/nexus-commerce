@@ -2,6 +2,8 @@
 import { useMemo, useState } from 'react'
 import { OpsCanvas } from '../_canvas/OpsCanvas'
 import { useAccountGraph } from '../_canvas/useAccountGraph'
+import { eur, eur2, pct, intl, roas, ago } from '../_canvas/format'
+import type { OpsObject } from '../_canvas/types'
 import './mission-control.css'
 
 const KIND_LABEL: Record<string, string> = {
@@ -12,12 +14,52 @@ const KIND_LABEL: Record<string, string> = {
   target: 'Target',
 }
 
+function InspectorBody({ o }: { o: OpsObject }) {
+  const d = o.detail ?? {}
+  const ctr = d.impressions ? (d.clicks ?? 0) / d.impressions : undefined
+  const cvr = d.clicks ? (d.orders ?? 0) / d.clicks : undefined
+  const cpc = d.clicks ? (o.spend ?? 0) / d.clicks : undefined
+  const metrics: Array<[string, string]> = [
+    ['Spend', eur(o.spend)],
+    ['Sales', eur(d.sales)],
+    ['ACoS', pct(o.acos)],
+    ['ROAS', roas(d.roas)],
+    ['Impressions', intl(d.impressions)],
+    ['Clicks', intl(d.clicks)],
+    ['CTR', pct(ctr)],
+    ['CVR', pct(cvr)],
+    ['CPC', eur2(cpc)],
+    ['Orders', intl(d.orders)],
+    ['True profit', eur(d.trueProfitCents != null ? d.trueProfitCents / 100 : undefined)],
+    ['Margin', pct(d.marginPct)],
+  ]
+  const sub = [d.status, d.adType, typeof d.dailyBudget === 'number' ? `${eur(d.dailyBudget)}/day` : null]
+    .filter(Boolean)
+    .join(' · ')
+  return (
+    <div>
+      <div className="mc-insp-kind">{KIND_LABEL[o.kind] ?? o.kind}</div>
+      <div className="mc-insp-name">{o.name}</div>
+      {o.kind === 'campaign' && sub && <div className="mc-insp-sub">{sub}</div>}
+      {d.lastSyncedAt && <div className="mc-insp-fresh">● Reports as of {ago(d.lastSyncedAt)}</div>}
+      <div className="mc-insp-grid">
+        {metrics.map(([k, v]) => (
+          <div className="mc-insp-cell" key={k}>
+            <div className="mc-insp-cell-k">{k}</div>
+            <div className="mc-insp-cell-v">{v}</div>
+          </div>
+        ))}
+      </div>
+      <div className="mc-insp-soon">Actions &amp; governing agents arrive in a later phase.</div>
+    </div>
+  )
+}
+
 export function MissionControlClient() {
   const { objects, loading, error } = useAccountGraph()
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  // Default: expand all markets once data arrives (clean first paint, not empty).
   const markets = useMemo(() => objects.filter((o) => o.kind === 'market').map((o) => o.id), [objects])
   const expandedReady = expanded.size > 0 || markets.length === 0 ? expanded : new Set(markets)
 
@@ -63,23 +105,7 @@ export function MissionControlClient() {
           )}
         </div>
         <aside className="mc-inspector" aria-label="Inspector">
-          {selected ? (
-            <div>
-              <div className="mc-insp-kind">{KIND_LABEL[selected.kind] ?? selected.kind}</div>
-              <div className="mc-insp-name">{selected.name}</div>
-              <dl className="mc-insp-kv">
-                <dt>Spend (30d)</dt>
-                <dd>{typeof selected.spend === 'number' ? `€${Math.round(selected.spend).toLocaleString()}` : '—'}</dd>
-                <dt>ACoS</dt>
-                <dd>{typeof selected.acos === 'number' ? `${Math.round(selected.acos * 100)}%` : '—'}</dd>
-                <dt>Health</dt>
-                <dd>{selected.health ?? 'ok'}</dd>
-              </dl>
-              <div className="mc-insp-soon">Actions &amp; governing agents arrive in a later phase.</div>
-            </div>
-          ) : (
-            <div className="mc-insp-empty">Select an object to inspect</div>
-          )}
+          {selected ? <InspectorBody o={selected} /> : <div className="mc-insp-empty">Select an object to inspect</div>}
         </aside>
       </div>
     </div>

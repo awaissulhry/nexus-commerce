@@ -17,4 +17,10 @@
 .mc-insp-kv { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; margin: 0; }
 .mc-insp-kv dt { color: #8a93a1; font-size: 12px; }
 .mc-insp-kv dd { margin: 0; font-weight: 700; font-size: 12px; color: #1c2530; text-align: right; }
+.mc-insp-sub { font-size: 11px; color: #5b6573; margin: 0 0 8px; }
+.mc-insp-fresh { display: inline-block; font-size: 10px; font-weight: 700; color: #067d62; background: #e7f5ee; border-radius: 6px; padding: 2px 7px; margin-bottom: 12px; }
+.mc-insp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.mc-insp-cell { border: 1px solid #eef0f3; border-radius: 7px; padding: 6px 8px; }
+.mc-insp-cell-k { font-size: 8.5px; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 700; color: #9aa3b0; }
+.mc-insp-cell-v { font-weight: 800; font-size: 13px; color: #1c2530; margin-top: 1px; }
 .mc-insp-soon { margin-top: 14px; font-size: 11px; color: #8a93a1; }
