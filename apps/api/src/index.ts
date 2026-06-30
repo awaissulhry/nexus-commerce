@@ -206,6 +206,7 @@ import { startEbayFinancialSyncCron } from "./jobs/ebay-financial-sync.job.js";
 import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
 import { startReservationSweepCron } from "./jobs/reservation-sweep.job.js";
 import { startReservationReconcileCron } from "./jobs/reservation-reconcile.job.js";
+import { startEbayReadbackCron } from "./jobs/ebay-readback.job.js";
 import { startLateShipmentFlagCron } from "./jobs/late-shipment-flag.job.js";
 import { startTrackingPushbackCron } from "./jobs/tracking-pushback.job.js";
 import { startCarrierServiceSyncCron } from "./jobs/carrier-service-sync.job.js";
@@ -1031,6 +1032,8 @@ async function start() {
       startReservationSweepCron();
     }
     startReservationReconcileCron();
+    // P5.2 — eBay inventory read-back → ChannelStockEvent (NEXUS_EBAY_READBACK=0 to disable)
+    startEbayReadbackCron();
 
     // H.5 — late-shipment auto-flag cron. Every 6h, scans non-terminal
     // inbound shipments past their expectedAt + 2 days and creates a

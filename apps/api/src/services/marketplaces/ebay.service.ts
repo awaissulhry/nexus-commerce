@@ -106,6 +106,58 @@ export class EbayService {
   }
 
   /**
+   * P5.2 — Read-back: fetch the current inventory item for a SKU from eBay.
+   * Returns the raw inventory item object on success, or null if the item is
+   * not found (404). All other errors are re-thrown so the caller's per-SKU
+   * try/catch can handle them.
+   */
+  async getPublishedInventoryItem(sku: string): Promise<Record<string, unknown> | null> {
+    const token = await this.getAccessToken();
+    const url = `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+    try {
+      return await recordApiCall<Record<string, unknown>>(
+        {
+          channel: 'EBAY',
+          operation: 'getInventoryItem',
+          endpoint: '/sell/inventory/v1/inventory_item',
+          method: 'GET',
+          marketplace: EBAY_MARKETPLACE_ID,
+          triggeredBy: 'api',
+        },
+        async () => {
+          const res = await fetch(url, {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          if (!res.ok) {
+            const errorBody = await res.text().catch(() => '');
+            const err = new Error(
+              `eBay API error ${res.status}: ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = res.status;
+            err.body = errorBody;
+            throw err;
+          }
+          return (await res.json()) as Record<string, unknown>;
+        },
+      );
+    } catch (err) {
+      // 404 = item not on eBay; treat as "not found", not an error
+      if (
+        err instanceof Error &&
+        'statusCode' in err &&
+        (err as Error & { statusCode: number }).statusCode === 404
+      ) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Updates the available quantity for an existing inventory item on eBay.
    */
   async updateInventory(sku: string, quantity: number, productId?: string): Promise<void> {
