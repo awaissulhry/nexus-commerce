@@ -1461,6 +1461,8 @@ export class AmazonFlatFileService {
         // frontend can use it for image loading, the "open on Amazon" link, and
         // the local ASIN cache without relying on the visible column value.
         if (listing.externalListingId) row._asin = listing.externalListingId
+        row._lastSyncedAt = (listing as any).lastSyncedAt ? (listing as any).lastSyncedAt.toISOString() : null
+        row._lastSyncStatus = (listing as any).lastSyncStatus ?? null
         row._fieldStates = {
           price:        ((listing as any).followMasterPrice        ?? true) ? 'INHERITED' : 'OVERRIDE',
           title:        ((listing as any).followMasterTitle        ?? true) ? 'INHERITED' : 'OVERRIDE',

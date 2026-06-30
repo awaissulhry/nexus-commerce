@@ -135,6 +135,7 @@ interface Column {
   /** Usage level from Amazon schema: REQUIRED / RECOMMENDED / OPTIONAL */
   guidance?: string
   maxLength?: number
+  maxUtf8ByteLength?: number
   width: number
   /** Maps canonical stored value → localized display label for enum cells.
    *  e.g. { 'parent': 'Articolo padre', 'child': 'Articolo figlio' } for IT. */
@@ -715,6 +716,7 @@ export default function AmazonFlatFileClient({
         options: c.options,
         guidance: c.guidance,
         maxLength: c.maxLength,
+        maxUtf8ByteLength: c.maxUtf8ByteLength,
         width: c.width,
       })),
     })),
@@ -876,6 +878,22 @@ export default function AmazonFlatFileClient({
     jobId: string
   } | null>(null)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  // P1.2 — auto-save indicator
+  const [lastLocalSave, setLastLocalSave] = useState<number>(0)
+  const [lastSaveTick, setLastSaveTick] = useState<number>(0)
+  // P1.3 — column search / quick-jump
+  const [colSearchOpen, setColSearchOpen] = useState(false)
+  const [colSearchQuery, setColSearchQuery] = useState('')
+  useEffect(() => {
+    if (!colSearchOpen) return
+    const handler = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('[data-col-search]')) {
+        setColSearchOpen(false); setColSearchQuery('')
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [colSearchOpen])
 
   // EH.5 — Sticky open-once flags for dynamic-imported modals. Each
   // resolves to true the first time its `open` state goes true, then
@@ -1764,6 +1782,7 @@ export default function AmazonFlatFileClient({
       if (mod && e.key === 'y' && !isEditingRef.current)                { e.preventDefault(); redo(); return }
       // BF.1 — Find & Replace
       if (mod && e.key === 'f') { e.preventDefault(); setFindReplaceOpen(true); return }
+      if (mod && e.shiftKey && e.key === 'G') { e.preventDefault(); setColSearchOpen((o) => !o); return }
       if (mod && e.key === 'g') { e.preventDefault(); setColumnsOpen(true); return }
       // PE: '?' opens the shortcuts modal (no modifier — ignore when typing in an input)
       if (e.key === '?' && !mod && !isEditingRef.current) {
@@ -2054,9 +2073,29 @@ export default function AmazonFlatFileClient({
   // (composite for a union sheet) so it never clobbers a per-type draft.
   useEffect(() => {
     if (!productType || !rows.length) return
-    const t = setTimeout(() => saveRows(marketplace, storageType, rows), 1000)
+    const t = setTimeout(() => {
+      saveRows(marketplace, storageType, rows)
+      setLastLocalSave(Date.now())
+    }, 1000)
     return () => clearTimeout(t)
   }, [rows, marketplace, storageType, productType])
+
+  // P1.2 — tick every 15 s to keep "saved X ago" label fresh
+  useEffect(() => {
+    if (!lastLocalSave) return
+    const t = setInterval(() => setLastSaveTick((n) => n + 1), 15000)
+    return () => clearInterval(t)
+  }, [lastLocalSave])
+
+  const lastSaveLabel = useMemo(() => {
+    if (!lastLocalSave) return null
+    const sec = Math.round((Date.now() - lastLocalSave) / 1000)
+    if (sec < 5) return 'Draft saved'
+    if (sec < 60) return `Saved ${sec}s ago`
+    if (sec < 3600) return `Saved ${Math.round(sec / 60)}m ago`
+    return 'Saved'
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastLocalSave, lastSaveTick])
 
   // MT.4 — load each ADDED category's rows into the union grid, so a mixed sheet
   // holds rows of every category (a Jacket row AND a Pants row). The primary
@@ -3695,6 +3734,73 @@ export default function AmazonFlatFileClient({
             </div>
           )}
           {/* History button moved to FlatFileIconToolbar via onHistoryClick */}
+          {/* P1.2 — Draft saved indicator */}
+          {lastSaveLabel && (
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 whitespace-nowrap select-none" aria-live="polite">
+              {lastSaveLabel}
+            </span>
+          )}
+          {/* P1.3 — Column search / quick-jump (⌘⇧G) */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setColSearchOpen((o) => !o)}
+              className={cn('h-6 w-6 inline-flex items-center justify-center rounded flex-shrink-0 transition-colors',
+                colSearchOpen
+                  ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400'
+                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-200')}
+              title="Jump to column (⌘⇧G)"
+              aria-label="Jump to column"
+            >
+              <Search className="w-3 h-3" />
+            </button>
+            {colSearchOpen && (
+              <div data-col-search className="absolute right-0 top-7 z-50 w-64 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl"
+                onKeyDown={(e) => { if (e.key === 'Escape') { setColSearchOpen(false); setColSearchQuery('') } }}>
+                <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-800">
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Search columns…"
+                    value={colSearchQuery}
+                    onChange={(e) => setColSearchQuery(e.target.value)}
+                    className="w-full text-xs bg-transparent text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none"
+                  />
+                </div>
+                <div className="max-h-52 overflow-y-auto py-1">
+                  {(() => {
+                    const q = colSearchQuery.toLowerCase()
+                    const hits = allColumns
+                      .map((c, ci) => ({ c, ci }))
+                      .filter(({ c }) => !q ||
+                        c.labelEn.toLowerCase().includes(q) ||
+                        c.labelLocal.toLowerCase().includes(q) ||
+                        c.id.toLowerCase().includes(q),
+                      )
+                      .slice(0, 24)
+                    if (!hits.length) return <div className="px-3 py-2 text-xs text-slate-400">No columns found</div>
+                    return hits.map(({ c, ci }) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+                        onClick={() => {
+                          requestAnimationFrame(() => {
+                            document.querySelector(`[data-ri="0"][data-ci="${ci}"]`)?.scrollIntoView({ block: 'nearest', inline: 'center' })
+                          })
+                          setColSearchOpen(false)
+                          setColSearchQuery('')
+                        }}
+                      >
+                        <span className="truncate flex-1">{c.labelEn}</span>
+                        {c.required && <span className="text-[9px] text-amber-500 flex-shrink-0">req</span>}
+                      </button>
+                    ))
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
           {/* PE: keyboard shortcuts modal trigger */}
           <button
             type="button"
@@ -5339,6 +5445,25 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
               <GitFork className="h-2.5 w-2.5" />↓
             </button>
           )}
+
+          {/* P1.4 — Last-sync badge: shows when images panel is at M+ (≥48 px) */}
+          {!row._ghost && row._lastSyncedAt && showRowImages && imageSize >= 48 && (() => {
+            const syncStatus = String(row._lastSyncStatus ?? '')
+            const syncAt = new Date(String(row._lastSyncedAt))
+            const secAgo = Math.round((Date.now() - syncAt.getTime()) / 1000)
+            const timeLabel = secAgo < 60 ? `${secAgo}s` : secAgo < 3600 ? `${Math.round(secAgo / 60)}m` : `${Math.round(secAgo / 3600)}h`
+            const ok = /^success$/i.test(syncStatus)
+            const err = /^error$/i.test(syncStatus)
+            return (
+              <span
+                className={cn('shrink-0 text-[8px] font-mono leading-none px-0.5',
+                  ok ? 'text-emerald-500 dark:text-emerald-400'
+                  : err ? 'text-red-500 dark:text-red-400'
+                  : 'text-slate-400 dark:text-slate-500')}
+                title={`Last Amazon sync: ${syncAt.toLocaleString()} (${syncStatus || 'n/a'})`}
+              >↑{timeLabel}</span>
+            )
+          })()}
         </div>
         {/* Row height resize handle at the bottom edge */}
         <div
@@ -5685,6 +5810,7 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [liveLen, setLiveLen] = useState(displayValue.length)
+  const [liveBytes, setLiveBytes] = useState(() => new TextEncoder().encode(displayValue).length)
   const cancelledRef = useRef(false)
   // Grayed cells (e.g. FBA quantity) are read-only; deactivate immediately if the
   // grid somehow starts editing one (e.g. via keyboard shortcut).
@@ -5728,8 +5854,13 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
     }
   }, [effectivelyEditing])
 
-  // Reset counter to committed value length each time cell becomes editing
-  useEffect(() => { if (effectivelyEditing) setLiveLen(displayValue.length) }, [effectivelyEditing])
+  // Reset counters to committed value length each time cell becomes editing
+  useEffect(() => {
+    if (effectivelyEditing) {
+      setLiveLen(displayValue.length)
+      setLiveBytes(new TextEncoder().encode(displayValue).length)
+    }
+  }, [effectivelyEditing])
 
   // GX.2b — typing on an active enum cell (or F2) opens its dropdown, pre-filled
   // with the typed character, so Color/Size/Brand support type-to-replace too.
@@ -5909,8 +6040,12 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
   // Longtext cell
   if (col.kind === 'longtext') {
     if (effectivelyEditing) {
-      const atLimit = col.maxLength != null && liveLen >= col.maxLength
-      const nearLimit = col.maxLength != null && liveLen >= col.maxLength * 0.8
+      const atCharLimit = col.maxLength != null && liveLen >= col.maxLength
+      const nearCharLimit = col.maxLength != null && liveLen >= col.maxLength * 0.8
+      const atByteLimit = col.maxUtf8ByteLength != null && liveBytes > col.maxUtf8ByteLength
+      const nearByteLimit = col.maxUtf8ByteLength != null && liveBytes >= col.maxUtf8ByteLength * 0.9
+      const atLimit = atCharLimit || atByteLimit
+      const nearLimit = !atLimit && (nearCharLimit || nearByteLimit)
       return (
         <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}>
           {fillHandle}
@@ -5918,7 +6053,9 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
             onInput={(e) => {
               // GX.8 — same local-edit model as the text/number cell (GX.3): only the
               // counter while typing; commitInput() writes the row once on exit.
-              setLiveLen((e.target as HTMLTextAreaElement).value.length)
+              const v = (e.target as HTMLTextAreaElement).value
+              setLiveLen(v.length)
+              if (col.maxUtf8ByteLength != null) setLiveBytes(new TextEncoder().encode(v).length)
             }}
             onBlur={() => {
               if (!cancelledRef.current) commitInput()
@@ -5929,19 +6066,26 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
             maxLength={col.maxLength}
             className="w-full px-1.5 py-1 text-xs bg-white dark:bg-slate-800 focus:outline-none text-slate-800 dark:text-slate-200 resize-none"
             style={{ minWidth: width, minHeight: Math.max(cellHeight, 60) }} />
-          {col.maxLength != null && (
-            <div className={cn('absolute bottom-1 right-1.5 text-[9px] tabular-nums font-mono pointer-events-none select-none',
+          {(col.maxLength != null || col.maxUtf8ByteLength != null) && (
+            <div className={cn('absolute bottom-1 right-1.5 text-[9px] tabular-nums font-mono pointer-events-none select-none flex gap-1.5',
               atLimit ? 'text-red-500 dark:text-red-400 font-bold'
               : nearLimit ? 'text-amber-500 dark:text-amber-400'
               : 'text-slate-300 dark:text-slate-600')}>
-              {liveLen}/{col.maxLength}
+              {col.maxLength != null && <span>{liveLen}/{col.maxLength}</span>}
+              {col.maxUtf8ByteLength != null && (
+                <span className={atByteLimit ? 'text-red-500 dark:text-red-400 font-bold' : nearByteLimit ? 'text-amber-500' : ''}>
+                  {liveBytes}B/{col.maxUtf8ByteLength}B
+                </span>
+              )}
             </div>
           )}
         </td>
       )
     }
+    const viewByteOver = col.maxUtf8ByteLength != null && new TextEncoder().encode(displayValue).length > col.maxUtf8ByteLength
     return (
-      <td {...tdShared} className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
+      <td {...tdShared} className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30',
+        viewByteOver && 'ring-1 ring-inset ring-red-400 dark:ring-red-500')}
         style={{ ...cellStyle, ...selStyle }}>
         {fillHandle}
         <div className="px-1.5 flex items-center text-xs text-slate-800 dark:text-slate-200 truncate" style={hStyle}>
@@ -5953,8 +6097,12 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
 
   // Text / number cell
   if (effectivelyEditing) {
-    const atLimit = col.maxLength != null && liveLen >= col.maxLength
-    const nearLimit = col.maxLength != null && liveLen >= col.maxLength * 0.8
+    const atCharLimit = col.maxLength != null && liveLen >= col.maxLength
+    const nearCharLimit = col.maxLength != null && liveLen >= col.maxLength * 0.8
+    const atByteLimit = col.maxUtf8ByteLength != null && liveBytes > col.maxUtf8ByteLength
+    const nearByteLimit = col.maxUtf8ByteLength != null && liveBytes >= col.maxUtf8ByteLength * 0.9
+    const atLimit = atCharLimit || atByteLimit
+    const nearLimit = !atLimit && (nearCharLimit || nearByteLimit)
     return (
       <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}>
         {fillHandle}
@@ -5966,7 +6114,9 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
             // the real "typing feels laggy"). The input is uncontrolled, so the
             // typed text shows without React; commitInput() writes the final value
             // to the row once, on Tab/Enter/blur.
-            setLiveLen((e.target as HTMLInputElement).value.length)
+            const v = (e.target as HTMLInputElement).value
+            setLiveLen(v.length)
+            if (col.maxUtf8ByteLength != null) setLiveBytes(new TextEncoder().encode(v).length)
           }}
           onBlur={() => {
             if (!cancelledRef.current) commitInput()
@@ -5976,20 +6126,27 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
           onKeyDown={handleKeyDown}
           className="w-full px-1.5 text-xs bg-white dark:bg-slate-800 focus:outline-none text-slate-800 dark:text-slate-200"
           style={hStyle} />
-        {col.maxLength != null && (
-          <div className={cn('absolute bottom-0.5 right-1 text-[9px] tabular-nums font-mono pointer-events-none select-none leading-none',
+        {(col.maxLength != null || col.maxUtf8ByteLength != null) && (
+          <div className={cn('absolute bottom-0.5 right-1 text-[9px] tabular-nums font-mono pointer-events-none select-none leading-none flex gap-1',
             atLimit ? 'text-red-500 dark:text-red-400 font-bold'
             : nearLimit ? 'text-amber-500 dark:text-amber-400'
             : 'text-slate-300 dark:text-slate-600')}>
-            {liveLen}/{col.maxLength}
+            {col.maxLength != null && <span>{liveLen}/{col.maxLength}</span>}
+            {col.maxUtf8ByteLength != null && (
+              <span className={atByteLimit ? 'text-red-500 dark:text-red-400 font-bold' : nearByteLimit ? 'text-amber-500' : ''}>
+                {liveBytes}B/{col.maxUtf8ByteLength}B
+              </span>
+            )}
           </div>
         )}
       </td>
     )
   }
 
+  const viewByteOver = col.maxUtf8ByteLength != null && new TextEncoder().encode(displayValue).length > col.maxUtf8ByteLength
   return (
-    <td {...tdShared} className={cn(baseCls, grayed ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
+    <td {...tdShared} className={cn(baseCls, grayed ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30',
+      viewByteOver && 'ring-1 ring-inset ring-red-400 dark:ring-red-500')}
       style={{ ...cellStyle, ...selStyle }} title={grayed ? 'Quantity is managed by Amazon for FBA listings' : (guidanceTitle ?? validIssue?.msg ?? col.description)}>
       {fillHandle}
       <div className={cn('px-1.5 flex items-center text-xs truncate',
