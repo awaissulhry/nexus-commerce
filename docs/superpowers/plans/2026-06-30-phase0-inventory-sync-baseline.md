@@ -612,12 +612,12 @@ Expected: a report. **This answers the open Phase 0 questions:** `dispatchPath` 
 - Create: `scripts/inventory-drift-baseline.ts`
 
 **Interfaces:**
-- Consumes: `reconcileAllAmazonMarketplaces` from `apps/api/src/services/channel-reconciliation.service.ts`; Prisma `ChannelListing` + the ATP resolver `resolveAtpAcrossChannels` from `apps/api/src/services/atp-channel.service.ts`.
+- Consumes: `reconcileAllAmazonMarketplaces({ daysBack? })` from `apps/api/src/services/channel-reconciliation.service.ts`; Prisma `ChannelListing` (+ its `product` relation).
 - Produces: console report only (no writes).
 
-Notes:
+Notes (verified against the codebase 2026-06-30):
 - Amazon side: call `reconcileAllAmazonMarketplaces({ daysBack: 30 })` (reporting-only per the service) and print its per-marketplace FBA-unit + order drift.
-- eBay side (DB-only first cut; true channel read-back is Phase 5): for each active eBay `ChannelListing`, compute drift = `quantity` (last pushed) − ATP (what it should be) via `resolveAtpAcrossChannels`. Print rows where `|drift| > 0`, worst-first, with a units + SKU-count + (drift×price) € total.
+- eBay side — **coarse DB-side baseline that mirrors the production `sync-drift-detection` job** (`apps/api/src/jobs/sync-drift-detection.job.ts`): for each `followMasterQuantity` ACTIVE eBay `ChannelListing`, compute `expected = max(0, Product.totalStock − stockBuffer)` and `drift = quantity − expected`. Print rows where `drift ≠ 0`, worst-first, with a SKU-count + absolute-unit total. This is intentionally coarse (ignores reservations / per-location ATP); the full ATP-accurate, channel-API read-back is Phase 5. Field facts: `ChannelListing.channel` is a `String` (`'EBAY'`), `listingStatus` is a `String` (`'ACTIVE'`), `Product.totalStock` is an `Int`. Do NOT use `resolveAtpAcrossChannels` here — it requires a pre-assembled `byLocation` array that only the stock-detail route builds.
 
 - [ ] **Step 1: Write the script**
 
@@ -635,7 +635,6 @@ Create `scripts/inventory-drift-baseline.ts`:
  * Run: npx tsx scripts/inventory-drift-baseline.ts
  */
 import { reconcileAllAmazonMarketplaces } from '../apps/api/src/services/channel-reconciliation.service.js'
-import { resolveAtpAcrossChannels } from '../apps/api/src/services/atp-channel.service.js'
 import prisma from '../apps/api/src/db.js'
 
 async function main() {
@@ -650,29 +649,34 @@ async function main() {
     console.error('Amazon reconcile failed:', err instanceof Error ? err.message : err)
   }
 
-  // ── eBay (DB-side) ───────────────────────────────────────
-  console.log('\n--- eBay DB-side drift (pushed qty vs ATP) ---')
+  // ── eBay (coarse DB-side; mirrors sync-drift-detection job) ──
+  // expected = max(0, totalStock - stockBuffer); drift = pushed qty - expected.
+  // Coarse on purpose (ignores reservations / per-location ATP) — Phase 5 adds
+  // the ATP-accurate channel-API read-back.
+  console.log('\n--- eBay DB-side drift (pushed qty vs max(0, totalStock - buffer)) ---')
   const ebayListings = await prisma.channelListing.findMany({
-    where: { channel: 'EBAY', status: 'ACTIVE' },
-    select: { id: true, productId: true, quantity: true, marketplace: true },
+    where: { channel: 'EBAY', listingStatus: 'ACTIVE', followMasterQuantity: true },
+    select: {
+      id: true,
+      marketplace: true,
+      quantity: true,
+      stockBuffer: true,
+      product: { select: { sku: true, totalStock: true } },
+    },
   })
 
-  type Row = { sku: string; marketplace: string | null; pushed: number; atp: number; drift: number }
-  const drifted: Row[] = []
-  for (const l of ebayListings) {
-    const atpByListing = await resolveAtpAcrossChannels(l.productId)
-    const match = atpByListing.find((a: any) => a.channelListingId === l.id)
-    if (!match) continue
-    const drift = (l.quantity ?? 0) - match.available
-    if (drift !== 0) {
-      const prod = await prisma.product.findUnique({ where: { id: l.productId }, select: { sku: true } })
-      drifted.push({ sku: prod?.sku ?? l.productId, marketplace: l.marketplace, pushed: l.quantity ?? 0, atp: match.available, drift })
-    }
-  }
-  drifted.sort((a, b) => Math.abs(b.drift) - Math.abs(a.drift))
-  console.log(`eBay listings checked: ${ebayListings.length}, drifted: ${drifted.length}`)
+  const drifted = ebayListings
+    .map((l) => {
+      const expected = Math.max(0, (l.product.totalStock ?? 0) - (l.stockBuffer ?? 0))
+      const pushed = l.quantity ?? 0
+      return { sku: l.product.sku, marketplace: l.marketplace, pushed, expected, drift: pushed - expected }
+    })
+    .filter((r) => r.drift !== 0)
+    .sort((a, b) => Math.abs(b.drift) - Math.abs(a.drift))
+
+  console.log(`eBay followMaster ACTIVE listings checked: ${ebayListings.length}, drifted: ${drifted.length}`)
   for (const r of drifted.slice(0, 50)) {
-    console.log(`  ${r.sku} [${r.marketplace ?? '-'}] pushed=${r.pushed} atp=${r.atp} drift=${r.drift > 0 ? '+' : ''}${r.drift}`)
+    console.log(`  ${r.sku} [${r.marketplace}] pushed=${r.pushed} expected=${r.expected} drift=${r.drift > 0 ? '+' : ''}${r.drift}`)
   }
   const totalUnits = drifted.reduce((s, r) => s + Math.abs(r.drift), 0)
   console.log(`\neBay drift totals: ${drifted.length} SKUs, ${totalUnits} units of absolute drift.`)
@@ -686,12 +690,11 @@ main().catch((e) => {
 })
 ```
 
-> **Implementer note:** confirm `resolveAtpAcrossChannels`'s return shape (the property exposing `channelListingId` and `available`) against `atp-channel.service.ts` before running; adjust the `.find(...)`/`match.available` access to the real field names. Also confirm `ChannelListing.channel`/`status`/`marketplace` field names. This is operational tooling — getting the report out matters more than test coverage.
+> **Implementer note (resolved 2026-06-30):** all field names + the `reconcileAllAmazonMarketplaces({ daysBack })` signature above are verified against the codebase — transcribe the script as written. It is operational tooling (runs against `DATABASE_URL`, not in the test sandbox); verification for this task is that it **typechecks / imports resolve**, since the live run is the separate baseline-capture step.
 
-- [ ] **Step 2: Run the script (this is the verification)**
+- [ ] **Step 2: Verify by faithful transcription + self-review**
 
-Run: `npx tsx scripts/inventory-drift-baseline.ts`
-Expected: an Amazon reconcile block + an eBay drift summary line. **Record the totals — this is the drift baseline that decides whether Phase 5 starts in detect-only or auto-heal.**
+`scripts/` is not covered by a tsconfig and the script connects to the DB on run, so there is no meaningful in-sandbox execution check. Verify by: (a) the file matches the brief code exactly; (b) the imports (`reconcileAllAmazonMarketplaces`, `prisma`) and the field names (`channel`, `listingStatus`, `followMasterQuantity`, `stockBuffer`, `product.totalStock`) match the confirmed signatures in this brief. **The live run against `DATABASE_URL` is the separate baseline-capture step (the controller runs it); its totals decide whether Phase 5 starts detect-only or auto-heal.**
 
 - [ ] **Step 3: Commit**
 
@@ -713,7 +716,8 @@ git commit -m "feat(inventory-sync): P0.4 one-time drift baseline script"
 
 Behavior:
 - Args: `--sku <SKU>` (required), `--confirm` (without it, dry-run: print what it would do and exit), `--delta <n>` (default 1), `--wait <seconds>` (default 90).
-- With `--confirm`: read the SKU's current stock, apply `+delta` via `applyStockMovement` (reason `'CYCLE_COUNT'` or a benign manual reason), capture timestamp T0, poll `OutboundSyncQueue` for rows with this product created ≥ T0 until each channel's row has `syncedAt` (or `--wait` elapses), then apply `−delta` to restore. Print per-channel `syncedAt - createdAt`.
+- With `--confirm`: read the SKU's current stock, apply `+delta` via `applyStockMovement` (reason `'MANUAL_ADJUSTMENT'` — a valid `MovementReason`), capture timestamp T0, poll `OutboundSyncQueue` for rows with this product created ≥ T0 until each channel's row has `syncedAt` (or `--wait` elapses), then apply `−delta` to restore. Print per-channel `syncedAt - createdAt`.
+- **Grace-window caveat:** `MANUAL_ADJUSTMENT` is NOT an order-driven reason, so its outbound rows carry the ~30s manual undo-grace (`DEFAULT_HOLD_MS`) before dispatch — the measured round-trip *includes* that 30s. Order-driven pushes (real sales) skip the grace (delay 0). Print this caveat in the output so the number isn't misread; the default `--wait 90` comfortably covers grace + push. (A Phase 4 latency variant can exercise the order-driven path.)
 - **Safety:** intended for a SKU the operator designates as safe (ideally not on live channels, or accept the ±1 round-trip). The net change is zero. Never runs from a cron.
 
 - [ ] **Step 1: Write the script**
@@ -760,7 +764,8 @@ async function main() {
 
   const t0 = new Date()
   console.log(`Canary: +${delta} on ${product.sku} at ${t0.toISOString()}`)
-  await applyStockMovement({ productId: product.id, change: delta, reason: 'CYCLE_COUNT' } as any)
+  console.log('NOTE: round-trip includes the ~30s manual undo-grace (MANUAL_ADJUSTMENT is not order-driven). Real sales skip it.')
+  await applyStockMovement({ productId: product.id, change: delta, reason: 'MANUAL_ADJUSTMENT' })
 
   const deadline = Date.now() + waitS * 1000
   const seen = new Map<string, number>()
@@ -780,7 +785,7 @@ async function main() {
   }
 
   console.log(`Canary: restoring -${delta} on ${product.sku}`)
-  await applyStockMovement({ productId: product.id, change: -delta, reason: 'CYCLE_COUNT' } as any)
+  await applyStockMovement({ productId: product.id, change: -delta, reason: 'MANUAL_ADJUSTMENT' })
 
   console.log('\nRound-trip summary:', Object.fromEntries(seen))
   await prisma.$disconnect()
@@ -789,12 +794,11 @@ async function main() {
 main().catch((e) => { console.error(e); process.exit(1) })
 ```
 
-> **Implementer note:** confirm `applyStockMovement`'s exact input shape (the `StockMovementInput` type) and a benign `reason` enum value against `stock-movement.service.ts` before running with `--confirm`; the `as any` is a placeholder to be replaced with the real typed call. Validate in dry-run first.
+> **Implementer note (resolved 2026-06-30):** `applyStockMovement(input: StockMovementInput)` takes `{ productId, change, reason, ... }`; `reason: 'MANUAL_ADJUSTMENT'` is a valid `MovementReason` (no `as any` cast needed — the inline object is contextually typed). Transcribe as written.
 
-- [ ] **Step 2: Verify in dry-run (safe)**
+- [ ] **Step 2: Verify by faithful transcription + self-review**
 
-Run: `npx tsx scripts/inventory-canary.ts --sku <a-known-sku>`
-Expected: the `[dry-run] would +1 then -1 ...` line, no writes.
+`scripts/` isn't covered by a tsconfig and even `--dry-run` reads the DB, so there's no in-sandbox execution check. Verify by: (a) the file matches the brief code exactly; (b) the `applyStockMovement({ productId, change, reason: 'MANUAL_ADJUSTMENT' })` call and the `prisma.outboundSyncQueue.findMany` select (`targetChannel`, `createdAt`, `syncedAt`) match the confirmed signatures. The `--sku` dry-run + `--confirm` live run happen in the controller's baseline-capture step against the real DB.
 
 - [ ] **Step 3: Commit**
 
