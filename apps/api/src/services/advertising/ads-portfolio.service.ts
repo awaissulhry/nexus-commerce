@@ -15,16 +15,25 @@
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { adsMode, listPortfolios, type AdsRegion } from './ads-api-client.js'
+import { adsMode, listPortfolios, type AdsRegion, type AdsPortfolioDTO } from './ads-api-client.js'
 
 const regionOf = (r: string | null): AdsRegion => (r === 'NA' || r === 'FE' ? r : 'EU')
 
-async function upsertSynced(profileId: string, pf: { portfolioId: string; name: string; state?: string }): Promise<void> {
+async function upsertSynced(profileId: string, pf: AdsPortfolioDTO): Promise<void> {
   const state = pf.state ? pf.state.toUpperCase() : null
+  // v3 returns the budget object; persist it (read-only display). Budget WRITES land in P3.
+  const budget = {
+    budgetAmount: pf.budgetAmount ?? null,
+    budgetCurrencyCode: pf.budgetCurrencyCode ?? null,
+    budgetPolicy: pf.budgetPolicy ? pf.budgetPolicy.toUpperCase() : null,
+    startDate: pf.startDate ? new Date(pf.startDate) : null,
+    endDate: pf.endDate ? new Date(pf.endDate) : null,
+    inBudget: pf.inBudget ?? true,
+  }
   await prisma.amazonAdsPortfolio.upsert({
     where: { profileId_externalPortfolioId: { profileId, externalPortfolioId: pf.portfolioId } },
-    update: { name: pf.name, ...(state ? { state } : {}), lastSyncedAt: new Date() },
-    create: { profileId, externalPortfolioId: pf.portfolioId, name: pf.name, state, lastSyncedAt: new Date() },
+    update: { name: pf.name, ...(state ? { state } : {}), ...budget, lastSyncedAt: new Date() },
+    create: { profileId, externalPortfolioId: pf.portfolioId, name: pf.name, state, ...budget, lastSyncedAt: new Date() },
   })
 }
 

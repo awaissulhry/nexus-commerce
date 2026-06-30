@@ -302,9 +302,15 @@ export async function listProfiles(): Promise<AdsProfileDTO[]> {
   })
 }
 
-// SP portfolios (v2 GET /v2/portfolios) — budget-grouping containers. Sandbox returns a
-// small fixture so the picker is demonstrable; live returns the account's real portfolios.
-export interface AdsPortfolioDTO { portfolioId: string; name: string; state?: string }
+// Portfolios — budget-grouping containers. Amazon RETIRED the v2 endpoints (GET /v2/portfolios
+// now 404s "Method Not Found"), so we use the v3 API: POST /portfolios/list + POST /portfolios
+// with the vnd.spPortfolio.v3+json media type. v3 also returns the budget object, which v2 dropped.
+const PORTFOLIO_V3_MIME = 'application/vnd.spPortfolio.v3+json'
+export interface AdsPortfolioDTO {
+  portfolioId: string; name: string; state?: string
+  budgetAmount?: number | null; budgetCurrencyCode?: string | null; budgetPolicy?: string | null
+  startDate?: string | null; endDate?: string | null; inBudget?: boolean | null
+}
 export async function listPortfolios(ctx: ClientContext): Promise<AdsPortfolioDTO[]> {
   if (adsMode() === 'sandbox') {
     return loadFixture<AdsPortfolioDTO[]>('portfolios', [
@@ -313,19 +319,42 @@ export async function listPortfolios(ctx: ClientContext): Promise<AdsPortfolioDT
       { portfolioId: 'SB-PF-3', name: 'Clearance', state: 'enabled' },
     ])
   }
-  const resp = await liveCall<Array<Record<string, unknown>>>({ ...ctx, method: 'GET', path: '/v2/portfolios' })
-  if (!Array.isArray(resp)) return []
-  return resp.map((p) => ({ portfolioId: String(p.portfolioId), name: String(p.name ?? ''), state: typeof p.state === 'string' ? p.state : undefined }))
+  const resp = await liveCall<{ portfolios?: Array<Record<string, unknown>> }>({
+    ...ctx, method: 'POST', path: '/portfolios/list', body: { maxResults: 100 },
+    contentType: PORTFOLIO_V3_MIME, acceptHeader: PORTFOLIO_V3_MIME,
+  })
+  const list = Array.isArray(resp?.portfolios) ? resp.portfolios : []
+  return list.map((p) => {
+    const budget = (p.budget ?? {}) as Record<string, unknown>
+    return {
+      portfolioId: String(p.portfolioId),
+      name: String(p.name ?? ''),
+      state: typeof p.state === 'string' ? p.state : undefined,
+      budgetAmount: typeof budget.amount === 'number' ? budget.amount : null,
+      budgetCurrencyCode: typeof budget.currencyCode === 'string' ? budget.currencyCode : null,
+      budgetPolicy: typeof budget.policy === 'string' ? budget.policy : null,
+      startDate: typeof budget.startDate === 'string' ? budget.startDate : null,
+      endDate: typeof budget.endDate === 'string' ? budget.endDate : null,
+      inBudget: typeof p.inBudget === 'boolean' ? p.inBudget : null,
+    }
+  })
 }
-// PA.2 — create a portfolio (v2 POST /v2/portfolios). Sandbox returns a generated id.
+// PA.2 — create a portfolio (v3 POST /portfolios). Sandbox returns a generated id. The v3
+// response mirrors campaign create: { portfolios: { success: [{ portfolioId }] } }.
 export async function createPortfolio(ctx: ClientContext, input: { name: string; state?: 'enabled' | 'paused' }): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null }> {
   if (adsMode() === 'sandbox') {
     const externalId = `sb-pf-${randomUUID().slice(0, 8)}`
     logger.info('[ADS-SANDBOX] createPortfolio', { input, externalId })
     return { ok: true, mode: 'sandbox', externalId }
   }
-  const resp = await liveCall<Array<{ portfolioId?: string | number }>>({ ...ctx, method: 'POST', path: '/v2/portfolios', body: [{ name: input.name, state: input.state ?? 'enabled' }] })
-  const id = Array.isArray(resp) ? resp[0]?.portfolioId : undefined
+  const resp = await liveCall<{ portfolios?: { success?: Array<{ portfolioId?: string | number }> } | Array<{ portfolioId?: string | number }> }>({
+    ...ctx, method: 'POST', path: '/portfolios',
+    body: { portfolios: [{ name: input.name, state: input.state ?? 'enabled' }] },
+    contentType: PORTFOLIO_V3_MIME, acceptHeader: PORTFOLIO_V3_MIME,
+  })
+  const bag = resp?.portfolios
+  const row = Array.isArray(bag) ? bag[0] : bag?.success?.[0]
+  const id = row?.portfolioId
   return { ok: true, mode: 'live', externalId: id != null ? String(id) : null }
 }
 
