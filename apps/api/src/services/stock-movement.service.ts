@@ -700,21 +700,29 @@ async function cascadeQuantityToListings(
 
   let queuedSyncIds: string[] = []
   if (queueRowsToCreate.length > 0) {
+    // P1 — the listings that actually receive a fresh queue row this cascade.
+    // Scope cancel + re-query to exactly these (cancel-scope == replace-scope)
+    // so coalesce can never cancel a pending row for a channel that isn't
+    // getting a replacement — e.g. a cascaded listing on a non-syncable channel
+    // (outside validTargets) is in cascadedListingIds but has no fresh row.
+    const replacedListingIds = queueRowsToCreate
+      .map((r) => r.channelListingId)
+      .filter((id): id is string => Boolean(id))
     // P1 — cancel stale PENDING quantity rows for these listings before
     // inserting the fresh ones, so an older snapshot can't dispatch after the
     // new value. Same tx → atomic. Kill-switch: NEXUS_SYNC_ORDERING_V2=0.
     if (process.env.NEXUS_SYNC_ORDERING_V2 !== '0') {
-      await coalescePendingQuantityRows(tx, cascadedListingIds)
+      await coalescePendingQuantityRows(tx, replacedListingIds)
     }
     await tx.outboundSyncQueue.createMany({ data: queueRowsToCreate })
     const justEnqueued = await tx.outboundSyncQueue.findMany({
       where: {
-        channelListingId: { in: cascadedListingIds },
+        channelListingId: { in: replacedListingIds },
         syncType: 'QUANTITY_UPDATE',
         syncStatus: 'PENDING',
       },
       orderBy: { createdAt: 'desc' },
-      take: cascadedListingIds.length,
+      take: replacedListingIds.length,
       select: { id: true },
     })
     queuedSyncIds = justEnqueued.map((r) => r.id)
