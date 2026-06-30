@@ -62,6 +62,19 @@ export function resolveBrowseNodeId(
   return ex == null || ex === '' ? null : String(ex)
 }
 
+/** Build the platformAttributes to persist on a flat-file sync: preserve all
+ *  existing top-level keys (cockpit-only: aplus_content, searchTerms, …),
+ *  overwrite `attributes` (flat-file authoritative), and set browseNodeId when
+ *  provided. */
+export function buildPlatformAttributes(
+  existing: unknown,
+  attributes: unknown,
+  browseNodeId: string | null,
+): Record<string, unknown> {
+  const base = (existing && typeof existing === 'object' ? existing : {}) as Record<string, unknown>
+  return { ...base, attributes, ...(browseNodeId ? { browseNodeId } : {}) }
+}
+
 export function extractBrowseNodes(
   schema: Record<string, unknown>,
   marketplaceId: string,

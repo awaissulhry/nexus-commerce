@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractBrowseNodes, browseNodeIdFromRow, resolveBrowseNodeId } from './browse-nodes.js'
+import { extractBrowseNodes, browseNodeIdFromRow, resolveBrowseNodeId, buildPlatformAttributes } from './browse-nodes.js'
 
 // Representative slice of an Amazon PTD schema for IT motorcycle apparel.
 // Mirrors the live shape: recommended_browse_nodes → array → items.properties.value
@@ -71,6 +71,32 @@ describe('browseNodeIdFromRow', () => {
   it('null when unset/empty', () => {
     expect(browseNodeIdFromRow({})).toBeNull()
     expect(browseNodeIdFromRow({ recommended_browse_nodes: '' })).toBeNull()
+  })
+})
+
+describe('buildPlatformAttributes', () => {
+  it('preserves existing top-level keys and sets attributes', () => {
+    const result = buildPlatformAttributes(
+      { aplus_content: 'x', browseNodeId: 'old' },
+      { a: 1 },
+      null,
+    )
+    expect(result).toEqual({ aplus_content: 'x', browseNodeId: 'old', attributes: { a: 1 } })
+  })
+
+  it('overwrites attributes with new value (flat-file is authoritative)', () => {
+    const result = buildPlatformAttributes({ attributes: { old: 1 } }, { new: 2 }, null)
+    expect(result.attributes).toEqual({ new: 2 })
+  })
+
+  it('sets browseNodeId when provided, overriding existing', () => {
+    const result = buildPlatformAttributes({ browseNodeId: 'old' }, {}, 'new')
+    expect(result.browseNodeId).toBe('new')
+  })
+
+  it('null existing produces a fresh object with attributes and optional browseNodeId', () => {
+    expect(buildPlatformAttributes(null, { x: 1 }, null)).toEqual({ attributes: { x: 1 } })
+    expect(buildPlatformAttributes(null, { x: 1 }, 'node1')).toEqual({ attributes: { x: 1 }, browseNodeId: 'node1' })
   })
 })
 

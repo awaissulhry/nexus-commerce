@@ -19,7 +19,7 @@ import { CategorySchemaService } from '../categories/schema-sync.service.js'
 import { parseLocaleNumber, parseLocaleInt } from '../../lib/parse-locale-number.js'
 import { casUpdateChannelListing, isVersionConflict } from '../channel-listing-cas.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
-import { extractBrowseNodes, browseNodeIdFromRow, resolveBrowseNodeId, type BrowseNode } from './browse-nodes.js'
+import { extractBrowseNodes, browseNodeIdFromRow, resolveBrowseNodeId, buildPlatformAttributes, type BrowseNode } from './browse-nodes.js'
 import { amazonMarketplaceId } from '../categories/marketplace-ids.js'
 
 // ── Constants ──────────────────────────────────────────────────────────
@@ -2421,14 +2421,15 @@ export class AmazonFlatFileService {
             Object.entries({ ...row, parentage_level: parentageLevel || String(row.parentage_level ?? '') })
               .filter(([k]) => !k.startsWith('_')),
           ),
-          platformAttributes: {
-            attributes: collapsedAttrs,
-            // BN.1.3 — mirror the flat-file's chosen browse node into the top-level
-            // browseNodeId field so the cockpit CategoryCard and browse-node-predictor
-            // both see the same value as the flat-file editor. Only written when a
-            // node id is present; never clobbers other sibling keys.
-            ...((() => { const _bn = resolveBrowseNodeId(row as Record<string, unknown>, (existing as any)?.platformAttributes); return _bn ? { browseNodeId: _bn } : {} })()),
-          },
+          // PA — merge instead of replace: preserve cockpit-only top-level keys
+          // (aplus_content, searchTerms, …) while flat-file remains authoritative
+          // for `attributes`. resolveBrowseNodeId falls back to the existing node
+          // so a node-less sync never wipes it.
+          platformAttributes: buildPlatformAttributes(
+            (existing as any)?.platformAttributes,
+            collapsedAttrs,
+            resolveBrowseNodeId(row as Record<string, unknown>, (existing as any)?.platformAttributes),
+          ),
           syncStatus: opts.isPublished ? 'SYNCED' : 'PENDING',
           lastSyncedAt: new Date(),
           lastSyncStatus: opts.isPublished ? 'SUCCESS' : null,
