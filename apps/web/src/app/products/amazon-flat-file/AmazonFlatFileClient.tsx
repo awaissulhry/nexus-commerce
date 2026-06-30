@@ -4249,18 +4249,23 @@ export default function AmazonFlatFileClient({
               <FFSavedViews
                 currentState={{
                   closedGroups: [...closedGroups],
+                  groupOrder: [...groupOrder],
                   ffFilter,
                   sortConfig,
                   cfRules,
                   frozenColCount,
                 }}
                 onApply={(state: FFViewState) => {
-                  applyGroupSettings(new Set(state.closedGroups), groupOrder)
+                  applyGroupSettings(new Set(state.closedGroups), state.groupOrder ?? [])
                   setFFFilter(state.ffFilter)
                   setSortConfig(state.sortConfig)
                   setCfRules(state.cfRules)
                   setFrozenColCount(state.frozenColCount)
                 }}
+                groups={orderedGroups.map((g) => ({
+                  id: g.id,
+                  label: (g as any).labelEn ?? (g as any).label ?? g.id,
+                }))}
               />
             </div>
           )}

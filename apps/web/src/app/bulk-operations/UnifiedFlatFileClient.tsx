@@ -106,7 +106,7 @@ export default function UnifiedFlatFileClient({
   const [frozenColCount, setFrozenColCount] = useState(1)
 
   const currentViewState: FFViewState = useMemo(
-    () => ({ closedGroups, ffFilter, sortConfig, cfRules, frozenColCount }),
+    () => ({ closedGroups, groupOrder: [], ffFilter, sortConfig, cfRules, frozenColCount }),
     [closedGroups, ffFilter, sortConfig, cfRules, frozenColCount],
   )
 

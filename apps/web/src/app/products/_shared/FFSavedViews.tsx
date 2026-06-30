@@ -13,6 +13,7 @@ interface SortLevel { id: string; colId: string; mode: 'asc' | 'desc' | 'custom'
 
 export interface FFViewState {
   closedGroups: string[]
+  groupOrder: string[]        // P6.1 — saved column group order
   ffFilter: FFFilterState
   sortConfig: SortLevel[]
   cfRules: ConditionalRule[]
@@ -40,29 +41,70 @@ function saveViews(storageKey: string, views: FFSavedView[]) {
   try { localStorage.setItem(storageKey, JSON.stringify(views)) } catch {}
 }
 
-// ── Built-in views ─────────────────────────────────────────────────────
+// ── Built-in presets ───────────────────────────────────────────────────────
+// Presets with `keepKeywords` are "workflow presets" — they compute closedGroups
+// at apply-time by closing groups whose label doesn't match any keyword.
+// Presets without `keepKeywords` are "filter presets" — they apply state directly.
 
-const BUILT_IN_VIEWS: FFSavedView[] = [
+interface BuiltInPreset {
+  id: string
+  name: string
+  description: string
+  keepKeywords?: string[]   // when set: close groups not matching any keyword
+  state: FFViewState
+}
+
+const BASE_STATE: FFViewState = {
+  closedGroups: [], groupOrder: [], ffFilter: AMAZON_FILTER_DEFAULT,
+  sortConfig: [], cfRules: [], frozenColCount: 1,
+}
+
+const BUILT_IN_PRESETS: BuiltInPreset[] = [
   {
     id: 'builtin-default',
     name: 'Default',
-    isBuiltIn: true,
-    createdAt: 0,
-    state: { closedGroups: [], ffFilter: AMAZON_FILTER_DEFAULT, sortConfig: [], cfRules: [], frozenColCount: 1 },
+    description: 'Show all column groups, clear all filters',
+    state: BASE_STATE,
+  },
+  {
+    id: 'builtin-essential',
+    name: 'Essential fields',
+    description: 'Title, SKU, price, category, brand, images — hides advanced groups',
+    keepKeywords: ['title', 'sku', 'identifier', 'price', 'offer', 'category', 'browse', 'brand', 'image', 'bullet', 'description'],
+    state: BASE_STATE,
+  },
+  {
+    id: 'builtin-seo',
+    name: 'SEO & Keywords',
+    description: 'Title, bullets, keywords, search terms, category, brand',
+    keepKeywords: ['title', 'keyword', 'search', 'bullet', 'description', 'brand', 'category', 'browse', 'generic'],
+    state: BASE_STATE,
+  },
+  {
+    id: 'builtin-pricing',
+    name: 'Pricing & Offers',
+    description: 'Price, sale, condition, fulfillment, quantity',
+    keepKeywords: ['price', 'offer', 'sale', 'discount', 'condition', 'currency', 'fulfillment', 'quantity', 'sku', 'identifier'],
+    state: BASE_STATE,
+  },
+  {
+    id: 'builtin-variation',
+    name: 'Variation setup',
+    description: 'Parentage, variation theme, size, color, style',
+    keepKeywords: ['parent', 'child', 'variant', 'variation', 'size', 'color', 'theme', 'style', 'sku', 'identifier'],
+    state: BASE_STATE,
   },
   {
     id: 'builtin-missing',
-    name: 'Missing required fields',
-    isBuiltIn: true,
-    createdAt: 0,
-    state: { closedGroups: [], ffFilter: { missingRequired: true, channel: { parentage: 'any', hasAsin: 'any' } }, sortConfig: [], cfRules: [], frozenColCount: 1 },
+    name: 'Missing required',
+    description: 'Show only rows with unfilled required fields',
+    state: { ...BASE_STATE, ffFilter: { missingRequired: true, channel: { parentage: 'any', hasAsin: 'any' } } },
   },
   {
     id: 'builtin-parents',
     name: 'Parents only',
-    isBuiltIn: true,
-    createdAt: 0,
-    state: { closedGroups: [], ffFilter: { missingRequired: false, channel: { parentage: 'parent', hasAsin: 'any' } }, sortConfig: [], cfRules: [], frozenColCount: 1 },
+    description: 'Show only parent rows',
+    state: { ...BASE_STATE, ffFilter: { missingRequired: false, channel: { parentage: 'parent', hasAsin: 'any' } } },
   },
 ]
 
@@ -71,13 +113,15 @@ const BUILT_IN_VIEWS: FFSavedView[] = [
 interface Props {
   currentState: FFViewState
   onApply: (state: FFViewState) => void
-  /** localStorage key — defaults to 'ff-saved-views-v1' (Amazon flat-file legacy key). */
+  /** Pass current orderedGroups so workflow presets can compute closedGroups by keyword. */
+  groups?: Array<{ id: string; label: string }>
+  /** localStorage key — defaults to 'ff-saved-views-v1'. */
   storageKey?: string
 }
 
 // ── Component ──────────────────────────────────────────────────────────
 
-export function FFSavedViews({ currentState, onApply, storageKey = 'ff-saved-views-v1' }: Props) {
+export function FFSavedViews({ currentState, onApply, groups, storageKey = 'ff-saved-views-v1' }: Props) {
   const [open, setOpen] = useState(false)
   const [userViews, setUserViews] = useState<FFSavedView[]>([])
   const [activeId, setActiveId] = useState<string>('builtin-default')
@@ -107,12 +151,22 @@ export function FFSavedViews({ currentState, onApply, storageKey = 'ff-saved-vie
     if (saving && open) nameRef.current?.focus()
   }, [saving, open])
 
-  const allViews = [...BUILT_IN_VIEWS, ...userViews]
+  const allViews = [...BUILT_IN_PRESETS, ...userViews]
   const activeView = allViews.find((v) => v.id === activeId)
 
-  const handleSelect = (view: FFSavedView) => {
+  const handleSelect = (view: FFSavedView | BuiltInPreset) => {
     setActiveId(view.id)
-    onApply(view.state)
+    let appliedState = view.state
+    const preset = view as BuiltInPreset
+    if (preset.keepKeywords && groups && groups.length > 0) {
+      const closed = groups
+        .filter((g) => !preset.keepKeywords!.some(
+          (kw) => g.label.toLowerCase().includes(kw.toLowerCase()),
+        ))
+        .map((g) => g.id)
+      appliedState = { ...appliedState, closedGroups: closed }
+    }
+    onApply(appliedState)
     setOpen(false)
   }
 
@@ -174,9 +228,9 @@ export function FFSavedViews({ currentState, onApply, storageKey = 'ff-saved-vie
         >
           <div className="px-2 pt-2 pb-1">
             <div className="text-[10px] font-semibold text-tertiary dark:text-slate-500 uppercase tracking-wider px-1 mb-1">
-              Built-in
+              Presets
             </div>
-            {BUILT_IN_VIEWS.map((v) => (
+            {BUILT_IN_PRESETS.map((v) => (
               <ViewRow
                 key={v.id}
                 view={v}
@@ -255,14 +309,19 @@ export function FFSavedViews({ currentState, onApply, storageKey = 'ff-saved-vie
 function ViewRow({
   view, active, onSelect, onDelete, onUpdate,
 }: {
-  view: FFSavedView
+  view: FFSavedView | BuiltInPreset
   active: boolean
   onSelect: () => void
   onDelete?: () => void
   onUpdate?: () => void
 }) {
+  const description = (view as any).description as string | undefined
+  const isBuiltIn = (view as any).isBuiltIn || (view as any).keepKeywords !== undefined || (view as any).id?.startsWith('builtin-')
   return (
-    <div className="group/vrow flex items-center gap-1 px-1 py-0.5 rounded hover:bg-slate-50 dark:hover:bg-slate-800">
+    <div
+      className="group/vrow flex items-center gap-1 px-1 py-0.5 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+      title={description}
+    >
       <button
         type="button"
         onClick={onSelect}
@@ -276,7 +335,7 @@ function ViewRow({
           {view.name}
         </span>
       </button>
-      {!view.isBuiltIn && (
+      {!isBuiltIn && (
         <div className="hidden group-hover/vrow:flex items-center gap-0.5">
           {onUpdate && (
             <button
