@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Upload, X, ChevronRight, ChevronDown, ArrowRight, CheckCircle2,
-  AlertTriangle, Loader2, Sparkles, Wand2,
+  AlertTriangle, Loader2, Sparkles, Wand2, Check,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
@@ -118,6 +118,9 @@ export function ImportWizardModal({
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [presets, setPresets] = useState<ImportPreset[]>([])
   const [appliedPreset, setAppliedPreset] = useState<string | null>(null)
+  const [savingPreset, setSavingPreset] = useState(false)
+  const [presetName, setPresetName] = useState('')
+  const presetNameRef = useRef<HTMLInputElement>(null)
   const [validateBySku, setValidateBySku] = useState<Record<string, { errors: number; warnings: number }>>({})
   const [aiBusy, setAiBusy] = useState(false)
   const [aiMapped, setAiMapped] = useState<Set<string>>(new Set()) // headers mapped by the AI tail
@@ -136,11 +139,16 @@ export function ImportWizardModal({
       setParsed(null); setSuggest(null); setMapping(new Map()); setCoerced(null)
       setMode('fill-missing'); setPlan(null); setOverrides({}); setExpanded(new Set())
       setAppliedPreset(null); setValidateBySku({}); setAiBusy(false); setAiMapped(new Set())
+      setSavingPreset(false); setPresetName('')
       consumedFileRef.current = null
     } else {
       setPresets(loadPresets())
     }
   }, [open])
+
+  useEffect(() => {
+    if (savingPreset) presetNameRef.current?.focus()
+  }, [savingPreset])
 
   const post = useCallback(async (path: string, body: unknown) => {
     const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/${path}`, {
@@ -193,20 +201,25 @@ export function ImportWizardModal({
   }, [pasteText, runParse])
 
   const savePreset = useCallback(() => {
-    if (!parsed) return
-    const suggestedName = fileName.replace(/\.[^.]+$/, '') || 'Supplier'
-    const name = (typeof window !== 'undefined' ? window.prompt('Save this mapping as a preset (re-used when a file with the same columns is imported):', suggestedName) : '')?.trim()
-    if (!name) return
+    const name = presetName.trim()
+    if (!name || !parsed) return
     const preset: ImportPreset = { name, headers: parsed.headers, mapping: Object.fromEntries(mapping), useAi, createdAt: Date.now() }
     const next = [...presets.filter((p) => p.name !== name), preset]
     setPresets(next); persistPresets(next); setAppliedPreset(name)
-  }, [parsed, fileName, mapping, useAi, presets])
+    setPresetName(''); setSavingPreset(false)
+  }, [parsed, presetName, mapping, useAi, presets])
 
   const applyPreset = useCallback((name: string) => {
     const p = presets.find((x) => x.name === name)
     if (!p) return
     setMapping(new Map(Object.entries(p.mapping))); setUseAi(p.useAi); setAppliedPreset(p.name)
   }, [presets])
+
+  const deletePreset = useCallback((name: string) => {
+    const next = presets.filter((p) => p.name !== name)
+    setPresets(next); persistPresets(next)
+    if (appliedPreset === name) setAppliedPreset(null)
+  }, [presets, appliedPreset])
 
   // FX.7 — AI-map the headers the heuristic + operator left unmapped.
   const aiMapRemaining = useCallback(async () => {
@@ -301,6 +314,26 @@ export function ImportWizardModal({
   }
   const toggleExpand = (key: string) =>
     setExpanded((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+
+  const expandAll = useCallback(() => {
+    if (!plan) return
+    setExpanded(new Set([
+      ...plan.newRows.map((n) => `new:${n.sku}`),
+      ...plan.updates.map((u) => `upd:${u.rowId}`),
+    ]))
+  }, [plan])
+
+  const collapseAll = useCallback(() => setExpanded(new Set()), [])
+
+  const toggleRow = useCallback((rowKey: string, cells: PlanCell[]) => {
+    // If ALL currently-on cells would become off → turn all on; otherwise turn all off
+    const allOn = cells.every((c) => isOn(rowKey, c))
+    setOverrides((prev) => {
+      const next = { ...prev }
+      for (const c of cells) next[cellKey(rowKey, c.columnId)] = !allOn
+      return next
+    })
+  }, [isOn])
 
   const applyResult = useMemo<ImportApplyResult>(() => {
     if (!plan) return { newRows: [], updates: [], cellCount: 0 }
@@ -408,16 +441,71 @@ export function ImportWizardModal({
                   </span>
                 )}
                 {presets.length > 0 && (
-                  <select value="" onChange={(e) => { if (e.target.value) applyPreset(e.target.value) }}
-                    className="text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 py-1 focus:outline-none focus:border-violet-400">
-                    <option value="">Load preset…</option>
-                    {presets.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
-                  </select>
+                  <details className="relative group/presets">
+                    <summary className="list-none cursor-pointer px-2 py-1 rounded border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1 select-none">
+                      Load preset <ChevronDown className="w-3 h-3 opacity-60" />
+                    </summary>
+                    <div className="absolute left-0 top-full mt-1 z-20 min-w-[180px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden">
+                      {presets.map((p) => (
+                        <div key={p.name} className="group/prow flex items-center gap-1 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800">
+                          <button
+                            type="button"
+                            onClick={() => { applyPreset(p.name); (document.activeElement as HTMLElement)?.blur() }}
+                            className={cn('flex-1 text-xs text-left truncate', appliedPreset === p.name ? 'font-medium text-violet-600 dark:text-violet-400' : 'text-slate-700 dark:text-slate-300')}
+                          >
+                            {p.name}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deletePreset(p.name)}
+                            className="hidden group-hover/prow:inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                            title={`Delete preset "${p.name}"`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
                 )}
-                <button type="button" onClick={savePreset}
-                  className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
-                  Save as preset
-                </button>
+                {savingPreset ? (
+                  <span className="inline-flex items-center gap-1">
+                    <input
+                      ref={presetNameRef}
+                      type="text"
+                      value={presetName}
+                      onChange={(e) => setPresetName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); savePreset() }
+                        if (e.key === 'Escape') { setSavingPreset(false); setPresetName('') }
+                      }}
+                      placeholder={fileName.replace(/\.[^.]+$/, '') || 'Preset name…'}
+                      className="h-6 px-2 text-xs rounded border border-violet-400 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500 w-36"
+                    />
+                    <button
+                      type="button"
+                      onClick={savePreset}
+                      disabled={!presetName.trim()}
+                      className="h-6 w-6 inline-flex items-center justify-center rounded bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40"
+                      title="Save preset"
+                    >
+                      <Check className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setSavingPreset(false); setPresetName('') }}
+                      className="h-6 w-6 inline-flex items-center justify-center rounded text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      title="Cancel"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ) : (
+                  <button type="button" onClick={() => { setSavingPreset(true); setPresetName(fileName.replace(/\.[^.]+$/, '') || '') }}
+                    className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+                    Save as preset
+                  </button>
+                )}
                 {suggest.mappings.length - mappedCount > 0 && (
                   <button type="button" onClick={() => void aiMapRemaining()} disabled={aiBusy}
                     className="ml-auto inline-flex items-center gap-1 px-2 py-1 rounded border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30 disabled:opacity-50">
@@ -495,6 +583,17 @@ export function ImportWizardModal({
                   {plan.skippedNoSku > 0 && <> · {plan.skippedNoSku} skipped (no SKU)</>}
                 </div>
                 {busy && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
+                <div className="ml-auto flex items-center gap-1 text-[11px] text-slate-500">
+                  <button type="button" onClick={expandAll}
+                    className="px-1.5 py-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    Expand all
+                  </button>
+                  <span className="text-slate-300 dark:text-slate-700">·</span>
+                  <button type="button" onClick={collapseAll}
+                    className="px-1.5 py-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    Collapse all
+                  </button>
+                </div>
               </div>
 
               {plan.newRows.length === 0 && plan.updates.length === 0 && (
@@ -514,6 +613,14 @@ export function ImportWizardModal({
                       return (
                         <div key={it.key} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
                           <div className="flex items-center gap-2 px-3 py-1.5">
+                            <input
+                              type="checkbox"
+                              checked={it.cells.every((c) => isOn(it.key, c))}
+                              onChange={() => toggleRow(it.key, it.cells)}
+                              className="w-3.5 h-3.5 accent-violet-600 flex-shrink-0"
+                              title="Select / deselect all cells in this row"
+                              onClick={(e) => e.stopPropagation()}
+                            />
                             <button type="button" onClick={() => toggleExpand(it.key)} className="text-slate-400 hover:text-slate-600">
                               {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                             </button>
