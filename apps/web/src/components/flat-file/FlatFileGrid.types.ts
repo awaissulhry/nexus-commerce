@@ -35,6 +35,8 @@ export interface FlatFileColumn {
   /** Field usage level from the channel's schema (REQUIRED/RECOMMENDED/OPTIONAL) */
   guidance?: string
   maxLength?: number
+  /** Max length in UTF-8 bytes (Amazon enforces bytes, not chars). */
+  maxUtf8ByteLength?: number
   width: number
   frozen?: boolean
   readOnly?: boolean
