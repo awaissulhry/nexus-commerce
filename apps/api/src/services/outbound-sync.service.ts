@@ -27,6 +27,7 @@ import { ebayAuthService } from "./ebay-auth.service.js";
 import { listingPublishService } from "./listing-publish.service.js";
 import { resolveComplianceById, buildShopifyComplianceMetafields } from "./compliance-resolver.service.js";
 import { computeAvailableToPublish } from "./available-to-publish.service.js";
+import { publishOrderEvent } from "./order-events.service.js";
 import { reviseInventoryStatus as ebayReviseInventoryStatus } from "./ebay-trading-api.service.js";
 
 // Phase 3 — test seam for the Trading-API network call.
@@ -650,6 +651,44 @@ export class OutboundSyncService {
     // below regardless of value. Kill-switch: NEXUS_SYNC_ORDERING_V2=0.
     if (process.env.NEXUS_SYNC_ORDERING_V2 !== '0' && cl && payload.quantity !== undefined) {
       payload.quantity = resolveDispatchQuantity(cl.quantity, payload.quantity);
+    }
+    // P2 — hard oversell guard for Amazon-FBM. FBA is never clamped (Amazon
+    // owns the qty; buildAmazonListingPatch drops the patch for FBA anyway).
+    // Kill-switch: NEXUS_OVERSELL_CLAMP=0.
+    if (
+      process.env.NEXUS_OVERSELL_CLAMP !== '0' &&
+      !isFba &&
+      payload.quantity !== undefined &&
+      product?.id
+    ) {
+      const whRows = await prisma.stockLevel.findMany({
+        where: { productId: product.id, location: { type: 'WAREHOUSE' } },
+        select: { available: true },
+      })
+      const warehouseAvailable = whRows.reduce((s, r) => s + (r.available ?? 0), 0)
+      const { available } = computeAvailableToPublish({
+        fulfillmentMethod: 'FBM',
+        warehouseAvailable,
+        fbaSellable: 0,
+        stockBuffer: cl?.stockBuffer ?? 0,
+      })
+      const requested = payload.quantity
+      const { quantity, clamped } = applyOversellClamp(requested, available)
+      if (clamped) {
+        payload.quantity = quantity
+        try {
+          publishOrderEvent({
+            type: 'sync.oversell.clamped',
+            sku,
+            channel: 'AMAZON',
+            marketplace: marketplaceId,
+            requested,
+            clampedTo: quantity,
+            available,
+            ts: Date.now(),
+          })
+        } catch { /* observability must never break the sync */ }
+      }
     }
     const amazonPayload = buildAmazonListingPatch(payload, marketplaceId, productType, isFba ? "FBA" : "FBM");
 
