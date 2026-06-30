@@ -51,3 +51,20 @@ describe('childParentIds', () => {
     expect(s.has('c:1')).toBe(false)
   })
 })
+
+describe('detail aggregation', () => {
+  it('sums child metrics into market detail, derives ACoS/ROAS, tracks latest sync', () => {
+    const cs: ApiCampaign[] = [
+      { id: '1', name: 'A', marketplace: 'DE', spend: '100', sales: '400', impressions: '1000', clicks: '50', orders: '8', lastSyncedAt: '2026-06-29T10:00:00Z' },
+      { id: '2', name: 'B', marketplace: 'DE', spend: '100', sales: '100', impressions: '500', clicks: '20', orders: '2', lastSyncedAt: '2026-06-30T08:00:00Z' },
+    ]
+    const de = campaignsToObjects(cs).find((o) => o.id === 'm:DE')!
+    expect(de.spend).toBe(200)
+    expect(de.detail!.sales).toBe(500)
+    expect(de.detail!.impressions).toBe(1500)
+    expect(de.detail!.orders).toBe(10)
+    expect(de.acos!).toBeCloseTo(0.4) // 200 / 500
+    expect(de.detail!.roas!).toBeCloseTo(2.5) // 500 / 200
+    expect(de.detail!.lastSyncedAt).toBe('2026-06-30T08:00:00Z')
+  })
+})
