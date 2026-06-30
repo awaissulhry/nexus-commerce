@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react'
 import {
   AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, ImageIcon, Loader2, ListOrdered, Plus, RefreshCw, RotateCcw, Search, Send, Upload, X, Zap,
 } from 'lucide-react'
@@ -321,6 +321,11 @@ function PublishPanel({ selectedCount, publishTargets, onChangeTargets, onPublis
   )
 }
 
+// Module-level SWR cache — persists across navigations (Amazon→eBay→Amazon→eBay is instant
+// on the second eBay visit because the cache survives the route change).
+const _ebay_swr = new Map<string, { rows: EbayRow[], fetchedAt: number }>()
+const EBAY_SWR_TTL_MS = 5 * 60 * 1000
+
 // ── Page props ─────────────────────────────────────────────────────────────
 
 interface Props {
@@ -498,6 +503,38 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     return:      Array<{ id: string; name: string }>
   }>({ fulfillment: [], payment: [], return: [] })
 
+  const ebayKey = familyId ?? '__global__'
+
+  // Track whether we have rows ready to pass to FlatFileGrid. Starts false;
+  // set to true once the SWR cache or client fetch resolves.
+  const [rowsReady, setRowsReady] = useState(false)
+  const [clientRows, setClientRows] = useState<EbayRow[]>([])
+
+  // useLayoutEffect fires synchronously before the browser paints.
+  // Cache hit → remounts FlatFileGrid with real rows in the same frame (invisible).
+  // Cache miss → triggers a client-side fetch; shows skeleton until rows arrive.
+  useLayoutEffect(() => {
+    const snap = _ebay_swr.get(ebayKey)
+    if (snap && Date.now() - snap.fetchedAt < EBAY_SWR_TTL_MS) {
+      setClientRows(snap.rows)
+      setRowsReady(true)
+      return
+    }
+    // No cache or stale — fetch from the API
+    const qs = new URLSearchParams()
+    if (familyId) qs.set('familyId', familyId)
+    fetch(`${BACKEND}/api/ebay/flat-file/rows?${qs}`)
+      .then((r) => r.json())
+      .then((json: { rows: EbayRow[] }) => {
+        const rows = json.rows ?? []
+        _ebay_swr.set(ebayKey, { rows, fetchedAt: Date.now() })
+        setClientRows(rows)
+      })
+      .catch(() => { setClientRows([]) })
+      .finally(() => setRowsReady(true))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Fetch policies once on mount (non-blocking — column options update when done)
   useEffect(() => {
     fetch(`${BACKEND}/api/ebay/flat-file/policies?marketplace=${marketplace}`)
@@ -651,8 +688,10 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     const res = await fetch(`${BACKEND}/api/ebay/flat-file/rows?${qs}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const json = await res.json() as { rows: EbayRow[] }
-    return json.rows
-  }, [familyId, BACKEND])
+    const rows = json.rows ?? []
+    _ebay_swr.set(ebayKey, { rows, fetchedAt: Date.now() })
+    return rows
+  }, [familyId, BACKEND, ebayKey])
 
   // ── API: save ─────────────────────────────────────────────────────────
 
@@ -1778,7 +1817,16 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         }}
       />
 
+    {!rowsReady ? (
+        <div className="flex-1 flex items-center justify-center bg-white dark:bg-slate-900">
+          <div className="flex flex-col items-center gap-3 text-slate-400 dark:text-slate-500">
+            <div className="w-6 h-6 border-2 border-slate-200 dark:border-slate-700 border-t-blue-500 rounded-full animate-spin" />
+            <span className="text-xs">Loading listings…</span>
+          </div>
+        </div>
+      ) : (
     <FlatFileGrid
+      key={rowsReady ? 'ready' : 'loading'}
       channel="ebay"
       title="eBay Flat File"
       titleIcon={titleIcon}
@@ -1794,7 +1842,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         visible: !coreClosedGroups.has(g.id),
       }))}
       onGroupStateChange={(closed, order) => coreApplyGroupSettings(closed, order)}
-      initialRows={initialRows as BaseRow[]}
+      initialRows={clientRows as BaseRow[]}
       makeBlankRow={makeBlankRow}
       minRows={15}
       getGroupKey={getGroupKey}
@@ -1856,6 +1904,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         </div>
       )}
     />
+    )}
     </div>
   )
 }
