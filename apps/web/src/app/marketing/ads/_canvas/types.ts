@@ -17,6 +17,10 @@ export interface OpsNodeData {
   spend?: number
   acos?: number
   health?: Health
+  hasChildren?: boolean
+  expanded?: boolean
+  selected?: boolean
+  onToggle?: () => void
 }
 
 export interface OpsNode {

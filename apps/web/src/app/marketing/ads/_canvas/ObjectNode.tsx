@@ -13,15 +13,28 @@ export function ObjectNode({ data }: NodeProps) {
   const d = data as unknown as OpsNodeData
   const health = d.health ?? 'ok'
   return (
-    <div className={`opsn opsn--${health}`}>
+    <div className={`opsn opsn--${health}${d.selected ? ' opsn--sel' : ''}`}>
       <Handle type="target" position={Position.Left} className="opsn-h" />
       <div className="opsn-kind">{KIND_LABEL[d.kind] ?? d.kind}</div>
       <div className="opsn-title">{d.name}</div>
       <div className="opsn-meta">
         <span className={`opsn-dot opsn-dot--${health}`} />
-        <span>{typeof d.spend === 'number' ? `€${d.spend.toLocaleString()}` : '—'}</span>
+        <span>{typeof d.spend === 'number' ? `€${Math.round(d.spend).toLocaleString()}` : '—'}</span>
         {typeof d.acos === 'number' && <span>· {Math.round(d.acos * 100)}%</span>}
       </div>
+      {d.hasChildren && (
+        <button
+          type="button"
+          className="opsn-exp"
+          onClick={(e) => {
+            e.stopPropagation()
+            d.onToggle?.()
+          }}
+          aria-label={d.expanded ? 'Collapse' : 'Expand'}
+        >
+          {d.expanded ? '−' : '+'}
+        </button>
+      )}
       <Handle type="source" position={Position.Right} className="opsn-h" />
     </div>
   )

@@ -1,6 +1,7 @@
 .ops-canvas { width: 100%; height: 100%; min-height: 560px; background: #fbfcfd; }
 
 .opsn {
+  position: relative;
   width: 152px;
   background: #fff;
   border: 1px solid #dde2e8;
@@ -20,3 +21,11 @@
 .opsn-dot--warn { background: #b87503; }
 .opsn-dot--bad { background: #e5484d; }
 .opsn-h { width: 7px; height: 7px; background: #b6c0cd; border: none; }
+.opsn--sel { border-color: #1f6fde; box-shadow: 0 0 0 3px #dce8fb, 0 2px 6px rgba(31, 111, 222, 0.18); }
+.opsn-exp {
+  position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+  width: 18px; height: 18px; border-radius: 50%; border: 1px solid #cfd5dd;
+  background: #fff; color: #1f6fde; font-weight: 800; font-size: 13px; line-height: 1;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+}
+.opsn-exp:hover { background: #eef3fb; }
