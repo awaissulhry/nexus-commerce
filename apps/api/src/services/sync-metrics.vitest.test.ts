@@ -120,6 +120,10 @@ describe('evaluateLatencyBreach', () => {
   it('ignores channels with null p95 (no samples)', () => {
     expect(evaluateLatencyBreach([mk('AMAZON', null)], 60_000)).toEqual([])
   })
+  it('does NOT flag at exact equality (strict > boundary)', () => {
+    expect(evaluateLatencyBreach([mk('AMAZON', 60_000)], 60_000)).toEqual([])
+    expect(evaluateLatencyBreach([mk('AMAZON', 60_001)], 60_000)).toEqual([{ channel: 'AMAZON', p95Ms: 60_001 }])
+  })
 })
 
 describe('summarizeDiagnostics', () => {

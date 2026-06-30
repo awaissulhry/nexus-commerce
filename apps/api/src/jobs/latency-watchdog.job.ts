@@ -54,6 +54,15 @@ export async function runLatencyWatchdog(): Promise<void> {
           take: 50_000,
         })) as OutboundLatencyRow[]
 
+        // If we hit the 50k cap the p95 is computed from a recent-biased subset
+        // (the window was silently cropped). Surface it so a breach/no-breach
+        // verdict under a sustained write burst isn't trusted blindly.
+        if (rows.length === 50_000) {
+          logger.warn('[latency-watchdog] outbound row cap hit — p95 from a cropped 24h window', {
+            cap: 50_000,
+          })
+        }
+
         const res = buildOutboundLatencyResponse(rows, '24h', new Date().toISOString())
         const breaches = evaluateLatencyBreach(res.channels, thresholdMs)
 
