@@ -18,6 +18,7 @@ export interface OpsNodeData {
   acos?: number
   health?: Health
   hasChildren?: boolean
+  childCount?: number
   expanded?: boolean
   selected?: boolean
   onToggle?: () => void

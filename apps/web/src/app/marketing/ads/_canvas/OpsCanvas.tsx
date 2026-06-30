@@ -24,12 +24,17 @@ export function OpsCanvas({
 }) {
   const visible = visibleObjects(objects, expanded)
   const parents = childParentIds(objects)
+  const childCount = new Map<string, number>()
+  for (const o of objects) {
+    if (o.parentId) childCount.set(o.parentId, (childCount.get(o.parentId) ?? 0) + 1)
+  }
   const { nodes, edges } = buildGraph(visible)
   const enriched = nodes.map((n) => ({
     ...n,
     data: {
       ...n.data,
       hasChildren: parents.has(n.id),
+      childCount: childCount.get(n.id) ?? 0,
       expanded: expanded.has(n.id),
       selected: selectedId === n.id,
       onToggle: () => onToggleExpand(n.id),
@@ -42,9 +47,10 @@ export function OpsCanvas({
         edges={edges as unknown as Edge[]}
         nodeTypes={nodeTypes}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
+        fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
         nodesConnectable={false}
-        minZoom={0.3}
+        minZoom={0.2}
+        onInit={(inst) => inst.fitView({ padding: 0.2, maxZoom: 1 })}
         onNodeClick={(_, node) => onSelect(node.id)}
       >
         <Background gap={22} color="#dfe4ea" />
