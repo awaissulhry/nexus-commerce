@@ -5447,7 +5447,8 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
           )}
 
           {/* P1.4 — Last-sync badge: shows when images panel is at M+ (≥48 px) */}
-          {!row._ghost && row._lastSyncedAt && showRowImages && imageSize >= 48 && (() => {
+          {!row._ghost && (() => {
+            if (!row._lastSyncedAt || !showRowImages || imageSize < 48) return null
             const syncStatus = String(row._lastSyncStatus ?? '')
             const syncAt = new Date(String(row._lastSyncedAt))
             const secAgo = Math.round((Date.now() - syncAt.getTime()) / 1000)
