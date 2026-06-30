@@ -25,7 +25,7 @@ export function ObjectNode({ data }: NodeProps) {
       {d.hasChildren && (
         <button
           type="button"
-          className="opsn-exp"
+          className="opsn-exp nodrag"
           onClick={(e) => {
             e.stopPropagation()
             d.onToggle?.()

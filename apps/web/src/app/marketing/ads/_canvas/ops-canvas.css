@@ -15,7 +15,7 @@
 .opsn--warn { border-left-color: #b87503; }
 .opsn--bad { border-left-color: #e5484d; }
 .opsn-kind { font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 800; color: #9aa3b0; }
-.opsn-title { font-weight: 700; font-size: 11.5px; margin: 1px 0 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opsn-title { font-weight: 700; font-size: 11.5px; margin: 1px 0 3px; padding-right: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .opsn-meta { font-size: 9.5px; color: #5b6573; display: flex; align-items: center; gap: 4px; }
 .opsn-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; background: #067d62; }
 .opsn-dot--warn { background: #b87503; }
@@ -23,9 +23,9 @@
 .opsn-h { width: 7px; height: 7px; background: #b6c0cd; border: none; }
 .opsn--sel { border-color: #1f6fde; box-shadow: 0 0 0 3px #dce8fb, 0 2px 6px rgba(31, 111, 222, 0.18); }
 .opsn-exp {
-  position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
-  width: 18px; height: 18px; border-radius: 50%; border: 1px solid #cfd5dd;
-  background: #fff; color: #1f6fde; font-weight: 800; font-size: 13px; line-height: 1;
+  position: absolute; top: 5px; right: 6px;
+  width: 20px; height: 20px; border-radius: 6px; border: 1px solid #cfd5dd;
+  background: #fff; color: #1f6fde; font-weight: 800; font-size: 14px; line-height: 1;
   display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
 }
 .opsn-exp:hover { background: #eef3fb; }
