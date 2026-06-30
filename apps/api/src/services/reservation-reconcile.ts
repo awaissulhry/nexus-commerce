@@ -72,6 +72,18 @@ export async function reconcileOpenOrderReservations(opts?: {
       where: { id: { in: orderIds } },
       select: { id: true, status: true, updatedAt: true },
     })
+    // Surface reservations whose order no longer exists (hard-deleted / missing
+    // FK). Without this they'd be re-scanned every run, never actioned, never
+    // seen. Conservative: alert + count, never touch stock.
+    const foundIds = new Set(orders.map((o) => o.id))
+    const orphanIds = orderIds.filter((id) => !foundIds.has(id))
+    if (orphanIds.length > 0) {
+      alerted += orphanIds.length
+      logger.warn('reservation-reconcile: reservations reference unknown orders', {
+        count: orphanIds.length,
+        sample: orphanIds.slice(0, 5),
+      })
+    }
     const now = Date.now()
     for (const o of orders) {
       const ageMs = now - o.updatedAt.getTime()
