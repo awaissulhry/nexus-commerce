@@ -2371,14 +2371,24 @@ export default function AmazonFlatFileClient({
     switchPerfRef.current = null
   }
 
-  // Seed cache with the SSR snapshot so the very first market we landed on
-  // is already warm. Subsequent switches back to it are instant.
+  // On mount: rows are no longer pre-fetched server-side. Check the SWR cache
+  // (warm from a previous visit in this session) for an instant paint, or kick
+  // off a client-side loadData() fetch if the cache is cold/stale.
   useEffect(() => {
-    if (initialManifest && initialMarketplace && initialProductType) {
-      _swr.set(
-        cacheKey(initialMarketplace, initialProductType),
-        { manifest: initialManifest, rows: initialRows ?? [], fetchedAt: Date.now() },
-      )
+    if (!initialManifest || !initialMarketplace || !initialProductType) return
+    const key = cacheKey(initialMarketplace, initialProductType)
+    const snap = _swr.get(key)
+    const isFresh = !!snap && (Date.now() - snap.fetchedAt) < SWR_TTL_MS
+    if (isFresh) {
+      // Return visit: paint rows from the module-level cache instantly.
+      // Use the server-provided manifest (always fresh from the 30-min CDN cache).
+      setManifest(initialManifest)
+      setRows(snap.rows)
+      _swr.set(key, { ...snap, manifest: initialManifest })
+    } else {
+      // First visit or stale cache: loadData() fetches both manifest+rows and
+      // seeds the cache on completion so the next visit is instant.
+      void loadData(initialMarketplace, initialProductType)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

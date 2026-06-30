@@ -6,8 +6,6 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 interface PageProps {
-  // familyId = parent product ID for a named family session.
-  // When absent, this is the global flat file (all products).
   searchParams: Promise<{ marketplace?: string; productType?: string; familyId?: string }>
 }
 
@@ -19,36 +17,25 @@ export default async function AmazonFlatFilePage({ searchParams }: PageProps) {
     await searchParams
   const backend = getBackendUrl()
 
-  const rowsQs = new URLSearchParams({ marketplace, productType })
-  if (familyId) rowsQs.set('productId', familyId)
-
-  const [manifestRes, rowsRes] = await Promise.all([
-    fetch(
-      `${backend}/api/amazon/flat-file/template?marketplace=${marketplace}&productType=${productType}`,
-      { next: { revalidate: 1800 } },
-    ).catch(() => null),
-    fetch(
-      `${backend}/api/amazon/flat-file/rows?${rowsQs}`,
-      { cache: 'no-store' },
-    ).catch(() => null),
-  ])
+  // Only fetch the manifest server-side (30-min cache, ~50ms). Rows are fetched
+  // client-side from the SWR cache (instant on return visits) or the API directly
+  // (first visit). This eliminates the 200-800ms no-store DB round-trip that was
+  // blocking every navigation to this page.
+  const manifestRes = await fetch(
+    `${backend}/api/amazon/flat-file/template?marketplace=${marketplace}&productType=${productType}`,
+    { next: { revalidate: 1800 } },
+  ).catch(() => null)
 
   const manifest = manifestRes?.ok ? await manifestRes.json().catch(() => null) : null
-  const rowsJson = rowsRes?.ok ? await rowsRes.json().catch(() => null) : null
-  const rows = rowsJson?.rows ?? []
 
   return (
     <>
-      {/* EH.8 — Cross-tab click→FCP perf telemetry. Falls back to
-          the familyId for keying when present (matches the click
-          mark written by the parent /edit page), otherwise the
-          page was opened directly without a family scope. */}
       {familyId && (
         <NewTabClickPerf button="flatFile" productId={familyId} />
       )}
       <AmazonFlatFileClient
         initialManifest={manifest}
-        initialRows={rows}
+        initialRows={[]}
         initialMarketplace={marketplace.toUpperCase()}
         initialProductType={productType.toUpperCase()}
         familyId={familyId}

@@ -1,4 +1,3 @@
-import { getBackendUrl } from '@/lib/backend-url'
 import EbayFlatFileClient from './EbayFlatFileClient'
 
 export const dynamic = 'force-dynamic'
@@ -11,25 +10,14 @@ interface PageProps {
 const DEFAULT_MARKETPLACE = 'IT'
 
 export default async function EbayFlatFilePage({ searchParams }: PageProps) {
-  // marketplace is retained as initial context for category schema calls,
-  // but rows are now all-market (one row per product, flat per-market fields).
+  // Rows are fetched client-side (SWR cache → instant on return visits, API on first visit).
+  // The server component is now a trivial shell — it streams near-instantly so the
+  // loading.tsx skeleton disappears in <50ms instead of waiting 200-800ms for a DB query.
   const { marketplace = DEFAULT_MARKETPLACE, familyId } = await searchParams
-  const backend = getBackendUrl()
-
-  const qs = new URLSearchParams()
-  if (familyId) qs.set('familyId', familyId)
-
-  const rowsRes = await fetch(
-    `${backend}/api/ebay/flat-file/rows?${qs.toString()}`,
-    { cache: 'no-store' },
-  ).catch(() => null)
-
-  const rowsJson = rowsRes?.ok ? await rowsRes.json().catch(() => null) : null
-  const rows = rowsJson?.rows ?? []
 
   return (
     <EbayFlatFileClient
-      initialRows={rows}
+      initialRows={[]}
       initialMarketplace={marketplace.toUpperCase()}
       familyId={familyId}
     />
