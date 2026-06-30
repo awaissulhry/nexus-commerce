@@ -477,7 +477,7 @@ Expected: one object per channel (AMAZON, EBAY at minimum) with numeric `p50Ms`/
 
 Notes for the implementer:
 - `ebayNotificationsActive`: best-effort. Query whether any active eBay `ChannelConnection` exists AND the env `EBAY_NOTIFICATION_VERIFICATION_TOKEN` is set (the webhook can't validate without it). If you can't determine it, return `null` (the summarizer treats `null` as "unknown", not a warning).
-- Cron names to surface (must match the strings passed to `recordCronRun`): `'sync-drift-detection'`, `'fba-flip-guard'`, `'reservation-sweep'`, `'amazon-inventory-sync'`, `'ebay-orders'`, `'dlq-monitor'`. Pull the latest `CronRun` per name.
+- Cron names to surface (verified against real `recordCronRun(...)` callsites 2026-06-30): `'sync-drift-detection'`, `'fba-flip-guard'`, `'reservation-sweep'`, `'amazon-inventory-sync'`, `'ebay-orders-sync'`. (`dlq-monitor` deliberately excluded — that job writes no `CronRun` row; DLQ depth is already surfaced via `queue.dlqDepth`.) Pull the latest `CronRun` per name. `CronRun` fields confirmed: `jobName`, `startedAt`, `status`.
 - DLQ depth = `OutboundSyncQueue` rows with `isDead: true`.
 
 - [ ] **Step 1: Write the route**
@@ -503,8 +503,7 @@ const CRON_NAMES = [
   'fba-flip-guard',
   'reservation-sweep',
   'amazon-inventory-sync',
-  'ebay-orders',
-  'dlq-monitor',
+  'ebay-orders-sync',
 ]
 
 export default async function inventorySyncDiagnosticsRoutes(app: FastifyInstance): Promise<void> {
@@ -570,7 +569,7 @@ export default async function inventorySyncDiagnosticsRoutes(app: FastifyInstanc
 }
 ```
 
-> **Implementer note:** confirm the `CronRun` field names (`jobName`, `startedAt`, `status`) against `packages/database/prisma/schema.prisma` before running — if they differ (e.g. `name` instead of `jobName`), adjust the `select`/`where`/`orderBy` accordingly. This is the only place Task 3 touches an unverified schema.
+> **Implementer note (resolved 2026-06-30):** `CronRun` fields `jobName`/`startedAt`/`status` are confirmed present, and the `CRON_NAMES` list above is the verified-correct set. No further schema investigation needed for Task 3.
 
 - [ ] **Step 2: Register the route in `index.ts`**
 
