@@ -45,6 +45,8 @@ import {
 } from '../services/amazon/flat-file-pull-preview.service.js'
 import { TtlCache } from '../utils/ttl-cache.js'
 import { ServerTiming } from '../utils/server-timing.js'
+import { extractBrowseNodes } from '../services/amazon/browse-nodes.js'
+import { amazonMarketplaceId } from '../services/categories/marketplace-ids.js'
 
 const amazon = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazon)
@@ -58,6 +60,13 @@ const flatFileService = new AmazonFlatFileService(prisma, schemaService)
 // built manifest in-process for 5 min. force=1 still bypasses both
 // caches and re-fetches from SP-API.
 const manifestCache = new TtlCache<unknown>({
+  ttlMs: 30 * 60_000,
+  maxEntries: 200,
+})
+
+// BN.0.3 — browse-node list per (marketplace, productType). Same TTL as the
+// manifest cache — the enum list is derived from the same underlying schema.
+const browseNodeCache = new TtlCache<unknown>({
   ttlMs: 30 * 60_000,
   maxEntries: 200,
 })
@@ -137,6 +146,51 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       } catch (err: any) {
         request.log.error(err, 'flat-file/product-types failed')
         return reply.code(500).send({ error: err?.message ?? 'Failed to load product types' })
+      }
+    },
+  )
+
+  // ── GET /api/amazon/flat-file/browse-nodes ─────────────────────────
+  // BN.0.3 — returns the list of Amazon browse nodes for a given
+  // (marketplace, productType) extracted from the PTD enum in the schema.
+  // ?marketplace=IT&productType=COAT[&force=1]
+  // Response: { marketplace, productType, nodes: {id,path,label}[], source, fetchedAt }
+  fastify.get<{ Querystring: { marketplace?: string; productType?: string; force?: string } }>(
+    '/amazon/flat-file/browse-nodes',
+    async (request, reply) => {
+      const marketplace = (request.query.marketplace ?? 'IT').toUpperCase()
+      const productType = (request.query.productType ?? '').toUpperCase()
+      const force = request.query.force === '1'
+
+      if (!productType) {
+        return reply.code(400).send({ error: 'productType is required' })
+      }
+
+      const cacheKey = `${marketplace}:${productType}`
+      if (!force) {
+        const cached = browseNodeCache.get(cacheKey)
+        if (cached !== undefined) return reply.send(cached)
+      }
+
+      try {
+        const schema = await schemaService.getSchema(
+          { channel: 'AMAZON', marketplace, productType },
+          { force },
+        )
+        const def = (schema.schemaDefinition ?? {}) as Record<string, unknown>
+        const nodes = extractBrowseNodes(def, amazonMarketplaceId(marketplace))
+        const payload = {
+          marketplace,
+          productType,
+          nodes: nodes.map((n) => ({ id: n.id, path: n.path, label: n.path })),
+          source: nodes.length ? 'schema' : 'none',
+          fetchedAt: new Date(schema.fetchedAt).toISOString(),
+        }
+        if (!force) browseNodeCache.set(cacheKey, payload)
+        return reply.send(payload)
+      } catch (err: any) {
+        request.log.error(err, 'flat-file/browse-nodes failed')
+        return reply.code(500).send({ error: err?.message ?? 'Failed to load browse nodes' })
       }
     },
   )
