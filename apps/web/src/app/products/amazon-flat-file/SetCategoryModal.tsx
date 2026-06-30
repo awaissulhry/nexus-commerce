@@ -34,14 +34,15 @@ export default function SetCategoryModal({ open, marketplace, productTypeOptions
     fetch(`${getBackendUrl()}/api/amazon/flat-file/browse-nodes?marketplace=${marketplace}&productType=${encodeURIComponent(productType)}${force ? '&force=1' : ''}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (alive) { setNodes(d?.nodes ?? []); setSource(d?.source ?? null); setFetchedAt(d?.fetchedAt ?? null) } })
-      .catch(() => { if (alive) { setNodes([]); setSource(null) } })
+      .catch(() => { if (alive) { setNodes([]); setSource(null); setFetchedAt(null) } })
       .finally(() => { if (alive) setNodesLoading(false) })
     return () => { alive = false }
   }, [productType, marketplace])
 
   // fetch nodes when a product type is chosen
   useEffect(() => {
-    if (!productType) { setNodes([]); setNodeId(null); setSource(null); setFetchedAt(null); return }
+    setNodeId(null)
+    if (!productType) { setNodes([]); setSource(null); setFetchedAt(null); return }
     const cleanup = loadNodes()
     return cleanup
   }, [productType, marketplace, loadNodes])
