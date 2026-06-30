@@ -69,14 +69,14 @@ export default function SetCategoryModal({ open, marketplace, productTypeOptions
 
   if (!open) return null
   return (
-    <Modal open onClose={onClose} title="Set category" subtitle={`Product type + browse node → ${selectedCount} selected row${selectedCount === 1 ? '' : 's'}`} size="md" footer={footer}>
-      <div className="grid grid-cols-2 gap-4">
+    <Modal open onClose={onClose} title="Set category" subtitle={`Product type + browse node → ${selectedCount} selected row${selectedCount === 1 ? '' : 's'}`} size="xl" footer={footer}>
+      <div className="grid grid-cols-[260px_1fr] gap-5">
         {/* Product type */}
         <div>
           <label className="text-xs font-medium text-slate-500 mb-1 block">Product type</label>
           <input value={ptQuery} onChange={(e) => setPtQuery(e.target.value)} placeholder="Search types…"
             className="w-full text-xs px-2 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 mb-1" />
-          <div className="max-h-56 overflow-y-auto border border-slate-100 dark:border-slate-800 rounded">
+          <div className="max-h-[420px] overflow-y-auto border border-slate-100 dark:border-slate-800 rounded">
             {ptFiltered.map((t) => (
               <button key={t} type="button" onClick={() => setProductType(t)}
                 className={`w-full text-left px-2 py-1 text-xs font-mono ${productType === t ? 'bg-blue-500 text-white' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{t}</button>
@@ -103,13 +103,13 @@ export default function SetCategoryModal({ open, marketplace, productTypeOptions
             <>
               <input value={nodeQuery} onChange={(e) => setNodeQuery(e.target.value)} placeholder={productType ? 'Search nodes…' : 'Pick a product type first'} disabled={!productType}
                 className="w-full text-xs px-2 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 mb-1 disabled:opacity-50" />
-              <div className="max-h-56 overflow-y-auto border border-slate-100 dark:border-slate-800 rounded">
+              <div className="max-h-[420px] overflow-y-auto border border-slate-100 dark:border-slate-800 rounded">
                 {!productType ? <div className="px-2 py-2 text-xs text-slate-400 italic">—</div>
                   : nodeFiltered.length === 0 ? <div className="px-2 py-2 text-xs text-slate-400 italic">{nodesLoading ? 'Loading…' : 'No browse nodes for this type'}</div>
                   : nodeFiltered.map((n) => (
                     <button key={n.id} type="button" onClick={() => setNodeId(n.id)}
                       className={`w-full text-left px-2 py-1 text-xs ${nodeId === n.id ? 'bg-blue-500 text-white' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                      title={n.path}><span className="truncate block">{n.path}</span></button>
+                      title={n.path}><span className="block whitespace-normal break-words leading-snug">{n.path}</span></button>
                   ))}
               </div>
             </>
