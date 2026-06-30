@@ -4,7 +4,11 @@ import { OpsCanvas } from '../_canvas/OpsCanvas'
 import { useAccountGraph } from '../_canvas/useAccountGraph'
 import { useCampaignDetail } from '../_canvas/useCampaignDetail'
 import { eur, eur2, pct, intl, roas, ago } from '../_canvas/format'
+import { resolveCampaigns, stageActions, type ActionSpec, type Staged, type CampaignInput } from '../_canvas/actions'
+import { getBackendUrl } from '@/lib/backend-url'
 import type { OpsObject } from '../_canvas/types'
+import { ActionBar } from './ActionBar'
+import { DiffModal } from './DiffModal'
 import './mission-control.css'
 
 const KIND_LABEL: Record<string, string> = {
@@ -110,6 +114,58 @@ export function MissionControlClient() {
 
   const selected = objects.find((o) => o.id === selectedId) || null
 
+  // P3.1 — actions: resolve selection → campaigns, stage → diff preview → gated apply.
+  const [staged, setStaged] = useState<Staged | null>(null)
+  const [dryRun, setDryRun] = useState(true)
+  const [applying, setApplying] = useState(false)
+  const [result, setResult] = useState<string | null>(null)
+
+  const scopeCampaigns = useMemo(() => resolveCampaigns(objects, selectedIds), [objects, selectedIds])
+
+  const onStage = (spec: ActionSpec) => {
+    const camps: CampaignInput[] = scopeCampaigns.map((o) => ({
+      id: o.id.replace(/^c:/, ''),
+      name: o.name,
+      dailyBudget: o.detail?.dailyBudget,
+      status: o.detail?.status,
+    }))
+    if (camps.length === 0) return
+    setResult(null)
+    setStaged(stageActions(camps, spec))
+  }
+
+  const patchJson = async (path: string, body: Record<string, unknown>) => {
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising${path}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const j = await r.json().catch(() => ({}))
+      return r.ok && (j as { ok?: boolean })?.ok !== false
+    } catch {
+      return false
+    }
+  }
+
+  const onConfirm = async () => {
+    if (!staged) return
+    if (dryRun) {
+      setResult(`Dry-run: ${staged.changes.length} change(s) previewed — nothing applied.`)
+      return
+    }
+    setApplying(true)
+    let ok = 0
+    let denied = 0
+    for (const c of staged.changes) {
+      const success = await patchJson(c.path, { ...c.body, applyImmediately: true, reason: 'Mission Control bulk action' })
+      if (success) ok++
+      else denied++
+    }
+    setApplying(false)
+    setResult(`${ok} applied · ${denied} denied (gate-blocked or error).`)
+  }
+
   return (
     <div className="mc-root">
       <header className="mc-head">
@@ -141,11 +197,32 @@ export function MissionControlClient() {
               onSelectNode={onSelectNode}
             />
           )}
+          {scopeCampaigns.length > 0 && (
+            <ActionBar
+              count={scopeCampaigns.length}
+              onStage={onStage}
+              onClear={() => setSelectedIds(new Set())}
+            />
+          )}
         </div>
         <aside className="mc-inspector" aria-label="Inspector">
           {selected ? <InspectorBody o={selected} /> : <div className="mc-insp-empty">Select an object to inspect</div>}
         </aside>
       </div>
+      {staged && (
+        <DiffModal
+          staged={staged}
+          dryRun={dryRun}
+          onToggleDryRun={() => setDryRun((v) => !v)}
+          onConfirm={onConfirm}
+          onCancel={() => {
+            setStaged(null)
+            setResult(null)
+          }}
+          applying={applying}
+          result={result}
+        />
+      )}
     </div>
   )
 }

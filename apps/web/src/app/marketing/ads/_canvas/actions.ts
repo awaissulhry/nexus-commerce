@@ -23,6 +23,26 @@ export interface ActionPlacement {
 }
 export type ActionSpec = ActionBudget | ActionStatus | ActionTargetAcos | ActionPlacement
 
+import type { OpsObject } from './types'
+
+/** Client-side scope resolver: every campaign at or under the selection.
+ * Selecting a market/portfolio cascades to its campaign descendants; selecting a
+ * campaign returns just it. (objects holds the whole account graph.) */
+export function resolveCampaigns(objects: OpsObject[], selectedIds: Set<string>): OpsObject[] {
+  const byId = new Map(objects.map((o) => [o.id, o]))
+  const underSelection = (o: OpsObject): boolean => {
+    let cur: OpsObject | undefined = o
+    const seen = new Set<string>()
+    while (cur && !seen.has(cur.id)) {
+      if (selectedIds.has(cur.id)) return true
+      seen.add(cur.id)
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined
+    }
+    return false
+  }
+  return objects.filter((o) => o.kind === 'campaign' && underSelection(o))
+}
+
 export interface CampaignInput {
   id: string
   name: string
