@@ -15,6 +15,7 @@ import {
   ChevronsUpDown,
   Copy,
   Download,
+  ExternalLink,
   Plus,
   Search,
   Send,
@@ -503,7 +504,28 @@ function ProductCell({
       )}
       <Thumbnail src={row.imageUrl} photoCount={row.photoCount} alt={row.name} />
       <div className={styles.pmeta}>
-        <div className={styles.ptitle}>{row.name}</div>
+        {/* Title is a same-tab link to the editor; the "Open" pill (revealed
+            on cell hover) opens the editor in a NEW tab. Styling mirrors the
+            ads-manager campaign-name cell exactly (h10 blue #1f6fde). */}
+        <div className={styles.ptitleRow}>
+          <Link
+            href={`/products/${row.id}/edit`}
+            className={styles.ptitleLink}
+            title={row.name}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {row.name}
+          </Link>
+          <a
+            className={styles.openBtn}
+            href={`/products/${row.id}/edit`}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink size={11} /> Open
+          </a>
+        </div>
         <div className={styles.psub}>
           <span className={styles.skuTag}>{row.sku}</span>
           {row.productType && (
