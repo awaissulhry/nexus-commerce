@@ -78,6 +78,17 @@ export type OrderEvent =
       available: number
       ts: number
     }
+  // P5.1 — fired by the reconciliation cron when per-channel inventory
+  // drift exceeds the configured percentage threshold. Surfaces an
+  // operator alert so stock discrepancies don't accumulate silently.
+  | { type: 'sync.reconcile.drift'; channel: string; marketplace?: string | null; metric: string; driftPct: number; ts: number }
+  // P5.1 — fired by the cumulative-drift watchdog when the absolute
+  // unit drift across a rolling window breaches the configured limit.
+  | { type: 'sync.drift.cumulative'; channel: string; absDriftUnits: number; windowHours: number; ts: number }
+  // P5.1 — fired by the stale-conflict sweeper when unresolved
+  // channel-stock conflicts older than the configured age threshold
+  // are detected. Count + age surface in the operator alert banner.
+  | { type: 'sync.conflict.stale'; count: number; olderThanDays: number; ts: number }
   // RT.13 — fired by the SQS poller when an ANY_OFFER_CHANGED
   // notification shows our seller is no longer holding the buy box.
   // Surfaces in the global competitive banner + (opt-in) browser
