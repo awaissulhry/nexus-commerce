@@ -77,6 +77,20 @@ export interface ChannelLatency extends LatencyStats {
   pendingCount: number
 }
 
+/**
+ * Phase 4 — pure helper for the latency-watchdog cron.
+ * Returns the subset of channels whose p95Ms exceeds `thresholdMs`.
+ * Channels with null p95 (no completed samples) are silently skipped.
+ */
+export function evaluateLatencyBreach(
+  channels: ChannelLatency[],
+  thresholdMs: number,
+): Array<{ channel: string; p95Ms: number }> {
+  return channels
+    .filter((c) => typeof c.p95Ms === 'number' && c.p95Ms > thresholdMs)
+    .map((c) => ({ channel: c.channel, p95Ms: c.p95Ms as number }))
+}
+
 export function buildOutboundLatencyResponse(
   rows: OutboundLatencyRow[],
   window: string,

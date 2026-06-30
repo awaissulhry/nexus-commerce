@@ -55,6 +55,17 @@ export type OrderEvent =
       queueArn: string | null
       ts: number
     }
+  // P4 — fired hourly by the latency-watchdog cron when a channel's
+  // p95 outbound latency exceeds the configured threshold
+  // (NEXUS_LATENCY_P95_BREACH_MS, default 60000ms). Surfaces a
+  // persistent operator alert so prolonged sync degradation is never
+  // silent. Read-only + emit-only — the watchdog never blocks a push.
+  | { type: 'sync.latency.breach'; channel: string; p95Ms: number; thresholdMs: number; window: string; ts: number }
+  // P4 — fired by the latency-watchdog cron when the dispatch path
+  // is cron-60s-only (queue workers off or Redis absent) OR an active
+  // eBay connection has no notification token. Signals that real-time
+  // inventory sync is not wired correctly.
+  | { type: 'sync.realtime.degraded'; reason: string; ts: number }
   // P2 — an outbound push was clamped to the backing pool (oversell prevented).
   // Surfaced via RT alerting so a clamp is never silent.
   | {
