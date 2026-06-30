@@ -7,6 +7,7 @@ import { consumeLayersInTx, receiveLayerInTx } from './cost-layers.service.js'
 import { computeAvailableToPublish } from './available-to-publish.service.js'
 import { enqueueSharedTradingFanout } from './ebay-shared-fanout.service.js'
 import { coalescePendingQuantityRows } from './sync-coalesce.js'
+import { outboundEnqueuePriority } from './sync-priority.js'
 
 // S.20 — reasons that consume cost layers (decrease quantity AND
 // realise COGS). Manual-adjustment subtractions also consume; the
@@ -471,6 +472,8 @@ export async function applyStockMovement(input: StockMovementInput) {
   // grace for operator "undo" patterns.
   const enqueueDelay = ORDER_DRIVEN_REASONS.has(reason) ? 0 : DEFAULT_HOLD_MS
   if (!outerTx && transactionResult.cascade.queuedSyncIds.length > 0) {
+    const priority =
+      process.env.NEXUS_OUTBOUND_PRIORITY === '0' ? undefined : outboundEnqueuePriority(reason)
     for (const queueId of transactionResult.cascade.queuedSyncIds) {
       try {
         await outboundSyncQueue.add(
@@ -485,6 +488,7 @@ export async function applyStockMovement(input: StockMovementInput) {
           {
             delay: enqueueDelay,
             jobId: queueId,
+            ...(priority !== undefined ? { priority } : {}),
           },
         )
       } catch (err) {
