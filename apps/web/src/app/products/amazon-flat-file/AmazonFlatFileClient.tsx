@@ -43,7 +43,7 @@ import { ChannelStrip } from '../ebay-flat-file/ChannelStrip'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import type { FlatFileAiChange } from '@/components/flat-file/FlatFileGrid.types'
 import { FEED_ERROR_CODES } from './feedErrorCodes'
-import { categoryOf, assignCategory, productTypesInUse } from './category-model'
+import { categoryOf, assignCategory, productTypesInUse, mixedTypeFamilies, rowsMissingNode } from './category-model'
 
 // EH.5 — Lazy-loaded modals, panels, and bars. Each one only ships
 // to the browser when the operator first opens it, so the initial
@@ -1353,6 +1353,10 @@ export default function AmazonFlatFileClient({
 
   const validErrorCount = useMemo(() => [...cellErrors.values()].filter((e) => e.level === 'error').length, [cellErrors])
   const validWarnCount  = useMemo(() => [...cellErrors.values()].filter((e) => e.level === 'warn').length, [cellErrors])
+
+  // BN.4.3 — Advisory-only warnings (never block submit).
+  const mixedFamilies = useMemo(() => mixedTypeFamilies(rows as Array<Record<string, unknown>>), [rows])
+  const missingNodeRowIds = useMemo(() => rowsMissingNode(rows as Array<Record<string, unknown>>), [rows])
 
   // P4 — Map from child rowId → parent's variation_theme, used for axis fingerprint + clone.
   const parentThemeByChildId = useMemo<Map<string, string>>(() => {
@@ -5055,7 +5059,7 @@ export default function AmazonFlatFileClient({
             </span>
             <button type="button" onClick={() => setShowValidPanel(false)} className="text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>
           </div>
-          {cellErrors.size === 0 ? (
+          {cellErrors.size === 0 && mixedFamilies.length === 0 && missingNodeRowIds.length === 0 ? (
             <div className="px-3 py-4 text-xs text-center text-slate-400">No issues found</div>
           ) : (
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -5094,6 +5098,29 @@ export default function AmazonFlatFileClient({
               {cellErrors.size > 200 && (
                 <div className="px-3 py-2 text-[10px] text-slate-400 text-center">
                   +{cellErrors.size - 200} more — fix shown issues first
+                </div>
+              )}
+              {/* BN.4.3 — Advisory-only warnings (display only; do NOT block submit) */}
+              {mixedFamilies.length > 0 && (
+                <div className="px-3 py-1.5 flex items-start gap-2">
+                  <span className="mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0 bg-amber-300" />
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-slate-400">Advisory</span>
+                    <p className="text-xs text-slate-700 dark:text-slate-300">
+                      {mixedFamilies.length} mixed-type famil{mixedFamilies.length === 1 ? 'y' : 'ies'} ({mixedFamilies.join(', ')}) — Amazon may reject mixed product types in one variation family.
+                    </p>
+                  </div>
+                </div>
+              )}
+              {missingNodeRowIds.length > 0 && (
+                <div className="px-3 py-1.5 flex items-start gap-2">
+                  <span className="mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0 bg-amber-300" />
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-slate-400">Advisory</span>
+                    <p className="text-xs text-slate-700 dark:text-slate-300">
+                      {missingNodeRowIds.length} row{missingNodeRowIds.length === 1 ? '' : 's'} have no browse node — Amazon will use the category root (lower discoverability). Set a category to add one.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>

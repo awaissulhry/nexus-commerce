@@ -1,6 +1,6 @@
 // category-model.vitest.test.ts
 import { describe, it, expect } from 'vitest'
-import { BROWSE_NODE_KEY, PRODUCT_TYPE_KEY, categoryOf, productTypesInUse, assignCategory } from './category-model.js'
+import { BROWSE_NODE_KEY, PRODUCT_TYPE_KEY, categoryOf, productTypesInUse, assignCategory, mixedTypeFamilies, rowsMissingNode } from './category-model.js'
 
 const LABELS = { '2420941031': 'Auto e Moto > … > Giacche', '2420943031': 'Auto e Moto > … > Pantaloni' }
 
@@ -37,5 +37,69 @@ describe('category-model', () => {
   it('assignCategory with null nodeId clears the browse node to empty string', () => {
     const out = assignCategory({ product_type: 'COAT' }, { productType: 'COAT', nodeId: null })
     expect(out.recommended_browse_nodes).toBe('')
+  })
+})
+
+describe('mixedTypeFamilies', () => {
+  it('returns parent SKU when children span >1 product type (AIREON COAT+PANTS case)', () => {
+    const rows = [
+      { parentage_level: 'parent', item_sku: 'AIREON' },
+      { parentage_level: 'child', parent_sku: 'AIREON', product_type: 'COAT', _rowId: 'r1' },
+      { parentage_level: 'child', parent_sku: 'AIREON', product_type: 'PANTS', _rowId: 'r2' },
+    ]
+    expect(mixedTypeFamilies(rows)).toEqual(['AIREON'])
+  })
+
+  it('returns [] when all children share the same product type', () => {
+    const rows = [
+      { parentage_level: 'parent', item_sku: 'JACKET' },
+      { parentage_level: 'child', parent_sku: 'JACKET', product_type: 'COAT', _rowId: 'r1' },
+      { parentage_level: 'child', parent_sku: 'JACKET', product_type: 'coat', _rowId: 'r2' },
+    ]
+    expect(mixedTypeFamilies(rows)).toEqual([])
+  })
+
+  it('returns [] when there are no parents', () => {
+    const rows = [
+      { parentage_level: 'child', parent_sku: 'X', product_type: 'COAT', _rowId: 'r1' },
+    ]
+    expect(mixedTypeFamilies(rows)).toEqual([])
+  })
+})
+
+describe('rowsMissingNode', () => {
+  it('returns _rowId for a child with product_type but no browse node', () => {
+    const rows = [
+      { parentage_level: 'child', product_type: 'COAT', _rowId: 'r1' },
+    ]
+    expect(rowsMissingNode(rows)).toEqual(['r1'])
+  })
+
+  it('excludes a child that has a browse node', () => {
+    const rows = [
+      { parentage_level: 'child', product_type: 'COAT', recommended_browse_nodes: '2420941031', _rowId: 'r1' },
+    ]
+    expect(rowsMissingNode(rows)).toEqual([])
+  })
+
+  it('excludes parent rows', () => {
+    const rows = [
+      { parentage_level: 'parent', product_type: 'COAT', _rowId: 'r1' },
+    ]
+    expect(rowsMissingNode(rows)).toEqual([])
+  })
+
+  it('excludes ghost rows', () => {
+    const rows = [
+      { _ghost: true, parentage_level: 'child', product_type: 'COAT', _rowId: 'r1' },
+    ]
+    expect(rowsMissingNode(rows)).toEqual([])
+  })
+
+  it('excludes rows with empty product_type', () => {
+    const rows = [
+      { parentage_level: 'child', product_type: '', _rowId: 'r1' },
+    ]
+    expect(rowsMissingNode(rows)).toEqual([])
   })
 })

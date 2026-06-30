@@ -27,3 +27,34 @@ export function assignCategory(
 ): Record<string, unknown> {
   return { ...row, [PRODUCT_TYPE_KEY]: c.productType.toUpperCase(), [BROWSE_NODE_KEY]: c.nodeId ?? '' }
 }
+
+/** Parent item_skus whose children span >1 distinct product type. */
+export function mixedTypeFamilies(rows: Array<Record<string, unknown>>): string[] {
+  const out: string[] = []
+  for (const p of rows) {
+    if (String(p.parentage_level ?? '') !== 'parent') continue
+    const pSku = String(p.item_sku ?? '')
+    if (!pSku) continue
+    const types = new Set(
+      rows
+        .filter((r) => String(r.parentage_level ?? '') === 'child' && String(r.parent_sku ?? '') === pSku)
+        .map((r) => String(r.product_type ?? '').toUpperCase())
+        .filter(Boolean),
+    )
+    if (types.size > 1) out.push(pSku)
+  }
+  return out
+}
+
+/** _rowIds of real (non-ghost, non-parent) rows that HAVE a product type but NO browse node. */
+export function rowsMissingNode(rows: Array<Record<string, unknown>>): string[] {
+  return rows
+    .filter((r) =>
+      !r._ghost &&
+      String(r.parentage_level ?? '') !== 'parent' &&
+      String(r.product_type ?? '') !== '' &&
+      (r[BROWSE_NODE_KEY] == null || r[BROWSE_NODE_KEY] === ''),
+    )
+    .map((r) => String(r._rowId ?? ''))
+    .filter(Boolean)
+}
