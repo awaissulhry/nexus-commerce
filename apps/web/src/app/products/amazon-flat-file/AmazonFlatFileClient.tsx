@@ -10,8 +10,8 @@ import {
 } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, History, Image as ImageIcon, Keyboard, Loader2, Pin, Plus, RefreshCw, RotateCcw,
+  Activity, AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
+  Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, Globe, History, Image as ImageIcon, Keyboard, Loader2, Pin, Plus, RefreshCw, RotateCcw,
   Search, Send, Trash2, Upload, X, ArrowRightLeft,
   Undo2, Redo2, GripVertical, Wand2,
 } from 'lucide-react'
@@ -900,6 +900,8 @@ export default function AmazonFlatFileClient({
     type: 'col' | 'row'; colId?: string
     startX: number; startY: number; startVal: number
   } | null>(null)
+  const [coverageModalOpen, setCoverageModalOpen] = useState(false)
+  const [healthModalOpen, setHealthModalOpen] = useState(false)
   const [pullPanelOpen, setPullPanelOpen] = useState(false)
   const [pulling, setPulling] = useState(false)
   const [pullProgress, setPullProgress] = useState<{ progress: number; total: number } | null>(null)
@@ -3746,6 +3748,11 @@ export default function AmazonFlatFileClient({
               { label: 'Copy to market…', icon: <Copy className="w-3.5 h-3.5" />, onClick: () => setPushPanel((p) => p ? null : { tab: 'copy' }), disabled: !manifest || !rows.length },
               { separator: true },
               { label: 'Reset column widths', onClick: () => { setColWidths({}); try { localStorage.removeItem('ff-col-widths') } catch {} }, disabled: !Object.keys(colWidths).length },
+            ]} />
+            <MenuDropdown label="View" items={[
+              { label: 'Market coverage…', icon: <Globe className="w-3.5 h-3.5" />, onClick: () => setCoverageModalOpen(true), disabled: !manifest || !rows.length },
+              { label: 'Listing health…', icon: <Activity className="w-3.5 h-3.5" />, onClick: () => setHealthModalOpen(true), disabled: !manifest || !rows.length },
+              { separator: true },
               { label: 'Reset row height', onClick: () => { setRowHeight(28); try { localStorage.setItem('ff-row-height', '28') } catch {} }, disabled: rowHeight === 28 },
             ]} />
           </div>
@@ -5194,6 +5201,25 @@ export default function AmazonFlatFileClient({
         />
       )}
 
+      {/* View → Market coverage modal */}
+      {coverageModalOpen && (
+        <CoverageModal
+          rows={displayRows.filter((r) => !r._ghost)}
+          marketplace={marketplace}
+          onSwitchMarket={(m) => { setCoverageModalOpen(false); navigateTo(m, productType) }}
+          onClose={() => setCoverageModalOpen(false)}
+        />
+      )}
+
+      {/* View → Listing health modal */}
+      {healthModalOpen && (
+        <HealthModal
+          rows={displayRows.filter((r) => !r._ghost)}
+          columns={allColumns}
+          onClose={() => setHealthModalOpen(false)}
+        />
+      )}
+
       {/* P5: completed-while-away banner */}
       {pendingPullReview && (
         <PendingPullBanner
@@ -5571,7 +5597,7 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
   onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
   onCellPointerDown, onCellDoubleClick, onRowSelect, onFillHandlePointerDown, onFillToBottom, onFillDrop,
   showOverrideBadges, showCascadeButtons, onCascadeRow,
-  parentVariationTheme, onCloneVariant, onSwitchMarket, browseNodeLabels }: RowProps) {
+  onCloneVariant, browseNodeLabels }: RowProps) {
   const rowId = row._rowId as string
   const status = row._status
   const canDragRef = useRef(false)
@@ -5777,114 +5803,6 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
             return <span className={cn('text-[9px] font-semibold leading-none', cls)}>{s.slice(0, 4)}</span>
           })()}
 
-          {/* P4.2 — Axis value fingerprint for child rows: "Nero / XL" */}
-          {!row._ghost && isChild && parentVariationTheme && (() => {
-            const colIdSet = new Set(columns.map((c) => c.id))
-            const axisColIds = parseThemeAxes(parentVariationTheme)
-              .map((axis) => axisColumnCandidates(axis).find((c) => colIdSet.has(c)))
-              .filter((c): c is string => c !== undefined)
-            const vals = axisColIds.map((cid) => String(row[cid] ?? '')).filter(Boolean)
-            if (!vals.length) return null
-            return (
-              <span
-                className="shrink-0 text-[8px] font-medium leading-none text-slate-500 dark:text-slate-400 truncate max-w-full text-center"
-                title={`Variant: ${vals.join(' / ')}`}
-              >
-                {vals.join(' / ')}
-              </span>
-            )
-          })()}
-
-          {/* P5.1/P5.2/P5.3 — Cross-market coverage dot-strip + divergence badge */}
-          {!row._ghost && (() => {
-            const coverage = row._marketCoverage as Record<string, { status: string; title?: string; price?: string }> | undefined
-            if (!coverage) return null
-            const MARKETS = ['IT', 'DE', 'FR', 'ES', 'UK'] as const
-            // P5.2 — divergence: any two active markets with different title or price
-            const activeEntries = MARKETS
-              .map((m) => ({ m, entry: coverage[m] }))
-              .filter(({ entry }) => entry && entry.status !== 'missing')
-            const titles = [...new Set(activeEntries.map(({ entry }) => entry?.title).filter(Boolean))]
-            const prices = [...new Set(activeEntries.map(({ entry }) => entry?.price).filter(Boolean))]
-            const hasDivergence = titles.length > 1 || prices.length > 1
-            return (
-              <div className="flex items-center gap-px shrink-0">
-                {MARKETS.map((m) => {
-                  const entry = coverage[m] ?? { status: 'missing' }
-                  const dotCls =
-                    entry.status === 'active'     ? 'bg-emerald-500 dark:bg-emerald-400'
-                    : entry.status === 'suppressed' ? 'bg-red-500 dark:bg-red-400'
-                    : entry.status === 'inactive'   ? 'bg-amber-400 dark:bg-amber-300'
-                    :                                 'bg-slate-300 dark:bg-slate-600'
-                  const tipParts = [`${m}: ${entry.status}`]
-                  if (entry.title) tipParts.push(`"${entry.title.slice(0, 40)}${entry.title.length > 40 ? '…' : ''}"`)
-                  if (entry.price) tipParts.push(`€${entry.price}`)
-                  return (
-                    <button
-                      key={m}
-                      onClick={(e) => { e.stopPropagation(); onSwitchMarket(m) }}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      title={tipParts.join(' · ')}
-                      className={`w-2.5 h-2.5 rounded-full transition-opacity hover:opacity-70 focus:outline-none ${dotCls}`}
-                      aria-label={`Switch to ${m} — ${entry.status}`}
-                    />
-                  )
-                })}
-                {hasDivergence && (
-                  <span
-                    className="ml-0.5 text-[8px] font-bold leading-none text-amber-600 dark:text-amber-400 cursor-default"
-                    title={[
-                      titles.length > 1 ? `Title differs: ${activeEntries.filter(({entry}) => entry?.title).map(({m,entry}) => `${m}="${entry?.title?.slice(0,20)}"`).join(', ')}` : '',
-                      prices.length > 1 ? `Price differs: ${activeEntries.filter(({entry}) => entry?.price).map(({m,entry}) => `${m}=€${entry?.price}`).join(', ')}` : '',
-                    ].filter(Boolean).join(' | ')}
-                  >≠</span>
-                )}
-              </div>
-            )
-          })()}
-
-          {/* P3.3 — Health chip: red = suppressed, amber = open issues */}
-          {!row._ghost && (() => {
-            const suppressed = row._suppressed
-            const issueCount = typeof row._issueCount === 'number' ? row._issueCount : 0
-            const issueSeverity = row._issueSeverity ? String(row._issueSeverity) : null
-            const suppressionReason = row._suppressionReason ? String(row._suppressionReason) : null
-            if (!suppressed && !issueCount) return null
-            const chipCls = suppressed
-              ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-              : issueSeverity === 'ERROR'
-              ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
-              : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-            const chipLabel = suppressed ? '⊘' : String(issueCount)
-            const tipText = suppressed
-              ? `Suppressed${suppressionReason ? `: ${suppressionReason}` : ' (no reason given)'}`
-              : `${issueCount} open issue${issueCount !== 1 ? 's' : ''}${issueSeverity ? ` — ${issueSeverity}` : ''}`
-            return (
-              <Tooltip label={<span className="text-xs max-w-[200px] block">{tipText}</span>} className="h10-ds-tooltip--light">
-                <span className={cn('shrink-0 font-mono text-[8px] rounded px-0.5 py-px leading-none cursor-help', chipCls)}>
-                  {chipLabel}
-                </span>
-              </Tooltip>
-            )
-          })()}
-
-          {/* Required-fields completeness chip — mirrors the eBay flat file; counts
-              the same required cells the grid reddens (greyed/N-A excluded). */}
-          {!row._ghost && (() => {
-            const { filled, total } = computeRowCompleteness(row, columns)
-            if (total === 0) return null
-            const complete = filled === total
-            const empty = filled === 0
-            return (
-              <span
-                className={cn('shrink-0 font-mono text-[9px] rounded px-1 py-0.5 tabular-nums leading-none',
-                  complete ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                  : empty  ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400'
-                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300')}
-                title={`${filled}/${total} required fields filled`}
-              >{filled}/{total}</span>
-            )
-          })()}
 
           {/* IN.1 — Override badge: shows when toggle is on and any field has followMaster*=false */}
           {showOverrideBadges && (!showRowImages || imageSize >= 48) && (
@@ -8421,6 +8339,351 @@ function AddRowsPanel({ initialType, initialPosition, rows, hasSelection, produc
 }
 
 // VersionHistoryPanel removed — merged into HistoryModal (H.1–H.4)
+
+// ── CoverageModal ───────────────────────────────────────────────────────
+
+const COVERAGE_MARKETS = ['IT', 'DE', 'FR', 'ES', 'UK'] as const
+type CoverageStatus = 'active' | 'inactive' | 'suppressed' | 'missing'
+type CoverageFilter = 'all' | 'active' | 'suppressed' | 'missing'
+
+function CoverageModal({
+  rows, marketplace, onSwitchMarket, onClose,
+}: {
+  rows: Row[]
+  marketplace: string
+  onSwitchMarket: (m: string) => void
+  onClose: () => void
+}) {
+  const [filter, setFilter] = useState<CoverageFilter>('all')
+
+  const filtered = useMemo(() => {
+    if (filter === 'all') return rows
+    return rows.filter((row) => {
+      const cov = row._marketCoverage as Record<string, { status: string }> | undefined
+      if (!cov) return filter === 'missing'
+      return COVERAGE_MARKETS.some((m) => {
+        const s = (cov[m]?.status ?? 'missing') as CoverageStatus
+        return s === filter
+      })
+    })
+  }, [rows, filter])
+
+  useEffect(() => {
+    const handler = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  function statusDot(status: CoverageStatus) {
+    const cls =
+      status === 'active'     ? 'bg-emerald-500'
+      : status === 'suppressed' ? 'bg-red-500'
+      : status === 'inactive'   ? 'bg-amber-400'
+      :                           'bg-slate-300 dark:bg-slate-600'
+    return <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${cls}`} />
+  }
+
+  const totals: Record<string, number> = { active: 0, suppressed: 0, inactive: 0, missing: 0 }
+  for (const row of rows) {
+    const cov = row._marketCoverage as Record<string, { status: string }> | undefined
+    for (const m of COVERAGE_MARKETS) {
+      const s = (cov?.[m]?.status ?? 'missing') as CoverageStatus
+      totals[s] = (totals[s] ?? 0) + 1
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="w-full max-w-3xl max-h-[80vh] flex flex-col rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <Globe className="w-4 h-4 text-slate-500" />
+            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Market Coverage</span>
+            <span className="text-xs text-slate-400">{rows.length} SKU{rows.length !== 1 ? 's' : ''}</span>
+          </div>
+          <button type="button" onClick={onClose} className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Summary strip + filter */}
+        <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 flex-wrap">
+          {(['all', 'active', 'suppressed', 'missing'] as CoverageFilter[]).map((f) => {
+            const count = f === 'all' ? rows.length : totals[f] ?? 0
+            const labelCls =
+              f === 'active'     ? 'text-emerald-700 dark:text-emerald-400'
+              : f === 'suppressed' ? 'text-red-700 dark:text-red-400'
+              : f === 'missing'    ? 'text-slate-500 dark:text-slate-400'
+              : 'text-slate-700 dark:text-slate-200'
+            return (
+              <button key={f} type="button"
+                onClick={() => setFilter(f)}
+                className={cn(
+                  'text-xs px-2 py-0.5 rounded-full border transition-colors',
+                  filter === f
+                    ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-700 dark:text-blue-300'
+                    : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
+                  filter !== f && labelCls,
+                )}>
+                {f === 'all' ? 'All SKUs' : `${f.charAt(0).toUpperCase() + f.slice(1)}`} · {count}
+              </button>
+            )
+          })}
+          <div className="flex-1" />
+          <div className="flex items-center gap-2">
+            {COVERAGE_MARKETS.map((m) => (
+              <button key={m} type="button"
+                onClick={() => onSwitchMarket(m)}
+                className={cn(
+                  'text-[11px] font-medium px-2 py-0.5 rounded transition-colors',
+                  m === marketplace
+                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+                    : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400',
+                )}
+                title={`Switch editor to ${m}`}
+              >{m}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-auto flex-1">
+          <table className="w-full text-xs border-collapse">
+            <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800/80 z-10">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 w-48">SKU</th>
+                <th className="text-left px-3 py-2 font-medium text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 w-16">Type</th>
+                {COVERAGE_MARKETS.map((m) => (
+                  <th key={m}
+                    className={cn(
+                      'px-3 py-2 font-medium border-b border-slate-200 dark:border-slate-700 text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors',
+                      m === marketplace ? 'text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-300',
+                    )}
+                    onClick={() => onSwitchMarket(m)}
+                    title={`Switch editor to ${m}`}
+                  >{m}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-400 text-xs">No SKUs match this filter.</td></tr>
+              )}
+              {filtered.map((row) => {
+                const sku = String(row.item_sku ?? '—')
+                const parentage = String(row.parentage_level ?? '')
+                const isParent = parentage.toLowerCase() === 'parent'
+                const isChild = parentage.toLowerCase() === 'child'
+                const cov = row._marketCoverage as Record<string, { status: string; title?: string; price?: string }> | undefined
+                return (
+                  <tr key={row._rowId as string} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className="px-3 py-1.5 font-mono text-[11px] text-slate-700 dark:text-slate-300 max-w-[192px] truncate">
+                      {isChild && <span className="inline-block w-3 mr-0.5 text-slate-300">↳</span>}
+                      {sku}
+                    </td>
+                    <td className="px-3 py-1.5 text-slate-400 dark:text-slate-500">
+                      {isParent ? 'parent' : isChild ? 'child' : 'single'}
+                    </td>
+                    {COVERAGE_MARKETS.map((m) => {
+                      const entry = cov?.[m]
+                      const status = (entry?.status ?? 'missing') as CoverageStatus
+                      const tip = [
+                        `${m}: ${status}`,
+                        entry?.title ? `"${entry.title.slice(0, 40)}${entry.title.length > 40 ? '…' : ''}"` : '',
+                        entry?.price ? `€${entry.price}` : '',
+                      ].filter(Boolean).join(' · ')
+                      return (
+                        <td key={m} className="px-3 py-1.5 text-center" title={tip}>
+                          <div className="flex items-center justify-center gap-1">
+                            {statusDot(status)}
+                            {entry?.price && <span className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums">€{entry.price}</span>}
+                          </div>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Legend */}
+        <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-4 text-[10px] text-slate-400">
+          <span className="flex items-center gap-1">{statusDot('active')} Active</span>
+          <span className="flex items-center gap-1">{statusDot('inactive')} Inactive</span>
+          <span className="flex items-center gap-1">{statusDot('suppressed')} Suppressed</span>
+          <span className="flex items-center gap-1">{statusDot('missing')} Not listed</span>
+          <span className="ml-auto">Click a market column header to switch the editor to that market.</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── HealthModal ─────────────────────────────────────────────────────────
+
+type HealthFilter = 'all' | 'suppressed' | 'issues' | 'incomplete'
+
+function HealthModal({
+  rows, columns, onClose,
+}: {
+  rows: Row[]
+  columns: Column[]
+  onClose: () => void
+}) {
+  const [filter, setFilter] = useState<HealthFilter>('all')
+
+  useEffect(() => {
+    const handler = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  const rowsWithHealth = useMemo(() => rows.map((row) => {
+    const suppressed = !!row._suppressed
+    const issueCount = typeof row._issueCount === 'number' ? row._issueCount : 0
+    const issueSeverity = row._issueSeverity ? String(row._issueSeverity) : null
+    const suppressionReason = row._suppressionReason ? String(row._suppressionReason) : null
+    const { filled, total } = computeRowCompleteness(row, columns)
+    const incomplete = total > 0 && filled < total
+    return { row, suppressed, issueCount, issueSeverity, suppressionReason, filled, total, incomplete }
+  }), [rows, columns])
+
+  const counts = useMemo(() => ({
+    suppressed: rowsWithHealth.filter((r) => r.suppressed).length,
+    issues:     rowsWithHealth.filter((r) => r.issueCount > 0).length,
+    incomplete: rowsWithHealth.filter((r) => r.incomplete).length,
+    flagged:    rowsWithHealth.filter((r) => r.suppressed || r.issueCount > 0 || r.incomplete).length,
+  }), [rowsWithHealth])
+
+  const filtered = useMemo(() => {
+    const base = filter === 'all'
+      ? rowsWithHealth.filter((r) => r.suppressed || r.issueCount > 0 || r.incomplete)
+      : filter === 'suppressed' ? rowsWithHealth.filter((r) => r.suppressed)
+      : filter === 'issues'     ? rowsWithHealth.filter((r) => r.issueCount > 0)
+      :                           rowsWithHealth.filter((r) => r.incomplete)
+    return [...base].sort((a, b) => {
+      if (a.suppressed !== b.suppressed) return a.suppressed ? -1 : 1
+      return b.issueCount - a.issueCount
+    })
+  }, [rowsWithHealth, filter])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="w-full max-w-3xl max-h-[80vh] flex flex-col rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-slate-500" />
+            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Listing Health</span>
+            <span className="text-xs text-slate-400">{counts.flagged} of {rows.length} SKU{rows.length !== 1 ? 's' : ''} flagged</span>
+          </div>
+          <button type="button" onClick={onClose} className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Filter strip */}
+        <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
+          {([
+            { key: 'all' as HealthFilter,        label: `All flagged · ${counts.flagged}` },
+            { key: 'suppressed' as HealthFilter, label: `Suppressed · ${counts.suppressed}`, cls: 'text-red-600 dark:text-red-400' },
+            { key: 'issues' as HealthFilter,     label: `Has issues · ${counts.issues}`,    cls: 'text-amber-600 dark:text-amber-400' },
+            { key: 'incomplete' as HealthFilter, label: `Incomplete · ${counts.incomplete}`, cls: 'text-slate-500 dark:text-slate-400' },
+          ]).map(({ key, label, cls }) => (
+            <button key={key} type="button"
+              onClick={() => setFilter(key)}
+              className={cn(
+                'text-xs px-2 py-0.5 rounded-full border transition-colors',
+                filter === key
+                  ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-700 dark:text-blue-300'
+                  : cn('border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800', cls ?? 'text-slate-600 dark:text-slate-300'),
+              )}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Table */}
+        <div className="overflow-auto flex-1">
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-2 text-slate-400">
+              <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+              <span className="text-sm">No issues found — all SKUs look healthy.</span>
+            </div>
+          ) : (
+            <table className="w-full text-xs border-collapse">
+              <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800/80 z-10">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 w-40">SKU</th>
+                  <th className="text-left px-3 py-2 font-medium text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 w-16">Type</th>
+                  <th className="text-center px-3 py-2 font-medium text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 w-24">Status</th>
+                  <th className="text-center px-3 py-2 font-medium text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 w-20">Issues</th>
+                  <th className="text-center px-3 py-2 font-medium text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 w-24">Required</th>
+                  <th className="text-left px-3 py-2 font-medium text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">Suppression / Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(({ row, suppressed, issueCount, issueSeverity, suppressionReason, filled, total }) => {
+                  const sku = String(row.item_sku ?? '—')
+                  const parentage = String(row.parentage_level ?? '')
+                  const isParent = parentage.toLowerCase() === 'parent'
+                  const isChild = parentage.toLowerCase() === 'child'
+                  const listingStatus = row._listingStatus ? String(row._listingStatus) : null
+                  return (
+                    <tr key={row._rowId as string} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-3 py-1.5 font-mono text-[11px] text-slate-700 dark:text-slate-300 max-w-[160px] truncate">
+                        {isChild && <span className="inline-block w-3 mr-0.5 text-slate-300">↳</span>}
+                        {sku}
+                      </td>
+                      <td className="px-3 py-1.5 text-slate-400 dark:text-slate-500">
+                        {isParent ? 'parent' : isChild ? 'child' : 'single'}
+                      </td>
+                      <td className="px-3 py-1.5 text-center">
+                        {suppressed
+                          ? <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400 font-medium"><AlertCircle className="w-3 h-3" />Suppressed</span>
+                          : listingStatus
+                          ? <span className={cn('font-medium',
+                              (listingStatus === 'ACTIVE' || listingStatus === 'BUYABLE') ? 'text-emerald-600 dark:text-emerald-400'
+                              : listingStatus === 'INACTIVE' ? 'text-amber-500 dark:text-amber-400'
+                              : 'text-slate-400'
+                            )}>{listingStatus}</span>
+                          : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                      </td>
+                      <td className="px-3 py-1.5 text-center">
+                        {issueCount > 0
+                          ? <span className={cn('font-medium tabular-nums',
+                              issueSeverity === 'ERROR' ? 'text-orange-600 dark:text-orange-400' : 'text-amber-600 dark:text-amber-400'
+                            )}>{issueCount}{issueSeverity ? ` ${issueSeverity.slice(0,3).toLowerCase()}` : ''}</span>
+                          : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                      </td>
+                      <td className="px-3 py-1.5 text-center">
+                        {total > 0
+                          ? <span className={cn('font-mono tabular-nums',
+                              filled === total ? 'text-emerald-600 dark:text-emerald-400'
+                              : filled === 0 ? 'text-red-500 dark:text-red-400'
+                              : 'text-amber-600 dark:text-amber-400'
+                            )}>{filled}/{total}</span>
+                          : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                      </td>
+                      <td className="px-3 py-1.5 text-slate-500 dark:text-slate-400 truncate max-w-[220px]" title={suppressionReason ?? undefined}>
+                        {suppressionReason ?? <span className="text-slate-300 dark:text-slate-600">—</span>}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── ContextMenu ────────────────────────────────────────────────────────
 
