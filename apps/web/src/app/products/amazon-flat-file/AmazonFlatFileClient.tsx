@@ -855,7 +855,7 @@ export default function AmazonFlatFileClient({
     })
   }, [])
   // submissionHistory is written to localStorage but no longer displayed (HistoryModal fetches live)
-  const [, setSubmissionHistory] = useState<SubmissionRecord[]>([])
+  const [submissionHistory, setSubmissionHistory] = useState<SubmissionRecord[]>([])
   const [historyOpen, setHistoryOpen] = useState(false)
   // versionPanelOpen kept to handle "Version history…" menu — redirects to historyOpen
 
@@ -2170,6 +2170,11 @@ export default function AmazonFlatFileClient({
     return () => clearInterval(t)
   }, [lastLocalSave])
 
+  // P8.4 — cleanup the latency flash timer on unmount
+  useEffect(() => () => {
+    if (lastSwitchMsTimerRef.current) clearTimeout(lastSwitchMsTimerRef.current)
+  }, [])
+
   const lastSaveLabel = useMemo(() => {
     if (!lastLocalSave) return null
     const sec = Math.round((Date.now() - lastLocalSave) / 1000)
@@ -2273,6 +2278,10 @@ export default function AmazonFlatFileClient({
     if (perf.to !== `${mp.toUpperCase()}·${pt.toUpperCase()}`) return
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
     const ms = Math.round(now - perf.startedAt)
+    // P8.4 — expose latency to the market tab; clear after 2.5 s
+    setLastSwitchMs(ms)
+    if (lastSwitchMsTimerRef.current) clearTimeout(lastSwitchMsTimerRef.current)
+    lastSwitchMsTimerRef.current = setTimeout(() => setLastSwitchMs(null), 2500)
     if (process.env.NODE_ENV !== 'production') {
       const tag = ms > 1000 ? 'slow' : ms < 50 ? 'instant' : 'ok'
       // eslint-disable-next-line no-console
@@ -2465,6 +2474,10 @@ export default function AmazonFlatFileClient({
   // already conveyed by the Save / submit button. Recomputes whenever the
   // user switches market or PT, which is exactly when a fresh switch could
   // have stashed a new draft.
+  // P8.4 — latency flash on the active market tab
+  const [lastSwitchMs, setLastSwitchMs] = useState<number | null>(null)
+  const lastSwitchMsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const otherMarketsDirtyCount = useMemo<Record<string, number>>(() => {
     if (typeof window === 'undefined' || !productType) return {}
     const out: Record<string, number> = {}
@@ -3694,9 +3707,16 @@ export default function AmazonFlatFileClient({
                 const label = done && errs > 0
                   ? `${e.status} · ${errs} error${errs === 1 ? '' : 's'}`
                   : (e.status ?? '…')
+                const inFlight = !done && !failed
                 return (
                   <span key={e.market} title={e.error ?? label}
-                    className={cn('text-xs font-medium px-2 py-0.5 rounded-full border', cls)}>
+                    className={cn('inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full border', cls)}>
+                    {inFlight && (
+                      <span className="relative flex h-1.5 w-1.5 flex-shrink-0">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500" />
+                      </span>
+                    )}
                     {e.market}: {label}
                   </span>
                 )
@@ -4068,6 +4088,36 @@ export default function AmazonFlatFileClient({
                   />
                 )}
               </div>
+              {/* P8.1 — Feed sparkline: last 10 submissions as coloured dots */}
+              {submissionHistory.length > 0 && (() => {
+                const dots = submissionHistory.slice(-10)
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setHistoryOpen(true)}
+                    title={`Last ${dots.length} submission${dots.length !== 1 ? 's' : ''} — click to open history`}
+                    className="inline-flex items-center gap-px h-7 px-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    aria-label="Feed submission history sparkline"
+                  >
+                    {dots.map((s, i) => {
+                      const isTerminalOk = s.status === 'DONE' && (s.errorCount ?? 0) === 0
+                      const isTerminalWarn = s.status === 'DONE' && (s.errorCount ?? 0) > 0
+                      const isFatal = s.status === 'FATAL' || s.status === 'CANCELLED'
+                      const cls = isFatal ? 'bg-red-500 dark:bg-red-400'
+                        : isTerminalWarn ? 'bg-amber-400 dark:bg-amber-300'
+                        : isTerminalOk ? 'bg-emerald-500 dark:bg-emerald-400'
+                        : 'bg-slate-300 dark:bg-slate-600 animate-pulse'
+                      return (
+                        <span
+                          key={`${s.id}-${i}`}
+                          className={`inline-block w-1.5 h-4 rounded-sm ${cls}`}
+                          title={`${s.market} · ${s.status}${s.errorCount ? ` · ${s.errorCount} errors` : ''}`}
+                        />
+                      )
+                    })}
+                  </button>
+                )
+              })()}
               {/* History — same slot/position as eBay */}
               <SharedTbBtn
                 icon={<History className="w-3.5 h-3.5" />}
@@ -4150,12 +4200,29 @@ export default function AmazonFlatFileClient({
                         : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400')}>
                     {isSwitching && <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" aria-hidden />}
                     {m}
-                    {dirtyCount > 0 && (
+                    {(() => {
+                      const count = isActive ? dirtyRows.length : dirtyCount
+                      if (!count) return null
+                      return (
+                        <span
+                          className={cn(
+                            'ml-1 inline-flex items-center justify-center min-w-[14px] h-3.5 px-1 rounded-sm text-[9px] font-semibold leading-none',
+                            isActive
+                              ? 'bg-amber-500 text-white'
+                              : 'bg-amber-500 text-white',
+                          )}
+                          title={`${count} unsaved change${count === 1 ? '' : 's'}${isActive ? '' : ` on ${m}`}`}
+                        >
+                          {count}
+                        </span>
+                      )
+                    })()}
+                    {isActive && lastSwitchMs !== null && (
                       <span
-                        className="ml-1 inline-flex items-center justify-center min-w-[14px] h-3.5 px-1 rounded-sm bg-amber-500 text-white text-[9px] font-semibold leading-none"
-                        title={`${dirtyCount} unsaved change${dirtyCount === 1 ? '' : 's'} on ${m}`}
+                        className="ml-1 text-[8px] font-mono leading-none text-slate-400 dark:text-slate-500 tabular-nums"
+                        title={`Market switch took ${lastSwitchMs}ms`}
                       >
-                        {dirtyCount}
+                        {lastSwitchMs < 1000 ? `${lastSwitchMs}ms` : `${(lastSwitchMs / 1000).toFixed(1)}s`}
                       </span>
                     )}
                   </button>
