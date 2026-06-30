@@ -1684,6 +1684,49 @@ export class AmazonFlatFileService {
     return out
   }
 
+  /**
+   * Phase 3 (FBA visibility) — every FBA SKU the batch would DELETE
+   * (record_action=delete). Deleting/relisting an FBA listing does NOT touch the
+   * units already in Amazon's warehouse: they stay bound to this SKU's FNSKU and
+   * become unfulfillable (stranded) unless the operator creates a removal order,
+   * sells through, or relabels to a new FNSKU. We never automate any of that —
+   * we surface it as a pre-publish WARNING so it's never a silent surprise.
+   * FBA detection mirrors findFbaQtyRows (Product.fulfillmentMethod==='FBA' OR
+   * positive AMAZON-EU-FBA stock). ≤2 queries.
+   */
+  async findFbaDeleteRows(rows: any[]): Promise<string[]> {
+    const delSkus = [
+      ...new Set(
+        (rows ?? [])
+          .filter((r) => String(r?.record_action ?? '').trim().toLowerCase() === 'delete')
+          .map((r) => String(r?.item_sku ?? '').trim())
+          .filter(Boolean),
+      ),
+    ]
+    if (delSkus.length === 0) return []
+
+    const products = await this.prisma.product.findMany({
+      where: { sku: { in: delSkus } },
+      select: { id: true, sku: true, fulfillmentMethod: true },
+    })
+    const fbaSkus = new Set<string>()
+    const needStock: Array<{ id: string; sku: string }> = []
+    for (const p of products) {
+      if (String(p.fulfillmentMethod ?? '').toUpperCase() === 'FBA') fbaSkus.add(p.sku)
+      else needStock.push({ id: p.id, sku: p.sku })
+    }
+    if (needStock.length > 0) {
+      const stock = await this.prisma.stockLevel.findMany({
+        where: { productId: { in: needStock.map((n) => n.id) }, quantity: { gt: 0 }, location: { code: 'AMAZON-EU-FBA' } },
+        select: { productId: true },
+      })
+      const fbaIds = new Set(stock.map((s) => s.productId))
+      for (const n of needStock) if (fbaIds.has(n.id)) fbaSkus.add(n.sku)
+    }
+
+    return delSkus.filter((s) => fbaSkus.has(s))
+  }
+
   buildJsonFeedBody(
     rows: FlatFileRow[],
     marketplace: string,
