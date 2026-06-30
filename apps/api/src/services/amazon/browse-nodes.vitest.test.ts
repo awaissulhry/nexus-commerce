@@ -47,4 +47,19 @@ describe('extractBrowseNodes', () => {
       { id: '222', path: '222' },
     ])
   })
+
+  it('skips blocks pinned to a different marketplace_id', () => {
+    const s = {
+      properties: {
+        recommended_browse_nodes: {
+          anyOf: [
+            { marketplace_id: { const: 'ATVPDKIKX0DER' }, properties: { value: { enum: ['US_NODE'] } } },
+            { marketplace_id: { const: 'APJ6JRA9NG5V4' }, properties: { value: { enum: ['IT_NODE'], enumNames: ['Italian Path'] } } },
+          ],
+        },
+      },
+    } as Record<string, unknown>
+    expect(extractBrowseNodes(s, 'APJ6JRA9NG5V4')).toEqual([{ id: 'IT_NODE', path: 'Italian Path' }])
+    expect(extractBrowseNodes(s, 'ATVPDKIKX0DER')).toEqual([{ id: 'US_NODE', path: 'US_NODE' }])
+  })
 })
