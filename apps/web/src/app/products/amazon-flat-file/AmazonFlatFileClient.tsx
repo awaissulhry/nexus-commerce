@@ -1357,6 +1357,8 @@ export default function AmazonFlatFileClient({
   // BN.4.3 — Advisory-only warnings (never block submit).
   const mixedFamilies = useMemo(() => mixedTypeFamilies(rows as Array<Record<string, unknown>>), [rows])
   const missingNodeRowIds = useMemo(() => rowsMissingNode(rows as Array<Record<string, unknown>>), [rows])
+  // Display-only count — kept strictly separate from validErrorCount/validWarnCount (those drive blocking logic).
+  const advisoryCount = mixedFamilies.length + missingNodeRowIds.length
 
   // P4 — Map from child rowId → parent's variation_theme, used for axis fingerprint + clone.
   const parentThemeByChildId = useMemo<Map<string, string>>(() => {
@@ -5030,18 +5032,21 @@ export default function AmazonFlatFileClient({
               {(clipboardRange.rMax - clipboardRange.rMin + 1) * (clipboardRange.cMax - clipboardRange.cMin + 1)} cells in clipboard
             </span>
           )}
-          {(validErrorCount > 0 || validWarnCount > 0) && (
+          {(validErrorCount > 0 || validWarnCount > 0 || advisoryCount > 0) && (
             <button
               type="button"
               onClick={() => setShowValidPanel((o) => !o)}
               className={cn(
                 'flex items-center gap-1 ml-auto',
-                validErrorCount > 0 ? 'text-red-500' : 'text-amber-500',
+                validErrorCount > 0 ? 'text-red-500' : validWarnCount > 0 ? 'text-amber-500' : 'text-indigo-500',
               )}
             >
               <AlertTriangle className="w-3 h-3" />
               {validErrorCount > 0 && <span>{validErrorCount} error{validErrorCount !== 1 ? 's' : ''}</span>}
               {validWarnCount > 0 && <span>{validWarnCount} warning{validWarnCount !== 1 ? 's' : ''}</span>}
+              {advisoryCount > 0 && validErrorCount === 0 && validWarnCount === 0 && (
+                <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 px-1.5 rounded-full text-[10px]">{advisoryCount} advisory</span>
+              )}
             </button>
           )}
         </div>
@@ -5056,6 +5061,7 @@ export default function AmazonFlatFileClient({
               Validation
               {validErrorCount > 0 && <span className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 px-1.5 rounded-full text-[10px]">{validErrorCount} error{validErrorCount !== 1 ? 's' : ''}</span>}
               {validWarnCount > 0 && <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 rounded-full text-[10px]">{validWarnCount} warning{validWarnCount !== 1 ? 's' : ''}</span>}
+              {advisoryCount > 0 && <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 px-1.5 rounded-full text-[10px]">{advisoryCount} advisory</span>}
             </span>
             <button type="button" onClick={() => setShowValidPanel(false)} className="text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>
           </div>
