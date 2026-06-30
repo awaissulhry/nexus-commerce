@@ -259,6 +259,57 @@
   max-width: 330px;
 }
 
+/* Title row: clickable name + hover-revealed "Open in new tab" pill.
+   Mirrors the ads-manager campaign-name cell (ads.css .nmw .t + .h10-open). */
+.ptitleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 330px;
+}
+
+.ptitleLink {
+  font-weight: 640;
+  font-size: 12.8px;
+  color: #1f6fde;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.ptitleLink:hover {
+  text-decoration: underline;
+}
+
+/* Exact copy of ads.css .h10-open — hidden until the product cell is hovered. */
+.openBtn {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: #1f6fde;
+  border-radius: 6px;
+  padding: 3px 8px;
+  text-decoration: none;
+  flex-shrink: 0;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.productCell:hover .openBtn {
+  display: inline-flex;
+}
+
+.openBtn:hover {
+  background: #1a60c4;
+}
+
 .psub {
   font-size: 11px;
   color: var(--text-tertiary);
