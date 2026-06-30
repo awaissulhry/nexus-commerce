@@ -1,6 +1,6 @@
 // category-model.vitest.test.ts
 import { describe, it, expect } from 'vitest'
-import { BROWSE_NODE_KEY, PRODUCT_TYPE_KEY, categoryOf, productTypesInUse, assignCategory, mixedTypeFamilies, rowsMissingNode } from './category-model.js'
+import { BROWSE_NODE_KEY, PRODUCT_TYPE_KEY, categoryOf, productTypesInUse, assignCategory, mixedTypeFamilies, rowsMissingNode, formatNodeBreadcrumb } from './category-model.js'
 
 const LABELS = { '2420941031': 'Auto e Moto > … > Giacche', '2420943031': 'Auto e Moto > … > Pantaloni' }
 
@@ -37,6 +37,30 @@ describe('category-model', () => {
   it('assignCategory with null nodeId clears the browse node to empty string', () => {
     const out = assignCategory({ product_type: 'COAT' }, { productType: 'COAT', nodeId: null })
     expect(out.recommended_browse_nodes).toBe('')
+  })
+})
+
+describe('formatNodeBreadcrumb', () => {
+  it('collapses 4 levels to A › … › C › D', () => {
+    expect(formatNodeBreadcrumb('A > B > C > D')).toBe('A › … › C › D')
+  })
+  it('keeps 3 levels as-is', () => {
+    expect(formatNodeBreadcrumb('A > B > C')).toBe('A › B › C')
+  })
+  it('keeps 2 levels as-is', () => {
+    expect(formatNodeBreadcrumb('A > B')).toBe('A › B')
+  })
+  it('collapses 5 levels to A › … › D › E', () => {
+    expect(formatNodeBreadcrumb('A > B > C > D > E')).toBe('A › … › D › E')
+  })
+  it('returns empty string for empty/null/undefined', () => {
+    expect(formatNodeBreadcrumb('')).toBe('')
+    expect(formatNodeBreadcrumb(null)).toBe('')
+    expect(formatNodeBreadcrumb(undefined)).toBe('')
+  })
+  it('real Amazon path: 4 levels → collapses middle', () => {
+    expect(formatNodeBreadcrumb('Auto e Moto > Moto, accessori e componenti > Abbigliamento protettivo > Giacche'))
+      .toBe('Auto e Moto › … › Abbigliamento protettivo › Giacche')
   })
 })
 

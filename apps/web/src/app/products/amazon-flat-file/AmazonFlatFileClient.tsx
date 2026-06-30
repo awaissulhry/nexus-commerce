@@ -43,7 +43,7 @@ import { ChannelStrip } from '../ebay-flat-file/ChannelStrip'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import type { FlatFileAiChange } from '@/components/flat-file/FlatFileGrid.types'
 import { FEED_ERROR_CODES } from './feedErrorCodes'
-import { categoryOf, assignCategory, productTypesInUse, mixedTypeFamilies, rowsMissingNode } from './category-model'
+import { categoryOf, assignCategory, productTypesInUse, mixedTypeFamilies, rowsMissingNode, formatNodeBreadcrumb } from './category-model'
 
 // EH.5 — Lazy-loaded modals, panels, and bars. Each one only ships
 // to the browser when the operator first opens it, so the initial
@@ -419,7 +419,9 @@ function makeEmptyRow(productType: string, _marketplace: string, parentage = '')
 }
 
 // BN.2.1 — synthetic derived column; NEVER enters data/paste/serialize paths.
-const CATEGORY_COL: Column = { id: '__category', fieldRef: '', labelEn: 'Category', labelLocal: 'Category', required: false, kind: 'text', width: 200 }
+// CAT-WIDTH: single source of truth — used in both column def AND sticky-offset math.
+const CATEGORY_COL_WIDTH = 360
+const CATEGORY_COL: Column = { id: '__category', fieldRef: '', labelEn: 'Category', labelLocal: 'Category', required: false, kind: 'text', width: CATEGORY_COL_WIDTH }
 
 // GX.5 — how many trailing blank "canvas" rows to keep so you can always just
 // start typing (auto-grow, like Sheets).
@@ -2131,7 +2133,7 @@ export default function AmazonFlatFileClient({
     let left = 36 + rowHeaderWidth // checkbox(36) + row# (dynamic)
     let catLeft: number | undefined
     const R = categoryInsertAfterIdx
-    const CAT_W = 200 // matches CATEGORY_COL.width
+    const CAT_W = CATEGORY_COL_WIDTH // matches CATEGORY_COL.width — keep these equal
     for (let i = 0; i < Math.min(frozenColCount, allColumns.length); i++) {
       out[i] = left
       left += colWidths[allColumns[i].id] ?? allColumns[i].width
@@ -5981,18 +5983,21 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
         // No event handlers → never enters selection/paste/nav paths.
         if (col.id === 'record_action') {
           const cat = categoryOf(row as Record<string, unknown>, browseNodeLabels)
-          const leaf = cat.nodePath ? cat.nodePath.split('>').pop()!.trim() : (cat.nodeId ?? '')
+          const crumb = formatNodeBreadcrumb(cat.nodePath)
           const show = !row._ghost && !!(cat.productType || cat.nodeId)
           return [
             _cell,
             <td key="__category"
               style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width, ...(categoryStickyLeft !== undefined ? { position: 'sticky' as const, left: categoryStickyLeft, zIndex: 22 } : {}) }}
               className="border-b border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-              <div className="px-1.5 flex items-center gap-1" style={{ height: rowHeight }}>
-                {show
-                  ? <Badge variant="info" size="sm"><span className="truncate max-w-[150px]">{leaf ? `${leaf} · ` : ''}{cat.productType}</span></Badge>
-                  : <span className="text-slate-300 dark:text-slate-600">—</span>
-                }
+              <div className="px-1.5 flex items-center gap-1.5 min-w-0" style={{ height: rowHeight }} title={cat.nodePath ?? undefined}>
+                {show ? (
+                  <>
+                    {cat.productType && <Badge variant="info" size="sm">{cat.productType}</Badge>}
+                    {crumb && <span className="text-[11px] text-slate-600 dark:text-slate-300 truncate">{crumb}</span>}
+                    {!cat.nodeId && cat.productType && <span className="text-[10px] text-amber-500 shrink-0">no node</span>}
+                  </>
+                ) : <span className="text-slate-300 dark:text-slate-600">—</span>}
               </div>
             </td>,
           ]

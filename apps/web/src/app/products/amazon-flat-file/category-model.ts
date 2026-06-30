@@ -46,6 +46,17 @@ export function mixedTypeFamilies(rows: Array<Record<string, unknown>>): string[
   return out
 }
 
+/** Format a browse-node path for the Category chip: ' › ' separators, and when
+ *  there are >3 levels, collapse the middle so the leaf is never lost:
+ *  'A › B › C › D' -> 'A › … › C › D'. Returns '' for empty. */
+export function formatNodeBreadcrumb(path: string | null | undefined): string {
+  if (!path) return ''
+  const segs = path.split('>').map((s) => s.trim()).filter(Boolean)
+  if (segs.length === 0) return ''
+  if (segs.length <= 3) return segs.join(' › ')
+  return `${segs[0]} › … › ${segs[segs.length - 2]} › ${segs[segs.length - 1]}`
+}
+
 /** _rowIds of real (non-ghost, non-parent) rows that HAVE a product type but NO browse node. */
 export function rowsMissingNode(rows: Array<Record<string, unknown>>): string[] {
   return rows
