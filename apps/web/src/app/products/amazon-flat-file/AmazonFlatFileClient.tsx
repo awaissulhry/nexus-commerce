@@ -2405,7 +2405,7 @@ export default function AmazonFlatFileClient({
         recordSwitchPerf(mp, pt, 'cache')
       }
     }
-    if (!paintedFromCache) setLoading(true)
+    if (!paintedFromCache) { setLoading(true); setManifest(null) }
 
     const backend = getBackendUrl()
     const qs = new URLSearchParams({ marketplace: mp, productType: pt, ...(force ? { force: '1' } : {}) })
@@ -2538,8 +2538,15 @@ export default function AmazonFlatFileClient({
     const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
     params.set('marketplace', nextMpU)
     params.set('productType', nextPtU)
-    router.replace(`?${params.toString()}`, { scroll: false })
-  }, [router, marketplace, productType, familyId])
+    // Bypass router.replace() to avoid the Next.js server round-trip on every market
+    // switch (force-dynamic re-fetches rows on every router navigation). We drive state
+    // directly and sync the URL via the History API; the URL effect below is a no-op
+    // (marketplace already matches) except on hard refresh or direct-URL navigation.
+    window.history.replaceState(null, '', `?${params.toString()}`)
+    setMarketplace(nextMpU)
+    setProductType(nextPtU)
+    void loadData(nextMpU, nextPtU)
+  }, [marketplace, productType, familyId, loadData])
 
   // FF-MS.5 — Per-market dirty counts for the marketplace selector. Reads
   // each other market's localStorage draft (for the CURRENT productType) and
