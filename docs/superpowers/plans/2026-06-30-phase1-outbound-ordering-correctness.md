@@ -226,15 +226,24 @@ import { coalescePendingQuantityRows } from './sync-coalesce.js'
 In `cascadeQuantityToListings`, inside the `if (queueRowsToCreate.length > 0) {` block, **immediately before** `await tx.outboundSyncQueue.createMany({ data: queueRowsToCreate })`, insert:
 
 ```ts
+    // P1 — the listings that actually receive a fresh queue row this cascade.
+    // Scope cancel == replace so coalesce can't cancel a pending row for a
+    // channel that isn't getting a replacement (a cascaded listing on a
+    // non-syncable channel is in cascadedListingIds but has no fresh row).
+    const replacedListingIds = queueRowsToCreate
+      .map((r) => r.channelListingId)
+      .filter((id): id is string => Boolean(id))
     // P1 — cancel stale PENDING quantity rows for these listings before
     // inserting the fresh ones, so an older snapshot can't dispatch after the
     // new value. Same tx → atomic. Kill-switch: NEXUS_SYNC_ORDERING_V2=0.
     if (process.env.NEXUS_SYNC_ORDERING_V2 !== '0') {
-      await coalescePendingQuantityRows(tx, cascadedListingIds)
+      await coalescePendingQuantityRows(tx, replacedListingIds)
     }
 ```
 
-(The existing `justEnqueued` query that follows already filters to PENDING QUANTITY_UPDATE rows for `cascadedListingIds`, so it will now pick up exactly the freshly-inserted rows.)
+Then change the following `justEnqueued` query's `where.channelListingId.in` and `take` from `cascadedListingIds` to `replacedListingIds` so the re-query scope matches the fresh rows exactly.
+
+> **Correction (reviewer P1.3 minor, applied 2026-06-30):** the original plan coalesced on `cascadedListingIds`, which is a superset (it includes cascaded listings on channels outside `validTargets`). Scoping to `replacedListingIds` (the listings in `queueRowsToCreate`) makes cancel-scope == replace-scope. For the in-scope channel set (Amazon/eBay/Shopify, all `validTargets`) the two sets are equal, so behavior is unchanged today; this removes a latent footgun if a future channel is cascaded but not synced.
 
 - [ ] **Step 2: Re-read at dispatch — Amazon** — `outbound-sync.service.ts`, in `syncToAmazon`
 
