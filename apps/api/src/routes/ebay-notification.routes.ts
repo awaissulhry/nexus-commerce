@@ -101,6 +101,14 @@ function verifyEbaySignature(
   }
 }
 
+// P4 — legacy Trading-API sale topics (what setup-ebay-notifications subscribes
+// to). Module-scope so the hot webhook handler doesn't re-allocate per request.
+const LEGACY_SALE_TOPICS = new Set([
+  'AuctionCheckoutComplete',
+  'FixedPriceTransaction',
+  'ItemSold',
+])
+
 export default async function ebayNotificationRoutes(app: FastifyInstance): Promise<void> {
 
   // ── GET /api/admin/ebay-token-status ──────────────────────────────
@@ -467,11 +475,6 @@ ${eventXml}
     // eBay sales would only decrement stock on the 15-min poll. Trigger the same
     // idempotent recent-window sync the REST `marketplace.order.created` branch
     // uses, so a sale decrements stock in real time on the legacy path too.
-    const LEGACY_SALE_TOPICS = new Set([
-      'AuctionCheckoutComplete',
-      'FixedPriceTransaction',
-      'ItemSold',
-    ])
     if (LEGACY_SALE_TOPICS.has(topic)) {
       void (async () => {
         try {
