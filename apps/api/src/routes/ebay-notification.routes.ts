@@ -460,6 +460,47 @@ ${eventXml}
       return reply.status(204).send()
     }
 
+    // P4 — legacy Trading-API sale notifications (AuctionCheckoutComplete /
+    // FixedPriceTransaction / ItemSold) are exactly what setup-ebay-notifications
+    // subscribes to, but they don't carry a REST `orderId`, so without this they'd
+    // fall through the `!ebayOrderId` guard below and never drive ingestion —
+    // eBay sales would only decrement stock on the 15-min poll. Trigger the same
+    // idempotent recent-window sync the REST `marketplace.order.created` branch
+    // uses, so a sale decrements stock in real time on the legacy path too.
+    const LEGACY_SALE_TOPICS = new Set([
+      'AuctionCheckoutComplete',
+      'FixedPriceTransaction',
+      'ItemSold',
+    ])
+    if (LEGACY_SALE_TOPICS.has(topic)) {
+      void (async () => {
+        try {
+          const connections = await (prisma as any).channelConnection.findMany({
+            where: { channelType: 'EBAY', isActive: true },
+            select: { id: true },
+          })
+          const { ebayOrdersService } = await import('../services/ebay-orders.service.js')
+          for (const conn of connections) {
+            try {
+              await ebayOrdersService.syncEbayOrders(conn.id)
+            } catch (err) {
+              logger.warn('[eBay notification] legacy-sale order sync failed for connection', {
+                connectionId: conn.id,
+                error: err instanceof Error ? err.message : String(err),
+              })
+            }
+          }
+          logger.info('[eBay notification] legacy sale notification → order sync complete', { topic })
+        } catch (err) {
+          logger.warn('[eBay notification] legacy-sale handling failed', {
+            topic,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      })()
+      return reply.status(204).send()
+    }
+
     if (!ebayOrderId) {
       return reply.status(204).send()
     }
