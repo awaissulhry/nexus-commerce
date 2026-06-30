@@ -43,6 +43,7 @@ import { ChannelStrip } from '../ebay-flat-file/ChannelStrip'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import type { FlatFileAiChange } from '@/components/flat-file/FlatFileGrid.types'
 import { FEED_ERROR_CODES } from './feedErrorCodes'
+import { categoryOf } from './category-model'
 
 // EH.5 — Lazy-loaded modals, panels, and bars. Each one only ships
 // to the browser when the operator first opens it, so the initial
@@ -415,6 +416,9 @@ function makeEmptyRow(productType: string, _marketplace: string, parentage = '')
     variation_theme: '',
   }
 }
+
+// BN.2.1 — synthetic derived column; NEVER enters data/paste/serialize paths.
+const CATEGORY_COL: Column = { id: '__category', fieldRef: '', labelEn: 'Category', labelLocal: 'Category', required: false, kind: 'text', width: 200 }
 
 // GX.5 — how many trailing blank "canvas" rows to keep so you can always just
 // start typing (auto-grow, like Sheets).
@@ -1237,6 +1241,30 @@ export default function AmazonFlatFileClient({
     () => (effectiveManifest?.groups ?? []).flatMap((g) => g.columns),
     [effectiveManifest],
   )
+
+  // BN.2.1 — browse-node id→path label map (drives the Category chip).
+  const browseNodeLabels = useMemo<Record<string, string>>(() => {
+    const col = manifestColumns.find((c) => c.id === 'recommended_browse_nodes' || /^recommended_browse_nodes\b/.test(c.fieldRef))
+    return col?.optionLabels ?? {}
+  }, [manifestColumns])
+
+  // BN.2.1 — position helpers for the synthetic Category column injection.
+  // categoryInsertAfterIdx: allColumns index of record_action (insert Category after it).
+  // categoryGroupInsertAfterIdx: displayGroups index of the group that contains record_action.
+  // These drive the 3 render-side injections; data/paste/nav/serialize keep using allColumns.
+  const categoryInsertAfterIdx = useMemo(
+    () => allColumns.findIndex((c) => c.id === 'record_action'),
+    [allColumns],
+  )
+  const categoryGroupInsertAfterIdx = useMemo(() => {
+    if (categoryInsertAfterIdx < 0) return -1
+    let cum = 0
+    for (let gi = 0; gi < displayGroups.length; gi++) {
+      cum += displayGroups[gi].columns.length
+      if (cum > categoryInsertAfterIdx) return gi
+    }
+    return displayGroups.length - 1
+  }, [displayGroups, categoryInsertAfterIdx])
 
   // Field ID → label map. Powers the PullDiffModal so the diff table
   // shows "Title" instead of "item_name". Falls back to the field id
@@ -4641,9 +4669,10 @@ export default function AmazonFlatFileClient({
                   style={{ width: rowHeaderWidth, minWidth: rowHeaderWidth }}
                   rowSpan={3}>#</th>
 
-                {displayGroups.map((g) => {
+                {/* BN.2.1 — inject Category band after the group containing record_action */}
+                {displayGroups.flatMap((g, gi) => {
                   const c = gColor(g.color)
-                  return (
+                  const groupTh = (
                     <th key={g.id} colSpan={g.columns.length}
                       className={cn('px-2 py-1 text-xs font-bold border-b border-r border-slate-200 dark:border-slate-700 text-left whitespace-nowrap', c.header)}>
                       {g.labelLocal}
@@ -4652,15 +4681,23 @@ export default function AmazonFlatFileClient({
                       )}
                     </th>
                   )
+                  if (gi === categoryGroupInsertAfterIdx) {
+                    return [groupTh, <th key="__category-band" style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width }}
+                      className="px-2 py-1 text-xs font-bold border-b border-r border-slate-200 dark:border-slate-700 text-left whitespace-nowrap text-slate-500 dark:text-slate-400">
+                      {CATEGORY_COL.labelLocal}
+                    </th>]
+                  }
+                  return [groupTh]
                 })}
               </tr>
 
               {/* Row 2: English column labels + column resize handles */}
               <tr>
-                {allColumns.map((col, colIdx) => {
+                {/* BN.2.1 — flatMap injects Category th after record_action; ci/colIdx stay allColumns-based */}
+                {allColumns.flatMap((col, colIdx) => {
                   const c = gColor(colToGroup.get(col.id)?.color ?? 'slate')
                   const w = colWidths[col.id] ?? col.width
-                  return (
+                  const _th = (
                     <th key={`en-${col.id}`}
                       style={{ minWidth: w, width: w, cursor: 'pointer', ...(colIdx < frozenColCount ? { position: 'sticky' as const, left: stickyLeftByColIdx[colIdx] ?? 0, zIndex: 25 } : {}) }}
                       className={cn('relative group/th px-2 py-0.5 text-left text-xs font-semibold border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none hover:bg-blue-50/50 dark:hover:bg-blue-950/10', c.text,
@@ -4715,14 +4752,22 @@ export default function AmazonFlatFileClient({
                       </div>
                     </th>
                   )
+                  if (col.id === 'record_action') {
+                    return [_th, <th key="en-__category" style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width }}
+                      className="px-2 py-0.5 text-left text-xs font-semibold border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none text-slate-500 dark:text-slate-400">
+                      {CATEGORY_COL.labelEn}
+                    </th>]
+                  }
+                  return [_th]
                 })}
               </tr>
 
               {/* Row 3: Italian column labels + max-length hint */}
               <tr>
-                {allColumns.map((col, colIdx) => {
+                {/* BN.2.1 — flatMap injects Category th after record_action; ci/colIdx stay allColumns-based */}
+                {allColumns.flatMap((col, colIdx) => {
                   const w = colWidths[col.id] ?? col.width
-                  return (
+                  const _th = (
                     <th key={`it-${col.id}`}
                       style={{ minWidth: w, width: w, ...(colIdx < frozenColCount ? { position: 'sticky' as const, left: stickyLeftByColIdx[colIdx] ?? 0, zIndex: 25 } : {}) }}
                       className={cn('px-2 py-0.5 text-left text-xs font-normal border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap text-slate-400 dark:text-slate-500 italic',
@@ -4735,6 +4780,13 @@ export default function AmazonFlatFileClient({
                       )}
                     </th>
                   )
+                  if (col.id === 'record_action') {
+                    return [_th, <th key="it-__category" style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width }}
+                      className="px-2 py-0.5 text-left text-xs font-normal border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap text-slate-400 dark:text-slate-500 italic">
+                      {CATEGORY_COL.labelLocal}
+                    </th>]
+                  }
+                  return [_th]
                 })}
               </tr>
             </thead>
@@ -4810,13 +4862,14 @@ export default function AmazonFlatFileClient({
                   parentVariationTheme={parentThemeByChildId.get(row._rowId as string)}
                   onCloneVariant={handleCloneVariant}
                   onSwitchMarket={(m) => navigateTo(m, productType)}
+                  browseNodeLabels={browseNodeLabels}
                 />
               ))}
 
               {/* Empty search result */}
               {searchQuery && searchMode === 'rows' && displayRows.length === 0 && (
                 <tr>
-                  <td colSpan={allColumns.length + 2} className="px-6 py-6 text-center text-sm text-slate-400 italic">
+                  <td colSpan={allColumns.length + 3} className="px-6 py-6 text-center text-sm text-slate-400 italic">
                     No rows match &ldquo;{searchQuery}&rdquo;
                   </td>
                 </tr>
@@ -4825,7 +4878,7 @@ export default function AmazonFlatFileClient({
               {/* G.2 — genuinely empty: beginner CTA distinguishing parent (variations) vs single item */}
               {!searchQuery && displayRows.length === 0 && (
                 <tr>
-                  <td colSpan={allColumns.length + 2} className="px-6 py-10 text-center">
+                  <td colSpan={allColumns.length + 3} className="px-6 py-10 text-center">
                     <div className="flex flex-col items-center gap-1.5">
                       <p className="text-sm font-medium text-slate-600 dark:text-slate-300">No products yet</p>
                       <p className="text-xs text-slate-400 max-w-md">Add your first product to get started — &ldquo;Add a parent&rdquo; for a listing with variations (sizes, colours), or &ldquo;Add a single item&rdquo; if it has none.</p>
@@ -4844,7 +4897,7 @@ export default function AmazonFlatFileClient({
 
               {/* Add-row bar */}
               <tr>
-                <td colSpan={allColumns.length + 2} className="px-4 py-2 border-t border-dashed border-slate-200 dark:border-slate-700">
+                <td colSpan={allColumns.length + 3} className="px-4 py-2 border-t border-dashed border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-2 relative">
                     <Button size="sm" variant="ghost"
                       onClick={() => setAddRowsPanel({ type: 'row', position: normSel ? 'below' : 'end' })}>
@@ -5345,6 +5398,8 @@ interface RowProps {
   parentVariationTheme?: string
   onCloneVariant: (row: Row) => void
   onSwitchMarket: (market: string) => void
+  /** BN.2.1 — browse-node id→path labels for the derived Category chip. */
+  browseNodeLabels: Record<string, string>
 }
 
 // Per-row required-fields completeness. Counts the SAME required cells the grid
@@ -5428,7 +5483,7 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
   onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
   onCellPointerDown, onCellDoubleClick, onRowSelect, onFillHandlePointerDown, onFillToBottom, onFillDrop,
   showOverrideBadges, showCascadeButtons, onCascadeRow,
-  parentVariationTheme, onCloneVariant, onSwitchMarket }: RowProps) {
+  parentVariationTheme, onCloneVariant, onSwitchMarket, browseNodeLabels }: RowProps) {
   const rowId = row._rowId as string
   const status = row._status
   const canDragRef = useRef(false)
@@ -5806,8 +5861,8 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
         </div>
       </td>
 
-      {/* Data cells */}
-      {columns.map((col, ci) => {
+      {/* Data cells — BN.2.1: flatMap injects __category td after record_action; ci stays allColumns-based */}
+      {columns.flatMap((col, ci) => {
         const isActive = activeCell?.rowId === rowId && activeCell?.colId === col.id
         const groupColor = colToGroup.get(col.id)?.color ?? 'slate'
         const w = colWidths[col.id] ?? col.width
@@ -5877,7 +5932,7 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
         const isFbaQtyCell = col.id === 'fulfillment_availability__quantity'
           && /^(AMAZON|AFN|FBA)/.test(String(row.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase())
 
-        return (
+        const _cell = (
           <SpreadsheetCell
             key={col.id}
             col={col}
@@ -5916,6 +5971,27 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
             stickyLeft={stickyLeft}
           />
         )
+        // BN.2.1 — inject derived Category td immediately after record_action.
+        // No event handlers → never enters selection/paste/nav paths.
+        if (col.id === 'record_action') {
+          const cat = categoryOf(row as Record<string, unknown>, browseNodeLabels)
+          const leaf = cat.nodePath ? cat.nodePath.split('>').pop()!.trim() : (cat.nodeId ?? '')
+          const show = !row._ghost && !!(cat.productType || cat.nodeId)
+          return [
+            _cell,
+            <td key="__category"
+              style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width }}
+              className="border-b border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+              <div className="px-1.5 flex items-center gap-1" style={{ height: rowHeight }}>
+                {show
+                  ? <Badge variant="info" size="sm"><span className="truncate max-w-[150px]">{leaf ? `${leaf} · ` : ''}{cat.productType}</span></Badge>
+                  : <span className="text-slate-300 dark:text-slate-600">—</span>
+                }
+              </div>
+            </td>,
+          ]
+        }
+        return [_cell]
       })}
     </tr>
   )
