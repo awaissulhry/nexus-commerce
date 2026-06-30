@@ -795,11 +795,25 @@ export class OutboundSyncService {
           fbaSellable: 0,
           stockBuffer: cl?.stockBuffer ?? 0,
         }).available;
-        if (payload.quantity > cap) {
+        const requested = payload.quantity
+        const { quantity: clampedQty, clamped } = applyOversellClamp(requested, cap)
+        if (clamped) {
           console.warn(
-            `[EBAY] capping ${sku} quantity ${payload.quantity} -> ${cap} (warehouse available ${warehouseAvailable}, buffer ${cl?.stockBuffer ?? 0})`,
+            `[EBAY] capping ${sku} quantity ${requested} -> ${clampedQty} (warehouse available ${warehouseAvailable}, buffer ${cl?.stockBuffer ?? 0})`,
           );
-          payload.quantity = cap;
+          payload.quantity = clampedQty;
+          try {
+            publishOrderEvent({
+              type: 'sync.oversell.clamped',
+              sku,
+              channel: 'EBAY',
+              marketplace: marketplaceId,
+              requested,
+              clampedTo: clampedQty,
+              available: cap,
+              ts: Date.now(),
+            })
+          } catch { /* observability must never break the sync */ }
         }
       }
     }
