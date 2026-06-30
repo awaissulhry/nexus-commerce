@@ -261,3 +261,8 @@ git push
 **3. Type consistency** — `applyOversellClamp(number, number): { quantity, clamped }` defined in Task 1, used identically in Tasks 2-3. The `sync.oversell.clamped` event shape (Task 1) matches both `publishOrderEvent` call sites (Tasks 2-3): `sku/channel/marketplace/requested/clampedTo/available/ts`.
 
 **Risk note:** Amazon-FBM clamp is the only new behavior and is flag-guarded (`NEXUS_OVERSELL_CLAMP=0` disables). eBay's clamp value is unchanged (only an event is added). FBA is explicitly excluded from both. The extra warehouse query in `syncToAmazon` runs once per FBM Amazon dispatch — acceptable (mirrors eBay).
+
+## Operator runbook note (from consolidated review)
+
+- `NEXUS_OVERSELL_CLAMP=0` disables only the **Amazon-FBM** clamp. eBay's warehouse clamp is pre-existing defence-in-depth and stays **unconditional**, and its new `sync.oversell.clamped` emission is likewise unconditional. So with both `NEXUS_OVERSELL_CLAMP=0` and `NEXUS_SYNC_ORDERING_V2=0` the **pushed quantities** are byte-identical to pre-change, but the eBay path may still emit `sync.oversell.clamped` events on RT alerting (it only fires when eBay was *already* clamping silently before — i.e. it surfaces a previously-hidden oversell condition, it does not change what's pushed). Don't be alarmed by these events when the kill-switches are flipped.
+- `sync.oversell.clamped` events are advisory observability (an oversell was *prevented*); they are not failures.
