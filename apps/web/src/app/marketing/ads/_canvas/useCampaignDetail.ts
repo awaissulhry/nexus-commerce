@@ -32,7 +32,11 @@ export function useCampaignDetail(localId: string | null): {
     }
     let alive = true
     setLoading(true)
-    fetch(`${getBackendUrl()}/api/advertising/campaigns/${localId}`, { cache: 'no-store' })
+    // windowDays=30 keeps the detail (ad-group) metrics on the SAME 30-day window
+    // as the campaign node + header ("Last 30 days"); the detail endpoint otherwise
+    // defaults to 7d, which made the breakdown look like it didn't reconcile.
+    // TODO: track the global date-range selector once it's wired.
+    fetch(`${getBackendUrl()}/api/advertising/campaigns/${localId}?windowDays=30`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => {
         if (alive) setAdGroups((d?.campaign?.adGroups ?? []) as AdGroupRow[])
