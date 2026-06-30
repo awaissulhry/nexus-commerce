@@ -104,4 +104,48 @@ describe('GET /amazon/flat-file/browse-nodes', () => {
     expect(body.source).toBe('none')
     expect(body.nodes).toEqual([])
   })
+
+  it('returns 200 with valid ISO fetchedAt when schema has no fetchedAt (null-safe guard)', async () => {
+    mockGetSchema.mockResolvedValue({
+      schemaDefinition: { properties: {} },
+      // fetchedAt intentionally absent (undefined)
+    })
+
+    const app = Fastify()
+    await app.register(amazonFlatFileRoutes)
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/amazon/flat-file/browse-nodes?marketplace=IT&productType=NOFETCHEDAT',
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(Number.isFinite(Date.parse(body.fetchedAt))).toBe(true)
+  })
+
+  it('honors ?force=1: passes { force: true } to getSchema', async () => {
+    mockGetSchema.mockResolvedValue({
+      schemaDefinition: { properties: {} },
+      fetchedAt: '2026-06-30T00:00:00Z',
+    })
+
+    const app = Fastify()
+    await app.register(amazonFlatFileRoutes)
+
+    // Use a distinct productType so the module-level browseNodeCache never
+    // serves a cached entry seeded by another test.
+    await app.inject({
+      method: 'GET',
+      url: '/amazon/flat-file/browse-nodes?marketplace=IT&productType=FORCEPT1&force=1',
+    })
+    await app.inject({
+      method: 'GET',
+      url: '/amazon/flat-file/browse-nodes?marketplace=IT&productType=FORCEPT2&force=1',
+    })
+
+    // Both calls should have reached getSchema with force: true as second arg
+    const calls = mockGetSchema.mock.calls
+    const forceCalls = calls.filter((c) => c[1]?.force === true)
+    expect(forceCalls.length).toBeGreaterThanOrEqual(2)
+  })
 })

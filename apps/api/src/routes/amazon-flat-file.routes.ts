@@ -184,7 +184,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
           productType,
           nodes: nodes.map((n) => ({ id: n.id, path: n.path, label: n.path })),
           source: nodes.length ? 'schema' : 'none',
-          fetchedAt: new Date(schema.fetchedAt).toISOString(),
+          fetchedAt: schema.fetchedAt ? new Date(schema.fetchedAt).toISOString() : new Date().toISOString(),
         }
         if (!force) browseNodeCache.set(cacheKey, payload)
         return reply.send(payload)
