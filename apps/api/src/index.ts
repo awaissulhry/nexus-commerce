@@ -197,6 +197,7 @@ import { startRefundDeadlineTrackerCron } from "./jobs/refund-deadline-tracker.j
 import { startAmazonOrdersCron } from "./jobs/amazon-orders-sync.job.js";
 import { startAmazonZeroTotalsBackfillCron } from "./jobs/amazon-zero-totals-backfill.job.js";
 import { startSalesDriftDetectorCron } from "./jobs/sales-drift-detector.job.js";
+import { startLatencyWatchdogCron } from "./jobs/latency-watchdog.job.js";
 import { startAmazonOrderItemsRetryCron } from "./jobs/amazon-order-items-retry.job.js";
 import { startEbayOrdersCron } from "./jobs/ebay-orders-sync.job.js";
 import { startEbayStatusReconcileCron } from "./jobs/ebay-status-reconcile.job.js";
@@ -929,6 +930,14 @@ async function start() {
     if (process.env.NEXUS_ENABLE_SALES_DRIFT_DETECTOR === '1') {
       startSalesDriftDetectorCron();
     }
+
+    // P4 — latency/realtime watchdog. Hourly (default 30 * * * *).
+    // Emits sync.latency.breach per channel whose p95 exceeds
+    // NEXUS_LATENCY_P95_BREACH_MS (default 60s) and
+    // sync.realtime.degraded when the dispatch path is cron-only or
+    // eBay notifications are inactive. Read-only + emit-only.
+    // Default-ON; disable via NEXUS_LATENCY_WATCHDOG=0.
+    startLatencyWatchdogCron();
 
     // DA-RT.9 — OrderItem.price upstream retry. Re-fetches
     // getOrderItems for items that landed with price=0 (Amazon

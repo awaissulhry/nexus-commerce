@@ -4,6 +4,7 @@ import {
   outboundDeltaMs,
   buildOutboundLatencyResponse,
   summarizeDiagnostics,
+  evaluateLatencyBreach,
 } from './sync-metrics.js'
 
 describe('computeLatencyStats', () => {
@@ -104,6 +105,20 @@ describe('buildOutboundLatencyResponse', () => {
 
     const resTruncated = buildOutboundLatencyResponse([row], '24h', '2026-06-30T10:01:00.000Z', true)
     expect(resTruncated.truncated).toBe(true)
+  })
+})
+
+describe('evaluateLatencyBreach', () => {
+  const mk = (channel: string, p95Ms: number | null) => ({
+    channel, pendingCount: 0, sampleCount: 1, p50Ms: p95Ms, p95Ms, p99Ms: p95Ms,
+    minMs: p95Ms, maxMs: p95Ms, histogram: [],
+  })
+  it('flags only channels over the threshold', () => {
+    const out = evaluateLatencyBreach([mk('AMAZON', 90_000), mk('EBAY', 3_000)], 60_000)
+    expect(out).toEqual([{ channel: 'AMAZON', p95Ms: 90_000 }])
+  })
+  it('ignores channels with null p95 (no samples)', () => {
+    expect(evaluateLatencyBreach([mk('AMAZON', null)], 60_000)).toEqual([])
   })
 })
 
