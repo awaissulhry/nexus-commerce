@@ -235,6 +235,19 @@ export function resolveDispatchQuantity(
   return payloadQty ?? undefined
 }
 
+/**
+ * Phase 2 — hard oversell guard. Clamp a requested dispatch quantity to what
+ * the backing pool can actually ship. `clamped` flags an overshoot so the
+ * caller can emit a sync.oversell.clamped event (never silent). Pure.
+ */
+export function applyOversellClamp(
+  requested: number,
+  available: number,
+): { quantity: number; clamped: boolean } {
+  if (requested > available) return { quantity: available, clamped: true }
+  return { quantity: requested, clamped: false }
+}
+
 // ── Data Structures ──────────────────────────────────────────────────────
 
 interface SyncPayload {

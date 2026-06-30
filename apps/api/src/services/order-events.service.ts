@@ -55,6 +55,18 @@ export type OrderEvent =
       queueArn: string | null
       ts: number
     }
+  // P2 — an outbound push was clamped to the backing pool (oversell prevented).
+  // Surfaced via RT alerting so a clamp is never silent.
+  | {
+      type: 'sync.oversell.clamped'
+      sku: string
+      channel: string
+      marketplace?: string | null
+      requested: number
+      clampedTo: number
+      available: number
+      ts: number
+    }
   // RT.13 — fired by the SQS poller when an ANY_OFFER_CHANGED
   // notification shows our seller is no longer holding the buy box.
   // Surfaces in the global competitive banner + (opt-in) browser
