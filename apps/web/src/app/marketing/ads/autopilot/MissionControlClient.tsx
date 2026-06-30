@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import { OpsCanvas } from '../_canvas/OpsCanvas'
 import { useAccountGraph } from '../_canvas/useAccountGraph'
+import { useCampaignDetail } from '../_canvas/useCampaignDetail'
 import { eur, eur2, pct, intl, roas, ago } from '../_canvas/format'
 import type { OpsObject } from '../_canvas/types'
 import './mission-control.css'
@@ -16,8 +17,14 @@ const KIND_LABEL: Record<string, string> = {
 
 function InspectorBody({ o }: { o: OpsObject }) {
   const d = o.detail ?? {}
+  const localId = o.kind === 'campaign' ? o.id.replace(/^c:/, '') : null
+  const { adGroups, ordersTotal, loading: agLoading } = useCampaignDetail(localId)
+  // Orders aren't in the campaigns list payload; for a campaign we derive them by
+  // summing its ad-groups' ordersCount (lazy-fetched on select). Markets/portfolios
+  // keep the aggregate from the list (orders absent there → shown as "—").
+  const orders = o.kind === 'campaign' ? ordersTotal ?? undefined : d.orders
   const ctr = d.impressions ? (d.clicks ?? 0) / d.impressions : undefined
-  const cvr = d.clicks ? (d.orders ?? 0) / d.clicks : undefined
+  const cvr = d.clicks && orders != null ? orders / d.clicks : undefined
   const cpc = d.clicks ? (o.spend ?? 0) / d.clicks : undefined
   const metrics: Array<[string, string]> = [
     ['Spend', eur(o.spend)],
@@ -29,7 +36,7 @@ function InspectorBody({ o }: { o: OpsObject }) {
     ['CTR', pct(ctr)],
     ['CVR', pct(cvr)],
     ['CPC', eur2(cpc)],
-    ['Orders', intl(d.orders)],
+    ['Orders', intl(orders)],
     ['True profit', eur(d.trueProfitCents != null ? d.trueProfitCents / 100 : undefined)],
     ['Margin', pct(d.marginPct)],
   ]
@@ -50,6 +57,25 @@ function InspectorBody({ o }: { o: OpsObject }) {
           </div>
         ))}
       </div>
+      {o.kind === 'campaign' && (
+        <div className="mc-insp-ags">
+          <div className="mc-insp-ags-h">Ad groups{adGroups.length ? ` · ${adGroups.length}` : ''}</div>
+          {agLoading && <div className="mc-insp-ags-empty">Loading…</div>}
+          {!agLoading && adGroups.length === 0 && <div className="mc-insp-ags-empty">No ad groups</div>}
+          {!agLoading &&
+            adGroups.map((a) => (
+              <div className="mc-insp-ag" key={a.id}>
+                <span className={`mc-ag-dot mc-ag-dot--${(a.status ?? '').toUpperCase() === 'ENABLED' ? 'on' : 'off'}`} />
+                <span className="mc-ag-name" title={a.name}>
+                  {a.name}
+                </span>
+                <span className="mc-ag-num">{eur((Number(a.spendCents) || 0) / 100)}</span>
+                <span className="mc-ag-num">{pct(typeof a.acos === 'number' ? a.acos : Number(a.acos) || undefined)}</span>
+                <span className="mc-ag-num">{intl(Number(a.ordersCount) || 0)}</span>
+              </div>
+            ))}
+        </div>
+      )}
       <div className="mc-insp-soon">Actions &amp; governing agents arrive in a later phase.</div>
     </div>
   )

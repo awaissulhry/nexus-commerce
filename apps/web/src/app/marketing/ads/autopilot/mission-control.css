@@ -23,4 +23,12 @@
 .mc-insp-cell { border: 1px solid #eef0f3; border-radius: 7px; padding: 6px 8px; }
 .mc-insp-cell-k { font-size: 8.5px; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 700; color: #9aa3b0; }
 .mc-insp-cell-v { font-weight: 800; font-size: 13px; color: #1c2530; margin-top: 1px; }
+.mc-insp-ags { margin-top: 14px; }
+.mc-insp-ags-h { font-size: 8.5px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 800; color: #9aa3b0; margin-bottom: 6px; }
+.mc-insp-ags-empty { font-size: 11px; color: #8a93a1; }
+.mc-insp-ag { display: flex; align-items: center; gap: 7px; padding: 5px 0; border-top: 1px solid #f3f4f6; font-size: 11px; }
+.mc-ag-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: #067d62; }
+.mc-ag-dot--off { background: #c2cad4; }
+.mc-ag-name { flex: 1; min-width: 0; font-weight: 600; color: #1c2530; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-ag-num { flex-shrink: 0; color: #5b6573; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 38px; text-align: right; }
 .mc-insp-soon { margin-top: 14px; font-size: 11px; color: #8a93a1; }
