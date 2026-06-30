@@ -43,7 +43,7 @@ import { ChannelStrip } from '../ebay-flat-file/ChannelStrip'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import type { FlatFileAiChange } from '@/components/flat-file/FlatFileGrid.types'
 import { FEED_ERROR_CODES } from './feedErrorCodes'
-import { categoryOf } from './category-model'
+import { categoryOf, assignCategory } from './category-model'
 
 // EH.5 — Lazy-loaded modals, panels, and bars. Each one only ships
 // to the browser when the operator first opens it, so the initial
@@ -91,6 +91,7 @@ const ImportWizardModal = dynamic(
   () => import('./ImportWizardModal').then((m) => m.ImportWizardModal),
   { ssr: false },
 )
+const SetCategoryModal = dynamic(() => import('./SetCategoryModal'), { ssr: false })
 
 /**
  * EH.5 — Returns true once `open` has been true at least once, then
@@ -902,6 +903,7 @@ export default function AmazonFlatFileClient({
     jobId: string
   } | null>(null)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [showSetCategory, setShowSetCategory] = useState(false)
   // P1.2 — auto-save indicator
   const [lastLocalSave, setLastLocalSave] = useState<number>(0)
   const [lastSaveTick, setLastSaveTick] = useState<number>(0)
@@ -2605,6 +2607,17 @@ export default function AmazonFlatFileClient({
     ))
   }, [selectedRows, pushSnapshot])
 
+  // BN.2.2 — bulk-assign product type + browse node to selected rows.
+  const applyCategory = useCallback((c: { productType: string; nodeId: string | null }) => {
+    pushSnapshot()
+    setRows((prev) => prev.map((r) =>
+      !r._ghost && selectedRows.has(r._rowId as string)
+        ? ({ ...assignCategory(r as Record<string, unknown>, c), _dirty: true } as Row)
+        : r))
+    setSheetTypes((s) => Array.from(new Set([...s, c.productType.toUpperCase()])))
+    setShowSetCategory(false)
+  }, [selectedRows, pushSnapshot])
+
   const handleAddRows = useCallback((params: {
     type: 'row' | 'parent' | 'variant'
     count: number
@@ -4302,6 +4315,12 @@ export default function AmazonFlatFileClient({
                 )}
               </div>
             )}
+            {/* BN.2.2 — Set category: bulk-assign product type + browse node to selected rows. */}
+            {selectedRows.size > 0 && (
+              <Button size="sm" variant="secondary" onClick={() => setShowSetCategory(true)}>
+                Set category ({selectedRows.size})
+              </Button>
+            )}
           </div>
 
           {/* Search */}
@@ -5253,6 +5272,14 @@ export default function AmazonFlatFileClient({
           })}
           marketplace={marketplace}
         />
+      )}
+
+      {/* BN.2.2 — Set category modal */}
+      {showSetCategory && (
+        <SetCategoryModal open marketplace={marketplace}
+          productTypeOptions={productTypes.map((p) => p.value)}
+          selectedCount={Array.from(selectedRows).filter((id) => rows.some((r) => r._rowId === id && !r._ghost)).length}
+          onApply={applyCategory} onClose={() => setShowSetCategory(false)} />
       )}
 
       {pushPanel && manifest && (
