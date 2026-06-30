@@ -360,6 +360,51 @@ export function RulesAutomationClient() {
         />
       ) : tab === 'budget-schedules' ? (
         <BudgetScheduleTab />
+      ) : tab === 'bid' ? (
+        <RuleListTab
+          noun="Bid Rule"
+          seed={[]}
+          liveType="bid"
+          editHref={(id) => `/marketing/ads/rules-automation/builder/bid?ruleId=${id}`}
+          onAddRule={() => { window.location.href = '/marketing/ads/rules-automation/builder/bid' }}
+          emptyNode={(
+            <span className="h10-rr-empty">
+              <NoDataIllus size={104} />
+              <b>Create a Bid Rule to optimize keyword bids based on performance!</b>
+              <a className="h10-am-btn primary" href="/marketing/ads/rules-automation/builder/bid"><Plus size={13} /> Create Rule</a>
+            </span>
+          )}
+        />
+      ) : tab === 'keyword-harvest' ? (
+        <RuleListTab
+          noun="Keyword Harvesting Rule"
+          seed={[]}
+          liveType="keyword-harvesting"
+          editHref={(id) => `/marketing/ads/rules-automation/builder/keyword-harvesting?ruleId=${id}`}
+          onAddRule={() => { window.location.href = '/marketing/ads/rules-automation/builder/keyword-harvesting' }}
+          emptyNode={(
+            <span className="h10-rr-empty">
+              <NoDataIllus size={104} />
+              <b>Create a Keyword Harvesting Rule to graduate converting search terms!</b>
+              <a className="h10-am-btn primary" href="/marketing/ads/rules-automation/builder/keyword-harvesting"><Plus size={13} /> Create Rule</a>
+            </span>
+          )}
+        />
+      ) : tab === 'negative-targeting' ? (
+        <RuleListTab
+          noun="Negative Targeting Rule"
+          seed={[]}
+          liveType="negative-targeting"
+          editHref={(id) => `/marketing/ads/rules-automation/builder/negative-targeting?ruleId=${id}`}
+          onAddRule={() => { window.location.href = '/marketing/ads/rules-automation/builder/negative-targeting' }}
+          emptyNode={(
+            <span className="h10-rr-empty">
+              <NoDataIllus size={104} />
+              <b>Create a Negative Targeting Rule to block wasted spend!</b>
+              <a className="h10-am-btn primary" href="/marketing/ads/rules-automation/builder/negative-targeting"><Plus size={13} /> Create Rule</a>
+            </span>
+          )}
+        />
       ) : TAB_RULES[tab] ? (
         <RuleListTab noun={TAB_RULES[tab].noun} seed={TAB_RULES[tab].rows} onAddRule={() => setShowRuleType(true)} />
       ) : (
