@@ -42,6 +42,7 @@ import { TagInput } from '@/design-system/primitives/TagInput'
 import { ChannelStrip } from '../ebay-flat-file/ChannelStrip'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import type { FlatFileAiChange } from '@/components/flat-file/FlatFileGrid.types'
+import { FEED_ERROR_CODES } from './feedErrorCodes'
 
 // EH.5 — Lazy-loaded modals, panels, and bars. Each one only ships
 // to the browser when the operator first opens it, so the initial
@@ -168,6 +169,10 @@ interface Row {
   _ghost?: boolean
   _status?: 'idle' | 'pending' | 'pushed' | 'success' | 'error'
   _feedMessage?: string
+  /** P2.1 — Column IDs that Amazon flagged in the last feed result. */
+  _errorFields?: string[]
+  /** P2.2 — Raw SP-API error code for the last feed error. */
+  _feedCode?: string
   _productId?: string
   [key: string]: unknown
 }
@@ -176,6 +181,10 @@ interface FeedResult {
   sku: string
   status: string
   message: string
+  /** P2.1 — Column IDs extracted from error messages. */
+  fields?: string[]
+  /** P2.2 — SP-API error code. */
+  code?: string
 }
 
 interface SortLevel {
@@ -1232,11 +1241,27 @@ export default function AmazonFlatFileClient({
         const val = rawVal != null ? String(rawVal) : ''
         if (col.required && !val) {
           m.set(`${row._rowId as string}:${col.id}`, { level: 'error', msg: `${col.labelEn} is required` })
+        } else if (col.maxUtf8ByteLength && val) {
+          // P2.3 — Amazon enforces UTF-8 byte limits (accented chars = 2+ bytes).
+          const bytes = new TextEncoder().encode(val).length
+          if (bytes > col.maxUtf8ByteLength) {
+            m.set(`${row._rowId as string}:${col.id}`, { level: 'warn', msg: `Exceeds ${col.maxUtf8ByteLength}-byte Amazon limit (${bytes} bytes; accented chars count as 2+)` })
+          }
         } else if (col.maxLength && val.length > col.maxLength) {
           m.set(`${row._rowId as string}:${col.id}`, { level: 'warn', msg: `Exceeds max ${col.maxLength} chars (${val.length})` })
         } else if (col.options?.length && val && !col.options.includes(val)) {
           m.set(`${row._rowId as string}:${col.id}`, { level: 'warn', msg: `"${val}" is not a valid option` })
         }
+      }
+    }
+    // P2.1 — Feed-error field highlighting: when Amazon returns per-field errors,
+    // shade those specific cells red so the operator knows exactly which to fix.
+    for (const row of rows) {
+      if (row._ghost || row._status !== 'error' || !row._errorFields) continue
+      const feedMsg = row._feedMessage ?? 'Amazon rejected this field'
+      for (const fieldId of (row._errorFields as string[])) {
+        const key = `${row._rowId as string}:${fieldId}`
+        if (!m.has(key)) m.set(key, { level: 'error', msg: String(feedMsg) })
       }
     }
     return m
@@ -2496,6 +2521,7 @@ export default function AmazonFlatFileClient({
       'item_sku', 'parent_sku', 'parentage_level', 'product_type',
       'record_action', 'variation_theme',
       '_rowId', '_isNew', '_dirty', '_status', '_feedMessage',
+      '_errorFields', '_feedCode',
       '_productId', '_asin', '_listingStatus',
     ])
 
@@ -2947,7 +2973,14 @@ export default function AmazonFlatFileClient({
             const bySkU = new Map<string, FeedResult>((data.results as FeedResult[]).map((r: FeedResult) => [r.sku, r]))
             setRows((prev) => prev.map((r) => {
               const fr = bySkU.get(r.item_sku as string)
-              return fr ? { ...r, _status: fr.status as any, _feedMessage: fr.message } : r
+              if (!fr) return r
+              return {
+                ...r,
+                _status: fr.status as Row['_status'],
+                _feedMessage: fr.message,
+                _errorFields: fr.status === 'error' ? (fr.fields ?? []) : [],
+                _feedCode: fr.status === 'error' ? (fr.code ?? '') : '',
+              }
             }))
           }
           return { ...entry, status: data.processingStatus, results: data.results ?? [], error: undefined }
@@ -5289,7 +5322,27 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
         onMouseUp={() => { canDragRef.current = false }}
       >
         {status === 'success' ? <CheckCircle2 className="w-3 h-3 text-emerald-500 mx-auto" />
-          : status === 'error' ? <Tooltip label={<span className="text-xs">{String(row._feedMessage ?? 'Push error')}</span>} className="h10-ds-tooltip--light"><AlertCircle className="w-3 h-3 text-red-500 mx-auto" /></Tooltip>
+          : status === 'error' ? (() => {
+            const errMsg = String(row._feedMessage ?? 'Push error')
+            const errCode = row._feedCode ? String(row._feedCode) : ''
+            const errFields = Array.isArray(row._errorFields) ? (row._errorFields as string[]) : []
+            const lookup = errCode ? FEED_ERROR_CODES[errCode] : undefined
+            return (
+              <Tooltip label={
+                <div className="text-xs space-y-1 max-w-[240px]">
+                  {lookup && <div className="font-semibold text-red-300">{lookup.title}</div>}
+                  <div>{errMsg}</div>
+                  {lookup?.hint && <div className="text-slate-400 italic">{lookup.hint}</div>}
+                  {errFields.length > 0 && (
+                    <div className="text-slate-400">Fields: <span className="font-mono">{errFields.join(', ')}</span></div>
+                  )}
+                  {errCode && <div className="text-slate-500 font-mono text-[10px]">Code: {errCode}</div>}
+                </div>
+              } className="h10-ds-tooltip--light">
+                <AlertCircle className="w-3 h-3 text-red-500 mx-auto" />
+              </Tooltip>
+            )
+          })()
           : status === 'pending' ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
           : <input type="checkbox" checked={selected} onChange={(e) => onSelect(e.target.checked)} className="w-3.5 h-3.5 accent-blue-600" />}
       </td>
