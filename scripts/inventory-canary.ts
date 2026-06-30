@@ -38,29 +38,31 @@ async function main() {
   const t0 = new Date()
   console.log(`Canary: +${delta} on ${product.sku} at ${t0.toISOString()}`)
   console.log('NOTE: round-trip includes the ~30s manual undo-grace (MANUAL_ADJUSTMENT is not order-driven). Real sales skip it.')
-  await applyStockMovement({ productId: product.id, change: delta, reason: 'MANUAL_ADJUSTMENT' })
-
-  const deadline = Date.now() + waitS * 1000
   const seen = new Map<string, number>()
-  while (Date.now() < deadline) {
-    const rows = await prisma.outboundSyncQueue.findMany({
-      where: { productId: product.id, createdAt: { gte: t0 }, syncType: 'QUANTITY_UPDATE' },
-      select: { targetChannel: true, createdAt: true, syncedAt: true },
-    })
-    for (const r of rows) {
-      if (r.syncedAt && !seen.has(r.targetChannel)) {
-        seen.set(r.targetChannel, r.syncedAt.getTime() - r.createdAt.getTime())
-        console.log(`  ${r.targetChannel}: round-trip ${seen.get(r.targetChannel)}ms`)
+  try {
+    await applyStockMovement({ productId: product.id, change: delta, reason: 'MANUAL_ADJUSTMENT' })
+
+    const deadline = Date.now() + waitS * 1000
+    while (Date.now() < deadline) {
+      const rows = await prisma.outboundSyncQueue.findMany({
+        where: { productId: product.id, createdAt: { gte: t0 }, syncType: 'QUANTITY_UPDATE' },
+        select: { targetChannel: true, createdAt: true, syncedAt: true },
+      })
+      for (const r of rows) {
+        if (r.syncedAt && !seen.has(r.targetChannel)) {
+          seen.set(r.targetChannel, r.syncedAt.getTime() - r.createdAt.getTime())
+          console.log(`  ${r.targetChannel}: round-trip ${seen.get(r.targetChannel)}ms`)
+        }
       }
+      if (rows.length > 0 && rows.every((r) => r.syncedAt)) break
+      await sleep(2000)
     }
-    if (rows.length > 0 && rows.every((r) => r.syncedAt)) break
-    await sleep(2000)
+  } finally {
+    console.log(`Canary: restoring -${delta} on ${product.sku}`)
+    await applyStockMovement({ productId: product.id, change: -delta, reason: 'MANUAL_ADJUSTMENT' })
+    console.log('\nRound-trip summary:', Object.fromEntries(seen))
   }
 
-  console.log(`Canary: restoring -${delta} on ${product.sku}`)
-  await applyStockMovement({ productId: product.id, change: -delta, reason: 'MANUAL_ADJUSTMENT' })
-
-  console.log('\nRound-trip summary:', Object.fromEntries(seen))
   await prisma.$disconnect()
 }
 

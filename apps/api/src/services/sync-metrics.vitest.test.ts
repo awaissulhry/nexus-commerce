@@ -60,9 +60,9 @@ describe('buildOutboundLatencyResponse', () => {
     const s2 = new Date('2026-06-30T10:00:02.000Z')
     const res = buildOutboundLatencyResponse(
       [
-        { targetChannel: 'AMAZON', createdAt: c, syncedAt: s2 },
-        { targetChannel: 'AMAZON', createdAt: c, syncedAt: null },
-        { targetChannel: 'EBAY', createdAt: c, syncedAt: s2 },
+        { targetChannel: 'AMAZON', createdAt: c, syncedAt: s2, syncStatus: 'SUCCESS' },
+        { targetChannel: 'AMAZON', createdAt: c, syncedAt: null, syncStatus: 'PENDING' },
+        { targetChannel: 'EBAY', createdAt: c, syncedAt: s2, syncStatus: 'SUCCESS' },
       ],
       '24h',
       '2026-06-30T10:01:00.000Z',
@@ -75,6 +75,35 @@ describe('buildOutboundLatencyResponse', () => {
     expect(amazon.p50Ms).toBe(2000)
     const ebay = res.channels.find((x) => x.channel === 'EBAY')!
     expect(ebay.pendingCount).toBe(0)
+  })
+
+  it('does NOT count FAILED/CANCELLED/SKIPPED rows in pendingCount', () => {
+    const c = new Date('2026-06-30T10:00:00.000Z')
+    const res = buildOutboundLatencyResponse(
+      [
+        { targetChannel: 'AMAZON', createdAt: c, syncedAt: null, syncStatus: 'FAILED' },
+        { targetChannel: 'AMAZON', createdAt: c, syncedAt: null, syncStatus: 'CANCELLED' },
+        { targetChannel: 'AMAZON', createdAt: c, syncedAt: null, syncStatus: 'SKIPPED' },
+        { targetChannel: 'AMAZON', createdAt: c, syncedAt: null, syncStatus: 'PENDING' },
+        { targetChannel: 'AMAZON', createdAt: c, syncedAt: null, syncStatus: 'IN_PROGRESS' },
+      ],
+      '24h',
+      '2026-06-30T10:01:00.000Z',
+    )
+    const amazon = res.channels.find((x) => x.channel === 'AMAZON')!
+    expect(amazon.pendingCount).toBe(2) // only PENDING + IN_PROGRESS
+  })
+
+  it('includes truncated: false by default and true when passed true', () => {
+    const c = new Date('2026-06-30T10:00:00.000Z')
+    const s = new Date('2026-06-30T10:00:01.000Z')
+    const row = { targetChannel: 'AMAZON', createdAt: c, syncedAt: s, syncStatus: 'SUCCESS' }
+
+    const resDefault = buildOutboundLatencyResponse([row], '24h', '2026-06-30T10:01:00.000Z')
+    expect(resDefault.truncated).toBe(false)
+
+    const resTruncated = buildOutboundLatencyResponse([row], '24h', '2026-06-30T10:01:00.000Z', true)
+    expect(resTruncated.truncated).toBe(true)
   })
 })
 
