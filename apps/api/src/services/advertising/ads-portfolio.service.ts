@@ -28,30 +28,38 @@ async function upsertSynced(profileId: string, pf: { portfolioId: string; name: 
   })
 }
 
+export interface SyncResult {
+  synced: number
+  errors: number
+  /** Per-connection failure detail so the page can show WHY a sync didn't return anything. */
+  errorDetail: Array<{ marketplace: string | null; error: string }>
+}
+
 /** Pull portfolios from Amazon for every active connection (or sandbox) and upsert them locally. */
-export async function syncPortfolios(opts: { marketplace?: string | null } = {}): Promise<{ synced: number; errors: number }> {
+export async function syncPortfolios(opts: { marketplace?: string | null } = {}): Promise<SyncResult> {
   const mk = opts.marketplace && opts.marketplace !== 'all' ? opts.marketplace : null
   let synced = 0
-  let errors = 0
+  const errorDetail: SyncResult['errorDetail'] = []
   if (adsMode() === 'sandbox') {
     const list = await listPortfolios({ profileId: 'SANDBOX-PROFILE-IT-001', region: 'EU' })
     for (const pf of list) { await upsertSynced('SANDBOX-PROFILE-IT-001', pf); synced++ }
-    return { synced, errors }
+    return { synced, errors: 0, errorDetail }
   }
   const conns = await prisma.amazonAdsConnection.findMany({
     where: { isActive: true, ...(mk ? { marketplace: mk } : {}) },
-    select: { profileId: true, region: true },
+    select: { profileId: true, region: true, marketplace: true },
   })
   for (const c of conns) {
     try {
       const list = await listPortfolios({ profileId: c.profileId, region: regionOf(c.region) })
       for (const pf of list) { await upsertSynced(c.profileId, pf); synced++ }
     } catch (e) {
-      errors++
-      logger.warn('[ADS-PORTFOLIO-SYNC] connection fetch failed', { profileId: c.profileId, error: (e as Error)?.message })
+      const error = (e as Error)?.message ?? String(e)
+      errorDetail.push({ marketplace: c.marketplace, error })
+      logger.warn('[ADS-PORTFOLIO-SYNC] connection fetch failed', { profileId: c.profileId, error })
     }
   }
-  return { synced, errors }
+  return { synced, errors: errorDetail.length, errorDetail }
 }
 
 export interface PortfolioOverview {
