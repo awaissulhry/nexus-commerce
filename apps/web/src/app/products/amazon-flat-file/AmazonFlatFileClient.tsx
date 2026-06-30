@@ -1285,11 +1285,41 @@ export default function AmazonFlatFileClient({
         }
       }
     }
+    // P4.1 — Orphaned child detection: flag parent_sku if no parent with that SKU exists.
+    const parentSkus = new Set<string>()
+    for (const r of rows) {
+      if (!r._ghost && r.parentage_level === 'parent' && r.item_sku) parentSkus.add(String(r.item_sku))
+    }
+    for (const row of rows) {
+      if (row._ghost || row.parentage_level !== 'child') continue
+      const ps = String(row.parent_sku ?? '').trim()
+      if (!ps || parentSkus.has(ps)) continue
+      const key = `${row._rowId as string}:parent_sku`
+      if (!m.has(key)) m.set(key, { level: 'error', msg: `No parent row with SKU "${ps}" found — add a parent row or fix the parent SKU` })
+    }
     return m
   }, [rows, manifestColumns])
 
   const validErrorCount = useMemo(() => [...cellErrors.values()].filter((e) => e.level === 'error').length, [cellErrors])
   const validWarnCount  = useMemo(() => [...cellErrors.values()].filter((e) => e.level === 'warn').length, [cellErrors])
+
+  // P4 — Map from child rowId → parent's variation_theme, used for axis fingerprint + clone.
+  const parentThemeByChildId = useMemo<Map<string, string>>(() => {
+    const parentThemeBySku = new Map<string, string>()
+    for (const r of rows) {
+      if (!r._ghost && r.parentage_level === 'parent' && r.item_sku && r.variation_theme) {
+        parentThemeBySku.set(String(r.item_sku), String(r.variation_theme))
+      }
+    }
+    const m = new Map<string, string>()
+    for (const r of rows) {
+      if (!r._ghost && r.parentage_level === 'child' && r.parent_sku) {
+        const theme = parentThemeBySku.get(String(r.parent_sku))
+        if (theme) m.set(r._rowId as string, theme)
+      }
+    }
+    return m
+  }, [rows])
 
   // Row-mode search + multi-level sort (display-only, never mutates rows)
   const displayRows = useMemo<Row[]>(() => {
@@ -2644,6 +2674,38 @@ export default function AmazonFlatFileClient({
     setAddRowsPanel(null)
     setTimeout(() => setActiveCell({ rowId: parentRow._rowId as string, colId: 'item_sku' }), 30)
   }, [marketplace, pushSnapshot])
+
+  // P4.3 — Clone variant: duplicate a child row with axis columns and identity
+  // fields cleared so the operator only needs to fill in the new variant's values.
+  const handleCloneVariant = useCallback((row: Row) => {
+    if (row.parentage_level !== 'child') return
+    const theme = parentThemeByChildId.get(row._rowId as string) ?? ''
+    const colIdSet = new Set(allColumnsRef.current.map((c) => c.id))
+    const axisColIds = parseThemeAxes(theme)
+      .map((axis) => axisColumnCandidates(axis).find((c) => colIdSet.has(c)))
+      .filter((c): c is string => c !== undefined)
+    const clone: Row = {
+      ...row,
+      _rowId: `clone-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      _isNew: true, _dirty: true, _status: 'idle',
+      _feedMessage: undefined, _errorFields: undefined, _feedCode: undefined,
+      _suppressed: undefined, _suppressionReason: undefined,
+      _issueCount: undefined, _issueSeverity: undefined, _issueFields: undefined,
+      _listingId: undefined, _asin: undefined, _listingStatus: undefined,
+      _productId: undefined, _lastSyncedAt: undefined, _lastSyncStatus: undefined,
+      // Clear item_sku and all axis columns — what makes each variant unique
+      item_sku: '',
+    }
+    for (const colId of axisColIds) clone[colId] = ''
+    pushSnapshot()
+    setRows((prev) => {
+      const idx = prev.findIndex((r) => r._rowId === row._rowId)
+      const next = [...prev]
+      next.splice(idx === -1 ? next.length : idx + 1, 0, clone)
+      return next
+    })
+    setTimeout(() => setActiveCell({ rowId: clone._rowId as string, colId: 'item_sku' }), 30)
+  }, [parentThemeByChildId, pushSnapshot])
 
   // GX.5 — editing a ghost (blank canvas) row materializes it into a real new
   // row; the buffer effect then re-adds a fresh ghost below (auto-grow).
@@ -4666,6 +4728,8 @@ export default function AmazonFlatFileClient({
                   showOverrideBadges={showOverrideBadges}
                   showCascadeButtons={showCascadeButtons}
                   onCascadeRow={(r) => setCascadeRow(r)}
+                  parentVariationTheme={parentThemeByChildId.get(row._rowId as string)}
+                  onCloneVariant={handleCloneVariant}
                 />
               ))}
 
@@ -5197,6 +5261,9 @@ interface RowProps {
   showOverrideBadges: boolean
   showCascadeButtons: boolean
   onCascadeRow: (row: Row) => void
+  /** P4 — variation_theme from this row's parent (child rows only). */
+  parentVariationTheme?: string
+  onCloneVariant: (row: Row) => void
 }
 
 // Per-row required-fields completeness. Counts the SAME required cells the grid
@@ -5234,7 +5301,7 @@ const SPREADSHEET_ROW_CALLBACK_PROPS = new Set<string>([
   'onToggleCollapse', 'onSelect', 'onDeactivate', 'onChange', 'onLiveChange', 'onPushSnapshot',
   'onNavigate', 'onRowResizeStart', 'onRowDragStart', 'onRowDragEnd', 'onRowDragOver', 'onRowDrop',
   'onCellPointerDown', 'onCellDoubleClick', 'onRowSelect', 'onFillHandlePointerDown', 'onFillToBottom',
-  'onFillDrop', 'onCascadeRow',
+  'onFillDrop', 'onCascadeRow', 'onCloneVariant',
 ])
 
 // FF-2 (perf) — memo comparator so a keystroke (liveUpdateCell → setRows →
@@ -5279,7 +5346,8 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
   onSelect, onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate, onRowResizeStart,
   onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
   onCellPointerDown, onCellDoubleClick, onRowSelect, onFillHandlePointerDown, onFillToBottom, onFillDrop,
-  showOverrideBadges, showCascadeButtons, onCascadeRow }: RowProps) {
+  showOverrideBadges, showCascadeButtons, onCascadeRow,
+  parentVariationTheme, onCloneVariant }: RowProps) {
   const rowId = row._rowId as string
   const status = row._status
   const canDragRef = useRef(false)
@@ -5485,6 +5553,24 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
             return <span className={cn('text-[9px] font-semibold leading-none', cls)}>{s.slice(0, 4)}</span>
           })()}
 
+          {/* P4.2 — Axis value fingerprint for child rows: "Nero / XL" */}
+          {!row._ghost && isChild && parentVariationTheme && (() => {
+            const colIdSet = new Set(columns.map((c) => c.id))
+            const axisColIds = parseThemeAxes(parentVariationTheme)
+              .map((axis) => axisColumnCandidates(axis).find((c) => colIdSet.has(c)))
+              .filter((c): c is string => c !== undefined)
+            const vals = axisColIds.map((cid) => String(row[cid] ?? '')).filter(Boolean)
+            if (!vals.length) return null
+            return (
+              <span
+                className="shrink-0 text-[8px] font-medium leading-none text-slate-500 dark:text-slate-400 truncate max-w-full text-center"
+                title={`Variant: ${vals.join(' / ')}`}
+              >
+                {vals.join(' / ')}
+              </span>
+            )
+          })()}
+
           {/* P3.3 — Health chip: red = suppressed, amber = open issues */}
           {!row._ghost && (() => {
             const suppressed = row._suppressed
@@ -5546,6 +5632,18 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
               className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold leading-none transition-colors bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
             >
               <GitFork className="h-2.5 w-2.5" />↓
+            </button>
+          )}
+
+          {/* P4.3 — Clone variant button (child rows only) */}
+          {!row._ghost && isChild && (!showRowImages || imageSize >= 48) && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onCloneVariant(row) }}
+              onPointerDown={(e) => e.stopPropagation()}
+              title="Clone this variant — copies all fields, clears axis values (SKU, Color, Size) for you to fill in"
+              className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold leading-none transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:bg-slate-700"
+            >
+              <Copy className="h-2.5 w-2.5" />
             </button>
           )}
 
