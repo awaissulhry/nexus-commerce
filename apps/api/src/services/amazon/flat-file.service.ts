@@ -1426,6 +1426,50 @@ export class AmazonFlatFileService {
       }
     }
 
+    // P5.1 — Cross-market coverage: one query per product set fetches all 5 EU
+    // Amazon listings so the grid shows a status dot-strip without extra round-trips.
+    // Sequential to avoid using allListings before it resolves.
+    const COVERAGE_MARKETS = ['IT', 'DE', 'FR', 'ES', 'UK'] as const
+    type MarketCoverageEntry = { status: 'active' | 'inactive' | 'suppressed' | 'missing'; title?: string; price?: string }
+    const coverageByProduct = new Map<string, Record<string, MarketCoverageEntry>>()
+
+    const productIds = products.map((p: any) => p.id as string)
+    if (productIds.length > 0) {
+      const allMktListings = await this.prisma.channelListing.findMany({
+        where: { productId: { in: productIds }, channel: 'AMAZON' },
+        select: { id: true, productId: true, marketplace: true, listingStatus: true, title: true, price: true },
+      }).catch(() => [] as any[])
+
+      // Fetch suppression for all cross-market listings in one indexed query
+      const allMktListingIds = (allMktListings as any[]).map((l: any) => l.id as string)
+      const crossSuppressed = new Set<string>()
+      if (allMktListingIds.length > 0) {
+        const xSupps = await this.prisma.amazonSuppression.findMany({
+          where: { listingId: { in: allMktListingIds }, resolvedAt: null },
+          select: { listingId: true },
+        }).catch(() => [] as any[])
+        for (const s of xSupps as any[]) crossSuppressed.add(s.listingId as string)
+      }
+
+      for (const listing of allMktListings as any[]) {
+        const mkt = String(listing.marketplace ?? '').toUpperCase()
+        if (!(COVERAGE_MARKETS as readonly string[]).includes(mkt)) continue
+        const map = coverageByProduct.get(listing.productId as string) ?? {} as Record<string, MarketCoverageEntry>
+        const isSuppressed = crossSuppressed.has(listing.id as string)
+        const s = String(listing.listingStatus ?? '')
+        const status: MarketCoverageEntry['status'] = isSuppressed ? 'suppressed'
+          : (s === 'ACTIVE' || s === 'BUYABLE') ? 'active'
+          : s === 'DRAFT' ? 'missing'
+          : 'inactive'
+        map[mkt] = {
+          status,
+          ...(listing.title ? { title: String(listing.title) } : {}),
+          ...(listing.price != null ? { price: String(listing.price) } : {}),
+        }
+        coverageByProduct.set(listing.productId as string, map)
+      }
+    }
+
     return products.map((p) => {
       const listing = (p.channelListings as any[])[0]
       const attrs = ((listing?.platformAttributes as any)?.attributes ?? {}) as Record<string, any>
@@ -1543,6 +1587,17 @@ export class AmazonFlatFileService {
           title:       (listing as any).masterTitle       ?? null,
           description: (listing as any).masterDescription ?? null,
           quantity:    (listing as any).masterQuantity    ?? null,
+        }
+        // P5.1 — Cross-market coverage map. Includes all 5 EU markets with their
+        // live status so the grid can render a dot-strip without extra fetches.
+        const coverage = coverageByProduct.get(p.id as string)
+        if (coverage) {
+          // Ensure all 5 markets are represented (missing = no listing exists)
+          const full: Record<string, MarketCoverageEntry> = {}
+          for (const m of COVERAGE_MARKETS) {
+            full[m] = coverage[m] ?? { status: 'missing' }
+          }
+          row._marketCoverage = full
         }
       }
 

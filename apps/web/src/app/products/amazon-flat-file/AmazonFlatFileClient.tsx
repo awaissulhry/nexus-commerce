@@ -183,6 +183,7 @@ interface Row {
   _issueSeverity?: string | null
   /** P3.1 — Column IDs that ALA ListingIssues identify as failing. */
   _issueFields?: string[]
+  _marketCoverage?: Record<string, { status: string; title?: string; price?: string }>  // P5.1
   _productId?: string
   [key: string]: unknown
 }
@@ -4730,6 +4731,7 @@ export default function AmazonFlatFileClient({
                   onCascadeRow={(r) => setCascadeRow(r)}
                   parentVariationTheme={parentThemeByChildId.get(row._rowId as string)}
                   onCloneVariant={handleCloneVariant}
+                  onSwitchMarket={(m) => navigateTo(m, productType)}
                 />
               ))}
 
@@ -5264,6 +5266,7 @@ interface RowProps {
   /** P4 — variation_theme from this row's parent (child rows only). */
   parentVariationTheme?: string
   onCloneVariant: (row: Row) => void
+  onSwitchMarket: (market: string) => void
 }
 
 // Per-row required-fields completeness. Counts the SAME required cells the grid
@@ -5301,7 +5304,7 @@ const SPREADSHEET_ROW_CALLBACK_PROPS = new Set<string>([
   'onToggleCollapse', 'onSelect', 'onDeactivate', 'onChange', 'onLiveChange', 'onPushSnapshot',
   'onNavigate', 'onRowResizeStart', 'onRowDragStart', 'onRowDragEnd', 'onRowDragOver', 'onRowDrop',
   'onCellPointerDown', 'onCellDoubleClick', 'onRowSelect', 'onFillHandlePointerDown', 'onFillToBottom',
-  'onFillDrop', 'onCascadeRow', 'onCloneVariant',
+  'onFillDrop', 'onCascadeRow', 'onCloneVariant', 'onSwitchMarket',
 ])
 
 // FF-2 (perf) — memo comparator so a keystroke (liveUpdateCell → setRows →
@@ -5347,7 +5350,7 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
   onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
   onCellPointerDown, onCellDoubleClick, onRowSelect, onFillHandlePointerDown, onFillToBottom, onFillDrop,
   showOverrideBadges, showCascadeButtons, onCascadeRow,
-  parentVariationTheme, onCloneVariant }: RowProps) {
+  parentVariationTheme, onCloneVariant, onSwitchMarket }: RowProps) {
   const rowId = row._rowId as string
   const status = row._status
   const canDragRef = useRef(false)
@@ -5568,6 +5571,54 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
               >
                 {vals.join(' / ')}
               </span>
+            )
+          })()}
+
+          {/* P5.1/P5.2/P5.3 — Cross-market coverage dot-strip + divergence badge */}
+          {!row._ghost && (() => {
+            const coverage = row._marketCoverage as Record<string, { status: string; title?: string; price?: string }> | undefined
+            if (!coverage) return null
+            const MARKETS = ['IT', 'DE', 'FR', 'ES', 'UK'] as const
+            // P5.2 — divergence: any two active markets with different title or price
+            const activeEntries = MARKETS
+              .map((m) => ({ m, entry: coverage[m] }))
+              .filter(({ entry }) => entry && entry.status !== 'missing')
+            const titles = [...new Set(activeEntries.map(({ entry }) => entry?.title).filter(Boolean))]
+            const prices = [...new Set(activeEntries.map(({ entry }) => entry?.price).filter(Boolean))]
+            const hasDivergence = titles.length > 1 || prices.length > 1
+            return (
+              <div className="flex items-center gap-px shrink-0">
+                {MARKETS.map((m) => {
+                  const entry = coverage[m] ?? { status: 'missing' }
+                  const dotCls =
+                    entry.status === 'active'     ? 'bg-emerald-500 dark:bg-emerald-400'
+                    : entry.status === 'suppressed' ? 'bg-red-500 dark:bg-red-400'
+                    : entry.status === 'inactive'   ? 'bg-amber-400 dark:bg-amber-300'
+                    :                                 'bg-slate-300 dark:bg-slate-600'
+                  const tipParts = [`${m}: ${entry.status}`]
+                  if (entry.title) tipParts.push(`"${entry.title.slice(0, 40)}${entry.title.length > 40 ? '…' : ''}"`)
+                  if (entry.price) tipParts.push(`€${entry.price}`)
+                  return (
+                    <button
+                      key={m}
+                      onClick={(e) => { e.stopPropagation(); onSwitchMarket(m) }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      title={tipParts.join(' · ')}
+                      className={`w-2.5 h-2.5 rounded-full transition-opacity hover:opacity-70 focus:outline-none ${dotCls}`}
+                      aria-label={`Switch to ${m} — ${entry.status}`}
+                    />
+                  )
+                })}
+                {hasDivergence && (
+                  <span
+                    className="ml-0.5 text-[8px] font-bold leading-none text-amber-600 dark:text-amber-400 cursor-default"
+                    title={[
+                      titles.length > 1 ? `Title differs: ${activeEntries.filter(({entry}) => entry?.title).map(({m,entry}) => `${m}="${entry?.title?.slice(0,20)}"`).join(', ')}` : '',
+                      prices.length > 1 ? `Price differs: ${activeEntries.filter(({entry}) => entry?.price).map(({m,entry}) => `${m}=€${entry?.price}`).join(', ')}` : '',
+                    ].filter(Boolean).join(' | ')}
+                  >≠</span>
+                )}
+              </div>
             )
           })()}
 
