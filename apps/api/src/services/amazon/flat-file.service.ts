@@ -19,7 +19,7 @@ import { CategorySchemaService } from '../categories/schema-sync.service.js'
 import { parseLocaleNumber, parseLocaleInt } from '../../lib/parse-locale-number.js'
 import { casUpdateChannelListing, isVersionConflict } from '../channel-listing-cas.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
-import { extractBrowseNodes, browseNodeIdFromRow, type BrowseNode } from './browse-nodes.js'
+import { extractBrowseNodes, browseNodeIdFromRow, resolveBrowseNodeId, type BrowseNode } from './browse-nodes.js'
 import { amazonMarketplaceId } from '../categories/marketplace-ids.js'
 
 // ── Constants ──────────────────────────────────────────────────────────
@@ -2390,7 +2390,7 @@ export class AmazonFlatFileService {
         // ── Upsert ChannelListing ───────────────────────────────────
         const existing = await this.prisma.channelListing.findFirst({
           where: { productId: product.id, channel: 'AMAZON', marketplace: mp },
-          select: { id: true, quantity: true, version: true, offerActive: true },
+          select: { id: true, quantity: true, version: true, offerActive: true, platformAttributes: true },
         })
 
         // MA.1 — when the operator has paused this market, inject skip_offer=true
@@ -2427,7 +2427,7 @@ export class AmazonFlatFileService {
             // browseNodeId field so the cockpit CategoryCard and browse-node-predictor
             // both see the same value as the flat-file editor. Only written when a
             // node id is present; never clobbers other sibling keys.
-            ...((() => { const _bn = browseNodeIdFromRow(row as Record<string, unknown>); return _bn ? { browseNodeId: _bn } : {} })()),
+            ...((() => { const _bn = resolveBrowseNodeId(row as Record<string, unknown>, (existing as any)?.platformAttributes); return _bn ? { browseNodeId: _bn } : {} })()),
           },
           syncStatus: opts.isPublished ? 'SYNCED' : 'PENDING',
           lastSyncedAt: new Date(),

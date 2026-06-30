@@ -49,6 +49,19 @@ export function browseNodeIdFromRow(row: Record<string, unknown>): string | null
   return v == null || v === '' ? null : String(v)
 }
 
+/** The browse node id to persist on sync: the row's chosen node, else an
+ *  existing/predicted node already on the listing (so a node-less sync never
+ *  wipes it). null only when neither has one. */
+export function resolveBrowseNodeId(
+  row: Record<string, unknown>,
+  existingPlatformAttributes: unknown,
+): string | null {
+  const fromRow = browseNodeIdFromRow(row)
+  if (fromRow) return fromRow
+  const ex = (existingPlatformAttributes as { browseNodeId?: unknown } | null | undefined)?.browseNodeId
+  return ex == null || ex === '' ? null : String(ex)
+}
+
 export function extractBrowseNodes(
   schema: Record<string, unknown>,
   marketplaceId: string,
