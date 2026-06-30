@@ -6187,6 +6187,24 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (e) { reply.status(500); return { error: (e as Error)?.message ?? 'create failed' } }
   })
 
+  // Portfolios P1 — pull the account's portfolios from Amazon and persist them (idempotent).
+  // Powers the dedicated Portfolios page; the picker GET above stays the per-request live merge.
+  fastify.post('/advertising/portfolios/sync', async (request, reply) => {
+    const q = request.query as { marketplace?: string }
+    const { syncPortfolios } = await import('../services/advertising/ads-portfolio.service.js')
+    try { return await syncPortfolios({ marketplace: q.marketplace ?? null }) }
+    catch (e) { reply.status(500); return { error: (e as Error)?.message ?? 'sync failed', synced: 0, errors: 1 } }
+  })
+
+  // Portfolios P1 — synced rows enriched with campaign counts + spend/sales rollup (from our data).
+  fastify.get('/advertising/portfolios/overview', async (request, reply) => {
+    const q = request.query as { marketplace?: string }
+    const { getPortfolioOverview } = await import('../services/advertising/ads-portfolio.service.js')
+    reply.header('Cache-Control', 'private, max-age=30')
+    try { return await getPortfolioOverview({ marketplace: q.marketplace ?? null }) }
+    catch (e) { reply.status(500); return { error: (e as Error)?.message ?? 'overview failed', portfolios: [], lastSyncedAt: null } }
+  })
+
   fastify.patch('/advertising/campaigns/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const body = request.body as {
