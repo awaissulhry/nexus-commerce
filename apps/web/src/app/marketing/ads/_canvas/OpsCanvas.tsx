@@ -14,13 +14,15 @@ export function OpsCanvas({
   expanded,
   onToggleExpand,
   selectedId,
-  onSelect,
+  selectedIds,
+  onSelectNode,
 }: {
   objects: OpsObject[]
   expanded: Set<string>
   onToggleExpand: (id: string) => void
   selectedId: string | null
-  onSelect: (id: string) => void
+  selectedIds: Set<string>
+  onSelectNode: (id: string, additive: boolean) => void
 }) {
   const visible = visibleObjects(objects, expanded)
   const parents = childParentIds(objects)
@@ -37,6 +39,7 @@ export function OpsCanvas({
       childCount: childCount.get(n.id) ?? 0,
       expanded: expanded.has(n.id),
       selected: selectedId === n.id,
+      checked: selectedIds.has(n.id),
       onToggle: () => onToggleExpand(n.id),
     },
   }))
@@ -51,7 +54,7 @@ export function OpsCanvas({
         nodesConnectable={false}
         minZoom={0.2}
         onInit={(inst) => inst.fitView({ padding: 0.2, maxZoom: 1 })}
-        onNodeClick={(_, node) => onSelect(node.id)}
+        onNodeClick={(e, node) => onSelectNode(node.id, e.shiftKey || e.metaKey || e.ctrlKey)}
       >
         <Background gap={22} color="#dfe4ea" />
         <MiniMap pannable zoomable />

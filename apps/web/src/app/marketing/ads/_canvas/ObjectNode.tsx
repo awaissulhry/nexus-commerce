@@ -14,9 +14,10 @@ export function ObjectNode({ data }: NodeProps) {
   const health = d.health ?? 'ok'
   const showCount = d.hasChildren && !d.expanded && typeof d.childCount === 'number' && d.childCount > 0
   return (
-    <div className={`opsn opsn--${health}${d.selected ? ' opsn--sel' : ''}`}>
+    <div className={`opsn opsn--${health}${d.selected ? ' opsn--sel' : ''}${d.checked ? ' opsn--checked' : ''}`}>
       <Handle type="target" position={Position.Left} className="opsn-h" />
       <div className="opsn-top">
+        {d.checked && <span className="opsn-chk" aria-hidden>✓</span>}
         <span className="opsn-kind">{KIND_LABEL[d.kind] ?? d.kind}</span>
         <span className="opsn-top-r">
           {showCount && <span className="opsn-count">{d.childCount}</span>}

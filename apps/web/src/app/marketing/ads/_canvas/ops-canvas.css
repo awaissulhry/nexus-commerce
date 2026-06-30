@@ -24,6 +24,8 @@
 .opsn-dot--bad { background: #e5484d; }
 .opsn-h { width: 7px; height: 7px; background: #b6c0cd; border: none; }
 .opsn--sel { border-color: #1f6fde; box-shadow: 0 0 0 3px #dce8fb, 0 2px 6px rgba(31, 111, 222, 0.18); }
+.opsn--checked { border-color: #1f6fde; background: #f5f9ff; }
+.opsn-chk { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 3px; background: #1f6fde; color: #fff; font-size: 9px; font-weight: 900; line-height: 1; margin-right: 5px; flex-shrink: 0; }
 .opsn-exp {
   width: 18px; height: 18px; border-radius: 5px; border: 1px solid #cfd5dd;
   background: #fff; color: #1f6fde; font-weight: 800; font-size: 13px; line-height: 1;

@@ -85,6 +85,17 @@ export function MissionControlClient() {
   const { objects, loading, error } = useAccountGraph()
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const onSelectNode = (id: string, additive: boolean) => {
+    setSelectedId(id)
+    setSelectedIds((prev) => {
+      if (!additive) return new Set([id])
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const markets = useMemo(() => objects.filter((o) => o.kind === 'market').map((o) => o.id), [objects])
   const expandedReady = expanded.size > 0 || markets.length === 0 ? expanded : new Set(markets)
@@ -126,7 +137,8 @@ export function MissionControlClient() {
               expanded={expandedReady}
               onToggleExpand={toggle}
               selectedId={selectedId}
-              onSelect={setSelectedId}
+              selectedIds={selectedIds}
+              onSelectNode={onSelectNode}
             />
           )}
         </div>

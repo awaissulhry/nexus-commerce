@@ -36,6 +36,7 @@ export interface OpsNodeData {
   childCount?: number
   expanded?: boolean
   selected?: boolean
+  checked?: boolean
   onToggle?: () => void
 }
 
