@@ -506,6 +506,10 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       // blocked at /submit); other channels = warning (qty ignored — clear it).
       const fbaFlags = await flatFileService.findFbaQtyRows(rows)
       const fbaBySku = new Map(fbaFlags.map((f) => [f.sku, f]))
+      // Phase 3 (FBA visibility) — deleting/relisting an FBA SKU leaves its units
+      // stranded in Amazon's warehouse (still bound to the SKU's FNSKU). Surface a
+      // WARNING with the operator-driven next steps; never block, never automate.
+      const fbaDeleteSkus = new Set(await flatFileService.findFbaDeleteRows(rows))
       // G.1 — batch parent/child orphan check (a child's parent_sku must point to a
       // parent present in this submission). eBay-parity with the orphan-variant check.
       const orphanFlags = validateParentChildBatch(rows)
@@ -520,6 +524,13 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
                 ? { field: 'fulfillment_availability__quantity', severity: 'error', message: 'FBA product — clear the quantity (a merchant quantity would flip this FBA listing to FBM)' }
                 : { field: 'fulfillment_availability__quantity', severity: 'warning', message: 'FBA product — quantity is ignored (Amazon manages FBA stock); clear it to be safe' },
             )
+          }
+          if (fbaDeleteSkus.has(sku) && String(r?.record_action ?? '').trim().toLowerCase() === 'delete') {
+            issues.push({
+              field: 'record_action',
+              severity: 'warning',
+              message: 'FBA inventory present — deleting this listing will NOT remove the units from Amazon’s warehouse; they stay bound to this SKU’s FNSKU and become unfulfillable. In Seller Central, create a removal order or sell through first; if relisting under a new SKU, relabel the units to the new FNSKU.',
+            })
           }
           for (const o of orphanFlags) if (o.itemSku === sku) issues.push(o.issue)
           return { sku, issues }
