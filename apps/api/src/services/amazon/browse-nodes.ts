@@ -43,6 +43,12 @@ function findEnumNode(
   return null
 }
 
+/** Read the flat-file row's chosen browse node id (col.id key). null if unset. */
+export function browseNodeIdFromRow(row: Record<string, unknown>): string | null {
+  const v = row['recommended_browse_nodes']
+  return v == null || v === '' ? null : String(v)
+}
+
 export function extractBrowseNodes(
   schema: Record<string, unknown>,
   marketplaceId: string,

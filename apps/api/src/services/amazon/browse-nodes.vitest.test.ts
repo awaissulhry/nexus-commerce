@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractBrowseNodes } from './browse-nodes.js'
+import { extractBrowseNodes, browseNodeIdFromRow } from './browse-nodes.js'
 
 // Representative slice of an Amazon PTD schema for IT motorcycle apparel.
 // Mirrors the live shape: recommended_browse_nodes → array → items.properties.value
@@ -61,5 +61,15 @@ describe('extractBrowseNodes', () => {
     } as Record<string, unknown>
     expect(extractBrowseNodes(s, 'APJ6JRA9NG5V4')).toEqual([{ id: 'IT_NODE', path: 'Italian Path' }])
     expect(extractBrowseNodes(s, 'ATVPDKIKX0DER')).toEqual([{ id: 'US_NODE', path: 'US_NODE' }])
+  })
+})
+
+describe('browseNodeIdFromRow', () => {
+  it('reads the col.id node value', () => {
+    expect(browseNodeIdFromRow({ recommended_browse_nodes: '2420941031' })).toBe('2420941031')
+  })
+  it('null when unset/empty', () => {
+    expect(browseNodeIdFromRow({})).toBeNull()
+    expect(browseNodeIdFromRow({ recommended_browse_nodes: '' })).toBeNull()
   })
 })
