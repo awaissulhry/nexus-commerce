@@ -22,6 +22,7 @@ import {
   isFbaListing,
   buildShopifyProductUpdate,
   withTimeout,
+  resolveDispatchQuantity,
 } from './outbound-sync.service.js'
 
 describe('Phase 0.1 — eBay sync payload helpers', () => {
@@ -212,5 +213,22 @@ describe('B3 — buildShopifyProductUpdate (Shopify content push)', () => {
     expect(buildShopifyProductUpdate(undefined, { title: 'X' })).toBeNull()
     expect(buildShopifyProductUpdate('abc', { title: 'X' })).toBeNull()
     expect(buildShopifyProductUpdate(0, { title: 'X' })).toBeNull()
+  })
+})
+
+describe('Phase 1 — resolveDispatchQuantity (re-read latest at dispatch)', () => {
+  it('prefers the current listing quantity over the stale payload snapshot', () => {
+    expect(resolveDispatchQuantity(45, 50)).toBe(45)
+  })
+  it('treats 0 as a real current value (not falsy-skipped)', () => {
+    expect(resolveDispatchQuantity(0, 50)).toBe(0)
+  })
+  it('falls back to the payload snapshot when current is null/undefined', () => {
+    expect(resolveDispatchQuantity(null, 50)).toBe(50)
+    expect(resolveDispatchQuantity(undefined, 50)).toBe(50)
+  })
+  it('returns undefined when neither is available', () => {
+    expect(resolveDispatchQuantity(null, undefined)).toBeUndefined()
+    expect(resolveDispatchQuantity(undefined, null)).toBeUndefined()
   })
 })
