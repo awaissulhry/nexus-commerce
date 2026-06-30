@@ -69,6 +69,7 @@ export interface OutboundLatencyRow {
   targetChannel: string
   createdAt: Date
   syncedAt: Date | null
+  syncStatus: string
 }
 
 export interface ChannelLatency extends LatencyStats {
@@ -80,13 +81,17 @@ export function buildOutboundLatencyResponse(
   rows: OutboundLatencyRow[],
   window: string,
   checkedAtIso: string,
-): { window: string; channels: ChannelLatency[]; checkedAt: string } {
+  truncated = false,
+): { window: string; channels: ChannelLatency[]; checkedAt: string; truncated: boolean } {
   const byChannel = new Map<string, { deltas: number[]; pending: number }>()
   for (const r of rows) {
     const entry = byChannel.get(r.targetChannel) ?? { deltas: [], pending: 0 }
     const d = outboundDeltaMs(r)
-    if (d === null) entry.pending++
-    else entry.deltas.push(d)
+    if (d === null) {
+      if (r.syncStatus === 'PENDING' || r.syncStatus === 'IN_PROGRESS') entry.pending++
+    } else {
+      entry.deltas.push(d)
+    }
     byChannel.set(r.targetChannel, entry)
   }
   const channels: ChannelLatency[] = [...byChannel.entries()]
@@ -96,7 +101,7 @@ export function buildOutboundLatencyResponse(
       ...computeLatencyStats(deltas),
     }))
     .sort((a, b) => a.channel.localeCompare(b.channel))
-  return { window, channels, checkedAt: checkedAtIso }
+  return { window, channels, checkedAt: checkedAtIso, truncated }
 }
 
 export interface DiagnosticsInput {

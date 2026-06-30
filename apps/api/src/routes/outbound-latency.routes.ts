@@ -27,11 +27,13 @@ export default async function outboundLatencyRoutes(app: FastifyInstance): Promi
           createdAt: { gte: since },
           ...(q.syncType ? { syncType: q.syncType } : {}),
         },
-        select: { targetChannel: true, createdAt: true, syncedAt: true },
+        select: { targetChannel: true, createdAt: true, syncedAt: true, syncStatus: true },
+        orderBy: { createdAt: 'desc' },
         take: 50_000,
       })) as OutboundLatencyRow[]
 
-      return reply.send(buildOutboundLatencyResponse(rows, window, new Date().toISOString()))
+      const truncated = rows.length === 50_000
+      return reply.send(buildOutboundLatencyResponse(rows, window, new Date().toISOString(), truncated))
     } catch (err: any) {
       logger.error('[outbound-latency] failed', { message: err?.message ?? String(err) })
       return reply.status(500).send({ error: err?.message ?? String(err) })
