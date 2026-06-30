@@ -18,6 +18,7 @@
  */
 
 import nodeCron from 'node-cron'
+import type { PrismaClient } from '@prisma/client'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
@@ -31,6 +32,31 @@ const schemaService = new CategorySchemaService(prisma, amazonService)
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
+/**
+ * Returns DISTINCT (marketplace, productType) pairs from active AMAZON schemas,
+ * ordered by marketplace then productType (first-seen wins on duplicates).
+ * A null marketplace defaults to 'IT' (Nexus primary market).
+ */
+export async function collectInUseSchemaTargets(
+  client: PrismaClient,
+): Promise<{ marketplace: string; productType: string }[]> {
+  const rows = await client.categorySchema.findMany({
+    where: { channel: 'AMAZON', isActive: true },
+    select: { marketplace: true, productType: true },
+    orderBy: [{ marketplace: 'asc' }, { productType: 'asc' }],
+  })
+  const seen = new Set<string>()
+  const out: { marketplace: string; productType: string }[] = []
+  for (const r of rows) {
+    const mp = r.marketplace ?? 'IT'
+    const key = `${mp}:${r.productType}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ marketplace: mp, productType: r.productType })
+  }
+  return out
+}
+
 export async function runSchemaRefresh(): Promise<string> {
   if (!amazonService.isConfigured()) {
     logger.warn('schema-refresh cron: Amazon SP-API not configured — skipping')
@@ -38,13 +64,9 @@ export async function runSchemaRefresh(): Promise<string> {
   }
 
   return recordCronRun('schema-refresh', async () => {
-    // Every (productType, marketplace) we have ever cached = the set in active use.
-    const pairs = await prisma.categorySchema.findMany({
-      where: { channel: 'AMAZON' },
-      distinct: ['productType', 'marketplace'],
-      select: { productType: true, marketplace: true },
-      orderBy: [{ productType: 'asc' }, { marketplace: 'asc' }],
-    })
+    // Refresh every (productType, marketplace) actively in use — keeps browse-node
+    // enums and required-field rules ≤24h fresh for operators editing those types.
+    const pairs = await collectInUseSchemaTargets(prisma)
 
     let refreshed = 0
     let failed = 0
