@@ -43,7 +43,7 @@ import { ChannelStrip } from '../ebay-flat-file/ChannelStrip'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import type { FlatFileAiChange } from '@/components/flat-file/FlatFileGrid.types'
 import { FEED_ERROR_CODES } from './feedErrorCodes'
-import { categoryOf, assignCategory } from './category-model'
+import { categoryOf, assignCategory, productTypesInUse } from './category-model'
 
 // EH.5 — Lazy-loaded modals, panels, and bars. Each one only ships
 // to the browser when the operator first opens it, so the initial
@@ -607,11 +607,6 @@ export default function AmazonFlatFileClient({
     }
   }, [unionManifest, manifest, sheetTypes])
 
-  // MT.3 — changing the primary product type (the single-type dropdown) OR the
-  // marketplace resets the sheet to that one category. Resetting on a market
-  // switch avoids racing loadData's row replacement against the union row-append.
-  useEffect(() => { setSheetTypes([productType]) }, [productType, marketplace])
-
   // MT.3 — fetch the UNION manifest whenever the sheet holds >1 product type.
   // Single type ⇒ clear it (effectiveManifest falls back to the single manifest).
   useEffect(() => {
@@ -706,6 +701,25 @@ export default function AmazonFlatFileClient({
     } catch {}
     return merged
   })
+  // MT.3 / BN.2.3 — derive sheetTypes from the union of the primary product type
+  // AND the types actually present in the rows. A mixed-type family (e.g. COAT
+  // rows + PANTS rows) therefore renders both types' columns automatically.
+  // On market-switch, rows reload via loadData so inUse reflects the new set;
+  // productType change re-derives immediately.
+  // VALUE-GUARD: the functional updater compares sorted joined strings and returns
+  // the PREVIOUS array when the set is unchanged — this prevents a new sheetTypes
+  // reference on every cell edit from thrashing the union-manifest fetch.
+  useEffect(() => {
+    const inUse = productTypesInUse(rows)                                   // distinct UPPERCASE
+    const next = Array.from(new Set([productType.toUpperCase(), ...inUse])).filter(Boolean)
+    setSheetTypes((prev) => {
+      const a = [...prev].map((t) => t.toUpperCase()).sort().join(',')
+      const b = [...next].sort().join(',')
+      return a === b ? prev : next                                          // no-op when set unchanged → no union refetch churn
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productType, marketplace, rows])
+
   // Non-null when localStorage has a draft with unsaved edits that differ from
   // the DB rows loaded on this page open.
   const [draftBanner, setDraftBanner] = useState<Row[] | null>(null)
