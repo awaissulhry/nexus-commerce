@@ -611,7 +611,7 @@ export class OutboundSyncService {
       cl = await prisma.channelListing
         .findUnique({
           where: { id: queueItem.channelListingId },
-          select: { platformAttributes: true, fulfillmentMethod: true, quantity: true },
+          select: { platformAttributes: true, fulfillmentMethod: true, quantity: true, stockBuffer: true },
         })
         .catch(() => null);
     }
