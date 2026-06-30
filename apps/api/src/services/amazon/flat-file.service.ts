@@ -1371,6 +1371,38 @@ export class AmazonFlatFileService {
       } catch { /* non-critical; snapshot normalization falls back to title-case only */ }
     }
 
+    // P3.1 — Batch-fetch suppression + open listing issues for all listings in
+    // scope so the grid can show health chips without a secondary round-trip.
+    // Both queries are indexed by listingId; safe to skip when there are no listings.
+    const listingIds = products
+      .map((p: any) => (p.channelListings as any[])[0]?.id)
+      .filter(Boolean) as string[]
+
+    type SuppRow = { listingId: string; reasonCode: string | null; reasonText: string; severity: string }
+    type IssueRow = { listingId: string; severity: string; attributeNames: string[] }
+
+    const suppByListing = new Map<string, SuppRow>()
+    const issuesByListing = new Map<string, IssueRow[]>()
+
+    if (listingIds.length > 0) {
+      const [supps, issues] = await Promise.all([
+        this.prisma.amazonSuppression.findMany({
+          where: { listingId: { in: listingIds }, resolvedAt: null },
+          select: { listingId: true, reasonCode: true, reasonText: true, severity: true },
+        }),
+        this.prisma.listingIssue.findMany({
+          where: { listingId: { in: listingIds }, resolvedAt: null },
+          select: { listingId: true, severity: true, attributeNames: true },
+        }),
+      ]).catch(() => [[], []])  // health data is advisory — never block a grid load
+      for (const s of supps as SuppRow[]) suppByListing.set(s.listingId, s)
+      for (const i of issues as IssueRow[]) {
+        const arr = issuesByListing.get(i.listingId) ?? []
+        arr.push(i)
+        issuesByListing.set(i.listingId, arr)
+      }
+    }
+
     return products.map((p) => {
       const listing = (p.channelListings as any[])[0]
       const attrs = ((listing?.platformAttributes as any)?.attributes ?? {}) as Record<string, any>
@@ -1461,8 +1493,21 @@ export class AmazonFlatFileService {
         // frontend can use it for image loading, the "open on Amazon" link, and
         // the local ASIN cache without relying on the visible column value.
         if (listing.externalListingId) row._asin = listing.externalListingId
+        // P3.1 — listingStatus from DB (was only available via pull-preview before).
+        row._listingStatus = (listing as any).listingStatus ?? null
         row._lastSyncedAt = (listing as any).lastSyncedAt ? (listing as any).lastSyncedAt.toISOString() : null
         row._lastSyncStatus = (listing as any).lastSyncStatus ?? null
+        // P3.1 — Suppression + issue health fields for inline health chip.
+        const supp = suppByListing.get(listing.id)
+        row._suppressed = !!supp
+        if (supp) row._suppressionReason = supp.reasonText ?? supp.reasonCode ?? null
+        const listIssues = issuesByListing.get(listing.id) ?? []
+        row._issueCount = listIssues.length
+        if (listIssues.length > 0) {
+          row._issueSeverity = listIssues.some((i) => i.severity === 'ERROR') ? 'ERROR'
+            : listIssues.some((i) => i.severity === 'WARNING') ? 'WARNING' : 'INFO'
+          row._issueFields = [...new Set(listIssues.flatMap((i) => i.attributeNames))]
+        }
         row._fieldStates = {
           price:        ((listing as any).followMasterPrice        ?? true) ? 'INHERITED' : 'OVERRIDE',
           title:        ((listing as any).followMasterTitle        ?? true) ? 'INHERITED' : 'OVERRIDE',

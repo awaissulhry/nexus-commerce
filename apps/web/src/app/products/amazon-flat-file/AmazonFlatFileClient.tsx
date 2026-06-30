@@ -173,6 +173,16 @@ interface Row {
   _errorFields?: string[]
   /** P2.2 — Raw SP-API error code for the last feed error. */
   _feedCode?: string
+  /** P3.1 — Row is currently suppressed on Amazon. */
+  _suppressed?: boolean
+  /** P3.1 — Human-readable suppression reason. */
+  _suppressionReason?: string | null
+  /** P3.1 — Count of open ListingIssues from ALA. */
+  _issueCount?: number
+  /** P3.1 — Worst open issue severity: ERROR | WARNING | INFO. */
+  _issueSeverity?: string | null
+  /** P3.1 — Column IDs that ALA ListingIssues identify as failing. */
+  _issueFields?: string[]
   _productId?: string
   [key: string]: unknown
 }
@@ -1256,12 +1266,23 @@ export default function AmazonFlatFileClient({
     }
     // P2.1 — Feed-error field highlighting: when Amazon returns per-field errors,
     // shade those specific cells red so the operator knows exactly which to fix.
+    // P3.1 — ListingIssue field highlighting: shade issue-flagged cells amber.
     for (const row of rows) {
-      if (row._ghost || row._status !== 'error' || !row._errorFields) continue
-      const feedMsg = row._feedMessage ?? 'Amazon rejected this field'
-      for (const fieldId of (row._errorFields as string[])) {
-        const key = `${row._rowId as string}:${fieldId}`
-        if (!m.has(key)) m.set(key, { level: 'error', msg: String(feedMsg) })
+      if (row._ghost) continue
+      if (row._status === 'error' && row._errorFields) {
+        const feedMsg = row._feedMessage ?? 'Amazon rejected this field'
+        for (const fieldId of (row._errorFields as string[])) {
+          const key = `${row._rowId as string}:${fieldId}`
+          if (!m.has(key)) m.set(key, { level: 'error', msg: String(feedMsg) })
+        }
+      }
+      if (row._issueFields && (row._issueFields as string[]).length) {
+        const sev = row._issueSeverity ? String(row._issueSeverity) : 'WARNING'
+        const level: 'error' | 'warn' = sev === 'ERROR' ? 'error' : 'warn'
+        for (const fieldId of (row._issueFields as string[])) {
+          const key = `${row._rowId as string}:${fieldId}`
+          if (!m.has(key)) m.set(key, { level, msg: `Amazon listing issue: ${sev.toLowerCase()} on this attribute` })
+        }
       }
     }
     return m
@@ -2522,6 +2543,7 @@ export default function AmazonFlatFileClient({
       'record_action', 'variation_theme',
       '_rowId', '_isNew', '_dirty', '_status', '_feedMessage',
       '_errorFields', '_feedCode',
+      '_suppressed', '_suppressionReason', '_issueCount', '_issueSeverity', '_issueFields',
       '_productId', '_asin', '_listingStatus',
     ])
 
@@ -5267,6 +5289,8 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
   const rowBg = status === 'success' ? 'bg-emerald-50/70 dark:bg-emerald-950/20'
     : status === 'error' ? 'bg-red-50/70 dark:bg-red-950/20'
     : status === 'pending' ? 'bg-amber-50/70 dark:bg-amber-950/20'
+    // P3.1 — suppressed rows get a faint pink tint (below push-status, above dirty)
+    : row._suppressed ? 'bg-pink-50/60 dark:bg-pink-950/15'
     : row._isNew ? 'bg-sky-50/40 dark:bg-sky-950/10'
     : row._dirty ? 'bg-yellow-50/40 dark:bg-yellow-950/10'
     // Family colour banding — only when ≥2 families present (map is empty otherwise)
@@ -5278,6 +5302,7 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
   const frozenBg = status === 'success' ? 'bg-emerald-50 dark:bg-emerald-950/60'
     : status === 'error' ? 'bg-red-50 dark:bg-red-950/60'
     : status === 'pending' ? 'bg-amber-50 dark:bg-amber-950/60'
+    : row._suppressed ? 'bg-pink-50 dark:bg-pink-950/40'
     : row._isNew ? 'bg-sky-50 dark:bg-sky-950/40'
     : row._dirty ? 'bg-yellow-50 dark:bg-yellow-950/40'
     : isParent && familyColor ? FC_PARENT_FROZEN[familyColor]
@@ -5458,6 +5483,31 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
               : s === 'INACTIVE' ? 'text-amber-500 dark:text-amber-400'
               : 'text-red-500 dark:text-red-400'
             return <span className={cn('text-[9px] font-semibold leading-none', cls)}>{s.slice(0, 4)}</span>
+          })()}
+
+          {/* P3.3 — Health chip: red = suppressed, amber = open issues */}
+          {!row._ghost && (() => {
+            const suppressed = row._suppressed
+            const issueCount = typeof row._issueCount === 'number' ? row._issueCount : 0
+            const issueSeverity = row._issueSeverity ? String(row._issueSeverity) : null
+            const suppressionReason = row._suppressionReason ? String(row._suppressionReason) : null
+            if (!suppressed && !issueCount) return null
+            const chipCls = suppressed
+              ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+              : issueSeverity === 'ERROR'
+              ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
+              : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+            const chipLabel = suppressed ? '⊘' : String(issueCount)
+            const tipText = suppressed
+              ? `Suppressed${suppressionReason ? `: ${suppressionReason}` : ' (no reason given)'}`
+              : `${issueCount} open issue${issueCount !== 1 ? 's' : ''}${issueSeverity ? ` — ${issueSeverity}` : ''}`
+            return (
+              <Tooltip label={<span className="text-xs max-w-[200px] block">{tipText}</span>} className="h10-ds-tooltip--light">
+                <span className={cn('shrink-0 font-mono text-[8px] rounded px-0.5 py-px leading-none cursor-help', chipCls)}>
+                  {chipLabel}
+                </span>
+              </Tooltip>
+            )
           })()}
 
           {/* Required-fields completeness chip — mirrors the eBay flat file; counts
