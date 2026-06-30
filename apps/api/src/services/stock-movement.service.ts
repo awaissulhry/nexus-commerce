@@ -6,6 +6,7 @@ import { handleMovementStockoutTransition } from './stockout-detector.service.js
 import { consumeLayersInTx, receiveLayerInTx } from './cost-layers.service.js'
 import { computeAvailableToPublish } from './available-to-publish.service.js'
 import { enqueueSharedTradingFanout } from './ebay-shared-fanout.service.js'
+import { coalescePendingQuantityRows } from './sync-coalesce.js'
 
 // S.20 — reasons that consume cost layers (decrease quantity AND
 // realise COGS). Manual-adjustment subtractions also consume; the
@@ -699,6 +700,12 @@ async function cascadeQuantityToListings(
 
   let queuedSyncIds: string[] = []
   if (queueRowsToCreate.length > 0) {
+    // P1 — cancel stale PENDING quantity rows for these listings before
+    // inserting the fresh ones, so an older snapshot can't dispatch after the
+    // new value. Same tx → atomic. Kill-switch: NEXUS_SYNC_ORDERING_V2=0.
+    if (process.env.NEXUS_SYNC_ORDERING_V2 !== '0') {
+      await coalescePendingQuantityRows(tx, cascadedListingIds)
+    }
     await tx.outboundSyncQueue.createMany({ data: queueRowsToCreate })
     const justEnqueued = await tx.outboundSyncQueue.findMany({
       where: {

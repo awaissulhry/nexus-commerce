@@ -597,7 +597,7 @@ export class OutboundSyncService {
       cl = await prisma.channelListing
         .findUnique({
           where: { id: queueItem.channelListingId },
-          select: { platformAttributes: true, fulfillmentMethod: true },
+          select: { platformAttributes: true, fulfillmentMethod: true, quantity: true },
         })
         .catch(() => null);
     }
@@ -632,6 +632,12 @@ export class OutboundSyncService {
       hasActiveFbaOffer = !!fbaOffer;
     }
     const isFba = isFbaListing(cl, product, { fbaStockQty, hasActiveFbaOffer });
+    // P1 — push the CURRENT listing quantity (the latest committed value), not
+    // the stale enqueue-time snapshot. FBA listings still drop the qty patch
+    // below regardless of value. Kill-switch: NEXUS_SYNC_ORDERING_V2=0.
+    if (process.env.NEXUS_SYNC_ORDERING_V2 !== '0' && cl && payload.quantity !== undefined) {
+      payload.quantity = resolveDispatchQuantity(cl.quantity, payload.quantity);
+    }
     const amazonPayload = buildAmazonListingPatch(payload, marketplaceId, productType, isFba ? "FBA" : "FBM");
 
     // B2 — an FBA quantity-only update yields zero patches (we never touch Amazon's
@@ -720,10 +726,15 @@ export class OutboundSyncService {
         queueItem.channelListingId
           ? prisma.channelListing.findUnique({
               where: { id: queueItem.channelListingId },
-              select: { stockBuffer: true, fulfillmentMethod: true },
+              select: { stockBuffer: true, fulfillmentMethod: true, quantity: true },
             })
           : Promise.resolve(null),
       ]);
+      // P1 — base the eBay push on the CURRENT listing quantity, then apply the
+      // warehouse cap below. Kill-switch: NEXUS_SYNC_ORDERING_V2=0.
+      if (process.env.NEXUS_SYNC_ORDERING_V2 !== '0' && cl && payload.quantity !== undefined) {
+        payload.quantity = resolveDispatchQuantity(cl.quantity, payload.quantity);
+      }
       if (cl?.fulfillmentMethod !== "FBA") {
         const warehouseAvailable = whRows.reduce((s, r) => s + r.available, 0);
         const cap = computeAvailableToPublish({
