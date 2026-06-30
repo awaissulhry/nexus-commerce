@@ -10,7 +10,7 @@ const KIND_LABEL: Record<string, string> = {
 }
 
 export function ObjectNode({ data }: NodeProps) {
-  const d = data as OpsNodeData
+  const d = data as unknown as OpsNodeData
   const health = d.health ?? 'ok'
   return (
     <div className={`opsn opsn--${health}`}>

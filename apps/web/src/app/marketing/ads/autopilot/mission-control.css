@@ -1,0 +1,12 @@
+.mc-root { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.mc-head { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-bottom: 1px solid #e3e7ec; background: #fff; }
+.mc-eyebrow { font-size: 11px; color: #8a93a1; font-weight: 600; }
+.mc-title { font-size: 20px; font-weight: 800; color: #1c2530; margin: 0; }
+.mc-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.mc-chip { border: 1px solid #e3e7ec; border-radius: 7px; padding: 5px 10px; font-size: 12px; font-weight: 700; color: #5b6573; background: #fff; }
+.mc-chip--auto { background: #1f6fde; color: #fff; border-color: #1f6fde; }
+.mc-chip--kill { color: #e5484d; border-color: #f3c0c2; }
+.mc-body { flex: 1; min-height: 0; display: flex; }
+.mc-canvas-wrap { flex: 1; min-width: 0; min-height: 560px; }
+.mc-inspector { width: 280px; flex: 0 0 280px; border-left: 1px solid #e3e7ec; background: #fff; padding: 16px; }
+.mc-insp-empty { color: #8a93a1; font-size: 13px; }
