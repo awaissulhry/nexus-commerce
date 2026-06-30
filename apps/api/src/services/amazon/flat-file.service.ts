@@ -19,6 +19,8 @@ import { CategorySchemaService } from '../categories/schema-sync.service.js'
 import { parseLocaleNumber, parseLocaleInt } from '../../lib/parse-locale-number.js'
 import { casUpdateChannelListing, isVersionConflict } from '../channel-listing-cas.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
+import { extractBrowseNodes, type BrowseNode } from './browse-nodes.js'
+import { amazonMarketplaceId } from '../categories/marketplace-ids.js'
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -515,6 +517,18 @@ function buildFieldRef(fieldId: string, index = 1): string {
   if (fieldId.includes('image_locator'))
     return `${fieldId}[marketplace_id]#${index}.media_location`
   return `${fieldId}[marketplace_id]#${index}.value`
+}
+
+/** BN.0.2 — if `col` is a recommended_browse_nodes value column, make it an
+ *  enum carrying node ids (options) + localized paths (optionLabels) so the
+ *  grid renders the existing search-as-you-type EnumDropdown. Free-text still
+ *  allowed (selectionOnly=false) since a market may surface a node not in enum. */
+export function decorateBrowseNodeColumn(col: FlatFileColumn, nodes: BrowseNode[]): FlatFileColumn {
+  if (!/^recommended_browse_nodes\b/.test(col.fieldRef) || nodes.length === 0) return col
+  const options = nodes.map((n) => n.id)
+  const optionLabels: Record<string, string> = {}
+  for (const n of nodes) optionLabels[n.id] = n.path
+  return { ...col, kind: 'enum', selectionOnly: false, options, optionLabels }
 }
 
 /**
@@ -1273,12 +1287,21 @@ export class AmazonFlatFileService {
       })
     }
 
+    // BN.0.2 — decorate recommended_browse_nodes columns with id→path enum options
+    const browseNodes = extractBrowseNodes(def, amazonMarketplaceId(mp))
+    const allGroups = [infraGroup, variationsGroup, ...schemaGroups]
+    if (browseNodes.length > 0) {
+      for (const g of allGroups) {
+        g.columns = g.columns.map((c) => decorateBrowseNodeColumn(c, browseNodes))
+      }
+    }
+
     return {
       marketplace: mp,
       productType: pt,
       variationThemes,
       fetchedAt: new Date().toISOString(),
-      groups: [infraGroup, variationsGroup, ...schemaGroups],
+      groups: allGroups,
       expandedFields,
     }
   }
