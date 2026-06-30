@@ -1524,6 +1524,12 @@ export default function AmazonFlatFileClient({
   // GX.5 — the visible rows excluding the blank canvas, for counts + select-all.
   const realDisplayRows = useMemo(() => displayRows.filter((r) => !r._ghost), [displayRows])
   const realRowCount = useMemo(() => rows.reduce((n, r) => n + (r._ghost ? 0 : 1), 0), [rows])
+  // P-1 — non-ghost selected count: used for Set-category button label/gate AND
+  // passed to SetCategoryModal so button N === modal N === apply N always agree.
+  const selectedRealCount = useMemo(
+    () => rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string)).length,
+    [rows, selectedRows],
+  )
 
   // BF.1 — flat list of every visible cell for FindReplaceBar
   const findCells = useMemo<FindCell[]>(() => {
@@ -2106,15 +2112,28 @@ export default function AmazonFlatFileClient({
     [showRowImages, imageSize],
   )
 
-  const stickyLeftByColIdx = useMemo<Record<number, number>>(() => {
+  // P-2: combined memo — stickyLeftByColIdx keyed by allColumns index + categoryStickyLeft
+  // for the synthetic Category column.  When frozenColCount <= categoryInsertAfterIdx, the
+  // loop never reaches column R so catLeft stays undefined and offsets are BYTE-IDENTICAL
+  // to the original (default frozenColCount=1 is unaffected).  When frozen past R the
+  // category's 200px is added to subsequent column offsets and the category itself gets
+  // a sticky left equal to the accumulated offset right after column R.
+  const { stickyLeftByColIdx, categoryStickyLeft } = useMemo(() => {
     const out: Record<number, number> = {}
     let left = 36 + rowHeaderWidth // checkbox(36) + row# (dynamic)
+    let catLeft: number | undefined
+    const R = categoryInsertAfterIdx
+    const CAT_W = 200 // matches CATEGORY_COL.width
     for (let i = 0; i < Math.min(frozenColCount, allColumns.length); i++) {
       out[i] = left
       left += colWidths[allColumns[i].id] ?? allColumns[i].width
+      if (i === R) {
+        catLeft = left   // category sits right after column R in the render
+        left += CAT_W   // shift all subsequent frozen cols by category width
+      }
     }
-    return out
-  }, [frozenColCount, allColumns, colWidths, rowHeaderWidth])
+    return { stickyLeftByColIdx: out, categoryStickyLeft: catLeft }
+  }, [frozenColCount, allColumns, colWidths, rowHeaderWidth, categoryInsertAfterIdx])
 
   const dirtyRows = useMemo(() => rows.filter((r) => r._dirty || r._isNew), [rows])
   const newCount  = useMemo(() => rows.filter((r) => r._isNew).length, [rows])
@@ -4330,9 +4349,10 @@ export default function AmazonFlatFileClient({
               </div>
             )}
             {/* BN.2.2 — Set category: bulk-assign product type + browse node to selected rows. */}
-            {selectedRows.size > 0 && (
+            {/* P-1: gate + label on selectedRealCount (non-ghost) so they match the modal's apply count */}
+            {selectedRealCount > 0 && (
               <Button size="sm" variant="secondary" onClick={() => setShowSetCategory(true)}>
-                Set category ({selectedRows.size})
+                Set category ({selectedRealCount})
               </Button>
             )}
           </div>
@@ -4715,9 +4735,10 @@ export default function AmazonFlatFileClient({
                     </th>
                   )
                   if (gi === categoryGroupInsertAfterIdx) {
-                    return [groupTh, <th key="__category-band" style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width }}
-                      className="px-2 py-1 text-xs font-bold border-b border-r border-slate-200 dark:border-slate-700 text-left whitespace-nowrap text-slate-500 dark:text-slate-400">
-                      {CATEGORY_COL.labelLocal}
+                    return [groupTh, <th key="__category-band"
+                      style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width, ...(categoryStickyLeft !== undefined ? { position: 'sticky' as const, left: categoryStickyLeft, zIndex: 30 } : {}) }}
+                      className={cn('px-2 py-1 text-xs font-bold border-b border-r border-slate-200 dark:border-slate-700 text-left whitespace-nowrap text-slate-500 dark:text-slate-400', categoryStickyLeft !== undefined && 'bg-white dark:bg-slate-900')}>
+                      {/* P-3: band label intentionally blank — column header row already says "Category" */}
                     </th>]
                   }
                   return [groupTh]
@@ -4786,8 +4807,9 @@ export default function AmazonFlatFileClient({
                     </th>
                   )
                   if (col.id === 'record_action') {
-                    return [_th, <th key="en-__category" style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width }}
-                      className="px-2 py-0.5 text-left text-xs font-semibold border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none text-slate-500 dark:text-slate-400">
+                    return [_th, <th key="en-__category"
+                      style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width, ...(categoryStickyLeft !== undefined ? { position: 'sticky' as const, left: categoryStickyLeft, zIndex: 25 } : {}) }}
+                      className={cn('px-2 py-0.5 text-left text-xs font-semibold border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none text-indigo-600 dark:text-indigo-400', categoryStickyLeft !== undefined && 'bg-white dark:bg-slate-900')}>
                       {CATEGORY_COL.labelEn}
                     </th>]
                   }
@@ -4814,8 +4836,9 @@ export default function AmazonFlatFileClient({
                     </th>
                   )
                   if (col.id === 'record_action') {
-                    return [_th, <th key="it-__category" style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width }}
-                      className="px-2 py-0.5 text-left text-xs font-normal border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap text-slate-400 dark:text-slate-500 italic">
+                    return [_th, <th key="it-__category"
+                      style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width, ...(categoryStickyLeft !== undefined ? { position: 'sticky' as const, left: categoryStickyLeft, zIndex: 25 } : {}) }}
+                      className={cn('px-2 py-0.5 text-left text-xs font-normal border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap text-slate-400 dark:text-slate-500 italic', categoryStickyLeft !== undefined && 'bg-white dark:bg-slate-900')}>
                       {CATEGORY_COL.labelLocal}
                     </th>]
                   }
@@ -4878,6 +4901,7 @@ export default function AmazonFlatFileClient({
                   onFillToBottom={fillToBottom}
                   onFillDrop={handleFillDrop}
                   stickyLeftByColIdx={stickyLeftByColIdx}
+                  categoryStickyLeft={categoryStickyLeft}
                   cellErrors={cellErrors}
                   collapsedParents={collapsedParents}
                   familyColor={familyColorByRowId.get(row._rowId as string)}
@@ -5292,7 +5316,7 @@ export default function AmazonFlatFileClient({
       {showSetCategory && (
         <SetCategoryModal open marketplace={marketplace}
           productTypeOptions={productTypes.map((p) => p.value)}
-          selectedCount={Array.from(selectedRows).filter((id) => rows.some((r) => r._rowId === id && !r._ghost)).length}
+          selectedCount={selectedRealCount}
           onApply={applyCategory} onClose={() => setShowSetCategory(false)} />
       )}
 
@@ -5410,6 +5434,8 @@ interface RowProps {
   editInitialChar: string | null
   clipboardRange: NormSel | null
   stickyLeftByColIdx: Record<number, number>
+  /** P-2: sticky left offset for the synthetic Category column when frozen. undefined = not frozen. */
+  categoryStickyLeft?: number
   cellErrors: Map<string, ValidationIssue>
   collapsedParents: Set<string>
   familyColor?: FamilyColor
@@ -5518,7 +5544,7 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
   marketplace, colWidths, rowHeight, rowHeaderWidth, showRowImages, imageSize, imagesByAsin,
   isDraggingRow, dropIndicator,
   normSel, fillTarget, isFillDragging, isEditing, editInitialChar, clipboardRange,
-  stickyLeftByColIdx, cellErrors, collapsedParents, familyColor, onToggleCollapse,
+  stickyLeftByColIdx, categoryStickyLeft, cellErrors, collapsedParents, familyColor, onToggleCollapse,
   matchKeys, toneMap,
   onSelect, onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate, onRowResizeStart,
   onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
@@ -6021,7 +6047,7 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
           return [
             _cell,
             <td key="__category"
-              style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width }}
+              style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width, ...(categoryStickyLeft !== undefined ? { position: 'sticky' as const, left: categoryStickyLeft, zIndex: 22 } : {}) }}
               className="border-b border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
               <div className="px-1.5 flex items-center gap-1" style={{ height: rowHeight }}>
                 {show
