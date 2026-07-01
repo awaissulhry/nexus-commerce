@@ -44,6 +44,10 @@ import { OverrideBadge } from '../_shared/OverrideBadge'
 import type { FlatFileAiChange } from '@/components/flat-file/FlatFileGrid.types'
 import { FEED_ERROR_CODES } from './feedErrorCodes'
 import { categoryOf, assignCategory, productTypesInUse, mixedTypeFamilies, rowsMissingNode, formatNodeBreadcrumb } from './category-model'
+import {
+  loadGroups, saveGroups, loadGroupMode, saveGroupMode, loadCollapsedGroups, saveCollapsedGroups,
+  type GroupMode, type FlatFileGroup,
+} from './group-model'
 
 // EH.5 — Lazy-loaded modals, panels, and bars. Each one only ships
 // to the browser when the operator first opens it, so the initial
@@ -841,6 +845,15 @@ export default function AmazonFlatFileClient({
   } | null>(null)
 
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
+  // ── CG — custom SKU groups (view-only; per-market, localStorage) ──────
+  // Grouping is a pure VIEW concern: it never enters rows/data/paste/serialize/
+  // submit/export. `family` (default) renders identically to before.
+  const [groupMode, setGroupMode] = useState<GroupMode>(() => loadGroupMode(marketplace))
+  const [customGroups, setCustomGroups] = useState<FlatFileGroup[]>(() => loadGroups(marketplace))
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => loadCollapsedGroups(marketplace))
+  // Tracks the market the group state currently belongs to, so persistence
+  // saves to the right market and a market switch never clobbers it.
+  const groupMarketRef = useRef(marketplace)
   const [frozenColCount, setFrozenColCount] = useState<number>(() => {
     try { return parseInt(localStorage.getItem('ff-frozen-cols') ?? '1', 10) || 1 } catch { return 1 }
   })
@@ -1115,6 +1128,23 @@ export default function AmazonFlatFileClient({
     try { return localStorage.getItem('ff-show-overrides') !== '0' } catch { return true }
   })
   useEffect(() => { try { localStorage.setItem('ff-show-overrides', showOverrideBadges ? '1' : '0') } catch {} }, [showOverrideBadges])
+
+  // CG — persist group state on change. Save to the ref-tracked market (NOT
+  // `marketplace` in deps) so switching markets — which reloads state below —
+  // can't save the old market's groups into the new market's key.
+  useEffect(() => { saveGroups(groupMarketRef.current, customGroups) }, [customGroups])
+  useEffect(() => { saveGroupMode(groupMarketRef.current, groupMode) }, [groupMode])
+  useEffect(() => { saveCollapsedGroups(groupMarketRef.current, collapsedGroups) }, [collapsedGroups])
+  // CG — rehydrate group state when the market changes (ref guard skips mount
+  // and prevents a load/save loop; persist effects above don't fire here since
+  // their deps are the state values, which only change on the next render).
+  useEffect(() => {
+    if (groupMarketRef.current === marketplace) return
+    groupMarketRef.current = marketplace
+    setGroupMode(loadGroupMode(marketplace))
+    setCustomGroups(loadGroups(marketplace))
+    setCollapsedGroups(loadCollapsedGroups(marketplace))
+  }, [marketplace])
 
   // IN.2 — Cascade button toggle (default on) + row being cascaded
   const [showCascadeButtons, setShowCascadeButtons] = useState<boolean>(() => {
@@ -4246,6 +4276,28 @@ export default function AmazonFlatFileClient({
                 onClick={() => setShowOverrideBadges((o) => !o)}
                 active={showOverrideBadges}
               />
+              {/* CG — Group by mode (view-only grouping) */}
+              <div
+                className="flex items-center gap-0.5 ml-1 pl-1.5 border-l border-slate-200 dark:border-slate-700"
+                title="Group rows by variation family (default), fulfillment (FBA/FBM), or your custom groups. View-only — never affects the feed."
+              >
+                <span className="text-[10px] uppercase tracking-wide text-slate-400 mr-0.5 select-none">Group</span>
+                {([['family', 'Family'], ['fulfillment', 'FBA/FBM'], ['custom', 'Custom']] as const).map(([val, label]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setGroupMode(val)}
+                    aria-pressed={groupMode === val}
+                    className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${
+                      groupMode === val
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               {/* IN.2 — Cascade buttons toggle */}
               <SharedTbBtn
                 icon={<GitFork className="w-3.5 h-3.5" />}
