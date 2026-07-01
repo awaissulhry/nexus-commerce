@@ -4732,6 +4732,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { pushCampaignStructure } = await import('../services/advertising/ads-create.service.js')
     try { return await pushCampaignStructure(id) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
+
+  // LAUNCH-REPAIR — bulk ad-group negative keywords (funnel isolation back-fill). Idempotent.
+  fastify.post('/advertising/negative-keywords/bulk', async (request, reply) => {
+    const b = request.body as { items?: Array<{ adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE' }>; userId?: string }
+    if (!Array.isArray(b?.items) || !b.items.length) { reply.status(400); return { error: 'items[] required' } }
+    if (b.items.length > 2000) { reply.status(400); return { error: 'too many items (max 2000)' } }
+    const { bulkNegativeKeywords } = await import('../services/advertising/ads-create.service.js')
+    try { return await bulkNegativeKeywords(b.items, b.userId) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
   // ── AX2.10: Data-grounded bid suggestions ───────────────────────────
   fastify.post('/advertising/bid-suggestions', async (request, reply) => {
     const b = request.body as { keywords?: string[]; matchType?: string; marketplace?: string; adTargetId?: string }

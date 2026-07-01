@@ -380,6 +380,27 @@ export async function createNegativeKeywordLocal(input: NewNegativeKeyword): Pro
   return { id: t.id, externalTargetId: externalId, mode }
 }
 
+// LAUNCH-REPAIR — bulk ad-group negative keywords (funnel isolation). Idempotent: skips a negative
+// that already exists for (adGroup, matchType, text). Used to back-fill the funnel de-dup negatives
+// on campaigns launched via the API (which bypasses the wizard UI's applyAutoNegatives).
+export async function bulkNegativeKeywords(items: Array<{ adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE' }>, userId?: string): Promise<{ created: number; pushed: number; skipped: number; failed: number; errors: string[] }> {
+  const out = { created: 0, pushed: 0, skipped: 0, failed: 0, errors: [] as string[] }
+  for (const it of items) {
+    const text = (it.keywordText || '').trim()
+    if (!text || (it.matchType !== 'EXACT' && it.matchType !== 'PHRASE')) { out.failed++; out.errors.push('bad item ' + JSON.stringify(it)); continue }
+    const dupe = await prisma.adTarget.findFirst({ where: { adGroupId: it.adGroupId, kind: 'KEYWORD', isNegative: true, expressionType: it.matchType, expressionValue: { equals: text, mode: 'insensitive' } }, select: { id: true } })
+    if (dupe) { out.skipped++; continue }
+    try {
+      const r = await createNegativeKeywordLocal({ adGroupId: it.adGroupId, keywordText: text, matchType: it.matchType, userId })
+      out.created++
+      if (r.externalTargetId) out.pushed++
+      else out.errors.push('not pushed (gate/local): ' + it.matchType + ' "' + text + '"')
+    } catch (e) { out.failed++; out.errors.push('"' + text + '" ' + it.matchType + ': ' + ((e as Error)?.message || '')) }
+  }
+  logger.info('[LAUNCH-REPAIR] bulkNegativeKeywords', out)
+  return out
+}
+
 // H.7 — persist a CAMPAIGN-scope negative keyword as a local mirror row so our platform reflects it
 // immediately (gated-local), matching how the sync stores campaign negatives: AdTarget with
 // negativeLevel='CAMPAIGN' + expressionType='NEGATIVE_<mt>', attached to a representative ad group of
