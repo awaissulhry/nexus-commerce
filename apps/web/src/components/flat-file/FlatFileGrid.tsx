@@ -804,8 +804,13 @@ export default function FlatFileGrid({
   })
   const resizeDragRef = useRef<{ type: 'col' | 'row'; colId?: string; startX: number; startY: number; startVal: number } | null>(null)
 
-  useEffect(() => { try { localStorage.setItem(`${storageKey}-col-widths`, JSON.stringify(colWidths)) } catch {} }, [colWidths, storageKey])
-  useEffect(() => { try { localStorage.setItem(`${storageKey}-row-height`, String(rowHeight)) } catch {} }, [rowHeight, storageKey])
+  // #49 — mirror sizes into refs and skip the localStorage write while a resize
+  // drag is in progress (it fired JSON.stringify + write on every mousemove);
+  // the final value is flushed once on mouseup (onUp below).
+  const colWidthsRef = useRef(colWidths); useEffect(() => { colWidthsRef.current = colWidths }, [colWidths])
+  const rowHeightRef = useRef(rowHeight); useEffect(() => { rowHeightRef.current = rowHeight }, [rowHeight])
+  useEffect(() => { if (resizeDragRef.current) return; try { localStorage.setItem(`${storageKey}-col-widths`, JSON.stringify(colWidths)) } catch {} }, [colWidths, storageKey])
+  useEffect(() => { if (resizeDragRef.current) return; try { localStorage.setItem(`${storageKey}-row-height`, String(rowHeight)) } catch {} }, [rowHeight, storageKey])
   useEffect(() => { try { localStorage.setItem(`${storageKey}-frozen-cols`, String(frozenColCount)) } catch {} }, [frozenColCount, storageKey])
 
   // ── Sort state (persisted) ─────────────────────────────────────────────
@@ -822,7 +827,16 @@ export default function FlatFileGrid({
       if (d.type === 'col' && d.colId) setColWidths((p) => ({ ...p, [d.colId!]: Math.max(60, d.startVal + e.clientX - d.startX) }))
       else if (d.type === 'row') setRowHeight(Math.max(24, d.startVal + e.clientY - d.startY))
     }
-    function onUp() { resizeDragRef.current = null }
+    function onUp() {
+      const d = resizeDragRef.current
+      resizeDragRef.current = null
+      if (!d) return
+      // #49 — flush the final size once, now that the per-move writes were skipped
+      try {
+        if (d.type === 'col') localStorage.setItem(`${storageKey}-col-widths`, JSON.stringify(colWidthsRef.current))
+        else localStorage.setItem(`${storageKey}-row-height`, String(rowHeightRef.current))
+      } catch {}
+    }
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
     return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
@@ -1072,9 +1086,10 @@ export default function FlatFileGrid({
     [rows, validate],
   )
 
-  const dirtyCount  = rows.filter((r) => r._dirty).length
-  const errorCount  = validationIssues.filter((i) => i.level === 'error').length
-  const warnCount   = validationIssues.filter((i) => i.level === 'warn').length
+  // #83 — memoize the status-bar derivations instead of recomputing every render
+  const dirtyCount  = useMemo(() => rows.filter((r) => r._dirty).length, [rows])
+  const errorCount  = useMemo(() => validationIssues.filter((i) => i.level === 'error').length, [validationIssues])
+  const warnCount   = useMemo(() => validationIssues.filter((i) => i.level === 'warn').length, [validationIssues])
 
   const toneMap = useMemo(() => {
     const out = new Map<string, string>()
@@ -1089,16 +1104,20 @@ export default function FlatFileGrid({
   }, [cfRules, displayRows])
 
   const findCells = useMemo<FindCell[]>(() => {
+    // #55 — only build the rows×cols index while Find/Replace is open (was
+    // rebuilt on every edit even when closed); depend on allColumns so it
+    // doesn't read a lagging ref.
+    if (!showFindReplace) return []
     const out: FindCell[] = []
     displayRows.forEach((row, ri) => {
-      allColumnsRef.current.forEach((col, ci) => {
+      allColumns.forEach((col, ci) => {
         // #7 — readonly columns stay FINDABLE (search ASIN/item-id) but the
         // replace write is gated in onReplaceCell, so they can't be mutated.
         out.push({ rowIdx: ri, colIdx: ci, rowId: row._rowId, columnId: col.id, value: row[col.id] })
       })
     })
     return out
-  }, [displayRows])
+  }, [displayRows, allColumns, showFindReplace])
 
   const stickyLeftByColIdx = useMemo<Record<number, number>>(() => {
     const out: Record<number, number> = {}
