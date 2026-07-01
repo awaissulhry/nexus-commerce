@@ -178,7 +178,20 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, initial
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase()
-    return options.filter((o) => !q || label(o).toLowerCase().includes(q) || o.toLowerCase().includes(q))
+    if (!q) return options
+    // #45 — rank matches exact > prefix > substring (stable within each tier) so
+    // an exact/prefix hit isn't buried past the render cap on big lists.
+    const rank = (o: string) => {
+      const a = o.toLowerCase(), b = label(o).toLowerCase()
+      if (a === q || b === q) return 0
+      if (a.startsWith(q) || b.startsWith(q)) return 1
+      return 2
+    }
+    return options
+      .map((o, i) => ({ o, i, r: rank(o) }))
+      .filter(({ o }) => label(o).toLowerCase().includes(q) || o.toLowerCase().includes(q))
+      .sort((x, y) => x.r - y.r || x.i - y.i)
+      .map(({ o }) => o)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options, optionLabels, query])
 
@@ -1217,10 +1230,29 @@ export default function FlatFileGrid({
   type CellChange = { rowId: string; colId: string; value: unknown }
   const commitCells = useCallback((changes: CellChange[]) => {
     if (changes.length === 0) return
+    // #23/#74/#75 — normalize every bulk-written value the same way the
+    // interactive editors do: coerce booleans, and clamp to maxLength (chars)
+    // and maxUtf8ByteLength (bytes), so paste/fill/replace/AI can't smuggle in
+    // invalid or over-long values that the channel later rejects.
+    const colById = new Map(allColumnsRef.current.map((c) => [c.id, c]))
+    const byteLen = (s: string) => new TextEncoder().encode(s).length
+    const normalized = changes.map((ch) => {
+      const col = colById.get(ch.colId)
+      if (!col || typeof ch.value !== 'string') return ch
+      let v = ch.value
+      if (col.kind === 'boolean') {
+        const t = v.trim().toLowerCase()
+        v = ['true', 'yes', '1', 'y', 't'].includes(t) ? 'true' : ['false', 'no', '0', 'n', 'f'].includes(t) ? 'false' : ''
+      } else {
+        if (col.maxLength && v.length > col.maxLength) v = v.slice(0, col.maxLength)
+        if (col.maxUtf8ByteLength) { while (v && byteLen(v) > col.maxUtf8ByteLength) v = v.slice(0, -1) }
+      }
+      return v === ch.value ? ch : { ...ch, value: v }
+    })
     // #30 — drop no-op changes (delete-empty, fill-same, re-pick same enum) so
     // rows aren't falsely marked dirty and undo isn't polluted with dead steps.
     const rowById = new Map(rowsRef.current.map((r) => [r._rowId, r]))
-    const real = changes.filter((ch) => {
+    const real = normalized.filter((ch) => {
       const r = rowById.get(ch.rowId)
       return !!r && (r[ch.colId] ?? '') !== (ch.value ?? '')
     })
