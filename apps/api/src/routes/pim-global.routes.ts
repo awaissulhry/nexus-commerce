@@ -551,7 +551,30 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
         apply(field)
       }
 
+      const quantityWillChange =
+        (field === 'quantity' || field === 'all') && cl.followMasterQuantity === false
+
       await prisma.channelListing.update({ where: { id: clId }, data })
+
+      // A2 — journal followMasterQuantity toggle (best-effort, fail-open).
+      if (quantityWillChange) {
+        try {
+          await prisma.auditLog.create({
+            data: {
+              entityType: 'ChannelListing',
+              entityId: clId,
+              action: 'update',
+              userId: null,
+              before: { followMasterQuantity: false },
+              after: { followMasterQuantity: true },
+              metadata: { field: 'followMasterQuantity', reason: 'reset' },
+            },
+          })
+        } catch (auditErr) {
+          request.log.warn({ err: auditErr, clId }, '[pim-global/reset] audit write failed (non-blocking)')
+        }
+      }
+
       return reply.send({ ok: true, field })
     },
   )

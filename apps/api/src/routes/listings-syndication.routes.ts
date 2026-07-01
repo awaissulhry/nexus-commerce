@@ -3312,6 +3312,21 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         let failed = 0
         const errors: Array<{ listingId: string; reason: string }> = []
 
+        // A2 — pre-read followMasterQuantity for follow/unfollow actions so
+        // we can skip no-op audit writes and capture accurate before values.
+        const followQtyBefore = new Map<string, boolean>()
+        if (action === 'follow-master' || action === 'unfollow-master') {
+          try {
+            const rows = await prisma.channelListing.findMany({
+              where: { id: { in: ids } },
+              select: { id: true, followMasterQuantity: true },
+            })
+            for (const r of rows) followQtyBefore.set(r.id, r.followMasterQuantity)
+          } catch (preReadErr) {
+            fastify.log.warn({ err: preReadErr, jobId }, '[listings/bulk-action] followMasterQuantity pre-read failed (non-blocking)')
+          }
+        }
+
         for (const id of ids) {
           try {
             const data: any = {}
@@ -3358,6 +3373,27 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
             data.version = { increment: 1 }
             await prisma.channelListing.update({ where: { id }, data })
             succeeded += 1
+
+            // A2 — journal followMasterQuantity toggle when it actually changed.
+            if (action === 'follow-master' || action === 'unfollow-master') {
+              const newVal = action === 'follow-master'
+              const oldVal = followQtyBefore.get(id) ?? true // default is true
+              if (oldVal !== newVal) {
+                prisma.auditLog.create({
+                  data: {
+                    entityType: 'ChannelListing',
+                    entityId: id,
+                    action: 'update',
+                    userId: null,
+                    before: { followMasterQuantity: oldVal },
+                    after: { followMasterQuantity: newVal },
+                    metadata: { field: 'followMasterQuantity', reason: `bulk:${action}`, jobId },
+                  },
+                }).catch((auditErr: unknown) => {
+                  fastify.log.warn({ err: auditErr, id, jobId }, '[listings/bulk-action] followMasterQuantity audit write failed (non-blocking)')
+                })
+              }
+            }
           } catch (err: any) {
             failed += 1
             errors.push({ listingId: id, reason: err?.message ?? String(err) })
