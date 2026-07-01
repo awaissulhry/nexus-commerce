@@ -26,6 +26,8 @@ import {
   Clock,
   Eye,
   Loader2,
+  Pause,
+  Play,
   RotateCcw,
   ShieldAlert,
   XCircle,
@@ -56,6 +58,7 @@ interface ChannelEntry {
   status: SyncStatus
   lastSyncedAt: string | null
   quantity: number | null
+  offerActive: boolean
 }
 
 interface ControlTowerRow {
@@ -215,6 +218,8 @@ export default function ControlTowerClient() {
   const [toast, setToast] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null)
   // Per-cell resync state: stores channelListingId of the cell currently resyncing.
   const [resyncingCell, setResyncingCell] = useState<string | null>(null)
+  // Per-cell suppress state: stores channelListingId of the cell being toggled.
+  const [suppressingCell, setSuppressingCell] = useState<string | null>(null)
   // Phase 6 T5 — DLQ badge (fetched with each grid load)
   const [dlqCount, setDlqCount] = useState<number | null>(null)
 
@@ -315,6 +320,46 @@ export default function ControlTowerClient() {
       showToast(e instanceof Error ? e.message : 'Resync failed', 'error')
     } finally {
       setResyncingCell(null)
+    }
+  }
+
+  // Per-cell suppress/activate toggle: flips offerActive on the ChannelListing via
+  // PATCH /api/products/:id/offer-availability. When suppressed, NEXUS_RESPECT_OFFER_ACTIVE
+  // gate will skip pushing that cell. Behind a confirm.
+  async function suppressCell(
+    productId: string,
+    channel: string,
+    marketplace: string | null,
+    channelListingId: string,
+    newOfferActive: boolean,
+  ) {
+    const action = newOfferActive ? 'Activate' : 'Suppress'
+    const label = `${channel}${marketplace ? ` · ${marketplace}` : ''}`
+    const ok = await confirm({
+      title: `${action} ${label}?`,
+      description: newOfferActive
+        ? `This re-enables outbound pushes for ${label}. The next sync run will push the current quantity.`
+        : `This suppresses outbound pushes for ${label}. No quantity updates will be sent until re-activated.`,
+      confirmLabel: action,
+      tone: 'warning',
+    })
+    if (!ok) return
+    setSuppressingCell(channelListingId)
+    try {
+      const res = await fetch(`${BACKEND}/api/products/${productId}/offer-availability`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          markets: [{ channel, marketplace: marketplace ?? '', offerActive: newOfferActive }],
+        }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      showToast(`${action} · ${label}`, 'success')
+      void load()
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : `${action} failed`, 'error')
+    } finally {
+      setSuppressingCell(null)
     }
   }
 
@@ -575,7 +620,12 @@ export default function ControlTowerClient() {
                       {row.channels.map((ch) => (
                         <div
                           key={`${ch.channel}-${ch.marketplace}`}
-                          className="inline-flex flex-col gap-0.5 border border-default dark:border-slate-700 rounded-md px-2 py-1 min-w-[92px]"
+                          className={cn(
+                            'inline-flex flex-col gap-0.5 border rounded-md px-2 py-1 min-w-[92px]',
+                            ch.offerActive
+                              ? 'border-default dark:border-slate-700'
+                              : 'border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-950/20 opacity-70',
+                          )}
                         >
                           {/* Channel badge + marketplace + delta preview */}
                           <div className="flex items-center gap-1">
@@ -627,10 +677,51 @@ export default function ControlTowerClient() {
                                 : <RotateCcw className="w-2.5 h-2.5" />
                               }
                             </button>
+                            {/* P7 B2 — suppress/activate toggle */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void suppressCell(
+                                  row.productId,
+                                  ch.channel,
+                                  ch.marketplace,
+                                  ch.channelListingId,
+                                  !ch.offerActive,
+                                )
+                              }
+                              disabled={suppressingCell === ch.channelListingId}
+                              className={cn(
+                                'p-0.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                                ch.offerActive
+                                  ? 'text-tertiary hover:text-amber-600 hover:bg-amber-50 dark:text-slate-500 dark:hover:text-amber-400 dark:hover:bg-amber-950/30'
+                                  : 'text-amber-600 hover:text-emerald-600 hover:bg-emerald-50 dark:text-amber-400 dark:hover:text-emerald-400 dark:hover:bg-emerald-950/30',
+                              )}
+                              title={ch.offerActive
+                                ? `Suppress pushes · ${ch.channel}${ch.marketplace ? ` · ${ch.marketplace}` : ''}`
+                                : `Activate pushes · ${ch.channel}${ch.marketplace ? ` · ${ch.marketplace}` : ''}`
+                              }
+                              aria-label={ch.offerActive
+                                ? `Suppress ${row.sku} on ${ch.channel}`
+                                : `Activate ${row.sku} on ${ch.channel}`
+                              }
+                            >
+                              {suppressingCell === ch.channelListingId
+                                ? <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                : ch.offerActive
+                                  ? <Pause className="w-2.5 h-2.5" />
+                                  : <Play className="w-2.5 h-2.5" />
+                              }
+                            </button>
                           </div>
-                          {/* Status chip + quantity */}
+                          {/* Status chip + quantity; suppressed badge when offerActive=false */}
                           <div className="flex items-center gap-1">
                             <StatusChip status={ch.status} size="xs" />
+                            {!ch.offerActive && (
+                              <span className="inline-flex items-center gap-0.5 px-1 py-0 rounded border border-amber-300 bg-amber-50 text-amber-700 text-[9px] font-semibold dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                                <Pause className="w-2 h-2" />
+                                suppressed
+                              </span>
+                            )}
                             <span className="tabular-nums text-[9px] text-slate-600 dark:text-slate-400 font-medium">
                               {ch.quantity ?? '—'}
                             </span>

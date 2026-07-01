@@ -51,6 +51,7 @@ export default async function controlTowerRoutes(app: FastifyInstance): Promise<
           quantity: true,
           productId: true,
           fulfillmentMethod: true,
+          offerActive: true,
           product: { select: { sku: true } },
         },
       })
@@ -139,6 +140,7 @@ export default async function controlTowerRoutes(app: FastifyInstance): Promise<
             lastSyncStatus: l.lastSyncStatus,
             lastSyncedAt: l.lastSyncedAt,
             quantity: l.quantity,
+            offerActive: l.offerActive,
           })),
           queueRows: productQueueRows,
           clampedChannels: [], // see comment above
