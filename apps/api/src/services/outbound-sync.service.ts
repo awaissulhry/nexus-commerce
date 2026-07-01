@@ -402,6 +402,18 @@ export class OutboundSyncService {
     if (item.holdUntil && item.holdUntil > new Date()) {
       return { success: false, queueId, channel: item.targetChannel, status: "SKIPPED", message: "Still within grace window", error: "held" };
     }
+    // P7 B2 — respect the offerActive suppress flag. OPT-IN (default OFF): only
+    // when NEXUS_RESPECT_OFFER_ACTIVE=1 do we skip pushing to a suppressed offer.
+    // Default-off so existing offerActive=false rows are unaffected until enabled.
+    if (process.env.NEXUS_RESPECT_OFFER_ACTIVE === '1' && item.channelListingId) {
+      const cl = await prisma.channelListing.findUnique({
+        where: { id: item.channelListingId },
+        select: { offerActive: true },
+      }).catch(() => null)
+      if (cl && cl.offerActive === false) {
+        return { success: false, queueId, channel: item.targetChannel, status: "SKIPPED", message: "Offer suppressed (offerActive=false)", error: "offer-suppressed" }
+      }
+    }
     await prisma.outboundSyncQueue.update({ where: { id: item.id }, data: { syncStatus: "IN_PROGRESS" } });
     try {
       return await withTimeout(this.dispatchSync(item), DISPATCH_TIMEOUT_MS, `dispatchSync(${item.targetChannel}/${item.id})`);

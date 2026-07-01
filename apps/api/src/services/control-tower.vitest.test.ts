@@ -33,7 +33,8 @@ const listing = (
   lastSyncedAt: Date | null = null,
   quantity: number | null = 10,
   channelListingId: string = 'cl-default',
-) => ({ channelListingId, channel, marketplace, lastSyncStatus, lastSyncedAt, quantity })
+  offerActive = true,
+) => ({ channelListingId, channel, marketplace, lastSyncStatus, lastSyncedAt, quantity, offerActive })
 
 const queueRow = (
   channel: string,

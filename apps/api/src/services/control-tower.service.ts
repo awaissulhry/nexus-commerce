@@ -24,6 +24,7 @@ export interface ControlTowerListing {
   lastSyncStatus: string | null
   lastSyncedAt: Date | null
   quantity: number | null
+  offerActive: boolean
 }
 
 export interface ControlTowerQueueRow {
@@ -52,6 +53,7 @@ export interface ControlTowerChannelCell {
   status: ControlTowerStatus
   lastSyncedAt: Date | null
   quantity: number | null
+  offerActive: boolean
 }
 
 export interface ControlTowerRow {
@@ -155,6 +157,7 @@ export function buildControlTowerRows(input: ControlTowerSkuInput[]): ControlTow
         status,
         lastSyncedAt: listing.lastSyncedAt,
         quantity: listing.quantity,
+        offerActive: listing.offerActive,
       }
     })
 
