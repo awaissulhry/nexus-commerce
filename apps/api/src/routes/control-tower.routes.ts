@@ -175,7 +175,9 @@ export default async function controlTowerRoutes(app: FastifyInstance): Promise<
     const { sku } = req.params as { sku: string }
     const q = req.query as { channel?: string; marketplace?: string }
     const channel = (q.channel ?? '').toUpperCase()
-    const marketplace = q.marketplace ?? null
+    // Normalise an empty ?marketplace= to "omitted" (null) — otherwise Prisma
+    // filters on marketplace="" and returns a spurious 404.
+    const marketplace = q.marketplace?.trim() || null
 
     if (!channel) {
       return reply.status(400).send({ error: 'channel query param is required' })
