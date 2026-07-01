@@ -2,7 +2,7 @@
 import { type ReactNode } from 'react'
 import {
   Undo2, Redo2, Copy, ArrowRightLeft, ShieldAlert,
-  ClipboardList, ImageIcon, SlidersHorizontal, Replace,
+  ClipboardList, ImageIcon, ArrowDownUp, Replace,
   Paintbrush2, Wand2, BrainCircuit, Columns,
 } from 'lucide-react'
 import { Tooltip } from '@/design-system/primitives/Tooltip'
@@ -370,7 +370,7 @@ export function FlatFileToolbar({
       {/* Sort */}
       <div className="relative">
         <TbBtn
-          icon={<SlidersHorizontal className="h-3.5 w-3.5" />}
+          icon={<ArrowDownUp className="h-3.5 w-3.5" />}
           title={sortDef.label}
           tooltipContent={
             <ToolTip

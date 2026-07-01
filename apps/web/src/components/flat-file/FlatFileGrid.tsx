@@ -1832,8 +1832,8 @@ export default function FlatFileGrid({
           onUndo={undo}
           onRedo={redo}
 
-          onCopy={() => setReplicateOpen(true)}
-          copyDisabled={!rows.length}
+          onCopy={() => { handleCopy(); setClipboardRange(normSel) }}
+          copyDisabled={!normSel}
 
           onReplicate={onReplicate ? () => setReplicateOpen(true) : undefined}
           replicateDisabled={!rows.length}

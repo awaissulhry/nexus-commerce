@@ -1,6 +1,6 @@
 import {
   Undo2, Redo2, Copy, ArrowRightLeft, ShieldAlert,
-  ClipboardList, ImageIcon, SlidersHorizontal, Replace,
+  ClipboardList, ImageIcon, ArrowDownUp, Replace,
   Paintbrush2, Wand2, BrainCircuit, Columns,
   type LucideIcon,
 } from 'lucide-react'
@@ -32,14 +32,14 @@ export const TOOLBAR_TOOLS: ToolbarToolDef[] = [
   { id: 'undo',               icon: Undo2,              label: 'Undo',             shortcut: '⌘Z',   description: 'Undo the last change',                          group: 'history' },
   { id: 'redo',               icon: Redo2,              label: 'Redo',             shortcut: '⌘⇧Z',  description: 'Re-apply the last undone change',               group: 'history' },
   // Clipboard
-  { id: 'copy',               icon: Copy,               label: 'Copy to market',                     description: 'Copy selected rows to another marketplace',      group: 'clipboard' },
-  { id: 'replicate',          icon: ArrowRightLeft,     label: 'Replicate',                          description: 'Copy selected columns to multiple markets',      group: 'clipboard' },
+  { id: 'copy',               icon: Copy,               label: 'Copy cells',       shortcut: '⌘C',   description: 'Copy the selected cells to the clipboard',        group: 'clipboard' },
+  { id: 'replicate',          icon: ArrowRightLeft,     label: 'Replicate to market',                description: 'Copy selected columns/rows to other marketplaces', group: 'clipboard' },
   // View
   { id: 'validation',         icon: ShieldAlert,        label: 'Validation',                         description: 'Show field errors and warnings',                 group: 'view' },
   { id: 'smart-paste',        icon: ClipboardList,      label: 'Smart paste',                        description: 'Map paste by column header instead of position', group: 'view' },
   { id: 'row-images',         icon: ImageIcon,          label: 'Row images',                         description: 'Show product thumbnail in each row',             group: 'view' },
   // Sort
-  { id: 'sort',               icon: SlidersHorizontal,  label: 'Sort',                               description: 'Sort rows by one or more columns',               group: 'sort' },
+  { id: 'sort',               icon: ArrowDownUp,        label: 'Sort',                               description: 'Sort rows by one or more columns',               group: 'sort' },
   // Search & format
   { id: 'find-replace',       icon: Replace,            label: 'Find & replace',   shortcut: '⌘F',   description: 'Search and replace values across all cells',    group: 'search' },
   { id: 'conditional-format', icon: Paintbrush2,        label: 'Highlight rules',                    description: 'Color cells by value conditions',                group: 'search' },
