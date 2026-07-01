@@ -1052,25 +1052,44 @@ export default function FlatFileGrid({
     navigator.clipboard.writeText(tsv).catch(() => {})
   }, [normSel])
 
+  // #9/#24 — the single write path for every bulk mutation. Pushes ONE snapshot,
+  // applies all changes in one O(N) pass (no per-row findIndex), and emits
+  // onCellChange for each (rowId,colId,value) so side-effects (e.g. the eBay
+  // category_id → schema reload) fire no matter how the value was set.
+  type CellChange = { rowId: string; colId: string; value: unknown }
+  const commitCells = useCallback((changes: CellChange[]) => {
+    if (changes.length === 0) return
+    pushSnapshot()
+    const byRow = new Map<string, CellChange[]>()
+    for (const ch of changes) {
+      const arr = byRow.get(ch.rowId)
+      if (arr) arr.push(ch); else byRow.set(ch.rowId, [ch])
+    }
+    setRows((prev) => prev.map((r) => {
+      const cs = byRow.get(r._rowId)
+      if (!cs) return r
+      const updated: BaseRow = { ...r, _dirty: true }
+      for (const c of cs) updated[c.colId] = c.value
+      return updated
+    }))
+    for (const ch of changes) onCellChange?.(ch.rowId, ch.colId, ch.value)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pushSnapshot, onCellChange])
+
   const handleDeleteCells = useCallback(() => {
     if (!normSel) return
-    pushSnapshot()
     const { rMin, rMax, cMin, cMax } = normSel
-    setRows((prev) => {
-      const next = [...prev]
-      for (let ri = rMin; ri <= rMax; ri++) {
-        const dr = displayRowsRef.current[ri]; if (!dr) continue
-        const idx = prev.findIndex((r) => r._rowId === dr._rowId); if (idx === -1) continue
-        let updated: BaseRow = { ...prev[idx], _dirty: true }
-        for (let ci = cMin; ci <= cMax; ci++) {
-          const col = allColumnsRef.current[ci]
-          if (isWritableCol(col)) updated[col.id] = ''
-        }
-        next[idx] = updated
+    const changes: CellChange[] = []
+    for (let ri = rMin; ri <= rMax; ri++) {
+      const dr = displayRowsRef.current[ri]; if (!dr) continue
+      for (let ci = cMin; ci <= cMax; ci++) {
+        const col = allColumnsRef.current[ci]
+        if (isWritableCol(col)) changes.push({ rowId: dr._rowId, colId: col.id, value: '' })
       }
-      return next
-    })
-  }, [normSel, pushSnapshot])
+    }
+    commitCells(changes)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normSel, commitCells])
 
   const handleCut = useCallback(() => { handleCopy(); handleDeleteCells() }, [handleCopy, handleDeleteCells])
 
@@ -1095,48 +1114,39 @@ export default function FlatFileGrid({
     const hasHeaders = smartPasteEnabled && matchCount >= 2
     const dataRows = hasHeaders ? pasteLines.slice(1) : pasteLines
     const { ri: startRi, ci: startCi } = selAnchor
-    pushSnapshot()
-    setRows((prev) => {
-      const next = [...prev]
-      dataRows.forEach((line, riOffset) => {
-        const pasteRow = line.split('\t')
-        const dr = displayRowsRef.current[startRi + riOffset]; if (!dr) return
-        const idx = prev.findIndex((r) => r._rowId === dr._rowId); if (idx === -1) return
-        const updated: BaseRow = { ...prev[idx], _dirty: true }
-        if (hasHeaders) {
-          pasteRow.forEach((val, pi) => { const ci = headerMap.get(pi); if (ci !== undefined) { const col = allColumnsRef.current[ci]; if (isWritableCol(col)) updated[col.id] = val } })
-        } else {
-          pasteRow.forEach((val, ciOffset) => { const col = allColumnsRef.current[startCi + ciOffset]; if (isWritableCol(col)) updated[col.id] = val })
-        }
-        next[idx] = updated
-      })
-      return next
+    const changes: CellChange[] = []
+    dataRows.forEach((line, riOffset) => {
+      const pasteRow = line.split('\t')
+      const dr = displayRowsRef.current[startRi + riOffset]; if (!dr) return
+      if (hasHeaders) {
+        pasteRow.forEach((val, pi) => { const ci = headerMap.get(pi); if (ci !== undefined) { const col = allColumnsRef.current[ci]; if (isWritableCol(col)) changes.push({ rowId: dr._rowId, colId: col.id, value: val }) } })
+      } else {
+        pasteRow.forEach((val, ciOffset) => { const col = allColumnsRef.current[startCi + ciOffset]; if (isWritableCol(col)) changes.push({ rowId: dr._rowId, colId: col.id, value: val }) })
+      }
     })
+    commitCells(changes)
     const lastR = dataRows.length - 1
     const lastC = hasHeaders ? Math.max(0, ...headerMap.values()) : startCi + Math.max(...dataRows.map((r) => r.split('\t').length)) - 1
     setSelEnd({ ri: startRi + lastR, ci: Math.min(lastC, allColumnsRef.current.length - 1) })
-  }, [selAnchor, pushSnapshot, smartPasteEnabled])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selAnchor, commitCells, smartPasteEnabled])
 
   const handleFillDown = useCallback(() => {
     if (!normSel) return
     const { rMin, rMax, cMin, cMax } = normSel
     if (rMin === rMax) return
-    pushSnapshot()
     const srcRow = displayRowsRef.current[rMin]; if (!srcRow) return
-    setRows((prev) => {
-      const next = [...prev]
-      for (let ri = rMin + 1; ri <= rMax; ri++) {
-        const dr = displayRowsRef.current[ri]; if (!dr) continue
-        const idx = prev.findIndex((r) => r._rowId === dr._rowId); if (idx === -1) continue
-        let updated: BaseRow = { ...prev[idx], _dirty: true }
-        for (let ci = cMin; ci <= cMax; ci++) {
-          const col = allColumnsRef.current[ci]; if (isWritableCol(col)) updated[col.id] = srcRow[col.id]
-        }
-        next[idx] = updated
+    const changes: CellChange[] = []
+    for (let ri = rMin + 1; ri <= rMax; ri++) {
+      const dr = displayRowsRef.current[ri]; if (!dr) continue
+      for (let ci = cMin; ci <= cMax; ci++) {
+        const col = allColumnsRef.current[ci]
+        if (isWritableCol(col)) changes.push({ rowId: dr._rowId, colId: col.id, value: srcRow[col.id] })
       }
-      return next
-    })
-  }, [normSel, pushSnapshot])
+    }
+    commitCells(changes)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normSel, commitCells])
 
   const handleSelectAll = useCallback(() => {
     const rMax = displayRowsRef.current.length - 1
@@ -1152,29 +1162,24 @@ export default function FlatFileGrid({
     if (!isFillDraggingRef.current) return
     isFillDraggingRef.current = false
     if (!normSel || !fillTarget) { setIsFillDragging(false); setFillDragEnd(null); return }
-    pushSnapshot()
     const { rMin, rMax, cMin, cMax } = normSel
     const selH = rMax - rMin + 1; const selW = cMax - cMin + 1
-    setRows((prev) => {
-      const next = [...prev]
-      for (let ri = fillTarget.rMin; ri <= fillTarget.rMax; ri++) {
-        const srcRi = rMin + ((ri - fillTarget.rMin) % selH)
-        const dr = displayRowsRef.current[ri]; if (!dr) continue
-        const srcDr = displayRowsRef.current[srcRi]; if (!srcDr) continue
-        const idx = prev.findIndex((r) => r._rowId === dr._rowId); if (idx === -1) continue
-        let updated: BaseRow = { ...prev[idx], _dirty: true }
-        for (let ci = fillTarget.cMin; ci <= fillTarget.cMax; ci++) {
-          const srcCi = cMin + ((ci - fillTarget.cMin) % selW)
-          const col = allColumnsRef.current[ci]; const srcCol = allColumnsRef.current[srcCi]
-          if (isWritableCol(col) && srcCol) updated[col.id] = srcDr[srcCol.id]
-        }
-        next[idx] = updated
+    const changes: CellChange[] = []
+    for (let ri = fillTarget.rMin; ri <= fillTarget.rMax; ri++) {
+      const srcRi = rMin + ((ri - fillTarget.rMin) % selH)
+      const dr = displayRowsRef.current[ri]; if (!dr) continue
+      const srcDr = displayRowsRef.current[srcRi]; if (!srcDr) continue
+      for (let ci = fillTarget.cMin; ci <= fillTarget.cMax; ci++) {
+        const srcCi = cMin + ((ci - fillTarget.cMin) % selW)
+        const col = allColumnsRef.current[ci]; const srcCol = allColumnsRef.current[srcCi]
+        if (isWritableCol(col) && srcCol) changes.push({ rowId: dr._rowId, colId: col.id, value: srcDr[srcCol.id] })
       }
-      return next
-    })
+    }
+    commitCells(changes)
     setSelEnd({ ri: Math.max(normSel.rMax, fillTarget.rMax), ci: Math.max(normSel.cMax, fillTarget.cMax) })
     setIsFillDragging(false); setFillDragEnd(null)
-  }, [normSel, fillTarget, pushSnapshot])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normSel, fillTarget, commitCells])
 
   // ── Row checkbox selection (with shift-click range select) ───────────────
   // Toggling a checkbox sets the anchor. Shift-clicking another checkbox applies
@@ -1403,21 +1408,19 @@ export default function FlatFileGrid({
   // A4.1 — apply AI-proposed changes as a single undoable snapshot
   const applyAiChanges = useCallback((changes: import('./FlatFileGrid.types.js').FlatFileAiChange[]) => {
     if (changes.length === 0) return
-    pushSnapshot()
-    setRows((prev) => {
-      const byRowId = new Map(prev.map((r) => [r._rowId, r]))
-      const bySku = new Map(prev.map((r) => [(r as any).sku, r]))
-      const updated = new Map<string, BaseRow>()
-      for (const ch of changes) {
-        const row = byRowId.get(ch.rowId) ?? bySku.get(ch.sku)
-        if (!row) continue
-        if (!isWritableCol(allColumnsRef.current.find((c) => c.id === ch.field))) continue  // #7 — AI can't write readonly cols
-        const existing = updated.get(row._rowId) ?? { ...row }
-        updated.set(row._rowId, { ...existing, [ch.field]: ch.newValue, _dirty: true })
-      }
-      return prev.map((r) => updated.get(r._rowId) ?? r)
-    })
-  }, [pushSnapshot])
+    const rows = rowsRef.current
+    const byRowId = new Map(rows.map((r) => [r._rowId, r]))
+    const bySku = new Map(rows.map((r) => [(r as any).sku, r]))
+    const resolved: CellChange[] = []
+    for (const ch of changes) {
+      const row = byRowId.get(ch.rowId) ?? bySku.get(ch.sku)
+      if (!row) continue
+      if (!isWritableCol(allColumnsRef.current.find((c) => c.id === ch.field))) continue  // #7 — AI can't write readonly cols
+      resolved.push({ rowId: row._rowId, colId: ch.field, value: ch.newValue })
+    }
+    commitCells(resolved)  // #9 — one snapshot + emits onCellChange per change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commitCells])
 
   const liveUpdateCell = useCallback((rowId: string, colId: string, value: string) => {
     setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [colId]: value, _dirty: true } : r))
@@ -1709,7 +1712,7 @@ export default function FlatFileGrid({
               requestAnimationFrame(() => document.querySelector(`[data-ri="${match.rowIdx}"][data-ci="${match.colIdx}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
             }}
             onMatchSetChange={setMatchKeys}
-            onReplaceCell={(rowId, columnId, newValue) => { if (!isWritableCol(allColumnsRef.current.find((c) => c.id === columnId))) return; pushSnapshot(); setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [columnId]: newValue, _dirty: true } : r)) }} />
+            onReplaceCell={(rowId, columnId, newValue) => { if (!isWritableCol(allColumnsRef.current.find((c) => c.id === columnId))) return; commitCells([{ rowId, colId: columnId, value: newValue }]) }} />
         </div>
       )}
 
