@@ -29,6 +29,7 @@ import { resolveComplianceById, buildShopifyComplianceMetafields } from "./compl
 import { computeAvailableToPublish } from "./available-to-publish.service.js";
 import { publishOrderEvent } from "./order-events.service.js";
 import { reviseInventoryStatus as ebayReviseInventoryStatus } from "./ebay-trading-api.service.js";
+import { toListingLanguage } from "./ebay-variation-push.service.js";
 
 // Phase 3 — test seam for the Trading-API network call.
 // Overridable in unit tests; defaults to the real Phase-1 fn.
@@ -59,6 +60,21 @@ const AD_SYNC_TYPES = [
 
 export function ebayCurrencyForMarket(marketplaceId: string | undefined): string {
   return marketplaceId === "EBAY_GB" ? "GBP" : "EUR";
+}
+
+/** eBay Inventory API requires BOTH language headers set to the marketplace
+ *  locale, plus the marketplace id, on every call (error 25709 otherwise). */
+export function ebayInventoryHeaders(token: string, marketplaceId: string): Record<string, string> {
+  const mp2 = (marketplaceId ?? "EBAY_IT").replace(/^EBAY_/, "");
+  const lang = toListingLanguage(mp2);
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "Content-Language": lang,
+    "Accept-Language": lang,
+    "X-EBAY-C-MARKETPLACE-ID": marketplaceId ?? "EBAY_IT",
+  };
 }
 
 /** Merge quantity/content into an existing inventory_item so the createOrReplace
@@ -956,11 +972,7 @@ export class OutboundSyncService {
     // (different endpoint). Either or both may run depending on the payload.
     const apiBase = getEbayApiBaseForMode(mode);
     const currency = ebayCurrencyForMarket(marketplaceId);
-    const headers = {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    };
+    const headers = ebayInventoryHeaders(token, marketplaceId);
 
     const ebayFail = (
       message: string,
@@ -1003,7 +1015,7 @@ export class OutboundSyncService {
         if (getRes.ok) existing = (await getRes.json().catch(() => ({}))) as Record<string, any>;
         const putRes = await fetch(itemUrl, {
           method: "PUT",
-          headers: { ...headers, "Content-Language": "en-US" },
+          headers,
           body: JSON.stringify(mergeEbayInventoryItem(existing, payload)),
         });
         if (!(putRes.ok || putRes.status === 204)) {
@@ -1031,7 +1043,7 @@ export class OutboundSyncService {
           `${apiBase}/sell/inventory/v1/offer/${encodeURIComponent(offer.offerId)}`,
           {
             method: "PUT",
-            headers: { ...headers, "Content-Language": "en-US" },
+            headers,
             body: JSON.stringify(buildEbayOfferUpdate(offer, payload.price, currency)),
           },
         );
