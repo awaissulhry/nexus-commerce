@@ -341,7 +341,7 @@ function DataRow({
         'transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50',
         (row.worstStatus === 'DEAD' || row.worstStatus === 'FAILED') && 'bg-red-50/30 dark:bg-red-950/10',
         row.worstStatus === 'CLAMPED' && 'bg-amber-50/30 dark:bg-amber-950/10',
-        indent && 'border-l-2 border-l-slate-200 dark:border-l-slate-700',
+        indent && 'border-l-2 border-default',
       )}
     >
       {/* SKU + negative-available warning */}
