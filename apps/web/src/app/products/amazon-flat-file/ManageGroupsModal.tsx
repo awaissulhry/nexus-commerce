@@ -3,6 +3,7 @@
 // Pure UI over the group array; all edits flow back through onChange (persisted
 // by the editor). Deleting a group sends its SKUs back to "Ungrouped" (they're
 // simply no longer a member of any group).
+import { useEffect } from 'react'
 import { ChevronUp, ChevronDown, Trash2, X } from 'lucide-react'
 import { GROUP_PALETTE, type FlatFileGroup, type FamilyColorName } from './group-model'
 
@@ -20,6 +21,12 @@ export function ManageGroupsModal({
   onChange: (groups: FlatFileGroup[]) => void
   onClose: () => void
 }) {
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, onClose])
   if (!open) return null
   const ordered = [...groups].sort((a, b) => a.order - b.order)
 
