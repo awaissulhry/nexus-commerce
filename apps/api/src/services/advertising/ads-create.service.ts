@@ -126,10 +126,6 @@ export async function createProductAdLocal(input: NewProductAd): Promise<{ id: s
 // (e.g. the campaign wasn't allowlisted at launch, so the write-gate skipped them → empty on
 // Amazon = "not eligible, no keyword and no ad"). Idempotent: only pushes rows with a null
 // external id and reuses the existing local rows — never duplicates. Campaign must be allowlisted.
-const AUTO_CLAUSE_MAP: Record<string, string> = {
-  close: 'queryHighRelMatches', loose: 'queryBroadRelMatches', substitutes: 'asinSubstituteRelated', complements: 'asinAccessoryRelated',
-  CLOSE_MATCH: 'queryHighRelMatches', LOOSE_MATCH: 'queryBroadRelMatches', SUBSTITUTES: 'asinSubstituteRelated', COMPLEMENTS: 'asinAccessoryRelated',
-}
 export async function pushCampaignStructure(campaignId: string): Promise<{ ok: boolean; adGroups: number; keywords: number; targets: number; productAds: number; errors: string[] }> {
   const out = { ok: true, adGroups: 0, keywords: 0, targets: 0, productAds: 0, errors: [] as string[] }
   const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true } })
@@ -158,20 +154,23 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
     if (!extAg) continue
     const targets = await prisma.adTarget.findMany({ where: { adGroupId: ag.id, isNegative: false, externalTargetId: null } })
     for (const t of targets) {
+      // Amazon auto-generates the 4 auto-targeting clauses when an ad group is created in an AUTO
+      // campaign — POST /sp/targets rejects expressionType AUTO. Skip (they already exist on Amazon).
+      if (t.kind === 'AUTO') continue
       const bid = (t.bidCents ?? 75) / 100
       try {
         let extId: string | null = null
         if (t.kind === 'KEYWORD') {
           const r = await createKeyword(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, keywordText: t.expressionValue ?? '', matchType: (t.expressionType as 'EXACT' | 'PHRASE' | 'BROAD') || 'BROAD', bid, state: 'enabled' })
           extId = r.externalId; if (extId) out.keywords++
+          else out.errors.push('keyword "' + (t.expressionValue || '') + '": ' + JSON.stringify(r.rawResponse).slice(0, 200))
         } else {
-          const expression = t.kind === 'AUTO'
-            ? [{ type: AUTO_CLAUSE_MAP[t.expressionValue ?? ''] ?? (t.expressionValue ?? '') }]
-            : [{ type: 'asinSameAs', value: t.expressionValue ?? '' }]
+          const expression = [{ type: 'ASIN_SAME_AS', value: t.expressionValue ?? '' }]
           const r = isSd
             ? await createSdTarget(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, expression, bid, state: 'enabled' })
-            : await createTarget(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, expression, expressionType: t.kind === 'AUTO' ? 'AUTO' : 'MANUAL', bid, state: 'enabled' })
+            : await createTarget(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, expression, expressionType: 'MANUAL', bid, state: 'enabled' })
           extId = r.externalId; if (extId) out.targets++
+          else out.errors.push('target "' + (t.expressionValue || '') + '": ' + JSON.stringify(r.rawResponse).slice(0, 200))
         }
         if (extId) await prisma.adTarget.update({ where: { id: t.id }, data: { externalTargetId: extId } })
       } catch (e) { out.errors.push('target "' + (t.expressionValue || '') + '": ' + ((e as Error)?.message || '')) }
@@ -181,6 +180,7 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
       try {
         const r = await createProductAd(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, sku: pa.sku ?? undefined, asin: pa.asin ?? undefined, state: 'enabled' })
         if (r.externalId) { await prisma.adProductAd.update({ where: { id: pa.id }, data: { externalAdId: r.externalId } }); out.productAds++ }
+        else out.errors.push('productAd "' + (pa.asin || pa.sku || '') + '": ' + JSON.stringify(r.rawResponse).slice(0, 200))
       } catch (e) { out.errors.push('productAd "' + (pa.asin || pa.sku || '') + '": ' + ((e as Error)?.message || '')) }
     }
   }
