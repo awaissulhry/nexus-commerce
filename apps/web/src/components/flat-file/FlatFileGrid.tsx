@@ -1050,6 +1050,35 @@ export default function FlatFileGrid({
     }
   }, [selAnchor, selEnd])
 
+  // #47 — live Count / Sum / Avg / Min / Max for the selected cells (numeric
+  // aware, it-IT comma decimals), so operators can sanity-check totals inline.
+  const selectionStats = useMemo(() => {
+    if (!normSel) return null
+    const parseNum = (raw: string): number | null => {
+      let t = raw.trim().replace(/[^\d.,-]/g, '')
+      if (!t) return null
+      const hasDot = t.includes('.'), hasComma = t.includes(',')
+      if (hasDot && hasComma) t = t.lastIndexOf(',') > t.lastIndexOf('.') ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '')
+      else if (hasComma) { const p = t.split(','); t = (p.length === 2 && p[1].length <= 2) ? `${p[0]}.${p[1]}` : t.replace(/,/g, '') }
+      const n = parseFloat(t)
+      return Number.isFinite(n) ? n : null
+    }
+    const { rMin, rMax, cMin, cMax } = normSel
+    let nonEmpty = 0, numCount = 0, sum = 0, min = Infinity, max = -Infinity
+    for (let ri = rMin; ri <= rMax; ri++) {
+      const row = displayRowsRef.current[ri]; if (!row) continue
+      for (let ci = cMin; ci <= cMax; ci++) {
+        const col = allColumnsRef.current[ci]; if (!col) continue
+        const s = row[col.id] == null ? '' : String(row[col.id]).trim()
+        if (!s) continue
+        nonEmpty++
+        const n = parseNum(s)
+        if (n != null) { numCount++; sum += n; if (n < min) min = n; if (n > max) max = n }
+      }
+    }
+    return { nonEmpty, numCount, sum, avg: numCount ? sum / numCount : 0, min, max }
+  }, [normSel, displayRows, allColumns])
+
   // #8 — reconcile the index-based selection to row/col IDENTITY. Capture the
   // rowId/colId under the selection whenever it changes…
   const selIdentityRef = useRef<{ aR?: string; aC?: string; eR?: string; eC?: string } | null>(null)
@@ -1140,15 +1169,19 @@ export default function FlatFileGrid({
     return out
   }, [displayRows, allColumns, showFindReplace])
 
+  // #16 — the row# column widens to fit thumbnails when row images are on; the
+  // frozen-column sticky offset (and the header cell) must use the same width or
+  // the frozen columns slide ~20px and overlap the row-number column.
+  const rowHeaderWidth = showRowImages ? imageSize + 12 : 40
   const stickyLeftByColIdx = useMemo<Record<number, number>>(() => {
     const out: Record<number, number> = {}
-    let left = 36 + 40 // checkbox(36) + row#(40)
+    let left = 36 + rowHeaderWidth // checkbox(36) + row#
     for (let i = 0; i < Math.min(frozenColCount, allColumns.length); i++) {
       out[i] = left
       left += colWidths[allColumns[i].id] ?? allColumns[i].width
     }
     return out
-  }, [frozenColCount, allColumns, colWidths])
+  }, [frozenColCount, allColumns, colWidths, rowHeaderWidth])
 
   // ── Clipboard + fill ops ───────────────────────────────────────────────
 
@@ -1996,7 +2029,7 @@ export default function FlatFileGrid({
                     ref={(el) => { if (el) el.indeterminate = selectedRows.size > 0 && selectedRows.size < displayRows.length }}
                     onChange={(e) => setSelectedRows(e.target.checked ? new Set(displayRows.map((r) => r._rowId)) : new Set())} />
                 </th>
-                <th className="sticky left-9 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 text-xs text-slate-400 text-center font-normal w-10 min-w-[40px]" rowSpan={2}>#</th>
+                <th className="sticky left-9 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 text-xs text-slate-400 text-center font-normal" style={{ width: rowHeaderWidth, minWidth: rowHeaderWidth }} rowSpan={2}>#</th>
                 {visibleGroups.map((g) => (
                   <th key={g.id} colSpan={g.columns.length}
                     className={cn('px-2 py-1 text-xs font-bold border-b border-r border-slate-200 dark:border-slate-700 text-left whitespace-nowrap', gColor(g.color).header)}>
@@ -2254,6 +2287,16 @@ export default function FlatFileGrid({
       <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-1 flex items-center gap-4 text-xs text-slate-400 select-none flex-shrink-0">
         <span>{filteredRows.length} row{filteredRows.length !== 1 ? 's' : ''}</span>
         {normSel && (() => { const rC = normSel.rMax - normSel.rMin + 1; const cC = normSel.cMax - normSel.cMin + 1; const tot = rC * cC; return <span className="text-blue-500">{tot === 1 ? '1 cell' : `${rC} × ${cC} = ${tot} cells`} selected</span> })()}
+        {/* #47 — aggregates for the selection (numeric columns show Sum/Avg/Min/Max) */}
+        {selectionStats && selectionStats.nonEmpty >= 2 && (() => {
+          const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2))
+          return (
+            <span className="text-slate-500 dark:text-slate-400 tabular-nums">
+              Count {selectionStats.nonEmpty}
+              {selectionStats.numCount >= 1 && <> · Sum {fmt(selectionStats.sum)} · Avg {fmt(selectionStats.avg)} · Min {fmt(selectionStats.min)} · Max {fmt(selectionStats.max)}</>}
+            </span>
+          )
+        })()}
         {dirtyCount > 0 && <span className="text-amber-500 ml-auto">{dirtyCount} unsaved change{dirtyCount !== 1 ? 's' : ''}</span>}
         {(errorCount > 0 || warnCount > 0) && (
           <button type="button" onClick={() => setShowValidation((o) => !o)}
