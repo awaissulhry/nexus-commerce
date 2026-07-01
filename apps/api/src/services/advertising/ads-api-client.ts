@@ -357,6 +357,22 @@ export async function createPortfolio(ctx: ClientContext, input: { name: string;
   const id = row?.portfolioId
   return { ok: true, mode: 'live', externalId: id != null ? String(id) : null }
 }
+// P2 — update a portfolio (v3 PUT /portfolios): rename + state (enabled/paused/archived).
+// Sandbox no-ops. Budget updates are P3.
+export async function updatePortfolio(ctx: ClientContext, input: { portfolioId: string; name?: string; state?: 'enabled' | 'paused' | 'archived' }): Promise<{ ok: boolean; mode: AdsMode }> {
+  if (adsMode() === 'sandbox') {
+    logger.info('[ADS-SANDBOX] updatePortfolio', { input })
+    return { ok: true, mode: 'sandbox' }
+  }
+  const pf: Record<string, unknown> = { portfolioId: input.portfolioId }
+  if (input.name != null) pf.name = input.name
+  if (input.state != null) pf.state = input.state
+  await liveCall<unknown>({
+    ...ctx, method: 'PUT', path: '/portfolios', body: { portfolios: [pf] },
+    contentType: PORTFOLIO_V3_MIME, acceptHeader: PORTFOLIO_V3_MIME,
+  })
+  return { ok: true, mode: 'live' }
+}
 
 // B — live v3 campaign-settings read. POST /sp/campaigns/list returns each campaign's
 // CURRENT dynamicBidding (strategy + placementBidding %), budget and state — the

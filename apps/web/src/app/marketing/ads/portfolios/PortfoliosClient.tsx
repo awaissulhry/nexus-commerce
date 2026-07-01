@@ -8,7 +8,7 @@
  * container, no direct spend). Assign / rename / archive / budgets land in P2–P3.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RefreshCw, Plus } from 'lucide-react'
+import { RefreshCw, Plus, Pencil, Archive } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { Button } from '@/design-system/primitives/Button'
 import { Select } from '@/design-system/primitives/Select'
@@ -51,6 +51,10 @@ function PortfoliosInner() {
   const [newName, setNewName] = useState('')
   const [newMarket, setNewMarket] = useState('IT')
   const [creating, setCreating] = useState(false)
+  const [renameRow, setRenameRow] = useState<PortfolioRow | null>(null)
+  const [renameName, setRenameName] = useState('')
+  const [archiveRow, setArchiveRow] = useState<PortfolioRow | null>(null)
+  const [rowBusy, setRowBusy] = useState<string | null>(null)
   const autoSyncedRef = useRef(false)
   const { toast } = useToast()
 
@@ -110,6 +114,27 @@ function PortfoliosInner() {
     } finally { setCreating(false) }
   }
 
+  const patchPortfolio = async (portfolioId: string, patch: { name?: string; state?: string }, label: string): Promise<boolean> => {
+    setRowBusy(portfolioId)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/portfolios/${portfolioId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+      }).then((x) => x.json()).catch(() => null)
+      if (r?.ok) { toast(`${label}${r.mode === 'live' ? ' — live on Amazon' : ''}`, 'success'); await loadOverview(market); return true }
+      toast(r?.error ? `${label} failed: ${r.error}` : `${label} failed`, 'danger')
+      return false
+    } finally { setRowBusy(null) }
+  }
+  const doRename = async () => {
+    const n = renameName.trim()
+    if (!n || !renameRow) return
+    if (await patchPortfolio(renameRow.portfolioId, { name: n }, 'Renamed')) setRenameRow(null)
+  }
+  const doArchive = async () => {
+    if (!archiveRow) return
+    if (await patchPortfolio(archiveRow.portfolioId, { state: 'archived' }, 'Archived')) setArchiveRow(null)
+  }
+
   const totals = rows.reduce((a, r) => ({ campaigns: a.campaigns + r.campaignCount, spend: a.spend + r.spendCents }), { campaigns: 0, spend: 0 })
 
   return (
@@ -156,7 +181,7 @@ function PortfoliosInner() {
         <div className="pf-tablewrap">
           <table className="pf-table">
             <thead><tr>
-              <th>Portfolio</th><th>Markets</th><th className="num">Campaigns</th><th className="num">Spend</th><th className="num">Sales</th><th className="num">ACoS</th><th>Synced</th>
+              <th>Portfolio</th><th>Markets</th><th className="num">Campaigns</th><th className="num">Spend</th><th className="num">Sales</th><th className="num">ACoS</th><th>Synced</th><th className="pf-actions-h">Actions</th>
             </tr></thead>
             <tbody>
               {rows.map((r) => (
@@ -174,6 +199,12 @@ function PortfoliosInner() {
                   <td className="num">{eurc(r.salesCents)}</td>
                   <td className="num pf-acos">{r.acos == null ? '—' : pct(r.acos)}</td>
                   <td>{ago(r.lastSyncedAt)}</td>
+                  <td className="pf-actions">
+                    <button type="button" className="pf-act" title="Rename" disabled={rowBusy === r.portfolioId} onClick={() => { setRenameRow(r); setRenameName(r.name) }}><Pencil size={13} /></button>
+                    {(r.state ?? '').toUpperCase() !== 'ARCHIVED' && (
+                      <button type="button" className="pf-act" title="Archive" disabled={rowBusy === r.portfolioId} onClick={() => setArchiveRow(r)}><Archive size={13} /></button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -199,6 +230,42 @@ function PortfoliosInner() {
           </label>
           <div className={`pf-mode pf-mode--${mode === 'sandbox' ? 'sandbox' : 'live'}`}>
             {mode === 'sandbox' ? <><b>Sandbox.</b> Simulated — not sent to Amazon.</> : <><b>Live.</b> Created on Amazon (gated) — a container only, no spend.</>}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!renameRow}
+        onClose={() => setRenameRow(null)}
+        title="Rename portfolio"
+        footer={<>
+          <Button variant="secondary" size="sm" onClick={() => setRenameRow(null)}>Cancel</Button>
+          <Button variant="primary" size="sm" disabled={!renameName.trim() || rowBusy === renameRow?.portfolioId} onClick={() => void doRename()}>{rowBusy === renameRow?.portfolioId ? 'Saving…' : 'Save'}</Button>
+        </>}
+      >
+        <div className="pf-form">
+          <label className="pf-fld"><span>Name</span><Input value={renameName} onChange={(e) => setRenameName(e.target.value)} aria-label="Portfolio name" /></label>
+          <div className={`pf-mode pf-mode--${mode === 'sandbox' ? 'sandbox' : 'live'}`}>
+            {mode === 'sandbox' ? <><b>Sandbox.</b> Simulated.</> : <><b>Live.</b> Renames on Amazon (gated).</>}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!archiveRow}
+        onClose={() => setArchiveRow(null)}
+        title="Archive portfolio"
+        footer={<>
+          <Button variant="secondary" size="sm" onClick={() => setArchiveRow(null)}>Cancel</Button>
+          <Button variant="primary" className={mode === 'sandbox' ? undefined : 'pf-btn-danger'} size="sm" disabled={rowBusy === archiveRow?.portfolioId} onClick={() => void doArchive()}>{rowBusy === archiveRow?.portfolioId ? 'Archiving…' : 'Archive'}</Button>
+        </>}
+      >
+        <div className="pf-form">
+          <div className="pf-confirm-name">Archive <b>{archiveRow?.name}</b>?</div>
+          <div className={`pf-mode pf-mode--${mode === 'sandbox' ? 'sandbox' : 'live'}`}>
+            {mode === 'sandbox'
+              ? <><b>Sandbox.</b> Simulated — not sent to Amazon.</>
+              : <><b>Live.</b> Archives on Amazon (gated). Campaigns aren’t deleted — they become unportfolio’d. Archiving may not be reversible on Amazon.</>}
           </div>
         </div>
       </Modal>

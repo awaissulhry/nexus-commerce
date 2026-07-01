@@ -15,7 +15,7 @@
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { adsMode, listPortfolios, listCampaignsV3, type AdsRegion, type AdsPortfolioDTO } from './ads-api-client.js'
+import { adsMode, listPortfolios, listCampaignsV3, updatePortfolio, type AdsRegion, type AdsPortfolioDTO } from './ads-api-client.js'
 
 const regionOf = (r: string | null): AdsRegion => (r === 'NA' || r === 'FE' ? r : 'EU')
 
@@ -174,4 +174,26 @@ export async function getPortfolioOverview(opts: { marketplace?: string | null }
     }
   })
   return { portfolios, lastSyncedAt: last != null ? new Date(last).toISOString() : null }
+}
+
+/** P2 — rename / change state (archive) of a portfolio. Pushes to Amazon when the write gate is
+ *  open (v3 PUT /portfolios), then mirrors the change locally. Keyed by externalPortfolioId. */
+export async function updatePortfolioById(args: { portfolioId: string; name?: string; state?: 'enabled' | 'paused' | 'archived' }): Promise<{ ok: boolean; mode: string; error?: string }> {
+  const row = await prisma.amazonAdsPortfolio.findFirst({ where: { externalPortfolioId: args.portfolioId } })
+  if (!row) return { ok: false, mode: 'local', error: 'portfolio not found' }
+  let mode = 'local'
+  const conn = await prisma.amazonAdsConnection.findFirst({ where: { profileId: row.profileId, isActive: true }, select: { region: true, marketplace: true } })
+  if (conn && !row.externalPortfolioId.startsWith('local-pf-')) {
+    const { checkAdsWriteGate } = await import('./ads-write-gate.js')
+    const gate = await checkAdsWriteGate({ marketplace: conn.marketplace, payloadValueCents: 0 })
+    if (gate.allowed) {
+      const r = await updatePortfolio({ profileId: row.profileId, region: regionOf(conn.region) }, { portfolioId: args.portfolioId, name: args.name, state: args.state })
+      mode = r.mode
+    }
+  }
+  await prisma.amazonAdsPortfolio.update({
+    where: { id: row.id },
+    data: { ...(args.name != null ? { name: args.name } : {}), ...(args.state != null ? { state: args.state.toUpperCase() } : {}) },
+  })
+  return { ok: true, mode }
 }

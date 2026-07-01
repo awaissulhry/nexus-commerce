@@ -671,6 +671,9 @@ export function CampaignsGrid() {
   const [adjMode, setAdjMode] = useState<'set' | 'incPct' | 'decPct'>('set')
   const [adjVal, setAdjVal] = useState('0')
   const [bulkConfirm, setBulkConfirm] = useState<'ENABLED' | 'PAUSED' | 'ARCHIVED' | null>(null)
+  // P2b — bulk assign selected campaigns to a portfolio (real names from /portfolios).
+  const [portfolioMenu, setPortfolioMenu] = useState(false)
+  const [pfOptions, setPfOptions] = useState<Array<{ portfolioId: string; name: string }>>([])
   // P3 — per-row interactions (open a modal/menu for a single campaign)
   const [strategyModal, setStrategyModal] = useState<Camp | null>(null)
   const [multiplierModal, setMultiplierModal] = useState<Camp | null>(null)
@@ -921,6 +924,28 @@ export function CampaignsGrid() {
     setRows((rs) => rs.map((x) => (done.has(x.id) ? { ...x, status } : x)))
     setApplying(false); setBulkConfirm(null); setSel(new Set())
     setApplyMsg(`${status === 'ENABLED' ? 'Enabled' : status === 'PAUSED' ? 'Paused' : 'Archived'} ${ok} campaign${ok !== 1 ? 's' : ''}${fail ? ` · ${fail} failed (write-gate or non-live)` : ''}`)
+    setTimeout(() => setApplyMsg(''), 5000)
+  }
+  // P2b — load portfolios (real names) for the bulk-assign picker.
+  useEffect(() => {
+    fetch(`${getBackendUrl()}/api/advertising/portfolios`, { cache: 'no-store' })
+      .then((r) => r.json()).then((d) => setPfOptions(Array.isArray(d?.portfolios) ? d.portfolios : [])).catch(() => {})
+  }, [])
+  // P2b — bulk assign selected campaigns to a portfolio (or clear) via the gated campaign PATCH.
+  const applyBulkPortfolio = async (portfolioId: string | null, name: string) => {
+    setPortfolioMenu(false); setApplying(true)
+    const targets = rows.filter((c) => sel.has(c.id))
+    let ok = 0; let fail = 0; const done = new Set<string>()
+    for (const c of targets) {
+      try {
+        const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ portfolioId, applyImmediately: true, reason: 'Ad Manager bulk portfolio assign' }) })
+        const j = await r.json().catch(() => ({}))
+        if (r.ok && j?.ok !== false) { ok++; done.add(c.id) } else fail++
+      } catch { fail++ }
+    }
+    setRows((rs) => rs.map((x) => (done.has(x.id) ? { ...x, portfolioId: portfolioId ?? null } : x)))
+    setApplying(false); setSel(new Set())
+    setApplyMsg(`Assigned ${ok} campaign${ok !== 1 ? 's' : ''} to ${name}${fail ? ` · ${fail} failed (write-gate or non-live)` : ''}`)
     setTimeout(() => setApplyMsg(''), 5000)
   }
   // P3 — single-campaign writes (operator actions), same gated endpoints as bulk.
@@ -1218,7 +1243,19 @@ export function CampaignsGrid() {
         <span className="cnt">{sel.size > 0 ? <b>{`Selected ${sel.size} Campaign${sel.size > 1 ? 's' : ''}`}</b> : `Viewing ${viewStart}-${viewEnd} of ${filtered.length} Campaigns`}</span>
         <button type="button" className={`h10-am-btn ${sel.size > 0 ? 'on' : ''}`} disabled={sel.size === 0} onClick={() => setShowBulk(true)}><ListChecks size={13} /> Bulk Actions</button>
         <button type="button" className={`h10-am-btn ${mode === 'edit' ? 'on' : ''}`} onClick={() => setMode(mode === 'edit' ? 'metrics' : 'edit')}><Pencil size={13} /> Edit Campaigns</button>
-        <button type="button" className="h10-am-btn" disabled={sel.size === 0} onClick={() => setApplyMsg('Portfolio assignment coming soon')}><Plus size={13} /> Portfolio</button>
+        <div className="h10-bulkwrap">
+          <button type="button" className="h10-am-btn" disabled={sel.size === 0} onClick={() => setPortfolioMenu((v) => !v)}><Plus size={13} /> Portfolio</button>
+          {portfolioMenu && sel.size > 0 && <>
+            <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setPortfolioMenu(false)} />
+            <div className="h10-menu" role="dialog" aria-label="Assign to portfolio" style={{ maxHeight: 320, overflowY: 'auto' }}>
+              <button type="button" onClick={() => void applyBulkPortfolio(null, 'No portfolio')}>No portfolio</button>
+              {pfOptions.map((p) => (
+                <button type="button" key={p.portfolioId} onClick={() => void applyBulkPortfolio(p.portfolioId, p.name)}>{p.name}</button>
+              ))}
+              {pfOptions.length === 0 && <span className="sub" style={{ padding: '8px 11px' }}>No portfolios yet — create one first.</span>}
+            </div>
+          </>}
+        </div>
         {sel.size > 0 && <>
           <div className="h10-bulkwrap">
             <button type="button" className="h10-am-btn" onClick={() => setAdjustOpen((v) => !v)}>Adjust Budget</button>

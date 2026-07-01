@@ -6205,6 +6205,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     catch (e) { reply.status(500); return { error: (e as Error)?.message ?? 'overview failed', portfolios: [], lastSyncedAt: null } }
   })
 
+  // Portfolios P2 — rename / archive a portfolio (gated live PUT to Amazon + local mirror).
+  fastify.patch('/advertising/portfolios/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = request.body as { name?: string; state?: 'enabled' | 'paused' | 'archived' }
+    const name = body.name?.trim() || undefined
+    if (name == null && body.state == null) { reply.status(400); return { error: 'name or state required' } }
+    const { updatePortfolioById } = await import('../services/advertising/ads-portfolio.service.js')
+    try {
+      const r = await updatePortfolioById({ portfolioId: id, name, state: body.state })
+      if (!r.ok) reply.status(r.error === 'portfolio not found' ? 404 : 500)
+      return r
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message ?? 'update failed' } }
+  })
+
   fastify.patch('/advertising/campaigns/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const body = request.body as {
