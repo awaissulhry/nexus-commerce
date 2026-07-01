@@ -157,6 +157,104 @@ function exportCsvBlob(lines: string[], filename: string) {
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
 }
 
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = filename
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+}
+
+// ── P5 export ────────────────────────────────────────────────────────────────
+// Flatten every structured issue into one export row; jobs that predate issue
+// capture fall back to their single per-SKU line so nothing is dropped.
+interface IssueExportRow { sku: string; code: string; severity: string; category: string; columns: string; message: string; details: string }
+function issueExportRows(job: AmazonFeedJob): IssueExportRow[] {
+  const out: IssueExportRow[] = []
+  for (const r of job.perSkuResults ?? []) {
+    if (r.issues?.length) {
+      for (const iss of r.issues) out.push({
+        sku: r.sku, code: iss.code, severity: iss.severity, category: iss.category ?? '',
+        columns: (iss.columns?.length ? iss.columns.map(c => c.label) : iss.attributeNames).join('; '),
+        message: iss.message, details: iss.details ?? '',
+      })
+    } else {
+      out.push({
+        sku: r.sku, code: r.code ?? '',
+        severity: r.status === 'error' ? 'error' : r.status === 'warning' ? 'warning' : 'info',
+        category: '', columns: '', message: r.message ?? '', details: '',
+      })
+    }
+  }
+  return out
+}
+// Aggregate identical codes (Amazon's "per codice di errore").
+function issueByCode(rows: IssueExportRow[]) {
+  const map = new Map<string, { code: string; severity: string; title: string; columns: string; message: string; count: number; skus: Set<string> }>()
+  for (const r of rows) {
+    const key = r.code || r.category || r.message
+    const hit = map.get(key)
+    if (hit) { hit.count++; hit.skus.add(r.sku) }
+    else map.set(key, { code: r.code, severity: r.severity, title: issueTitle(r), columns: r.columns, message: r.message, count: 1, skus: new Set([r.sku]) })
+  }
+  return [...map.values()].sort((a, b) => b.skus.size - a.skus.size)
+}
+
+function exportFeedCsv(job: AmazonFeedJob) {
+  const rows = issueExportRows(job)
+  const q = (v: string) => `"${(v ?? '').replace(/"/g, '""')}"`
+  const lines = [['sku', 'code', 'severity', 'category', 'affected_columns', 'message', 'details'].join(',')]
+  for (const r of rows) lines.push([q(r.sku), q(r.code), q(r.severity), q(r.category), q(r.columns), q(r.message), q(r.details)].join(','))
+  exportCsvBlob(lines, `feed-${job.marketplace}-${job.feedId.slice(0, 12)}.csv`)
+}
+
+// Amazon-layout .xlsx — three groupings matching Seller Central's summary:
+// Summary (Riepilogo) · By code (per codice di errore) · By SKU (per SKU).
+async function exportFeedXlsx(job: AmazonFeedJob) {
+  const mod: any = await import('exceljs')
+  const ExcelJS = mod.default ?? mod
+  const wb = new ExcelJS.Workbook()
+  const rows = issueExportRows(job)
+  const s = job.resultSummary
+  const bold = { bold: true } as const
+
+  const sum = wb.addWorksheet('Summary')
+  sum.columns = [{ header: 'Metric', key: 'm', width: 22 }, { header: 'Value', key: 'v', width: 40 }]
+  sum.getRow(1).font = bold
+  sum.addRows([
+    ['Marketplace', job.marketplace],
+    ['Product type', job.productType ?? '—'],
+    ['Feed ID', job.feedId],
+    ['SKUs processed', s?.messagesProcessed ?? (job.perSkuResults?.length ?? 0)],
+    ['Successful', s?.messagesSuccessful ?? 0],
+    ['With warning', s?.messagesWithWarning ?? 0],
+    ['With error', s?.messagesWithError ?? 0],
+  ])
+
+  const codeSheet = wb.addWorksheet('By code')
+  codeSheet.columns = [
+    { header: '#', key: 'n', width: 5 }, { header: 'Code', key: 'code', width: 10 },
+    { header: 'Severity', key: 'sev', width: 10 }, { header: 'Issue', key: 'title', width: 34 },
+    { header: 'Affected columns', key: 'cols', width: 28 }, { header: 'SKUs', key: 'count', width: 7 },
+    { header: 'Message', key: 'msg', width: 70 },
+  ]
+  codeSheet.getRow(1).font = bold
+  issueByCode(rows).forEach((g, i) => codeSheet.addRow([i + 1, g.code, g.severity, g.title, g.columns, g.skus.size, g.message]))
+
+  const skuSheet = wb.addWorksheet('By SKU')
+  skuSheet.columns = [
+    { header: '#', key: 'n', width: 5 }, { header: 'SKU', key: 'sku', width: 22 },
+    { header: 'Code', key: 'code', width: 10 }, { header: 'Severity', key: 'sev', width: 10 },
+    { header: 'Category', key: 'cat', width: 22 }, { header: 'Affected columns', key: 'cols', width: 28 },
+    { header: 'Message', key: 'msg', width: 70 }, { header: 'Details', key: 'det', width: 40 },
+  ]
+  skuSheet.getRow(1).font = bold
+  rows.forEach((r, i) => skuSheet.addRow([i + 1, r.sku, r.code, r.severity, r.category, r.columns, r.message, r.details]))
+
+  const buf = await wb.xlsx.writeBuffer()
+  downloadBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    `feed-${job.marketplace}-${job.feedId.slice(0, 12)}.xlsx`)
+}
+
 // ── Pill tones ─────────────────────────────────────────────────────────────
 
 function amazonJobTone(job: AmazonFeedJob): 'success' | 'danger' | 'warning' | 'neutral' {
@@ -275,14 +373,6 @@ function AmazonPushesTab({
     return [...map.values()].sort((a, b) => b.skus.length - a.skus.length)
   }, [flatIssues])
 
-  function exportCsv(job: AmazonFeedJob) {
-    const lines = [['sku', 'status', 'code', 'message'].join(',')]
-    for (const r of job.perSkuResults ?? []) {
-      lines.push([r.sku, r.status, r.code ?? '', `"${(r.message ?? '').replace(/"/g, '""')}"`].join(','))
-    }
-    exportCsvBlob(lines, `feed-${job.marketplace}-${job.feedId.slice(0, 12)}.csv`)
-  }
-
   function copyErrored(job: AmazonFeedJob) {
     const skus = (job.perSkuResults ?? []).filter(r => r.status === 'error').map(r => r.sku)
     if (skus.length) void navigator.clipboard?.writeText(skus.join('\n'))
@@ -391,9 +481,15 @@ function AmazonPushesTab({
                             </button>
                           </div>
                         )}
-                        <button type="button" onClick={() => exportCsv(job)}
-                          className="h-7 px-2 text-xs border border-default dark:border-slate-700 rounded hover:bg-white dark:hover:bg-slate-800 inline-flex items-center gap-1">
+                        <button type="button" onClick={() => exportFeedCsv(job)}
+                          className="h-7 px-2 text-xs border border-default dark:border-slate-700 rounded hover:bg-white dark:hover:bg-slate-800 inline-flex items-center gap-1"
+                          title="Per-issue CSV: sku · code · severity · category · columns · message · details">
                           <Download className="w-3 h-3" />CSV
+                        </button>
+                        <button type="button" onClick={() => { void exportFeedXlsx(job) }}
+                          className="h-7 px-2 text-xs border border-default dark:border-slate-700 rounded hover:bg-white dark:hover:bg-slate-800 inline-flex items-center gap-1"
+                          title="Amazon-layout workbook: Summary · By code · By SKU">
+                          <Download className="w-3 h-3" />XLSX
                         </button>
                         {errCount > 0 && (
                           <button type="button" onClick={() => copyErrored(job)}
