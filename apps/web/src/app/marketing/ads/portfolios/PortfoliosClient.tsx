@@ -8,7 +8,7 @@
  * container, no direct spend). Assign / rename / archive / budgets land in P2–P3.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RefreshCw, Plus, Pencil, Archive } from 'lucide-react'
+import { RefreshCw, Plus, Pencil, Archive, Wallet } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { Button } from '@/design-system/primitives/Button'
 import { Select } from '@/design-system/primitives/Select'
@@ -26,9 +26,16 @@ interface PortfolioRow {
   portfolioId: string; name: string; state: string | null; marketplaces: string[]
   campaignCount: number; activeCampaignCount: number; spendCents: number; salesCents: number
   acos: number | null; source: 'amazon' | 'local'; lastSyncedAt: string | null
+  budgetAmountCents: number | null; budgetCurrencyCode: string | null; budgetPolicy: string | null; inBudget: boolean | null
 }
 
 const eurc = (c?: number) => eur((c ?? 0) / 100)
+const budgetLabel = (r: PortfolioRow): string => {
+  if (r.budgetAmountCents == null || !r.budgetPolicy) return 'No cap'
+  const amt = eurc(r.budgetAmountCents)
+  const suffix = r.budgetPolicy === 'MONTHLY_RECURRING' ? '/mo' : r.budgetPolicy === 'DATE_RANGE' ? ' range' : ''
+  return `${amt}${suffix}`
+}
 const stateClass = (s: string | null) => {
   const v = (s ?? '').toUpperCase()
   return v === 'ENABLED' ? 'pf-state--enabled' : v === 'PAUSED' ? 'pf-state--paused' : v === 'ARCHIVED' ? 'pf-state--archived' : ''
@@ -54,6 +61,11 @@ function PortfoliosInner() {
   const [renameRow, setRenameRow] = useState<PortfolioRow | null>(null)
   const [renameName, setRenameName] = useState('')
   const [archiveRow, setArchiveRow] = useState<PortfolioRow | null>(null)
+  const [budgetRow, setBudgetRow] = useState<PortfolioRow | null>(null)
+  const [budgetPolicy, setBudgetPolicy] = useState<'monthlyRecurring' | 'dateRange'>('monthlyRecurring')
+  const [budgetAmount, setBudgetAmount] = useState('')
+  const [budgetStart, setBudgetStart] = useState('')
+  const [budgetEnd, setBudgetEnd] = useState('')
   const [rowBusy, setRowBusy] = useState<string | null>(null)
   const autoSyncedRef = useRef(false)
   const { toast } = useToast()
@@ -114,7 +126,7 @@ function PortfoliosInner() {
     } finally { setCreating(false) }
   }
 
-  const patchPortfolio = async (portfolioId: string, patch: { name?: string; state?: string }, label: string): Promise<boolean> => {
+  const patchPortfolio = async (portfolioId: string, patch: Record<string, unknown>, label: string): Promise<boolean> => {
     setRowBusy(portfolioId)
     try {
       const r = await fetch(`${getBackendUrl()}/api/advertising/portfolios/${portfolioId}`, {
@@ -133,6 +145,23 @@ function PortfoliosInner() {
   const doArchive = async () => {
     if (!archiveRow) return
     if (await patchPortfolio(archiveRow.portfolioId, { state: 'archived' }, 'Archived')) setArchiveRow(null)
+  }
+  const openBudget = (r: PortfolioRow) => {
+    setBudgetRow(r)
+    setBudgetPolicy(r.budgetPolicy === 'DATE_RANGE' ? 'dateRange' : 'monthlyRecurring')
+    setBudgetAmount(r.budgetAmountCents != null ? String(r.budgetAmountCents / 100) : '')
+    setBudgetStart(''); setBudgetEnd('')
+  }
+  const doSetBudget = async () => {
+    if (!budgetRow) return
+    const amount = Number(budgetAmount)
+    if (!(amount > 0)) { toast('Enter a budget amount', 'danger'); return }
+    const budget: Record<string, unknown> = { amount, currencyCode: budgetRow.budgetCurrencyCode || 'EUR', policy: budgetPolicy }
+    if (budgetPolicy === 'dateRange') {
+      if (!budgetStart || !budgetEnd) { toast('Pick start and end dates', 'danger'); return }
+      budget.startDate = budgetStart; budget.endDate = budgetEnd
+    }
+    if (await patchPortfolio(budgetRow.portfolioId, { budget }, 'Budget set')) setBudgetRow(null)
   }
 
   const totals = rows.reduce((a, r) => ({ campaigns: a.campaigns + r.campaignCount, spend: a.spend + r.spendCents }), { campaigns: 0, spend: 0 })
@@ -181,7 +210,7 @@ function PortfoliosInner() {
         <div className="pf-tablewrap">
           <table className="pf-table">
             <thead><tr>
-              <th>Portfolio</th><th>Markets</th><th className="num">Campaigns</th><th className="num">Spend</th><th className="num">Sales</th><th className="num">ACoS</th><th>Synced</th><th className="pf-actions-h">Actions</th>
+              <th>Portfolio</th><th>Markets</th><th className="num">Campaigns</th><th className="num">Budget</th><th className="num">Spend</th><th className="num">Sales</th><th className="num">ACoS</th><th>Synced</th><th className="pf-actions-h">Actions</th>
             </tr></thead>
             <tbody>
               {rows.map((r) => (
@@ -195,11 +224,13 @@ function PortfoliosInner() {
                   </td>
                   <td>{r.marketplaces.length ? <span className="pf-mkts">{r.marketplaces.map((m) => <span className="pf-mkt" key={m}>{m}</span>)}</span> : <span className="pf-mkt-none">—</span>}</td>
                   <td className="num">{r.activeCampaignCount}/{r.campaignCount}</td>
+                  <td className={`num${r.budgetAmountCents == null ? ' pf-nocap' : ''}`}>{budgetLabel(r)}</td>
                   <td className="num">{eurc(r.spendCents)}</td>
                   <td className="num">{eurc(r.salesCents)}</td>
                   <td className="num pf-acos">{r.acos == null ? '—' : pct(r.acos)}</td>
                   <td>{ago(r.lastSyncedAt)}</td>
                   <td className="pf-actions">
+                    <button type="button" className="pf-act" title="Set budget" disabled={rowBusy === r.portfolioId} onClick={() => openBudget(r)}><Wallet size={13} /></button>
                     <button type="button" className="pf-act" title="Rename" disabled={rowBusy === r.portfolioId} onClick={() => { setRenameRow(r); setRenameName(r.name) }}><Pencil size={13} /></button>
                     {(r.state ?? '').toUpperCase() !== 'ARCHIVED' && (
                       <button type="button" className="pf-act" title="Archive" disabled={rowBusy === r.portfolioId} onClick={() => setArchiveRow(r)}><Archive size={13} /></button>
@@ -266,6 +297,35 @@ function PortfoliosInner() {
             {mode === 'sandbox'
               ? <><b>Sandbox.</b> Simulated — not sent to Amazon.</>
               : <><b>Live.</b> Archives on Amazon (gated). Campaigns aren’t deleted — they become unportfolio’d. Archiving may not be reversible on Amazon.</>}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!budgetRow}
+        onClose={() => setBudgetRow(null)}
+        title={<>Set budget · {budgetRow?.name}</>}
+        footer={<>
+          <Button variant="secondary" size="sm" onClick={() => setBudgetRow(null)}>Cancel</Button>
+          <Button variant="primary" className={mode === 'sandbox' ? undefined : 'pf-btn-danger'} size="sm" disabled={rowBusy === budgetRow?.portfolioId || !(Number(budgetAmount) > 0)} onClick={() => void doSetBudget()}>{rowBusy === budgetRow?.portfolioId ? 'Saving…' : 'Set budget'}</Button>
+        </>}
+      >
+        <div className="pf-form">
+          <div className="pf-seg">
+            <button type="button" className={budgetPolicy === 'monthlyRecurring' ? 'on' : ''} onClick={() => setBudgetPolicy('monthlyRecurring')}>Monthly recurring</button>
+            <button type="button" className={budgetPolicy === 'dateRange' ? 'on' : ''} onClick={() => setBudgetPolicy('dateRange')}>Date range</button>
+          </div>
+          <label className="pf-fld"><span>Amount ({budgetRow?.budgetCurrencyCode || 'EUR'})</span><Input inputMode="decimal" value={budgetAmount} onChange={(e) => setBudgetAmount(e.target.value)} placeholder="e.g. 500" aria-label="Budget amount" /></label>
+          {budgetPolicy === 'dateRange' && (
+            <div className="pf-daterow">
+              <label className="pf-fld"><span>Start</span><Input type="date" value={budgetStart} onChange={(e) => setBudgetStart(e.target.value)} aria-label="Start date" /></label>
+              <label className="pf-fld"><span>End</span><Input type="date" value={budgetEnd} onChange={(e) => setBudgetEnd(e.target.value)} aria-label="End date" /></label>
+            </div>
+          )}
+          <div className={`pf-mode pf-mode--${mode === 'sandbox' ? 'sandbox' : 'live'}`}>
+            {mode === 'sandbox'
+              ? <><b>Sandbox.</b> Simulated — not sent to Amazon.</>
+              : <><b>Live.</b> Sets a spend cap on Amazon (gated). A cap <b>can throttle delivery</b> — campaigns in this portfolio stop serving once the cap is reached. Raise or change it any time.</>}
           </div>
         </div>
       </Modal>

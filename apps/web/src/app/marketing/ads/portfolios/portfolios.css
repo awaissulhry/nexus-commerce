@@ -62,3 +62,10 @@
 .pf-act { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; border: 1px solid #e3e7ec; background: #fff; color: #8a93a1; cursor: pointer; margin-left: 4px; }
 .pf-act:hover:not(:disabled) { background: #f5f7fa; color: #5b6573; }
 .pf-act:disabled { opacity: 0.5; cursor: default; }
+.pf-table tbody td.pf-nocap { color: #aeb6c2; font-weight: 600; }
+
+/* budget modal */
+.pf-seg { display: inline-flex; border: 1px solid #dde2e8; border-radius: 8px; overflow: hidden; align-self: flex-start; }
+.pf-seg button { border: 0; background: #fff; padding: 6px 12px; font-size: 12px; font-weight: 700; color: #5b6573; cursor: pointer; }
+.pf-seg button.on { background: #1f6fde; color: #fff; }
+.pf-daterow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

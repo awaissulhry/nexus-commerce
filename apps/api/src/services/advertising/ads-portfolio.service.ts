@@ -15,7 +15,7 @@
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { adsMode, listPortfolios, listCampaignsV3, updatePortfolio, type AdsRegion, type AdsPortfolioDTO } from './ads-api-client.js'
+import { adsMode, listPortfolios, listCampaignsV3, updatePortfolio, type AdsRegion, type AdsPortfolioDTO, type PortfolioBudgetInput } from './ads-api-client.js'
 
 const regionOf = (r: string | null): AdsRegion => (r === 'NA' || r === 'FE' ? r : 'EU')
 
@@ -116,6 +116,11 @@ export interface PortfolioOverview {
   spendCents: number
   salesCents: number
   acos: number | null // fraction (spend / sales)
+  // P3 — budget cap (read from Amazon v3; null policy/amount = no cap)
+  budgetAmountCents: number | null
+  budgetCurrencyCode: string | null
+  budgetPolicy: string | null // NO_CAP | MONTHLY_RECURRING | DATE_RANGE
+  inBudget: boolean | null
   source: 'amazon' | 'local'
   lastSyncedAt: string | null
 }
@@ -169,6 +174,10 @@ export async function getPortfolioOverview(opts: { marketplace?: string | null }
       spendCents,
       salesCents,
       acos: salesCents > 0 ? spendCents / salesCents : null,
+      budgetAmountCents: p.budgetAmount != null ? Math.round(Number(p.budgetAmount) * 100) : null,
+      budgetCurrencyCode: p.budgetCurrencyCode ?? null,
+      budgetPolicy: p.budgetPolicy ?? null,
+      inBudget: p.inBudget ?? null,
       source: p.externalPortfolioId.startsWith('local-pf-') ? 'local' : 'amazon',
       lastSyncedAt: p.lastSyncedAt ? p.lastSyncedAt.toISOString() : null,
     }
@@ -176,24 +185,43 @@ export async function getPortfolioOverview(opts: { marketplace?: string | null }
   return { portfolios, lastSyncedAt: last != null ? new Date(last).toISOString() : null }
 }
 
-/** P2 — rename / change state (archive) of a portfolio. Pushes to Amazon when the write gate is
- *  open (v3 PUT /portfolios), then mirrors the change locally. Keyed by externalPortfolioId. */
-export async function updatePortfolioById(args: { portfolioId: string; name?: string; state?: 'enabled' | 'paused' | 'archived' }): Promise<{ ok: boolean; mode: string; error?: string }> {
+const POLICY_TO_DB: Record<string, string> = { monthlyRecurring: 'MONTHLY_RECURRING', dateRange: 'DATE_RANGE' }
+
+/** P2/P3 — rename / archive / set budget on a portfolio. Pushes to Amazon when the write gate is
+ *  open (v3 PUT /portfolios), then mirrors the change locally. Keyed by externalPortfolioId.
+ *  A budget cap can throttle delivery (it's the one field with spend impact) — hence gated. */
+export async function updatePortfolioById(args: { portfolioId: string; name?: string; state?: 'enabled' | 'paused' | 'archived'; budget?: PortfolioBudgetInput }): Promise<{ ok: boolean; mode: string; error?: string }> {
   const row = await prisma.amazonAdsPortfolio.findFirst({ where: { externalPortfolioId: args.portfolioId } })
   if (!row) return { ok: false, mode: 'local', error: 'portfolio not found' }
   let mode = 'local'
   const conn = await prisma.amazonAdsConnection.findFirst({ where: { profileId: row.profileId, isActive: true }, select: { region: true, marketplace: true } })
   if (conn && !row.externalPortfolioId.startsWith('local-pf-')) {
     const { checkAdsWriteGate } = await import('./ads-write-gate.js')
-    const gate = await checkAdsWriteGate({ marketplace: conn.marketplace, payloadValueCents: 0 })
+    // The budget amount is the write's blast-radius value for the gate's value cap.
+    const payloadValueCents = args.budget ? Math.round(args.budget.amount * 100) : 0
+    const gate = await checkAdsWriteGate({ marketplace: conn.marketplace, payloadValueCents })
     if (gate.allowed) {
-      const r = await updatePortfolio({ profileId: row.profileId, region: regionOf(conn.region) }, { portfolioId: args.portfolioId, name: args.name, state: args.state })
+      const r = await updatePortfolio({ profileId: row.profileId, region: regionOf(conn.region) }, { portfolioId: args.portfolioId, name: args.name, state: args.state, budget: args.budget })
       mode = r.mode
+    } else if (args.budget) {
+      // Budget caps are spend-affecting — never record a cap we couldn't actually push to Amazon.
+      return { ok: false, mode: 'gated', error: (gate as { reason?: string }).reason || 'write gate closed' }
     }
+    // name/state are harmless metadata — they still mirror locally even if the gate is closed.
   }
   await prisma.amazonAdsPortfolio.update({
     where: { id: row.id },
-    data: { ...(args.name != null ? { name: args.name } : {}), ...(args.state != null ? { state: args.state.toUpperCase() } : {}) },
+    data: {
+      ...(args.name != null ? { name: args.name } : {}),
+      ...(args.state != null ? { state: args.state.toUpperCase() } : {}),
+      ...(args.budget ? {
+        budgetAmount: args.budget.amount,
+        budgetCurrencyCode: args.budget.currencyCode,
+        budgetPolicy: POLICY_TO_DB[args.budget.policy] ?? args.budget.policy,
+        startDate: args.budget.startDate ? new Date(args.budget.startDate) : null,
+        endDate: args.budget.endDate ? new Date(args.budget.endDate) : null,
+      } : {}),
+    },
   })
   return { ok: true, mode }
 }

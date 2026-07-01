@@ -357,9 +357,12 @@ export async function createPortfolio(ctx: ClientContext, input: { name: string;
   const id = row?.portfolioId
   return { ok: true, mode: 'live', externalId: id != null ? String(id) : null }
 }
-// P2 — update a portfolio (v3 PUT /portfolios): rename + state (enabled/paused/archived).
-// Sandbox no-ops. Budget updates are P3.
-export async function updatePortfolio(ctx: ClientContext, input: { portfolioId: string; name?: string; state?: 'enabled' | 'paused' | 'archived' }): Promise<{ ok: boolean; mode: AdsMode }> {
+// P3 — portfolio budget cap. v3 policy is 'monthlyRecurring' | 'dateRange' (dateRange needs
+// start+end). currencyCode must match the connection's marketplace (EUR for IT/DE/FR/ES).
+export interface PortfolioBudgetInput { amount: number; currencyCode: string; policy: 'monthlyRecurring' | 'dateRange'; startDate?: string; endDate?: string }
+// P2/P3 — update a portfolio (v3 PUT /portfolios): rename + state (enabled/paused/archived) + budget.
+// Sandbox no-ops.
+export async function updatePortfolio(ctx: ClientContext, input: { portfolioId: string; name?: string; state?: 'enabled' | 'paused' | 'archived'; budget?: PortfolioBudgetInput }): Promise<{ ok: boolean; mode: AdsMode }> {
   if (adsMode() === 'sandbox') {
     logger.info('[ADS-SANDBOX] updatePortfolio', { input })
     return { ok: true, mode: 'sandbox' }
@@ -367,6 +370,14 @@ export async function updatePortfolio(ctx: ClientContext, input: { portfolioId: 
   const pf: Record<string, unknown> = { portfolioId: input.portfolioId }
   if (input.name != null) pf.name = input.name
   if (input.state != null) pf.state = input.state
+  if (input.budget) {
+    const b = input.budget
+    pf.budget = {
+      amount: b.amount, currencyCode: b.currencyCode, policy: b.policy,
+      ...(b.startDate ? { startDate: b.startDate } : {}),
+      ...(b.endDate ? { endDate: b.endDate } : {}),
+    }
+  }
   await liveCall<unknown>({
     ...ctx, method: 'PUT', path: '/portfolios', body: { portfolios: [pf] },
     contentType: PORTFOLIO_V3_MIME, acceptHeader: PORTFOLIO_V3_MIME,

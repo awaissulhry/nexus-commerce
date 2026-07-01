@@ -6205,16 +6205,29 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     catch (e) { reply.status(500); return { error: (e as Error)?.message ?? 'overview failed', portfolios: [], lastSyncedAt: null } }
   })
 
-  // Portfolios P2 — rename / archive a portfolio (gated live PUT to Amazon + local mirror).
+  // Portfolios P2/P3 — rename / archive / set budget-cap (gated live PUT to Amazon + local mirror).
   fastify.patch('/advertising/portfolios/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = request.body as { name?: string; state?: 'enabled' | 'paused' | 'archived' }
+    const body = request.body as {
+      name?: string
+      state?: 'enabled' | 'paused' | 'archived'
+      budget?: { amount?: number; currencyCode?: string; policy?: 'monthlyRecurring' | 'dateRange'; startDate?: string; endDate?: string }
+    }
     const name = body.name?.trim() || undefined
-    if (name == null && body.state == null) { reply.status(400); return { error: 'name or state required' } }
+    let budget: { amount: number; currencyCode: string; policy: 'monthlyRecurring' | 'dateRange'; startDate?: string; endDate?: string } | undefined
+    if (body.budget) {
+      const b = body.budget
+      if (!(typeof b.amount === 'number' && b.amount > 0) || (b.policy !== 'monthlyRecurring' && b.policy !== 'dateRange')) {
+        reply.status(400); return { error: 'budget requires amount > 0 and policy monthlyRecurring|dateRange' }
+      }
+      if (b.policy === 'dateRange' && (!b.startDate || !b.endDate)) { reply.status(400); return { error: 'dateRange budget requires startDate + endDate' } }
+      budget = { amount: b.amount, currencyCode: b.currencyCode || 'EUR', policy: b.policy, startDate: b.startDate, endDate: b.endDate }
+    }
+    if (name == null && body.state == null && !budget) { reply.status(400); return { error: 'name, state or budget required' } }
     const { updatePortfolioById } = await import('../services/advertising/ads-portfolio.service.js')
     try {
-      const r = await updatePortfolioById({ portfolioId: id, name, state: body.state })
-      if (!r.ok) reply.status(r.error === 'portfolio not found' ? 404 : 500)
+      const r = await updatePortfolioById({ portfolioId: id, name, state: body.state, budget })
+      if (!r.ok) reply.status(r.error === 'portfolio not found' ? 404 : r.mode === 'gated' ? 409 : 500)
       return r
     } catch (e) { reply.status(500); return { error: (e as Error)?.message ?? 'update failed' } }
   })
