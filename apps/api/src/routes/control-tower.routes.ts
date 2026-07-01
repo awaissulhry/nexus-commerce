@@ -52,7 +52,7 @@ export default async function controlTowerRoutes(app: FastifyInstance): Promise<
           productId: true,
           fulfillmentMethod: true,
           offerActive: true,
-          product: { select: { sku: true } },
+          product: { select: { sku: true, isParent: true, parentId: true, parent: { select: { sku: true } } } },
         },
       })
 
@@ -130,6 +130,7 @@ export default async function controlTowerRoutes(app: FastifyInstance): Promise<
             }
           })
 
+        const rep = productListings[0]
         inputs.push({
           sku,
           productId,
@@ -145,6 +146,9 @@ export default async function controlTowerRoutes(app: FastifyInstance): Promise<
           queueRows: productQueueRows,
           clampedChannels: [], // see comment above
           negativeAvailable: negativeProductIds.has(productId),
+          isParent: rep.product.isParent,
+          parentId: rep.product.parentId ?? null,
+          parentSku: rep.product.parent?.sku ?? null,
         })
       }
 

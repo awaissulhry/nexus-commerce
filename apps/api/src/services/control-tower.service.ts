@@ -44,6 +44,12 @@ export interface ControlTowerSkuInput {
   clampedChannels?: string[]
   /** this SKU has available < 0 somewhere */
   negativeAvailable?: boolean
+  /** true when this product is itself a parent (no parentId) */
+  isParent?: boolean
+  /** id of the parent Product, or null for standalone / parent rows */
+  parentId?: string | null
+  /** SKU of the parent Product, or null when not a child */
+  parentSku?: string | null
 }
 
 export interface ControlTowerChannelCell {
@@ -60,6 +66,9 @@ export interface ControlTowerRow {
   sku: string
   productId: string
   negativeAvailable: boolean
+  isParent: boolean
+  parentId: string | null
+  parentSku: string | null
   channels: ControlTowerChannelCell[]
   worstStatus: ControlTowerStatus
 }
@@ -171,6 +180,9 @@ export function buildControlTowerRows(input: ControlTowerSkuInput[]): ControlTow
       sku: item.sku,
       productId: item.productId,
       negativeAvailable: item.negativeAvailable ?? false,
+      isParent: item.isParent ?? false,
+      parentId: item.parentId ?? null,
+      parentSku: item.parentSku ?? null,
       channels,
       worstStatus,
     }
