@@ -290,6 +290,11 @@ interface SyncResult {
   status: string;
   message: string;
   error?: string;
+  /** Stable error classifier (e.g. EBAY_VALIDATION, EBAY_TRANSIENT). Copied
+   *  by the BullMQ worker onto OutboundSyncQueue.errorCode so the operator
+   *  sees the real cause instead of the downstream circuit-open message. */
+  errorCode?: string;
+  retryable?: boolean;
   /** PD.3 — true when the "success" was a dry-run/sandbox no-op (nothing actually
    *  published). The worker marks these SKIPPED, not SUCCESS, so the grid doesn't
    *  show false green. */
@@ -305,6 +310,29 @@ interface ProcessingStats {
 }
 
 // ── Outbound Sync Service ────────────────────────────────────────────────
+
+/**
+ * Classify an eBay API failure by HTTP status so the operator sees a stable
+ * code on the queue row rather than the downstream "circuit open" message.
+ *
+ * 400/404/409/422 = the listing or payload is wrong; retrying won't help and
+ * must NOT back off the whole marketplace (EBAY_VALIDATION).
+ * Everything else (401/403/429/5xx, network/null) is transient/connection-level:
+ * retry + trip the circuit (EBAY_TRANSIENT).
+ *
+ * retryable / tripsCircuit are wired into the circuit-breaker in Task 3;
+ * only `code` is consumed in Task 2.
+ */
+export function classifyEbayFailure(httpStatus: number | null): {
+  code: 'EBAY_VALIDATION' | 'EBAY_TRANSIENT';
+  retryable: boolean;
+  tripsCircuit: boolean;
+} {
+  const listingFatal = httpStatus != null && [400, 404, 409, 422].includes(httpStatus);
+  return listingFatal
+    ? { code: 'EBAY_VALIDATION', retryable: false, tripsCircuit: false }
+    : { code: 'EBAY_TRANSIENT', retryable: true, tripsCircuit: true };
+}
 
 /**
  * PD-Q — bound a promise so one hung downstream call (SP-API / Redis) can never
@@ -977,6 +1005,7 @@ export class OutboundSyncService {
     const ebayFail = (
       message: string,
       outcome: "failed" | "timeout" = "failed",
+      httpStatus?: number | null,
     ): SyncResult => {
       recordEbayOutcome(connection.id, marketplaceId, false);
       writeAttemptLog({
@@ -998,6 +1027,7 @@ export class OutboundSyncService {
         status: "FAILED",
         message: `Failed to sync to eBay`,
         error: message,
+        errorCode: classifyEbayFailure(httpStatus ?? null).code,
       };
     };
 
@@ -1019,7 +1049,7 @@ export class OutboundSyncService {
           body: JSON.stringify(mergeEbayInventoryItem(existing, payload)),
         });
         if (!(putRes.ok || putRes.status === 204)) {
-          return ebayFail(`inventory_item PUT ${putRes.status}: ${(await putRes.text().catch(() => "")).slice(0, 300)}`);
+          return ebayFail(`inventory_item PUT ${putRes.status}: ${(await putRes.text().catch(() => "")).slice(0, 300)}`, "failed", putRes.status);
         }
       }
 
@@ -1030,7 +1060,7 @@ export class OutboundSyncService {
           { method: "GET", headers },
         );
         if (!offersRes.ok) {
-          return ebayFail(`get offers ${offersRes.status}: ${(await offersRes.text().catch(() => "")).slice(0, 300)}`);
+          return ebayFail(`get offers ${offersRes.status}: ${(await offersRes.text().catch(() => "")).slice(0, 300)}`, "failed", offersRes.status);
         }
         const offersData = (await offersRes.json().catch(() => ({}))) as {
           offers?: Array<Record<string, any>>;
@@ -1048,7 +1078,7 @@ export class OutboundSyncService {
           },
         );
         if (!offerRes.ok) {
-          return ebayFail(`offer PUT ${offerRes.status}: ${(await offerRes.text().catch(() => "")).slice(0, 300)}`);
+          return ebayFail(`offer PUT ${offerRes.status}: ${(await offerRes.text().catch(() => "")).slice(0, 300)}`, "failed", offerRes.status);
         }
       }
     } catch (err) {
