@@ -97,6 +97,7 @@ const ImportWizardModal = dynamic(
   { ssr: false },
 )
 const SetCategoryModal = dynamic(() => import('./SetCategoryModal'), { ssr: false })
+const ManageGroupsModal = dynamic(() => import('./ManageGroupsModal').then((m) => m.ManageGroupsModal), { ssr: false })
 
 /**
  * EH.5 — Returns true once `open` has been true at least once, then
@@ -900,6 +901,7 @@ export default function AmazonFlatFileClient({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => loadCollapsedGroups(marketplace))
   // Pending "Group selected…" creation (captured SKUs + draft name/colour).
   const [groupCreate, setGroupCreate] = useState<{ skus: string[]; name: string; color: FamilyColorName } | null>(null)
+  const [manageGroupsOpen, setManageGroupsOpen] = useState(false)
   // Tracks the market the group state currently belongs to, so persistence
   // saves to the right market and a market switch never clobbers it.
   const groupMarketRef = useRef(marketplace)
@@ -4427,6 +4429,15 @@ export default function AmazonFlatFileClient({
                     </button>
                   )
                 })()}
+                {groupMode === 'custom' && (
+                  <button
+                    type="button"
+                    onClick={() => setManageGroupsOpen(true)}
+                    className="ml-1 px-1 py-0.5 text-[10px] rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    Manage
+                  </button>
+                )}
               </div>
               {/* IN.2 — Cascade buttons toggle */}
               <SharedTbBtn
@@ -5751,6 +5762,14 @@ export default function AmazonFlatFileClient({
             </div>
           </div>
         </div>
+      )}
+      {manageGroupsOpen && (
+        <ManageGroupsModal
+          open={manageGroupsOpen}
+          groups={customGroups}
+          onChange={setCustomGroups}
+          onClose={() => setManageGroupsOpen(false)}
+        />
       )}
     </div>
   )
