@@ -1295,7 +1295,10 @@ export default function FlatFileGrid({
 
   const handlePaste = useCallback(async () => {
     if (!selAnchor) return
-    const text = await navigator.clipboard.readText().catch(() => '')
+    // #69 — surface a denied/unavailable clipboard read instead of failing silently.
+    let text = ''
+    try { text = await navigator.clipboard.readText() }
+    catch { toast({ title: 'Clipboard access blocked', description: 'Allow clipboard permission for this site, then paste again.', tone: 'warning' }); return }
     if (!text) return
     // #29 — normalize Windows/Mac line endings (Excel appends a stray \r to each
     // row's last cell) and split; only drop a single trailing blank line, so
