@@ -17,16 +17,10 @@ import prisma from '../db.js'
 import { getAmazonSpClient } from '../lib/amazon-sp-client.js'
 import { logger } from '../utils/logger.js'
 import { publishOrderEvent } from './order-events.service.js'
-
-export type SkuStatus = 'success' | 'warning' | 'error'
-export interface PerSkuResult {
-  sku: string
-  status: SkuStatus
-  code?: string
-  message?: string
-  /** Column IDs extracted from the error message — used by the UI to highlight specific cells. */
-  fields?: string[]
-}
+import type {
+  FeedIssue, FeedIssueSeverity, SkuStatus, PerSkuResult, FeedReportSummary,
+} from './feed-report-types.js'
+export type { SkuStatus, PerSkuResult, FeedReportSummary, FeedIssue, FeedIssueColumn, ParsedFeedReport } from './feed-report-types.js'
 
 /**
  * P2.1 — Extract column IDs from Amazon SP-API error messages.
@@ -48,12 +42,6 @@ function extractFields(message: string): string[] {
   const m3 = message.match(/for\s+attribute[:\s]+['"]?(\w+)['"]?/i)
   if (m3 && !fields.includes(m3[1])) fields.push(m3[1])
   return fields
-}
-export interface FeedReportSummary {
-  messagesProcessed: number
-  messagesSuccessful: number
-  messagesWithWarning: number
-  messagesWithError: number
 }
 export interface ParsedReport { summary: FeedReportSummary; perSku: PerSkuResult[]; feedError?: string; pending?: boolean }
 
@@ -78,6 +66,36 @@ function sevToStatus(sev: unknown): SkuStatus {
 const worse = (a: SkuStatus, b: SkuStatus): SkuStatus => {
   const rank: Record<SkuStatus, number> = { success: 0, warning: 1, error: 2 }
   return rank[a] >= rank[b] ? a : b
+}
+
+function sevToIssueSeverity(sev: unknown): FeedIssueSeverity {
+  const s = String(sev ?? '').toUpperCase()
+  if (s === 'ERROR') return 'error'
+  if (s === 'WARNING') return 'warning'
+  return 'info'
+}
+const sevRank = (s: FeedIssueSeverity): number => (s === 'error' ? 2 : s === 'warning' ? 1 : 0)
+
+function mkIssue(
+  code: string, severity: FeedIssueSeverity, message: string,
+  attributeNames: string[] = [], category?: string, details?: string,
+): FeedIssue {
+  return { code, severity, category, message, attributeNames, details }
+}
+
+/** Populate the legacy code/message/fields from a SKU's issues (back-compat with
+ *  already-stored rows + the existing UI/row-merge that read those fields). */
+function deriveLegacyFields(r: PerSkuResult): void {
+  if (!r.issues.length) return
+  const top = [...r.issues].sort((a, b) => sevRank(b.severity) - sevRank(a.severity))[0]
+  r.code = top.code || undefined
+  r.message = r.issues.map((i) => i.message).filter(Boolean).join('; ') || undefined
+  const fields = new Set<string>()
+  for (const i of r.issues) {
+    for (const a of i.attributeNames) if (a) fields.add(a)
+    for (const f of extractFields(i.message)) fields.add(f)
+  }
+  r.fields = fields.size ? [...fields] : undefined
 }
 
 /**
@@ -107,30 +125,29 @@ export function parseProcessingReport(reportText: string, submittedSkus?: string
     for (const iss of obj.issues) {
       const status = sevToStatus(iss?.severity)
       const sku = typeof iss?.sku === 'string' ? iss.sku : ''
+      const message = String(iss?.message ?? '')
       if (!sku) {
         // feed-level issue (no SKU) — surface the first error as the feed error
-        if (status === 'error' && !feedError) feedError = String(iss?.message ?? iss?.code ?? 'Feed-level error')
+        if (status === 'error' && !feedError) feedError = message || String(iss?.code ?? 'Feed-level error')
         continue
       }
+      // Preserve EVERY issue individually with Amazon's structured detail.
+      const issue = mkIssue(
+        iss?.code != null ? String(iss.code) : '',
+        sevToIssueSeverity(iss?.severity),
+        message,
+        Array.isArray(iss?.attributeNames) ? iss.attributeNames.map(String).filter(Boolean) : [],
+        Array.isArray(iss?.categories) && iss.categories.length ? String(iss.categories[0]) : undefined,
+        iss?.details != null ? String(iss.details) : undefined,
+      )
       const prev = bySku.get(sku)
-      const message = String(iss?.message ?? '')
-      const issFields = extractFields(message)
-      if (prev) {
-        prev.status = worse(prev.status, status)
-        if (message) prev.message = prev.message ? `${prev.message}; ${message}` : message
-        if (!prev.code && iss?.code) prev.code = String(iss.code)
-        if (issFields.length) prev.fields = [...new Set([...(prev.fields ?? []), ...issFields])]
-      } else {
-        bySku.set(sku, {
-          sku, status,
-          code: iss?.code != null ? String(iss.code) : undefined,
-          message: message || undefined,
-          fields: issFields.length ? issFields : undefined,
-        })
-      }
+      if (prev) { prev.issues.push(issue); prev.status = worse(prev.status, status) }
+      else bySku.set(sku, { sku, status, issues: [issue] })
     }
     // issue-free submitted SKUs = success
-    for (const s of skus) if (!bySku.has(s)) bySku.set(s, { sku: s, status: 'success' })
+    for (const s of skus) if (!bySku.has(s)) bySku.set(s, { sku: s, status: 'success', issues: [] })
+    // legacy code/message/fields for back-compat
+    for (const r of bySku.values()) deriveLegacyFields(r)
 
     const perSku = [...bySku.values()]
     const sum = obj.summary ?? {}
@@ -155,16 +172,19 @@ export function parseProcessingReport(reportText: string, submittedSkus?: string
   const rows: any[] = obj?.processingReport?.rows ?? obj?.rows ?? []
   if (Array.isArray(rows) && rows.length) {
     const perSku: PerSkuResult[] = rows.map((r: any) => {
-      const issues: any[] = Array.isArray(r?.issues) ? r.issues : []
+      const rawIssues: any[] = Array.isArray(r?.issues) ? r.issues : []
       const hasErr = r?.processingStatus && r.processingStatus !== 'DONE'
-      const sev = issues.some((i) => sevToStatus(i?.severity) === 'error') || hasErr ? 'error'
-        : issues.some((i) => sevToStatus(i?.severity) === 'warning') ? 'warning' : 'success'
-      return {
-        sku: r?.sku ?? r?.messageId ?? '',
-        status: sev as SkuStatus,
-        code: issues[0]?.code != null ? String(issues[0].code) : undefined,
-        message: issues.map((i: any) => i?.message).filter(Boolean).join('; ') || undefined,
-      }
+      const feedIssues: FeedIssue[] = rawIssues.map((i) => mkIssue(
+        i?.code != null ? String(i.code) : '',
+        sevToIssueSeverity(i?.severity),
+        String(i?.message ?? ''),
+        Array.isArray(i?.attributeNames) ? i.attributeNames.map(String).filter(Boolean) : extractFields(String(i?.message ?? '')),
+      ))
+      const status: SkuStatus = feedIssues.some((i) => i.severity === 'error') || hasErr ? 'error'
+        : feedIssues.some((i) => i.severity === 'warning') ? 'warning' : 'success'
+      const pr: PerSkuResult = { sku: r?.sku ?? r?.messageId ?? '', status, issues: feedIssues }
+      deriveLegacyFields(pr)
+      return pr
     })
     return summarize(perSku)
   }
@@ -182,7 +202,11 @@ export function parseProcessingReport(reportText: string, submittedSkus?: string
         const c = ln.split('\t')
         const code = iCode >= 0 ? c[iCode] : ''
         const message = iMsg >= 0 ? c[iMsg] : ''
-        return { sku: c[iSku] ?? '', status: (code || message ? 'error' : 'success') as SkuStatus, code: code || undefined, message: message || undefined }
+        const has = !!(code || message)
+        const issues: FeedIssue[] = has ? [mkIssue(code || '', 'error', message, extractFields(message))] : []
+        const pr: PerSkuResult = { sku: c[iSku] ?? '', status: has ? 'error' : 'success', issues }
+        deriveLegacyFields(pr)
+        return pr
       })
       return summarize(perSku)
     }

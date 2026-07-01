@@ -66,6 +66,55 @@ describe('parseProcessingReport — JSON_LISTINGS_FEED (issues[]/summary)', () =
   })
 })
 
+describe('parseProcessingReport — structured issues[] (P1 Amazon-parity)', () => {
+  const imgMsg = 'Il contenuto multimediale all’indirizzo https://res.cloudinary.com/x.jpg è bloccato dal sito web di hosting…'
+  const mkReport = (n: number, acceptedCount: number) => JSON.stringify({
+    header: { sellerId: 'X', feedId: 'F' },
+    issues: Array.from({ length: n }, (_, i) => ({
+      sku: `G-${i}`, code: '20017', severity: 'ERROR', message: imgMsg,
+      attributeNames: ['main_product_image_locator'], categories: ['INVALID_IMAGE'],
+    })),
+    summary: { messagesProcessed: n + acceptedCount, messagesAccepted: acceptedCount, messagesInvalid: n, errors: n, warnings: 0 },
+  })
+
+  it('preserves each Amazon issue with code/category/attributeNames/full message (the 20017 image case)', () => {
+    const submitted = [...Array.from({ length: 18 }, (_, i) => `G-${i}`), 'OK-1', 'OK-2', 'OK-3']
+    const { perSku, summary } = parseProcessingReport(mkReport(18, 3), submitted)
+    expect(summary).toMatchObject({ messagesProcessed: 21, messagesSuccessful: 3, messagesWithError: 18, messagesWithWarning: 0 })
+    const g0 = perSku.find((p) => p.sku === 'G-0')!
+    expect(g0.status).toBe('error')
+    expect(g0.issues).toHaveLength(1)
+    expect(g0.issues[0]).toMatchObject({ code: '20017', severity: 'error', category: 'INVALID_IMAGE', attributeNames: ['main_product_image_locator'] })
+    expect(g0.issues[0].message).toBe(imgMsg) // FULL, untruncated
+    expect(g0.fields).toContain('main_product_image_locator') // legacy fields now sourced from attributeNames
+    const ok = perSku.find((p) => p.sku === 'OK-1')!
+    expect(ok.status).toBe('success')
+    expect(ok.issues).toEqual([])
+  })
+
+  it('keeps multiple issues on one SKU as separate FeedIssues (not collapsed)', () => {
+    const r = JSON.stringify({
+      issues: [
+        { sku: 'S', code: '20017', severity: 'ERROR', message: 'image bad', attributeNames: ['main_product_image_locator'] },
+        { sku: 'S', code: '90220', severity: 'WARNING', message: 'title short', attributeNames: ['item_name'] },
+      ],
+      summary: { messagesProcessed: 1, messagesInvalid: 1 },
+    })
+    const s = parseProcessingReport(r, ['S']).perSku[0]
+    expect(s.status).toBe('error')
+    expect(s.issues).toHaveLength(2)
+    expect(s.issues.map((i) => i.code)).toEqual(['20017', '90220'])
+    expect(s.issues.map((i) => i.attributeNames[0])).toEqual(['main_product_image_locator', 'item_name'])
+  })
+
+  it('fallback shapes still yield issues[] (legacy rows + TSV)', () => {
+    const legacy = parseProcessingReport(JSON.stringify({ processingReport: { rows: [
+      { sku: 'B', processingStatus: 'ERROR', issues: [{ code: 'X', severity: 'ERROR', message: 'bad', attributeNames: ['brand'] }] },
+    ] } })).perSku[0]
+    expect(legacy.issues[0]).toMatchObject({ code: 'X', severity: 'error', attributeNames: ['brand'] })
+  })
+})
+
 describe('parseProcessingReport — fallbacks', () => {
   it('legacy {processingReport.rows} shape', () => {
     const r = JSON.stringify({ processingReport: { rows: [
