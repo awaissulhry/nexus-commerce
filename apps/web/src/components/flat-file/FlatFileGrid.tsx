@@ -2012,14 +2012,25 @@ export default function FlatFileGrid({
       {showValidation && validationIssues.length > 0 && (
         <div className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 max-h-40 overflow-y-auto">
           {validationIssues.map((issue, i) => (
-            <div key={i} className={cn('flex items-center gap-2 text-xs py-0.5', issue.level === 'error' ? 'text-red-600' : 'text-amber-600')}>
+            // #40 — click a validation row to jump to (and select) the offending cell.
+            <button key={i} type="button"
+              onClick={() => {
+                const ri = displayRows.findIndex((r) => String(r.sku ?? r.item_sku ?? '') === String(issue.sku))
+                const ci = allColumns.findIndex((c) => c.id === issue.field)
+                if (ri < 0 || ci < 0) return
+                const row = displayRows[ri]
+                selAnchorRef.current = { ri, ci }
+                setSelAnchor({ ri, ci }); setSelEnd({ ri, ci }); setActiveCell({ rowId: row._rowId, colId: issue.field })
+                requestAnimationFrame(() => document.querySelector(`[data-ri="${ri}"][data-ci="${ci}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
+              }}
+              className={cn('w-full flex items-center gap-2 text-xs py-0.5 text-left rounded hover:bg-slate-100 dark:hover:bg-slate-800', issue.level === 'error' ? 'text-red-600' : 'text-amber-600')}>
               <AlertCircle className="h-3 w-3 shrink-0" />
               <span className="font-mono">{issue.sku}</span>
               <span className="text-slate-400">·</span>
               <span className="font-medium">{issue.field}</span>
               <span className="text-slate-400">·</span>
               <span>{issue.msg}</span>
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -2073,7 +2084,7 @@ export default function FlatFileGrid({
               {/* Row 1: group color bands */}
               <tr>
                 <th className="sticky left-0 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 w-9 min-w-[36px] text-center" rowSpan={2}>
-                  <input type="checkbox" className="w-3.5 h-3.5 accent-blue-600"
+                  <input type="checkbox" className="w-3.5 h-3.5 accent-blue-600" aria-label="Select all rows"
                     checked={displayRows.length > 0 && selectedRows.size === displayRows.length}
                     ref={(el) => { if (el) el.indeterminate = selectedRows.size > 0 && selectedRows.size < displayRows.length }}
                     onChange={(e) => setSelectedRows(e.target.checked ? new Set(displayRows.map((r) => r._rowId)) : new Set())} />
@@ -2220,6 +2231,7 @@ export default function FlatFileGrid({
                           : row._status === 'error'   ? <Tooltip label={<span className="text-xs">{String(row._feedMessage ?? 'Push error')}</span>} className="h10-ds-tooltip--light"><AlertCircle className="w-3 h-3 text-red-500 mx-auto" /></Tooltip>
                           : row._status === 'pending' ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
                           : <input type="checkbox" className="w-3.5 h-3.5 accent-blue-600" checked={isRowSel}
+                              aria-label={`Select row ${ri + 1}${row.sku ? ` (${row.sku})` : ''}`}
                               onChange={(e) => toggleRowSelection(ri, row._rowId, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)} />}
                         </td>
 
