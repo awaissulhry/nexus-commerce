@@ -17,6 +17,7 @@ export type ControlTowerStatus =
   | 'UNKNOWN'
 
 export interface ControlTowerListing {
+  channelListingId: string
   channel: string
   marketplace: string | null
   /** 'SUCCESS' | 'FAILED' | 'PENDING' | null (from ChannelListing.lastSyncStatus) */
@@ -45,6 +46,7 @@ export interface ControlTowerSkuInput {
 }
 
 export interface ControlTowerChannelCell {
+  channelListingId: string
   channel: string
   marketplace: string | null
   status: ControlTowerStatus
@@ -147,6 +149,7 @@ export function buildControlTowerRows(input: ControlTowerSkuInput[]): ControlTow
       const status = deriveCell(listing, matchingQueueRows, isClamped)
 
       return {
+        channelListingId: listing.channelListingId,
         channel: listing.channel,
         marketplace: listing.marketplace,
         status,

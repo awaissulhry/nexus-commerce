@@ -32,7 +32,8 @@ const listing = (
   lastSyncStatus: string | null,
   lastSyncedAt: Date | null = null,
   quantity: number | null = 10,
-) => ({ channel, marketplace, lastSyncStatus, lastSyncedAt, quantity })
+  channelListingId: string = 'cl-default',
+) => ({ channelListingId, channel, marketplace, lastSyncStatus, lastSyncedAt, quantity })
 
 const queueRow = (
   channel: string,
@@ -340,5 +341,15 @@ describe('cell data pass-through', () => {
     expect(cell.quantity).toBe(42)
     expect(cell.channel).toBe('amazon')
     expect(cell.marketplace).toBe('IT')
+  })
+
+  it('channelListingId is passed through from the listing', () => {
+    const rows = buildControlTowerRows([
+      sku('A', {
+        listings: [listing('amazon', 'IT', 'SUCCESS', null, 5, 'cl-abc123')],
+      }),
+    ])
+    const cell = rows[0].channels[0]
+    expect(cell.channelListingId).toBe('cl-abc123')
   })
 })
