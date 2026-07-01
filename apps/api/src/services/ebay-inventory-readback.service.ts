@@ -69,11 +69,12 @@ export interface ReadBackResult {
 export async function readBackEbayInventory(
   opts: { maxSkus?: number } = {},
 ): Promise<ReadBackResult> {
-  const cap =
-    opts.maxSkus ??
-    (process.env.NEXUS_EBAY_READBACK_MAX
-      ? Number.parseInt(process.env.NEXUS_EBAY_READBACK_MAX, 10)
-      : DEFAULT_MAX_SKUS)
+  const envMax = process.env.NEXUS_EBAY_READBACK_MAX
+    ? Number.parseInt(process.env.NEXUS_EBAY_READBACK_MAX, 10)
+    : DEFAULT_MAX_SKUS
+  // Harden against a typo'd env var (NaN) silently UNCAPPING the sweep → a
+  // potential flood of eBay read calls. Fall back to the default.
+  const cap = opts.maxSkus ?? (Number.isFinite(envMax) && envMax > 0 ? envMax : DEFAULT_MAX_SKUS)
 
   const listings = await prisma.channelListing.findMany({
     where: { channel: 'EBAY', listingStatus: 'ACTIVE' },
