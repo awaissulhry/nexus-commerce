@@ -445,9 +445,25 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
     onCellPointerDown(e.shiftKey)
   }
 
+  // Commit the input's CURRENT value before leaving the cell. A single typed
+  // char arrives as the input's defaultValue and fires NO onInput, so without
+  // this it was silently dropped on Tab/Enter/blur ("type 5, Enter → gone").
+  const commitInput = () => {
+    const inp = inputRef.current
+    if (!inp) return
+    const val = inp.value
+    if (val === displayValue) return
+    if (!snapshotPushedRef.current) {
+      originalValueRef.current = displayValue
+      onPushSnapshot()
+      snapshotPushedRef.current = true
+    }
+    onLiveChange(val)
+  }
+
   function handleKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Tab') { e.preventDefault(); onNavigate(e.shiftKey ? 'left' : 'right') }
-    else if (e.key === 'Enter' && col.kind !== 'longtext') { e.preventDefault(); onNavigate(e.shiftKey ? 'up' : 'down') }
+    if (e.key === 'Tab') { e.preventDefault(); commitInput(); onNavigate(e.shiftKey ? 'left' : 'right') }
+    else if (e.key === 'Enter' && col.kind !== 'longtext') { e.preventDefault(); commitInput(); onNavigate(e.shiftKey ? 'up' : 'down') }
     else if (e.key === 'Escape') {
       if (snapshotPushedRef.current) { onLiveChange(originalValueRef.current); snapshotPushedRef.current = false }
       cancelledRef.current = true
@@ -549,7 +565,7 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
               if (!snapshotPushedRef.current) { originalValueRef.current = displayValue; onPushSnapshot(); snapshotPushedRef.current = true }
               onLiveChange(val)
             }}
-            onBlur={() => { cancelledRef.current = false; onDeactivate() }}
+            onBlur={() => { if (!cancelledRef.current) commitInput(); cancelledRef.current = false; onDeactivate() }}
             onKeyDown={handleKeyDown}
             maxLength={col.maxLength}
             className="w-full px-1.5 py-1 text-xs bg-white dark:bg-slate-800 focus:outline-none text-slate-800 dark:text-slate-200 resize-none"
