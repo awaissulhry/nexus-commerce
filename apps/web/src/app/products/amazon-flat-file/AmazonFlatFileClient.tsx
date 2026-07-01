@@ -205,6 +205,8 @@ interface FeedResult {
   fields?: string[]
   /** P2.2 — SP-API error code. */
   code?: string
+  /** P1/P2 — structured per-issue detail with resolved editor columns. */
+  issues?: Array<{ code: string; severity: string; message: string; attributeNames?: string[]; columns?: Array<{ id: string; label: string }> }>
 }
 
 interface SortLevel {
@@ -3345,11 +3347,18 @@ export default function AmazonFlatFileClient({
             setRows((prev) => prev.map((r) => {
               const fr = bySkU.get(r.item_sku as string)
               if (!fr) return r
+              // Prefer server-resolved issue columns (exact cells Amazon flagged);
+              // fall back to the legacy regex-derived fields for older jobs.
+              const resolvedCols = (fr.issues ?? [])
+                .flatMap((iss) => iss.columns ?? [])
+                .map((c) => c.id)
+                .filter(Boolean)
+              const errorFields = resolvedCols.length ? Array.from(new Set(resolvedCols)) : (fr.fields ?? [])
               return {
                 ...r,
                 _status: fr.status as Row['_status'],
                 _feedMessage: fr.message,
-                _errorFields: fr.status === 'error' ? (fr.fields ?? []) : [],
+                _errorFields: fr.status === 'error' ? errorFields : [],
                 _feedCode: fr.status === 'error' ? (fr.code ?? '') : '',
               }
             }))
@@ -3850,6 +3859,33 @@ export default function AmazonFlatFileClient({
       } catch { /* quota exceeded */ }
     }
   }, [marketplace, productType, pushSnapshot])
+
+  // P4 — jump-to-cell from the feed-report panel: focus the SKU's cell for the
+  // column Amazon flagged. Clears any active search/collapse so the row can't be
+  // hidden, then selects + scrolls (mirrors the validation-panel / find-replace
+  // navigation at the issue list + FindReplaceBar.onActivate).
+  const handleGoToCell = useCallback((sku: string, columnId: string) => {
+    setSearchQuery('')
+    setCollapsedGroups(new Set())
+    setCollapsedParents(new Set())
+    const go = () => {
+      const dr = displayRowsRef.current
+      const rowIdx = dr.findIndex((r) => String(r.item_sku ?? '') === sku)
+      const colIdx = allColumnsRef.current.findIndex((c) => c.id === columnId)
+      if (rowIdx < 0 || colIdx < 0) return false
+      setSelAnchor({ ri: rowIdx, ci: colIdx })
+      setSelEnd({ ri: rowIdx, ci: colIdx })
+      const row = dr[rowIdx]
+      if (row) setActiveCell({ rowId: row._rowId as string, colId: columnId })
+      requestAnimationFrame(() =>
+        document.querySelector(`[data-ri="${rowIdx}"][data-ci="${colIdx}"]`)
+          ?.scrollIntoView({ block: 'center', inline: 'center' }),
+      )
+      return true
+    }
+    // displayRows recomputes after the state flush above — retry across two frames
+    requestAnimationFrame(() => { if (!go()) requestAnimationFrame(go) })
+  }, [])
 
   // ── Render ─────────────────────────────────────────────────────────
 
@@ -5513,6 +5549,7 @@ export default function AmazonFlatFileClient({
           ))
           setHistoryOpen(false)
         }}
+        onGoToCell={handleGoToCell}
         onRePull={(rec) => {
           setHistoryOpen(false)
           const isAllCols = rec.columnsApplied.includes('all') || rec.columnsApplied.length === 0
