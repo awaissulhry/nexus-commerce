@@ -1,7 +1,7 @@
 'use client'
 
 import {
-  useCallback, useEffect, useId, useRef, useState, useMemo,
+  useCallback, useEffect, useId, useRef, useState, useMemo, memo,
   type KeyboardEvent,
 } from 'react'
 import { useRouter } from 'next/navigation'
@@ -336,7 +336,7 @@ interface CellInternalProps {
   onNavigate: (dir: 'right' | 'left' | 'down' | 'up') => void
 }
 
-function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight, ri, ci,
+function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHeight, ri, ci,
   isSelected, selEdges, isCorner, isFillTarget, fillTargetEdges,
   isEditing, editInitialChar, isClipboard, clipboardEdges,
   validIssue, stickyLeft, isMatch, toneCls,
@@ -630,6 +630,49 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
     </td>
   )
 }
+
+// #3 (perf) — memoize each cell so moving the active cell / typing only
+// re-renders the cells whose VISUAL props changed, not the whole sheet. The
+// on* callbacks are intentionally excluded: they're recreated every render but
+// close over the stable ri/ci, and every visual input is compared below.
+// `row` identity is compared (commitCells only clones changed rows) which
+// covers renderCellContent reading any row field.
+type CellEdges = { top: boolean; right: boolean; bottom: boolean; left: boolean } | null
+function edgesEqual(a: CellEdges, b: CellEdges): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  return a.top === b.top && a.right === b.right && a.bottom === b.bottom && a.left === b.left
+}
+function areCellPropsEqual(a: CellInternalProps, b: CellInternalProps): boolean {
+  return (
+    a.col === b.col &&
+    a.row === b.row &&
+    a.value === b.value &&
+    a.isActive === b.isActive &&
+    a.isEditing === b.isEditing &&
+    a.editInitialChar === b.editInitialChar &&
+    a.cellBg === b.cellBg &&
+    a.width === b.width &&
+    a.cellHeight === b.cellHeight &&
+    a.ri === b.ri &&
+    a.ci === b.ci &&
+    a.isSelected === b.isSelected &&
+    a.isCorner === b.isCorner &&
+    a.isFillTarget === b.isFillTarget &&
+    a.isClipboard === b.isClipboard &&
+    a.isMatch === b.isMatch &&
+    a.toneCls === b.toneCls &&
+    a.guidanceLevel === b.guidanceLevel &&
+    a.stickyLeft === b.stickyLeft &&
+    a.renderCellContent === b.renderCellContent &&
+    edgesEqual(a.selEdges, b.selEdges) &&
+    edgesEqual(a.fillTargetEdges, b.fillTargetEdges) &&
+    edgesEqual(a.clipboardEdges, b.clipboardEdges) &&
+    (a.validIssue === b.validIssue ||
+      (!!a.validIssue && !!b.validIssue && a.validIssue.level === b.validIssue.level && a.validIssue.msg === b.validIssue.msg))
+  )
+}
+const SpreadsheetCell = memo(SpreadsheetCellImpl, areCellPropsEqual)
 
 // ── GroupHeader ────────────────────────────────────────────────────────────
 
@@ -1961,7 +2004,16 @@ export default function FlatFileGrid({
                         onDragEnd={() => { canDragRef.current = false; setArmedDragRowId(null); setDraggingRowId(null); setDropTarget(null) }}
                         onDragOver={(e) => { e.preventDefault(); const rect = e.currentTarget.getBoundingClientRect(); setDropTarget((p) => { const half: 'top' | 'bottom' = e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom'; return p?.rowId === row._rowId && p?.half === half ? p : { rowId: row._rowId, half } }) }}
                         onDrop={(e) => { e.preventDefault(); const rect = e.currentTarget.getBoundingClientRect(); if (draggingRowId) reorderRow(draggingRowId, row._rowId, e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom') }}
-                        style={{ borderTop: dropInd === 'top' ? '2px solid #3b82f6' : undefined, borderBottom: dropInd === 'bottom' ? '2px solid #3b82f6' : undefined }}
+                        style={{
+                          // #3 (perf) — browser skips layout/paint of off-screen rows.
+                          // Every row stays in the DOM, so drag/fill/selection/
+                          // scroll-into-view keep working; the intrinsic height keeps
+                          // the scrollbar accurate for skipped rows.
+                          contentVisibility: 'auto',
+                          containIntrinsicSize: `0 ${rowHeight}px`,
+                          borderTop: dropInd === 'top' ? '2px solid #3b82f6' : undefined,
+                          borderBottom: dropInd === 'bottom' ? '2px solid #3b82f6' : undefined,
+                        }}
                         className={cn('group/row transition-colors', rowBg, isDragging ? 'opacity-40' : 'hover:bg-white/60 dark:hover:bg-slate-800/40')}>
 
                         {/* Checkbox + drag handle */}
