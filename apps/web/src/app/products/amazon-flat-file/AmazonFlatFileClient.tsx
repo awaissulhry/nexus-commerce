@@ -46,7 +46,8 @@ import { FEED_ERROR_CODES } from './feedErrorCodes'
 import { categoryOf, assignCategory, productTypesInUse, mixedTypeFamilies, rowsMissingNode, formatNodeBreadcrumb } from './category-model'
 import {
   loadGroups, saveGroups, loadGroupMode, saveGroupMode, loadCollapsedGroups, saveCollapsedGroups,
-  type GroupMode, type FlatFileGroup,
+  groupIdForSku, fulfillmentBucket,
+  type GroupMode, type FlatFileGroup, type FamilyColorName,
 } from './group-model'
 
 // EH.5 — Lazy-loaded modals, panels, and bars. Each one only ships
@@ -407,6 +408,46 @@ const FC_CHILD_BORDER: Record<FamilyColor, string> = {
   orange:  'border-l-orange-200 dark:border-l-orange-800',
   teal:    'border-l-teal-200 dark:border-l-teal-800',
   amber:   'border-l-amber-200 dark:border-l-amber-800',
+}
+
+// ── CG — group section rendering (VIEW-ONLY) ──────────────────────────────
+// A RenderItem is either a data row (carrying its index into displayRows, so
+// paste/selection/nav ri-mapping is unchanged) or a synthetic section header.
+// Header items exist ONLY in the render output — never in rows/displayRows/the
+// Amazon feed.
+type RenderItem =
+  | { kind: 'header'; groupId: string; name: string; color: FamilyColorName; count: number; collapsed: boolean }
+  | { kind: 'row'; row: Row; dataIdx: number }
+
+function GroupHeaderRow({
+  name, color, count, collapsed, colSpan, onToggle,
+}: {
+  name: string; color: FamilyColorName; count: number; collapsed: boolean; colSpan: number; onToggle: () => void
+}) {
+  return (
+    <tr>
+      <td
+        colSpan={colSpan}
+        className={cn(
+          'px-2 py-1 border-b border-l-4 border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/60',
+          FC_PARENT_BORDER[color],
+        )}
+      >
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={!collapsed}
+          className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
+        >
+          {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          <span>{name}</span>
+          <span className="font-normal normal-case text-slate-400 dark:text-slate-500">
+            · {count} {count === 1 ? 'SKU' : 'SKUs'}
+          </span>
+        </button>
+      </td>
+    </tr>
+  )
 }
 
 function makeEmptyRow(productType: string, _marketplace: string, parentage = ''): Row {
@@ -1564,6 +1605,73 @@ export default function AmazonFlatFileClient({
   // GX.5 — the visible rows excluding the blank canvas, for counts + select-all.
   const realDisplayRows = useMemo(() => displayRows.filter((r) => !r._ghost), [displayRows])
   const realRowCount = useMemo(() => rows.reduce((n, r) => n + (r._ghost ? 0 : 1), 0), [rows])
+
+  // ── CG — render items: data rows + injected section headers (VIEW-ONLY) ──
+  // `dataIdx` is the index into `displayRows`, passed to SpreadsheetRow as
+  // rowIdx so data-ri / paste / selection / keyboard-nav are unchanged. Header
+  // rows are never added to displayRows/rows, so submit + export (which iterate
+  // `rows`) can never see them. `family` mode is a 1:1 passthrough → identical
+  // DOM to before the feature.
+  const groupHeaderColSpan = allColumns.length + 2 // data cols + Category col + row-header col
+  const renderRows = useMemo<RenderItem[]>(() => {
+    const all = displayRows.map((row, i) => ({ row, dataIdx: i }))
+    const asRows = (xs: Array<{ row: Row; dataIdx: number }>): RenderItem[] =>
+      xs.map((x) => ({ kind: 'row', row: x.row, dataIdx: x.dataIdx }))
+    if (groupMode === 'family') return asRows(all)
+    if (groupMode === 'custom' && customGroups.length === 0) return asRows(all)
+
+    const ghosts = all.filter((x) => x.row._ghost)
+    const reals = all.filter((x) => !x.row._ghost)
+
+    type Sec = { id: string; name: string; color: FamilyColorName; items: Array<{ row: Row; dataIdx: number }> }
+    let sections: Sec[]
+    let sectionFor: (x: { row: Row; dataIdx: number }) => string
+
+    if (groupMode === 'custom') {
+      const ids = new Set(customGroups.map((g) => g.id))
+      sections = [...customGroups]
+        .sort((a, b) => a.order - b.order)
+        .map((g) => ({ id: g.id, name: g.name, color: g.color, items: [] as Sec['items'] }))
+      sections.push({ id: '__ungrouped', name: 'Ungrouped', color: 'blue', items: [] })
+      sectionFor = (x) => {
+        const gid = groupIdForSku(customGroups, String(x.row.item_sku ?? ''))
+        return gid && ids.has(gid) ? gid : '__ungrouped'
+      }
+    } else {
+      // fulfillment: a parent follows its FBA children (kept with its FBA group);
+      // otherwise bucket by the row's own fulfillment. FBA section first.
+      sections = [
+        { id: '__fba', name: 'FBA', color: 'blue', items: [] },
+        { id: '__fbm', name: 'FBM', color: 'amber', items: [] },
+      ]
+      const parentHasFba = new Set<string>()
+      for (const x of reals) {
+        if (String(x.row.parentage_level ?? '') === 'child' && fulfillmentBucket(x.row) === 'FBA') {
+          parentHasFba.add(String(x.row.parent_sku ?? ''))
+        }
+      }
+      sectionFor = (x) => {
+        const bucket = String(x.row.parentage_level ?? '') === 'parent'
+          ? (parentHasFba.has(String(x.row.item_sku ?? '')) ? 'FBA' : 'FBM')
+          : fulfillmentBucket(x.row)
+        return bucket === 'FBA' ? '__fba' : '__fbm'
+      }
+    }
+
+    const byId = new Map(sections.map((s) => [s.id, s]))
+    for (const x of reals) byId.get(sectionFor(x))!.items.push(x)
+
+    const out: RenderItem[] = []
+    for (const s of sections) {
+      if (s.items.length === 0) continue // hide empty sections (incl. Ungrouped)
+      const collapsed = collapsedGroups.has(s.id)
+      out.push({ kind: 'header', groupId: s.id, name: s.name, color: s.color, count: s.items.length, collapsed })
+      if (!collapsed) for (const it of s.items) out.push({ kind: 'row', row: it.row, dataIdx: it.dataIdx })
+    }
+    // Ghost/canvas rows always trail at the bottom, ungrouped + headerless.
+    for (const gRow of ghosts) out.push({ kind: 'row', row: gRow.row, dataIdx: gRow.dataIdx })
+    return out
+  }, [displayRows, groupMode, customGroups, collapsedGroups])
   // P-1 — non-ghost selected count: used for Set-category button label/gate AND
   // passed to SetCategoryModal so button N === modal N === apply N always agree.
   const selectedRealCount = useMemo(
@@ -4926,7 +5034,28 @@ export default function AmazonFlatFileClient({
             </thead>
 
             <tbody>
-              {displayRows.map((row, rowIdx) => (
+              {renderRows.map((item) => {
+                if (item.kind === 'header') {
+                  return (
+                    <GroupHeaderRow
+                      key={`gh-${item.groupId}`}
+                      name={item.name}
+                      color={item.color}
+                      count={item.count}
+                      collapsed={item.collapsed}
+                      colSpan={groupHeaderColSpan}
+                      onToggle={() => setCollapsedGroups((prev) => {
+                        const n = new Set(prev)
+                        if (n.has(item.groupId)) n.delete(item.groupId)
+                        else n.add(item.groupId)
+                        return n
+                      })}
+                    />
+                  )
+                }
+                const row = item.row
+                const rowIdx = item.dataIdx
+                return (
                 <SpreadsheetRow
                   key={row._rowId as string}
                   row={row}
@@ -4999,7 +5128,8 @@ export default function AmazonFlatFileClient({
                   onSwitchMarket={(m) => navigateTo(m, productType)}
                   browseNodeLabels={browseNodeLabels}
                 />
-              ))}
+                )
+              })}
 
               {/* Empty search result */}
               {searchQuery && searchMode === 'rows' && displayRows.length === 0 && (
