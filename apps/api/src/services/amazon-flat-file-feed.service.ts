@@ -343,6 +343,31 @@ export async function reconcileFeedJob(feedId: string, opts?: { force?: boolean 
     reportPending = true
   }
 
+  // P2 — resolve each issue's attributeNames → editor columns, once, at terminal
+  // (only when there are attribute-bearing issues). The manifest is cached; a
+  // failure here is non-fatal — raw attributeNames remain on the issue.
+  if (job && perSku.some((p) => p.issues.some((i) => i.attributeNames.length))) {
+    try {
+      const [{ resolveIssueColumns }, { AmazonFlatFileService }, { CategorySchemaService }, { AmazonService }] = await Promise.all([
+        import('./amazon/feed-attribute-columns.js'),
+        import('./amazon/flat-file.service.js'),
+        import('./categories/schema-sync.service.js'),
+        import('./marketplaces/amazon.service.js'),
+      ])
+      const svc = new AmazonFlatFileService(prisma, new CategorySchemaService(prisma, new AmazonService()))
+      const manifest: any = await svc.generateManifest(job.marketplace, job.productType ?? '')
+      const manifestColumns = (manifest?.groups ?? [])
+        .flatMap((g: any) => g?.columns ?? [])
+        .map((c: any) => ({ id: String(c?.id ?? ''), label: String(c?.labelEn ?? c?.id ?? '') }))
+        .filter((c: { id: string }) => c.id)
+      for (const p of perSku) for (const iss of p.issues) {
+        if (iss.attributeNames.length) iss.columns = resolveIssueColumns(iss.attributeNames, manifestColumns)
+      }
+    } catch (e: any) {
+      logger.warn('[flat-file-feed] column resolution skipped', { feedId, error: e?.message })
+    }
+  }
+
   const pollCount = (job?.pollCount ?? 0) + 1
   // If the Amazon status is DONE but the report isn't ready, keep the job "live"
   // (status IN_PROGRESS, no completedAt, nextPollAt set) so the cron + UI keep
