@@ -27,7 +27,7 @@ export default async function controlTowerRoutes(app: FastifyInstance): Promise<
   // GET /api/inventory-sync/control-tower?filter=&page=&pageSize=
   app.get('/inventory-sync/control-tower', async (req, reply) => {
     reply.header('Cache-Control', 'private, max-age=15')
-    const q = req.query as { filter?: string; page?: string; pageSize?: string }
+    const q = req.query as { filter?: string; status?: string; channel?: string; page?: string; pageSize?: string }
 
     const page = Math.max(1, parseInt(q.page ?? '1', 10) || 1)
     const pageSize = Math.min(
@@ -35,6 +35,8 @@ export default async function controlTowerRoutes(app: FastifyInstance): Promise<
       Math.max(1, parseInt(q.pageSize ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE),
     )
     const filter = (q.filter ?? '').trim().toLowerCase()
+    const statusFilter = (q.status ?? '').trim().toUpperCase()
+    const channelFilter = (q.channel ?? '').trim().toUpperCase()
 
     try {
       // 1. Fetch all active ChannelListings with their product SKU.
@@ -156,10 +158,21 @@ export default async function controlTowerRoutes(app: FastifyInstance): Promise<
         summary[row.worstStatus] = (summary[row.worstStatus] ?? 0) + 1
       }
 
-      // 7. Paginate.
-      const total = allRows.length
+      // 7. Apply status + channel filters (summary already computed over allRows above).
+      let displayRows = allRows
+      if (statusFilter) {
+        displayRows = displayRows.filter((row) => row.worstStatus === statusFilter)
+      }
+      if (channelFilter) {
+        displayRows = displayRows.filter((row) =>
+          row.channels.some((ch) => ch.channel === channelFilter),
+        )
+      }
+
+      // 8. Paginate.
+      const total = displayRows.length
       const offset = (page - 1) * pageSize
-      const pagedRows = allRows.slice(offset, offset + pageSize)
+      const pagedRows = displayRows.slice(offset, offset + pageSize)
 
       return reply.send({ rows: pagedRows, total, summary, page, pageSize })
     } catch (err: any) {

@@ -43,10 +43,10 @@ type SyncStatus = 'DEAD' | 'FAILED' | 'CLAMPED' | 'PENDING' | 'IN_SYNC' | 'UNKNO
 
 interface ChannelEntry {
   channel: string
-  marketplace: string
+  marketplace: string | null
   status: SyncStatus
   lastSyncedAt: string | null
-  quantity: number
+  quantity: number | null
 }
 
 interface ControlTowerRow {
@@ -234,7 +234,7 @@ export default function ControlTowerClient() {
       const p = new URLSearchParams()
       p.set('page', String(page))
       p.set('pageSize', String(PAGE_SIZE))
-      if (filterStatus) p.set('filter', filterStatus)
+      if (filterStatus) p.set('status', filterStatus)
       if (filterChannel) p.set('channel', filterChannel)
       const res = await fetch(`${BACKEND}/api/inventory-sync/control-tower?${p}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -371,9 +371,19 @@ export default function ControlTowerClient() {
         <div className="text-sm text-red-600 dark:text-red-400 py-8 text-center">{error}</div>
       ) : rows.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-16 text-center">
-          <CheckCircle2 className="w-8 h-8 text-emerald-500 dark:text-emerald-400" />
-          <p className="text-sm font-medium text-slate-700 dark:text-slate-300">All channels in sync</p>
-          <p className="text-xs text-tertiary dark:text-slate-500">No SKUs matched the current filters.</p>
+          {filterStatus || filterChannel ? (
+            <>
+              <ShieldAlert className="w-8 h-8 text-slate-400 dark:text-slate-500" />
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">No SKUs match the current filters</p>
+              <p className="text-xs text-tertiary dark:text-slate-500">Try clearing the status or channel filter.</p>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="w-8 h-8 text-emerald-500 dark:text-emerald-400" />
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">All channels in sync</p>
+              <p className="text-xs text-tertiary dark:text-slate-500">No active listings have sync issues.</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="rounded-xl border border-default dark:border-slate-700 overflow-hidden">
@@ -441,16 +451,16 @@ export default function ControlTowerClient() {
                             </span>
                             <span
                               className="text-[9px] text-slate-500 dark:text-slate-400 font-mono truncate max-w-[64px]"
-                              title={ch.marketplace}
+                              title={ch.marketplace ?? undefined}
                             >
-                              {ch.marketplace}
+                              {ch.marketplace ?? '—'}
                             </span>
                           </div>
                           {/* Status chip + quantity */}
                           <div className="flex items-center gap-1">
                             <StatusChip status={ch.status} size="xs" />
                             <span className="tabular-nums text-[9px] text-slate-600 dark:text-slate-400 font-medium">
-                              {ch.quantity}
+                              {ch.quantity ?? '—'}
                             </span>
                           </div>
                           {/* Last synced */}
