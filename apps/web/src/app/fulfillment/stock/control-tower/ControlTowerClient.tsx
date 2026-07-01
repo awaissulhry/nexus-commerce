@@ -482,7 +482,7 @@ export default function ControlTowerClient() {
         <div className="flex flex-col items-center gap-2 py-16 text-center">
           {filterStatus || filterChannel ? (
             <>
-              <ShieldAlert className="w-8 h-8 text-slate-400 dark:text-slate-500" />
+              <ShieldAlert className="w-8 h-8 text-tertiary dark:text-slate-500" />
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300">No SKUs match the current filters</p>
               <p className="text-xs text-tertiary dark:text-slate-500">Try clearing the status or channel filter.</p>
             </>
@@ -545,7 +545,7 @@ export default function ControlTowerClient() {
                       {row.channels.map((ch) => (
                         <div
                           key={`${ch.channel}-${ch.marketplace}`}
-                          className="inline-flex flex-col gap-0.5 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1 min-w-[92px]"
+                          className="inline-flex flex-col gap-0.5 border border-default dark:border-slate-700 rounded-md px-2 py-1 min-w-[92px]"
                         >
                           {/* Channel badge + marketplace + delta preview */}
                           <div className="flex items-center gap-1">
@@ -573,7 +573,7 @@ export default function ControlTowerClient() {
                                   marketplace: ch.marketplace,
                                 })
                               }
-                              className="ml-auto p-0.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:text-slate-500 dark:hover:text-blue-400 dark:hover:bg-blue-950/30 transition-colors"
+                              className="ml-auto p-0.5 rounded text-tertiary hover:text-blue-600 hover:bg-blue-50 dark:text-slate-500 dark:hover:text-blue-400 dark:hover:bg-blue-950/30 transition-colors"
                               title={`Preview sync delta · ${ch.channel}${ch.marketplace ? ` · ${ch.marketplace}` : ''}`}
                               aria-label={`Preview sync delta for ${row.sku} on ${ch.channel}`}
                             >
@@ -588,7 +588,7 @@ export default function ControlTowerClient() {
                             </span>
                           </div>
                           {/* Last synced */}
-                          <div className="text-[9px] text-slate-400 dark:text-slate-500 tabular-nums">
+                          <div className="text-[9px] text-tertiary dark:text-slate-500 tabular-nums">
                             {fmtRelative(ch.lastSyncedAt)}
                           </div>
                         </div>
