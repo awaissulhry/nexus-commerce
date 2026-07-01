@@ -133,6 +133,7 @@ export default async function controlTowerRoutes(app: FastifyInstance): Promise<
           sku,
           productId,
           listings: productListings.map((l) => ({
+            channelListingId: l.id,
             channel: l.channel,
             marketplace: l.marketplace,
             lastSyncStatus: l.lastSyncStatus,

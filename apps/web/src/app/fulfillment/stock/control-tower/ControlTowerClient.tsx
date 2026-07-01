@@ -50,6 +50,7 @@ import ControlTowerBanner from './ControlTowerBanner'
 type SyncStatus = 'DEAD' | 'FAILED' | 'CLAMPED' | 'PENDING' | 'IN_SYNC' | 'UNKNOWN'
 
 interface ChannelEntry {
+  channelListingId: string
   channel: string
   marketplace: string | null
   status: SyncStatus
@@ -212,6 +213,8 @@ export default function ControlTowerClient() {
   // Bulk-retry action state + transient toast.
   const [retrying, setRetrying] = useState(false)
   const [toast, setToast] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null)
+  // Per-cell resync state: stores channelListingId of the cell currently resyncing.
+  const [resyncingCell, setResyncingCell] = useState<string | null>(null)
   // Phase 6 T5 — DLQ badge (fetched with each grid load)
   const [dlqCount, setDlqCount] = useState<number | null>(null)
 
@@ -286,6 +289,33 @@ export default function ControlTowerClient() {
   function showToast(msg: string, tone: 'success' | 'error') {
     setToast({ msg, tone })
     setTimeout(() => setToast(null), 3500)
+  }
+
+  // Per-cell resync: mark a single ChannelListing as PENDING + re-queue.
+  async function resyncCell(channelListingId: string, label: string) {
+    const ok = await confirm({
+      title: `Resync ${label}?`,
+      description: `This marks the listing as PENDING and re-queues it for channel sync. The published quantity will be recalculated on the next sync run.`,
+      confirmLabel: 'Resync',
+      tone: 'warning',
+    })
+    if (!ok) return
+    setResyncingCell(channelListingId)
+    try {
+      const res = await fetch(`${BACKEND}/api/listings/bulk-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'resync', listingIds: [channelListingId] }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const body = (await res.json()) as { jobId: string; status: string; total: number }
+      showToast(`Resync queued · ${label} · job ${body.jobId.slice(-6)}`, 'success')
+      void load()
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : 'Resync failed', 'error')
+    } finally {
+      setResyncingCell(null)
+    }
   }
 
   // Bulk-retry: re-enqueue ALL failed + dead outbound-sync rows, optionally
@@ -578,6 +608,24 @@ export default function ControlTowerClient() {
                               aria-label={`Preview sync delta for ${row.sku} on ${ch.channel}`}
                             >
                               <Eye className="w-2.5 h-2.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void resyncCell(
+                                  ch.channelListingId,
+                                  `${ch.channel}${ch.marketplace ? ` · ${ch.marketplace}` : ''}`,
+                                )
+                              }
+                              disabled={resyncingCell === ch.channelListingId}
+                              className="p-0.5 rounded text-tertiary hover:text-orange-600 hover:bg-orange-50 dark:text-slate-500 dark:hover:text-orange-400 dark:hover:bg-orange-950/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={`Resync · ${ch.channel}${ch.marketplace ? ` · ${ch.marketplace}` : ''}`}
+                              aria-label={`Resync ${row.sku} on ${ch.channel}`}
+                            >
+                              {resyncingCell === ch.channelListingId
+                                ? <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                : <RotateCcw className="w-2.5 h-2.5" />
+                              }
                             </button>
                           </div>
                           {/* Status chip + quantity */}
