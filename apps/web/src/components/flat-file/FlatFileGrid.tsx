@@ -1,7 +1,7 @@
 'use client'
 
 import {
-  useCallback, useEffect, useId, useRef, useState, useMemo,
+  useCallback, useEffect, useId, useRef, useState, useMemo, memo,
   type KeyboardEvent,
 } from 'react'
 import { useRouter } from 'next/navigation'
@@ -55,6 +55,13 @@ const GROUP_COLORS: Record<string, { band: string; header: string; text: string;
 }
 
 function gColor(color: string) { return GROUP_COLORS[color] ?? GROUP_COLORS.slate }
+
+// #7 — the single writability gate for every bulk mutation (paste, fill,
+// fill-down, replace, AI). A column locked via readOnly OR kind:'readonly'
+// must never be written by any path, matching the click/type editors.
+function isWritableCol(col?: { readOnly?: boolean; kind?: string } | null): boolean {
+  return !!col && !col.readOnly && col.kind !== 'readonly'
+}
 
 function statusBadgeCls(status?: string | null) {
   switch (status?.toUpperCase()) {
@@ -329,7 +336,7 @@ interface CellInternalProps {
   onNavigate: (dir: 'right' | 'left' | 'down' | 'up') => void
 }
 
-function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight, ri, ci,
+function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHeight, ri, ci,
   isSelected, selEdges, isCorner, isFillTarget, fillTargetEdges,
   isEditing, editInitialChar, isClipboard, clipboardEdges,
   validIssue, stickyLeft, isMatch, toneCls,
@@ -445,9 +452,25 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
     onCellPointerDown(e.shiftKey)
   }
 
+  // Commit the input's CURRENT value before leaving the cell. A single typed
+  // char arrives as the input's defaultValue and fires NO onInput, so without
+  // this it was silently dropped on Tab/Enter/blur ("type 5, Enter → gone").
+  const commitInput = () => {
+    const inp = inputRef.current
+    if (!inp) return
+    const val = inp.value
+    if (val === displayValue) return
+    if (!snapshotPushedRef.current) {
+      originalValueRef.current = displayValue
+      onPushSnapshot()
+      snapshotPushedRef.current = true
+    }
+    onLiveChange(val)
+  }
+
   function handleKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Tab') { e.preventDefault(); onNavigate(e.shiftKey ? 'left' : 'right') }
-    else if (e.key === 'Enter' && col.kind !== 'longtext') { e.preventDefault(); onNavigate(e.shiftKey ? 'up' : 'down') }
+    if (e.key === 'Tab') { e.preventDefault(); commitInput(); onNavigate(e.shiftKey ? 'left' : 'right') }
+    else if (e.key === 'Enter' && col.kind !== 'longtext') { e.preventDefault(); commitInput(); onNavigate(e.shiftKey ? 'up' : 'down') }
     else if (e.key === 'Escape') {
       if (snapshotPushedRef.current) { onLiveChange(originalValueRef.current); snapshotPushedRef.current = false }
       cancelledRef.current = true
@@ -543,13 +566,8 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
         <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}>
           {fillHandle}
           <textarea ref={inputRef as any} defaultValue={editInitialChar !== null ? editInitialChar : displayValue}
-            onInput={(e) => {
-              const val = (e.target as HTMLTextAreaElement).value
-              setLiveLen(val.length)
-              if (!snapshotPushedRef.current) { originalValueRef.current = displayValue; onPushSnapshot(); snapshotPushedRef.current = true }
-              onLiveChange(val)
-            }}
-            onBlur={() => { cancelledRef.current = false; onDeactivate() }}
+            onInput={(e) => setLiveLen((e.target as HTMLTextAreaElement).value.length) /* #5 — commit-once: no per-keystroke setRows; commitInput writes on exit */}
+            onBlur={() => { if (!cancelledRef.current) commitInput(); cancelledRef.current = false; onDeactivate() }}
             onKeyDown={handleKeyDown}
             maxLength={col.maxLength}
             className="w-full px-1.5 py-1 text-xs bg-white dark:bg-slate-800 focus:outline-none text-slate-800 dark:text-slate-200 resize-none"
@@ -583,12 +601,7 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
         {fillHandle}
         <input ref={inputRef as any} type={col.kind === 'number' ? 'number' : 'text'}
           defaultValue={editInitialChar !== null ? editInitialChar : displayValue} maxLength={col.maxLength}
-          onInput={(e) => {
-            const val = (e.target as HTMLInputElement).value
-            setLiveLen(val.length)
-            if (!snapshotPushedRef.current) { originalValueRef.current = displayValue; onPushSnapshot(); snapshotPushedRef.current = true }
-            onLiveChange(val)
-          }}
+          onInput={(e) => setLiveLen((e.target as HTMLInputElement).value.length) /* #5 — commit-once: commitInput writes on exit */}
           onBlur={() => { cancelledRef.current = false; onDeactivate() }}
           onKeyDown={handleKeyDown}
           className="w-full px-1.5 text-xs bg-white dark:bg-slate-800 focus:outline-none text-slate-800 dark:text-slate-200"
@@ -617,6 +630,49 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
     </td>
   )
 }
+
+// #3 (perf) — memoize each cell so moving the active cell / typing only
+// re-renders the cells whose VISUAL props changed, not the whole sheet. The
+// on* callbacks are intentionally excluded: they're recreated every render but
+// close over the stable ri/ci, and every visual input is compared below.
+// `row` identity is compared (commitCells only clones changed rows) which
+// covers renderCellContent reading any row field.
+type CellEdges = { top: boolean; right: boolean; bottom: boolean; left: boolean } | null
+function edgesEqual(a: CellEdges, b: CellEdges): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  return a.top === b.top && a.right === b.right && a.bottom === b.bottom && a.left === b.left
+}
+function areCellPropsEqual(a: CellInternalProps, b: CellInternalProps): boolean {
+  return (
+    a.col === b.col &&
+    a.row === b.row &&
+    a.value === b.value &&
+    a.isActive === b.isActive &&
+    a.isEditing === b.isEditing &&
+    a.editInitialChar === b.editInitialChar &&
+    a.cellBg === b.cellBg &&
+    a.width === b.width &&
+    a.cellHeight === b.cellHeight &&
+    a.ri === b.ri &&
+    a.ci === b.ci &&
+    a.isSelected === b.isSelected &&
+    a.isCorner === b.isCorner &&
+    a.isFillTarget === b.isFillTarget &&
+    a.isClipboard === b.isClipboard &&
+    a.isMatch === b.isMatch &&
+    a.toneCls === b.toneCls &&
+    a.guidanceLevel === b.guidanceLevel &&
+    a.stickyLeft === b.stickyLeft &&
+    a.renderCellContent === b.renderCellContent &&
+    edgesEqual(a.selEdges, b.selEdges) &&
+    edgesEqual(a.fillTargetEdges, b.fillTargetEdges) &&
+    edgesEqual(a.clipboardEdges, b.clipboardEdges) &&
+    (a.validIssue === b.validIssue ||
+      (!!a.validIssue && !!b.validIssue && a.validIssue.level === b.validIssue.level && a.validIssue.msg === b.validIssue.msg))
+  )
+}
+const SpreadsheetCell = memo(SpreadsheetCellImpl, areCellPropsEqual)
 
 // ── GroupHeader ────────────────────────────────────────────────────────────
 
@@ -959,6 +1015,42 @@ export default function FlatFileGrid({
     }
   }, [selAnchor, selEnd])
 
+  // #8 — reconcile the index-based selection to row/col IDENTITY. Capture the
+  // rowId/colId under the selection whenever it changes…
+  const selIdentityRef = useRef<{ aR?: string; aC?: string; eR?: string; eC?: string } | null>(null)
+  useEffect(() => {
+    if (!selAnchor || !selEnd) { selIdentityRef.current = null; return }
+    const dr = displayRowsRef.current, ac = allColumnsRef.current
+    selIdentityRef.current = {
+      aR: dr[selAnchor.ri]?._rowId, aC: ac[selAnchor.ci]?.id,
+      eR: dr[selEnd.ri]?._rowId,    eC: ac[selEnd.ci]?.id,
+    }
+  }, [selAnchor, selEnd])
+
+  // …and remap those identities back to indices when the displayed rows or
+  // columns change (sort / filter / collapse / reorder / delete), so the
+  // highlight (and every bulk op that reads it) stays on the same records
+  // instead of the same screen coordinates — and stops diverging from the
+  // identity-based active cell. If a selected row/col vanished, clear rather
+  // than point destructive ops at the wrong data.
+  useEffect(() => {
+    const id = selIdentityRef.current
+    if (!id) return
+    const dr = displayRowsRef.current, ac = allColumnsRef.current
+    const aRi = id.aR ? dr.findIndex((r) => r._rowId === id.aR) : -1
+    const aCi = id.aC ? ac.findIndex((c) => c.id === id.aC) : -1
+    const eRi = id.eR ? dr.findIndex((r) => r._rowId === id.eR) : -1
+    const eCi = id.eC ? ac.findIndex((c) => c.id === id.eC) : -1
+    if (aRi < 0 || aCi < 0 || eRi < 0 || eCi < 0) {
+      setSelAnchor(null); setSelEnd(null); setActiveCell(null); setClipboardRange(null)
+      return
+    }
+    setSelAnchor((p) => (p && p.ri === aRi && p.ci === aCi ? p : { ri: aRi, ci: aCi }))
+    setSelEnd((p) => (p && p.ri === eRi && p.ci === eCi ? p : { ri: eRi, ci: eCi }))
+    setClipboardRange((c) => (c ? null : c))  // index-based copy marquee: drop on structural change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayRows, allColumns])
+
   const fillTarget = useMemo<NormSel | null>(() => {
     if (!isFillDragging || !fillDragEnd || !normSel) return null
     const { rMin, rMax, cMin, cMax } = normSel
@@ -1000,6 +1092,8 @@ export default function FlatFileGrid({
     const out: FindCell[] = []
     displayRows.forEach((row, ri) => {
       allColumnsRef.current.forEach((col, ci) => {
+        // #7 — readonly columns stay FINDABLE (search ASIN/item-id) but the
+        // replace write is gated in onReplaceCell, so they can't be mutated.
         out.push({ rowIdx: ri, colIdx: ci, rowId: row._rowId, columnId: col.id, value: row[col.id] })
       })
     })
@@ -1027,25 +1121,52 @@ export default function FlatFileGrid({
     navigator.clipboard.writeText(tsv).catch(() => {})
   }, [normSel])
 
+  // #9/#24 — the single write path for every bulk mutation. Pushes ONE snapshot,
+  // applies all changes in one O(N) pass (no per-row findIndex), and emits
+  // onCellChange for each (rowId,colId,value) so side-effects (e.g. the eBay
+  // category_id → schema reload) fire no matter how the value was set.
+  type CellChange = { rowId: string; colId: string; value: unknown }
+  const commitCells = useCallback((changes: CellChange[]) => {
+    if (changes.length === 0) return
+    // #30 — drop no-op changes (delete-empty, fill-same, re-pick same enum) so
+    // rows aren't falsely marked dirty and undo isn't polluted with dead steps.
+    const rowById = new Map(rowsRef.current.map((r) => [r._rowId, r]))
+    const real = changes.filter((ch) => {
+      const r = rowById.get(ch.rowId)
+      return !!r && (r[ch.colId] ?? '') !== (ch.value ?? '')
+    })
+    if (real.length === 0) return
+    pushSnapshot()
+    const byRow = new Map<string, CellChange[]>()
+    for (const ch of real) {
+      const arr = byRow.get(ch.rowId)
+      if (arr) arr.push(ch); else byRow.set(ch.rowId, [ch])
+    }
+    setRows((prev) => prev.map((r) => {
+      const cs = byRow.get(r._rowId)
+      if (!cs) return r
+      const updated: BaseRow = { ...r, _dirty: true }
+      for (const c of cs) updated[c.colId] = c.value
+      return updated
+    }))
+    for (const ch of real) onCellChange?.(ch.rowId, ch.colId, ch.value)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pushSnapshot, onCellChange])
+
   const handleDeleteCells = useCallback(() => {
     if (!normSel) return
-    pushSnapshot()
     const { rMin, rMax, cMin, cMax } = normSel
-    setRows((prev) => {
-      const next = [...prev]
-      for (let ri = rMin; ri <= rMax; ri++) {
-        const dr = displayRowsRef.current[ri]; if (!dr) continue
-        const idx = prev.findIndex((r) => r._rowId === dr._rowId); if (idx === -1) continue
-        let updated: BaseRow = { ...prev[idx], _dirty: true }
-        for (let ci = cMin; ci <= cMax; ci++) {
-          const col = allColumnsRef.current[ci]
-          if (col && !col.readOnly && col.kind !== 'readonly') updated[col.id] = ''
-        }
-        next[idx] = updated
+    const changes: CellChange[] = []
+    for (let ri = rMin; ri <= rMax; ri++) {
+      const dr = displayRowsRef.current[ri]; if (!dr) continue
+      for (let ci = cMin; ci <= cMax; ci++) {
+        const col = allColumnsRef.current[ci]
+        if (isWritableCol(col)) changes.push({ rowId: dr._rowId, colId: col.id, value: '' })
       }
-      return next
-    })
-  }, [normSel, pushSnapshot])
+    }
+    commitCells(changes)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normSel, commitCells])
 
   const handleCut = useCallback(() => { handleCopy(); handleDeleteCells() }, [handleCopy, handleDeleteCells])
 
@@ -1069,49 +1190,50 @@ export default function FlatFileGrid({
     })
     const hasHeaders = smartPasteEnabled && matchCount >= 2
     const dataRows = hasHeaders ? pasteLines.slice(1) : pasteLines
-    const { ri: startRi, ci: startCi } = selAnchor
-    pushSnapshot()
-    setRows((prev) => {
-      const next = [...prev]
-      dataRows.forEach((line, riOffset) => {
-        const pasteRow = line.split('\t')
-        const dr = displayRowsRef.current[startRi + riOffset]; if (!dr) return
-        const idx = prev.findIndex((r) => r._rowId === dr._rowId); if (idx === -1) return
-        const updated: BaseRow = { ...prev[idx], _dirty: true }
-        if (hasHeaders) {
-          pasteRow.forEach((val, pi) => { const ci = headerMap.get(pi); if (ci !== undefined) { const col = allColumnsRef.current[ci]; if (col && !col.readOnly) updated[col.id] = val } })
-        } else {
-          pasteRow.forEach((val, ciOffset) => { const col = allColumnsRef.current[startCi + ciOffset]; if (col && !col.readOnly) updated[col.id] = val })
-        }
-        next[idx] = updated
-      })
-      return next
+    // #10 — anchor paste at the normalized TOP-LEFT of the selection, not the
+    // drag-origin corner, so an up/left-dragged selection doesn't spill paste
+    // onto unselected cells.
+    const startRi = normSel ? normSel.rMin : selAnchor.ri
+    const startCi = normSel ? normSel.cMin : selAnchor.ci
+    const changes: CellChange[] = []
+    dataRows.forEach((line, riOffset) => {
+      const pasteRow = line.split('\t')
+      const dr = displayRowsRef.current[startRi + riOffset]; if (!dr) return
+      if (hasHeaders) {
+        pasteRow.forEach((val, pi) => { const ci = headerMap.get(pi); if (ci !== undefined) { const col = allColumnsRef.current[ci]; if (isWritableCol(col)) changes.push({ rowId: dr._rowId, colId: col.id, value: val }) } })
+      } else {
+        pasteRow.forEach((val, ciOffset) => { const col = allColumnsRef.current[startCi + ciOffset]; if (isWritableCol(col)) changes.push({ rowId: dr._rowId, colId: col.id, value: val }) })
+      }
     })
-    const lastR = dataRows.length - 1
+    commitCells(changes)
+    // #11 — rows past the end can't be written (parent/child structure makes
+    // silent auto-append unsafe); warn instead of dropping them silently.
+    const overflow = (startRi + dataRows.length) - displayRowsRef.current.length
+    if (overflow > 0) {
+      toast({ title: `${overflow} pasted row${overflow > 1 ? 's' : ''} didn't fit`, description: 'Add more rows first, then paste again to include them.', tone: 'warning' })
+    }
+    const lastR = Math.min(dataRows.length - 1, displayRowsRef.current.length - 1 - startRi)
     const lastC = hasHeaders ? Math.max(0, ...headerMap.values()) : startCi + Math.max(...dataRows.map((r) => r.split('\t').length)) - 1
     setSelEnd({ ri: startRi + lastR, ci: Math.min(lastC, allColumnsRef.current.length - 1) })
-  }, [selAnchor, pushSnapshot, smartPasteEnabled])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selAnchor, normSel, commitCells, smartPasteEnabled, toast])
 
   const handleFillDown = useCallback(() => {
     if (!normSel) return
     const { rMin, rMax, cMin, cMax } = normSel
     if (rMin === rMax) return
-    pushSnapshot()
     const srcRow = displayRowsRef.current[rMin]; if (!srcRow) return
-    setRows((prev) => {
-      const next = [...prev]
-      for (let ri = rMin + 1; ri <= rMax; ri++) {
-        const dr = displayRowsRef.current[ri]; if (!dr) continue
-        const idx = prev.findIndex((r) => r._rowId === dr._rowId); if (idx === -1) continue
-        let updated: BaseRow = { ...prev[idx], _dirty: true }
-        for (let ci = cMin; ci <= cMax; ci++) {
-          const col = allColumnsRef.current[ci]; if (col && !col.readOnly) updated[col.id] = srcRow[col.id]
-        }
-        next[idx] = updated
+    const changes: CellChange[] = []
+    for (let ri = rMin + 1; ri <= rMax; ri++) {
+      const dr = displayRowsRef.current[ri]; if (!dr) continue
+      for (let ci = cMin; ci <= cMax; ci++) {
+        const col = allColumnsRef.current[ci]
+        if (isWritableCol(col)) changes.push({ rowId: dr._rowId, colId: col.id, value: srcRow[col.id] })
       }
-      return next
-    })
-  }, [normSel, pushSnapshot])
+    }
+    commitCells(changes)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normSel, commitCells])
 
   const handleSelectAll = useCallback(() => {
     const rMax = displayRowsRef.current.length - 1
@@ -1127,29 +1249,24 @@ export default function FlatFileGrid({
     if (!isFillDraggingRef.current) return
     isFillDraggingRef.current = false
     if (!normSel || !fillTarget) { setIsFillDragging(false); setFillDragEnd(null); return }
-    pushSnapshot()
     const { rMin, rMax, cMin, cMax } = normSel
     const selH = rMax - rMin + 1; const selW = cMax - cMin + 1
-    setRows((prev) => {
-      const next = [...prev]
-      for (let ri = fillTarget.rMin; ri <= fillTarget.rMax; ri++) {
-        const srcRi = rMin + ((ri - fillTarget.rMin) % selH)
-        const dr = displayRowsRef.current[ri]; if (!dr) continue
-        const srcDr = displayRowsRef.current[srcRi]; if (!srcDr) continue
-        const idx = prev.findIndex((r) => r._rowId === dr._rowId); if (idx === -1) continue
-        let updated: BaseRow = { ...prev[idx], _dirty: true }
-        for (let ci = fillTarget.cMin; ci <= fillTarget.cMax; ci++) {
-          const srcCi = cMin + ((ci - fillTarget.cMin) % selW)
-          const col = allColumnsRef.current[ci]; const srcCol = allColumnsRef.current[srcCi]
-          if (col && srcCol && !col.readOnly) updated[col.id] = srcDr[srcCol.id]
-        }
-        next[idx] = updated
+    const changes: CellChange[] = []
+    for (let ri = fillTarget.rMin; ri <= fillTarget.rMax; ri++) {
+      const srcRi = rMin + ((ri - fillTarget.rMin) % selH)
+      const dr = displayRowsRef.current[ri]; if (!dr) continue
+      const srcDr = displayRowsRef.current[srcRi]; if (!srcDr) continue
+      for (let ci = fillTarget.cMin; ci <= fillTarget.cMax; ci++) {
+        const srcCi = cMin + ((ci - fillTarget.cMin) % selW)
+        const col = allColumnsRef.current[ci]; const srcCol = allColumnsRef.current[srcCi]
+        if (isWritableCol(col) && srcCol) changes.push({ rowId: dr._rowId, colId: col.id, value: srcDr[srcCol.id] })
       }
-      return next
-    })
+    }
+    commitCells(changes)
     setSelEnd({ ri: Math.max(normSel.rMax, fillTarget.rMax), ci: Math.max(normSel.cMax, fillTarget.cMax) })
     setIsFillDragging(false); setFillDragEnd(null)
-  }, [normSel, fillTarget, pushSnapshot])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normSel, fillTarget, commitCells])
 
   // ── Row checkbox selection (with shift-click range select) ───────────────
   // Toggling a checkbox sets the anchor. Shift-clicking another checkbox applies
@@ -1227,6 +1344,16 @@ export default function FlatFileGrid({
 
   useEffect(() => {
     function handle(e: globalThis.KeyboardEvent) {
+      // #2 — when focus is in a NON-grid form field (toolbar Search, Find &
+      // Replace, a filter box, a dropdown search), let that field own every key.
+      // Otherwise Backspace/Delete wiped the selected grid cells, Ctrl+A/C/V
+      // hijacked the grid, and a letter flipped a grid cell into edit mode.
+      // The grid's OWN cell editor has isEditingRef.current === true and is
+      // handled by the dedicated isEditing branch below, so it's exempt here.
+      const tgt = e.target as HTMLElement | null
+      const inField = !!tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable)
+      if (inField && !isEditingRef.current) return
+
       const mod = e.metaKey || e.ctrlKey
       if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return }
       if (mod && e.key === 'z' &&  e.shiftKey) { e.preventDefault(); redo(); return }
@@ -1360,32 +1487,31 @@ export default function FlatFileGrid({
   // ── Cell update ────────────────────────────────────────────────────────
 
   const updateCell = useCallback((rowId: string, colId: string, value: unknown) => {
-    pushSnapshot()
-    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [colId]: value, _dirty: true } : r))
-    onCellChange?.(rowId, colId, value)
-  }, [pushSnapshot, onCellChange])
+    commitCells([{ rowId, colId, value }])  // #30 — no-op re-pick of same enum won't dirty/snapshot
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commitCells])
 
   // A4.1 — apply AI-proposed changes as a single undoable snapshot
   const applyAiChanges = useCallback((changes: import('./FlatFileGrid.types.js').FlatFileAiChange[]) => {
     if (changes.length === 0) return
-    pushSnapshot()
-    setRows((prev) => {
-      const byRowId = new Map(prev.map((r) => [r._rowId, r]))
-      const bySku = new Map(prev.map((r) => [(r as any).sku, r]))
-      const updated = new Map<string, BaseRow>()
-      for (const ch of changes) {
-        const row = byRowId.get(ch.rowId) ?? bySku.get(ch.sku)
-        if (!row) continue
-        const existing = updated.get(row._rowId) ?? { ...row }
-        updated.set(row._rowId, { ...existing, [ch.field]: ch.newValue, _dirty: true })
-      }
-      return prev.map((r) => updated.get(r._rowId) ?? r)
-    })
-  }, [pushSnapshot])
+    const rows = rowsRef.current
+    const byRowId = new Map(rows.map((r) => [r._rowId, r]))
+    const bySku = new Map(rows.map((r) => [(r as any).sku, r]))
+    const resolved: CellChange[] = []
+    for (const ch of changes) {
+      const row = byRowId.get(ch.rowId) ?? bySku.get(ch.sku)
+      if (!row) continue
+      if (!isWritableCol(allColumnsRef.current.find((c) => c.id === ch.field))) continue  // #7 — AI can't write readonly cols
+      resolved.push({ rowId: row._rowId, colId: ch.field, value: ch.newValue })
+    }
+    commitCells(resolved)  // #9 — one snapshot + emits onCellChange per change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commitCells])
 
   const liveUpdateCell = useCallback((rowId: string, colId: string, value: string) => {
     setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [colId]: value, _dirty: true } : r))
-  }, [])
+    onCellChange?.(rowId, colId, value)  // #9 — commit-on-exit (commitInput) fires side-effects for typed edits too
+  }, [onCellChange])
 
   const navigate = useCallback((rowId: string, colId: string, dir: 'right' | 'left' | 'down' | 'up') => {
     const colIds = allColumnsRef.current.map((c) => c.id)
@@ -1673,7 +1799,15 @@ export default function FlatFileGrid({
               requestAnimationFrame(() => document.querySelector(`[data-ri="${match.rowIdx}"][data-ci="${match.colIdx}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
             }}
             onMatchSetChange={setMatchKeys}
-            onReplaceCell={(rowId, columnId, newValue) => { pushSnapshot(); setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [columnId]: newValue, _dirty: true } : r)) }} />
+            onReplaceCell={(rowId, columnId, newValue, batch) => {
+              if (!isWritableCol(allColumnsRef.current.find((c) => c.id === columnId))) return
+              const change: CellChange = { rowId, colId: columnId, value: newValue }
+              // #12 — during Replace All the bar collects a batch; accumulate and
+              // apply it in ONE commitCells (one snapshot) instead of N per cell.
+              if (batch) { batch.push(change); return }
+              commitCells([change])
+            }}
+            onCommitReplaceBatch={(batch) => commitCells(batch as CellChange[])} />
         </div>
       )}
 
@@ -1870,7 +2004,16 @@ export default function FlatFileGrid({
                         onDragEnd={() => { canDragRef.current = false; setArmedDragRowId(null); setDraggingRowId(null); setDropTarget(null) }}
                         onDragOver={(e) => { e.preventDefault(); const rect = e.currentTarget.getBoundingClientRect(); setDropTarget((p) => { const half: 'top' | 'bottom' = e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom'; return p?.rowId === row._rowId && p?.half === half ? p : { rowId: row._rowId, half } }) }}
                         onDrop={(e) => { e.preventDefault(); const rect = e.currentTarget.getBoundingClientRect(); if (draggingRowId) reorderRow(draggingRowId, row._rowId, e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom') }}
-                        style={{ borderTop: dropInd === 'top' ? '2px solid #3b82f6' : undefined, borderBottom: dropInd === 'bottom' ? '2px solid #3b82f6' : undefined }}
+                        style={{
+                          // #3 (perf) — browser skips layout/paint of off-screen rows.
+                          // Every row stays in the DOM, so drag/fill/selection/
+                          // scroll-into-view keep working; the intrinsic height keeps
+                          // the scrollbar accurate for skipped rows.
+                          contentVisibility: 'auto',
+                          containIntrinsicSize: `0 ${rowHeight}px`,
+                          borderTop: dropInd === 'top' ? '2px solid #3b82f6' : undefined,
+                          borderBottom: dropInd === 'bottom' ? '2px solid #3b82f6' : undefined,
+                        }}
                         className={cn('group/row transition-colors', rowBg, isDragging ? 'opacity-40' : 'hover:bg-white/60 dark:hover:bg-slate-800/40')}>
 
                         {/* Checkbox + drag handle */}

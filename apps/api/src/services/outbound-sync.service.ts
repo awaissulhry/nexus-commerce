@@ -29,6 +29,7 @@ import { resolveComplianceById, buildShopifyComplianceMetafields } from "./compl
 import { computeAvailableToPublish } from "./available-to-publish.service.js";
 import { publishOrderEvent } from "./order-events.service.js";
 import { reviseInventoryStatus as ebayReviseInventoryStatus } from "./ebay-trading-api.service.js";
+import { toListingLanguage } from "./ebay-variation-push.service.js";
 
 // Phase 3 — test seam for the Trading-API network call.
 // Overridable in unit tests; defaults to the real Phase-1 fn.
@@ -59,6 +60,21 @@ const AD_SYNC_TYPES = [
 
 export function ebayCurrencyForMarket(marketplaceId: string | undefined): string {
   return marketplaceId === "EBAY_GB" ? "GBP" : "EUR";
+}
+
+/** eBay Inventory API requires BOTH language headers set to the marketplace
+ *  locale, plus the marketplace id, on every call (error 25709 otherwise). */
+export function ebayInventoryHeaders(token: string, marketplaceId: string): Record<string, string> {
+  const mp2 = (marketplaceId ?? "EBAY_IT").replace(/^EBAY_/, "");
+  const lang = toListingLanguage(mp2);
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "Content-Language": lang,
+    "Accept-Language": lang,
+    "X-EBAY-C-MARKETPLACE-ID": marketplaceId ?? "EBAY_IT",
+  };
 }
 
 /** Merge quantity/content into an existing inventory_item so the createOrReplace
@@ -274,6 +290,11 @@ interface SyncResult {
   status: string;
   message: string;
   error?: string;
+  /** Stable error classifier (e.g. EBAY_VALIDATION, EBAY_TRANSIENT). Copied
+   *  by the BullMQ worker onto OutboundSyncQueue.errorCode so the operator
+   *  sees the real cause instead of the downstream circuit-open message. */
+  errorCode?: string;
+  retryable?: boolean;
   /** PD.3 — true when the "success" was a dry-run/sandbox no-op (nothing actually
    *  published). The worker marks these SKIPPED, not SUCCESS, so the grid doesn't
    *  show false green. */
@@ -289,6 +310,55 @@ interface ProcessingStats {
 }
 
 // ── Outbound Sync Service ────────────────────────────────────────────────
+
+/**
+ * Classify an eBay API failure by HTTP status so the operator sees a stable
+ * code on the queue row rather than the downstream "circuit open" message.
+ *
+ * 400/404/409/422 = the listing or payload is wrong; retrying won't help and
+ * must NOT back off the whole marketplace (EBAY_VALIDATION).
+ * Everything else (401/403/429/5xx, network/null) is transient/connection-level:
+ * retry + trip the circuit (EBAY_TRANSIENT).
+ *
+ * retryable / tripsCircuit are wired into the circuit-breaker in Task 3;
+ * only `code` is consumed in Task 2.
+ */
+export function classifyEbayFailure(httpStatus: number | null): {
+  code: 'EBAY_VALIDATION' | 'EBAY_TRANSIENT';
+  retryable: boolean;
+  tripsCircuit: boolean;
+} {
+  const listingFatal = httpStatus != null && [400, 404, 409, 422].includes(httpStatus);
+  return listingFatal
+    ? { code: 'EBAY_VALIDATION', retryable: false, tripsCircuit: false }
+    : { code: 'EBAY_TRANSIENT', retryable: true, tripsCircuit: true };
+}
+
+/**
+ * Task 3 — pure decision helper for `ebayFail`.
+ *
+ * Determines, for a given failure, whether the marketplace circuit breaker
+ * should be tripped and whether the queue row should be retried.
+ *
+ * Kill-switch: `NEXUS_EBAY_FAILURE_ISOLATION`
+ *   - default (absent or any value ≠ '0'): isolation ON — validation errors
+ *     do NOT trip the circuit and are marked non-retryable (terminal FAILED).
+ *   - '0': isolation OFF — preserve pre-Task-3 behavior (always record toward
+ *     the circuit; retryable left for the worker's default true logic).
+ *
+ * Exported so it can be unit-tested as a pure function without mocking.
+ */
+export function ebayFailureDecision(
+  httpStatus: number | null | undefined,
+  isolationEnabled: boolean,
+): { record: boolean; retryable: boolean; code: 'EBAY_VALIDATION' | 'EBAY_TRANSIENT' } {
+  const c = classifyEbayFailure(httpStatus ?? null);
+  if (!isolationEnabled) {
+    // Kill-switch '0': always record toward circuit, retryable stays true
+    return { record: true, retryable: true, code: c.code };
+  }
+  return { record: c.tripsCircuit, retryable: c.retryable, code: c.code };
+}
 
 /**
  * PD-Q — bound a promise so one hung downstream call (SP-API / Redis) can never
@@ -956,17 +1026,24 @@ export class OutboundSyncService {
     // (different endpoint). Either or both may run depending on the payload.
     const apiBase = getEbayApiBaseForMode(mode);
     const currency = ebayCurrencyForMarket(marketplaceId);
-    const headers = {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    };
+    const headers = ebayInventoryHeaders(token, marketplaceId);
+
+    // Task 3: gate the new per-listing isolation behind an env flag (default ON).
+    // Set NEXUS_EBAY_FAILURE_ISOLATION=0 to fall back to pre-Task-3 behavior.
+    const failureIsolationEnabled = process.env.NEXUS_EBAY_FAILURE_ISOLATION !== '0';
 
     const ebayFail = (
       message: string,
       outcome: "failed" | "timeout" = "failed",
+      httpStatus?: number | null,
     ): SyncResult => {
-      recordEbayOutcome(connection.id, marketplaceId, false);
+      const decision = ebayFailureDecision(httpStatus, failureIsolationEnabled);
+      // Only record toward the marketplace circuit breaker when the failure is
+      // transient/connection-level (EBAY_TRANSIENT). A per-listing validation
+      // error (EBAY_VALIDATION) must NOT trip the whole marketplace circuit.
+      if (decision.record) {
+        recordEbayOutcome(connection.id, marketplaceId, false);
+      }
       writeAttemptLog({
         channel: "EBAY",
         marketplace: marketplaceId,
@@ -986,6 +1063,12 @@ export class OutboundSyncService {
         status: "FAILED",
         message: `Failed to sync to eBay`,
         error: message,
+        errorCode: decision.code,
+        // When isolation is ON, propagate retryable so the worker routes EBAY_VALIDATION
+        // to terminal FAILED (retryable:false) instead of re-queuing forever.
+        // When isolation is OFF (kill-switch), leave retryable unset to preserve
+        // pre-Task-3 byte-compat (worker defaults to retryable=true).
+        ...(failureIsolationEnabled ? { retryable: decision.retryable } : {}),
       };
     };
 
@@ -1003,11 +1086,11 @@ export class OutboundSyncService {
         if (getRes.ok) existing = (await getRes.json().catch(() => ({}))) as Record<string, any>;
         const putRes = await fetch(itemUrl, {
           method: "PUT",
-          headers: { ...headers, "Content-Language": "en-US" },
+          headers,
           body: JSON.stringify(mergeEbayInventoryItem(existing, payload)),
         });
         if (!(putRes.ok || putRes.status === 204)) {
-          return ebayFail(`inventory_item PUT ${putRes.status}: ${(await putRes.text().catch(() => "")).slice(0, 300)}`);
+          return ebayFail(`inventory_item PUT ${putRes.status}: ${(await putRes.text().catch(() => "")).slice(0, 300)}`, "failed", putRes.status);
         }
       }
 
@@ -1018,25 +1101,28 @@ export class OutboundSyncService {
           { method: "GET", headers },
         );
         if (!offersRes.ok) {
-          return ebayFail(`get offers ${offersRes.status}: ${(await offersRes.text().catch(() => "")).slice(0, 300)}`);
+          return ebayFail(`get offers ${offersRes.status}: ${(await offersRes.text().catch(() => "")).slice(0, 300)}`, "failed", offersRes.status);
         }
         const offersData = (await offersRes.json().catch(() => ({}))) as {
           offers?: Array<Record<string, any>>;
         };
         const offer = offersData.offers?.[0];
         if (!offer?.offerId) {
-          return ebayFail(`No eBay offer for SKU "${sku}" — publish the listing before syncing price.`);
+          // No offer = the listing was never published; same root cause as a 404.
+          // Pass 404 so classifyEbayFailure routes this as EBAY_VALIDATION:
+          // non-retryable + does not trip the marketplace circuit.
+          return ebayFail(`No eBay offer for SKU "${sku}" — publish the listing before syncing price.`, "failed", 404);
         }
         const offerRes = await fetch(
           `${apiBase}/sell/inventory/v1/offer/${encodeURIComponent(offer.offerId)}`,
           {
             method: "PUT",
-            headers: { ...headers, "Content-Language": "en-US" },
+            headers,
             body: JSON.stringify(buildEbayOfferUpdate(offer, payload.price, currency)),
           },
         );
         if (!offerRes.ok) {
-          return ebayFail(`offer PUT ${offerRes.status}: ${(await offerRes.text().catch(() => "")).slice(0, 300)}`);
+          return ebayFail(`offer PUT ${offerRes.status}: ${(await offerRes.text().catch(() => "")).slice(0, 300)}`, "failed", offerRes.status);
         }
       }
     } catch (err) {
