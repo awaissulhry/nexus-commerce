@@ -4413,6 +4413,20 @@ export default function AmazonFlatFileClient({
                     {label}
                   </button>
                 ))}
+                {groupMode !== 'family' && (() => {
+                  const gids = renderRows.flatMap((i) => (i.kind === 'header' ? [i.groupId] : []))
+                  const allCollapsed = gids.length > 0 && gids.every((id) => collapsedGroups.has(id))
+                  return (
+                    <button
+                      type="button"
+                      title={allCollapsed ? 'Expand all groups' : 'Collapse all groups'}
+                      onClick={() => setCollapsedGroups(allCollapsed ? new Set() : new Set(gids))}
+                      className="ml-1 px-1 py-0.5 text-[10px] rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    >
+                      {allCollapsed ? 'Expand all' : 'Collapse all'}
+                    </button>
+                  )
+                })()}
               </div>
               {/* IN.2 — Cascade buttons toggle */}
               <SharedTbBtn
