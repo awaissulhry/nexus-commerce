@@ -330,6 +330,7 @@ interface CellInternalProps {
   onCellPointerDown: (shiftKey: boolean) => void
   onCellDoubleClick: () => void
   onFillHandlePointerDown: () => void
+  onFillToBottom: () => void
   onFillDrop: () => void
   onDeactivate: () => void
   onChange: (val: unknown) => void
@@ -344,7 +345,7 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
   validIssue, stickyLeft, isMatch, toneCls,
   guidanceLevel,
   renderCellContent,
-  onCellPointerDown, onCellDoubleClick, onFillHandlePointerDown, onFillDrop,
+  onCellPointerDown, onCellDoubleClick, onFillHandlePointerDown, onFillToBottom, onFillDrop,
   onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate,
 }: CellInternalProps) {
   const displayValue = value != null ? String(value) : ''
@@ -483,7 +484,9 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
 
   const fillHandle = isCorner ? (
     <div className="absolute bottom-[-3px] right-[-3px] w-[7px] h-[7px] bg-blue-500 border-[1.5px] border-white dark:border-slate-900 z-20 cursor-crosshair"
-      onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); e.currentTarget.releasePointerCapture(e.pointerId); onFillHandlePointerDown() }} />
+      onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); e.currentTarget.releasePointerCapture(e.pointerId); onFillHandlePointerDown() }}
+      onDoubleClick={(e) => { e.stopPropagation(); e.preventDefault(); onFillToBottom() }}
+      title="Drag to fill · double-click to fill down" />
   ) : null
 
   const tdShared = {
@@ -1294,10 +1297,12 @@ export default function FlatFileGrid({
   const handleFillDown = useCallback(() => {
     if (!normSel) return
     const { rMin, rMax, cMin, cMax } = normSel
-    if (rMin === rMax) return
-    const srcRow = displayRowsRef.current[rMin]; if (!srcRow) return
+    // #27 — Ctrl+D on a single cell pulls the value from the row directly above.
+    const srcRi = rMin === rMax ? rMin - 1 : rMin
+    const startRi = rMin === rMax ? rMin : rMin + 1
+    const srcRow = displayRowsRef.current[srcRi]; if (!srcRow) return
     const changes: CellChange[] = []
-    for (let ri = rMin + 1; ri <= rMax; ri++) {
+    for (let ri = startRi; ri <= rMax; ri++) {
       const dr = displayRowsRef.current[ri]; if (!dr) continue
       for (let ci = cMin; ci <= cMax; ci++) {
         const col = allColumnsRef.current[ci]
@@ -1305,6 +1310,47 @@ export default function FlatFileGrid({
       }
     }
     commitCells(changes)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normSel, commitCells])
+
+  // #27 — Ctrl+R fills the selection's leftmost column value(s) rightward.
+  const handleFillRight = useCallback(() => {
+    if (!normSel) return
+    const { rMin, rMax, cMin, cMax } = normSel
+    const srcCi = cMin === cMax ? cMin - 1 : cMin
+    const startCi = cMin === cMax ? cMin : cMin + 1
+    const srcCol = allColumnsRef.current[srcCi]; if (!srcCol) return
+    const changes: CellChange[] = []
+    for (let ri = rMin; ri <= rMax; ri++) {
+      const dr = displayRowsRef.current[ri]; if (!dr) continue
+      for (let ci = startCi; ci <= cMax; ci++) {
+        const col = allColumnsRef.current[ci]
+        if (isWritableCol(col)) changes.push({ rowId: dr._rowId, colId: col.id, value: dr[srcCol.id] })
+      }
+    }
+    commitCells(changes)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normSel, commitCells])
+
+  // #27 — double-clicking the fill handle fills the selection's columns down to
+  // the last row (Excel's fill-to-bottom).
+  const fillToBottom = useCallback(() => {
+    if (!normSel) return
+    const { rMin, rMax, cMin, cMax } = normSel
+    const lastRi = displayRowsRef.current.length - 1
+    if (lastRi <= rMax) return
+    const selH = rMax - rMin + 1
+    const changes: CellChange[] = []
+    for (let ri = rMax + 1; ri <= lastRi; ri++) {
+      const dr = displayRowsRef.current[ri]; if (!dr) continue
+      const srcDr = displayRowsRef.current[rMin + ((ri - rMin) % selH)]; if (!srcDr) continue
+      for (let ci = cMin; ci <= cMax; ci++) {
+        const col = allColumnsRef.current[ci]
+        if (isWritableCol(col)) changes.push({ rowId: dr._rowId, colId: col.id, value: srcDr[col.id] })
+      }
+    }
+    commitCells(changes)
+    setSelEnd({ ri: lastRi, ci: cMax })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [normSel, commitCells])
 
@@ -1470,6 +1516,9 @@ export default function FlatFileGrid({
       if (mod && e.key === 'x') { e.preventDefault(); handleCut(); setClipboardRange(normSel); return }
       if (mod && e.key === 'v') { e.preventDefault(); void handlePaste(); setClipboardRange(null); return }
       if (mod && e.key === 'd') { e.preventDefault(); handleFillDown(); return }
+      // #27 fill-right — only for a real multi-column selection, so a lone
+      // selected cell doesn't steal the browser's Ctrl/Cmd+R reload.
+      if (mod && e.key === 'r' && normSel && normSel.cMax > normSel.cMin) { e.preventDefault(); handleFillRight(); return }
 
       if (mod && e.key === 'Home') {
         e.preventDefault()
@@ -1588,7 +1637,7 @@ export default function FlatFileGrid({
     }
     document.addEventListener('keydown', handle)
     return () => document.removeEventListener('keydown', handle)
-  }, [undo, redo, normSel, clipboardRange, handleCopy, handleCut, handlePaste, handleFillDown, handleDeleteCells, handleSelectAll, moveSelection, onColumnsClick])
+  }, [undo, redo, normSel, clipboardRange, handleCopy, handleCut, handlePaste, handleFillDown, handleFillRight, handleDeleteCells, handleSelectAll, moveSelection, onColumnsClick])
 
   // ── Row ops ────────────────────────────────────────────────────────────
 
@@ -2237,6 +2286,7 @@ export default function FlatFileGrid({
                               onCellPointerDown={(shiftKey) => handleCellPointerDown(ri, ci, shiftKey)}
                               onCellDoubleClick={() => handleCellDoubleClick(ri, ci)}
                               onFillHandlePointerDown={() => handleFillHandlePointerDown(ri, ci)}
+                              onFillToBottom={fillToBottom}
                               onFillDrop={handleFillDrop}
                               onDeactivate={onDeactivate}
                               onChange={(v) => updateCell(row._rowId, col.id, v)}
