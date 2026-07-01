@@ -274,6 +274,22 @@ export async function reconcileNegativesAndDelivery(campaignIds: string[]): Prom
   return out
 }
 
+// LAUNCH-REPAIR — force-push a campaign's portfolio membership to Amazon. The normal PATCH path
+// diffs against LOCAL state, so when local already has the portfolioId (but Amazon has null — the
+// launch never applied it) it no-ops. This bypasses the diff and pushes updateCampaign directly.
+export async function assignPortfolioDirect(campaignId: string, portfolioId: string): Promise<{ ok: boolean; error?: string; rawResponse?: unknown }> {
+  const c = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { externalCampaignId: true, marketplace: true } })
+  if (!c?.externalCampaignId || !c.marketplace) return { ok: false, error: 'campaign missing externalCampaignId/marketplace' }
+  const gate = await checkAdsWriteGate({ marketplace: c.marketplace, payloadValueCents: 0, campaignId })
+  if (!gate.allowed) return { ok: false, error: 'write-gate closed: ' + ('reason' in gate ? gate.reason : 'denied') }
+  const ctx = await resolveCtx(c.marketplace)
+  if (!ctx) return { ok: false, error: 'no connection for ' + c.marketplace }
+  const r = await updateCampaign(ctx, c.externalCampaignId, { portfolioId })
+  if (r.ok) await prisma.campaign.update({ where: { id: campaignId }, data: { portfolioId } })
+  logger.info('[LAUNCH-REPAIR] assignPortfolioDirect', { campaignId, portfolioId, ok: r.ok, error: r.error })
+  return { ok: r.ok, error: r.error ?? undefined, rawResponse: r.rawResponse }
+}
+
 // ── AX2.1 — Product / category / auto targeting ─────────────────────────
 // Amazon SP product-targeting expressions. AUTO targets are the four
 // auto-campaign clauses (close-match / loose-match / substitutes /
