@@ -126,8 +126,8 @@ export async function createProductAdLocal(input: NewProductAd): Promise<{ id: s
 // (e.g. the campaign wasn't allowlisted at launch, so the write-gate skipped them → empty on
 // Amazon = "not eligible, no keyword and no ad"). Idempotent: only pushes rows with a null
 // external id and reuses the existing local rows — never duplicates. Campaign must be allowlisted.
-export async function pushCampaignStructure(campaignId: string): Promise<{ ok: boolean; adGroups: number; keywords: number; targets: number; productAds: number; errors: string[] }> {
-  const out = { ok: true, adGroups: 0, keywords: 0, targets: 0, productAds: 0, errors: [] as string[] }
+export async function pushCampaignStructure(campaignId: string): Promise<{ ok: boolean; adGroups: number; keywords: number; targets: number; productAds: number; negKeywords: number; errors: string[] }> {
+  const out = { ok: true, adGroups: 0, keywords: 0, targets: 0, productAds: 0, negKeywords: 0, errors: [] as string[] }
   const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true } })
   if (!campaign?.externalCampaignId || !campaign.marketplace) { out.ok = false; out.errors.push('campaign missing externalCampaignId/marketplace'); return out }
   const ctx = await resolveCtx(campaign.marketplace)
@@ -192,6 +192,16 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
         if (r.externalId) { await prisma.adProductAd.update({ where: { id: pa.id }, data: { externalAdId: r.externalId, sku } }); out.productAds++ }
         else out.errors.push('productAd "' + (pa.asin || sku) + '": ' + JSON.stringify(r.rawResponse).slice(0, 200))
       } catch (e) { out.errors.push('productAd "' + (pa.asin || pa.sku || '') + '": ' + ((e as Error)?.message || '')) }
+    }
+    // Ad-group negative keywords (funnel isolation) that exist locally but were never pushed.
+    const negKws = await prisma.adTarget.findMany({ where: { adGroupId: ag.id, kind: 'KEYWORD', isNegative: true, externalTargetId: null } })
+    for (const nk of negKws) {
+      const mt: 'EXACT' | 'PHRASE' = nk.expressionType === 'PHRASE' ? 'PHRASE' : 'EXACT'
+      try {
+        const r = await createNegativeKeyword(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, keywordText: nk.expressionValue ?? '', matchType: mt, state: 'enabled' })
+        if (r.externalId) { await prisma.adTarget.update({ where: { id: nk.id }, data: { externalTargetId: r.externalId } }); out.negKeywords++ }
+        else out.errors.push('negKw "' + (nk.expressionValue || '') + '" ' + mt + ': ' + JSON.stringify(r.rawResponse).slice(0, 220))
+      } catch (e) { out.errors.push('negKw "' + (nk.expressionValue || '') + '": ' + ((e as Error)?.message || '')) }
     }
   }
   logger.info('[LAUNCH-REPAIR] pushCampaignStructure', { campaignId, ...out })
