@@ -638,10 +638,16 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
   const custom = renderCellContent?.(col, row, value, displayValue)
   return (
     <td {...tdShared} className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
-      style={{ ...cellStyle, ...selStyle }} title={guidanceTitle ?? validIssue?.msg ?? col.description}>
+      style={{ ...cellStyle, ...selStyle }} title={guidanceTitle ?? validIssue?.msg ?? col.description}
+      aria-invalid={validIssue?.level === 'error' ? true : undefined}>
       {fillHandle}
+      {/* #41 — non-color error/warning cue (Excel-style corner marker) */}
+      {validIssue && (
+        <span aria-hidden className="absolute top-0 right-0 w-0 h-0 border-t-[5px] border-l-[5px] border-l-transparent"
+          style={{ borderTopColor: validIssue.level === 'error' ? '#ef4444' : '#f59e0b' }} />
+      )}
       <div className={cn('px-1.5 flex items-center text-xs truncate',
-        isEmpty ? (col.required ? 'text-red-400 dark:text-red-500 italic' : 'text-slate-300 dark:text-slate-600') : 'text-slate-800 dark:text-slate-200')}
+        isEmpty ? (col.required ? 'text-red-500 dark:text-red-400 italic' : 'text-slate-400 dark:text-slate-500') : 'text-slate-800 dark:text-slate-200')}
         style={hStyle}>
         {custom ?? (displayValue || (col.required ? '⚠ required' : ''))}
       </div>
@@ -2352,8 +2358,13 @@ export default function FlatFileGrid({
         )}
       </div>
 
+      {/* #21 — announce the current selection to screen readers */}
+      <div aria-live="polite" className="sr-only">
+        {normSel ? `${normSel.rMax - normSel.rMin + 1} by ${normSel.cMax - normSel.cMin + 1} cells selected` : ''}
+      </div>
+
       {/* Status bar */}
-      <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-1 flex items-center gap-4 text-xs text-slate-400 select-none flex-shrink-0">
+      <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-1 flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 select-none flex-shrink-0">
         <span>{filteredRows.length} row{filteredRows.length !== 1 ? 's' : ''}</span>
         {normSel && (() => { const rC = normSel.rMax - normSel.rMin + 1; const cC = normSel.cMax - normSel.cMin + 1; const tot = rC * cC; return <span className="text-blue-500">{tot === 1 ? '1 cell' : `${rC} × ${cC} = ${tot} cells`} selected</span> })()}
         {/* #47 — aggregates for the selection (numeric columns show Sum/Avg/Min/Max) */}
