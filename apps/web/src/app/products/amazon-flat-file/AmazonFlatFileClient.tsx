@@ -49,6 +49,7 @@ import {
   groupIdForSku, fulfillmentBucket, makeGroupId, assignSkusToGroup, GROUP_PALETTE,
   type GroupMode, type FlatFileGroup, type FamilyColorName,
 } from './group-model'
+import { CreateGroupPopover } from './CreateGroupPopover'
 
 // EH.5 — Lazy-loaded modals, panels, and bars. Each one only ships
 // to the browser when the operator first opens it, so the initial
@@ -409,12 +410,6 @@ const FC_CHILD_BORDER: Record<FamilyColor, string> = {
   orange:  'border-l-orange-200 dark:border-l-orange-800',
   teal:    'border-l-teal-200 dark:border-l-teal-800',
   amber:   'border-l-amber-200 dark:border-l-amber-800',
-}
-
-// CG — static swatch backgrounds (must be literal class strings for Tailwind JIT).
-const GROUP_SWATCH: Record<FamilyColor, string> = {
-  blue: 'bg-blue-400', purple: 'bg-purple-400', emerald: 'bg-emerald-400',
-  orange: 'bg-orange-400', teal: 'bg-teal-400', amber: 'bg-amber-400',
 }
 
 // ── CG — group section rendering (VIEW-ONLY) ──────────────────────────────
@@ -901,7 +896,7 @@ export default function AmazonFlatFileClient({
   const [customGroups, setCustomGroups] = useState<FlatFileGroup[]>(() => loadGroups(marketplace))
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => loadCollapsedGroups(marketplace))
   // Pending "Group selected…" creation (captured SKUs + draft name/colour).
-  const [groupCreate, setGroupCreate] = useState<{ skus: string[]; name: string; color: FamilyColorName } | null>(null)
+  const [groupCreate, setGroupCreate] = useState<{ skus: string[] } | null>(null)
   const [manageGroupsOpen, setManageGroupsOpen] = useState(false)
   // Tracks the market the group state currently belongs to, so persistence
   // saves to the right market and a market switch never clobbers it.
@@ -1707,6 +1702,10 @@ export default function AmazonFlatFileClient({
   // WARM — prefetch the Set-category modal chunk before first click so it opens instantly.
   const warmSetCategoryModal = useCallback(() => { void import('./SetCategoryModal') }, [])
   useEffect(() => { if (selectedRealCount > 0) warmSetCategoryModal() }, [selectedRealCount > 0, warmSetCategoryModal])
+  // WARM — prefetch the Manage-groups modal chunk as soon as Custom mode is
+  // active, so clicking "Manage" opens instantly instead of cold-loading.
+  const warmManageGroupsModal = useCallback(() => { void import('./ManageGroupsModal') }, [])
+  useEffect(() => { if (groupMode === 'custom') warmManageGroupsModal() }, [groupMode, warmManageGroupsModal])
 
   // BF.1 — flat list of every visible cell for FindReplaceBar
   const findCells = useMemo<FindCell[]>(() => {
@@ -4449,6 +4448,8 @@ export default function AmazonFlatFileClient({
                   <button
                     type="button"
                     onClick={() => setManageGroupsOpen(true)}
+                    onMouseEnter={warmManageGroupsModal}
+                    onFocus={warmManageGroupsModal}
                     className="ml-1 px-1 py-0.5 text-[10px] rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
                     Manage
@@ -5722,63 +5723,25 @@ export default function AmazonFlatFileClient({
               const sku = String(r.item_sku ?? '')
               if (sku && !seen.has(sku)) { seen.add(sku); skus.push(sku) }
             }
-            if (skus.length) setGroupCreate({ skus, name: '', color: GROUP_PALETTE[customGroups.length % GROUP_PALETTE.length] })
+            if (skus.length) setGroupCreate({ skus })
           }}
           onClose={() => setContextMenu(null)}
         />
       )}
       {groupCreate && (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/20" onClick={() => setGroupCreate(null)}>
-          <div
-            className="w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl p-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">New group</div>
-            <div className="text-[11px] text-slate-400 mb-3">{groupCreate.skus.length} SKU{groupCreate.skus.length === 1 ? '' : 's'} selected</div>
-            <input
-              autoFocus
-              value={groupCreate.name}
-              onChange={(e) => setGroupCreate((g) => (g ? { ...g, name: e.target.value } : g))}
-              onKeyDown={(e) => { if (e.key === 'Enter') (document.getElementById('cg-create-btn') as HTMLButtonElement | null)?.click(); else if (e.key === 'Escape') setGroupCreate(null) }}
-              placeholder="Group name (e.g. FBM items)"
-              className="w-full text-sm px-2 py-1.5 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 mb-3"
-            />
-            <div className="flex items-center gap-1.5 mb-4">
-              {GROUP_PALETTE.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  aria-label={c}
-                  onClick={() => setGroupCreate((g) => (g ? { ...g, color: c } : g))}
-                  className={cn(
-                    'w-6 h-6 rounded-full border-2',
-                    GROUP_SWATCH[c],
-                    groupCreate.color === c ? 'ring-2 ring-offset-1 ring-slate-400' : 'border-transparent',
-                  )}
-                />
-              ))}
-            </div>
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setGroupCreate(null)} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700">Cancel</button>
-              <button
-                id="cg-create-btn"
-                type="button"
-                onClick={() => {
-                  const id = makeGroupId(customGroups)
-                  const order = customGroups.reduce((m, g) => Math.max(m, g.order), -1) + 1
-                  const name = groupCreate.name.trim() || `Group ${customGroups.length + 1}`
-                  const withNew = [...customGroups, { id, name, color: groupCreate.color, order, memberSkus: [] as string[] }]
-                  setCustomGroups(assignSkusToGroup(withNew, id, groupCreate.skus))
-                  setGroupMode('custom')
-                  setGroupCreate(null)
-                }}
-                className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                Create group
-              </button>
-            </div>
-          </div>
-        </div>
+        <CreateGroupPopover
+          skuCount={groupCreate.skus.length}
+          defaultColor={GROUP_PALETTE[customGroups.length % GROUP_PALETTE.length]}
+          onCancel={() => setGroupCreate(null)}
+          onCreate={(name, color) => {
+            const id = makeGroupId(customGroups)
+            const order = customGroups.reduce((m, g) => Math.max(m, g.order), -1) + 1
+            const withNew = [...customGroups, { id, name, color, order, memberSkus: [] as string[] }]
+            setCustomGroups(assignSkusToGroup(withNew, id, groupCreate.skus))
+            setGroupMode('custom')
+            setGroupCreate(null)
+          }}
+        />
       )}
       {manageGroupsOpen && (
         <ManageGroupsModal
