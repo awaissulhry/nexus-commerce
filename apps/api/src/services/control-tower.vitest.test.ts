@@ -23,6 +23,9 @@ const sku = (
   queueRows: [],
   clampedChannels: [],
   negativeAvailable: false,
+  isParent: false,
+  parentId: null,
+  parentSku: null,
   ...overrides,
 })
 
@@ -324,6 +327,28 @@ describe('multiple SKUs', () => {
     ])
     expect(rows[0].channels[0].status).toBe('CLAMPED')
     expect(rows[1].channels[0].status).toBe('IN_SYNC')
+  })
+})
+
+// ─── parent-product fields pass-through ───────────────────────────────────────
+
+describe('parent-product fields pass-through', () => {
+  it('isParent:true row carries the flag through unchanged', () => {
+    const rows = buildControlTowerRows([
+      sku('PARENT-SKU', { isParent: true, parentId: null, parentSku: null }),
+    ])
+    expect(rows[0].isParent).toBe(true)
+    expect(rows[0].parentId).toBeNull()
+    expect(rows[0].parentSku).toBeNull()
+  })
+
+  it('child row with parentId + parentSku passes them through unchanged', () => {
+    const rows = buildControlTowerRows([
+      sku('CHILD-SKU', { isParent: false, parentId: 'p-1', parentSku: 'PARENT-SKU' }),
+    ])
+    expect(rows[0].isParent).toBe(false)
+    expect(rows[0].parentId).toBe('p-1')
+    expect(rows[0].parentSku).toBe('PARENT-SKU')
   })
 })
 
