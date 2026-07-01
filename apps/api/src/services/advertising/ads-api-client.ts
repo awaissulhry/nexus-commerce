@@ -366,6 +366,7 @@ export interface V3CampaignSettings {
   campaignId: string
   name?: string
   state?: string // enabled | paused | archived
+  portfolioId?: string | null // Amazon's authoritative campaign→portfolio membership
   dynamicBidding?: { strategy?: string; placementBidding?: Array<{ placement: string; percentage: number }> }
   budget?: { budget?: number; budgetType?: string }
 }

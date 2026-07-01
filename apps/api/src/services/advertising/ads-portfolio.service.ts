@@ -15,7 +15,7 @@
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { adsMode, listPortfolios, type AdsRegion, type AdsPortfolioDTO } from './ads-api-client.js'
+import { adsMode, listPortfolios, listCampaignsV3, type AdsRegion, type AdsPortfolioDTO } from './ads-api-client.js'
 
 const regionOf = (r: string | null): AdsRegion => (r === 'NA' || r === 'FE' ? r : 'EU')
 
@@ -40,19 +40,47 @@ async function upsertSynced(profileId: string, pf: AdsPortfolioDTO): Promise<voi
 export interface SyncResult {
   synced: number
   errors: number
+  /** P2 — campaigns linked to a portfolio from Amazon's authoritative v3 membership. */
+  campaignsLinked: number
   /** Per-connection failure detail so the page can show WHY a sync didn't return anything. */
   errorDetail: Array<{ marketplace: string | null; error: string }>
+}
+
+/**
+ * P2 — pull Amazon's authoritative campaign→portfolio membership (v3 /sp/campaigns/list) and
+ * write it onto local Campaign.portfolioId so the overview shows real counts + spend. Amazon is
+ * source-of-truth here (assignments made via the campaign PATCH also push to Amazon), so setting
+ * portfolioId=null for campaigns Amazon reports as unportfolio'd is correct, not destructive.
+ * Grouped updateMany by portfolioId to keep round-trips low. Returns campaigns actually linked.
+ */
+async function linkCampaignMembership(profileId: string, region: AdsRegion): Promise<number> {
+  const camps = await listCampaignsV3({ profileId, region })
+  const byPid = new Map<string | null, string[]>()
+  for (const cam of camps) {
+    const pid = cam.portfolioId ?? null
+    const arr = byPid.get(pid) ?? []
+    arr.push(cam.campaignId)
+    byPid.set(pid, arr)
+  }
+  let linked = 0
+  for (const [pid, ids] of byPid) {
+    if (!ids.length) continue
+    const res = await prisma.campaign.updateMany({ where: { externalCampaignId: { in: ids } }, data: { portfolioId: pid } })
+    if (pid) linked += res.count
+  }
+  return linked
 }
 
 /** Pull portfolios from Amazon for every active connection (or sandbox) and upsert them locally. */
 export async function syncPortfolios(opts: { marketplace?: string | null } = {}): Promise<SyncResult> {
   const mk = opts.marketplace && opts.marketplace !== 'all' ? opts.marketplace : null
   let synced = 0
+  let campaignsLinked = 0
   const errorDetail: SyncResult['errorDetail'] = []
   if (adsMode() === 'sandbox') {
     const list = await listPortfolios({ profileId: 'SANDBOX-PROFILE-IT-001', region: 'EU' })
     for (const pf of list) { await upsertSynced('SANDBOX-PROFILE-IT-001', pf); synced++ }
-    return { synced, errors: 0, errorDetail }
+    return { synced, errors: 0, campaignsLinked, errorDetail }
   }
   const conns = await prisma.amazonAdsConnection.findMany({
     where: { isActive: true, ...(mk ? { marketplace: mk } : {}) },
@@ -67,8 +95,15 @@ export async function syncPortfolios(opts: { marketplace?: string | null } = {})
       errorDetail.push({ marketplace: c.marketplace, error })
       logger.warn('[ADS-PORTFOLIO-SYNC] connection fetch failed', { profileId: c.profileId, error })
     }
+    // Campaign membership is a separate best-effort pass — a failure here must not
+    // block the portfolio sync (or vice-versa).
+    try {
+      campaignsLinked += await linkCampaignMembership(c.profileId, regionOf(c.region))
+    } catch (e) {
+      logger.warn('[ADS-PORTFOLIO-SYNC] campaign link pass failed', { profileId: c.profileId, error: (e as Error)?.message })
+    }
   }
-  return { synced, errors: errorDetail.length, errorDetail }
+  return { synced, errors: errorDetail.length, campaignsLinked, errorDetail }
 }
 
 export interface PortfolioOverview {

@@ -78,7 +78,7 @@ function PortfoliosInner() {
       const mp = mk === 'all' ? '' : `?marketplace=${mk}`
       const r = await fetch(`${getBackendUrl()}/api/advertising/portfolios/sync${mp}`, { method: 'POST' }).then((x) => x.json()).catch(() => null)
       await loadOverview(mk)
-      if (!silent) toast(r?.error ? `Sync failed: ${r.error}` : `Synced ${r?.synced ?? 0} from Amazon${r?.errors ? ` · ${r.errors} errors` : ''}`, r?.error ? 'danger' : 'success')
+      if (!silent) toast(r?.error ? `Sync failed: ${r.error}` : `Synced ${r?.synced ?? 0} portfolios · ${r?.campaignsLinked ?? 0} campaigns linked${r?.errors ? ` · ${r.errors} errors` : ''}`, r?.error ? 'danger' : 'success')
     } finally { setSyncing(false) }
   }, [loadOverview, toast])
 
