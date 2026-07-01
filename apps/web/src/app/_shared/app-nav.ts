@@ -153,7 +153,10 @@ export function buildAppNav(counts: SidebarCounts, conn: Connections): RailNavIt
       label: 'Stock',
       href: '/fulfillment/stock',
       Icon: Warehouse,
-      children: [{ label: 'Channel Drift', href: '/fulfillment/stock/channel-drift' }],
+      children: [
+        { label: 'Control Tower', href: '/fulfillment/stock/control-tower' },
+        { label: 'Channel Drift', href: '/fulfillment/stock/channel-drift' },
+      ],
     },
     { label: 'Inbound', href: '/fulfillment/inbound', Icon: PackageCheck },
     {

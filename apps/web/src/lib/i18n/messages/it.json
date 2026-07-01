@@ -4726,6 +4726,7 @@
   "channelDrift.dashboard.topOfTotal": "Mostrati {shown} di {total}",
   "channelDrift.dashboard.seeAll": "Vedi tutti",
   "channelDrift.subnav": "Drift canale",
+  "controlTower.subnav": "Control Tower",
   "poolDrift.subnav": "Drift pool",
   "poolDrift.pageTitle": "Drift pool",
   "poolDrift.pageDescription": "Inserzioni attive che pubblicano più di quanto il pool di magazzino possa evadere — correggi prima di vendere in eccesso.",

@@ -18,6 +18,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Boxes,
+  LayoutGrid,
   ClipboardCheck,
   ArrowRightLeft,
   Lock as LockIcon,
@@ -62,6 +63,7 @@ export function StockSubNav({ cycleCountActive = 0, recallsOpen = 0, channelDrif
     { href: '/fulfillment/stock/stockouts', labelKey: 'stock.stockouts.title', icon: AlertTriangle },
     { href: '/fulfillment/stock/lots', labelKey: 'stock.lots.subnav', icon: Package },
     { href: '/fulfillment/stock/recalls', labelKey: 'stock.recalls.title', icon: ShieldAlert, badge: recallsOpen, badgeTone: 'rose' as const },
+    { href: '/fulfillment/stock/control-tower', labelKey: 'controlTower.subnav', icon: LayoutGrid },
     { href: '/fulfillment/stock/channel-drift', labelKey: 'channelDrift.subnav', icon: Cable, badge: channelDriftOpen, badgeTone: 'amber' as const },
     { href: '/fulfillment/stock/pool-drift', labelKey: 'poolDrift.subnav', icon: Scale },
     { href: '/fulfillment/stock/import', labelKey: 'stock.import.title', icon: Upload },

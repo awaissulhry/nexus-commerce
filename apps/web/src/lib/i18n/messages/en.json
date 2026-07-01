@@ -4706,6 +4706,7 @@
   "channelDrift.dashboard.topOfTotal": "Showing {shown} of {total}",
   "channelDrift.dashboard.seeAll": "See all",
   "channelDrift.subnav": "Channel drift",
+  "controlTower.subnav": "Control Tower",
   "poolDrift.subnav": "Pool drift",
   "poolDrift.pageTitle": "Pool drift",
   "poolDrift.pageDescription": "Active listings publishing more than their stock pool can fulfil — fix before they oversell.",
