@@ -703,6 +703,8 @@ export default function FlatFileGrid({
 
   // ── Selection state ────────────────────────────────────────────────────
   const [selectedRows,   setSelectedRows]   = useState<Set<string>>(new Set())
+  // Anchor for shift-click range selection on the row checkboxes (display-row index).
+  const lastCheckedRef   = useRef<number | null>(null)
   const [activeCell,     setActiveCell]     = useState<{ rowId: string; colId: string } | null>(null)
   const [selAnchor,      setSelAnchor]      = useState<{ ri: number; ci: number } | null>(null)
   const [selEnd,         setSelEnd]         = useState<{ ri: number; ci: number } | null>(null)
@@ -1111,6 +1113,32 @@ export default function FlatFileGrid({
     setSelEnd({ ri: Math.max(normSel.rMax, fillTarget.rMax), ci: Math.max(normSel.cMax, fillTarget.cMax) })
     setIsFillDragging(false); setFillDragEnd(null)
   }, [normSel, fillTarget, pushSnapshot])
+
+  // ── Row checkbox selection (with shift-click range select) ───────────────
+  // Toggling a checkbox sets the anchor. Shift-clicking another checkbox applies
+  // the clicked box's new checked state to every row between the anchor and it
+  // (inclusive), in displayed order — matching Gmail/Airtable range-select.
+  const toggleRowSelection = useCallback((ri: number, rowId: string, checked: boolean, shiftKey: boolean) => {
+    setSelectedRows((prev) => {
+      const next = new Set(prev)
+      if (shiftKey && lastCheckedRef.current !== null && lastCheckedRef.current !== ri) {
+        const lo = Math.min(lastCheckedRef.current, ri)
+        const hi = Math.max(lastCheckedRef.current, ri)
+        const rows = displayRowsRef.current
+        for (let i = lo; i <= hi; i++) {
+          const r = rows[i]
+          if (!r) continue
+          if (checked) next.add(r._rowId); else next.delete(r._rowId)
+        }
+      } else if (checked) {
+        next.add(rowId)
+      } else {
+        next.delete(rowId)
+      }
+      return next
+    })
+    lastCheckedRef.current = ri
+  }, [])
 
   // ── Pointer handlers ───────────────────────────────────────────────────
 
@@ -1810,7 +1838,7 @@ export default function FlatFileGrid({
                           : row._status === 'error'   ? <Tooltip label={<span className="text-xs">{String(row._feedMessage ?? 'Push error')}</span>} className="h10-ds-tooltip--light"><AlertCircle className="w-3 h-3 text-red-500 mx-auto" /></Tooltip>
                           : row._status === 'pending' ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
                           : <input type="checkbox" className="w-3.5 h-3.5 accent-blue-600" checked={isRowSel}
-                              onChange={(e) => setSelectedRows((prev) => { const n = new Set(prev); e.target.checked ? n.add(row._rowId) : n.delete(row._rowId); return n })} />}
+                              onChange={(e) => toggleRowSelection(ri, row._rowId, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)} />}
                         </td>
 
                         {/* Row # + optional image + row meta slot */}
