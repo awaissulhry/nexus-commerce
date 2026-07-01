@@ -19,10 +19,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
+  AlertCircle,
   AlertTriangle,
   CheckCircle2,
   Clock,
+  Eye,
   Loader2,
+  RotateCcw,
   ShieldAlert,
   XCircle,
 } from 'lucide-react'
@@ -34,8 +37,11 @@ import {
   type AutoRefreshInterval,
   type Density,
 } from '@/app/_shared/grid-lens'
+import { Button } from '@/components/ui/Button'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { DeltaPreviewModal, type DeltaPreviewTarget } from './DeltaPreviewModal'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -185,6 +191,7 @@ const PAGE_SIZE = 50
 export default function ControlTowerClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const confirm = useConfirm()
 
   const filterStatus = searchParams.get('status') ?? ''
   const filterChannel = searchParams.get('channel') ?? ''
@@ -197,6 +204,12 @@ export default function ControlTowerClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+
+  // Delta-preview modal target (per channel×marketplace cell).
+  const [deltaTarget, setDeltaTarget] = useState<DeltaPreviewTarget | null>(null)
+  // Bulk-retry action state + transient toast.
+  const [retrying, setRetrying] = useState(false)
+  const [toast, setToast] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null)
 
   const [density, setDensity] = useState<Density>(() => {
     if (typeof window === 'undefined') return 'comfortable'
@@ -256,11 +269,61 @@ export default function ControlTowerClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, filterStatus, filterChannel])
 
+  function showToast(msg: string, tone: 'success' | 'error') {
+    setToast({ msg, tone })
+    setTimeout(() => setToast(null), 3500)
+  }
+
+  // Bulk-retry: re-enqueue ALL failed + dead outbound-sync rows, optionally
+  // scoped to the active channel filter. Behind a confirm. Refreshes on done.
+  async function bulkRetry() {
+    const scope = filterChannel || null
+    const ok = await confirm({
+      title: 'Retry failed syncs?',
+      description: scope
+        ? `This re-enqueues every failed and dead-lettered ${scope} sync job. It is not limited to the SKUs on this page.`
+        : 'This re-enqueues every failed and dead-lettered sync job across all channels. It is not limited to the SKUs on this page.',
+      confirmLabel: 'Retry failed',
+      tone: 'warning',
+    })
+    if (!ok) return
+    setRetrying(true)
+    try {
+      const res = await fetch(`${BACKEND}/api/outbound-queue/bulk-retry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: scope ?? undefined }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const body = (await res.json()) as { ok: boolean; count: number }
+      showToast(
+        `Re-enqueued ${body.count} sync job${body.count !== 1 ? 's' : ''}${scope ? ` · ${scope}` : ''}`,
+        'success',
+      )
+      void load()
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : 'Retry failed', 'error')
+    } finally {
+      setRetrying(false)
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const cellPad = ROW_PAD[density] ?? ROW_PAD.comfortable
 
   return (
     <div className="p-3 sm:p-6 space-y-4">
+
+      {/* Transient action toast */}
+      {toast && (
+        <div className={cn(
+          'fixed bottom-4 right-4 z-50 px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium flex items-center gap-2',
+          toast.tone === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white',
+        )}>
+          {toast.tone === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+          {toast.msg}
+        </div>
+      )}
 
       {/* Summary stat cards — click to toggle status filter */}
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
@@ -360,6 +423,22 @@ export default function ControlTowerClient() {
             loading={loading}
           />
         }
+        trailingSlot={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void bulkRetry()}
+            loading={retrying}
+            icon={<RotateCcw className="w-3.5 h-3.5" />}
+            title={
+              filterChannel
+                ? `Re-enqueue all failed + dead ${filterChannel} sync jobs`
+                : 'Re-enqueue all failed + dead sync jobs (all channels)'
+            }
+          >
+            {filterChannel ? `Retry failed · ${filterChannel}` : 'Retry failed'}
+          </Button>
+        }
       />
 
       {/* Table */}
@@ -438,7 +517,7 @@ export default function ControlTowerClient() {
                           key={`${ch.channel}-${ch.marketplace}`}
                           className="inline-flex flex-col gap-0.5 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1 min-w-[92px]"
                         >
-                          {/* Channel badge + marketplace */}
+                          {/* Channel badge + marketplace + delta preview */}
                           <div className="flex items-center gap-1">
                             <span
                               className={cn(
@@ -455,6 +534,21 @@ export default function ControlTowerClient() {
                             >
                               {ch.marketplace ?? '—'}
                             </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDeltaTarget({
+                                  sku: row.sku,
+                                  channel: ch.channel,
+                                  marketplace: ch.marketplace,
+                                })
+                              }
+                              className="ml-auto p-0.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:text-slate-500 dark:hover:text-blue-400 dark:hover:bg-blue-950/30 transition-colors"
+                              title={`Preview sync delta · ${ch.channel}${ch.marketplace ? ` · ${ch.marketplace}` : ''}`}
+                              aria-label={`Preview sync delta for ${row.sku} on ${ch.channel}`}
+                            >
+                              <Eye className="w-2.5 h-2.5" />
+                            </button>
                           </div>
                           {/* Status chip + quantity */}
                           <div className="flex items-center gap-1">
@@ -506,6 +600,11 @@ export default function ControlTowerClient() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Delta-preview modal (per channel×marketplace cell) */}
+      {deltaTarget && (
+        <DeltaPreviewModal target={deltaTarget} onClose={() => setDeltaTarget(null)} />
       )}
     </div>
   )
