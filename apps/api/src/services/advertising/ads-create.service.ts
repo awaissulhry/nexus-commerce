@@ -143,15 +143,19 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
   const adGroups = await prisma.adGroup.findMany({ where: { campaignId } })
   for (const ag of adGroups) {
     let extAg = ag.externalAdGroupId
+    // Amazon rejects the `·` middle-dot (U+00B7) in ad group names (same constraint as portfolio
+    // names) — it silently drops the item into the error array so no adGroupId comes back. Sanitize.
+    const safeName = ag.name.replace(/\s*·\s*/g, ' - ')
     if (!extAg) {
       try {
-        const r = await createAdGroup(ctx, { externalCampaignId: extC, name: ag.name, defaultBid: (ag.defaultBidCents ?? 75) / 100, state: 'enabled' })
+        const r = await createAdGroup(ctx, { externalCampaignId: extC, name: safeName, defaultBid: (ag.defaultBidCents ?? 75) / 100, state: 'enabled' })
         extAg = r.externalId
-        await prisma.adGroup.update({ where: { id: ag.id }, data: { externalAdGroupId: extAg, lastSyncStatus: extAg ? 'SUCCESS' : 'FAILED' } })
+        await prisma.adGroup.update({ where: { id: ag.id }, data: { externalAdGroupId: extAg, name: safeName, lastSyncStatus: extAg ? 'SUCCESS' : 'FAILED' } })
         if (extAg) out.adGroups++
-      } catch (e) { out.errors.push('adGroup "' + ag.name + '": ' + ((e as Error)?.message || '')); continue }
+        else out.errors.push('adGroup "' + safeName + '": no external id — ' + JSON.stringify(r.rawResponse).slice(0, 300))
+      } catch (e) { out.errors.push('adGroup "' + safeName + '": ' + ((e as Error)?.message || '')); continue }
     }
-    if (!extAg) { out.errors.push('adGroup "' + ag.name + '": no external id'); continue }
+    if (!extAg) continue
     const targets = await prisma.adTarget.findMany({ where: { adGroupId: ag.id, isNegative: false, externalTargetId: null } })
     for (const t of targets) {
       const bid = (t.bidCents ?? 75) / 100
