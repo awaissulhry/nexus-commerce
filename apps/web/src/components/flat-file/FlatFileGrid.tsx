@@ -159,7 +159,9 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, initial
   /** Seed the search box (e.g. the character the user typed on the cell to
    *  open the dropdown) so dropdown cells support Excel-style type-to-filter. */
   initialQuery?: string
-  onSelect: (v: string) => void; onClose: () => void
+  /** #14 — dir is how the value was committed: Enter→'down', Tab→'right',
+   *  mouse-click→undefined (stay on the cell). */
+  onSelect: (v: string, dir?: 'right' | 'down') => void; onClose: () => void
 }) {
   const [query, setQuery] = useState(initialQuery)
   const [hi, setHi] = useState(0)
@@ -203,17 +205,17 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, initial
   }, [onClose])
 
   // Single: replace + (caller) close. Multi: toggle membership, stay open.
-  function choose(v: string) {
-    if (!multi) { onSelect(v); return }
+  function choose(v: string, dir?: 'right' | 'down') {
+    if (!multi) { onSelect(v, dir); return }
     const next = new Set(selected)
     if (next.has(v)) next.delete(v); else next.add(v)
     onSelect([...next].join(','))
     setQuery('')
   }
 
-  function commit(idx: number) {
-    if (idx === visible.length && hasCustom) { choose(query.trim()); return }
-    if (visible[idx] != null) choose(visible[idx])
+  function commit(idx: number, dir?: 'right' | 'down') {
+    if (idx === visible.length && hasCustom) { choose(query.trim(), dir); return }
+    if (visible[idx] != null) choose(visible[idx], dir)
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -223,9 +225,9 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, initial
     e.stopPropagation()
     if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(h + 1, totalItems - 1)) }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)) }
-    else if (e.key === 'Enter') { e.preventDefault(); commit(hi) }
+    else if (e.key === 'Enter') { e.preventDefault(); commit(hi, 'down') }
     else if (e.key === 'Escape') { e.preventDefault(); onClose() }
-    else if (e.key === 'Tab') { e.preventDefault(); commit(hi) }
+    else if (e.key === 'Tab') { e.preventDefault(); commit(hi, e.shiftKey ? undefined : 'right') }
   }
 
   return (
@@ -519,6 +521,12 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
     const strictInvalid =
       col.kind === 'enum' && col.enumMode === 'strict' && !!displayValue &&
       displayValue.split(',').map((s) => s.trim()).filter(Boolean).some((v) => !enumOptions.includes(v))
+    // #13 — show the friendly label(s) (e.g. "Fixed Price", "kg") the dropdown
+    // shows, not the raw code (FIXED_PRICE, KILOGRAM). Map each part for multi.
+    const labelFor = (v: string) => col.optionLabels?.[v] ?? v
+    const shownLabel = displayValue
+      ? displayValue.split(',').map((s) => labelFor(s.trim())).filter(Boolean).join(', ')
+      : ''
     return (
       <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}
         title={strictInvalid ? `"${displayValue}" isn't in eBay's list for this field — eBay may reject it at publish` : undefined}
@@ -534,7 +542,7 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
               strictInvalid ? 'text-amber-600 dark:text-amber-400'
               : isEmpty ? 'text-slate-300 dark:text-slate-600 italic' : 'text-slate-800 dark:text-slate-200')}>
               {strictInvalid && <AlertCircle className="w-3 h-3 shrink-0" aria-hidden />}
-              <span className="truncate">{displayValue || (col.required ? '⚠ required' : enumOptions[1] ? `e.g. ${enumOptions[1]}` : '—')}</span>
+              <span className="truncate">{shownLabel || (col.required ? '⚠ required' : enumOptions[1] ? `e.g. ${labelFor(enumOptions[1])}` : '—')}</span>
             </span>
           )}
           <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
@@ -545,11 +553,15 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
             enumMode={col.kind === 'enum' ? col.enumMode : undefined}
             multi={col.kind === 'enum' ? col.multiValue : undefined}
             initialQuery={editInitialChar ?? ''}
-            onSelect={(v) => {
+            onSelect={(v, dir) => {
               onChange(v)
-              // Multi keeps the dropdown open for more toggles; single
-              // replaces the value and advances.
-              if (!(col.kind === 'enum' && col.multiValue)) { setDropdownOpen(false); onNavigate('right') }
+              // Multi keeps the dropdown open for more toggles; single replaces
+              // and advances only in the direction implied by how it was
+              // committed (#14): Enter→down, Tab→right, mouse-click→stay.
+              if (!(col.kind === 'enum' && col.multiValue)) {
+                setDropdownOpen(false)
+                if (dir) onNavigate(dir); else onDeactivate()
+              }
             }}
             onClose={() => { setDropdownOpen(false); onDeactivate() }} />
         )}
@@ -977,11 +989,17 @@ export default function FlatFileGrid({
   const filteredRows = useMemo(() => {
     if (!searchQuery) return rows
     const q = searchQuery.toLowerCase()
-    return rows.filter((r) =>
-      String(r.sku ?? r.item_sku ?? '').toLowerCase().includes(q) ||
-      String(r.title ?? '').toLowerCase().includes(q) ||
-      String(r.ebay_item_id ?? r.asin ?? '').includes(q),
-    )
+    return rows.filter((r) => {
+      if (String(r.sku ?? r.item_sku ?? '').toLowerCase().includes(q)) return true
+      if (String(r.title ?? '').toLowerCase().includes(q)) return true
+      if (String(r.asin ?? '').includes(q)) return true
+      // #53 — also match any per-market eBay item/listing id column shown in the
+      // grid (was only the single ebay_item_id field).
+      for (const k in r) {
+        if (/(_item_id|_listing_id)$|^ebay_item_id/.test(k) && String(r[k] ?? '').toLowerCase().includes(q)) return true
+      }
+      return false
+    })
   }, [rows, searchQuery])
 
   const displayRows = useMemo(() => {
@@ -1982,7 +2000,15 @@ export default function FlatFileGrid({
                 {visibleGroups.map((g) => (
                   <th key={g.id} colSpan={g.columns.length}
                     className={cn('px-2 py-1 text-xs font-bold border-b border-r border-slate-200 dark:border-slate-700 text-left whitespace-nowrap', gColor(g.color).header)}>
-                    <button onClick={() => setClosedGroups((prev) => { const n = new Set(prev); n.has(g.id) ? n.delete(g.id) : n.add(g.id); onGroupStateChange?.(n, internalGroupOrder); return n })} className="flex items-center gap-1">
+                    <button onClick={() => {
+                      // #52 — don't let the chevrons collapse the last visible group
+                      // (leaving an empty grid); the Bar-3 pill path already guards.
+                      if (!closedGroups.has(g.id)) {
+                        const stillOpen = columnGroups.filter((cg) => !closedGroups.has(cg.id) && cg.id !== g.id).length
+                        if (stillOpen === 0) { toast({ title: 'Keep at least one column group visible', tone: 'info' }); return }
+                      }
+                      setClosedGroups((prev) => { const n = new Set(prev); n.has(g.id) ? n.delete(g.id) : n.add(g.id); onGroupStateChange?.(n, internalGroupOrder); return n })
+                    }} className="flex items-center gap-1">
                       <ChevronDown className={cn('h-3 w-3 transition-transform', closedGroups.has(g.id) && '-rotate-90')} />
                       {g.label}
                     </button>
