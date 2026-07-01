@@ -1722,7 +1722,15 @@ export default function FlatFileGrid({
               requestAnimationFrame(() => document.querySelector(`[data-ri="${match.rowIdx}"][data-ci="${match.colIdx}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
             }}
             onMatchSetChange={setMatchKeys}
-            onReplaceCell={(rowId, columnId, newValue) => { if (!isWritableCol(allColumnsRef.current.find((c) => c.id === columnId))) return; commitCells([{ rowId, colId: columnId, value: newValue }]) }} />
+            onReplaceCell={(rowId, columnId, newValue, batch) => {
+              if (!isWritableCol(allColumnsRef.current.find((c) => c.id === columnId))) return
+              const change: CellChange = { rowId, colId: columnId, value: newValue }
+              // #12 — during Replace All the bar collects a batch; accumulate and
+              // apply it in ONE commitCells (one snapshot) instead of N per cell.
+              if (batch) { batch.push(change); return }
+              commitCells([change])
+            }}
+            onCommitReplaceBatch={(batch) => commitCells(batch as CellChange[])} />
         </div>
       )}
 
