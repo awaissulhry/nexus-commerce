@@ -56,6 +56,13 @@ const GROUP_COLORS: Record<string, { band: string; header: string; text: string;
 
 function gColor(color: string) { return GROUP_COLORS[color] ?? GROUP_COLORS.slate }
 
+// #7 — the single writability gate for every bulk mutation (paste, fill,
+// fill-down, replace, AI). A column locked via readOnly OR kind:'readonly'
+// must never be written by any path, matching the click/type editors.
+function isWritableCol(col?: { readOnly?: boolean; kind?: string } | null): boolean {
+  return !!col && !col.readOnly && col.kind !== 'readonly'
+}
+
 function statusBadgeCls(status?: string | null) {
   switch (status?.toUpperCase()) {
     case 'ACTIVE': return 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300'
@@ -1016,6 +1023,8 @@ export default function FlatFileGrid({
     const out: FindCell[] = []
     displayRows.forEach((row, ri) => {
       allColumnsRef.current.forEach((col, ci) => {
+        // #7 — readonly columns stay FINDABLE (search ASIN/item-id) but the
+        // replace write is gated in onReplaceCell, so they can't be mutated.
         out.push({ rowIdx: ri, colIdx: ci, rowId: row._rowId, columnId: col.id, value: row[col.id] })
       })
     })
@@ -1055,7 +1064,7 @@ export default function FlatFileGrid({
         let updated: BaseRow = { ...prev[idx], _dirty: true }
         for (let ci = cMin; ci <= cMax; ci++) {
           const col = allColumnsRef.current[ci]
-          if (col && !col.readOnly && col.kind !== 'readonly') updated[col.id] = ''
+          if (isWritableCol(col)) updated[col.id] = ''
         }
         next[idx] = updated
       }
@@ -1095,9 +1104,9 @@ export default function FlatFileGrid({
         const idx = prev.findIndex((r) => r._rowId === dr._rowId); if (idx === -1) return
         const updated: BaseRow = { ...prev[idx], _dirty: true }
         if (hasHeaders) {
-          pasteRow.forEach((val, pi) => { const ci = headerMap.get(pi); if (ci !== undefined) { const col = allColumnsRef.current[ci]; if (col && !col.readOnly) updated[col.id] = val } })
+          pasteRow.forEach((val, pi) => { const ci = headerMap.get(pi); if (ci !== undefined) { const col = allColumnsRef.current[ci]; if (isWritableCol(col)) updated[col.id] = val } })
         } else {
-          pasteRow.forEach((val, ciOffset) => { const col = allColumnsRef.current[startCi + ciOffset]; if (col && !col.readOnly) updated[col.id] = val })
+          pasteRow.forEach((val, ciOffset) => { const col = allColumnsRef.current[startCi + ciOffset]; if (isWritableCol(col)) updated[col.id] = val })
         }
         next[idx] = updated
       })
@@ -1121,7 +1130,7 @@ export default function FlatFileGrid({
         const idx = prev.findIndex((r) => r._rowId === dr._rowId); if (idx === -1) continue
         let updated: BaseRow = { ...prev[idx], _dirty: true }
         for (let ci = cMin; ci <= cMax; ci++) {
-          const col = allColumnsRef.current[ci]; if (col && !col.readOnly) updated[col.id] = srcRow[col.id]
+          const col = allColumnsRef.current[ci]; if (isWritableCol(col)) updated[col.id] = srcRow[col.id]
         }
         next[idx] = updated
       }
@@ -1157,7 +1166,7 @@ export default function FlatFileGrid({
         for (let ci = fillTarget.cMin; ci <= fillTarget.cMax; ci++) {
           const srcCi = cMin + ((ci - fillTarget.cMin) % selW)
           const col = allColumnsRef.current[ci]; const srcCol = allColumnsRef.current[srcCi]
-          if (col && srcCol && !col.readOnly) updated[col.id] = srcDr[srcCol.id]
+          if (isWritableCol(col) && srcCol) updated[col.id] = srcDr[srcCol.id]
         }
         next[idx] = updated
       }
@@ -1402,6 +1411,7 @@ export default function FlatFileGrid({
       for (const ch of changes) {
         const row = byRowId.get(ch.rowId) ?? bySku.get(ch.sku)
         if (!row) continue
+        if (!isWritableCol(allColumnsRef.current.find((c) => c.id === ch.field))) continue  // #7 — AI can't write readonly cols
         const existing = updated.get(row._rowId) ?? { ...row }
         updated.set(row._rowId, { ...existing, [ch.field]: ch.newValue, _dirty: true })
       }
@@ -1699,7 +1709,7 @@ export default function FlatFileGrid({
               requestAnimationFrame(() => document.querySelector(`[data-ri="${match.rowIdx}"][data-ci="${match.colIdx}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
             }}
             onMatchSetChange={setMatchKeys}
-            onReplaceCell={(rowId, columnId, newValue) => { pushSnapshot(); setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [columnId]: newValue, _dirty: true } : r)) }} />
+            onReplaceCell={(rowId, columnId, newValue) => { if (!isWritableCol(allColumnsRef.current.find((c) => c.id === columnId))) return; pushSnapshot(); setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [columnId]: newValue, _dirty: true } : r)) }} />
         </div>
       )}
 
