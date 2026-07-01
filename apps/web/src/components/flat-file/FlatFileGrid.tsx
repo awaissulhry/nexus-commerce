@@ -566,12 +566,7 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
         <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}>
           {fillHandle}
           <textarea ref={inputRef as any} defaultValue={editInitialChar !== null ? editInitialChar : displayValue}
-            onInput={(e) => {
-              const val = (e.target as HTMLTextAreaElement).value
-              setLiveLen(val.length)
-              if (!snapshotPushedRef.current) { originalValueRef.current = displayValue; onPushSnapshot(); snapshotPushedRef.current = true }
-              onLiveChange(val)
-            }}
+            onInput={(e) => setLiveLen((e.target as HTMLTextAreaElement).value.length) /* #5 — commit-once: no per-keystroke setRows; commitInput writes on exit */}
             onBlur={() => { if (!cancelledRef.current) commitInput(); cancelledRef.current = false; onDeactivate() }}
             onKeyDown={handleKeyDown}
             maxLength={col.maxLength}
@@ -606,12 +601,7 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
         {fillHandle}
         <input ref={inputRef as any} type={col.kind === 'number' ? 'number' : 'text'}
           defaultValue={editInitialChar !== null ? editInitialChar : displayValue} maxLength={col.maxLength}
-          onInput={(e) => {
-            const val = (e.target as HTMLInputElement).value
-            setLiveLen(val.length)
-            if (!snapshotPushedRef.current) { originalValueRef.current = displayValue; onPushSnapshot(); snapshotPushedRef.current = true }
-            onLiveChange(val)
-          }}
+          onInput={(e) => setLiveLen((e.target as HTMLInputElement).value.length) /* #5 — commit-once: commitInput writes on exit */}
           onBlur={() => { cancelledRef.current = false; onDeactivate() }}
           onKeyDown={handleKeyDown}
           className="w-full px-1.5 text-xs bg-white dark:bg-slate-800 focus:outline-none text-slate-800 dark:text-slate-200"
@@ -1059,9 +1049,17 @@ export default function FlatFileGrid({
   type CellChange = { rowId: string; colId: string; value: unknown }
   const commitCells = useCallback((changes: CellChange[]) => {
     if (changes.length === 0) return
+    // #30 — drop no-op changes (delete-empty, fill-same, re-pick same enum) so
+    // rows aren't falsely marked dirty and undo isn't polluted with dead steps.
+    const rowById = new Map(rowsRef.current.map((r) => [r._rowId, r]))
+    const real = changes.filter((ch) => {
+      const r = rowById.get(ch.rowId)
+      return !!r && (r[ch.colId] ?? '') !== (ch.value ?? '')
+    })
+    if (real.length === 0) return
     pushSnapshot()
     const byRow = new Map<string, CellChange[]>()
-    for (const ch of changes) {
+    for (const ch of real) {
       const arr = byRow.get(ch.rowId)
       if (arr) arr.push(ch); else byRow.set(ch.rowId, [ch])
     }
@@ -1072,7 +1070,7 @@ export default function FlatFileGrid({
       for (const c of cs) updated[c.colId] = c.value
       return updated
     }))
-    for (const ch of changes) onCellChange?.(ch.rowId, ch.colId, ch.value)
+    for (const ch of real) onCellChange?.(ch.rowId, ch.colId, ch.value)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pushSnapshot, onCellChange])
 
@@ -1410,10 +1408,9 @@ export default function FlatFileGrid({
   // ── Cell update ────────────────────────────────────────────────────────
 
   const updateCell = useCallback((rowId: string, colId: string, value: unknown) => {
-    pushSnapshot()
-    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [colId]: value, _dirty: true } : r))
-    onCellChange?.(rowId, colId, value)
-  }, [pushSnapshot, onCellChange])
+    commitCells([{ rowId, colId, value }])  // #30 — no-op re-pick of same enum won't dirty/snapshot
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commitCells])
 
   // A4.1 — apply AI-proposed changes as a single undoable snapshot
   const applyAiChanges = useCallback((changes: import('./FlatFileGrid.types.js').FlatFileAiChange[]) => {
@@ -1434,7 +1431,8 @@ export default function FlatFileGrid({
 
   const liveUpdateCell = useCallback((rowId: string, colId: string, value: string) => {
     setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [colId]: value, _dirty: true } : r))
-  }, [])
+    onCellChange?.(rowId, colId, value)  // #9 — commit-on-exit (commitInput) fires side-effects for typed edits too
+  }, [onCellChange])
 
   const navigate = useCallback((rowId: string, colId: string, dir: 'right' | 'left' | 'down' | 'up') => {
     const colIds = allColumnsRef.current.map((c) => c.id)
