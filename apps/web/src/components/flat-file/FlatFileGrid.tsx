@@ -225,7 +225,7 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, initial
     const next = new Set(selected)
     if (next.has(v)) next.delete(v); else next.add(v)
     onSelect([...next].join(','))
-    setQuery('')
+    // #70 — keep the search query so the filter survives each multi toggle.
   }
 
   function commit(idx: number, dir?: 'right' | 'down') {
@@ -1323,24 +1323,42 @@ export default function FlatFileGrid({
     const startRi = normSel ? normSel.rMin : selAnchor.ri
     const startCi = normSel ? normSel.cMin : selAnchor.ci
     const changes: CellChange[] = []
-    dataRows.forEach((line, riOffset) => {
-      const pasteRow = line.split('\t')
-      const dr = displayRowsRef.current[startRi + riOffset]; if (!dr) return
-      if (hasHeaders) {
+    let tgtH = dataRows.length
+    let tgtW = 1
+    if (hasHeaders) {
+      dataRows.forEach((line, riOffset) => {
+        const pasteRow = line.split('\t')
+        const dr = displayRowsRef.current[startRi + riOffset]; if (!dr) return
         pasteRow.forEach((val, pi) => { const ci = headerMap.get(pi); if (ci !== undefined) { const col = allColumnsRef.current[ci]; if (isWritableCol(col)) changes.push({ rowId: dr._rowId, colId: col.id, value: val }) } })
-      } else {
-        pasteRow.forEach((val, ciOffset) => { const col = allColumnsRef.current[startCi + ciOffset]; if (isWritableCol(col)) changes.push({ rowId: dr._rowId, colId: col.id, value: val }) })
+      })
+    } else {
+      // #28 — tile a smaller copied block (or a single cell) across a larger
+      // selection when it divides evenly; otherwise paste the block as-is.
+      const block = dataRows.map((l) => l.split('\t'))
+      const dataH = block.length, dataW = Math.max(...block.map((r) => r.length))
+      tgtH = dataH; tgtW = dataW
+      if (normSel) {
+        const selH = normSel.rMax - normSel.rMin + 1, selW = normSel.cMax - normSel.cMin + 1
+        if (selH >= dataH && selW >= dataW && selH % dataH === 0 && selW % dataW === 0) { tgtH = selH; tgtW = selW }
       }
-    })
+      for (let ro = 0; ro < tgtH; ro++) {
+        const dr = displayRowsRef.current[startRi + ro]; if (!dr) continue
+        const srcRow = block[ro % dataH]
+        for (let co = 0; co < tgtW; co++) {
+          const col = allColumnsRef.current[startCi + co]
+          if (isWritableCol(col)) changes.push({ rowId: dr._rowId, colId: col.id, value: srcRow[co % dataW] ?? '' })
+        }
+      }
+    }
     commitCells(changes)
     // #11 — rows past the end can't be written (parent/child structure makes
     // silent auto-append unsafe); warn instead of dropping them silently.
-    const overflow = (startRi + dataRows.length) - displayRowsRef.current.length
+    const overflow = (startRi + tgtH) - displayRowsRef.current.length
     if (overflow > 0) {
       toast({ title: `${overflow} pasted row${overflow > 1 ? 's' : ''} didn't fit`, description: 'Add more rows first, then paste again to include them.', tone: 'warning' })
     }
-    const lastR = Math.min(dataRows.length - 1, displayRowsRef.current.length - 1 - startRi)
-    const lastC = hasHeaders ? Math.max(0, ...headerMap.values()) : startCi + Math.max(...dataRows.map((r) => r.split('\t').length)) - 1
+    const lastR = Math.min(tgtH - 1, displayRowsRef.current.length - 1 - startRi)
+    const lastC = hasHeaders ? Math.max(0, ...headerMap.values()) : startCi + tgtW - 1
     setSelEnd({ ri: startRi + lastR, ci: Math.min(lastC, allColumnsRef.current.length - 1) })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selAnchor, normSel, commitCells, smartPasteEnabled, toast])
