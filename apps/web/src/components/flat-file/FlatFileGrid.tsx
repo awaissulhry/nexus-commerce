@@ -49,6 +49,8 @@ const GROUP_COLORS: Record<string, { band: string; header: string; text: string;
   teal:    { band: 'bg-teal-50 dark:bg-teal-950/30', header: 'bg-teal-100 dark:bg-teal-900/50 text-teal-800 dark:text-teal-200', text: 'text-teal-700 dark:text-teal-300', cell: 'bg-teal-50/50 dark:bg-teal-950/10', badge: 'bg-teal-100 text-teal-700 border border-teal-200 dark:bg-teal-900/40 dark:text-teal-300 dark:border-teal-800' },
   amber:   { band: 'bg-amber-50 dark:bg-amber-950/30', header: 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200', text: 'text-amber-700 dark:text-amber-300', cell: 'bg-amber-50/50 dark:bg-amber-950/10', badge: 'bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800' },
   sky:     { band: 'bg-sky-50 dark:bg-sky-950/30', header: 'bg-sky-100 dark:bg-sky-900/50 text-sky-800 dark:text-sky-200', text: 'text-sky-700 dark:text-sky-300', cell: 'bg-sky-50/50 dark:bg-sky-950/10', badge: 'bg-sky-100 text-sky-700 border border-sky-200 dark:bg-sky-900/40 dark:text-sky-300 dark:border-sky-800' },
+  // #80 — eBay 'Package & Shipping' group uses cyan; add it so it doesn't fall back to slate.
+  cyan:    { band: 'bg-cyan-50 dark:bg-cyan-950/30', header: 'bg-cyan-100 dark:bg-cyan-900/50 text-cyan-800 dark:text-cyan-200', text: 'text-cyan-700 dark:text-cyan-300', cell: 'bg-cyan-50/50 dark:bg-cyan-950/10', badge: 'bg-cyan-100 text-cyan-700 border border-cyan-200 dark:bg-cyan-900/40 dark:text-cyan-300 dark:border-cyan-800' },
   red:     { band: 'bg-red-50 dark:bg-red-950/30', header: 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200', text: 'text-red-700 dark:text-red-300', cell: 'bg-red-50/50 dark:bg-red-950/10', badge: 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/40 dark:text-red-300 dark:border-red-800' },
   violet:  { band: 'bg-violet-50 dark:bg-violet-950/30', header: 'bg-violet-100 dark:bg-violet-900/50 text-violet-800 dark:text-violet-200', text: 'text-violet-700 dark:text-violet-300', cell: 'bg-violet-50/50 dark:bg-violet-950/10', badge: 'bg-violet-100 text-violet-700 border border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-800' },
   slate:   { band: 'bg-slate-50 dark:bg-slate-900/30', header: 'bg-slate-100 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300', text: 'text-slate-600 dark:text-slate-400', cell: '', badge: 'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700' },
@@ -1435,6 +1437,9 @@ export default function FlatFileGrid({
       }
     }
     commitCells(changes)
+    // #72 — highlight the UNION of the source and filled range (so fill-up
+    // extends the selection upward, not only downward).
+    setSelAnchor({ ri: Math.min(normSel.rMin, fillTarget.rMin), ci: Math.min(normSel.cMin, fillTarget.cMin) })
     setSelEnd({ ri: Math.max(normSel.rMax, fillTarget.rMax), ci: Math.max(normSel.cMax, fillTarget.cMax) })
     setIsFillDragging(false); setFillDragEnd(null)
   // eslint-disable-next-line react-hooks/exhaustive-deps
