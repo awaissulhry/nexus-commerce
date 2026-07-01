@@ -139,7 +139,7 @@ function wordBoundsAt(text: string, pos: number): [number, number] {
 
 // ── EnumDropdown ───────────────────────────────────────────────────────────
 
-function EnumDropdown({ options, optionLabels, current, enumMode, multi, onSelect, onClose }: {
+function EnumDropdown({ options, optionLabels, current, enumMode, multi, initialQuery = '', onSelect, onClose }: {
   options: string[]; optionLabels?: Record<string, string>
   current: string
   /** 'strict' = eBay only accepts listed values; a typed custom value is
@@ -149,9 +149,12 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, onSelec
    *  and the dropdown stays open. onSelect receives the full comma-joined
    *  string. Single (default) replaces the value and closes. */
   multi?: boolean
+  /** Seed the search box (e.g. the character the user typed on the cell to
+   *  open the dropdown) so dropdown cells support Excel-style type-to-filter. */
+  initialQuery?: string
   onSelect: (v: string) => void; onClose: () => void
 }) {
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery)
   const [hi, setHi] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -181,7 +184,9 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, onSelec
   const totalItems = visible.length + (hasCustom ? 1 : 0)
   const listId = useId()
 
-  useEffect(() => { searchRef.current?.focus() }, [])
+  // Focus the search box on open; if seeded with a typed char, place the caret
+  // at the end so the next keystroke appends (Excel-style type-to-replace).
+  useEffect(() => { const el = searchRef.current; if (el) { el.focus(); const n = el.value.length; el.setSelectionRange(n, n) } }, [])
   useEffect(() => { setHi(0) }, [filtered])
   useEffect(() => { (listRef.current?.children[hi] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest' }) }, [hi])
   useEffect(() => {
@@ -205,6 +210,10 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, onSelec
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
+    // Keep these keys inside the dropdown — otherwise they bubble to the grid's
+    // global keydown handler and double-fire (Escape clearing the whole
+    // selection, Enter/Tab moving the active cell out from under the popover).
+    e.stopPropagation()
     if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(h + 1, totalItems - 1)) }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)) }
     else if (e.key === 'Enter') { e.preventDefault(); commit(hi) }
@@ -361,6 +370,15 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
   useEffect(() => { if (isEditing) { snapshotPushedRef.current = false } }, [isEditing])
   useEffect(() => { if (isEditing) setLiveLen(displayValue.length) }, [isEditing])
 
+  // Typing on an active enum/boolean cell (or pressing F2) flips the grid into
+  // edit mode; bridge that into opening this cell's dropdown, pre-filled with
+  // the typed character. Without this the keystroke is swallowed and the cell
+  // appears frozen — the root of the "can't type into dropdown cells" glitch.
+  useEffect(() => {
+    if (isEditing && (col.kind === 'enum' || col.kind === 'boolean')) setDropdownOpen(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, col.kind])
+
   const isEmpty = !displayValue
   const cellStyle: React.CSSProperties = {
     minWidth: width, width,
@@ -408,6 +426,9 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
     : guidanceCls || cellBg,
     isActive && !isEditing && 'outline outline-2 outline-blue-500 outline-offset-[-1px] z-[5]',
     isEditing && 'ring-2 ring-inset ring-blue-500 z-[5]',
+    // Suppress native text selection while dragging to select cells; the input
+    // in an editing cell keeps its own selectable text (UA reset).
+    !isEditing && 'select-none',
     !isActive && !isSelected && !isMatch && !toneCls && !guidanceLevel && (
       validIssue?.level === 'error' ? 'bg-red-100/80 dark:bg-red-950/30'
       : validIssue?.level === 'warn' ? 'bg-amber-50/80 dark:bg-amber-950/20'
@@ -500,6 +521,7 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
           <EnumDropdown options={enumOptions} optionLabels={col.optionLabels} current={displayValue}
             enumMode={col.kind === 'enum' ? col.enumMode : undefined}
             multi={col.kind === 'enum' ? col.multiValue : undefined}
+            initialQuery={editInitialChar ?? ''}
             onSelect={(v) => {
               onChange(v)
               // Multi keeps the dropdown open for more toggles; single
@@ -806,6 +828,11 @@ export default function FlatFileGrid({
   // ── Drag-drop rows ─────────────────────────────────────────────────────
   const [draggingRowId, setDraggingRowId] = useState<string | null>(null)
   const [dropTarget,    setDropTarget]    = useState<{ rowId: string; half: 'top' | 'bottom' } | null>(null)
+  // Only the row whose drag-handle is currently pressed is `draggable`. Leaving
+  // every <tr> draggable makes the browser run native HTML5 drag-detection on
+  // press, which swallows the first pointer moves and makes cell range-select
+  // and fill-drag feel glitchy/laggy to start.
+  const [armedDragRowId, setArmedDragRowId] = useState<string | null>(null)
   const canDragRef   = useRef(false)
   const rowDragRef   = useRef<number | null>(null)
 
@@ -815,6 +842,11 @@ export default function FlatFileGrid({
   const selAnchorRef         = useRef<{ ri: number; ci: number } | null>(null)
   const selEndRef            = useRef<{ ri: number; ci: number } | null>(null)
   const isEditingRef         = useRef(false)
+  // Mirrors isFillDragging synchronously. The container onPointerMove/onPointerUp
+  // read this instead of the state value: setIsFillDragging(true) hasn't
+  // re-rendered yet when the first move fires, so reading the state there routed
+  // the whole gesture into selection-extend and the fill silently no-op'd.
+  const isFillDraggingRef    = useRef(false)
   const onBeforeEditCellRef  = useRef(onBeforeEditCell)
   const getCellGuidanceRef   = useRef(getCellGuidance)
 
@@ -1089,7 +1121,12 @@ export default function FlatFileGrid({
   }, [])
 
   const executeFill = useCallback(() => {
-    if (!normSel || !fillTarget) return
+    // Guard against the double pointer-up: both the container onPointerUp and the
+    // cell's onPointerUp fire executeFill; only the first (which flips the ref)
+    // should run, so we don't push two undo snapshots for one fill.
+    if (!isFillDraggingRef.current) return
+    isFillDraggingRef.current = false
+    if (!normSel || !fillTarget) { setIsFillDragging(false); setFillDragEnd(null); return }
     pushSnapshot()
     const { rMin, rMax, cMin, cMax } = normSel
     const selH = rMax - rMin + 1; const selW = cMax - cMin + 1
@@ -1180,10 +1217,11 @@ export default function FlatFileGrid({
   }, [])
 
   const handleFillHandlePointerDown = useCallback((ri: number, ci: number) => {
+    isFillDraggingRef.current = true          // synchronous — first onPointerMove reads this
     setIsFillDragging(true); setFillDragEnd({ ri, ci })
   }, [])
 
-  const handleFillDrop = useCallback(() => { if (isFillDragging) executeFill() }, [isFillDragging, executeFill])
+  const handleFillDrop = useCallback(() => { if (isFillDraggingRef.current) executeFill() }, [executeFill])
 
   // ── Keyboard handler ───────────────────────────────────────────────────
 
@@ -1691,14 +1729,18 @@ export default function FlatFileGrid({
           const ri = parseInt(td.dataset.ri ?? '', 10)
           const ci = parseInt(td.dataset.ci ?? '', 10)
           if (isNaN(ri) || isNaN(ci)) return
-          if (isFillDragging) {
+          if (isFillDraggingRef.current) {
             setFillDragEnd((p) => (p?.ri === ri && p?.ci === ci ? p : { ri, ci }))
           } else if (selAnchorRef.current) {
+            const a = selAnchorRef.current
+            // Ignore jitter that stays on the anchor cell — otherwise a still
+            // single click nulls activeCell and dropdown cells won't open on click.
+            if (ri === a.ri && ci === a.ci) return
             setSelEnd((p) => (p?.ri === ri && p?.ci === ci ? p : { ri, ci }))
             setActiveCell(null)
           }
         }}
-        onPointerUp={() => { rowDragRef.current = null; if (isFillDragging) executeFill() }}>
+        onPointerUp={() => { rowDragRef.current = null; setArmedDragRowId(null); if (isFillDraggingRef.current) executeFill() }}>
 
         {loading && <div className="flex items-center justify-center h-32"><Loader2 className="h-6 w-6 animate-spin text-blue-500" /></div>}
 
@@ -1823,9 +1865,9 @@ export default function FlatFileGrid({
                       : 'bg-white dark:bg-slate-900'
 
                     rendered.push(
-                      <tr key={row._rowId} draggable
+                      <tr key={row._rowId} draggable={armedDragRowId === row._rowId}
                         onDragStart={(e) => { if (!canDragRef.current) { e.preventDefault(); return } e.dataTransfer.effectAllowed = 'move'; setDraggingRowId(row._rowId) }}
-                        onDragEnd={() => { canDragRef.current = false; setDraggingRowId(null); setDropTarget(null) }}
+                        onDragEnd={() => { canDragRef.current = false; setArmedDragRowId(null); setDraggingRowId(null); setDropTarget(null) }}
                         onDragOver={(e) => { e.preventDefault(); const rect = e.currentTarget.getBoundingClientRect(); setDropTarget((p) => { const half: 'top' | 'bottom' = e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom'; return p?.rowId === row._rowId && p?.half === half ? p : { rowId: row._rowId, half } }) }}
                         onDrop={(e) => { e.preventDefault(); const rect = e.currentTarget.getBoundingClientRect(); if (draggingRowId) reorderRow(draggingRowId, row._rowId, e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom') }}
                         style={{ borderTop: dropInd === 'top' ? '2px solid #3b82f6' : undefined, borderBottom: dropInd === 'bottom' ? '2px solid #3b82f6' : undefined }}
@@ -1833,7 +1875,7 @@ export default function FlatFileGrid({
 
                         {/* Checkbox + drag handle */}
                         <td className={cn('sticky left-0 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-1.5 w-9 text-center cursor-grab active:cursor-grabbing', frozenBg)}
-                          onMouseDown={() => { canDragRef.current = true }} onMouseUp={() => { canDragRef.current = false }}>
+                          onMouseDown={() => { canDragRef.current = true; setArmedDragRowId(row._rowId) }} onMouseUp={() => { canDragRef.current = false; setArmedDragRowId(null) }}>
                           {row._status === 'pushed'  ? <CheckCircle2 className="w-3 h-3 text-emerald-500 mx-auto" />
                           : row._status === 'error'   ? <Tooltip label={<span className="text-xs">{String(row._feedMessage ?? 'Push error')}</span>} className="h10-ds-tooltip--light"><AlertCircle className="w-3 h-3 text-red-500 mx-auto" /></Tooltip>
                           : row._status === 'pending' ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
