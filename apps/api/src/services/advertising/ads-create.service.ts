@@ -17,6 +17,7 @@ import { logger } from '../../utils/logger.js'
 import {
   createCampaign, createAdGroup, createKeyword, createProductAd,
   createTarget, createNegativeProductTarget, createNegativeKeyword, createSdTarget, createSbAd, updateCampaign,
+  listNegativeKeywords, listAdGroupsV3, listCampaignsServing,
   type AdsRegion,
 } from './ads-api-client.js'
 import { checkAdsWriteGate } from './ads-write-gate.js'
@@ -205,6 +206,71 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
     }
   }
   logger.info('[LAUNCH-REPAIR] pushCampaignStructure', { campaignId, ...out })
+  return out
+}
+
+// LAUNCH-REPAIR — Amazon→DB reconcile for a set of campaigns. Read-mostly: (1) lists negative
+// keywords from Amazon and back-fills local rows' externalTargetId (matched by ad group + match
+// type + text), reporting Amazon total / dupes / local-unmatched; (2) reads real serving status
+// (delivery) for each campaign + its ad group; (3) reads Amazon's authoritative portfolio membership
+// per campaign. The only write is back-filling externalTargetId on already-existing local rows.
+export async function reconcileNegativesAndDelivery(campaignIds: string[]): Promise<Record<string, unknown>> {
+  const campaigns = await prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true, marketplace: true, externalCampaignId: true, portfolioId: true } })
+  const mkt = campaigns.find((c) => c.marketplace)?.marketplace
+  if (!mkt) return { ok: false, error: 'no marketplace on campaigns' }
+  const ctx = await resolveCtx(mkt)
+  if (!ctx) return { ok: false, error: 'no connection for ' + mkt }
+  const extIds = campaigns.map((c) => c.externalCampaignId).filter((x): x is string => !!x)
+
+  const adGroups = await prisma.adGroup.findMany({ where: { campaignId: { in: campaignIds } }, select: { id: true, campaignId: true, externalAdGroupId: true } })
+  const extAgToLocal = new Map(adGroups.filter((a) => a.externalAdGroupId).map((a) => [a.externalAdGroupId as string, a.id]))
+  const localNegs = await prisma.adTarget.findMany({ where: { adGroupId: { in: adGroups.map((a) => a.id) }, kind: 'KEYWORD', isNegative: true }, select: { id: true, adGroupId: true, expressionType: true, expressionValue: true, externalTargetId: true } })
+
+  // (1) negatives — index Amazon negs by localAdGroup|MATCH|text, back-fill ids
+  const amzNegs = await listNegativeKeywords(ctx, { campaignIds: extIds })
+  const amzIndex = new Map<string, Array<{ id: string | null }>>()
+  for (const n of amzNegs) {
+    const localAg = n.adGroupId ? extAgToLocal.get(n.adGroupId) : undefined
+    const mt = (n.matchType || '').replace('NEGATIVE_', '')
+    const key = `${localAg}|${mt}|${(n.keywordText || '').toLowerCase()}`
+    const arr = amzIndex.get(key) ?? []; arr.push({ id: n.negativeKeywordId ?? n.keywordId ?? null }); amzIndex.set(key, arr)
+  }
+  let backfilled = 0, alreadyLinked = 0, unmatchedLocal = 0
+  for (const ln of localNegs) {
+    const key = `${ln.adGroupId}|${ln.expressionType}|${(ln.expressionValue || '').toLowerCase()}`
+    const id = amzIndex.get(key)?.[0]?.id ?? null
+    if (id) {
+      if (ln.externalTargetId === id) alreadyLinked++
+      else { await prisma.adTarget.update({ where: { id: ln.id }, data: { externalTargetId: id } }); backfilled++ }
+    } else unmatchedLocal++
+  }
+  const duplicates = [...amzIndex.entries()].filter(([, v]) => v.length > 1).map(([k, v]) => ({ key: k, count: v.length }))
+
+  // (2)+(3) serving status + portfolio membership
+  const amzCamps = await listCampaignsServing(ctx, { campaignIds: extIds })
+  const campByExt = new Map(amzCamps.map((c) => [c.campaignId, c]))
+  const amzAgs = await listAdGroupsV3(ctx, { campaignIds: extIds })
+  const agByExt = new Map(amzAgs.map((a) => [a.adGroupId, a]))
+  const delivery = campaigns.map((c) => {
+    const ac = c.externalCampaignId ? campByExt.get(c.externalCampaignId) : undefined
+    const ag = adGroups.find((a) => a.campaignId === c.id)
+    const aag = ag?.externalAdGroupId ? agByExt.get(ag.externalAdGroupId) : undefined
+    return {
+      name: c.name,
+      campaignState: ac?.state ?? null,
+      campaignServing: ac?.extendedData?.servingStatus ?? null,
+      adGroupServing: aag?.extendedData?.servingStatus ?? null,
+      amazonPortfolioId: ac?.portfolioId ?? null,
+      localPortfolioId: c.portfolioId ?? null,
+    }
+  })
+
+  const out = {
+    ok: true,
+    negatives: { amazonTotal: amzNegs.length, localTotal: localNegs.length, backfilled, alreadyLinked, unmatchedLocal, duplicates: duplicates.length, duplicateKeys: duplicates.slice(0, 10) },
+    delivery,
+  }
+  logger.info('[LAUNCH-REPAIR] reconcileNegativesAndDelivery', { campaignIds, negatives: out.negatives })
   return out
 }
 

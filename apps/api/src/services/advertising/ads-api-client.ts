@@ -423,6 +423,60 @@ export async function listCampaignsV3(ctx: ClientContext, opts?: { campaignIds?:
   return out
 }
 
+// LAUNCH-REPAIR reconcile reads — list negatives (backfill ids + audit dupes), and serving status
+// (real Amazon delivery state) for campaigns and ad groups. All read-only (no write-gate).
+export interface NegKwDTO { keywordId?: string; negativeKeywordId?: string; campaignId?: string; adGroupId?: string; keywordText?: string; matchType?: string; state?: string }
+export async function listNegativeKeywords(ctx: ClientContext, opts: { campaignIds?: string[] }): Promise<NegKwDTO[]> {
+  if (adsMode() === 'sandbox') return []
+  const out: NegKwDTO[] = []; let nextToken: string | undefined; let pages = 0
+  do {
+    const body: Record<string, unknown> = { maxResults: 500, ...(nextToken ? { nextToken } : {}) }
+    if (opts.campaignIds?.length) body.campaignIdFilter = { include: opts.campaignIds }
+    const res = await liveCall<{ negativeKeywords?: NegKwDTO[]; nextToken?: string }>({
+      profileId: ctx.profileId, region: ctx.region, method: 'POST', path: '/sp/negativeKeywords/list', body,
+      contentType: 'application/vnd.spNegativeKeyword.v3+json', acceptHeader: 'application/vnd.spNegativeKeyword.v3+json',
+    })
+    for (const k of res.negativeKeywords ?? []) out.push(k)
+    nextToken = res.nextToken; pages++
+  } while (nextToken && pages < 50)
+  return out
+}
+
+export interface AdGroupServingDTO { adGroupId?: string; campaignId?: string; name?: string; state?: string; extendedData?: { servingStatus?: string; statusReasons?: string[] } }
+export async function listAdGroupsV3(ctx: ClientContext, opts: { campaignIds?: string[] }): Promise<AdGroupServingDTO[]> {
+  if (adsMode() === 'sandbox') return []
+  const out: AdGroupServingDTO[] = []; let nextToken: string | undefined; let pages = 0
+  do {
+    const body: Record<string, unknown> = { maxResults: 500, includeExtendedDataFields: true, ...(nextToken ? { nextToken } : {}) }
+    if (opts.campaignIds?.length) body.campaignIdFilter = { include: opts.campaignIds }
+    const res = await liveCall<{ adGroups?: AdGroupServingDTO[]; nextToken?: string }>({
+      profileId: ctx.profileId, region: ctx.region, method: 'POST', path: '/sp/adGroups/list', body,
+      contentType: 'application/vnd.spAdGroup.v3+json', acceptHeader: 'application/vnd.spAdGroup.v3+json',
+    })
+    for (const a of res.adGroups ?? []) out.push(a)
+    nextToken = res.nextToken; pages++
+  } while (nextToken && pages < 50)
+  return out
+}
+
+// Campaign serving status + portfolio membership (Amazon's authoritative view).
+export interface CampaignServingDTO { campaignId?: string; name?: string; state?: string; portfolioId?: string | null; extendedData?: { servingStatus?: string; statusReasons?: string[] } }
+export async function listCampaignsServing(ctx: ClientContext, opts: { campaignIds?: string[] }): Promise<CampaignServingDTO[]> {
+  if (adsMode() === 'sandbox') return []
+  const out: CampaignServingDTO[] = []; let nextToken: string | undefined; let pages = 0
+  do {
+    const body: Record<string, unknown> = { maxResults: 100, includeExtendedDataFields: true, ...(nextToken ? { nextToken } : {}) }
+    if (opts.campaignIds?.length) body.campaignIdFilter = { include: opts.campaignIds }
+    const res = await liveCall<{ campaigns?: CampaignServingDTO[]; nextToken?: string }>({
+      profileId: ctx.profileId, region: ctx.region, method: 'POST', path: '/sp/campaigns/list', body,
+      contentType: 'application/vnd.spCampaign.v3+json', acceptHeader: 'application/vnd.spCampaign.v3+json',
+    })
+    for (const c of res.campaigns ?? []) out.push(c)
+    nextToken = res.nextToken; pages++
+  } while (nextToken && pages < 50)
+  return out
+}
+
 // ── Apex C.1 — Amazon theme-based bid recommendations ──────────────────────
 // POST /sp/targets/bid/recommendations returns themed bid candidates per
 // targeting expression (theme = CONVERSION_OPPORTUNITIES | SPECIAL_DAYS …),
@@ -835,8 +889,10 @@ export async function createNegativeKeyword(ctx: ClientContext, input: CreateNeg
     return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
   }
   const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, keywordText: input.keywordText, matchType: `NEGATIVE_${input.matchType}`, state: (input.state ?? 'enabled').toUpperCase() }
-  const response = await liveCall<{ negativeKeywords?: { success?: Array<{ keywordId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/negativeKeywords', body: { negativeKeywords: [v3] }, contentType: 'application/vnd.spNegativeKeyword.v3+json', acceptHeader: 'application/vnd.spNegativeKeyword.v3+json' })
-  return { ok: true, mode: 'live', externalId: response?.negativeKeywords?.success?.[0]?.keywordId ?? null, rawResponse: response }
+  const response = await liveCall<{ negativeKeywords?: { success?: Array<{ keywordId?: string; negativeKeywordId?: string }> } }>({ ...ctx, method: 'POST', path: '/sp/negativeKeywords', body: { negativeKeywords: [v3] }, contentType: 'application/vnd.spNegativeKeyword.v3+json', acceptHeader: 'application/vnd.spNegativeKeyword.v3+json' })
+  // v3 create returns negativeKeywordId; some shapes echo keywordId — accept either so the id is captured.
+  const nk = response?.negativeKeywords?.success?.[0]
+  return { ok: true, mode: 'live', externalId: nk?.negativeKeywordId ?? nk?.keywordId ?? null, rawResponse: response }
 }
 
 // ── Sponsored Display audience / contextual targeting (AX2.3) ───────────

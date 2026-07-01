@@ -4733,6 +4733,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await pushCampaignStructure(id) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // LAUNCH-REPAIR — Amazon->DB reconcile: back-fill negative-keyword ids, read serving status +
+  // portfolio membership for a set of campaigns. Body: { campaignIds: string[] }.
+  fastify.post('/advertising/campaigns/reconcile', async (request, reply) => {
+    const b = request.body as { campaignIds?: string[] }
+    if (!Array.isArray(b?.campaignIds) || !b.campaignIds.length) { reply.status(400); return { error: 'campaignIds[] required' } }
+    const { reconcileNegativesAndDelivery } = await import('../services/advertising/ads-create.service.js')
+    try { return await reconcileNegativesAndDelivery(b.campaignIds) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // LAUNCH-REPAIR — bulk ad-group negative keywords (funnel isolation back-fill). Idempotent.
   fastify.post('/advertising/negative-keywords/bulk', async (request, reply) => {
     const b = request.body as { items?: Array<{ adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE' }>; userId?: string }
