@@ -25,10 +25,26 @@ import { updateCampaignWithSync, updateAdGroupWithSync, type AdsActor } from '..
 import { suppressCampaignBids, restoreCampaignBids, applyBaseBidDelta, revertBaseBidDelta } from '../services/advertising/ads-bid-suppression.service.js'
 import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
 
+// Clock source for time-of-day window resolution: the DATABASE clock, not the container's process
+// clock. Railway cron containers have exhibited multi-hour clock skew (the process clock ran ~2h
+// behind real time while Postgres stayed correct), which silently shifted every rank/dayparting
+// window. Sourcing "now" from Postgres makes window selection immune to container clock drift.
+async function dbNow(): Promise<Date> {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT now() as now`
+    const n = rows?.[0]?.now
+    if (n instanceof Date) return n
+    if (n) return new Date(n as unknown as string)
+  } catch { /* fall through to process clock */ }
+  return new Date()
+}
+
 // RD.8 — leadMinutes shifts the evaluation clock forward so a plan starts converging
 // BEFORE a window opens (Amazon bid changes propagate with lag → arrive at-rank, not late).
-function nowInTz(tz: string, leadMinutes = 0): { day: number; hour: number } {
-  const at = leadMinutes ? new Date(Date.now() + leadMinutes * 60_000) : new Date()
+// baseNow: the authoritative clock (pass dbNow()); defaults to the process clock only as a fallback.
+function nowInTz(tz: string, leadMinutes = 0, baseNow?: Date): { day: number; hour: number } {
+  const baseMs = (baseNow ?? new Date()).getTime()
+  const at = leadMinutes ? new Date(baseMs + leadMinutes * 60_000) : new Date(baseMs)
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: 'numeric', hour12: false }).formatToParts(at)
   const wk = parts.find((p) => p.type === 'weekday')?.value ?? 'Sun'
   const hourStr = parts.find((p) => p.type === 'hour')?.value ?? '0'
@@ -317,6 +333,9 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
   const plans = await prisma.productRankPlan.findMany({ where: opts.onlyPlanId ? { id: opts.onlyPlanId } : { enabled: true } })
   if (schedules.length === 0 && plans.length === 0) return { evaluated: 0, applied: 0, decisions: [], plans: [] }
 
+  // Authoritative clock for ALL window resolution in this run (not the container process clock).
+  const clockNow = await dbNow()
+
   const targets = await prisma.rankTarget.findMany()
   const targetByKey = new Map(targets.map((t) => [t.key, t as unknown as RankTargetRow]))
 
@@ -429,7 +448,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
 
   // ── Plans first (governed). Dry-only actuation until RD.7. ──
   for (const { plan, campaigns: famCamps } of planFamilies) {
-    const { day, hour } = nowInTz(plan.timezone || 'Europe/Rome', plan.leadTimeMinutes || 0)
+    const { day, hour } = nowInTz(plan.timezone || 'Europe/Rome', plan.leadTimeMinutes || 0, clockNow)
     const key = resolveActiveTargetKey(plan.windows as ScheduleWindow[], plan.defaultTargetKey, day, hour)
     const planDecisions: RankDefendDecision[] = []
     let planConflicts: SelfCompetitionConflict[] = []
@@ -471,7 +490,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
   for (const s of schedules) {
     if (governed.has(s.campaignId)) continue
     const camp = campById.get(s.campaignId); if (!camp) continue
-    const { day, hour } = nowInTz(s.timezone || 'Europe/Rome')
+    const { day, hour } = nowInTz(s.timezone || 'Europe/Rome', 0, clockNow)
     const key = resolveActiveTargetKey(s.windows as ScheduleWindow[], s.defaultTargetKey, day, hour)
     if (!key) continue
     const target = targetByKey.get(key); if (!target) continue

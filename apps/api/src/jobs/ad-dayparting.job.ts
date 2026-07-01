@@ -21,9 +21,22 @@ import { isGoalMode } from './ad-rank-defend.job.js'
 // the multiplied bid; on window-exit we restore from the snapshot.
 interface Window { days?: number[]; startHour?: number; endHour?: number; bidMultiplierPct?: number }
 
-/** Current weekday (0=Sun..6=Sat) + hour (0-23) in a timezone. */
-function nowInTz(tz: string): { day: number; hour: number } {
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: 'numeric', hour12: false }).formatToParts(new Date())
+// Clock source: the DATABASE clock, not the container process clock — Railway cron containers have
+// exhibited multi-hour clock skew that silently shifted every dayparting window. Sourcing "now" from
+// Postgres makes window selection immune to container clock drift.
+async function dbNow(): Promise<Date> {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT now() as now`
+    const n = rows?.[0]?.now
+    if (n instanceof Date) return n
+    if (n) return new Date(n as unknown as string)
+  } catch { /* fall through to process clock */ }
+  return new Date()
+}
+
+/** Current weekday (0=Sun..6=Sat) + hour (0-23) in a timezone. baseNow: authoritative clock (dbNow()). */
+function nowInTz(tz: string, baseNow?: Date): { day: number; hour: number } {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: 'numeric', hour12: false }).formatToParts(baseNow ?? new Date())
   const wk = parts.find((p) => p.type === 'weekday')?.value ?? 'Sun'
   const hourStr = parts.find((p) => p.type === 'hour')?.value ?? '0'
   const dayIdx = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(wk)
@@ -32,9 +45,9 @@ function nowInTz(tz: string): { day: number; hour: number } {
   return { day: dayIdx < 0 ? 0 : dayIdx, hour }
 }
 
-function shouldDeliver(windows: Window[], tz: string): boolean {
+function shouldDeliver(windows: Window[], tz: string, baseNow?: Date): boolean {
   if (!Array.isArray(windows) || windows.length === 0) return true
-  const { day, hour } = nowInTz(tz)
+  const { day, hour } = nowInTz(tz, baseNow)
   return windows.some((w) => {
     const days = w.days ?? [0, 1, 2, 3, 4, 5, 6]
     const start = w.startHour ?? 0
@@ -44,9 +57,9 @@ function shouldDeliver(windows: Window[], tz: string): boolean {
 }
 
 /** The active window's bidMultiplierPct (first matching), or null if none. */
-function activeMultiplier(windows: Window[], tz: string): number | null {
+function activeMultiplier(windows: Window[], tz: string, baseNow?: Date): number | null {
   if (!Array.isArray(windows) || windows.length === 0) return null
-  const { day, hour } = nowInTz(tz)
+  const { day, hour } = nowInTz(tz, baseNow)
   for (const w of windows) {
     const days = w.days ?? [0, 1, 2, 3, 4, 5, 6]
     const start = w.startHour ?? 0
@@ -98,12 +111,14 @@ export async function runDaypartingOnce(): Promise<{ evaluated: number; changed:
 
   const schedules = (await prisma.adSchedule.findMany({ where: { enabled: true } }))
     .filter((s) => !isGoalMode(s.windows, s.defaultTargetKey) && !planGoverned.has(s.campaignId))
+  // Authoritative clock (DB) for all window checks this run — immune to container clock skew.
+  const clockNow = await dbNow()
   let changed = 0
   let bidsAdjusted = 0
   for (const s of schedules) {
-    const inWindow = shouldDeliver((s.windows as Window[]) ?? [], s.timezone)
+    const inWindow = shouldDeliver((s.windows as Window[]) ?? [], s.timezone, clockNow)
     const desired = inWindow ? 'ENABLED' : 'PAUSED'
-    const multiplier = activeMultiplier((s.windows as Window[]) ?? [], s.timezone)
+    const multiplier = activeMultiplier((s.windows as Window[]) ?? [], s.timezone, clockNow)
     const campaign = await prisma.campaign.findUnique({ where: { id: s.campaignId }, select: { status: true, bidsSuppressedAt: true } })
     if (!campaign) continue
 
