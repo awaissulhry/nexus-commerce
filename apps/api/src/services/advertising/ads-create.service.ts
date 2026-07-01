@@ -234,9 +234,9 @@ export async function createTargetLocal(input: NewTarget): Promise<{ id: string;
   const isAudience = input.kind === 'AUDIENCE'
   const audType = input.audienceType ?? 'AUDIENCE'
   const expression = input.kind === 'PRODUCT'
-    ? [{ type: 'asinSameAs', value: input.value }]
+    ? [{ type: 'ASIN_SAME_AS', value: input.value }]
     : input.kind === 'CATEGORY'
-      ? [{ type: 'asinCategorySameAs', value: input.value }]
+      ? [{ type: 'ASIN_CATEGORY_SAME_AS', value: input.value }]
       : isAudience
         ? (AUDIENCE_EXPRESSION[audType] ?? AUDIENCE_EXPRESSION.AUDIENCE)(input.value)
         : [{ type: AUTO_EXPRESSION[input.value] ?? input.value }]
