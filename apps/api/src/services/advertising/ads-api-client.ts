@@ -349,7 +349,7 @@ export async function createPortfolio(ctx: ClientContext, input: { name: string;
   }
   const resp = await liveCall<{ portfolios?: { success?: Array<{ portfolioId?: string | number }> } | Array<{ portfolioId?: string | number }> }>({
     ...ctx, method: 'POST', path: '/portfolios',
-    body: { portfolios: [{ name: input.name, state: input.state ?? 'enabled' }] },
+    body: { portfolios: [{ name: input.name, state: (input.state ?? 'enabled').toUpperCase() }] }, // v3 requires UPPERCASE enum
     contentType: PORTFOLIO_V3_MIME, acceptHeader: PORTFOLIO_V3_MIME,
   })
   const bag = resp?.portfolios
@@ -369,7 +369,7 @@ export async function updatePortfolio(ctx: ClientContext, input: { portfolioId: 
   }
   const pf: Record<string, unknown> = { portfolioId: input.portfolioId }
   if (input.name != null) pf.name = input.name
-  if (input.state != null) pf.state = input.state
+  if (input.state != null) pf.state = input.state.toUpperCase() // v3 requires UPPERCASE enum
   if (input.budget) {
     const b = input.budget
     pf.budget = {
