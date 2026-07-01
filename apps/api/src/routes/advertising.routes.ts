@@ -898,6 +898,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         const bidEur = Number(c.bidEur) || 0.75
         const budgetEur = Number(c.budgetEur) || 10
         const camp = await createCampaignLocal({ name: c.name, type: c.adProduct ?? 'SP', marketplace: market, targetingType: c.kind === 'auto' ? 'AUTO' : 'MANUAL', dailyBudgetEur: budgetEur, biddingStrategy: 'legacyForSales', portfolioId: b.portfolioId, userId })
+        // LAUNCH-REPAIR: allowlist the campaign the instant it exists, BEFORE its sub-entities are
+        // created — otherwise the per-campaign write-gate check skips every ad group/keyword/product-ad
+        // and the campaign lands empty on Amazon ("not eligible, no keyword and no ad").
+        try { await prisma.campaign.update({ where: { id: camp.id }, data: { liveBidWritesEnabled: true } }) } catch (e) { logger.warn('[SPW-launch] allowlist failed', { error: (e as Error).message }) }
         // SB creative (brand · ad type · landing page · ASINs · headline · logo/custom image) → Campaign.creativeAssetJson (gated; pushed to Amazon when the SB write gate opens).
         if (c.creative && c.adProduct === 'SB') { try { await prisma.campaign.update({ where: { id: camp.id }, data: { creativeAssetJson: c.creative as never } }) } catch (e) { logger.warn('[SPW-launch] SB creative store failed', { error: (e as Error).message }) } }
         const ag = await createAdGroupLocal({ campaignId: camp.id, name: c.adGroupName || `${c.name} Ad Group`, defaultBidEur: bidEur, userId })
@@ -4719,6 +4723,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!b?.adGroupId || !b?.asin) { reply.status(400); return { error: 'adGroupId, asin required' } }
     const { createNegativeProductTargetLocal } = await import('../services/advertising/ads-create.service.js')
     try { return await createNegativeProductTargetLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
+  // LAUNCH-REPAIR — push a campaign's existing local structure (ad group/keywords/auto/product ads)
+  // to Amazon (for campaigns launched before they were allowlisted → empty on Amazon). Idempotent.
+  fastify.post('/advertising/campaigns/:id/push-structure', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { pushCampaignStructure } = await import('../services/advertising/ads-create.service.js')
+    try { return await pushCampaignStructure(id) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   // ── AX2.10: Data-grounded bid suggestions ───────────────────────────
   fastify.post('/advertising/bid-suggestions', async (request, reply) => {

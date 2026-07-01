@@ -121,6 +121,69 @@ export async function createProductAdLocal(input: NewProductAd): Promise<{ id: s
   return { id: ad.id, externalAdId: externalId }
 }
 
+// LAUNCH-REPAIR — push a campaign's EXISTING local structure (ad group → keywords/auto targets →
+// product ads) to Amazon. Fixes campaigns whose sub-entities were saved locally but never pushed
+// (e.g. the campaign wasn't allowlisted at launch, so the write-gate skipped them → empty on
+// Amazon = "not eligible, no keyword and no ad"). Idempotent: only pushes rows with a null
+// external id and reuses the existing local rows — never duplicates. Campaign must be allowlisted.
+const AUTO_CLAUSE_MAP: Record<string, string> = {
+  close: 'queryHighRelMatches', loose: 'queryBroadRelMatches', substitutes: 'asinSubstituteRelated', complements: 'asinAccessoryRelated',
+  CLOSE_MATCH: 'queryHighRelMatches', LOOSE_MATCH: 'queryBroadRelMatches', SUBSTITUTES: 'asinSubstituteRelated', COMPLEMENTS: 'asinAccessoryRelated',
+}
+export async function pushCampaignStructure(campaignId: string): Promise<{ ok: boolean; adGroups: number; keywords: number; targets: number; productAds: number; errors: string[] }> {
+  const out = { ok: true, adGroups: 0, keywords: 0, targets: 0, productAds: 0, errors: [] as string[] }
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true } })
+  if (!campaign?.externalCampaignId || !campaign.marketplace) { out.ok = false; out.errors.push('campaign missing externalCampaignId/marketplace'); return out }
+  const ctx = await resolveCtx(campaign.marketplace)
+  if (!ctx) { out.ok = false; out.errors.push('no connection for ' + campaign.marketplace); return out }
+  const gate = await checkAdsWriteGate({ marketplace: campaign.marketplace, payloadValueCents: 0, campaignId })
+  if (!gate.allowed) { out.ok = false; out.errors.push('write-gate closed — allowlist the campaign first'); return out }
+  const extC = campaign.externalCampaignId
+  const isSd = campaign.adProduct === 'SPONSORED_DISPLAY'
+  const adGroups = await prisma.adGroup.findMany({ where: { campaignId } })
+  for (const ag of adGroups) {
+    let extAg = ag.externalAdGroupId
+    if (!extAg) {
+      try {
+        const r = await createAdGroup(ctx, { externalCampaignId: extC, name: ag.name, defaultBid: (ag.defaultBidCents ?? 75) / 100, state: 'enabled' })
+        extAg = r.externalId
+        await prisma.adGroup.update({ where: { id: ag.id }, data: { externalAdGroupId: extAg, lastSyncStatus: extAg ? 'SUCCESS' : 'FAILED' } })
+        if (extAg) out.adGroups++
+      } catch (e) { out.errors.push('adGroup "' + ag.name + '": ' + ((e as Error)?.message || '')); continue }
+    }
+    if (!extAg) { out.errors.push('adGroup "' + ag.name + '": no external id'); continue }
+    const targets = await prisma.adTarget.findMany({ where: { adGroupId: ag.id, isNegative: false, externalTargetId: null } })
+    for (const t of targets) {
+      const bid = (t.bidCents ?? 75) / 100
+      try {
+        let extId: string | null = null
+        if (t.kind === 'KEYWORD') {
+          const r = await createKeyword(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, keywordText: t.expressionValue ?? '', matchType: (t.expressionType as 'EXACT' | 'PHRASE' | 'BROAD') || 'BROAD', bid, state: 'enabled' })
+          extId = r.externalId; if (extId) out.keywords++
+        } else {
+          const expression = t.kind === 'AUTO'
+            ? [{ type: AUTO_CLAUSE_MAP[t.expressionValue ?? ''] ?? (t.expressionValue ?? '') }]
+            : [{ type: 'asinSameAs', value: t.expressionValue ?? '' }]
+          const r = isSd
+            ? await createSdTarget(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, expression, bid, state: 'enabled' })
+            : await createTarget(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, expression, expressionType: t.kind === 'AUTO' ? 'AUTO' : 'MANUAL', bid, state: 'enabled' })
+          extId = r.externalId; if (extId) out.targets++
+        }
+        if (extId) await prisma.adTarget.update({ where: { id: t.id }, data: { externalTargetId: extId } })
+      } catch (e) { out.errors.push('target "' + (t.expressionValue || '') + '": ' + ((e as Error)?.message || '')) }
+    }
+    const productAds = await prisma.adProductAd.findMany({ where: { adGroupId: ag.id, externalAdId: null } })
+    for (const pa of productAds) {
+      try {
+        const r = await createProductAd(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, sku: pa.sku ?? undefined, asin: pa.asin ?? undefined, state: 'enabled' })
+        if (r.externalId) { await prisma.adProductAd.update({ where: { id: pa.id }, data: { externalAdId: r.externalId } }); out.productAds++ }
+      } catch (e) { out.errors.push('productAd "' + (pa.asin || pa.sku || '') + '": ' + ((e as Error)?.message || '')) }
+    }
+  }
+  logger.info('[LAUNCH-REPAIR] pushCampaignStructure', { campaignId, ...out })
+  return out
+}
+
 // ── AX2.1 — Product / category / auto targeting ─────────────────────────
 // Amazon SP product-targeting expressions. AUTO targets are the four
 // auto-campaign clauses (close-match / loose-match / substitutes /
