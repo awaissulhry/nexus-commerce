@@ -911,6 +911,9 @@ export default function FlatFileGrid({
   const allColumnsRef        = useRef<FlatFileColumn[]>([])
   const selAnchorRef         = useRef<{ ri: number; ci: number } | null>(null)
   const selEndRef            = useRef<{ ri: number; ci: number } | null>(null)
+  // #35 — the column a row's Tab-entry started in; Enter returns here and drops
+  // down. Reset by any non-Tab/Enter navigation.
+  const entryColRef          = useRef<number | null>(null)
   const isEditingRef         = useRef(false)
   // Mirrors isFillDragging synchronously. The container onPointerMove/onPointerUp
   // read this instead of the state value: setIsFillDragging(true) hasn't
@@ -1321,6 +1324,7 @@ export default function FlatFileGrid({
     } else {
       // Update ref immediately so onPointerMove sees it before React re-renders
       selAnchorRef.current = { ri, ci }
+      entryColRef.current = null  // #35 — a mouse click resets the Tab-entry column
       setSelAnchor({ ri, ci }); setSelEnd({ ri, ci }); setIsEditing(false); setEditInitialChar(null)
       const row = displayRowsRef.current[ri]; const col = allColumnsRef.current[ci]
       if (row && col) setActiveCell({ rowId: row._rowId, colId: col.id })
@@ -1395,6 +1399,20 @@ export default function FlatFileGrid({
       }
 
       if (mod && e.key === 'a') { e.preventDefault(); handleSelectAll(); return }
+
+      // #4 — wake at A1: with no active selection (fresh load, or after
+      // Escape/delete) the first arrow/Tab/Enter/typing bootstraps a selection
+      // at the top-left instead of doing nothing until a mouse click.
+      if (!selAnchorRef.current) {
+        const isNav = !mod && (e.key.startsWith('Arrow') || e.key === 'Tab' || e.key === 'Enter')
+        const isPrintable = !mod && e.key.length === 1
+        if (!isNav && !isPrintable) return
+        const row = displayRowsRef.current[0]; const col = allColumnsRef.current[0]
+        if (!row || !col) return
+        selAnchorRef.current = { ri: 0, ci: 0 }
+        setSelAnchor({ ri: 0, ci: 0 }); setSelEnd({ ri: 0, ci: 0 }); setActiveCell({ rowId: row._rowId, colId: col.id })
+        if (isNav) { e.preventDefault(); return }  // land on A1; next key navigates. Printable falls through to edit A1.
+      }
       if (!selAnchorRef.current) return
 
       if (mod && e.key === 'c') { e.preventDefault(); handleCopy(); setClipboardRange(normSel); return }
@@ -1420,25 +1438,70 @@ export default function FlatFileGrid({
         return
       }
 
+      // #34 — Cmd/Ctrl+Shift+Arrow EXTENDS the selection to the data edge (a big
+      // delta clamps to the edge in moveSelection). Must precede the plain
+      // mod-jump branches, which have no shiftKey check and would collapse it.
+      if (mod && e.shiftKey && e.key === 'ArrowDown')  { e.preventDefault(); moveSelection(0,  displayRowsRef.current.length, true); return }
+      if (mod && e.shiftKey && e.key === 'ArrowUp')    { e.preventDefault(); moveSelection(0, -displayRowsRef.current.length, true); return }
+      if (mod && e.shiftKey && e.key === 'ArrowRight') { e.preventDefault(); moveSelection(allColumnsRef.current.length, 0, true); return }
+      if (mod && e.shiftKey && e.key === 'ArrowLeft')  { e.preventDefault(); moveSelection(-allColumnsRef.current.length, 0, true); return }
+
       if (mod && e.key === 'ArrowDown')  { e.preventDefault(); moveSelection(0,  displayRowsRef.current.length - 1 - (selAnchorRef.current?.ri ?? 0)); return }
       if (mod && e.key === 'ArrowUp')    { e.preventDefault(); moveSelection(0, -(selAnchorRef.current?.ri ?? 0)); return }
       if (mod && e.key === 'ArrowRight') { e.preventDefault(); moveSelection(allColumnsRef.current.length - 1 - (selAnchorRef.current?.ci ?? 0), 0); return }
       if (mod && e.key === 'ArrowLeft')  { e.preventDefault(); moveSelection(-(selAnchorRef.current?.ci ?? 0), 0); return }
 
-      if (!e.shiftKey && !mod) {
-        if (e.key === 'ArrowDown')  { e.preventDefault(); moveSelection(0,  1); return }
-        if (e.key === 'ArrowUp')    { e.preventDefault(); moveSelection(0, -1); return }
-        if (e.key === 'ArrowRight') { e.preventDefault(); moveSelection(1,  0); return }
-        if (e.key === 'ArrowLeft')  { e.preventDefault(); moveSelection(-1, 0); return }
-        if (e.key === 'Enter')      { e.preventDefault(); moveSelection(0,  1); return }
-        if (e.key === 'Tab')        { e.preventDefault(); moveSelection(1,  0); return }
+      // #37 — Alt+Down opens the dropdown on an active enum/boolean cell.
+      if (e.altKey && e.key === 'ArrowDown') {
+        const a = selAnchorRef.current
+        const col = a ? allColumnsRef.current[a.ci] : null
+        if (col && (col.kind === 'enum' || col.kind === 'boolean')) { e.preventDefault(); setIsEditing(true); setEditInitialChar(null) }
+        return
+      }
+
+      if (!e.shiftKey && !mod && !e.altKey) {
+        const a = selAnchorRef.current
+        const maxCi = allColumnsRef.current.length - 1
+        // #35/#36 — Tab advances (wrapping to the next row at the last column) and
+        // records the entry column; Enter returns to that column and drops down.
+        if (e.key === 'Tab') {
+          e.preventDefault()
+          if (a && entryColRef.current === null) entryColRef.current = a.ci
+          if (a && a.ci >= maxCi) moveSelection(-maxCi, 1); else moveSelection(1, 0)
+          return
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          if (a && entryColRef.current !== null) moveSelection(entryColRef.current - a.ci, 1)
+          else moveSelection(0, 1)
+          return
+        }
+        // Any other navigation resets the entry column.
+        if (e.key === 'ArrowDown')  { entryColRef.current = null; e.preventDefault(); moveSelection(0,  1); return }
+        if (e.key === 'ArrowUp')    { entryColRef.current = null; e.preventDefault(); moveSelection(0, -1); return }
+        if (e.key === 'ArrowRight') { entryColRef.current = null; e.preventDefault(); moveSelection(1,  0); return }
+        if (e.key === 'ArrowLeft')  { entryColRef.current = null; e.preventDefault(); moveSelection(-1, 0); return }
+        // #37 — plain Home/End jump to the first/last column of the row; PageUp/
+        // Down move by roughly a screen of rows.
+        if (e.key === 'Home') { entryColRef.current = null; e.preventDefault(); moveSelection(-maxCi, 0); return }
+        if (e.key === 'End')  { entryColRef.current = null; e.preventDefault(); moveSelection(maxCi, 0); return }
+        if (e.key === 'PageDown') { entryColRef.current = null; e.preventDefault(); moveSelection(0,  20); return }
+        if (e.key === 'PageUp')   { entryColRef.current = null; e.preventDefault(); moveSelection(0, -20); return }
       }
       if (e.shiftKey && !mod) {
         if (e.key === 'ArrowDown')  { e.preventDefault(); moveSelection(0,  1, true); return }
         if (e.key === 'ArrowUp')    { e.preventDefault(); moveSelection(0, -1, true); return }
         if (e.key === 'ArrowRight') { e.preventDefault(); moveSelection(1,  0, true); return }
         if (e.key === 'ArrowLeft')  { e.preventDefault(); moveSelection(-1, 0, true); return }
-        if (e.key === 'Tab')        { e.preventDefault(); moveSelection(-1, 0, true); return }
+        // #36 — Shift+Tab moves back one cell, wrapping up at the first column
+        // (was a non-standard extend-left).
+        if (e.key === 'Tab') {
+          e.preventDefault()
+          const a = selAnchorRef.current
+          const maxCi = allColumnsRef.current.length - 1
+          if (a && a.ci <= 0) moveSelection(maxCi, -1); else moveSelection(-1, 0)
+          return
+        }
         if (e.key === 'Enter')      { e.preventDefault(); moveSelection(0, -1, true); return }
       }
 
@@ -1454,7 +1517,14 @@ export default function FlatFileGrid({
 
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); handleDeleteCells(); return }
 
-      if (e.key === 'Escape') { setSelAnchor(null); setSelEnd(null); setClipboardRange(null); return }
+      // #4 — Escape collapses the range to its anchor (and clears the copy
+      // marquee) but KEEPS the anchor live, so arrows/typing keep working after
+      // Escape instead of the grid going keyboard-dead until a mouse click.
+      if (e.key === 'Escape') {
+        if (clipboardRange) { setClipboardRange(null); return }
+        if (selAnchorRef.current) setSelEnd(selAnchorRef.current)
+        return
+      }
 
       if (e.key.length === 1 && !mod) {
         const anchor = selAnchorRef.current
@@ -1467,7 +1537,7 @@ export default function FlatFileGrid({
     }
     document.addEventListener('keydown', handle)
     return () => document.removeEventListener('keydown', handle)
-  }, [undo, redo, normSel, handleCopy, handleCut, handlePaste, handleFillDown, handleDeleteCells, handleSelectAll, moveSelection, onColumnsClick])
+  }, [undo, redo, normSel, clipboardRange, handleCopy, handleCut, handlePaste, handleFillDown, handleDeleteCells, handleSelectAll, moveSelection, onColumnsClick])
 
   // ── Row ops ────────────────────────────────────────────────────────────
 
