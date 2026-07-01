@@ -1113,7 +1113,11 @@ export default function FlatFileGrid({
     })
     const hasHeaders = smartPasteEnabled && matchCount >= 2
     const dataRows = hasHeaders ? pasteLines.slice(1) : pasteLines
-    const { ri: startRi, ci: startCi } = selAnchor
+    // #10 — anchor paste at the normalized TOP-LEFT of the selection, not the
+    // drag-origin corner, so an up/left-dragged selection doesn't spill paste
+    // onto unselected cells.
+    const startRi = normSel ? normSel.rMin : selAnchor.ri
+    const startCi = normSel ? normSel.cMin : selAnchor.ci
     const changes: CellChange[] = []
     dataRows.forEach((line, riOffset) => {
       const pasteRow = line.split('\t')
@@ -1125,11 +1129,17 @@ export default function FlatFileGrid({
       }
     })
     commitCells(changes)
-    const lastR = dataRows.length - 1
+    // #11 — rows past the end can't be written (parent/child structure makes
+    // silent auto-append unsafe); warn instead of dropping them silently.
+    const overflow = (startRi + dataRows.length) - displayRowsRef.current.length
+    if (overflow > 0) {
+      toast({ title: `${overflow} pasted row${overflow > 1 ? 's' : ''} didn't fit`, description: 'Add more rows first, then paste again to include them.', tone: 'warning' })
+    }
+    const lastR = Math.min(dataRows.length - 1, displayRowsRef.current.length - 1 - startRi)
     const lastC = hasHeaders ? Math.max(0, ...headerMap.values()) : startCi + Math.max(...dataRows.map((r) => r.split('\t').length)) - 1
     setSelEnd({ ri: startRi + lastR, ci: Math.min(lastC, allColumnsRef.current.length - 1) })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selAnchor, commitCells, smartPasteEnabled])
+  }, [selAnchor, normSel, commitCells, smartPasteEnabled, toast])
 
   const handleFillDown = useCallback(() => {
     if (!normSel) return
