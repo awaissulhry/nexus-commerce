@@ -38,7 +38,31 @@ import type { PullHistoryRecord } from '@/app/products/_shared/PullHistoryDrawer
 // ── Amazon types ───────────────────────────────────────────────────────────
 
 type AmazonSkuStatus = 'success' | 'warning' | 'error'
-interface AmazonPerSku { sku: string; status: AmazonSkuStatus; code?: string; message?: string }
+type IssueSeverity = 'error' | 'warning' | 'info'
+interface FeedIssueColumn { id: string; label: string }
+interface FeedIssue {
+  code: string; severity: IssueSeverity; category?: string
+  message: string; attributeNames: string[]; details?: string
+  columns?: FeedIssueColumn[]
+}
+interface AmazonPerSku { sku: string; status: AmazonSkuStatus; code?: string; message?: string; issues?: FeedIssue[] }
+interface FlatIssue extends FeedIssue { sku: string }
+
+const issueSevCls: Record<IssueSeverity, string> = {
+  error: 'text-red-600 dark:text-red-400',
+  warning: 'text-amber-600 dark:text-amber-400',
+  info: 'text-slate-500 dark:text-slate-400',
+}
+/** Friendly title for common opaque Amazon codes; falls back to category → code. */
+const CODE_TITLE: Record<string, string> = {
+  '20017': 'Image blocked by its hosting site',
+  '90220': 'Missing required attribute',
+  '8541': 'Invalid or missing value',
+  '5000': 'Image quality',
+}
+const issueTitle = (i: { code: string; category?: string }) =>
+  CODE_TITLE[i.code] ?? (i.category ? i.category.replace(/_/g, ' ').toLowerCase() : `code ${i.code || '—'}`)
+const issueCols = (i: FeedIssue) => (i.columns?.length ? i.columns.map((c) => c.label).join(', ') : i.attributeNames.join(', '))
 interface AmazonFeedJob {
   id: string
   feedId: string
@@ -92,6 +116,7 @@ export interface HistoryModalProps {
   marketplace: string
   productType?: string
   onResubmitErroredSkus?: (skus: string[], channel: 'amazon' | 'ebay') => void
+  onGoToCell?: (sku: string, columnId: string) => void
   onRePull?: (rec: PullHistoryRecord) => void
   onRestoreVersion?: (rows: unknown[]) => void
   currentRows?: unknown[]
@@ -183,14 +208,18 @@ function LoadingSkeletons() {
 
 function AmazonPushesTab({
   onResubmitErroredSkus,
+  onGoToCell,
 }: {
   onResubmitErroredSkus?: (skus: string[], channel: 'amazon' | 'ebay') => void
+  onGoToCell?: (sku: string, columnId: string) => void
 }) {
   const [jobs, setJobs] = useState<AmazonFeedJob[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<'all' | AmazonSkuStatus>('all')
+  const [viewMode, setViewMode] = useState<'error' | 'code'>('error')
+  const [openMsg, setOpenMsg] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -219,6 +248,32 @@ function AmazonPushesTab({
       return r.sku?.toLowerCase().includes(q) || r.message?.toLowerCase().includes(q) || r.code?.toLowerCase().includes(q)
     })
   }, [expandedJob, query, filter])
+
+  // P3 — flatten every structured issue across the filtered SKUs into one list,
+  // so a SKU with several distinct problems shows each on its own row (Amazon's
+  // "Errori e avvisi per SKU"). Falls back to legacy per-SKU rows when a job
+  // predates structured capture (no `issues`).
+  const hasIssues = useMemo(
+    () => filteredSkuRows.some(r => (r.issues?.length ?? 0) > 0),
+    [filteredSkuRows],
+  )
+  const flatIssues = useMemo<FlatIssue[]>(() => {
+    const out: FlatIssue[] = []
+    for (const r of filteredSkuRows) for (const iss of r.issues ?? []) out.push({ ...iss, sku: r.sku })
+    return out
+  }, [filteredSkuRows])
+  // "Errori e avvisi per codice di errore" — roll identical codes up, count the
+  // affected SKUs, keep a representative message + resolved columns.
+  const byCode = useMemo(() => {
+    const map = new Map<string, { code: string; severity: IssueSeverity; title: string; cols: string; message: string; skus: string[] }>()
+    for (const iss of flatIssues) {
+      const key = iss.code || iss.category || iss.message
+      const hit = map.get(key)
+      if (hit) { if (!hit.skus.includes(iss.sku)) hit.skus.push(iss.sku) }
+      else map.set(key, { code: iss.code, severity: iss.severity, title: issueTitle(iss), cols: issueCols(iss), message: iss.message, skus: [iss.sku] })
+    }
+    return [...map.values()].sort((a, b) => b.skus.length - a.skus.length)
+  }, [flatIssues])
 
   function exportCsv(job: AmazonFeedJob) {
     const lines = [['sku', 'status', 'code', 'message'].join(',')]
@@ -324,6 +379,18 @@ function AmazonPushesTab({
                           <option value="warning">Warnings</option>
                           <option value="success">OK</option>
                         </select>
+                        {hasIssues && (
+                          <div className="inline-flex h-7 rounded border border-default dark:border-slate-700 overflow-hidden shrink-0">
+                            <button type="button" onClick={() => setViewMode('error')}
+                              className={cn('px-2 text-xs', viewMode === 'error' ? 'bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300')}>
+                              By error
+                            </button>
+                            <button type="button" onClick={() => setViewMode('code')}
+                              className={cn('px-2 text-xs border-l border-default dark:border-slate-700', viewMode === 'code' ? 'bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300')}>
+                              By code
+                            </button>
+                          </div>
+                        )}
                         <button type="button" onClick={() => exportCsv(job)}
                           className="h-7 px-2 text-xs border border-default dark:border-slate-700 rounded hover:bg-white dark:hover:bg-slate-800 inline-flex items-center gap-1">
                           <Download className="w-3 h-3" />CSV
@@ -346,27 +413,124 @@ function AmazonPushesTab({
                         )}
                       </div>
 
-                      {/* Per-SKU table */}
-                      <div className="max-h-60 overflow-y-auto border border-default dark:border-slate-800 rounded">
-                        <table className="w-full text-xs">
-                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                            {filteredSkuRows.map((r, i) => (
-                              <tr key={`${r.sku}-${i}`} className="hover:bg-white dark:hover:bg-slate-800/40">
-                                <td className="px-2 py-1 font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap">{r.sku}</td>
-                                <td className="px-2 py-1">
-                                  <Pill tone={r.status === 'success' ? 'success' : r.status === 'warning' ? 'warning' : 'danger'}>
-                                    {r.status}
-                                  </Pill>
-                                </td>
-                                <td className="px-2 py-1 text-tertiary whitespace-nowrap">{r.code ?? ''}</td>
-                                <td className="px-2 py-1 text-slate-500 dark:text-slate-400">{r.message ?? ''}</td>
+                      {/* Detail — structured issues (Amazon parity) or legacy per-SKU table */}
+                      <div className="max-h-72 overflow-y-auto border border-default dark:border-slate-800 rounded">
+                        {hasIssues && viewMode === 'error' && (
+                          <table className="w-full text-xs">
+                            <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900 text-tertiary">
+                              <tr className="text-left">
+                                <th className="px-2 py-1 font-medium">Code</th>
+                                <th className="px-2 py-1 font-medium">Issue</th>
+                                <th className="px-2 py-1 font-medium">SKU</th>
+                                <th className="px-2 py-1 font-medium">Column</th>
+                                <th className="px-2 py-1 font-medium">Message</th>
                               </tr>
-                            ))}
-                            {filteredSkuRows.length === 0 && (
-                              <tr><td colSpan={4} className="px-2 py-3 text-center text-tertiary">No rows match.</td></tr>
-                            )}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                              {flatIssues.map((iss, i) => {
+                                const firstCol = iss.columns?.[0]
+                                const msgKey = `${iss.sku}-${iss.code}-${i}`
+                                return (
+                                  <tr key={msgKey} className="hover:bg-white dark:hover:bg-slate-800/40 align-top">
+                                    <td className="px-2 py-1 whitespace-nowrap">
+                                      <span className={cn('inline-flex items-center gap-1', issueSevCls[iss.severity])}>
+                                        <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
+                                        <span className="font-mono">{iss.code || '—'}</span>
+                                      </span>
+                                    </td>
+                                    <td className="px-2 py-1 text-slate-700 dark:text-slate-200 whitespace-nowrap">{issueTitle(iss)}</td>
+                                    <td className="px-2 py-1 font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap">{iss.sku}</td>
+                                    <td className="px-2 py-1 whitespace-nowrap">
+                                      {firstCol && onGoToCell ? (
+                                        <button type="button" onClick={() => onGoToCell(iss.sku, firstCol.id)}
+                                          className="inline-flex items-center gap-0.5 text-blue-600 dark:text-blue-400 hover:underline" title="Jump to this cell">
+                                          {issueCols(iss)}<span aria-hidden>↗</span>
+                                        </button>
+                                      ) : (
+                                        <span className="text-tertiary">{issueCols(iss) || '—'}</span>
+                                      )}
+                                    </td>
+                                    <td className="px-2 py-1 text-slate-500 dark:text-slate-400">
+                                      <button type="button" onClick={() => setOpenMsg(openMsg === msgKey ? null : msgKey)}
+                                        className={cn('text-left w-full', openMsg === msgKey ? '' : 'line-clamp-1')}>
+                                        {iss.message}{iss.details ? ` — ${iss.details}` : ''}
+                                      </button>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                              {flatIssues.length === 0 && (
+                                <tr><td colSpan={5} className="px-2 py-3 text-center text-tertiary">No issues match.</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        )}
+
+                        {hasIssues && viewMode === 'code' && (
+                          <table className="w-full text-xs">
+                            <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900 text-tertiary">
+                              <tr className="text-left">
+                                <th className="px-2 py-1 font-medium">Code</th>
+                                <th className="px-2 py-1 font-medium">Issue</th>
+                                <th className="px-2 py-1 font-medium">Count</th>
+                                <th className="px-2 py-1 font-medium">Column</th>
+                                <th className="px-2 py-1 font-medium">SKUs</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                              {byCode.map((g, i) => (
+                                <tr key={`${g.code}-${i}`} className="hover:bg-white dark:hover:bg-slate-800/40 align-top">
+                                  <td className="px-2 py-1 whitespace-nowrap">
+                                    <span className={cn('inline-flex items-center gap-1', issueSevCls[g.severity])}>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
+                                      <span className="font-mono">{g.code || '—'}</span>
+                                    </span>
+                                  </td>
+                                  <td className="px-2 py-1 text-slate-700 dark:text-slate-200">
+                                    <div className="whitespace-nowrap">{g.title}</div>
+                                    <div className="text-tertiary line-clamp-1">{g.message}</div>
+                                  </td>
+                                  <td className="px-2 py-1 text-slate-600 dark:text-slate-300 whitespace-nowrap">{g.skus.length}×</td>
+                                  <td className="px-2 py-1 text-tertiary whitespace-nowrap">{g.cols || '—'}</td>
+                                  <td className="px-2 py-1">
+                                    <div className="flex flex-wrap gap-1">
+                                      {g.skus.map(sku => (
+                                        <button key={sku} type="button"
+                                          onClick={() => { setViewMode('error'); setQuery(sku) }}
+                                          className="font-mono text-[11px] px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                                          title="Filter to this SKU">
+                                          {sku}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+
+                        {!hasIssues && (
+                          <table className="w-full text-xs">
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                              {filteredSkuRows.map((r, i) => (
+                                <tr key={`${r.sku}-${i}`} className="hover:bg-white dark:hover:bg-slate-800/40">
+                                  <td className="px-2 py-1 font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap">{r.sku}</td>
+                                  <td className="px-2 py-1">
+                                    <Pill tone={r.status === 'success' ? 'success' : r.status === 'warning' ? 'warning' : 'danger'}>
+                                      {r.status}
+                                    </Pill>
+                                  </td>
+                                  <td className="px-2 py-1 text-tertiary whitespace-nowrap">{r.code ?? ''}</td>
+                                  <td className="px-2 py-1 text-slate-500 dark:text-slate-400">{r.message ?? ''}</td>
+                                </tr>
+                              ))}
+                              {filteredSkuRows.length === 0 && (
+                                <tr><td colSpan={4} className="px-2 py-3 text-center text-tertiary">No rows match.</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        )}
                       </div>
                     </>
                   ) : (
@@ -829,6 +993,7 @@ export function HistoryModal({
   marketplace,
   productType,
   onResubmitErroredSkus,
+  onGoToCell,
   onRePull,
   onRestoreVersion,
   currentRows = [],
@@ -863,7 +1028,10 @@ export function HistoryModal({
         <div className="flex-1 overflow-y-auto" style={{ maxHeight: 560 }}>
           {activeTab === 'pushes' && (
             channel === 'amazon'
-              ? <AmazonPushesTab onResubmitErroredSkus={onResubmitErroredSkus} />
+              ? <AmazonPushesTab
+                  onResubmitErroredSkus={onResubmitErroredSkus}
+                  onGoToCell={onGoToCell ? (sku, columnId) => { onClose(); onGoToCell(sku, columnId) } : undefined}
+                />
               : <EbayPushesTab onResubmitErroredSkus={onResubmitErroredSkus} />
           )}
           {activeTab === 'pulls' && (
