@@ -614,7 +614,10 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
     return (
       <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}>
         {fillHandle}
-        <input ref={inputRef as any} type={col.kind === 'number' ? 'number' : 'text'}
+        {/* #22 — text + inputMode instead of type=number: allows it-IT comma
+            decimals (9,99), stops scroll-wheel mutating the value, and respects
+            maxLength (all broken by the native number input). */}
+        <input ref={inputRef as any} type="text" inputMode={col.kind === 'number' ? 'decimal' : undefined}
           defaultValue={editInitialChar !== null ? editInitialChar : displayValue} maxLength={col.maxLength}
           onInput={(e) => setLiveLen((e.target as HTMLInputElement).value.length) /* #5 — commit-once: commitInput writes on exit */}
           onBlur={() => { cancelledRef.current = false; onDeactivate() }}
@@ -1250,7 +1253,11 @@ export default function FlatFileGrid({
     if (!selAnchor) return
     const text = await navigator.clipboard.readText().catch(() => '')
     if (!text) return
-    const pasteLines = text.split('\n').filter((l) => l.trim())
+    // #29 — normalize Windows/Mac line endings (Excel appends a stray \r to each
+    // row's last cell) and split; only drop a single trailing blank line, so
+    // interior blank rows are preserved instead of compacting everything up.
+    const pasteLines = text.replace(/\r\n?/g, '\n').split('\n')
+    while (pasteLines.length > 1 && pasteLines[pasteLines.length - 1] === '') pasteLines.pop()
     if (!pasteLines.length) return
     const firstRow = pasteLines[0].split('\t')
     const colLookup = new Map<string, number>()
