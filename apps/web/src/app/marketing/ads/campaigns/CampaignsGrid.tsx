@@ -1049,12 +1049,16 @@ export function CampaignsGrid() {
   const metricCols = useMemo(() => colOrder.filter((k) => visKeySet.has(k)), [colOrder, visKeySet])
 
   const markets = useMemo(() => Array.from(new Set(rows.map((r) => r.marketplace).filter(Boolean) as string[])).sort(), [rows])
-  // Portfolio options derived from the data (no portfolio-name endpoint yet, so
-  // labels fall back to a short id). Campaign names back the typeahead combobox.
+  // Portfolio filter options — resolve real names from /advertising/portfolios (pfOptions,
+  // the same v3-backed source Amazon shows + the bulk-assign picker uses). Fall back to a short
+  // id only for a portfolio we have no name for; sort by name so the dropdown reads like Amazon.
   const portfolios = useMemo(() => {
-    const ids = Array.from(new Set(rows.map((r) => r.portfolioId).filter(Boolean) as string[])).sort()
-    return ids.map((id) => ({ id, label: `Portfolio ${id.slice(0, 6)}` }))
-  }, [rows])
+    const nameById = new Map(pfOptions.map((p) => [p.portfolioId, p.name]))
+    const ids = Array.from(new Set(rows.map((r) => r.portfolioId).filter(Boolean) as string[]))
+    return ids
+      .map((id) => ({ id, label: nameById.get(id) ?? `Portfolio ${id.slice(0, 6)}` }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [rows, pfOptions])
   const campaignNames = useMemo(() => Array.from(new Set(rows.map((r) => r.name))).sort((a, b) => a.localeCompare(b)), [rows])
 
   const statusActive = statuses.length !== DEFAULT_STATUSES.length || !DEFAULT_STATUSES.every((s) => statuses.includes(s))
