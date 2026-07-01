@@ -1243,6 +1243,16 @@ export default function FlatFileGrid({
 
   useEffect(() => {
     function handle(e: globalThis.KeyboardEvent) {
+      // #2 — when focus is in a NON-grid form field (toolbar Search, Find &
+      // Replace, a filter box, a dropdown search), let that field own every key.
+      // Otherwise Backspace/Delete wiped the selected grid cells, Ctrl+A/C/V
+      // hijacked the grid, and a letter flipped a grid cell into edit mode.
+      // The grid's OWN cell editor has isEditingRef.current === true and is
+      // handled by the dedicated isEditing branch below, so it's exempt here.
+      const tgt = e.target as HTMLElement | null
+      const inField = !!tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable)
+      if (inField && !isEditingRef.current) return
+
       const mod = e.metaKey || e.ctrlKey
       if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return }
       if (mod && e.key === 'z' &&  e.shiftKey) { e.preventDefault(); redo(); return }
