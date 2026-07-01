@@ -533,6 +533,7 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
     return (
       <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}
         title={strictInvalid ? `"${displayValue}" isn't in eBay's list for this field — eBay may reject it at publish` : undefined}
+        aria-haspopup="listbox" aria-expanded={isActive && dropdownOpen}
         onClick={() => { if (isActive) setDropdownOpen(true) }}
         onDoubleClick={(e) => {
           const charPos = getCharIndexFromPoint(e.clientX, e.clientY)
@@ -548,7 +549,10 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
               <span className="truncate">{shownLabel || (col.required ? '⚠ required' : enumOptions[1] ? `e.g. ${labelFor(enumOptions[1])}` : '—')}</span>
             </span>
           )}
-          <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+          {/* #39 — the pick-list chevron is always visible once the cell is
+              active/selected (only hover-revealed otherwise), so enum cells read
+              as dropdowns. */}
+          <ChevronDown className={cn('w-3 h-3 text-slate-400 flex-shrink-0 transition-opacity', isActive || isSelected ? 'opacity-100' : 'opacity-0 group-hover/cell:opacity-100')} />
         </div>
         {fillHandle}
         {isActive && dropdownOpen && (
@@ -1371,7 +1375,11 @@ export default function FlatFileGrid({
     const rMax = displayRowsRef.current.length - 1
     const cMax = allColumnsRef.current.length - 1
     if (rMax < 0 || cMax < 0) return
-    setSelAnchor({ ri: 0, ci: 0 }); setSelEnd({ ri: rMax, ci: cMax }); setActiveCell(null)
+    setSelAnchor({ ri: 0, ci: 0 }); setSelEnd({ ri: rMax, ci: cMax })
+    // #82 — keep an active cell (seed A1 if none) so the grid stays keyboard-live
+    // after select-all instead of going dead.
+    if (!selAnchorRef.current) { const row = displayRowsRef.current[0]; const col = allColumnsRef.current[0]; if (row && col) setActiveCell({ rowId: row._rowId, colId: col.id }) }
+    selAnchorRef.current = { ri: 0, ci: 0 }
   }, [])
 
   const executeFill = useCallback(() => {
@@ -1493,8 +1501,9 @@ export default function FlatFileGrid({
       if (mod && e.key === 'y')                { e.preventDefault(); redo(); return }
       if (mod && e.key === 'f') { e.preventDefault(); setShowFindReplace(true); return }
       if (mod && e.key === 'g') { e.preventDefault(); onColumnsClick?.(); return }
-      // PE: '?' opens the shortcuts modal (no modifier — skip when typing in an input)
-      if (e.key === '?' && !mod && !isEditingRef.current) {
+      // PE: '?' opens the shortcuts modal (no modifier — skip when typing in an
+      // input or when a grid cell is selected so #64 '?' can be typed into it)
+      if (e.key === '?' && !mod && !isEditingRef.current && !selAnchorRef.current) {
         const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase()
         if (tag !== 'input' && tag !== 'textarea') {
           e.preventDefault()
