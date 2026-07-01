@@ -17,6 +17,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle,
@@ -42,6 +43,7 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { DeltaPreviewModal, type DeltaPreviewTarget } from './DeltaPreviewModal'
+import ControlTowerBanner from './ControlTowerBanner'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -210,6 +212,8 @@ export default function ControlTowerClient() {
   // Bulk-retry action state + transient toast.
   const [retrying, setRetrying] = useState(false)
   const [toast, setToast] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null)
+  // Phase 6 T5 — DLQ badge (fetched with each grid load)
+  const [dlqCount, setDlqCount] = useState<number | null>(null)
 
   const [density, setDensity] = useState<Density>(() => {
     if (typeof window === 'undefined') return 'comfortable'
@@ -256,6 +260,16 @@ export default function ControlTowerClient() {
       setTotal(data.total ?? 0)
       setSummary(data.summary ?? {})
       setLastFetchedAt(Date.now())
+      // Phase 6 T5 — fetch DLQ count alongside every grid refresh
+      try {
+        const dlqRes = await fetch(`${BACKEND}/api/outbound-queue?tab=dead&limit=1`)
+        if (dlqRes.ok) {
+          const dlqData = (await dlqRes.json()) as { stats?: { dead?: number } }
+          setDlqCount(dlqData.stats?.dead ?? 0)
+        }
+      } catch {
+        /* DLQ badge is non-critical; don't surface its failures */
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load')
     } finally {
@@ -313,6 +327,9 @@ export default function ControlTowerClient() {
 
   return (
     <div className="p-3 sm:p-6 space-y-4">
+
+      {/* Phase 6 T5 — live sync-event banner (SSE, subscribe-only, dismiss per item) */}
+      <ControlTowerBanner />
 
       {/* Transient action toast */}
       {toast && (
@@ -424,20 +441,33 @@ export default function ControlTowerClient() {
           />
         }
         trailingSlot={
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => void bulkRetry()}
-            loading={retrying}
-            icon={<RotateCcw className="w-3.5 h-3.5" />}
-            title={
-              filterChannel
-                ? `Re-enqueue all failed + dead ${filterChannel} sync jobs`
-                : 'Re-enqueue all failed + dead sync jobs (all channels)'
-            }
-          >
-            {filterChannel ? `Retry failed · ${filterChannel}` : 'Retry failed'}
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Phase 6 T5 — DLQ badge: links to /sync-logs/outbound-queue when > 0 */}
+            {dlqCount !== null && dlqCount > 0 && (
+              <Link
+                href="/sync-logs/outbound-queue"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-300 bg-amber-50 text-amber-700 text-xs font-semibold hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950/60 transition-colors"
+                title="View dead-lettered sync jobs"
+              >
+                <AlertTriangle className="w-3 h-3" />
+                DLQ: {dlqCount}
+              </Link>
+            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void bulkRetry()}
+              loading={retrying}
+              icon={<RotateCcw className="w-3.5 h-3.5" />}
+              title={
+                filterChannel
+                  ? `Re-enqueue all failed + dead ${filterChannel} sync jobs`
+                  : 'Re-enqueue all failed + dead sync jobs (all channels)'
+              }
+            >
+              {filterChannel ? `Retry failed · ${filterChannel}` : 'Retry failed'}
+            </Button>
+          </div>
         }
       />
 
