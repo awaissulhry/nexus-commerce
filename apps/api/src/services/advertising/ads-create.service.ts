@@ -178,9 +178,19 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
     const productAds = await prisma.adProductAd.findMany({ where: { adGroupId: ag.id, externalAdId: null } })
     for (const pa of productAds) {
       try {
-        const r = await createProductAd(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, sku: pa.sku ?? undefined, asin: pa.asin ?? undefined, state: 'enabled' })
-        if (r.externalId) { await prisma.adProductAd.update({ where: { id: pa.id }, data: { externalAdId: r.externalId } }); out.productAds++ }
-        else out.errors.push('productAd "' + (pa.asin || pa.sku || '') + '": ' + JSON.stringify(r.rawResponse).slice(0, 200))
+        // Sponsored Products ads require a seller SKU (merchantSku), not just an ASIN. When the row
+        // has none (wizard launches store ASIN-only), resolve the FBA seller SKU from the catalog
+        // (GALE campaigns are FBA); fall back to any SKU for that ASIN. Persist it back.
+        let sku = pa.sku ?? undefined
+        if (!sku && pa.asin) {
+          const fba = await prisma.product.findFirst({ where: { amazonAsin: pa.asin, fulfillmentMethod: 'FBA' }, select: { sku: true }, orderBy: { sku: 'asc' } })
+          const any = fba ?? await prisma.product.findFirst({ where: { amazonAsin: pa.asin }, select: { sku: true }, orderBy: { sku: 'asc' } })
+          sku = any?.sku ?? undefined
+        }
+        if (!sku) { out.errors.push('productAd "' + (pa.asin || '') + '": no seller SKU for ASIN'); continue }
+        const r = await createProductAd(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, sku, state: 'enabled' })
+        if (r.externalId) { await prisma.adProductAd.update({ where: { id: pa.id }, data: { externalAdId: r.externalId, sku } }); out.productAds++ }
+        else out.errors.push('productAd "' + (pa.asin || sku) + '": ' + JSON.stringify(r.rawResponse).slice(0, 200))
       } catch (e) { out.errors.push('productAd "' + (pa.asin || pa.sku || '') + '": ' + ((e as Error)?.message || '')) }
     }
   }
