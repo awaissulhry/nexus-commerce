@@ -5388,7 +5388,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const q = request.query as Record<string, string | undefined>
     const { buildAlerts } = await import('../services/advertising/ads-alerts.service.js')
     reply.header('Cache-Control', 'private, max-age=120')
-    return buildAlerts({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, acosThreshold: q.acosThreshold ? Number(q.acosThreshold) : undefined })
+    const severity = q.severity === 'high' || q.severity === 'medium' ? q.severity : undefined
+    const type = (['acos_breach', 'zero_sales', 'spend_spike', 'sales_drop'] as const).includes(q.type as never) ? (q.type as 'acos_breach' | 'zero_sales' | 'spend_spike' | 'sales_drop') : undefined
+    return buildAlerts({
+      windowDays: q.windowDays ? Number(q.windowDays) : undefined,
+      acosThreshold: q.acosThreshold ? Number(q.acosThreshold) : undefined,
+      marketplace: q.marketplace ?? null,
+      severity,
+      type,
+    })
   })
 
   // ── AX2.7: Unified AI + rules recommendations feed ──────────────────

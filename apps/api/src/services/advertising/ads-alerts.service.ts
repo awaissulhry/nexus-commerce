@@ -18,9 +18,10 @@ export interface AlertsResult { generatedAt: string; windowDays: number; acosThr
 
 const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`
 
-export async function buildAlerts(opts: { windowDays?: number; acosThreshold?: number } = {}): Promise<AlertsResult> {
+export async function buildAlerts(opts: { windowDays?: number; acosThreshold?: number; marketplace?: string | null; severity?: AlertSeverity; type?: AlertType } = {}): Promise<AlertsResult> {
   const windowDays = opts.windowDays ?? 7
   const acosThreshold = opts.acosThreshold ?? 0.5
+  const mk = opts.marketplace && opts.marketplace !== 'all' ? opts.marketplace : null
   const now = Date.now()
   const recentSince = new Date(now - windowDays * 86_400_000)
   const priorSince = new Date(now - 2 * windowDays * 86_400_000)
@@ -33,7 +34,9 @@ export async function buildAlerts(opts: { windowDays?: number; acosThreshold?: n
   const priorMap = new Map(prior.map((p) => [p.localEntityId, { cost: Number(p._sum.costMicros ?? 0) / 10_000, sales: p._sum.sales7dCents ?? 0 }]))
 
   const ids = recent.map((r) => r.localEntityId).filter(Boolean) as string[]
-  const campaigns = await prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, status: true } })
+  // marketplace filter lives here: only campaigns in the chosen market land in cMap, so the
+  // loop below (which skips ids not in cMap) naturally scopes alerts + counts to that market.
+  const campaigns = await prisma.campaign.findMany({ where: { id: { in: ids }, ...(mk ? { marketplace: mk } : {}) }, select: { id: true, name: true, status: true } })
   const cMap = new Map(campaigns.map((c) => [c.id, c]))
 
   const alerts: Alert[] = []
@@ -61,7 +64,12 @@ export async function buildAlerts(opts: { windowDays?: number; acosThreshold?: n
 
   const sevRank = { high: 0, medium: 1 }
   alerts.sort((a, b) => sevRank[a.severity] - sevRank[b.severity])
+  // counts reflect the market-scoped set (all types) so filter chips show real totals; the
+  // returned list is then narrowed by the optional severity/type filter.
   const counts: Record<AlertType, number> = { acos_breach: 0, zero_sales: 0, spend_spike: 0, sales_drop: 0 }
   for (const a of alerts) counts[a.type]++
-  return { generatedAt: new Date().toISOString(), windowDays, acosThreshold, alerts, counts }
+  let list = alerts
+  if (opts.type) list = list.filter((a) => a.type === opts.type)
+  if (opts.severity) list = list.filter((a) => a.severity === opts.severity)
+  return { generatedAt: new Date().toISOString(), windowDays, acosThreshold, alerts: list, counts }
 }

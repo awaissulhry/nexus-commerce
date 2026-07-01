@@ -1,0 +1,79 @@
+/* E4 — Alerts & Health. Light H10, design-system tokens, image-free.
+   Unifies /alerts + /retail-readiness + /automation-health + /budget enforcement + /summary. */
+
+.hl { display: flex; flex-direction: column; gap: 14px; }
+.hl-toolbar { display: flex; align-items: center; gap: 10px; }
+.hl-win { display: inline-flex; border: 1px solid #e3e7ec; border-radius: 7px; overflow: hidden; }
+.hl-win button { border: 0; background: #fff; padding: 5px 11px; font-size: 11px; font-weight: 700; color: #5b6573; cursor: pointer; }
+.hl-win button.on { background: #1f6fde; color: #fff; }
+
+/* hero score */
+.hl-hero { display: grid; grid-template-columns: auto 1fr; gap: 22px; align-items: center; background: #fff; border: 1px solid #e3e7ec; border-radius: 14px; padding: 18px 22px; }
+.hl-score { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 148px; }
+.hl-score-num { font-size: 52px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+.hl-score-num small { font-size: 18px; font-weight: 700; color: #aeb6c2; }
+.hl-score-lbl { margin-top: 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 10px; border-radius: 999px; }
+.hl-good { color: #067d62; } .hl-good.bg { background: #e7f5ee; }
+.hl-fair { color: #b87503; } .hl-fair.bg { background: #fff4e0; }
+.hl-poor { color: #e5484d; } .hl-poor.bg { background: #fdeaea; }
+.hl-factors { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hl-factors-h { font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: #8a93a1; }
+.hl-factor { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.hl-factor-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.hl-factor-txt { color: #37495b; flex: 1; min-width: 0; }
+.hl-factor-pts { font-weight: 800; font-variant-numeric: tabular-nums; color: #e5484d; }
+.hl-factor-pts.ok { color: #067d62; }
+.hl-allclear { font-size: 12px; color: #067d62; font-weight: 600; }
+
+/* summary tiles */
+.hl-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 980px) { .hl-tiles { grid-template-columns: repeat(2, 1fr); } }
+.hl-tile { text-align: left; background: #fff; border: 1px solid #e3e7ec; border-radius: 11px; padding: 12px 14px; cursor: pointer; }
+.hl-tile:hover { border-color: #cdd5df; box-shadow: 0 2px 8px rgba(20,28,38,0.05); }
+.hl-tile.on { border-color: #9ec1f2; background: #f7faff; }
+.hl-tile-k { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: #8a93a1; }
+.hl-tile-v { font-weight: 800; font-size: 22px; color: #1c2530; margin-top: 4px; display: flex; align-items: baseline; gap: 8px; }
+.hl-tile-sub { font-size: 11px; font-weight: 700; margin-top: 2px; }
+.hl-tile-sub.danger { color: #e5484d; } .hl-tile-sub.warn { color: #b87503; } .hl-tile-sub.ok { color: #067d62; } .hl-tile-sub.muted { color: #8a93a1; }
+
+/* sections */
+.hl-section { background: #fff; border: 1px solid #e3e7ec; border-radius: 12px; padding: 14px 16px; }
+.hl-sec-h { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 800; color: #1c2530; margin-bottom: 10px; }
+.hl-sec-h .grow { flex: 1; }
+.hl-chip { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: #eef0f3; color: #5b6573; }
+.hl-empty { color: #8a93a1; font-size: 13px; padding: 16px 0; text-align: center; }
+
+/* alert filters */
+.hl-filters { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.hl-fchip { border: 1px solid #e3e7ec; background: #fff; border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 700; color: #5b6573; cursor: pointer; }
+.hl-fchip.on { border-color: #1f6fde; background: #eef5ff; color: #1f6fde; }
+.hl-fchip:disabled { opacity: 0.4; cursor: default; }
+
+/* rows (alerts + retail) */
+.hl-rows { display: flex; flex-direction: column; }
+.hl-row { display: flex; align-items: center; gap: 11px; padding: 9px 0; border-top: 1px solid #f3f4f6; font-size: 12px; text-decoration: none; color: inherit; }
+.hl-row:first-child { border-top: 0; }
+.hl-row.lnk:hover { background: #fafbfc; }
+.hl-sev { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.hl-sev--high { background: #e5484d; } .hl-sev--medium { background: #b87503; } .hl-sev--watch { background: #b87503; } .hl-sev--pause { background: #e5484d; }
+.hl-atype { font-size: 9px; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; flex-shrink: 0; }
+.hl-atype--acos_breach { background: #fdeaea; color: #e5484d; }
+.hl-atype--zero_sales { background: #fdeaea; color: #b3261e; }
+.hl-atype--spend_spike { background: #fff4e0; color: #b87503; }
+.hl-atype--sales_drop { background: #fbf3da; color: #8a5a00; }
+.hl-atype--pause { background: #fdeaea; color: #e5484d; }
+.hl-atype--watch { background: #fff4e0; color: #b87503; }
+.hl-name { font-weight: 700; color: #1c2530; flex-shrink: 0; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hl-mkt { font-size: 10px; font-weight: 700; color: #5b6573; background: #f3f4f6; border-radius: 5px; padding: 1px 6px; flex-shrink: 0; }
+.hl-msg { color: #5b6573; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hl-arrow { color: #c2cad4; flex-shrink: 0; }
+
+/* automation health */
+.hl-auto { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 780px) { .hl-auto { grid-template-columns: repeat(2, 1fr); } }
+.hl-metric { border: 1px solid #eef0f3; border-radius: 9px; padding: 9px 11px; }
+.hl-metric-k { font-size: 8.5px; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 800; color: #9aa3b0; }
+.hl-metric-v { font-weight: 800; font-size: 17px; color: #1c2530; margin-top: 2px; }
+.hl-metric-v.danger { color: #e5484d; } .hl-metric-v.ok { color: #067d62; }
+.hl-risk { margin-top: 10px; display: flex; align-items: flex-start; gap: 8px; background: #fdf4f4; border: 1px solid #f3c0c2; border-radius: 9px; padding: 9px 12px; font-size: 12px; color: #b3261e; }
+.hl-risk b { font-weight: 800; }
