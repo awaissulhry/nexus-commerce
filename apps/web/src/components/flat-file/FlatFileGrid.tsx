@@ -972,6 +972,42 @@ export default function FlatFileGrid({
     }
   }, [selAnchor, selEnd])
 
+  // #8 — reconcile the index-based selection to row/col IDENTITY. Capture the
+  // rowId/colId under the selection whenever it changes…
+  const selIdentityRef = useRef<{ aR?: string; aC?: string; eR?: string; eC?: string } | null>(null)
+  useEffect(() => {
+    if (!selAnchor || !selEnd) { selIdentityRef.current = null; return }
+    const dr = displayRowsRef.current, ac = allColumnsRef.current
+    selIdentityRef.current = {
+      aR: dr[selAnchor.ri]?._rowId, aC: ac[selAnchor.ci]?.id,
+      eR: dr[selEnd.ri]?._rowId,    eC: ac[selEnd.ci]?.id,
+    }
+  }, [selAnchor, selEnd])
+
+  // …and remap those identities back to indices when the displayed rows or
+  // columns change (sort / filter / collapse / reorder / delete), so the
+  // highlight (and every bulk op that reads it) stays on the same records
+  // instead of the same screen coordinates — and stops diverging from the
+  // identity-based active cell. If a selected row/col vanished, clear rather
+  // than point destructive ops at the wrong data.
+  useEffect(() => {
+    const id = selIdentityRef.current
+    if (!id) return
+    const dr = displayRowsRef.current, ac = allColumnsRef.current
+    const aRi = id.aR ? dr.findIndex((r) => r._rowId === id.aR) : -1
+    const aCi = id.aC ? ac.findIndex((c) => c.id === id.aC) : -1
+    const eRi = id.eR ? dr.findIndex((r) => r._rowId === id.eR) : -1
+    const eCi = id.eC ? ac.findIndex((c) => c.id === id.eC) : -1
+    if (aRi < 0 || aCi < 0 || eRi < 0 || eCi < 0) {
+      setSelAnchor(null); setSelEnd(null); setActiveCell(null); setClipboardRange(null)
+      return
+    }
+    setSelAnchor((p) => (p && p.ri === aRi && p.ci === aCi ? p : { ri: aRi, ci: aCi }))
+    setSelEnd((p) => (p && p.ri === eRi && p.ci === eCi ? p : { ri: eRi, ci: eCi }))
+    setClipboardRange((c) => (c ? null : c))  // index-based copy marquee: drop on structural change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayRows, allColumns])
+
   const fillTarget = useMemo<NormSel | null>(() => {
     if (!isFillDragging || !fillDragEnd || !normSel) return null
     const { rMin, rMax, cMin, cMax } = normSel
