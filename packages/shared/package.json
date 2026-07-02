@@ -13,6 +13,10 @@
     "./image-validation": {
       "types": "./dist/image-validation.d.ts",
       "default": "./dist/image-validation.js"
+    },
+    "./permissions": {
+      "types": "./dist/permissions.d.ts",
+      "default": "./dist/permissions.js"
     }
   },
   "scripts": {

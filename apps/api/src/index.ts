@@ -258,6 +258,8 @@ import pricingRoutes from "./routes/pricing.routes.js";
 import pricingRulesRoutes from "./routes/pricing-rules.routes.js";
 // Phase S1 (auth core) — human authentication endpoints.
 import authRoutes from "./routes/auth.routes.js";
+// Phase S2 (RBAC engine) — the one global permission gate (shadow/enforce).
+import { rbacHook } from "./lib/auth/rbac-hook.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
 // initializeQueue pings Redis and throws on failure; tryStartQueueWorkers
 // catches that so a missing/unreachable Redis can't crash the API process
@@ -409,6 +411,16 @@ async function tryStartQueueWorkers(): Promise<void> {
 // the throttle. (Phase S1 auth core — review finding H2.)
 const app = Fastify({ logger: true, trustProxy: 1 });
 
+// Phase S2 (RBAC engine) — record every registered route so the
+// rbac-coverage check can prove deny-by-default: every route must resolve
+// to a permission in the manifest. onRoute fires as each plugin registers.
+export const REGISTERED_ROUTES: { method: string; url: string }[] = [];
+app.addHook('onRoute', (r) => {
+  const methods = Array.isArray(r.method) ? r.method : [r.method];
+  for (const m of methods) REGISTERED_ROUTES.push({ method: String(m), url: r.url });
+});
+export { app };
+
 // L.12.0 — request context. Every HTTP request runs the handler
 // inside an AsyncLocalStorage scope keyed by Fastify's request.id
 // (or an incoming x-request-id header). Deep service calls — most
@@ -512,6 +524,13 @@ app.register(cors, {
 // session + CSRF cookies). No global secret needed: session/CSRF tokens
 // are opaque random values validated against the DB, not signed cookies.
 app.register(cookie);
+
+// Phase S2 (RBAC engine) — global permission gate. Added BEFORE the route
+// plugins so Fastify applies it to every one of them. Deny-by-default via
+// the route→permission manifest; runs in shadow mode (log-only) until S3
+// flips NEXUS_RBAC_MODE=enforce. Registered as a preHandler so it sits
+// after body parsing and can read cookies / short-circuit with a reply.
+app.addHook('preHandler', rbacHook);
 
 // HTTP routes — all queue references are lazy (see lib/queue.ts), so registering
 // these does not open Redis connections. Workers/jobs remain disabled (Phase 2).
@@ -1531,7 +1550,9 @@ async function start() {
   }
 }
 
-start();
+// Skip listening / cron + queue startup when the module is imported purely
+// to enumerate routes (rbac-coverage check).
+if (!process.env.RBAC_COVERAGE) start();
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {

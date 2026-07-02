@@ -76,4 +76,18 @@ npm run build --workspace=@nexus/api > /tmp/api-build.log 2>&1 || {
 }
 echo "✓ apps/api build passed"
 
+# Security workstream S2 — deny-by-default coverage. Boots the API
+# (registration only; app.ready() never opens a DB connection) and fails
+# the push if ANY route lacks a permission mapping in the manifest. This
+# is what makes deny-by-default a proven invariant: a new endpoint is
+# invisible until it's mapped in permissions-manifest.ts.
+echo "→ Checking RBAC deny-by-default coverage (S2)..."
+npx tsx apps/api/src/scripts/check-rbac-coverage.ts > /tmp/rbac-coverage.log 2>&1 || {
+  echo "❌ RBAC coverage FAILED — a route has no permission mapping"
+  tail -40 /tmp/rbac-coverage.log
+  exit 1
+}
+grep -E "RBAC coverage:" /tmp/rbac-coverage.log || true
+echo "✓ RBAC coverage: every route maps to a permission"
+
 echo "✅ All workspaces build cleanly — pushing"
