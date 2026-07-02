@@ -38,7 +38,7 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
 const api = (p: string) => `${getBackendUrl()}/api/advertising${p}`
 
-export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaign[]; name: string; groupId?: string; onStatus?: (s: RankPlanStatus) => void }>(function RankPlanBody({ campaigns, name, groupId, onStatus }, ref) {
+export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaign[]; name: string; groupId?: string; portfolioId?: string; onStatus?: (s: RankPlanStatus) => void }>(function RankPlanBody({ campaigns, name, groupId, portfolioId, onStatus }, ref) {
   const campKey = useMemo(() => campaigns.map(c => c.id).sort().join(','), [campaigns])
   const [targets, setTargets] = useState<RankTarget[]>([])
   const [scheds, setScheds] = useState<Record<string, Sched | null>>({}) // per-campaign existing schedule
@@ -131,7 +131,7 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
   const saveGroup = async (enabled: boolean): Promise<{ ok: boolean; id?: string }> => {
     const perCamp: Record<string, unknown> = {}
     for (const c of campaigns) { const o = scheds[c.id]?.targetOverrides; if (o && Object.keys(o).length) perCamp[c.id] = o }
-    const body = { id: groupId || undefined, name: name.trim(), campaignIds: campaigns.map(c => c.id), windows, defaultTargetKey: baseline || null, targetOverrides: perCamp, enabled, timezone: 'Europe/Rome' }
+    const body = { id: groupId || undefined, name: name.trim(), campaignIds: campaigns.map(c => c.id), windows, defaultTargetKey: baseline || null, targetOverrides: perCamp, enabled, timezone: 'Europe/Rome', portfolioId: portfolioId || null }
     const url = groupId ? api(`/rank-schedule-groups/${groupId}`) : api('/rank-schedule-groups')
     const r = await fetch(url, { method: groupId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(x => x.json()).catch(() => null)
     return { ok: !!r?.id, id: r?.id }

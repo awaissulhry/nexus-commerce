@@ -523,10 +523,25 @@ export interface RankScheduleGroupInput {
   targetOverrides?: Record<string, unknown> // per-campaign map: { [campaignId]: { targetKey: {...} } }
   enabled?: boolean; campaignIds: string[]; portfolioId?: string | null; userId?: string
 }
+// A portfolio-scoped group covers the whole portfolio: its current, non-archived campaigns. Resolved
+// by Campaign.portfolioId (the Amazon external id the /portfolios list also keys on).
+export async function resolvePortfolioCampaignIds(portfolioId: string): Promise<string[]> {
+  if (!portfolioId) return []
+  const rows = await prisma.campaign.findMany({ where: { portfolioId, status: { not: 'ARCHIVED' } }, select: { id: true } })
+  return rows.map((r) => r.id)
+}
+
 export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Promise<{ id: string; members: number; moved: number }> {
   const name = (input.name || '').trim()
   if (!name) throw new Error('name is required')
-  const campaignIds = [...new Set((input.campaignIds || []).filter(Boolean))]
+  let campaignIds = [...new Set((input.campaignIds || []).filter(Boolean))]
+  // Portfolio scope: auto-include the portfolio's current campaigns so a portfolio schedule always
+  // covers the whole portfolio (and picks up any campaigns added to it since the last save). Members
+  // still inherit `enabled` below, so a Manual group stays cron-safe even as it auto-grows.
+  if (input.portfolioId) {
+    const pcamps = await resolvePortfolioCampaignIds(String(input.portfolioId))
+    campaignIds = [...new Set([...campaignIds, ...pcamps])]
+  }
   const windows = Array.isArray(input.windows) ? input.windows : []
   const overrides = (input.targetOverrides ?? {}) as Record<string, unknown>
   const enabled = input.enabled !== false

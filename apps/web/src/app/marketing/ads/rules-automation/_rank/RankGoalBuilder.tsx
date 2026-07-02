@@ -71,6 +71,39 @@ export function RankGoalBuilder() {
   const removeCampaign = (id: string) => setSelCampaigns((cur) => cur.filter((c) => c.id !== id))
   const clearCampaigns = () => setSelCampaigns([])
 
+  // Phase 5 — portfolio scope. Binding the schedule to a portfolio auto-includes that portfolio's
+  // campaigns (and the backend re-unions the portfolio's current campaigns on every save, so ones
+  // added to the portfolio later get picked up). None = pick campaigns manually.
+  const [portfolios, setPortfolios] = useState<Array<{ id: string; name: string }>>([])
+  const [allCamps, setAllCamps] = useState<SchedCampaign[]>([])
+  const [portfolioScope, setPortfolioScope] = useState('')
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      const [cj, pj] = await Promise.all([
+        fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`).then((r) => r.json()).catch(() => ({ items: [] })),
+        fetch(`${getBackendUrl()}/api/advertising/portfolios`).then((r) => r.json()).catch(() => ({})),
+      ])
+      if (!alive) return
+      const camps = (Array.isArray(cj?.items) ? cj.items : Array.isArray(cj) ? cj : []) as Array<Record<string, unknown>>
+      setAllCamps(camps.map(toCampaign))
+      // /api/advertising/portfolios returns { portfolios: [{ portfolioId, name }] } — the id key is
+      // portfolioId (the Amazon external id, matching Campaign.portfolioId), not `id`.
+      const praw = (pj.portfolios ?? pj.items ?? (Array.isArray(pj) ? pj : [])) as Array<{ portfolioId?: string | number; id?: string | number; name?: string }>
+      setPortfolios((Array.isArray(praw) ? praw : []).map((x) => { const pid = String(x.portfolioId ?? x.id ?? ''); return { id: pid, name: String(x.name ?? pid) } }).filter((p) => p.id))
+    })()
+    return () => { alive = false }
+  }, [])
+  // Pick a portfolio → add all its campaigns (least-destructive: keeps any manual adds; the backend
+  // unions the portfolio's current campaigns on save regardless). Clearing keeps the campaigns but
+  // drops the binding.
+  const applyPortfolioScope = (pid: string) => {
+    setPortfolioScope(pid)
+    if (!pid) return
+    const inPf = allCamps.filter((c) => c.portfolioId === pid)
+    if (inPf.length) addCampaigns(inPf)
+  }
+
   // Edit mode: ?groupId opens an existing NAMED schedule group — load its name + ALL member campaigns
   // so the builder repopulates as one unit (was blank before, forcing you to re-add campaigns).
   // RankPlanBody then loads windows/baseline/overrides from the members. ?scheduleId is a legacy
@@ -91,6 +124,7 @@ export function RankGoalBuilder() {
           const ids = (Array.isArray(g.campaignIds) ? g.campaignIds : []) as unknown[]
           const sel = ids.map((cid) => byId.get(String(cid))).filter(Boolean).map((c) => toCampaign(c as Record<string, unknown>))
           if (sel.length) setSelCampaigns(sel)
+          if (g.portfolioId) setPortfolioScope(String(g.portfolioId))
         } else if (scheduleId) {
           const sj = await fetch(`${getBackendUrl()}/api/advertising/schedules`, { cache: 'no-store' }).then((r) => r.json()).catch(() => [])
           if (!alive) return
@@ -166,13 +200,21 @@ export function RankGoalBuilder() {
             <section id="rgd-campaigns" className="h10-rb-sec">
               <h2>Campaigns</h2>
               <p className="h10-rb-desc">Select the campaigns this rank plan should hold — one plan, applied across all of them.</p>
+              <div className="h10-rb-pfscope">
+                <label htmlFor="rgd-pfscope">Portfolio scope <span className="opt">(optional)</span></label>
+                <select id="rgd-pfscope" value={portfolioScope} onChange={(e) => applyPortfolioScope(e.target.value)} aria-label="Portfolio scope">
+                  <option value="">None — pick campaigns manually</option>
+                  {portfolios.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                {portfolioScope && <span className="hint">Covers every campaign in this portfolio — campaigns added to it later are included on save.</span>}
+              </div>
               <CampaignSection selected={selCampaigns} onAdd={addCampaign} onAddMany={addCampaigns} onRemove={removeCampaign} onClear={clearCampaigns} />
             </section>
 
             <section id="rgd-plan" className="h10-rb-sec">
               <h2>Your rank goal &amp; schedule</h2>
               <p className="h10-rb-desc">Hold this rank, on this schedule.</p>
-              <RankPlanBody ref={planRef} campaigns={selCampaigns} name={name} groupId={groupId ?? undefined} onStatus={setPlanStatus} />
+              <RankPlanBody ref={planRef} campaigns={selCampaigns} name={name} groupId={groupId ?? undefined} portfolioId={portfolioScope || undefined} onStatus={setPlanStatus} />
             </section>
 
             <section id="rgd-control" className="h10-rb-sec">

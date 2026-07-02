@@ -37,6 +37,14 @@
 .h10-rb-input::placeholder { color: #aeb6c2; }
 .h10-rb-input:focus { outline: 0; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.15); }
 
+/* Phase 5 — portfolio scope selector above the campaign picker */
+.h10-rb-pfscope { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
+.h10-rb-pfscope > label { font-size: 13px; font-weight: 600; color: #38414d; }
+.h10-rb-pfscope > label .opt { font-weight: 400; color: #8a93a1; }
+.h10-rb-pfscope select { height: 36px; border: 1px solid #d8dde4; border-radius: 8px; padding: 0 30px 0 11px; font: inherit; font-size: 13px; color: #1c2530; background: #fff; min-width: 260px; cursor: pointer; }
+.h10-rb-pfscope select:focus { outline: 0; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.15); }
+.h10-rb-pfscope .hint { font-size: 12.5px; color: #1f6fde; background: #eef4fd; border: 1px solid #d4e4fb; border-radius: 6px; padding: 5px 10px; }
+
 .h10-rb-card { border: 1px solid #e6e9ee; border-radius: 10px; background: #fff; }
 .h10-rb-card-h { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; }
 .h10-rb-card-h b { font-size: 15px; font-weight: 700; color: #1c2530; }
@@ -715,9 +723,12 @@
    name wrapper caps the column so a long name truncates (ellipsis) and the hover Manage button
    stays inside the column instead of spilling into the next one. (Table is table-layout:auto, so
    the cap must live on the content, not the cell's ignored max-width.) */
-.h10-am-grid td.nm .rg-namew { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 340px; }
+.h10-am-grid td.nm .rg-namecell { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; max-width: 340px; }
+.h10-am-grid td.nm .rg-namew { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
 .h10-am-grid td.nm .rg-namew .rg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-am-grid td.nm .rg-namew .h10-nt-open { flex-shrink: 0; }
+/* Phase 5 — portfolio-scoped schedules get a sublabel under the name. */
+.h10-am-grid td.nm .rg-pfbadge { max-width: 100%; font-size: 11px; font-weight: 600; color: #1f6fde; background: #eef4fd; border: 1px solid #d4e4fb; border-radius: 5px; padding: 1px 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Baseline chip — compact, read-only version of the builder's target chip (h10-rp-chip). */
 .h10-rg-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; font-size: 12px; font-weight: 600; color: #2b3440; background: #fff; border: 1px solid #d8dde4; border-radius: 999px; padding: 3px 9px; }
 .h10-rg-chip .sw { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }

@@ -17,7 +17,7 @@ import { NoDataIllus } from '../_shared/NoDataIllus'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface SchedWindow { targetKey?: string }
-interface RankRow { id: string; name: string; baseline: string; baselineKey: string; baselineColor: string | null; windows: number; campaigns: number; enabled: boolean }
+interface RankRow { id: string; name: string; baseline: string; baselineKey: string; baselineColor: string | null; windows: number; campaigns: number; enabled: boolean; portfolioId: string | null; portfolioName: string | null }
 type TargetMeta = { name: string; color: string | null }
 
 // Fallbacks used until /rank-targets resolves (built-in keys + the builder palette colors).
@@ -39,19 +39,25 @@ export function RankGoalsList() {
     let alive = true
     ;(async () => {
       try {
-        const [gj, tj] = await Promise.all([
+        const [gj, tj, pj] = await Promise.all([
           fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
           fetch(`${getBackendUrl()}/api/advertising/rank-targets`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
+          fetch(`${getBackendUrl()}/api/advertising/portfolios`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({})),
         ])
         // real target name + color (falls back to built-in palette for any missing key)
         const tmeta: Record<string, TargetMeta> = { ...FALLBACK }
         const titems = (Array.isArray(tj?.items) ? tj.items : Array.isArray(tj) ? tj : []) as Array<{ key?: string; name?: string; color?: string | null }>
         for (const t of titems) if (t.key) tmeta[t.key] = { name: String(t.name ?? t.key), color: t.color ?? null }
+        // portfolio id → name (the list returns { portfolios: [{ portfolioId, name }] })
+        const pmeta: Record<string, string> = {}
+        const praw = (pj?.portfolios ?? pj?.items ?? (Array.isArray(pj) ? pj : [])) as Array<{ portfolioId?: string | number; id?: string | number; name?: string }>
+        for (const p of Array.isArray(praw) ? praw : []) { const pid = String(p.portfolioId ?? p.id ?? ''); if (pid) pmeta[pid] = String(p.name ?? pid) }
         const groups = (Array.isArray(gj?.items) ? gj.items : Array.isArray(gj) ? gj : []) as Array<Record<string, unknown>>
         const mapped = groups.map((g): RankRow => {
           const key = String(g.defaultTargetKey ?? '')
           const meta = tmeta[key]
           const wins = Array.isArray(g.windows) ? (g.windows as SchedWindow[]) : []
+          const pid = g.portfolioId ? String(g.portfolioId) : null
           return {
             id: String(g.id),
             name: String(g.name ?? 'Rank schedule'),
@@ -61,6 +67,8 @@ export function RankGoalsList() {
             windows: wins.filter((w) => !!w?.targetKey).length,
             campaigns: Number(g.campaignCount ?? 0),
             enabled: g.enabled !== false,
+            portfolioId: pid,
+            portfolioName: pid ? (pmeta[pid] ?? pid) : null,
           }
         })
         if (alive) setRows(mapped)
@@ -110,9 +118,12 @@ export function RankGoalsList() {
   // Mirrors Ads Manager's first-column: a max-width name wrapper so a long name truncates with an
   // ellipsis and the hover Manage button stays inside the column (not spilling into the next one).
   const renderFirst = (r: RankRow) => (
-    <span className="rg-namew">
-      <a className="h10-nt-name rg-name" href={builderHref(r.id)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={r.name}>{r.name}</a>
-      <a className="h10-nt-open" href={builderHref(r.id)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Manage</a>
+    <span className="rg-namecell">
+      <span className="rg-namew">
+        <a className="h10-nt-name rg-name" href={builderHref(r.id)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={r.name}>{r.name}</a>
+        <a className="h10-nt-open" href={builderHref(r.id)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Manage</a>
+      </span>
+      {r.portfolioName && <span className="rg-pfbadge" title={`Portfolio schedule · ${r.portfolioName}`}>Portfolio · {r.portfolioName}</span>}
     </span>
   )
 
