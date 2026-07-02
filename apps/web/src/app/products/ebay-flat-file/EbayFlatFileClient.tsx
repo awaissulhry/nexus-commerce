@@ -1448,10 +1448,21 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           {addListingOpen && (
             <AddListingPopover
               categoryAxisNames={variantAxisNames}
+              existingParents={rows
+                .filter((r) => (r as EbayRow)._isParent === true)
+                .map((r) => ({
+                  id: String((r as EbayRow)._productId ?? (r as EbayRow).platformProductId ?? r._rowId),
+                  sku: String((r as EbayRow).sku ?? ''),
+                  variationTheme: (r as EbayRow).variation_theme
+                    ? String((r as EbayRow).variation_theme)
+                    : undefined,
+                }))}
               onConfirm={(newRows) => {
                 const next = pinBlankRowsLast([...rows, ...newRows])
                 pushHistory(next)
                 setRows(next)
+                // Note: no focus-set here — the grid exposes no clean imperative
+                // handle for jumping to a row by _rowId from outside the grid tree.
               }}
               onClose={() => setAddListingOpen(false)}
             />
