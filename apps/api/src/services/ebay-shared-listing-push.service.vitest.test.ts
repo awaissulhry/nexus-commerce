@@ -129,6 +129,10 @@ describe('createSharedListing', () => {
       { sku: 'SH-L', it_price: 90, it_qty: 2, aspect_Size: 'L' },  // no _productId, not in products
     ]
     await createSharedListing(parent, variantsNoId, { ...ctx0, db, addFixedPriceItemFn: addFn })
+    // Structural: memberships are written inside a single $transaction (one promise per variant).
+    // Guards against a regression that drops $transaction (create runs sync, so data asserts alone can't catch it).
+    expect(db.$transaction).toHaveBeenCalledTimes(1)
+    expect((db.$transaction as any).mock.calls[0][0]).toHaveLength(2)
     const bySkuM = db.created.find((m: any) => m.sku === 'SH-M')
     const bySkuL = db.created.find((m: any) => m.sku === 'SH-L')
     // productId resolved via SKU lookup for SH-M; null for SH-L (not in mock products)
