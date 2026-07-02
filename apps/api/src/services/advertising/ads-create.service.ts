@@ -512,3 +512,57 @@ export async function createNegativeKeywordCampaignLocal(input: { externalCampai
   await audit('create_negative_keyword', 'AD_TARGET', t.id, { keywordText: input.keywordText, matchType: input.matchType, scope: 'CAMPAIGN', externalTargetId: input.externalTargetId ?? null }, input.userId)
   return { id: t.id, created: true }
 }
+
+// ── Phase 3 — named rank-schedule groups (one named schedule spanning many campaigns) ──────────
+// A group is the authoring layer; saving it MATERIALIZES one AdSchedule row per member campaign
+// (which the rank-defend cron already runs — engine untouched). Rebinds any existing per-campaign
+// schedule to this group so a campaign is never double-scheduled (one campaign → one schedule row).
+export interface RankScheduleGroupInput {
+  id?: string; name: string; marketplace?: string | null; timezone?: string
+  windows: unknown[]; defaultTargetKey?: string | null
+  targetOverrides?: Record<string, unknown> // per-campaign map: { [campaignId]: { targetKey: {...} } }
+  enabled?: boolean; campaignIds: string[]; portfolioId?: string | null; userId?: string
+}
+export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Promise<{ id: string; members: number; moved: number }> {
+  const name = (input.name || '').trim()
+  if (!name) throw new Error('name is required')
+  const campaignIds = [...new Set((input.campaignIds || []).filter(Boolean))]
+  const windows = Array.isArray(input.windows) ? input.windows : []
+  const overrides = (input.targetOverrides ?? {}) as Record<string, unknown>
+  const enabled = input.enabled !== false
+  const tz = input.timezone || 'Europe/Rome'
+  const gdata = { name, marketplace: input.marketplace ?? null, timezone: tz, windows: windows as never, defaultTargetKey: input.defaultTargetKey ?? null, targetOverrides: overrides as never, enabled, portfolioId: input.portfolioId ?? null }
+  const group = input.id
+    ? await prisma.rankScheduleGroup.update({ where: { id: input.id }, data: gdata })
+    : await prisma.rankScheduleGroup.create({ data: { ...gdata, createdBy: input.userId ?? null } })
+
+  const camps = campaignIds.length ? await prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true } }) : []
+  const nameById = new Map(camps.map((c) => [c.id, c.name]))
+
+  // Materialize: one AdSchedule per member campaign, bound to the group. Reuse any existing schedule
+  // for the campaign (rebind to this group) so we never create a duplicate → one campaign, one row.
+  let moved = 0
+  for (const cid of campaignIds) {
+    const perCamp = overrides[cid]
+    const memberName = nameById.get(cid) ? `${nameById.get(cid)} — ${name}` : name
+    const data = { name: memberName, windows: windows as never, timezone: tz, defaultTargetKey: input.defaultTargetKey ?? null, targetOverrides: (perCamp ?? {}) as never, enabled }
+    const existing = await prisma.adSchedule.findFirst({ where: { campaignId: cid }, select: { id: true, groupId: true } })
+    if (existing) {
+      if (existing.groupId && existing.groupId !== group.id) moved++
+      await prisma.adSchedule.update({ where: { id: existing.id }, data: { ...data, groupId: group.id } })
+    } else {
+      await prisma.adSchedule.create({ data: { ...data, campaignId: cid, groupId: group.id } })
+    }
+  }
+  // Campaigns removed from the group → drop their (now-orphaned) execution rows.
+  await prisma.adSchedule.deleteMany({ where: { groupId: group.id, campaignId: { notIn: campaignIds.length ? campaignIds : ['__none__'] } } })
+  logger.info('[Phase3] saveRankScheduleGroup', { id: group.id, name, members: campaignIds.length, moved })
+  return { id: group.id, members: campaignIds.length, moved }
+}
+
+export async function deleteRankScheduleGroup(id: string): Promise<{ ok: boolean; removedSchedules: number }> {
+  const del = await prisma.adSchedule.deleteMany({ where: { groupId: id } })
+  await prisma.rankScheduleGroup.delete({ where: { id } }).catch(() => {})
+  logger.info('[Phase3] deleteRankScheduleGroup', { id, removedSchedules: del.count })
+  return { ok: true, removedSchedules: del.count }
+}

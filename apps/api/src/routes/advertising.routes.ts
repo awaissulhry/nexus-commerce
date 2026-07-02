@@ -5771,6 +5771,54 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return await prisma.rankTarget.update({ where: { id }, data: { name: d.name, placement: d.placement, targetISPct: d.targetISPct ?? null, acosCapPct: d.acosCapPct ?? null, maxCpcCents: d.maxCpcCents ?? null, biasPct: d.biasPct ?? null, jumpStartPct: (d.jumpStartPct as number | null) ?? null, stepUpPct: (d.stepUpPct as number | null) ?? null, stepDownPct: (d.stepDownPct as number | null) ?? null, maxBiasPct: (d.maxBiasPct as number | null) ?? null, keepClimbing: !!d.keepClimbing, color: d.color ?? null, pause: !!d.pause, allOut: !!d.allOut, lanes: [], bidMode: null, bidValueCents: null, bidDeltaPct: null } as never })
   })
 
+  // ── Phase 3 — named rank-schedule GROUPS (one named schedule spanning many campaigns). The group
+  // is the authoring/management layer; member AdSchedule rows (materialized on save) are the
+  // per-campaign execution layer the rank-defend cron already runs (engine untouched). ──
+  fastify.get('/advertising/rank-schedule-groups', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=5')
+    const groups = await prisma.rankScheduleGroup.findMany({ orderBy: { name: 'asc' } })
+    const counts = await prisma.adSchedule.groupBy({ by: ['groupId'], _count: { _all: true }, where: { groupId: { not: null } } })
+    const byGroup = new Map(counts.map((c) => [c.groupId as string, c._count._all]))
+    return { items: groups.map((g) => ({ ...g, campaignCount: byGroup.get(g.id) ?? 0 })), count: groups.length }
+  })
+  fastify.get('/advertising/rank-schedule-groups/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const group = await prisma.rankScheduleGroup.findUnique({ where: { id } })
+    if (!group) { reply.status(404); return { error: 'not found' } }
+    const members = await prisma.adSchedule.findMany({ where: { groupId: id }, select: { id: true, campaignId: true, name: true, enabled: true } })
+    return { ...group, members, campaignIds: members.map((m) => m.campaignId) }
+  })
+  fastify.post('/advertising/rank-schedule-groups', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.name || !String(b.name).trim()) { reply.status(400); return { error: 'name is required' } }
+    if (!Array.isArray(b?.campaignIds)) { reply.status(400); return { error: 'campaignIds[] required' } }
+    const { saveRankScheduleGroup } = await import('../services/advertising/ads-create.service.js')
+    try { return await saveRankScheduleGroup(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+  fastify.patch('/advertising/rank-schedule-groups/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as Record<string, unknown>
+    // Lightweight PATCH (e.g. bulk enable/pause) — no campaignIds → just update group fields + members' enabled.
+    if (!Array.isArray(b?.campaignIds)) {
+      const data: Record<string, unknown> = {}
+      for (const k of ['name', 'windows', 'defaultTargetKey', 'targetOverrides', 'enabled', 'marketplace', 'portfolioId', 'timezone']) if (b[k] !== undefined) data[k] = b[k]
+      if (!Object.keys(data).length) { reply.status(400); return { error: 'nothing to update' } }
+      try {
+        const g = await prisma.rankScheduleGroup.update({ where: { id }, data })
+        if (b.enabled !== undefined) await prisma.adSchedule.updateMany({ where: { groupId: id }, data: { enabled: !!b.enabled } })
+        return g
+      } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    }
+    if (b.name !== undefined && !String(b.name).trim()) { reply.status(400); return { error: 'name is required' } }
+    const { saveRankScheduleGroup } = await import('../services/advertising/ads-create.service.js')
+    try { return await saveRankScheduleGroup({ ...(b as Record<string, unknown>), id } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+  fastify.delete('/advertising/rank-schedule-groups/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { deleteRankScheduleGroup } = await import('../services/advertising/ads-create.service.js')
+    try { return await deleteRankScheduleGroup(id) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── RTPL — named rank-SCHEDULE templates (account-global; Save/Load a painted schedule) ──
   fastify.get('/advertising/rank-templates', async (_request, reply) => {
     reply.header('Cache-Control', 'private, max-age=10')
