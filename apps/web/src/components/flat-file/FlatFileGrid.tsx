@@ -1471,11 +1471,16 @@ export default function FlatFileGrid({
   // the clicked box's new checked state to every row between the anchor and it
   // (inclusive), in displayed order — matching Gmail/Airtable range-select.
   const toggleRowSelection = useCallback((ri: number, rowId: string, checked: boolean, shiftKey: boolean) => {
+    // Snapshot the anchor BEFORE it's overwritten below. setSelectedRows defers
+    // its updater to React's render phase, so reading lastCheckedRef.current
+    // inside the updater would see the just-assigned `ri` (line at end) and the
+    // range guard would always be false — the reason shift-range never worked.
+    const anchor = lastCheckedRef.current
     setSelectedRows((prev) => {
       const next = new Set(prev)
-      if (shiftKey && lastCheckedRef.current !== null && lastCheckedRef.current !== ri) {
-        const lo = Math.min(lastCheckedRef.current, ri)
-        const hi = Math.max(lastCheckedRef.current, ri)
+      if (shiftKey && anchor !== null && anchor !== ri) {
+        const lo = Math.min(anchor, ri)
+        const hi = Math.max(anchor, ri)
         const rows = displayRowsRef.current
         for (let i = lo; i <= hi; i++) {
           const r = rows[i]
