@@ -108,8 +108,8 @@ export function RankGoalsList() {
   // ellipsis and the hover Manage button stays inside the column (not spilling into the next one).
   const renderFirst = (r: RankRow) => (
     <span className="rg-namew">
-      <a className="h10-nt-name rg-name" href={builderHref(r.id)} onClick={(e) => e.stopPropagation()} title={r.name}>{r.name}</a>
-      <a className="h10-nt-open" href={builderHref(r.id)} onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Manage</a>
+      <a className="h10-nt-name rg-name" href={builderHref(r.id)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={r.name}>{r.name}</a>
+      <a className="h10-nt-open" href={builderHref(r.id)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Manage</a>
     </span>
   )
 

@@ -14,8 +14,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X, Video } from 'lucide-react'
 import { ScheduleBuilder } from '../_schedule/ScheduleBuilder'
-import { CampaignSection, type SchedCampaign } from '../_schedule/CampaignSection'
+import { CampaignSection, toCampaign, type SchedCampaign } from '../_schedule/CampaignSection'
 import { RankPlanBody, type RankPlanHandle, type RankPlanStatus } from './RankPlanBody'
+import { getBackendUrl } from '@/lib/backend-url'
 
 // Adtomic-style atom mark — same glyph the other builders use in the top bar.
 function AtomMark({ size = 20 }: { size?: number }) {
@@ -68,6 +69,31 @@ export function RankGoalBuilder() {
   const addCampaigns = (cs: SchedCampaign[]) => setSelCampaigns((cur) => { const have = new Set(cur.map((x) => x.id)); return [...cur, ...cs.filter((c) => !have.has(c.id))] })
   const removeCampaign = (id: string) => setSelCampaigns((cur) => cur.filter((c) => c.id !== id))
   const clearCampaigns = () => setSelCampaigns([])
+
+  // Edit mode: ?scheduleId opens an existing rank goal — load its name + campaign so the builder
+  // repopulates (was blank before, forcing you to re-add the campaign). RankPlanBody then loads the
+  // windows/baseline/overrides for the now-selected campaign. (Phase 3 will load the whole group.)
+  useEffect(() => {
+    if (!scheduleId) return
+    let alive = true
+    ;(async () => {
+      try {
+        const [sj, cj] = await Promise.all([
+          fetch(`${getBackendUrl()}/api/advertising/schedules`, { cache: 'no-store' }).then((r) => r.json()).catch(() => []),
+          fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`).then((r) => r.json()).catch(() => ({ items: [] })),
+        ])
+        if (!alive) return
+        const scheds = (Array.isArray(sj) ? sj : Array.isArray(sj?.items) ? sj.items : []) as Array<Record<string, unknown>>
+        const sched = scheds.find((s) => String(s.id) === scheduleId)
+        if (!sched) return
+        if (sched.name) setName(String(sched.name))
+        const camps = (Array.isArray(cj?.items) ? cj.items : Array.isArray(cj) ? cj : []) as Array<Record<string, unknown>>
+        const camp = camps.find((c) => String(c.id) === String(sched.campaignId))
+        if (camp) setSelCampaigns([toCampaign(camp)])
+      } catch { /* fail soft */ }
+    })()
+    return () => { alive = false }
+  }, [scheduleId])
 
   // RGD.7 — the builder owns ONE action + a Manual/Automate Control section, matching every other
   // rule type. The rank plan body exposes save(enabled) via a ref + reports its status up.

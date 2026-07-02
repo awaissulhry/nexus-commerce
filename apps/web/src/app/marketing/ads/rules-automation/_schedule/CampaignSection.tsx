@@ -21,7 +21,7 @@ const prodShort = (it: { type?: string | null; adProduct?: string | null }): str
   if (a.includes('DISPLAY')) return 'SD'
   return 'SP'
 }
-const toCampaign = (it: Record<string, unknown>): SchedCampaign => ({
+export const toCampaign = (it: Record<string, unknown>): SchedCampaign => ({
   id: String(it.id),
   name: String(it.name ?? ''),
   marketplace: (it.marketplace as string) ?? null,
