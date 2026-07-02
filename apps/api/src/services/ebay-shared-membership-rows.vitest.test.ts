@@ -118,6 +118,38 @@ describe('synthesizeSharedRow', () => {
     expect(row.fr_price).toBe(50)
     expect(row.fr_qty).toBe(2)
   })
+
+  it('C1: sets a unique _rowId (shared::<itemId>::<sku>) distinct from the child base row _rowId', () => {
+    const childBaseRow: Record<string, unknown> = {
+      sku: 'C', _rowId: 'prod-C', _productId: 'prod-C', it_price: 100, title: 'Jacket',
+    }
+    const row = synthesizeSharedRow({
+      membership: {
+        sku: 'C', itemId: '110', marketplace: 'IT',
+        price: null, lastQtyPushed: null, variationSpecifics: {}, productId: 'prod-C',
+      },
+      childBaseRow,
+      parentProductId: 'pid-P',
+    })
+    expect(row._rowId).toBe('shared::110::C')
+    // MUST differ from the child's natural row _rowId (no duplicate React key / selection clash)
+    expect(row._rowId).not.toBe(childBaseRow._rowId)
+    // _productId stays the real child id for downstream resolution
+    expect(row._productId).toBe('prod-C')
+  })
+
+  it('C1: seeds _productId from membership.productId when childBaseRow is null', () => {
+    const row = synthesizeSharedRow({
+      membership: {
+        sku: 'Z', itemId: '777', marketplace: 'FR',
+        price: 50, lastQtyPushed: 2, variationSpecifics: {}, productId: 'child-prod-Z',
+      },
+      childBaseRow: null,
+      parentProductId: 'pid-R',
+    })
+    expect(row._rowId).toBe('shared::777::Z')
+    expect(row._productId).toBe('child-prod-Z')
+  })
 })
 
 // ── loadSharedMembershipRows ──────────────────────────────────────────────────
@@ -278,5 +310,46 @@ describe('loadSharedMembershipRows', () => {
 
     // Second entry for the same key should be dropped
     expect(result).toHaveLength(1)
+  })
+
+  it('C1/integration: synthesized rows get a UNIQUE _rowId vs normal rows AND are push-filterable', async () => {
+    // child-1 is a NORMAL row under parent-A (buildFlatRow → _rowId = child product id)
+    // AND a membership under parent-B → the synthesized row must not collide on _rowId.
+    const parentRows: Record<string, unknown>[] = [
+      { sku: 'parent-A', _isParent: true, _productId: 'prod-A' },
+      { sku: 'parent-B', _isParent: true, _productId: 'prod-B' },
+    ]
+    const normalRows: Record<string, unknown>[] = [
+      { sku: 'child-1', _rowId: 'child-prod-1', _productId: 'child-prod-1', platformProductId: 'prod-A', _isParent: false },
+    ]
+
+    const mockMembership = {
+      sku: 'child-1', itemId: 'item-111', marketplace: 'IT', parentSku: 'parent-B',
+      productId: 'child-prod-1', variationSpecifics: { Colore: 'Nero' }, price: null, lastQtyPushed: 3,
+    }
+    const mockChildProduct = {
+      id: 'child-prod-1', sku: 'child-1', name: 'Child', ean: null, parentId: 'prod-A',
+      brand: null, variationTheme: null, categoryAttributes: null, variantAttributes: null, images: [], channelListings: [],
+    }
+    const mockPrisma = {
+      sharedListingMembership: { findMany: vi.fn().mockResolvedValue([mockMembership]) },
+      product: { findMany: vi.fn().mockResolvedValue([mockChildProduct]) },
+    }
+
+    const synth = await loadSharedMembershipRows(mockPrisma as any, parentRows, normalRows)
+    expect(synth).toHaveLength(1)
+
+    const allRows = [...normalRows, ...synth]
+    // (a) every _rowId (normal + synthesized) is unique — no collision
+    const rowIds = allRows.map(r => r._rowId)
+    expect(new Set(rowIds).size).toBe(rowIds.length)
+    expect(synth[0]._rowId).toBe('shared::item-111::child-1')
+    expect(synth[0]._rowId).not.toBe(normalRows[0]._rowId)
+
+    // (b) a `!_readonly && !_shared` push filter excludes the synthesized VIEW row
+    const pushable = allRows.filter(r => !(r as Record<string, unknown>)._readonly && !(r as Record<string, unknown>)._shared)
+    expect(pushable).toHaveLength(1)
+    expect(pushable[0].sku).toBe('child-1')
+    expect(pushable[0]._rowId).toBe('child-prod-1')
   })
 })

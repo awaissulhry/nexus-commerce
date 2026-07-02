@@ -236,17 +236,43 @@ export function planEbayFamilyCreates(input: {
     if (!sku) continue
     skuCounts.set(sku, (skuCounts.get(sku) ?? 0) + 1)
   }
+  // Family key of a row — same precedence the client's isSharedDuplicateAllowed uses.
+  const familyKeyOf = (row: EbayRow) =>
+    String(row.platformProductId ?? row._productId ?? row._rowId ?? '')
   const dupedSkus = new Set<string>()
+  // Shared-allowed duplicates are NOT errors — they COLLAPSE to a single create (one
+  // unique-SKU Product); the extra shared parents receive the child via
+  // SharedListingMembership fan-out, so the Product must still be created here.
+  const collapsedSkus = new Set<string>()
   for (const [sku, count] of skuCounts) {
-    if (count >= 2) {
+    if (count < 2) continue
+    // I3: mirror isSharedDuplicateAllowed — shared-allowed iff the occurrences span
+    // >=2 DISTINCT family keys AND every such key is a shared family.
+    const familyKeys = new Set(
+      rows
+        .filter(r => String(r.sku ?? '').trim() === sku)
+        .map(familyKeyOf)
+        .filter(Boolean),
+    )
+    const sharedAllowed = familyKeys.size >= 2 && [...familyKeys].every(k => sharedFamilyKeys.has(k))
+    if (sharedAllowed) {
+      collapsedSkus.add(sku)
+    } else {
       dupedSkus.add(sku)
       errors.push({ sku, reason: 'duplicate SKU in payload' })
     }
   }
-  // Rows with a duped SKU are excluded from all further processing
+  // Rows with a (non-shared) duped SKU are excluded from all further processing.
+  // For a shared-allowed duplicate keep exactly ONE occurrence (the first) and drop the rest.
+  const keptCollapsed = new Set<string>()
   const validRows = rows.filter(row => {
     const sku = String(row.sku ?? '').trim()
-    return sku !== '' && !dupedSkus.has(sku)
+    if (sku === '' || dupedSkus.has(sku)) return false
+    if (collapsedSkus.has(sku)) {
+      if (keptCollapsed.has(sku)) return false
+      keptCollapsed.add(sku)
+    }
+    return true
   })
 
   // ── Step 2 + 4: First pass — collect parentCreates ──────────────────

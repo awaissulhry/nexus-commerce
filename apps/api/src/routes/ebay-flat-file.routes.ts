@@ -791,6 +791,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     // Group rows by family (platformProductId). Rows without one are their own family.
     const families = new Map<string, typeof rows>();
     for (const row of rows) {
+      // C2 (defensive) — synthesized shared-membership rows (_shared) are read-only VIEW
+      // rows, never a push source; skip them so they can't create a phantom listing even
+      // if the client filter is bypassed.
+      if (row._shared === true) continue;
       const key = (row.platformProductId as string | undefined) ?? (row.sku as string);
       if (!families.has(key)) families.set(key, []);
       families.get(key)!.push(row);

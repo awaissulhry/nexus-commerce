@@ -3,6 +3,13 @@ import type { AddFixedPriceItemInput, TradingVariation } from './ebay-trading-ap
 export type SharedRow = Record<string, unknown>
 export type CapQtyFn = (productId: string | undefined, sku: string, requested: number, market?: string) => number
 
+// I4 — a shared variation carries a NULLABLE price so a genuinely-absent per-listing
+// price yields `null` (→ membership.price NULL → synthesis falls back to the child base
+// price) instead of a coerced 0. createSharedListing rejects any null/≤0 price before it
+// ever reaches the eBay push, so a persisted membership always has a real positive price.
+export type SharedVariation = Omit<TradingVariation, 'price'> & { price: number | null }
+export type SharedListingInput = Omit<AddFixedPriceItemInput, 'variations'> & { variations: SharedVariation[] }
+
 const CURRENCY_BY_MARKET: Record<string, string> = { IT: 'EUR', DE: 'EUR', FR: 'EUR', ES: 'EUR', UK: 'GBP' }
 
 function str(v: unknown): string { return v == null ? '' : String(v) }
@@ -13,7 +20,7 @@ export function buildSharedListingInput(
   variantRows: SharedRow[],
   market: string,
   capQty?: CapQtyFn,
-): AddFixedPriceItemInput {
+): SharedListingInput {
   const mkt = market.toUpperCase()
   const prefix = mkt.toLowerCase()
 
@@ -57,7 +64,13 @@ export function buildSharedListingInput(
       const val = rowKeyLower.get(lowerKey) ?? ''
       if (val) specifics[name] = val
     }
-    return { sku, price: num(row[`${prefix}_price`] ?? row.price), quantity, specifics }
+    // I4 — only treat a price as present when the selected field actually carries a
+    // non-blank value. num() coerces missing/blank → 0, which (a) defeats the "fall back
+    // to the child price" path in synthesis and (b) would silently persist a €0 listing.
+    const rawPrice = row[`${prefix}_price`] ?? row.price
+    const priceStr = rawPrice == null ? '' : String(rawPrice).trim()
+    const price = priceStr === '' ? null : num(priceStr)
+    return { sku, price, quantity, specifics }
   })
 
   const src = parentRow ?? variantRows[0] ?? {}
@@ -129,7 +142,15 @@ export async function createSharedListing(
     }
 
     const input = buildSharedListingInput(parentRow, variantRows, market, ctx.capQty)
-    const { itemId } = await addFn(input, { oauthToken: ctx.oauthToken, market })
+
+    // I4 — reject BEFORE the eBay push (mirrors the single-SKU path's price>0 guard) so a
+    // 0/undefined-price listing is never created and no Decimal(0) membership is persisted.
+    if (input.variations.some((v) => v.price == null || v.price <= 0)) {
+      return { status: 'ERROR', parentSku, market, memberships: 0, message: 'missing/invalid price for one or more shared variants' }
+    }
+
+    // All variant prices validated as positive numbers above — safe to widen for addFn.
+    const { itemId } = await addFn(input as AddFixedPriceItemInput, { oauthToken: ctx.oauthToken, market })
 
     // Build a SKU→productId map so writeback is correct even if the mapper filters/reorders variations.
     const productIdBySku = new Map<string, string | undefined>()

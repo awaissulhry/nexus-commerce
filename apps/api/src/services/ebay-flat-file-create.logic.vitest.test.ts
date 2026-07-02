@@ -429,4 +429,50 @@ describe('planEbayFamilyCreates', () => {
     expect(result.reparents[0]).toEqual({ productId: 'idC1', sku: 'C1', newParentId: 'B' })
     expect(result.warnings).toHaveLength(0)
   })
+
+  // ── I3: shared-aware create dedup ─────────────────────────────────────
+  it('I3: same NEW child SKU under two SHARED parents → exactly ONE create, NO duplicate-SKU error', () => {
+    const parentA = { sku: 'PARENT-A', _rowId: 'pa', _isParent: true, platformProductId: 'pa', variation_theme: 'Colore' }
+    const parentB = { sku: 'PARENT-B', _rowId: 'pb', _isParent: true, platformProductId: 'pb', variation_theme: 'Colore' }
+    const childUnderA = { sku: 'SHARED-CHILD', _rowId: 'ca', platformProductId: 'pa', aspect_Colore: 'Nero' }
+    const childUnderB = { sku: 'SHARED-CHILD', _rowId: 'cb', platformProductId: 'pb', aspect_Colore: 'Nero' }
+
+    const result = planEbayFamilyCreates({
+      rows: [parentA, parentB, childUnderA, childUnderB],
+      existingBySku: new Map(),
+      existingParentById: new Map(),
+      // Both family keys are shared (server derives these from shared_sku_listing parents)
+      sharedFamilyKeys: new Set(['pa', 'pb']),
+    })
+
+    // No duplicate-SKU error for the shared child
+    expect(result.errors.filter(e => e.reason === 'duplicate SKU in payload')).toHaveLength(0)
+    // Collapsed to exactly ONE create for SHARED-CHILD (membership fan-out serves parent-B)
+    const childCreatesForSku = result.childCreates.filter(c => c.sku === 'SHARED-CHILD')
+    expect(childCreatesForSku).toHaveLength(1)
+    // The single create keeps the FIRST occurrence → under parent-A
+    expect(childCreatesForSku[0].parentRef).toEqual({ kind: 'temp', tempRowId: 'pa' })
+    // Both parents still created
+    expect(result.parentCreates).toHaveLength(2)
+  })
+
+  it('I3 CONTROL: same NEW child SKU under two NON-shared parents → still ONE duplicate-SKU error, both dropped', () => {
+    const parentA = { sku: 'PARENT-A', _rowId: 'pa', _isParent: true, platformProductId: 'pa', variation_theme: 'Colore' }
+    const parentB = { sku: 'PARENT-B', _rowId: 'pb', _isParent: true, platformProductId: 'pb', variation_theme: 'Colore' }
+    const childUnderA = { sku: 'DUP-CHILD', _rowId: 'ca', platformProductId: 'pa', aspect_Colore: 'Nero' }
+    const childUnderB = { sku: 'DUP-CHILD', _rowId: 'cb', platformProductId: 'pb', aspect_Colore: 'Nero' }
+
+    const result = planEbayFamilyCreates({
+      rows: [parentA, parentB, childUnderA, childUnderB],
+      existingBySku: new Map(),
+      existingParentById: new Map(),
+      // sharedFamilyKeys omitted → neither family is shared → real duplicate
+    })
+
+    const dupErrors = result.errors.filter(e => e.reason === 'duplicate SKU in payload')
+    expect(dupErrors).toHaveLength(1)
+    expect(dupErrors[0].sku).toBe('DUP-CHILD')
+    // Both occurrences dropped — no child create for the duped SKU
+    expect(result.childCreates.filter(c => c.sku === 'DUP-CHILD')).toHaveLength(0)
+  })
 })

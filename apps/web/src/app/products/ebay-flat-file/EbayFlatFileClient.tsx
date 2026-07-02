@@ -721,9 +721,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── API: push to eBay ─────────────────────────────────────────────────
 
   async function pushToEbay(rows: BaseRow[], selectedRows: Set<string>) {
-    const toPush = selectedRows.size > 0
+    const toPush = (selectedRows.size > 0
       ? rows.filter((r) => selectedRows.has(r._rowId))
-      : rows.filter((r) => r._dirty)
+      : rows.filter((r) => r._dirty))
+      // C2 — synthesized shared-membership rows are read-only VIEW rows; never a push
+      // source (they'd create a phantom Inventory-API listing). Mirror the grid's edit block.
+      .filter((r) => !(r as EbayRow)._readonly && !(r as EbayRow)._shared)
     if (!toPush.length) { toast({ title: 'Nothing to push', tone: 'info' }); return }
 
     // G.1 — hard-block structural errors (duplicate SKU, orphan variant, oversized
@@ -792,9 +795,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   }
 
   async function quickUpdateToEbay(rows: BaseRow[], selectedRows: Set<string>) {
-    const toPush = selectedRows.size > 0
+    const toPush = (selectedRows.size > 0
       ? rows.filter((r) => selectedRows.has(r._rowId))
-      : rows.filter((r) => r._dirty)
+      : rows.filter((r) => r._dirty))
+      // C2 — exclude synthesized shared-membership VIEW rows from offer-only updates too.
+      .filter((r) => !(r as EbayRow)._readonly && !(r as EbayRow)._shared)
     if (!toPush.length) { toast({ title: 'Nothing to update', tone: 'info' }); return }
     const dirty = rows.filter((r) => r._dirty)
     if (dirty.length > 0) {

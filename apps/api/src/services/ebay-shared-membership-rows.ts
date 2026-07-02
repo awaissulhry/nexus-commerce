@@ -23,8 +23,10 @@ export function reverseVariationSpecifics(
 ): Record<string, string> {
   const out: Record<string, string> = {}
   for (const [name, val] of Object.entries(specifics)) {
-    out[`aspect_${name.replace(/ /g, '_')}`] = val
-    out[`aspect_${name.toLowerCase().replace(/ /g, '_')}`] = val
+    // M6 — collapse ANY whitespace run (not just single spaces) so the keys
+    // truly mirror buildFlatRow:1450-1451 / readAspectValue's `/\s+/g`.
+    out[`aspect_${name.replace(/\s+/g, '_')}`] = val
+    out[`aspect_${name.toLowerCase().replace(/\s+/g, '_')}`] = val
   }
   return out
 }
@@ -47,6 +49,8 @@ export function synthesizeSharedRow(opts: {
     price: number | null
     lastQtyPushed: number | null
     variationSpecifics: Record<string, string>
+    /** Real child product id — used to seed _productId when there's no base row. */
+    productId?: string | null
   }
   childBaseRow: Record<string, unknown> | null
   parentProductId: string
@@ -56,6 +60,13 @@ export function synthesizeSharedRow(opts: {
   const base: Record<string, unknown> = childBaseRow ? { ...childBaseRow } : { sku: m.sku }
   return {
     ...base,
+    // C1 — synthesized rows MUST NOT collide with the child's own natural row on
+    // _rowId (buildFlatRow sets _rowId = product.id). A unique, stable id keeps
+    // React keys, selection, and paste-map targeting isolated from the real row.
+    _rowId: `shared::${m.itemId}::${m.sku}`,
+    // Keep _productId = the real child id for downstream resolution. buildFlatRow
+    // already put it on `base`; when there's no base row, seed it from the membership.
+    ...(childBaseRow ? {} : { _productId: m.productId ?? undefined }),
     _shared: true,
     _readonly: true,
     _isParent: false,
@@ -202,6 +213,7 @@ export async function loadSharedMembershipRows(
           price,
           lastQtyPushed: m.lastQtyPushed,
           variationSpecifics: (m.variationSpecifics as Record<string, string>) ?? {},
+          productId: m.productId,
         },
         childBaseRow,
         parentProductId,

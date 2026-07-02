@@ -65,6 +65,18 @@ describe('buildSharedListingInput', () => {
     expect(result.variationSpecificNames).toContain('Colore')
     expect(result.variationSpecificNames).not.toContain('colore')
   })
+
+  it('I4: a variant with NO price field → price null (not coerced to 0)', () => {
+    const noPrice = [{ sku: 'NP-M', it_qty: 5, aspect_Size: 'M', _productId: 'p1' }]
+    expect(buildSharedListingInput(parent, noPrice, 'IT').variations[0].price).toBeNull()
+  })
+  it('I4: a blank price string → price null', () => {
+    const blank = [{ sku: 'NP-M', it_price: '', it_qty: 5, aspect_Size: 'M', _productId: 'p1' }]
+    expect(buildSharedListingInput(parent, blank, 'IT').variations[0].price).toBeNull()
+  })
+  it('I4: an explicit price → parsed number', () => {
+    expect(buildSharedListingInput(parent, variants, 'IT').variations[0].price).toBe(49.9)
+  })
 })
 
 function mockDb(existing: unknown = null, products: { id: string; sku: string }[] = []) {
@@ -150,6 +162,39 @@ describe('createSharedListing', () => {
     expect(res.status).toBe('ERROR')
     expect(res.message).toMatch(/Bad category/)
     expect(db.created).toHaveLength(0)
+  })
+
+  it('I4: rejects (ERROR) a null/absent price BEFORE the eBay push — no Decimal(0) membership', async () => {
+    const db = mockDb(null)
+    const addFn = vi.fn(async () => ({ itemId: 'SHOULD-NOT-BE-CALLED' }))
+    const noPriceVariants = [
+      { sku: 'NP-M', it_qty: 5, aspect_Size: 'M', _productId: 'p1' },        // missing price
+      { sku: 'NP-L', it_price: 10, it_qty: 3, aspect_Size: 'L', _productId: 'p2' },
+    ]
+    const res = await createSharedListing(parent, noPriceVariants, { ...ctx0, db, addFixedPriceItemFn: addFn })
+    expect(res.status).toBe('ERROR')
+    expect(res.message).toMatch(/price/i)
+    expect(addFn).not.toHaveBeenCalled()   // rejected before touching eBay
+    expect(db.created).toHaveLength(0)      // nothing persisted (no Decimal(0) membership)
+  })
+
+  it('I4: rejects a non-positive (0) price', async () => {
+    const db = mockDb(null)
+    const addFn = vi.fn(async () => ({ itemId: 'X' }))
+    const zeroPrice = [{ sku: 'Z-M', it_price: 0, it_qty: 1, aspect_Size: 'M', _productId: 'p1' }]
+    const res = await createSharedListing(parent, zeroPrice, { ...ctx0, db, addFixedPriceItemFn: addFn })
+    expect(res.status).toBe('ERROR')
+    expect(addFn).not.toHaveBeenCalled()
+    expect(db.created).toHaveLength(0)
+  })
+
+  it('I4: a variant WITH a price is stored as a Prisma.Decimal', async () => {
+    const db = mockDb(null)
+    const addFn = vi.fn(async () => ({ itemId: '424242' }))
+    const res = await createSharedListing(parent, variants, { ...ctx0, db, addFixedPriceItemFn: addFn })
+    expect(res.status).toBe('CREATED')
+    const m = db.created.find((x: any) => x.sku === 'LNR-BLK-M')
+    expect(m.price).toEqual(new Prisma.Decimal(49.9))
   })
 })
 
