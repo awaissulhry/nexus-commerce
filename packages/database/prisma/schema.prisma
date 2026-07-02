@@ -12910,9 +12910,36 @@ model AdSchedule {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   createdBy       String?
+  // Phase 2 (rank-schedule groups) — binds this execution row to a named RankScheduleGroup so one
+  // named schedule can span many campaigns. The rank-defend cron still reads per-campaign rows;
+  // groupId is metadata for the management/authoring layer only (cron untouched).
+  groupId         String?
+  group           RankScheduleGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
   @@index([campaignId])
   @@index([enabled])
+  @@index([groupId])
+}
+
+// Phase 2 — named rank-schedule group: the management/authoring layer over a set of campaigns.
+// One group = one row in the Dayparting Schedules list; its member AdSchedule rows (via groupId)
+// remain the per-campaign execution layer the rank-defend cron already runs (engine untouched).
+model RankScheduleGroup {
+  id               String       @id @default(cuid())
+  name             String // compulsory (validated at the API/UI layer, Phase 3)
+  marketplace      String?
+  timezone         String       @default("Europe/Rome")
+  windows          Json         @default("[]") // canonical windows (authoring source of truth)
+  defaultTargetKey String? // canonical baseline RankTarget.key
+  targetOverrides  Json         @default("{}") // per-campaign overrides { campaignId: { targetKey: {...} } }
+  portfolioId      String? // Phase 5 — portfolio-scoped group (auto-includes the portfolio's campaigns)
+  enabled          Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  createdBy        String?
+  schedules        AdSchedule[]
+
+  @@index([marketplace])
 }
 
 // BS — Budget Schedule (Helium 10 "Budget Schedules" tab). An hourly/daily schedule that
