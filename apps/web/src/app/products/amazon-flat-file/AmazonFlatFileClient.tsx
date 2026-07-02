@@ -13,7 +13,7 @@ import {
   Activity, AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, Globe, History, Image as ImageIcon, Keyboard, Loader2, Pin, Plus, RefreshCw, RotateCcw,
   Search, Send, Trash2, Upload, X, ArrowRightLeft,
-  Undo2, Redo2, GripVertical, Wand2,
+  Undo2, Redo2, GripVertical, Wand2, Layers,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { evaluateRule, TONE_CLASSES, type ConditionalRule } from '@/app/_shared/bulk-edit/conditional-format'
@@ -2837,6 +2837,22 @@ export default function AmazonFlatFileClient({
     setSelectedRows(new Set())
   }, [selectedRows])
 
+  // P3 — open the Create-Group popover for the current selection (checkbox Set ∪
+  // drag-range), so grouping works from ticked checkboxes, not only a range.
+  const groupFromSelection = useCallback(() => {
+    setContextMenu(null)
+    const ids = new Set<string>(selectedRows)
+    if (normSel) for (const r of displayRowsRef.current.slice(normSel.rMin, normSel.rMax + 1)) ids.add(r._rowId as string)
+    const skus: string[] = []
+    const seen = new Set<string>()
+    for (const r of rows) {
+      if (r._ghost || !ids.has(r._rowId as string)) continue
+      const sku = String(r.item_sku ?? '')
+      if (sku && !seen.has(sku)) { seen.add(sku); skus.push(sku) }
+    }
+    if (skus.length) setGroupCreate({ skus })
+  }, [selectedRows, normSel, rows])
+
   // MT.5 — bulk-set the category for the selected rows (build a mixed sheet fast).
   const bulkSetProductType = useCallback((t: string) => {
     const T = t.toUpperCase()
@@ -5286,6 +5302,12 @@ export default function AmazonFlatFileClient({
                       </select>
                     )}
                     {selectedRows.size > 0 && (
+                      <Button size="sm" variant="ghost" onClick={groupFromSelection} className="ml-2"
+                        title={`Create a custom group from the ${selectedRows.size} selected row(s)`}>
+                        <Layers className="w-3.5 h-3.5 mr-1" />Group {selectedRows.size}…
+                      </Button>
+                    )}
+                    {selectedRows.size > 0 && (
                       <Button size="sm" variant="ghost" onClick={deleteSelected}
                         className="text-red-500 hover:text-red-700 ml-2">
                         <Trash2 className="w-3.5 h-3.5 mr-1" />Delete {selectedRows.size}
@@ -5712,7 +5734,7 @@ export default function AmazonFlatFileClient({
           y={contextMenu.y}
           canPaste={true}
           hasSelection={!!normSel}
-          selRowCount={normSel ? normSel.rMax - normSel.rMin + 1 : 0}
+          selRowCount={Math.max(selectedRows.size, normSel ? normSel.rMax - normSel.rMin + 1 : 0)}
           onCut={() => { handleCut(); setClipboardRange(normSel) }}
           onCopy={() => { handleCopy(); setClipboardRange(normSel) }}
           onPaste={() => void handlePaste()}
@@ -5759,20 +5781,7 @@ export default function AmazonFlatFileClient({
             setSelAnchor(null); setSelEnd(null)
           }}
           onClearCells={handleDeleteCells}
-          onGroupSelected={() => {
-            setContextMenu(null)
-            // collect the selected real rows' SKUs (checkbox Set ∪ range selection)
-            const ids = new Set<string>(selectedRows)
-            if (normSel) for (const r of displayRowsRef.current.slice(normSel.rMin, normSel.rMax + 1)) ids.add(r._rowId as string)
-            const skus: string[] = []
-            const seen = new Set<string>()
-            for (const r of rows) {
-              if (r._ghost || !ids.has(r._rowId as string)) continue
-              const sku = String(r.item_sku ?? '')
-              if (sku && !seen.has(sku)) { seen.add(sku); skus.push(sku) }
-            }
-            if (skus.length) setGroupCreate({ skus })
-          }}
+          onGroupSelected={groupFromSelection}
           onClose={() => setContextMenu(null)}
         />
       )}
@@ -9095,7 +9104,7 @@ function ContextMenu({ x, y, canPaste, hasSelection, selRowCount, onCut, onCopy,
       <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
       {item('Add rows here…', undefined, onAddRows)}
       <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
-      {item('Group selected…', undefined, onGroupSelected, !hasSelection)}
+      {item('Group selected…', undefined, onGroupSelected, selRowCount === 0)}
       {item('Clear cells', 'Del', onClearCells, !hasSelection)}
     </div>
   )
