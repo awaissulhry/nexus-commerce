@@ -14,8 +14,10 @@ import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
 import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx, RenderCellContent } from '@/components/flat-file/FlatFileGrid.types'
 import { Modal } from '@/design-system/components/Modal'
 import { Banner } from '@/design-system/components/Banner'
+import { Combobox } from '@/design-system/components/Combobox'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { pinBlankRowsLast } from './rowOrder'
+import { moveRowsToParent } from './moveRows'
 import { AddListingPopover } from './AddListingPopover'
 import { EbayImportWizard } from './EbayImportWizard'
 import { stampUnderParent } from './importUnderParent'
@@ -108,6 +110,22 @@ function makeBlankRow(): EbayRow {
     _rowId: `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     _isNew: true, _dirty: true, _status: 'idle', sku: '',
   }
+}
+
+// ── Sheet-parents derivation (DRY) ─────────────────────────────────────────
+// Single source of truth for the parent-picker used by AddListingPopover,
+// EbayImportWizard, and the Move-to-parent action.
+
+function deriveSheetParents(rows: BaseRow[]) {
+  return rows
+    .filter((r) => (r as EbayRow)._isParent === true)
+    .map((r) => ({
+      id: String((r as EbayRow)._productId ?? (r as EbayRow).platformProductId ?? r._rowId),
+      sku: String((r as EbayRow).sku ?? ''),
+      variationTheme: (r as EbayRow).variation_theme
+        ? String((r as EbayRow).variation_theme)
+        : undefined,
+    }))
 }
 
 // ── Validation ────────────────────────────────────────────────────────────
@@ -470,6 +488,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [cascadeRow, setCascadeRow] = useState<BaseRow | null>(null)
 
   const [addListingOpen, setAddListingOpen] = useState(false)
+  const [moveParentOpen, setMoveParentOpen] = useState(false)
+  const [moveTargetId, setMoveTargetId] = useState('')
   const [importWizardOpen, setImportWizardOpen] = useState(false)
   const [importInitialFile, setImportInitialFile] = useState<File | null>(null)
   const [aspectsPanelRowId, setAspectsPanelRowId] = useState<string | null>(null)
@@ -1438,6 +1458,29 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     latestSelectedRowsRef.current = selectedRows
     latestSetRowsRef.current = setRows
     latestPushHistoryRef.current = pushHistory
+
+    // ── sheetParents (DRY) — single derivation reused by AddListingPopover and Move-to-parent ──
+    const sheetParents = deriveSheetParents(rows)
+
+    // Move-to-parent: shared-SKU warning — show if target OR source family publishes as shared-SKU
+    const showMoveSharedWarning = (() => {
+      if (!moveTargetId) return false
+      if ((rows as EbayRow[]).some(
+        (r) => r._isParent === true &&
+          String((r as EbayRow)._productId ?? (r as EbayRow).platformProductId ?? r._rowId) === moveTargetId &&
+          (r as EbayRow).shared_sku_listing === true,
+      )) return true
+      return rows.filter((r) => selectedRows.has(r._rowId)).some((sr) => {
+        const parentId = String((sr as EbayRow).platformProductId ?? '')
+        if (!parentId) return false
+        return (rows as EbayRow[]).some(
+          (r) => r._isParent === true &&
+            String((r as EbayRow)._productId ?? (r as EbayRow).platformProductId ?? r._rowId) === parentId &&
+            (r as EbayRow).shared_sku_listing === true,
+        )
+      })
+    })()
+
     return (
       <>
         {/* Add listing row generator */}
@@ -1454,15 +1497,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           {addListingOpen && (
             <AddListingPopover
               categoryAxisNames={variantAxisNames}
-              existingParents={rows
-                .filter((r) => (r as EbayRow)._isParent === true)
-                .map((r) => ({
-                  id: String((r as EbayRow)._productId ?? (r as EbayRow).platformProductId ?? r._rowId),
-                  sku: String((r as EbayRow).sku ?? ''),
-                  variationTheme: (r as EbayRow).variation_theme
-                    ? String((r as EbayRow).variation_theme)
-                    : undefined,
-                }))}
+              existingParents={sheetParents}
               onConfirm={(newRows) => {
                 const next = pinBlankRowsLast([...rows, ...newRows])
                 pushHistory(next)
@@ -1474,6 +1509,55 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             />
           )}
         </div>
+
+        {/* Move to parent — re-parent selected variants under a different family in the sheet */}
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={selectedRows.size === 0}
+          onClick={() => { setMoveParentOpen(true); setMoveTargetId('') }}
+          title="Move selected variants under a different parent in this sheet — persisted on Save"
+        >
+          <GitBranch className="w-3.5 h-3.5 mr-1.5" />
+          Move to parent…
+        </Button>
+        {moveParentOpen && (
+          <Modal
+            open
+            onClose={() => setMoveParentOpen(false)}
+            title="Move variants to parent"
+            size="sm"
+            footer={
+              <>
+                <Button size="sm" variant="ghost" onClick={() => setMoveParentOpen(false)}>Cancel</Button>
+                <Button
+                  size="sm"
+                  disabled={!moveTargetId}
+                  onClick={() => {
+                    const next = pinBlankRowsLast(moveRowsToParent(rows, selectedRows, moveTargetId))
+                    pushHistory(next)
+                    setRows(next)
+                    setMoveParentOpen(false)
+                  }}
+                >
+                  Move {selectedRows.size} variant{selectedRows.size !== 1 ? 's' : ''}
+                </Button>
+              </>
+            }
+          >
+            {showMoveSharedWarning && (
+              <Banner variant="warning" className="mb-3">
+                This family publishes as a shared-SKU listing; moving a variant is membership-managed and won&rsquo;t re-parent on the server.
+              </Banner>
+            )}
+            <Combobox
+              options={sheetParents.map((p) => ({ value: p.id, label: p.sku || p.id }))}
+              value={moveTargetId}
+              onChange={setMoveTargetId}
+              placeholder="Choose parent…"
+            />
+          </Modal>
+        )}
 
         {/* Phase 3 — Pull from eBay (full data, undoable, diff preview) */}
         <div className="relative">
@@ -1542,7 +1626,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       </>
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, imageModalOpen, derivedProductIds])
+  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, imageModalOpen, derivedProductIds, moveParentOpen, moveTargetId])
 
   // ── Slot: import button ────────────────────────────────────────────────
 
@@ -1690,15 +1774,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           onClose={() => { setImportWizardOpen(false); setImportInitialFile(null) }}
           columns={exportColumns}
           existingSkus={new Set(rows.map((r) => String(r.sku ?? '').trim()).filter(Boolean))}
-          existingParents={rows
-            .filter((r) => (r as EbayRow)._isParent === true)
-            .map((r) => ({
-              id: String((r as EbayRow)._productId ?? (r as EbayRow).platformProductId ?? r._rowId),
-              sku: String((r as EbayRow).sku ?? ''),
-              variationTheme: (r as EbayRow).variation_theme
-                ? String((r as EbayRow).variation_theme)
-                : undefined,
-            }))}
+          existingParents={deriveSheetParents(rows)}
           marketplace={marketplace}
           initialFile={importInitialFile}
           onImport={(imported, mode, targetParentId) => handleImport(imported, mode, rows, setRows, pushHistory, targetParentId)}
