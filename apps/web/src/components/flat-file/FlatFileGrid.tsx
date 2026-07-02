@@ -2243,7 +2243,7 @@ export default function FlatFileGrid({
                 let bandCounter = 0
                 let displayIdx = 0
 
-                displayRows.forEach((row) => {
+                displayRows.forEach((row, rowIndex) => {
                   const groupKey   = resolvedGetGroupKey(row)
                   const groupRows  = rowGroups.get(groupKey) ?? [row]
                   const isCollapsed = collapsedRowGroups.has(groupKey)
@@ -2266,7 +2266,13 @@ export default function FlatFileGrid({
                   if (isCollapsed) return
 
                   {
-                    const ri         = displayIdx++
+                    // ri is the TRUE index into displayRows / displayRowsRef.current
+                    // (so cell selection, range-fill and shift-range checkbox
+                    // ranges stay aligned even when a group above is collapsed and
+                    // skipped in render). rowNum is a separate contiguous counter
+                    // for the visible "#" so numbering has no gaps.
+                    const ri         = rowIndex
+                    const rowNum     = displayIdx++
                     const isRowSel   = selectedRows.has(row._rowId)
                     const isDragging = draggingRowId === row._rowId
                     const dropInd    = dropTarget?.rowId === row._rowId ? dropTarget.half : null
@@ -2306,12 +2312,12 @@ export default function FlatFileGrid({
 
                         {/* Checkbox + drag handle */}
                         <td className={cn('sticky left-0 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-1.5 w-9 text-center cursor-grab active:cursor-grabbing', frozenBg)}
-                          onMouseDown={() => { canDragRef.current = true; setArmedDragRowId(row._rowId) }} onMouseUp={() => { canDragRef.current = false; setArmedDragRowId(null) }}>
+                          onMouseDown={(e) => { if ((e.target as HTMLElement).tagName === 'INPUT') return; canDragRef.current = true; setArmedDragRowId(row._rowId) }} onMouseUp={() => { canDragRef.current = false; setArmedDragRowId(null) }}>
                           {row._status === 'pushed'  ? <CheckCircle2 className="w-3 h-3 text-emerald-500 mx-auto" />
                           : row._status === 'error'   ? <Tooltip label={<span className="text-xs">{String(row._feedMessage ?? 'Push error')}</span>} className="h10-ds-tooltip--light"><AlertCircle className="w-3 h-3 text-red-500 mx-auto" /></Tooltip>
                           : row._status === 'pending' ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
                           : <input type="checkbox" className="w-3.5 h-3.5 accent-blue-600" checked={isRowSel}
-                              aria-label={`Select row ${ri + 1}${row.sku ? ` (${row.sku})` : ''}`}
+                              aria-label={`Select row ${rowNum + 1}${row.sku ? ` (${row.sku})` : ''}`}
                               onChange={(e) => toggleRowSelection(ri, row._rowId, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)} />}
                         </td>
 
@@ -2332,7 +2338,7 @@ export default function FlatFileGrid({
                                 </div>
                               )
                             })()}
-                            <span className={cn('tabular-nums leading-none', showRowImages ? 'text-[9px] text-slate-400' : 'text-xs text-slate-400')}>{ri + 1}</span>
+                            <span className={cn('tabular-nums leading-none', showRowImages ? 'text-[9px] text-slate-400' : 'text-xs text-slate-400')}>{rowNum + 1}</span>
                             {renderRowMeta?.(row, ri)}
                           </div>
                           {/* Row resize handle */}
