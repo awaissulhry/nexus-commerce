@@ -46,6 +46,7 @@ import { VariationValueOrderModal } from './VariationValueOrderModal'
 import { useFlatFileCore } from '@/components/flat-file/useFlatFileCore'
 import { ColumnGroupModal } from '@/components/flat-file/ColumnGroupModal'
 import { EBAY_FILTER_DEFAULT, type EbayFilterDims } from '../_shared/flat-file-filter.types'
+import { isSharedDuplicateAllowed } from './validateRows.shared'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -109,7 +110,9 @@ function makeBlankRow(): EbayRow {
 
 // ── Validation ────────────────────────────────────────────────────────────
 
-function validateRows(rows: BaseRow[], allRows: BaseRow[] = rows) {
+export { isSharedDuplicateAllowed } from './validateRows.shared'
+
+export function validateRows(rows: BaseRow[], allRows: BaseRow[] = rows) {
   const issues: Array<{ level: 'error' | 'warn'; sku: string; field: string; msg: string }> = []
 
   // G.1 — parent/child integrity. Build the set of parent identifiers from the
@@ -131,7 +134,7 @@ function validateRows(rows: BaseRow[], allRows: BaseRow[] = rows) {
     const er = row as EbayRow & Record<string, unknown>
     const sku = String(row.sku ?? '')
     if (!sku) { issues.push({ level: 'error', sku: '?', field: 'sku', msg: 'SKU is required' }); continue }
-    if ((skuCount.get(sku) ?? 0) > 1) issues.push({ level: 'error', sku, field: 'sku', msg: 'Duplicate SKU — each listing needs a unique SKU' })
+    if ((skuCount.get(sku) ?? 0) > 1 && !isSharedDuplicateAllowed(sku, allRows as EbayRow[])) issues.push({ level: 'error', sku, field: 'sku', msg: 'Duplicate SKU — each listing needs a unique SKU' })
     const title = String(row.title ?? '')
     if (!title) issues.push({ level: 'warn', sku, field: 'title', msg: 'Title is empty' })
     if (title.length > 80) issues.push({ level: 'error', sku, field: 'title', msg: `Title exceeds 80 chars (${title.length})` })
