@@ -69,7 +69,23 @@ The DB-touching happy paths (real login, invite accept, reset) can only be verif
 
 ## 5. Security self-review
 
-_Adversarial review pass summarized here once complete._
+An independent adversarial review pass was run over all ten auth files. It found **2 HIGH, 2 MEDIUM, 6 LOW** defects — **all fixed** in the follow-up commit before go-live. It also confirmed the token handling, session validation, password verification, CSRF (incl. non-bypassability under `SameSite=None`), cookie attributes, guards, revocation, and bootstrap were **solid**.
+
+| ID | Sev | Defect | Fix |
+|---|---|---|---|
+| H1 | HIGH | Lockout was checked *after* password verify → never throttled guessing, allowed persistent owner-DoS, and the `423` was a password oracle | Check lock **before** verify; locked → generic 401 with a timing-equalizing dummy hash, no failure re-arming |
+| H2 | HIGH | `req.ip` was the Railway proxy (no `trustProxy`) → per-IP throttle was one global bucket (DoS everyone), audit IPs useless | `Fastify({ trustProxy: 1 })` (not `true` — XFF stays unspoofable) |
+| M1 | MED | `reset-request` enumerable by response *timing* (email send on the response path) | Token+email work moved off the response path (fire-and-forget); uniform 200 |
+| M2 | MED | Raw invite token in the URL path → captured by the request logger | Preview changed to `POST …/accept/preview` with the token in the body |
+| L1 | LOW | Login timing delta from an extra DB write on the known-account path | `registerLoginFailure` made fire-and-forget → both paths await equal work |
+| L2 | LOW | Double-accept / double-reset race (token not consumed atomically) | Consume in-tx via guarded `updateMany` + `count === 1` check |
+| L3 | LOW | Invite-accept reactivated a deactivated account keeping stale roles | On reactivation, clear prior role assignments → invited role only (least privilege) |
+| L4 | LOW | `reset-request` unthrottled → email bombing / token flooding | Coalesce: skip minting if a live token exists in a 5-min window |
+| L5 | LOW | IPv6 truncation produced malformed `2001:db8::1::` | Expand `::` before truncating to /64 (+ regression test) |
+| L6 | LOW | Misleading comment ("both reset on success") | Corrected |
+| — | Info | No max password length before hashing | `MAX_PASSWORD_LENGTH=512` guard on all hash paths |
+
+Post-fix: `tsc` clean, **34/34** tests, full build green.
 
 ## 6. Verification steps (post-approval)
 

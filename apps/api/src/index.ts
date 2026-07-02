@@ -401,7 +401,13 @@ async function tryStartQueueWorkers(): Promise<void> {
   }
 }
 
-const app = Fastify({ logger: true });
+// trustProxy: 1 — the API sits behind Railway's edge proxy (one hop), so
+// without this req.ip is the proxy's address (identical for every client),
+// which would collapse the per-IP login throttle into one shared bucket
+// and record a useless IP on every audit/session row. `1` (not `true`)
+// trusts exactly one hop so X-Forwarded-For cannot be spoofed to bypass
+// the throttle. (Phase S1 auth core — review finding H2.)
+const app = Fastify({ logger: true, trustProxy: 1 });
 
 // L.12.0 — request context. Every HTTP request runs the handler
 // inside an AsyncLocalStorage scope keyed by Fastify's request.id

@@ -11,8 +11,11 @@
  *   • Per-IP throttle — counts recent failed LoginEvent rows from the
  *     (truncated) IP; over IP_MAX_FAILURES in IP_WINDOW_MS → 429.
  *
- * Both reset on a successful login. Lockout never reveals whether the
- * account exists (the login route returns a uniform error).
+ * A successful login clears the per-account counters; the per-IP count
+ * is a rolling time window that a success does not clear (more
+ * conservative by design). Lockout never reveals whether the account
+ * exists — the login route checks the lock BEFORE verifying the password
+ * and returns the same uniform error either way.
  */
 
 import prisma from '../../db.js'

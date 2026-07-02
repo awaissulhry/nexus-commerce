@@ -31,6 +31,8 @@ const ARGON2ID_OPTS = {
 
 /** Minimum password length (master prompt §S1: 12 + strength gate). */
 export const MIN_PASSWORD_LENGTH = 12
+/** Upper bound — reject before hashing so argon2 can't be CPU-DoS'd. */
+export const MAX_PASSWORD_LENGTH = 512
 /** Minimum acceptable zxcvbn score (0–4). 3 = "safely unguessable". */
 export const MIN_ZXCVBN_SCORE = 3
 
@@ -106,6 +108,9 @@ export function checkPasswordStrength(
       score: 0,
       message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
     }
+  }
+  if (plain.length > MAX_PASSWORD_LENGTH) {
+    return { ok: false, score: 0, message: `Password must be at most ${MAX_PASSWORD_LENGTH} characters.` }
   }
   // zxcvbn caps analysis at 100 chars; guard against DoS on huge inputs.
   const sample = plain.slice(0, 100)

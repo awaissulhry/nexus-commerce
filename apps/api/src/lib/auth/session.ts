@@ -28,9 +28,16 @@ export function truncateIp(ip: string | undefined | null): string | null {
     return clean
   }
   if (clean.includes(':')) {
-    const groups = clean.split(':')
-    // Keep the first 4 groups (/64), zero the rest.
-    return groups.slice(0, 4).join(':') + '::'
+    // Expand any "::" first, else a compressed address like "2001:db8::1"
+    // would yield a malformed "2001:db8::1::" and group inconsistently
+    // (review finding L5). Normalise to the first 4 groups (/64).
+    const [head, tail] = clean.split('::')
+    const h = head ? head.split(':') : []
+    const t = tail !== undefined && tail ? tail.split(':') : []
+    const missing = Math.max(0, 8 - h.length - t.length)
+    const full = [...h, ...Array(missing).fill('0'), ...t]
+    const first4 = full.slice(0, 4).map((g) => g || '0')
+    return first4.join(':') + '::'
   }
   return clean
 }

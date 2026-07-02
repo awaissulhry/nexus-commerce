@@ -66,6 +66,12 @@ import {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const INVITE_TTL_MS = 72 * 60 * 60 * 1000
 const RESET_TTL_MS = 60 * 60 * 1000
+// Upper bound on password input length before hashing — argon2 on a huge
+// string is a CPU-DoS vector; the real limit is far below this.
+const MAX_PASSWORD_INPUT = 512
+// Coalesce window: skip minting a new reset token if a live one already
+// exists for the account (limits reset-email bombing + token-row flooding).
+const RESET_COALESCE_MS = 5 * 60 * 1000
 
 // Constant dummy hash so an unknown-email login does the same argon2
 // work as a known one — closes the timing side-channel for enumeration.
@@ -118,8 +124,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       const password = req.body?.password ?? ''
       const ipTrunc = truncateIp(req.ip)
       const GENERIC = { error: 'Invalid email or password', code: 'invalid_credentials' }
+      const logEvent = (outcome: string, userId?: string, metadata?: Record<string, unknown>) =>
+        (prisma as any).loginEvent.create({
+          data: { userId: userId ?? null, emailTried: email, outcome, ipAddress: ipTrunc, userAgent: ua(req), metadata },
+        })
 
-      // Per-IP throttle (distributed guessing across accounts).
+      // Per-IP throttle (distributed guessing across accounts). Relies on
+      // trustProxy=1 so ipTrunc is the real client, not the Railway proxy.
       if ((await ipRecentFailureCount(ipTrunc)) > IP_MAX_FAILURES) {
         return reply.code(429).send({
           error: 'Too many failed attempts from this network. Try again later.',
@@ -127,7 +138,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
 
-      if (!email || !password) return reply.code(401).send(GENERIC)
+      // Reject absurd inputs up front: bound the argon2 pre-image so a
+      // huge password can't burn CPU (defense-in-depth atop bodyLimit).
+      if (!email || !password || password.length > MAX_PASSWORD_INPUT) return reply.code(401).send(GENERIC)
 
       const user = await (prisma as any).userProfile.findUnique({
         where: { email },
@@ -146,45 +159,40 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       // Unknown email → equalize timing, log, uniform error.
       if (!user) {
         await verifyPassword(password, await dummyHash())
-        await (prisma as any).loginEvent.create({
-          data: { emailTried: email, outcome: 'bad_password', ipAddress: ipTrunc, userAgent: ua(req) },
-        })
+        await logEvent('bad_password')
         return reply.code(401).send(GENERIC)
       }
 
-      const locked = accountLockState(user)
+      // CHECK LOCK BEFORE verifying the password (review finding H1):
+      // a locked account is rejected with the SAME generic 401 as a wrong
+      // password — no argon2 processing, no failure re-arming, and no
+      // 423 oracle that would confirm a correct guess. A throwaway hash
+      // keeps the timing indistinguishable from the wrong-password path.
+      if (accountLockState(user).locked) {
+        await verifyPassword(password, await dummyHash())
+        await logEvent('locked', user.id)
+        return reply.code(401).send(GENERIC)
+      }
+
       const verify = user.passwordHash
         ? await verifyPassword(password, user.passwordHash)
         : { ok: false, needsRehash: false }
 
-      // Wrong password (or no password set): register failure, uniform error.
+      // Wrong password: uniform error. registerLoginFailure is fire-and-
+      // forget so the known-account path does the same awaited DB work as
+      // the unknown-email path (closes the L1 timing delta); the atomic
+      // increment still lands and drives lockout.
       if (!verify.ok) {
-        await registerLoginFailure(user.id)
-        await (prisma as any).loginEvent.create({
-          data: { userId: user.id, emailTried: email, outcome: 'bad_password', ipAddress: ipTrunc, userAgent: ua(req) },
-        })
+        void registerLoginFailure(user.id).catch(() => undefined)
+        await logEvent('bad_password', user.id)
         return reply.code(401).send(GENERIC)
       }
 
-      // Correct password but account deactivated → reveal nothing extra.
+      // Correct password but account deactivated → only revealed to the
+      // holder of the correct password, so it doesn't enumerate.
       if (user.status !== 'active') {
-        await (prisma as any).loginEvent.create({
-          data: { userId: user.id, emailTried: email, outcome: 'locked', ipAddress: ipTrunc, userAgent: ua(req), metadata: { reason: 'deactivated' } },
-        })
+        await logEvent('locked', user.id, { reason: 'deactivated' })
         return reply.code(403).send({ error: 'This account is deactivated.', code: 'deactivated' })
-      }
-
-      // Correct password but currently locked → only the real user
-      // (who knows the password) learns about the lock.
-      if (locked.locked) {
-        await (prisma as any).loginEvent.create({
-          data: { userId: user.id, emailTried: email, outcome: 'locked', ipAddress: ipTrunc, userAgent: ua(req) },
-        })
-        return reply.code(423).send({
-          error: `Account temporarily locked after repeated failures. Try again after ${locked.until?.toUTCString()}.`,
-          code: 'locked',
-          until: locked.until,
-        })
       }
 
       // Success. Rehash legacy hashes to argon2id opportunistically.
@@ -212,9 +220,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       reply.setCookie(sessionCookieName(), rawToken, sessionCookieOptions())
       reply.setCookie(csrfCookieName(), csrfToken, csrfCookieOptions())
 
-      await (prisma as any).loginEvent.create({
-        data: { userId: user.id, emailTried: email, outcome: 'success', ipAddress: ipTrunc, userAgent: ua(req) },
-      })
+      await logEvent('success', user.id)
       await writeAuthAudit({
         actorUserId: user.id, ip: ipTrunc, userAgent: ua(req),
         entityType: 'Auth', entityId: user.id, action: 'login.success',
@@ -335,11 +341,16 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   // ── Preview an invitation (public — for the accept page) ───────
-  fastify.get<{ Params: { token: string } }>(
-    '/api/auth/invitations/accept/:token',
+  // POST with the token in the BODY, not a URL param: Fastify's request
+  // logger records req.url, so a token in the path would leak the single-
+  // use invite into logs (review finding M2). Bodies are not logged.
+  fastify.post<{ Body: { token?: string } }>(
+    '/api/auth/invitations/accept/preview',
     async (req, reply) => {
+      const token = req.body?.token ?? ''
+      if (!token) return reply.code(400).send({ error: 'Missing token', code: 'bad_token' })
       const invite = await (prisma as any).invitation.findUnique({
-        where: { tokenHash: hashToken(req.params.token) },
+        where: { tokenHash: hashToken(token) },
         select: { email: true, expiresAt: true, acceptedAt: true, revokedAt: true, role: { select: { name: true } } },
       })
       if (!invite || invite.acceptedAt || invite.revokedAt || invite.expiresAt.getTime() <= Date.now()) {
@@ -375,25 +386,48 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       // email, else create the account. Then assign the invited role
       // and mark the invite consumed — atomically.
       const userId = await prisma.$transaction(async (tx: any) => {
-        const existing = await tx.userProfile.findUnique({ where: { email: invite.email }, select: { id: true } })
-        const u = existing
-          ? await tx.userProfile.update({
-              where: { id: existing.id },
-              data: { passwordHash, status: 'active', deactivatedAt: null, ...(displayName ? { displayName } : {}) },
-              select: { id: true },
-            })
-          : await tx.userProfile.create({
-              data: { email: invite.email, passwordHash, displayName: displayName || invite.email.split('@')[0] },
-              select: { id: true },
-            })
-        await tx.userRole.upsert({
-          where: { userId_roleId: { userId: u.id, roleId: invite.roleId } },
-          create: { userId: u.id, roleId: invite.roleId, channelScope: invite.channelScope ?? undefined },
-          update: {},
+        // Consume the invite atomically FIRST, guarded on the null
+        // sentinel, so two concurrent accepts of the same token can't
+        // both proceed (review finding L2).
+        const consumed = await tx.invitation.updateMany({
+          where: { id: invite.id, acceptedAt: null, revokedAt: null },
+          data: { acceptedAt: new Date() },
         })
-        await tx.invitation.update({ where: { id: invite.id }, data: { acceptedAt: new Date(), acceptedUserId: u.id } })
-        return u.id as string
+        if (consumed.count !== 1) throw new Error('invite_already_consumed')
+
+        const existing = await tx.userProfile.findUnique({ where: { email: invite.email }, select: { id: true } })
+        let uid: string
+        if (existing) {
+          await tx.userProfile.update({
+            where: { id: existing.id },
+            data: { passwordHash, status: 'active', deactivatedAt: null, ...(displayName ? { displayName } : {}) },
+          })
+          uid = existing.id
+          // Re-onboarding a previously deactivated account: reset to LEAST
+          // privilege. The invite defines access, so clear stale role
+          // assignments before granting the invited one (review finding
+          // L3). Invites to *active* accounts are blocked at creation, so
+          // this path is reactivation-only.
+          await tx.userRole.deleteMany({ where: { userId: uid } })
+        } else {
+          const created = await tx.userProfile.create({
+            data: { email: invite.email, passwordHash, displayName: displayName || invite.email.split('@')[0] },
+            select: { id: true },
+          })
+          uid = created.id
+        }
+        await tx.userRole.create({
+          data: { userId: uid, roleId: invite.roleId, channelScope: invite.channelScope ?? undefined },
+        })
+        await tx.invitation.update({ where: { id: invite.id }, data: { acceptedUserId: uid } })
+        return uid as string
+      }).catch((e: any) => {
+        if (e?.message === 'invite_already_consumed') return null
+        throw e
       })
+      if (!userId) {
+        return reply.code(409).send({ error: 'This invitation was already used.', code: 'invite_used' })
+      }
 
       // Auto-login the new user (session + fresh CSRF token in the body).
       const { rawToken } = await createSession({ userId, userAgent: ua(req), ip: req.ip, mfaSatisfied: true })
@@ -413,20 +447,39 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     '/api/auth/password/reset-request',
     async (req, reply) => {
       const email = (req.body?.email ?? '').trim().toLowerCase()
-      // Always 200 regardless of whether the account exists.
+      const ipTrunc = truncateIp(req.ip)
+      const uaStr = ua(req)
+      // Respond 200 immediately and identically for every input. The
+      // existence-revealing token+email work runs OFF the response path so
+      // latency can't enumerate accounts (review finding M1).
       if (EMAIL_RE.test(email)) {
-        const user = await (prisma as any).userProfile.findUnique({ where: { email }, select: { id: true, status: true } })
-        if (user && user.status === 'active') {
-          const raw = generateToken(32)
-          const expiresAt = new Date(Date.now() + RESET_TTL_MS)
-          await (prisma as any).passwordResetToken.create({ data: { userId: user.id, tokenHash: hashToken(raw), expiresAt } })
-          const link = passwordResetLink(raw)
-          await sendPasswordResetEmail({ to: email, link, expiresAt })
-          await writeAuthAudit({
-            actorUserId: user.id, ip: truncateIp(req.ip), userAgent: ua(req),
-            entityType: 'PasswordReset', entityId: user.id, action: 'password.reset.request',
-          })
-        }
+        void (async () => {
+          try {
+            const user = await (prisma as any).userProfile.findUnique({ where: { email }, select: { id: true, status: true } })
+            if (!user || user.status !== 'active') return
+            // Coalesce: skip minting a new token if a live one already
+            // exists — limits reset-email bombing + row flooding (L4).
+            const recent = await (prisma as any).passwordResetToken.findFirst({
+              where: {
+                userId: user.id, usedAt: null,
+                expiresAt: { gt: new Date() },
+                createdAt: { gt: new Date(Date.now() - RESET_COALESCE_MS) },
+              },
+              select: { id: true },
+            })
+            if (recent) return
+            const raw = generateToken(32)
+            const expiresAt = new Date(Date.now() + RESET_TTL_MS)
+            await (prisma as any).passwordResetToken.create({ data: { userId: user.id, tokenHash: hashToken(raw), expiresAt } })
+            await sendPasswordResetEmail({ to: email, link: passwordResetLink(raw), expiresAt })
+            await writeAuthAudit({
+              actorUserId: user.id, ip: ipTrunc, userAgent: uaStr,
+              entityType: 'PasswordReset', entityId: user.id, action: 'password.reset.request',
+            })
+          } catch (err) {
+            req.log.error({ err }, '[auth] reset-request background task failed')
+          }
+        })()
       }
       return { ok: true }
     },
@@ -452,13 +505,23 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       if (!strength.ok) return reply.code(400).send({ error: strength.message, code: 'weak_password' })
 
       const passwordHash = await hashPassword(password)
-      await prisma.$transaction(async (tx: any) => {
+      // Consume the token atomically (guard on usedAt: null) so a token
+      // can't be replayed by two concurrent requests (review finding L2).
+      const applied = await prisma.$transaction(async (tx: any) => {
+        const consumed = await tx.passwordResetToken.updateMany({
+          where: { id: row.id, usedAt: null },
+          data: { usedAt: new Date() },
+        })
+        if (consumed.count !== 1) return false
         await tx.userProfile.update({
           where: { id: row.userId },
           data: { passwordHash, failedLoginCount: 0, lockedUntil: null },
         })
-        await tx.passwordResetToken.update({ where: { id: row.id }, data: { usedAt: new Date() } })
+        return true
       })
+      if (!applied) {
+        return reply.code(404).send({ error: 'This reset link is invalid or has expired.', code: 'invalid_token' })
+      }
       // Invalidate every session — a reset means "lock everyone out".
       await revokeAllSessions(row.userId)
       await writeAuthAudit({

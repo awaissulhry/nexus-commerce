@@ -135,6 +135,11 @@ describe('IP truncation for privacy', () => {
   it('truncates IPv6 to /64', () => {
     expect(truncateIp('2001:db8:1234:5678:9abc:def0:1234:5678')).toBe('2001:db8:1234:5678::')
   })
+  it('expands a compressed IPv6 before truncating (no malformed "::")', () => {
+    // Regression for review finding L5: must not produce "2001:db8::1::".
+    expect(truncateIp('2001:db8::1')).toBe('2001:db8:0:0::')
+    expect(truncateIp('::1')).toBe('0:0:0:0::')
+  })
   it('null in → null out', () => {
     expect(truncateIp(null)).toBeNull()
     expect(truncateIp(undefined)).toBeNull()
