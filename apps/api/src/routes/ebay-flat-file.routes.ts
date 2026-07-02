@@ -44,6 +44,8 @@ import { renderExport } from '../services/export/renderers.js';
 import { parseCsv, parseFile, sniffDelimiter, detectFileKind, type ParsedFile } from '../services/import/parsers.js';
 // P1.2 — eBay flat-file create/reparent pre-pass (new products persist under their parent before ChannelListing loop runs)
 import { runEbayFlatFileCreates, type CreateResult } from '../services/ebay-flat-file-create.service.js';
+// Task 4 — shared-SKU management: synthesize membership rows for the GET /rows response
+import { loadSharedMembershipRows } from '../services/ebay-shared-membership-rows.js';
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
 
@@ -114,6 +116,16 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           const inherited = familyItemId.get(fk)
           if (inherited) row.ebay_item_id = inherited
         }
+      }
+
+      // Shared-SKU management: append a row for each shared child under every parent listing it belongs to.
+      try {
+        const parentRows = rows.filter(r => (r as Record<string, unknown>)._isParent === true)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sharedRows = await loadSharedMembershipRows(prisma as any, parentRows, rows)
+        rows.push(...sharedRows)
+      } catch (err) {
+        request.log.error(err, 'ebay/flat-file/rows: shared membership synthesis failed (non-fatal)')
       }
 
       return reply.send({ rows });
