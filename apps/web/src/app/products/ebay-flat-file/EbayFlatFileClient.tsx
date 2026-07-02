@@ -15,6 +15,7 @@ import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImport
 import { Modal } from '@/design-system/components/Modal'
 import { Banner } from '@/design-system/components/Banner'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
+import { pinBlankRowsLast } from './rowOrder'
 import { AddListingPopover } from './AddListingPopover'
 import { EbayImportWizard } from './EbayImportWizard'
 import { EbayFlatFileImageModal } from './EbayFlatFileImageModal'
@@ -1386,8 +1387,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         added++
       }
     }
-    pushHistory(next)
-    setRows(next)
+    const ordered = pinBlankRowsLast(next)
+    pushHistory(ordered)
+    setRows(ordered)
     toast.success(`Imported ${imported.length} row${imported.length === 1 ? '' : 's'} — ${added} added, ${updated} updated`)
   }, [toast])
 
@@ -1447,7 +1449,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             <AddListingPopover
               categoryAxisNames={variantAxisNames}
               onConfirm={(newRows) => {
-                const next = [...rows, ...newRows]
+                const next = pinBlankRowsLast([...rows, ...newRows])
                 pushHistory(next)
                 setRows(next)
               }}
