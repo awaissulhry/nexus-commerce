@@ -2318,7 +2318,12 @@ export default function FlatFileGrid({
                           : row._status === 'pending' ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
                           : <input type="checkbox" className="w-3.5 h-3.5 accent-blue-600" checked={isRowSel}
                               aria-label={`Select row ${rowNum + 1}${row.sku ? ` (${row.sku})` : ''}`}
-                              onChange={(e) => toggleRowSelection(ri, row._rowId, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)} />}
+                              // Read shiftKey from onClick (a real MouseEvent) — onChange's
+                              // nativeEvent doesn't reliably carry modifier keys, so shift-range
+                              // never fired. onClick handles the toggle; onChange is a no-op to
+                              // satisfy React's controlled-checkbox requirement.
+                              onClick={(e) => toggleRowSelection(ri, row._rowId, !isRowSel, e.shiftKey)}
+                              onChange={() => {}} />}
                         </td>
 
                         {/* Row # + optional image + row meta slot */}
