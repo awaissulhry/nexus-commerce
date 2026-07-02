@@ -7,7 +7,7 @@ import {
 import { useRouter } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  Image as ImageIcon, Keyboard, Loader2, Pin, Plus,
+  Image as ImageIcon, Keyboard, Layers, Loader2, Pin, Plus, Settings2,
   Search, Trash2, Undo2, Redo2, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -28,6 +28,13 @@ import type {
   ValidationIssue, RenderCellContent, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, ReplicateCtx,
 } from './FlatFileGrid.types'
 import { SortPanel, applySortLevels, type SortLevel, type SortGroup } from './SortPanel'
+import {
+  loadGroups, saveGroups, loadGroupMode, saveGroupMode, loadCollapsedGroups, saveCollapsedGroups,
+  groupIdForSku, assignSkusToGroup, makeGroupId, GROUP_PALETTE,
+  type CustomGroup, type CustomGroupMode, type GroupColorName,
+} from './group-model'
+import { GroupCreatePopover } from './GroupCreatePopover'
+import { ManageGroupsModal } from './ManageGroupsModal'
 import {
   FlatFileIconToolbar,
   type RowImageSize as SharedRowImageSize,
@@ -719,19 +726,26 @@ const SpreadsheetCell = memo(SpreadsheetCellImpl, areCellPropsEqual)
 
 // ── GroupHeader ────────────────────────────────────────────────────────────
 
-function GroupHeader({ row, bandClass, isExpanded, onToggle, showImage, imageSize, colSpan }: {
-  row: BaseRow; bandClass: string; isExpanded: boolean; onToggle: () => void
+const GROUP_DOT: Record<string, string> = {
+  blue: 'bg-blue-500', purple: 'bg-purple-500', emerald: 'bg-emerald-500',
+  orange: 'bg-orange-500', teal: 'bg-teal-500', amber: 'bg-amber-500',
+}
+function GroupHeader({ row, label, color, count, bandClass, isExpanded, onToggle, showImage, imageSize, colSpan }: {
+  row?: BaseRow; label?: string; color?: string; count?: number
+  bandClass: string; isExpanded: boolean; onToggle: () => void
   showImage: boolean; imageSize: number; colSpan: number
 }) {
-  const label  = String(row.title ?? row.sku ?? row.item_sku ?? row._rowId)
-  const imgUrl = row.image_1 as string | undefined
+  const shownLabel = label ?? String(row?.title ?? row?.sku ?? row?.item_sku ?? row?._rowId ?? '')
+  const imgUrl = row?.image_1 as string | undefined
   return (
     <tr className={cn('border-b border-slate-200 dark:border-slate-700', bandClass)}>
       <td colSpan={colSpan} className="px-3 py-1">
         <div className="flex items-center gap-3">
-          <button onClick={onToggle} className="flex items-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900">
+          <button onClick={onToggle} className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900">
             <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', !isExpanded && '-rotate-90')} />
-            {label}
+            {color && <span className={cn('w-2 h-2 rounded-full shrink-0', GROUP_DOT[color] ?? 'bg-slate-400')} />}
+            {shownLabel}
+            {count != null && <span className="text-slate-400 font-normal tabular-nums">· {count}</span>}
           </button>
           {showImage && imgUrl && (
             // eslint-disable-next-line @next/next/no-img-element
@@ -760,6 +774,7 @@ export default function FlatFileGrid({
   onColumnsClick, columnsActive, toolbarTrailing,
   columnGroupState, onGroupStateChange,
   fileMenuItems,
+  enableCustomGroups = false,
 }: FlatFileGridProps) {
   const router = useRouter()
   const { toast } = useToast()
@@ -938,6 +953,18 @@ export default function FlatFileGrid({
   // ── Row collapse ───────────────────────────────────────────────────────
   const [collapsedRowGroups, setCollapsedRowGroups] = useState<Set<string>>(new Set())
 
+  // ── P4 — custom named groups (opt-in; persisted under the storageKey scope) ─
+  const [customGroups, setCustomGroups] = useState<CustomGroup[]>(() => enableCustomGroups ? loadGroups(storageKey) : [])
+  const [groupMode, setGroupMode] = useState<CustomGroupMode>(() => enableCustomGroups ? loadGroupMode(storageKey) : 'family')
+  const [collapsedCustomGroups, setCollapsedCustomGroups] = useState<Set<string>>(() => enableCustomGroups ? loadCollapsedGroups(storageKey) : new Set())
+  const [groupCreate, setGroupCreate] = useState<{ skus: string[] } | null>(null)
+  const [manageGroupsOpen, setManageGroupsOpen] = useState(false)
+  useEffect(() => { if (enableCustomGroups) saveGroups(storageKey, customGroups) }, [enableCustomGroups, storageKey, customGroups])
+  useEffect(() => { if (enableCustomGroups) saveGroupMode(storageKey, groupMode) }, [enableCustomGroups, storageKey, groupMode])
+  useEffect(() => { if (enableCustomGroups) saveCollapsedGroups(storageKey, collapsedCustomGroups) }, [enableCustomGroups, storageKey, collapsedCustomGroups])
+  const UNGROUPED = 'cg:__ungrouped__'
+  const skuOf = useCallback((row: BaseRow) => String(row.item_sku ?? row.sku ?? ''), [])
+
   // ── Drag-drop rows ─────────────────────────────────────────────────────
   const [draggingRowId, setDraggingRowId] = useState<string | null>(null)
   const [dropTarget,    setDropTarget]    = useState<{ rowId: string; half: 'top' | 'bottom' } | null>(null)
@@ -1033,7 +1060,41 @@ export default function FlatFileGrid({
     })
   }, [rows, searchQuery])
 
+  // P4 — custom-group section key for a row (only meaningful in custom mode).
+  const customSectionKey = useCallback((row: BaseRow) => {
+    const id = groupIdForSku(customGroups, skuOf(row))
+    return id ? `cg:${id}` : UNGROUPED
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customGroups, skuOf])
+
   const displayRows = useMemo(() => {
+    // P4 — CUSTOM mode: partition rows by custom group (in group.order),
+    // Ungrouped last; column-sort applies WITHIN each group. A collapsed group
+    // contributes just its first row as a header anchor (skipped in render).
+    if (enableCustomGroups && groupMode === 'custom') {
+      const buckets = new Map<string, BaseRow[]>()
+      for (const g of [...customGroups].sort((a, b) => a.order - b.order)) buckets.set(`cg:${g.id}`, [])
+      buckets.set(UNGROUPED, [])
+      for (const row of filteredRows) {
+        const key = customSectionKey(row)
+        ;(buckets.get(key) ?? buckets.get(UNGROUPED)!).push(row)
+      }
+      const out: BaseRow[] = []
+      buckets.forEach((bucket, key) => {
+        if (!bucket.length) return  // don't render empty sections (incl. empty Ungrouped)
+        if (collapsedCustomGroups.has(key)) { out.push(bucket[0]); return }
+        out.push(...(sortConfig.length ? applySortLevels(bucket as Array<Record<string, unknown>>, sortConfig) as BaseRow[] : bucket))
+      })
+      displayRowsRef.current = out
+      return out
+    }
+    // P4 — NONE mode: flat, no sections; column sort applies to the whole sheet.
+    if (enableCustomGroups && groupMode === 'none') {
+      const out = sortConfig.length ? applySortLevels([...filteredRows] as Array<Record<string, unknown>>, sortConfig) as BaseRow[] : [...filteredRows]
+      displayRowsRef.current = out
+      return out
+    }
+    // FAMILY (default / feature-off) — unchanged.
     // Build per-group arrays, pinning _isParent=true to index 0 within each group.
     const groupArrays: BaseRow[][] = []
     rowGroups.forEach((groupRows, groupKey) => {
@@ -1071,7 +1132,19 @@ export default function FlatFileGrid({
     }
     displayRowsRef.current = result
     return result
-  }, [rowGroups, filteredRows, collapsedRowGroups, sortConfig])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowGroups, filteredRows, collapsedRowGroups, sortConfig, enableCustomGroups, groupMode, customGroups, collapsedCustomGroups, customSectionKey])
+
+  // P4 — per-section metadata for custom-group headers (name/color/count).
+  const customGroupMeta = useMemo(() => {
+    const m = new Map<string, { name: string; color: GroupColorName; count: number }>()
+    if (!enableCustomGroups || groupMode !== 'custom') return m
+    for (const g of customGroups) m.set(`cg:${g.id}`, { name: g.name, color: g.color, count: 0 })
+    m.set(UNGROUPED, { name: 'Ungrouped', color: 'blue', count: 0 })
+    for (const row of filteredRows) { const e = m.get(customSectionKey(row)) ?? m.get(UNGROUPED)!; e.count++ }
+    return m
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enableCustomGroups, groupMode, customGroups, filteredRows, customSectionKey])
 
   const normSel = useMemo<NormSel | null>(() => {
     if (!selAnchor || !selEnd) return null
@@ -1496,6 +1569,22 @@ export default function FlatFileGrid({
     })
     lastCheckedRef.current = ri
   }, [])
+
+  // P4 — open the Create-Group popover for the current selection (checkbox Set ∪
+  // range), collecting item_sku values. No-ops if nothing resolvable.
+  const groupFromSelection = useCallback(() => {
+    const ids = new Set<string>(selectedRows)
+    if (normSel) for (const r of displayRowsRef.current.slice(normSel.rMin, normSel.rMax + 1)) if (r) ids.add(r._rowId)
+    const skus: string[] = []
+    const seen = new Set<string>()
+    for (const r of rows) {
+      if (!ids.has(r._rowId)) continue
+      const sku = skuOf(r)
+      if (sku && !seen.has(sku)) { seen.add(sku); skus.push(sku) }
+    }
+    if (skus.length) setGroupCreate({ skus })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRows, normSel, rows, skuOf])
 
   // ── Pointer handlers ───────────────────────────────────────────────────
 
@@ -1980,6 +2069,28 @@ export default function FlatFileGrid({
         {/* Bar 3: search + filter + saved views + column pills */}
         <div className="px-3 py-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3 flex-wrap">
           {renderBar3Left?.()}
+          {/* P4 — Group by: Family | Custom | None */}
+          {enableCustomGroups && (
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-slate-400">Group by</span>
+              <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
+                {(['family', 'custom', 'none'] as CustomGroupMode[]).map((m) => (
+                  <button key={m} type="button" onClick={() => setGroupMode(m)}
+                    className={cn('px-2 py-0.5 text-[11px] capitalize', groupMode === m
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700')}>
+                    {m}
+                  </button>
+                ))}
+              </div>
+              {groupMode === 'custom' && (
+                <button type="button" onClick={() => setManageGroupsOpen(true)}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-slate-500 hover:text-slate-700 dark:text-slate-400" title="Manage groups">
+                  <Settings2 className="w-3 h-3" />Manage
+                </button>
+              )}
+            </div>
+          )}
           <div className="relative flex items-center">
             <Search className="absolute left-2 w-3 h-3 text-slate-400 pointer-events-none" />
             <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
@@ -2059,6 +2170,27 @@ export default function FlatFileGrid({
       <AIBulkModal open={aiModalOpen} onClose={() => setAiModalOpen(false)}
         selectedProductIds={[...selectedRows].flatMap((rowId) => { const row = rows.find((r) => r._rowId === rowId); return row?._productId ? [row._productId as string] : [] })}
         marketplace={marketplace} />
+
+      {/* P4 — custom groups: create popover + manage modal */}
+      {groupCreate && (
+        <GroupCreatePopover
+          skuCount={groupCreate.skus.length}
+          defaultColor={GROUP_PALETTE[customGroups.length % GROUP_PALETTE.length]}
+          onCancel={() => setGroupCreate(null)}
+          onCreate={(name, color) => {
+            const id = makeGroupId(customGroups)
+            const order = customGroups.reduce((m, g) => Math.max(m, g.order), -1) + 1
+            const withNew: CustomGroup[] = [...customGroups, { id, name, color, order, memberSkus: [] }]
+            setCustomGroups(assignSkusToGroup(withNew, id, groupCreate.skus))
+            setGroupMode('custom')
+            setGroupCreate(null)
+            setSelectedRows(new Set())
+          }} />
+      )}
+      {enableCustomGroups && (
+        <ManageGroupsModal open={manageGroupsOpen} groups={customGroups}
+          onChange={setCustomGroups} onClose={() => setManageGroupsOpen(false)} />
+      )}
 
       {/* Find / Replace */}
       {showFindReplace && (
@@ -2248,23 +2380,45 @@ export default function FlatFileGrid({
                 let bandCounter = 0
                 let displayIdx = 0
 
+                const customMode = enableCustomGroups && groupMode === 'custom'
+                const noneMode   = enableCustomGroups && groupMode === 'none'
+
                 displayRows.forEach((row, rowIndex) => {
                   const groupKey   = resolvedGetGroupKey(row)
                   const groupRows  = rowGroups.get(groupKey) ?? [row]
-                  const isCollapsed = collapsedRowGroups.has(groupKey)
+                  // P4 — section key + collapse are mode-aware.
+                  const sectionKey  = customMode ? customSectionKey(row) : groupKey
+                  const isCollapsed = customMode ? collapsedCustomGroups.has(sectionKey)
+                    : noneMode ? false
+                    : collapsedRowGroups.has(groupKey)
 
-                  if (!renderedGroupHeaders.has(groupKey)) {
-                    renderedGroupHeaders.add(groupKey)
-                    if (!groupBandIdx.has(groupKey)) groupBandIdx.set(groupKey, bandCounter++)
-                    if (groupRows.length > 1) {
-                      const bandClass = GROUP_BAND_COLORS[groupBandIdx.get(groupKey)! % GROUP_BAND_COLORS.length]
-                      rendered.push(
-                        <GroupHeader key={`hdr-${groupKey}`} row={groupRows[0]} bandClass={bandClass}
-                          isExpanded={!isCollapsed} showImage={showRowImages} imageSize={imageSize}
-                          colSpan={allColumns.length + 2}
-                          onToggle={() => setCollapsedRowGroups((prev) => { const n = new Set(prev); n.has(groupKey) ? n.delete(groupKey) : n.add(groupKey); return n })} />
-                      )
+                  if (!renderedGroupHeaders.has(sectionKey)) {
+                    renderedGroupHeaders.add(sectionKey)
+                    if (customMode) {
+                      const meta = customGroupMeta.get(sectionKey)
+                      if (meta) {
+                        rendered.push(
+                          <GroupHeader key={`hdr-${sectionKey}`} label={meta.name}
+                            color={sectionKey === UNGROUPED ? undefined : meta.color} count={meta.count}
+                            bandClass="bg-slate-50 dark:bg-slate-800/50"
+                            isExpanded={!isCollapsed} showImage={false} imageSize={imageSize}
+                            colSpan={allColumns.length + 2}
+                            onToggle={() => setCollapsedCustomGroups((prev) => { const n = new Set(prev); n.has(sectionKey) ? n.delete(sectionKey) : n.add(sectionKey); return n })} />
+                        )
+                      }
+                    } else if (!noneMode) {
+                      if (!groupBandIdx.has(groupKey)) groupBandIdx.set(groupKey, bandCounter++)
+                      if (groupRows.length > 1) {
+                        const bandClass = GROUP_BAND_COLORS[groupBandIdx.get(groupKey)! % GROUP_BAND_COLORS.length]
+                        rendered.push(
+                          <GroupHeader key={`hdr-${groupKey}`} row={groupRows[0]} bandClass={bandClass}
+                            isExpanded={!isCollapsed} showImage={showRowImages} imageSize={imageSize}
+                            colSpan={allColumns.length + 2}
+                            onToggle={() => setCollapsedRowGroups((prev) => { const n = new Set(prev); n.has(groupKey) ? n.delete(groupKey) : n.add(groupKey); return n })} />
+                        )
+                      }
                     }
+                    // none mode: no section header
                   }
 
                   // Collapsed groups: skip rendering the anchor data row (header already rendered above)
@@ -2288,7 +2442,7 @@ export default function FlatFileGrid({
                       : row._status === 'pending' ? 'bg-amber-50/70 dark:bg-amber-950/20'
                       : row._isNew  ? 'bg-sky-50/40 dark:bg-sky-950/10'
                       : row._dirty  ? 'bg-yellow-50/40 dark:bg-yellow-950/10'
-                      : groupRows.length > 1 ? GROUP_BAND_COLORS[groupBandIdx.get(groupKey)! % GROUP_BAND_COLORS.length] : ''
+                      : (!customMode && !noneMode && groupRows.length > 1) ? GROUP_BAND_COLORS[groupBandIdx.get(groupKey)! % GROUP_BAND_COLORS.length] : ''
 
                     const frozenBg = row._status === 'pushed'  ? 'bg-emerald-50 dark:bg-emerald-950/60'
                       : row._status === 'error'   ? 'bg-red-50 dark:bg-red-950/60'
@@ -2428,6 +2582,12 @@ export default function FlatFileGrid({
                 <td colSpan={allColumns.length + 2} className="px-4 py-2 border-t border-dashed border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-2">
                     <Button size="sm" variant="ghost" onClick={addRow}><Plus className="w-3.5 h-3.5 mr-1" />Add row</Button>
+                    {enableCustomGroups && selectedRows.size > 0 && (
+                      <Button size="sm" variant="ghost" onClick={groupFromSelection} className="ml-2"
+                        title={`Create a custom group from the ${selectedRows.size} selected row(s)`}>
+                        <Layers className="w-3.5 h-3.5 mr-1" />Group {selectedRows.size}…
+                      </Button>
+                    )}
                     {selectedRows.size > 0 && (
                       <Button size="sm" variant="ghost" onClick={deleteSelected} className="text-red-500 hover:text-red-700 ml-2">
                         <Trash2 className="w-3.5 h-3.5 mr-1" />Delete {selectedRows.size}

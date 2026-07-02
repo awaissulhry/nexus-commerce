@@ -1833,6 +1833,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       marketplace={marketplace}
       familyId={familyId}
       storageKey="eff"
+      enableCustomGroups
       columnGroups={columnGroups}
       columnGroupState={coreColumnGroups.map((g) => ({
         id: g.id,

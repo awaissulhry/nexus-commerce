@@ -231,6 +231,14 @@ export interface FlatFileGridProps {
    * In controlled mode the parent must update columnGroupState in response.
    */
   onGroupStateChange?: (closed: Set<string>, order: string[]) => void
+
+  /**
+   * P4 — enable named custom SKU groups (create/name/assign from checkbox
+   * selection, plus a Family|Custom|None "Group by" toggle). Opt-in per
+   * consumer; when omitted/false the grid behaves exactly as before (family
+   * grouping only). Groups persist under the `storageKey` scope.
+   */
+  enableCustomGroups?: boolean
 }
 
 // ── A4.1 — AI panel context ───────────────────────────────────────────────
