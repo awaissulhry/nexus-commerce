@@ -42,6 +42,8 @@ import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, p
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
 import { renderExport } from '../services/export/renderers.js';
 import { parseCsv, parseFile, sniffDelimiter, detectFileKind, type ParsedFile } from '../services/import/parsers.js';
+// P1.2 — eBay flat-file create/reparent pre-pass (new products persist under their parent before ChannelListing loop runs)
+import { runEbayFlatFileCreates, type CreateResult } from '../services/ebay-flat-file-create.service.js';
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
 
@@ -264,22 +266,35 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     });
 
     try {
+      // P1.2 — create/reparent PRE-PASS: persist any new products (and reparents) before the
+      // ChannelListing loop so that newly-created rows are not silently skipped below.
+      const createResult: CreateResult = await runEbayFlatFileCreates(prisma as any, rows);
+      // Build a sku→productId map from the pre-pass so new rows can be resolved without a DB hit.
+      const createdIdBySku = new Map<string, string>(
+        createResult.idMap.map(e => [e.sku, e.productId]),
+      );
+
       for (const row of rows) {
         const sku = row.sku as string;
         if (!sku) continue;
 
-        // Resolve productId
+        // Resolve productId — check pre-pass results before falling back to DB lookup.
         let productId = (row._productId as string) ?? '';
         if (!productId) {
-          const product = await prisma.product.findFirst({
-            where: { sku, deletedAt: null },
-            select: { id: true },
-          });
-          if (!product) {
-            request.log.warn({ sku }, 'ebay/flat-file/rows PATCH: product not found, skipping');
-            continue;
+          const createdId = createdIdBySku.get(sku);
+          if (createdId) {
+            productId = createdId;
+          } else {
+            const product = await prisma.product.findFirst({
+              where: { sku, deletedAt: null },
+              select: { id: true },
+            });
+            if (!product) {
+              request.log.warn({ sku }, 'ebay/flat-file/rows PATCH: product not found, skipping');
+              continue;
+            }
+            productId = product.id;
           }
-          productId = product.id;
         }
 
         const sharedPacked = packSharedFields(row);
@@ -507,7 +522,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         saved++;
       }
 
-      return reply.send({ saved });
+      // Preserve existing `{ saved }` shape; add createResult as a new field (additive only).
+      return reply.send({ saved, createResult });
     } catch (err: unknown) {
       request.log.error(err, 'ebay/flat-file/rows PATCH failed');
       return reply
