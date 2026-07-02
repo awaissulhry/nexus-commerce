@@ -10,12 +10,13 @@
  *
  * Re-skinned to the H10 builder chrome (h10-rb-* / cp-*) so it's seamless with the other builders.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { X, Video } from 'lucide-react'
+import { X, Video, AlertTriangle } from 'lucide-react'
 import { ScheduleBuilder } from '../_schedule/ScheduleBuilder'
 import { CampaignSection, toCampaign, type SchedCampaign } from '../_schedule/CampaignSection'
 import { RankPlanBody, type RankPlanHandle, type RankPlanStatus } from './RankPlanBody'
+import { detectScheduleConflicts, type MembershipMap } from './scheduleConflicts'
 import { getBackendUrl } from '@/lib/backend-url'
 
 // Adtomic-style atom mark — same glyph the other builders use in the top bar.
@@ -77,14 +78,17 @@ export function RankGoalBuilder() {
   const [portfolios, setPortfolios] = useState<Array<{ id: string; name: string }>>([])
   const [allCamps, setAllCamps] = useState<SchedCampaign[]>([])
   const [portfolioScope, setPortfolioScope] = useState('')
+  const [memberships, setMemberships] = useState<MembershipMap>({})
   useEffect(() => {
     let alive = true
     ;(async () => {
-      const [cj, pj] = await Promise.all([
+      const [cj, pj, mj] = await Promise.all([
         fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`).then((r) => r.json()).catch(() => ({ items: [] })),
         fetch(`${getBackendUrl()}/api/advertising/portfolios`).then((r) => r.json()).catch(() => ({})),
+        fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/memberships`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: {} })),
       ])
       if (!alive) return
+      setMemberships((mj?.items ?? {}) as MembershipMap)
       const camps = (Array.isArray(cj?.items) ? cj.items : Array.isArray(cj) ? cj : []) as Array<Record<string, unknown>>
       setAllCamps(camps.map(toCampaign))
       // /api/advertising/portfolios returns { portfolios: [{ portfolioId, name }] } — the id key is
@@ -103,6 +107,14 @@ export function RankGoalBuilder() {
     const inPf = allCamps.filter((c) => c.portfolioId === pid)
     if (inPf.length) addCampaigns(inPf)
   }
+
+  // Phase 6 guardrail — selected campaigns already held by ANOTHER schedule. Saving moves them here
+  // (one campaign → one schedule), so we surface them before the user commits.
+  const conflicts = useMemo(() => {
+    const raw = detectScheduleConflicts(selCampaigns.map((c) => c.id), memberships, groupId ?? undefined)
+    const nameById = new Map(selCampaigns.map((c) => [c.id, c.name]))
+    return raw.map((x) => ({ ...x, campaignName: nameById.get(x.campaignId) ?? x.campaignId }))
+  }, [selCampaigns, memberships, groupId])
 
   // Edit mode: ?groupId opens an existing NAMED schedule group — load its name + ALL member campaigns
   // so the builder repopulates as one unit (was blank before, forcing you to re-add campaigns).
@@ -209,6 +221,19 @@ export function RankGoalBuilder() {
                 {portfolioScope && <span className="hint">Covers every campaign in this portfolio — campaigns added to it later are included on save.</span>}
               </div>
               <CampaignSection selected={selCampaigns} onAdd={addCampaign} onAddMany={addCampaigns} onRemove={removeCampaign} onClear={clearCampaigns} />
+              {conflicts.length > 0 && (
+                <div className="h10-rb-conflict" role="alert">
+                  <AlertTriangle size={15} />
+                  <div className="body">
+                    <b>{conflicts.length} campaign{conflicts.length === 1 ? '' : 's'} already held by another schedule.</b>
+                    <span> Saving moves {conflicts.length === 1 ? 'it' : 'them'} here — {conflicts.length === 1 ? 'it leaves' : 'they leave'} the other schedule (one campaign runs in one schedule).</span>
+                    <ul>
+                      {conflicts.slice(0, 6).map((c) => <li key={c.campaignId}><span className="cn">{c.campaignName}</span> → <span className="gn">{c.groupName}</span></li>)}
+                      {conflicts.length > 6 && <li>+{conflicts.length - 6} more</li>}
+                    </ul>
+                  </div>
+                </div>
+              )}
             </section>
 
             <section id="rgd-plan" className="h10-rb-sec">
@@ -230,6 +255,7 @@ export function RankGoalBuilder() {
                   <span className="b"><span className="t">Automate</span><span className="d">Have the engine hold this rank automatically on its cadence (real Amazon pushes still honour each campaign&apos;s write-gate).</span></span>
                 </label>
               </div>
+              <p className="h10-rb-hint-note">Removing a campaign here, or deleting the schedule, stops the engine holding that rank — current Amazon bids stay as last set (nothing is reverted).</p>
             </section>
 
             <div className="h10-rb-foot">

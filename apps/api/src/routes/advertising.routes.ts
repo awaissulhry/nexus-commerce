@@ -5781,6 +5781,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const byGroup = new Map(counts.map((c) => [c.groupId as string, c._count._all]))
     return { items: groups.map((g) => ({ ...g, campaignCount: byGroup.get(g.id) ?? 0 })), count: groups.length }
   })
+  // Guardrail data — which campaigns are currently held by a group, so the builder can warn that
+  // saving would MOVE a campaign out of another schedule (one campaign → one schedule row).
+  fastify.get('/advertising/rank-schedule-groups/memberships', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=5')
+    const rows = await prisma.adSchedule.findMany({ where: { groupId: { not: null } }, select: { campaignId: true, group: { select: { id: true, name: true } } } })
+    const map: Record<string, { groupId: string; groupName: string }> = {}
+    for (const r of rows) { if (r.group) map[r.campaignId] = { groupId: r.group.id, groupName: r.group.name } }
+    return { items: map, count: Object.keys(map).length }
+  })
   fastify.get('/advertising/rank-schedule-groups/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const group = await prisma.rankScheduleGroup.findUnique({ where: { id } })

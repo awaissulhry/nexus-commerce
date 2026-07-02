@@ -45,6 +45,18 @@
 .h10-rb-pfscope select:focus { outline: 0; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.15); }
 .h10-rb-pfscope .hint { font-size: 12.5px; color: #1f6fde; background: #eef4fd; border: 1px solid #d4e4fb; border-radius: 6px; padding: 5px 10px; }
 
+/* Phase 6 — conflict warning (a selected campaign is already in another schedule) */
+.h10-rb-conflict { display: flex; align-items: flex-start; gap: 10px; margin: 14px 0 0; padding: 11px 13px; background: #fff8ec; border: 1px solid #f2d59a; border-radius: 9px; color: #7a5a12; }
+.h10-rb-conflict > svg { flex-shrink: 0; margin-top: 1px; color: #c9871f; }
+.h10-rb-conflict .body { font-size: 13px; line-height: 1.5; min-width: 0; }
+.h10-rb-conflict .body b { color: #6a4d0f; }
+.h10-rb-conflict .body ul { margin: 6px 0 0; padding: 0 0 0 2px; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.h10-rb-conflict .body li { font-size: 12.5px; }
+.h10-rb-conflict .body .cn { font-weight: 600; color: #59440d; }
+.h10-rb-conflict .body .gn { font-weight: 600; color: #b45309; }
+/* Phase 6 — delete/remove semantics note under Control */
+.h10-rb-hint-note { margin: 10px 0 0; font-size: 12.5px; color: #6b7583; line-height: 1.5; }
+
 .h10-rb-card { border: 1px solid #e6e9ee; border-radius: 10px; background: #fff; }
 .h10-rb-card-h { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; }
 .h10-rb-card-h b { font-size: 15px; font-weight: 700; color: #1c2530; }
