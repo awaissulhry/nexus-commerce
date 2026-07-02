@@ -71,6 +71,7 @@ describe('synthesizeSharedRow', () => {
 
     // quantity
     expect(row.it_qty).toBe(5)
+    expect(row.quantity).toBe(5)
 
     // variation specifics
     expect(row.aspect_Colore).toBe('Nero')
@@ -197,9 +198,13 @@ describe('loadSharedMembershipRows', () => {
       channelListings: [],
     }
 
+    // child-1 ALSO has a membership under parent-A — but parent-A already shows child-1 as a
+    // normal row, so this membership MUST be deduped (skipped) against normalRows.
+    const mockMembershipA = { ...mockMembership, parentSku: 'parent-A', itemId: 'item-000' }
+
     const mockPrisma = {
       sharedListingMembership: {
-        findMany: vi.fn().mockResolvedValue([mockMembership]),
+        findMany: vi.fn().mockResolvedValue([mockMembershipA, mockMembership]),
       },
       product: {
         findMany: vi.fn().mockResolvedValue([mockChildProduct]),
@@ -208,8 +213,9 @@ describe('loadSharedMembershipRows', () => {
 
     const result = await loadSharedMembershipRows(mockPrisma as any, parentRows, normalRows)
 
-    // Exactly one synthesized row
+    // Exactly one synthesized row — the parent-A membership was deduped against the normal row.
     expect(result).toHaveLength(1)
+    expect(result.some(r => r.platformProductId === 'prod-A')).toBe(false)
 
     const row = result[0]
     expect(row.sku).toBe('child-1')
