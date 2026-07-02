@@ -88,6 +88,7 @@ export function buildSharedListingInput(
   }
 }
 
+import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { addFixedPriceItem } from './ebay-trading-api.service.js'
 
@@ -96,7 +97,11 @@ export interface SharedListingCtx {
   market: string
   capQty?: CapQtyFn
   addFixedPriceItemFn?: (input: AddFixedPriceItemInput, ctx: { oauthToken: string; market: string }) => Promise<{ itemId: string }>
-  db?: { sharedListingMembership: { findFirst: Function; create: Function } }
+  db?: {
+    sharedListingMembership: { findFirst: Function; create: Function }
+    product: { findMany: Function }
+    $transaction: (args: Promise<unknown>[]) => Promise<unknown[]>
+  }
 }
 export interface SharedListingResult {
   status: 'CREATED' | 'SKIPPED_EXISTS' | 'ERROR'
@@ -133,9 +138,18 @@ export async function createSharedListing(
       if (sku) productIdBySku.set(sku, row._productId as string | undefined)
     }
 
-    let count = 0
-    for (const v of input.variations) {
-      await db.sharedListingMembership.create({
+    // Backfill productId via DB SKU lookup for variants that had no _productId.
+    const missing = [...productIdBySku.entries()].filter(([, id]) => !id).map(([sku]) => sku)
+    if (missing.length) {
+      const found = await db.product.findMany({
+        where: { sku: { in: missing }, deletedAt: null },
+        select: { id: true, sku: true },
+      })
+      for (const f of found) productIdBySku.set(f.sku as string, f.id as string)
+    }
+
+    await db.$transaction(input.variations.map((v) =>
+      db.sharedListingMembership.create({
         data: {
           marketplace: market,
           sku: v.sku,
@@ -143,13 +157,14 @@ export async function createSharedListing(
           parentSku,
           productId: productIdBySku.get(v.sku) ?? null,
           variationSpecifics: v.specifics,
+          price: v.price != null ? new Prisma.Decimal(v.price) : null,
           lastQtyPushed: v.quantity,
           lastPushedAt: new Date(),
           status: 'ACTIVE',
         },
       })
-      count++
-    }
+    ))
+    const count = input.variations.length
     return { status: 'CREATED', itemId, parentSku, market, memberships: count, message: `created ${count} memberships` }
   } catch (err) {
     return { status: 'ERROR', parentSku, market, memberships: 0, message: err instanceof Error ? err.message : String(err) }

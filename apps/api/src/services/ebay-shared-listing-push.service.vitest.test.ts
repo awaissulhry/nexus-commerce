@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { Prisma } from '@prisma/client'
 import { buildSharedListingInput, createSharedListing, pushSharedListings } from './ebay-shared-listing-push.service.js'
 
 const parent = {
@@ -66,7 +67,7 @@ describe('buildSharedListingInput', () => {
   })
 })
 
-function mockDb(existing: unknown = null) {
+function mockDb(existing: unknown = null, products: { id: string; sku: string }[] = []) {
   const created: any[] = []
   return {
     created,
@@ -74,6 +75,10 @@ function mockDb(existing: unknown = null) {
       findFirst: vi.fn(async () => existing),
       create: vi.fn(async ({ data }: any) => { created.push(data); return data }),
     },
+    product: {
+      findMany: vi.fn(async () => products),
+    },
+    $transaction: vi.fn(async (promises: Promise<any>[]) => Promise.all(promises)),
   }
 }
 
@@ -114,6 +119,24 @@ describe('createSharedListing', () => {
     const bySkuL = db.created.find((m: any) => m.sku === 'LNR-BLK-L')
     expect(bySkuM?.productId).toBe('pid-M')
     expect(bySkuL?.productId).toBe('pid-L')
+  })
+
+  it('T2: backfills productId via SKU lookup when _productId is absent, and stores price', async () => {
+    const db = mockDb(null, [{ id: 'prod-1', sku: 'SH-M' }])
+    const addFn = vi.fn(async () => ({ itemId: '555444333' }))
+    const variantsNoId = [
+      { sku: 'SH-M', it_price: 120, it_qty: 3, aspect_Size: 'M' }, // no _productId
+      { sku: 'SH-L', it_price: 90, it_qty: 2, aspect_Size: 'L' },  // no _productId, not in products
+    ]
+    await createSharedListing(parent, variantsNoId, { ...ctx0, db, addFixedPriceItemFn: addFn })
+    const bySkuM = db.created.find((m: any) => m.sku === 'SH-M')
+    const bySkuL = db.created.find((m: any) => m.sku === 'SH-L')
+    // productId resolved via SKU lookup for SH-M; null for SH-L (not in mock products)
+    expect(bySkuM?.productId).toBe('prod-1')
+    expect(bySkuL?.productId).toBeNull()
+    // price stored as Prisma.Decimal
+    expect(bySkuM?.price).toEqual(new Prisma.Decimal(120))
+    expect(bySkuL?.price).toEqual(new Prisma.Decimal(90))
   })
 
   it('returns ERROR (no throw) when the eBay call fails', async () => {
