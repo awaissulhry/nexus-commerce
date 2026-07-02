@@ -104,13 +104,13 @@ export function RankGoalsList() {
     ]
   }, [rows])
 
+  // Mirrors Ads Manager's first-column: a max-width name wrapper so a long name truncates with an
+  // ellipsis and the hover Manage button stays inside the column (not spilling into the next one).
   const renderFirst = (r: RankRow) => (
-    <>
-      <a className="h10-nt-name h10-rg-name" href={builderHref(r.id)} onClick={(e) => e.stopPropagation()} title={r.name}>{r.name}</a>
-      <span className="h10-nt-acts">
-        <a className="h10-nt-open" href={builderHref(r.id)} onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Manage</a>
-      </span>
-    </>
+    <span className="rg-namew">
+      <a className="h10-nt-name rg-name" href={builderHref(r.id)} onClick={(e) => e.stopPropagation()} title={r.name}>{r.name}</a>
+      <a className="h10-nt-open" href={builderHref(r.id)} onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Manage</a>
+    </span>
   )
 
   return (
