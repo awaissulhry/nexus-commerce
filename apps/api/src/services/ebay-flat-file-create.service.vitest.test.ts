@@ -84,6 +84,7 @@ function makeMock(opts: MockResponses = {}) {
       if (opts.throwP2002) {
         const err: any = new Error('Unique constraint violated')
         err.code = 'P2002'
+        err.meta = { target: ['sku'] }
         throw err
       }
       // Pass the same product mock as tx.product — no real DB transaction

@@ -280,7 +280,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     try {
       // P1.2 — create/reparent PRE-PASS: persist any new products (and reparents) before the
       // ChannelListing loop so that newly-created rows are not silently skipped below.
-      const createResult: CreateResult = await runEbayFlatFileCreates(prisma as any, rows);
+      // Shared-SKU parents carry shared_sku_listing:true — derive their family keys so the
+      // planner suppresses re-parents that must stay membership-managed.
+      const sharedFamilyKeys = new Set(
+        rows
+          .filter(r => (r as Record<string, unknown>).shared_sku_listing === true)
+          .map(r => String(r._productId ?? r._rowId ?? r.platformProductId ?? ''))
+          .filter(Boolean),
+      );
+      const createResult: CreateResult = await runEbayFlatFileCreates(prisma, rows, { sharedFamilyKeys });
       // Build a sku→productId map from the pre-pass so new rows can be resolved without a DB hit.
       const createdIdBySku = new Map<string, string>(
         createResult.idMap.map(e => [e.sku, e.productId]),

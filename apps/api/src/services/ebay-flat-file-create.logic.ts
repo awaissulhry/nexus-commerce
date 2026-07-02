@@ -217,8 +217,11 @@ export function planEbayFamilyCreates(input: {
   rows: EbayRow[]
   existingBySku: Map<string, ExistingProduct>
   existingParentById: Map<string, ExistingParent>
+  /** Shared-SKU family keys: a re-parent whose new or current parent is in this set is suppressed
+   *  (emitted as a warnings entry instead) because SharedListingMembership owns that linkage. */
+  sharedFamilyKeys?: Set<string>
 }): CreatePlan {
-  const { rows, existingBySku, existingParentById } = input
+  const { rows, existingBySku, existingParentById, sharedFamilyKeys = new Set() } = input
 
   const parentCreates: CreatePlan['parentCreates'] = []
   const childCreates: CreatePlan['childCreates'] = []
@@ -328,7 +331,12 @@ export function planEbayFamilyCreates(input: {
           // Self-parent guard
           errors.push({ sku, reason: 'self-parent: platformProductId points to the product itself' })
         } else if (ppid !== (existing.parentId ?? '')) {
-          reparents.push({ productId: existing.id, sku, newParentId: ppid })
+          // Suppress reparent for shared-SKU families — memberships own the parent linkage.
+          if (sharedFamilyKeys.has(ppid) || sharedFamilyKeys.has(String(existing.parentId ?? ''))) {
+            warnings.push({ sku, reason: 'reparent suppressed: shared family (membership-managed)' })
+          } else {
+            reparents.push({ productId: existing.id, sku, newParentId: ppid })
+          }
         }
         // else ppid === existing.parentId → no-op (already on the right parent)
       }

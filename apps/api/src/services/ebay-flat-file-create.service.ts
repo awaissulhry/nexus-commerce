@@ -23,7 +23,7 @@ import {
 // ──────────────────────────────────────────────────────────────────────
 
 export type CreateResult = {
-  /** tempRowId (may be absent for reparent idMap entries) + sku → real productId; for client temp→real reconciliation */
+  /** tempRowId + sku → real productId; for client temp→real reconciliation (reparents go to `reparented`, not here) */
   idMap: Array<{ tempRowId?: string; sku: string; productId: string }>
   reparented: Array<{ sku: string; productId: string; newParentId: string }>
   errors: Array<{ sku?: string; tempRowId?: string; reason: string }>
@@ -69,6 +69,7 @@ export interface EbayCreatePrisma {
 export async function runEbayFlatFileCreates(
   prisma: EbayCreatePrisma | PrismaClient,
   rows: EbayRow[],
+  opts?: { sharedFamilyKeys?: Set<string> },
 ): Promise<CreateResult> {
   const p = prisma as EbayCreatePrisma
 
@@ -91,18 +92,15 @@ export async function runEbayFlatFileCreates(
       })) as Array<{ id: string; sku: string; parentId: string | null; variationTheme: string | null; isParent: boolean }>
     : []
 
-  const existingBySku = new Map(existingProductRows.map(p => [p.sku, p]))
+  const existingBySku = new Map(existingProductRows.map(row => [row.sku, row]))
 
-  // Collect platformProductId values from child rows that are NOT temp rowIds in this payload.
-  // These may reference real existing parent products in the DB.
-  const tempRowIdsInPayload = new Set(
-    rows.map(r => String(r._rowId ?? r._productId ?? '')).filter(Boolean),
-  )
+  // Collect all non-empty platformProductId values — these are candidate real parent ids.
+  // Temp client _rowId values (cuid/nanoid) won't match real product ids in the DB findMany,
+  // so including them is harmless and avoids excluding a real parent whose id happens to be
+  // present as a _rowId (e.g. when buildFlatRow sets _rowId = product.id for existing products).
   const candidateParentIds = [
     ...new Set(
-      rows
-        .map(r => String(r.platformProductId ?? '').trim())
-        .filter(ppid => ppid && !tempRowIdsInPayload.has(ppid)),
+      rows.map(r => String(r.platformProductId ?? '').trim()).filter(Boolean),
     ),
   ]
 
@@ -116,7 +114,12 @@ export async function runEbayFlatFileCreates(
   const existingParentById = new Map(existingParentRows.map(r => [r.id, r]))
 
   // ── Step 2: Plan ──────────────────────────────────────────────────────
-  const plan = planEbayFamilyCreates({ rows, existingBySku, existingParentById })
+  const plan = planEbayFamilyCreates({
+    rows,
+    existingBySku,
+    existingParentById,
+    sharedFamilyKeys: opts?.sharedFamilyKeys ?? new Set(),
+  })
 
   errors.push(...plan.errors)
   warnings.push(...plan.warnings)
@@ -197,7 +200,9 @@ export async function runEbayFlatFileCreates(
       }
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code
-      if (code === 'P2002') {
+      const t = (err as { meta?: { target?: unknown } })?.meta?.target
+      const isSkuP2002 = code === 'P2002' && (Array.isArray(t) ? t.includes('sku') : String(t ?? '').includes('sku'))
+      if (isSkuP2002) {
         // Double-submit: idempotent recovery — look up all products in this family by SKU.
         const found = (await p.product.findMany({
           where: { sku: { in: allSkusInFamily }, deletedAt: null },
@@ -261,7 +266,9 @@ export async function runEbayFlatFileCreates(
       }
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code
-      if (code === 'P2002') {
+      const t = (err as { meta?: { target?: unknown } })?.meta?.target
+      const isSkuP2002 = code === 'P2002' && (Array.isArray(t) ? t.includes('sku') : String(t ?? '').includes('sku'))
+      if (isSkuP2002) {
         // Idempotent recovery for existing-parent family.
         const found = (await p.product.findMany({
           where: { sku: { in: allChildSkus }, deletedAt: null },

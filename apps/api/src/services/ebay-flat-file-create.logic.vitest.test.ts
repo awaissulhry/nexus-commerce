@@ -345,4 +345,88 @@ describe('planEbayFamilyCreates', () => {
     expect(result.childCreates).toHaveLength(0)
     expect(result.reparents).toHaveLength(0)
   })
+
+  // ── P1.2 regression: existing parent row present in payload with its REAL id ────────────────
+  it('regression: existing parent row in payload (real id) alongside new child → child resolves to kind:existing, NOT unresolved', () => {
+    // buildFlatRow sets _rowId = _productId = product.id for real products.
+    // If that real id is also a platformProductId for a new child, the old
+    // tempRowIdsInPayload filter would exclude it from candidateParentIds,
+    // causing "unresolved parent". This test locks the fix.
+    const parentRow = {
+      sku: 'P_PARENT',
+      _rowId: 'P_real',
+      _productId: 'P_real',
+      platformProductId: 'P_real', // points to self → inferred parent
+      variation_theme: 'Colore',
+    }
+    const newChild = {
+      sku: 'NEW_CHILD',
+      _rowId: 'c-temp-1',
+      platformProductId: 'P_real', // points to the existing parent's real id
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [parentRow, newChild],
+      existingBySku: new Map([
+        // The parent ALREADY EXISTS in the DB
+        ['P_PARENT', { id: 'P_real', parentId: null, variationTheme: 'Colore', isParent: true }],
+      ]),
+      existingParentById: new Map([
+        ['P_real', { id: 'P_real', variationTheme: 'Colore', isParent: true }],
+      ]),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    // Child must be created under the existing parent (not error as unresolved)
+    expect(result.childCreates).toHaveLength(1)
+    expect(result.childCreates[0].parentRef).toEqual({ kind: 'existing', productId: 'P_real' })
+    expect(result.childCreates[0].sku).toBe('NEW_CHILD')
+    // Parent already exists — must NOT be in parentCreates
+    expect(result.parentCreates).toHaveLength(0)
+  })
+
+  // ── Shared-family reparent suppression ────────────────────────────────
+  it('shared-skip: child reparent suppressed when platformProductId is a sharedFamilyKey', () => {
+    const row = {
+      sku: 'C1',
+      _productId: 'idC1',
+      platformProductId: 'B', // new parent candidate — in sharedFamilyKeys
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['C1', { id: 'idC1', parentId: 'A', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+      sharedFamilyKeys: new Set(['B']),
+    })
+
+    expect(result.reparents).toHaveLength(0)
+    expect(result.warnings).toHaveLength(1)
+    expect(result.warnings[0].sku).toBe('C1')
+    expect(result.warnings[0].reason).toMatch(/reparent suppressed.*shared family/)
+    expect(result.errors).toHaveLength(0)
+  })
+
+  it('shared-skip CONTROL: same input WITHOUT sharedFamilyKeys still reparents (regression guard)', () => {
+    const row = {
+      sku: 'C1',
+      _productId: 'idC1',
+      platformProductId: 'B',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['C1', { id: 'idC1', parentId: 'A', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+      // sharedFamilyKeys intentionally omitted
+    })
+
+    expect(result.reparents).toHaveLength(1)
+    expect(result.reparents[0]).toEqual({ productId: 'idC1', sku: 'C1', newParentId: 'B' })
+    expect(result.warnings).toHaveLength(0)
+  })
 })
