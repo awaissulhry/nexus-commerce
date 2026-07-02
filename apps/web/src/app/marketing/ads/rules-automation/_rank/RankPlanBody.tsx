@@ -3,8 +3,10 @@
 /**
  * RGD.1 — Rank Plan body (the §2 "Your rank goal & schedule" cockpit), re-skinned to H10 and made
  * MULTI-CAMPAIGN. Author ONE plan — a baseline rank ("for the rest of the week, hold Y") + time
- * windows ("Mon–Fri 18–22 → Own Top") — applied across every selected campaign at once (fan-out:
- * one /schedules row per campaign). Live defend preview + delivery truth are shown per campaign.
+ * windows ("Mon–Fri 18–22 → Own Top") — applied across every selected campaign at once. Saved as
+ * ONE NAMED GROUP (RankScheduleGroup): the API materializes one AdSchedule row per member campaign
+ * (which the rank-defend cron runs — engine untouched) but the list shows a single named row. Edit
+ * via ?groupId reloads name + all members. Live defend preview + delivery truth are shown per campaign.
  *
  * RGD.7 — the action model follows the rules-automation convention: there's no Save/Publish/Discard
  * trio here. The parent builder owns ONE "Create Schedule" action + a Manual/Automate Control section
@@ -36,7 +38,7 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
 const api = (p: string) => `${getBackendUrl()}/api/advertising${p}`
 
-export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaign[]; name: string; onStatus?: (s: RankPlanStatus) => void }>(function RankPlanBody({ campaigns, name, onStatus }, ref) {
+export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaign[]; name: string; groupId?: string; onStatus?: (s: RankPlanStatus) => void }>(function RankPlanBody({ campaigns, name, groupId, onStatus }, ref) {
   const campKey = useMemo(() => campaigns.map(c => c.id).sort().join(','), [campaigns])
   const [targets, setTargets] = useState<RankTarget[]>([])
   const [scheds, setScheds] = useState<Record<string, Sched | null>>({}) // per-campaign existing schedule
@@ -45,6 +47,7 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
   const [serverBaseline, setServerBaseline] = useState('')
   const [serverWindows, setServerWindows] = useState<Win[]>([])
   const [loaded, setLoaded] = useState(false)
+  const [savedOnce, setSavedOnce] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [decisions, setDecisions] = useState<Decision[]>([])
@@ -111,48 +114,44 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
   const activeDemand = smooth && smoothed ? smoothed : demand
 
   const dirty = baseline !== serverBaseline || JSON.stringify(windows) !== JSON.stringify(serverWindows)
-  const saved = Object.values(scheds).some(Boolean)
+  const saved = !!groupId || savedOnce || Object.values(scheds).some(Boolean)
   const hasGoal = !!baseline || windows.length > 0
-  // Report state up so the parent builder can drive its single "Create Schedule" action.
-  useEffect(() => { onStatus?.({ valid: campaigns.length > 0 && hasGoal, busy, dirty, saved }) }, [campaigns.length, hasGoal, busy, dirty, saved, onStatus])
+  // Report state up so the parent builder can drive its single action. Name is compulsory now —
+  // a schedule can't be saved without one (the builder disables the button until it's set).
+  useEffect(() => { onStatus?.({ valid: campaigns.length > 0 && hasGoal && !!name.trim(), busy, dirty, saved }) }, [campaigns.length, hasGoal, name, busy, dirty, saved, onStatus])
 
   const addWindow = () => setWindows(w => [...w, { days: [1, 2, 3, 4, 5], startHour: 18, endHour: 22, targetKey: targets[0]?.key }])
   const setWin = (i: number, patch: Partial<Win>) => setWindows(w => w.map((x, j) => j === i ? { ...x, ...patch } : x))
   const removeWin = (i: number) => setWindows(w => w.filter((_, j) => j !== i))
   const toggleDay = (i: number, d: number) => setWindows(w => w.map((x, j) => j === i ? { ...x, days: x.days.includes(d) ? x.days.filter(y => y !== d) : [...x.days, d].sort() } : x))
 
-  // Fan-out persist: upsert each selected campaign's schedule with the SAME plan + arm state.
-  // enabled comes from the parent's Control choice (Manual=false / Automate=true).
-  const persistAll = async (enabled: boolean): Promise<Record<string, Sched | null>> => {
-    const body = { defaultTargetKey: baseline || null, windows, enabled }
-    const next: Record<string, Sched | null> = { ...scheds }
-    await Promise.all(campaigns.map(async c => {
-      const existing = scheds[c.id]
-      try {
-        if (existing) {
-          const r = await fetch(api(`/schedules/${existing.id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(x => x.json())
-          if (r?.id) next[c.id] = r
-        } else {
-          const r = await fetch(api('/schedules'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campaignId: c.id, name: (name.trim() || `Rank plan — ${c.name}`), timezone: 'Europe/Rome', ...body }) }).then(x => x.json())
-          if (r?.id) next[c.id] = r
-        }
-      } catch { /* per-campaign failure leaves its prior entry */ }
-    }))
-    setScheds(next)
-    return next
+  // Persist as ONE named group. The API materializes one AdSchedule row per member campaign (which
+  // the rank-defend cron runs — engine untouched). Per-campaign overrides are preserved by gathering
+  // them from the loaded member schedules and passing them in the group's per-campaign map.
+  const saveGroup = async (enabled: boolean): Promise<{ ok: boolean; id?: string }> => {
+    const perCamp: Record<string, unknown> = {}
+    for (const c of campaigns) { const o = scheds[c.id]?.targetOverrides; if (o && Object.keys(o).length) perCamp[c.id] = o }
+    const body = { id: groupId || undefined, name: name.trim(), campaignIds: campaigns.map(c => c.id), windows, defaultTargetKey: baseline || null, targetOverrides: perCamp, enabled, timezone: 'Europe/Rome' }
+    const url = groupId ? api(`/rank-schedule-groups/${groupId}`) : api('/rank-schedule-groups')
+    const r = await fetch(url, { method: groupId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(x => x.json()).catch(() => null)
+    return { ok: !!r?.id, id: r?.id }
   }
   const markSaved = () => { setServerBaseline(baseline); setServerWindows(windows.map(w => ({ ...w }))) }
 
-  // The ONE action, invoked by the parent's "Create Schedule" with the Control choice's enabled flag.
+  // The ONE action, invoked by the parent's "Create Schedule" / "Save Changes" with the Control flag.
   const doSave = async (enabled: boolean) => {
     if (!campaigns.length || busy) return
+    if (!name.trim()) { setMsg('Name your schedule first — a schedule name is required.'); return }
     setBusy(true); setMsg('')
     try {
-      const r = await persistAll(enabled); markSaved(); setDeliverySignal(n => n + 1)
-      const ok = Object.values(r).filter(Boolean).length
-      setMsg(enabled
-        ? `Saved + armed for ${ok} campaign${ok === 1 ? '' : 's'} — the engine holds this rank on its cadence (real Amazon pushes honour each campaign's write-gate; sandbox stays local).`
-        : `Saved for ${ok} campaign${ok === 1 ? '' : 's'} — Manual, so nothing runs yet. Set Control to Automate to hold it automatically.`)
+      const r = await saveGroup(enabled)
+      if (r.ok) {
+        markSaved(); setSavedOnce(true); setDeliverySignal(n => n + 1)
+        const n = campaigns.length
+        setMsg(enabled
+          ? `Saved + armed — one schedule "${name.trim()}" holding ${n} campaign${n === 1 ? '' : 's'} on its cadence (real Amazon pushes honour each campaign's write-gate; sandbox stays local).`
+          : `Saved — one schedule "${name.trim()}" over ${n} campaign${n === 1 ? '' : 's'}. Manual, so nothing runs yet; set Control to Automate to hold it.`)
+      } else setMsg('Save failed — please retry.')
     } finally { setBusy(false) }
   }
   // Expose a STABLE save() that always runs the latest closure (avoids dependency churn on the ref).

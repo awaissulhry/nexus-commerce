@@ -1,13 +1,14 @@
 'use client'
 
 /**
- * Rank Goals list — the Dayparting Schedules tab's real content. Rank goals are AdSchedule rows
- * (GET /advertising/schedules, goal-mode), created by the Rank Goal builder; the legacy RuleListTab
- * only listed AutomationRule dayparting rules, so goal-mode schedules never appeared. This lists
- * them on the shared AdsDataGrid — same grid/filters/toolbar/customize/selection chrome as the
- * Apply Rules and Ads Manager grids — with a truncating name + Manage link (contained in the sticky
- * first column), a colored Baseline chip matching the builder's target palette, and persisted
- * enable/pause.
+ * Rank Schedules list — the Dayparting Schedules tab's real content. A rank schedule is now ONE
+ * NAMED GROUP (RankScheduleGroup, GET /advertising/rank-schedule-groups) that binds MANY campaigns;
+ * the API materializes one AdSchedule row per member for the rank-defend cron to run (engine
+ * untouched), but this list shows a single named row per group with a member count — so "test over
+ * 12 campaigns" is one row, not twelve. Rendered on the shared AdsDataGrid (same grid/filters/
+ * toolbar/customize/selection chrome as Apply Rules + Ads Manager): a truncating name + Manage link
+ * (contained in the sticky first column), a Campaigns count, a colored Baseline chip matching the
+ * builder's target palette, and persisted group-level enable/pause.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, ExternalLink } from 'lucide-react'
@@ -16,7 +17,7 @@ import { NoDataIllus } from '../_shared/NoDataIllus'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface SchedWindow { targetKey?: string }
-interface RankRow { id: string; name: string; baseline: string; baselineKey: string; baselineColor: string | null; windows: number; enabled: boolean }
+interface RankRow { id: string; name: string; baseline: string; baselineKey: string; baselineColor: string | null; windows: number; campaigns: number; enabled: boolean }
 type TargetMeta = { name: string; color: string | null }
 
 // Fallbacks used until /rank-targets resolves (built-in keys + the builder palette colors).
@@ -27,9 +28,7 @@ const FALLBACK: Record<string, TargetMeta> = {
   'pause': { name: 'Min bid', color: '#d97757' },
   'own-top-allout': { name: 'Own Top — All-Out', color: '#b91c1c' },
 }
-const isGoalMode = (s: { defaultTargetKey?: string | null; windows?: SchedWindow[] }) =>
-  !!s.defaultTargetKey || (Array.isArray(s.windows) && s.windows.some((w) => !!w?.targetKey))
-const builderHref = (id?: string) => `/marketing/ads/rules-automation/builder/dayparting-schedule${id ? `?scheduleId=${id}` : ''}`
+const builderHref = (id?: string) => `/marketing/ads/rules-automation/builder/dayparting-schedule${id ? `?groupId=${id}` : ''}`
 
 export function RankGoalsList() {
   const [rows, setRows] = useState<RankRow[]>([])
@@ -40,41 +39,44 @@ export function RankGoalsList() {
     let alive = true
     ;(async () => {
       try {
-        const [sj, tj] = await Promise.all([
-          fetch(`${getBackendUrl()}/api/advertising/schedules`, { cache: 'no-store' }).then((r) => r.json()).catch(() => []),
+        const [gj, tj] = await Promise.all([
+          fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
           fetch(`${getBackendUrl()}/api/advertising/rank-targets`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
         ])
         // real target name + color (falls back to built-in palette for any missing key)
         const tmeta: Record<string, TargetMeta> = { ...FALLBACK }
         const titems = (Array.isArray(tj?.items) ? tj.items : Array.isArray(tj) ? tj : []) as Array<{ key?: string; name?: string; color?: string | null }>
         for (const t of titems) if (t.key) tmeta[t.key] = { name: String(t.name ?? t.key), color: t.color ?? null }
-        const all = (Array.isArray(sj) ? sj : Array.isArray(sj?.items) ? sj.items : []) as Array<Record<string, unknown>>
-        const goals = all.filter((s) => isGoalMode(s as never)).map((s): RankRow => {
-          const key = String(s.defaultTargetKey ?? '')
+        const groups = (Array.isArray(gj?.items) ? gj.items : Array.isArray(gj) ? gj : []) as Array<Record<string, unknown>>
+        const mapped = groups.map((g): RankRow => {
+          const key = String(g.defaultTargetKey ?? '')
           const meta = tmeta[key]
+          const wins = Array.isArray(g.windows) ? (g.windows as SchedWindow[]) : []
           return {
-            id: String(s.id),
-            name: String(s.name ?? 'Rank goal'),
+            id: String(g.id),
+            name: String(g.name ?? 'Rank schedule'),
             baseline: meta?.name ?? (key || '—'),
             baselineKey: key,
             baselineColor: meta?.color ?? null,
-            windows: Array.isArray(s.windows) ? (s.windows as SchedWindow[]).length : 0,
-            enabled: s.enabled !== false,
+            windows: wins.filter((w) => !!w?.targetKey).length,
+            campaigns: Number(g.campaignCount ?? 0),
+            enabled: g.enabled !== false,
           }
         })
-        if (alive) setRows(goals)
+        if (alive) setRows(mapped)
       } catch { if (alive) setRows([]) }
       finally { if (alive) setLoading(false) }
     })()
     return () => { alive = false }
   }, [])
 
-  // Persisted enable/pause. Optimistic; reverts the row(s) if the PATCH fails.
+  // Persisted group-level enable/pause (PATCH cascades to every member schedule). Optimistic; reverts
+  // the affected row(s) if the PATCH fails.
   const setEnabled = useCallback(async (ids: string[], enabled: boolean) => {
     const idset = new Set(ids)
     setRows((rs) => rs.map((r) => (idset.has(r.id) ? { ...r, enabled } : r)))
     const results = await Promise.all(ids.map((id) =>
-      fetch(`${getBackendUrl()}/api/advertising/schedules/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) })
+      fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) })
         .then((r) => r.ok).catch(() => false)))
     const failed = new Set(ids.filter((_, i) => !results[i]))
     if (failed.size) setRows((rs) => rs.map((r) => (failed.has(r.id) ? { ...r, enabled: !enabled } : r)))
@@ -90,6 +92,7 @@ export function RankGoalsList() {
         </span>
       ),
     },
+    { key: 'campaigns', label: 'Campaigns', metric: true, sortable: true, sortValue: (r) => r.campaigns, render: (r) => <span>{r.campaigns}</span> },
     { key: 'windows', label: 'Windows', metric: true, sortable: true, sortValue: (r) => r.windows, render: (r) => <span>{r.windows}</span> },
     { key: 'status', label: 'Status', metric: false, sortable: true, sortValue: (r) => (r.enabled ? 0 : 1), render: (r) => <span className={`h10-pill ${r.enabled ? 'ok' : 'warn'}`}>{r.enabled ? 'Active' : 'Paused'}</span> },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,8 +121,8 @@ export function RankGoalsList() {
       rows={rows}
       loading={loading}
       rowId={(r) => r.id}
-      noun="Rank Goal"
-      firstColLabel="Rank Goal"
+      noun="Rank Schedule"
+      firstColLabel="Rank Schedule"
       renderFirst={renderFirst}
       firstSortValue={(r) => r.name}
       columns={columns}
@@ -137,19 +140,19 @@ export function RankGoalsList() {
       customizable
       storageKey="rank-goals-grid"
       searchable
-      searchPlaceholder="Search rank goals…"
+      searchPlaceholder="Search rank schedules…"
       searchValue={(r) => r.name}
       pagerCentered
       defaultSort={{ key: '__first', dir: 'asc' }}
-      emptyLabel="No rank goals yet."
+      emptyLabel="No rank schedules yet."
       emptyNode={(
         <span className="h10-rr-empty">
           <NoDataIllus size={104} />
-          <b>No rank goals yet — create one to hold a rank on a schedule.</b>
-          <a className="h10-am-btn primary" href={builderHref()}><Plus size={13} /> Create Rank Goal</a>
+          <b>No rank schedules yet — create one named schedule to hold a rank across many campaigns.</b>
+          <a className="h10-am-btn primary" href={builderHref()}><Plus size={13} /> Create Rank Schedule</a>
         </span>
       )}
-      toolbarRight={<a className="h10-am-btn primary" href={builderHref()}><Plus size={13} /> Rank Goal</a>}
+      toolbarRight={<a className="h10-am-btn primary" href={builderHref()}><Plus size={13} /> Rank Schedule</a>}
     />
   )
 }

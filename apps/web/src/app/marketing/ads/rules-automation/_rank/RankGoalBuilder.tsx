@@ -49,8 +49,9 @@ const STEPS = [
 export function RankGoalBuilder() {
   const router = useRouter()
   const sp = useSearchParams()
+  const groupId = sp.get('groupId')
   const scheduleId = sp.get('scheduleId')
-  const isEdit = !!scheduleId
+  const isEdit = !!groupId || !!scheduleId
   const style: 'rank' | 'classic' = sp.get('style') === 'classic' ? 'classic' : 'rank' // rank is the new default
   const setStyle = useCallback((s: 'rank' | 'classic') => {
     const next = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : sp.toString())
@@ -70,30 +71,40 @@ export function RankGoalBuilder() {
   const removeCampaign = (id: string) => setSelCampaigns((cur) => cur.filter((c) => c.id !== id))
   const clearCampaigns = () => setSelCampaigns([])
 
-  // Edit mode: ?scheduleId opens an existing rank goal — load its name + campaign so the builder
-  // repopulates (was blank before, forcing you to re-add the campaign). RankPlanBody then loads the
-  // windows/baseline/overrides for the now-selected campaign. (Phase 3 will load the whole group.)
+  // Edit mode: ?groupId opens an existing NAMED schedule group — load its name + ALL member campaigns
+  // so the builder repopulates as one unit (was blank before, forcing you to re-add campaigns).
+  // RankPlanBody then loads windows/baseline/overrides from the members. ?scheduleId is a legacy
+  // single-schedule fallback for any old links.
   useEffect(() => {
-    if (!scheduleId) return
+    if (!groupId && !scheduleId) return
     let alive = true
     ;(async () => {
       try {
-        const [sj, cj] = await Promise.all([
-          fetch(`${getBackendUrl()}/api/advertising/schedules`, { cache: 'no-store' }).then((r) => r.json()).catch(() => []),
-          fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`).then((r) => r.json()).catch(() => ({ items: [] })),
-        ])
+        const cj = await fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`).then((r) => r.json()).catch(() => ({ items: [] }))
         if (!alive) return
-        const scheds = (Array.isArray(sj) ? sj : Array.isArray(sj?.items) ? sj.items : []) as Array<Record<string, unknown>>
-        const sched = scheds.find((s) => String(s.id) === scheduleId)
-        if (!sched) return
-        if (sched.name) setName(String(sched.name))
         const camps = (Array.isArray(cj?.items) ? cj.items : Array.isArray(cj) ? cj : []) as Array<Record<string, unknown>>
-        const camp = camps.find((c) => String(c.id) === String(sched.campaignId))
-        if (camp) setSelCampaigns([toCampaign(camp)])
+        const byId = new Map(camps.map((c) => [String(c.id), c]))
+        if (groupId) {
+          const g = await fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/${groupId}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null)
+          if (!alive || !g?.id) return
+          if (g.name) setName(String(g.name))
+          const ids = (Array.isArray(g.campaignIds) ? g.campaignIds : []) as unknown[]
+          const sel = ids.map((cid) => byId.get(String(cid))).filter(Boolean).map((c) => toCampaign(c as Record<string, unknown>))
+          if (sel.length) setSelCampaigns(sel)
+        } else if (scheduleId) {
+          const sj = await fetch(`${getBackendUrl()}/api/advertising/schedules`, { cache: 'no-store' }).then((r) => r.json()).catch(() => [])
+          if (!alive) return
+          const scheds = (Array.isArray(sj) ? sj : Array.isArray(sj?.items) ? sj.items : []) as Array<Record<string, unknown>>
+          const sched = scheds.find((s) => String(s.id) === scheduleId)
+          if (!sched) return
+          if (sched.name) setName(String(sched.name))
+          const camp = byId.get(String(sched.campaignId))
+          if (camp) setSelCampaigns([toCampaign(camp)])
+        }
       } catch { /* fail soft */ }
     })()
     return () => { alive = false }
-  }, [scheduleId])
+  }, [groupId, scheduleId])
 
   // RGD.7 — the builder owns ONE action + a Manual/Automate Control section, matching every other
   // rule type. The rank plan body exposes save(enabled) via a ref + reports its status up.
@@ -161,7 +172,7 @@ export function RankGoalBuilder() {
             <section id="rgd-plan" className="h10-rb-sec">
               <h2>Your rank goal &amp; schedule</h2>
               <p className="h10-rb-desc">Hold this rank, on this schedule.</p>
-              <RankPlanBody ref={planRef} campaigns={selCampaigns} name={name} onStatus={setPlanStatus} />
+              <RankPlanBody ref={planRef} campaigns={selCampaigns} name={name} groupId={groupId ?? undefined} onStatus={setPlanStatus} />
             </section>
 
             <section id="rgd-control" className="h10-rb-sec">
