@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { moveRowsToParent, type MoveableRow } from './moveRows'
+import { moveRowsToParent, detachRowsToStandalone, type MoveableRow } from './moveRows'
 
 const mkRow = (overrides: Partial<MoveableRow> & { _rowId: string }): MoveableRow => ({
   ...overrides,
@@ -65,5 +65,60 @@ describe('moveRowsToParent', () => {
     const result = moveRowsToParent(rows, new Set(['r1']), 'new-parent')
     expect(result[1]).toBe(rows[1])
     expect(result[0].platformProductId).toBe('new-parent')
+  })
+})
+
+describe('detachRowsToStandalone', () => {
+  it('(a) selected child with parent link → clears platformProductId and marks dirty', () => {
+    const rows: MoveableRow[] = [
+      mkRow({ _rowId: 'r1', _isParent: false, platformProductId: 'parent-123', _productId: 'p-r1' }),
+    ]
+    const result = detachRowsToStandalone(rows, new Set(['r1']))
+    expect(result[0].platformProductId).toBe('')
+    expect(result[0]._isParent).toBe(false)
+    expect(result[0]._dirty).toBe(true)
+  })
+
+  it('(b) selected _isParent row → returned unchanged', () => {
+    const rows: MoveableRow[] = [
+      mkRow({ _rowId: 'p1', _isParent: true, platformProductId: undefined }),
+    ]
+    const result = detachRowsToStandalone(rows, new Set(['p1']))
+    expect(result[0]).toBe(rows[0])
+  })
+
+  it('(c) selected _shared row → returned unchanged', () => {
+    const rows: MoveableRow[] = [
+      mkRow({ _rowId: 'r1', _isParent: false, _shared: true, platformProductId: 'parent-123' }),
+    ]
+    const result = detachRowsToStandalone(rows, new Set(['r1']))
+    expect(result[0]).toBe(rows[0])
+  })
+
+  it('(c) selected _readonly row → returned unchanged', () => {
+    const rows: MoveableRow[] = [
+      mkRow({ _rowId: 'r1', _isParent: false, _readonly: true, platformProductId: 'parent-123' }),
+    ]
+    const result = detachRowsToStandalone(rows, new Set(['r1']))
+    expect(result[0]).toBe(rows[0])
+  })
+
+  it('(d) selected row already standalone (empty platformProductId) → not dirtied, returned unchanged', () => {
+    const rows: MoveableRow[] = [
+      mkRow({ _rowId: 'r1', _isParent: false, platformProductId: '', _dirty: false }),
+    ]
+    const result = detachRowsToStandalone(rows, new Set(['r1']))
+    expect(result[0]).toBe(rows[0])
+    expect(result[0]._dirty).toBeFalsy()
+  })
+
+  it('(e) unselected row → returned unchanged regardless of parent link', () => {
+    const rows: MoveableRow[] = [
+      mkRow({ _rowId: 'r1', _isParent: false, platformProductId: 'parent-123' }),
+      mkRow({ _rowId: 'r2', _isParent: false, platformProductId: 'parent-123' }),
+    ]
+    const result = detachRowsToStandalone(rows, new Set(['r1']))
+    expect(result[1]).toBe(rows[1])
+    expect(result[0].platformProductId).toBe('')
   })
 })

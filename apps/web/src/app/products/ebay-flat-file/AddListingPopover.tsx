@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Plus, RefreshCw, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
+import { Tag } from '@/design-system/primitives/Tag'
 import { TagInput } from '@/design-system/primitives/TagInput'
 import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
 import { Combobox } from '@/design-system/components/Combobox'
@@ -103,7 +104,10 @@ export function AddListingPopover({ categoryAxisNames = [], existingParents, onC
     setTemplateEdited(false)
   }
 
-  // When a parent is chosen in 'existing' mode, seed parentSku + selectedAxes from that parent
+  // When a parent is chosen in 'existing' mode, seed parentSku + selectedAxes from that parent.
+  // Derive a stable key so this effect doesn't re-fire on every parent re-render that
+  // produces a fresh array reference with the same contents.
+  const existingParentsKey = (existingParents ?? []).map((p) => p.id).join(',')
   useEffect(() => {
     if (familyMode !== 'existing' || !targetParentId) return
     const parent = existingParents?.find((p) => p.id === targetParentId)
@@ -115,7 +119,9 @@ export function AddListingPopover({ categoryAxisNames = [], existingParents, onC
       .filter(Boolean) ?? []
     if (axes.length) setSelectedAxes(axes)
     setTemplateEdited(false) // let the template effect rebuild from the new parentSku/axes
-  }, [familyMode, targetParentId, existingParents])
+  // existingParents intentionally read inside the effect but tracked via stable existingParentsKey
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [familyMode, targetParentId, existingParentsKey])
 
   // ── Derived preview ─────────────────────────────────────────────────────────
   const activeAxisValues = selectedAxes.map((a) => axisValues[a] ?? []).filter((v) => v.length > 0)
@@ -300,9 +306,7 @@ export function AddListingPopover({ categoryAxisNames = [], existingParents, onC
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Variation axes</span>
               {familyMode === 'existing' && (
-                <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 rounded px-1.5 py-0.5">
-                  locked — set by parent
-                </span>
+                <Tag tone="neutral">locked — set by parent</Tag>
               )}
             </div>
             <div className="space-y-2">

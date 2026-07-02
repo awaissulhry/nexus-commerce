@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, ImageIcon, Loader2, ListOrdered, Plus, RefreshCw, RotateCcw, Search, Send, Upload, X, Zap,
+  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, ImageIcon, Loader2, ListOrdered, Plus, RefreshCw, RotateCcw, Search, Send, Unlink, Upload, X, Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -17,7 +17,7 @@ import { Banner } from '@/design-system/components/Banner'
 import { Combobox } from '@/design-system/components/Combobox'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { pinBlankRowsLast } from './rowOrder'
-import { moveRowsToParent } from './moveRows'
+import { moveRowsToParent, detachRowsToStandalone } from './moveRows'
 import { AddListingPopover } from './AddListingPopover'
 import { EbayImportWizard } from './EbayImportWizard'
 import { stampUnderParent } from './importUnderParent'
@@ -490,6 +490,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [addListingOpen, setAddListingOpen] = useState(false)
   const [moveParentOpen, setMoveParentOpen] = useState(false)
   const [moveTargetId, setMoveTargetId] = useState('')
+  const [detachOpen, setDetachOpen] = useState(false)
   const [importWizardOpen, setImportWizardOpen] = useState(false)
   const [importInitialFile, setImportInitialFile] = useState<File | null>(null)
   const [aspectsPanelRowId, setAspectsPanelRowId] = useState<string | null>(null)
@@ -1462,6 +1463,17 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     // ── sheetParents (DRY) — single derivation reused by AddListingPopover and Move-to-parent ──
     const sheetParents = deriveSheetParents(rows)
 
+    // Detach: shared-SKU warning — show if any selected row's parent family publishes as shared-SKU
+    const showDetachSharedWarning = rows.filter((r) => selectedRows.has(r._rowId)).some((sr) => {
+      const parentId = String((sr as EbayRow).platformProductId ?? '')
+      if (!parentId) return false
+      return (rows as EbayRow[]).some(
+        (r) => r._isParent === true &&
+          String((r as EbayRow)._productId ?? (r as EbayRow).platformProductId ?? r._rowId) === parentId &&
+          (r as EbayRow).shared_sku_listing === true,
+      )
+    })
+
     // Move-to-parent: shared-SKU warning — show if target OR source family publishes as shared-SKU
     const showMoveSharedWarning = (() => {
       if (!moveTargetId) return false
@@ -1559,6 +1571,51 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           </Modal>
         )}
 
+        {/* Detach to standalone — clear parent link on selected variants */}
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={selectedRows.size === 0}
+          onClick={() => setDetachOpen(true)}
+          title="Detach selected variants to standalone products — parent link removed on Save"
+        >
+          <Unlink className="w-3.5 h-3.5 mr-1.5" />
+          Detach to standalone
+        </Button>
+        {detachOpen && (
+          <Modal
+            open
+            onClose={() => setDetachOpen(false)}
+            title="Detach to standalone"
+            size="sm"
+            footer={
+              <>
+                <Button size="sm" variant="ghost" onClick={() => setDetachOpen(false)}>Cancel</Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const next = pinBlankRowsLast(detachRowsToStandalone(rows, selectedRows))
+                    pushHistory(next)
+                    setRows(next)
+                    setDetachOpen(false)
+                  }}
+                >
+                  Detach {selectedRows.size} variant{selectedRows.size !== 1 ? 's' : ''}
+                </Button>
+              </>
+            }
+          >
+            <Banner variant="info" className="mb-3">
+              Detach {selectedRows.size} variant{selectedRows.size !== 1 ? 's' : ''} to standalone? Their parent link is removed on Save.
+            </Banner>
+            {showDetachSharedWarning && (
+              <Banner variant="warning">
+                This family publishes as a shared-SKU listing; the server suppresses detach for shared families.
+              </Banner>
+            )}
+          </Modal>
+        )}
+
         {/* Phase 3 — Pull from eBay (full data, undoable, diff preview) */}
         <div className="relative">
           <SharedTbBtn
@@ -1626,7 +1683,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       </>
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, imageModalOpen, derivedProductIds, moveParentOpen, moveTargetId])
+  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, imageModalOpen, derivedProductIds, moveParentOpen, moveTargetId, detachOpen])
 
   // ── Slot: import button ────────────────────────────────────────────────
 

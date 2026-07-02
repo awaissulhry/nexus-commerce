@@ -21,6 +21,35 @@ export type MoveableRow = {
 }
 
 /**
+ * Returns a new rows array where every **selected, detachable variant** row has
+ * its `platformProductId` cleared to `''`, making it standalone.
+ *
+ * Rules applied per row:
+ * - Unselected → returned as-is (reference preserved)
+ * - `_isParent === true` → skipped (can't detach the parent itself)
+ * - `_readonly === true` OR `_shared === true` → skipped (synthesized view rows)
+ * - Already standalone (platformProductId is empty or self-linking) → no-op; NOT marked dirty
+ * - Otherwise → `{ ...row, platformProductId: '', _isParent: false, _dirty: true }`
+ *
+ * The server's create/reparent pre-pass detects empty `platformProductId` on a
+ * former child and sets `Product.parentId = null` on Save.
+ */
+export function detachRowsToStandalone<T extends MoveableRow>(
+  rows: T[],
+  selectedIds: Set<string>,
+): T[] {
+  return rows.map((r) => {
+    if (!selectedIds.has(String(r._rowId))) return r
+    if (r._isParent === true || r._readonly === true || r._shared === true) return r
+    const selfId = String(r._productId ?? r._rowId ?? '')
+    const currentParent = String(r.platformProductId ?? '')
+    // Already standalone: empty platformProductId or self-linking
+    if (!currentParent || currentParent === selfId) return r
+    return { ...r, platformProductId: '', _isParent: false, _dirty: true }
+  })
+}
+
+/**
  * Returns a new rows array where every **selected, moveable variant** row has
  * its `platformProductId` rewritten to `targetParentId`.
  *
