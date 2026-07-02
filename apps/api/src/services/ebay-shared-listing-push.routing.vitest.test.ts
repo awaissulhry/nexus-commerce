@@ -10,6 +10,13 @@ function mockDb() {
       findFirst: vi.fn(async () => null),
       create: vi.fn(async ({ data }: any) => { created.push(data); return data }),
     },
+    // createSharedListing now resolves productId via a SKU lookup for variants missing
+    // _productId; these fixtures carry _productId so findMany returns [] (not consulted).
+    product: {
+      findMany: vi.fn(async () => []),
+    },
+    // Membership writes are wrapped in a $transaction; execute the array like Prisma does.
+    $transaction: vi.fn(async (promises: Promise<any>[]) => Promise.all(promises)),
   }
 }
 
