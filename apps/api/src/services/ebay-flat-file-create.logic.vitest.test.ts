@@ -172,6 +172,30 @@ describe('planEbayFamilyCreates', () => {
     expect(result.childCreates[1].variationTheme).toBe('Colore,Taglia')
   })
 
+  it('case 5b: _isParent hint contradicting inference → inference wins + one warning', () => {
+    // Row claims _isParent:true but platformProductId points to another product → inferred child.
+    const row = {
+      sku: 'CONTRA-1',
+      _rowId: 'x1',
+      _isParent: true,
+      platformProductId: 'P_parent', // points elsewhere → inferred child
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map(),
+      existingParentById: new Map([
+        ['P_parent', { id: 'P_parent', variationTheme: 'Colore', isParent: true }],
+      ]),
+    })
+
+    expect(result.warnings).toHaveLength(1)
+    expect(result.warnings[0].sku).toBe('CONTRA-1')
+    expect(result.childCreates).toHaveLength(1)
+    expect(result.childCreates[0].parentRef).toEqual({ kind: 'existing', productId: 'P_parent' })
+    expect(result.parentCreates).toHaveLength(0)
+  })
+
   it('case 2: add variant to existing family → 1 childCreate (kind:existing), no parentCreate', () => {
     const newChild = {
       sku: 'NEW-1',

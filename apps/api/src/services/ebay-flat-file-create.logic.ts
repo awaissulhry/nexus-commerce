@@ -90,7 +90,7 @@ export type CreatePlan = {
 function readAspectValue(row: EbayRow, axisName: string): string {
   const key1 = `aspect_${axisName.replace(/\s+/g, '_')}`
   const key2 = `aspect_${axisName.toLowerCase().replace(/\s+/g, '_')}`
-  const raw = row[key1] !== undefined ? row[key1] : row[key2]
+  const raw = row[key1] ?? row[key2]
   return String(raw ?? '').trim()
 }
 
@@ -103,8 +103,8 @@ function readAspectValue(row: EbayRow, axisName: string): string {
  *   child  ⟺  ppid !== '' && ppid !== selfId
  */
 function inferIsChild(row: EbayRow): { isChild: boolean; selfId: string; ppid: string } {
-  const selfId = String(row._productId !== undefined ? row._productId : (row._rowId !== undefined ? row._rowId : ''))
-  const ppid = String(row.platformProductId !== undefined ? row.platformProductId : '')
+  const selfId = String(row._productId ?? row._rowId ?? '')
+  const ppid = String(row.platformProductId ?? '')
   const isChild = ppid !== '' && ppid !== selfId
   return { isChild, selfId, ppid }
 }
@@ -116,7 +116,7 @@ function parsePriceFields(row: EbayRow): number {
     const raw = row[field]
     if (raw !== undefined && raw !== null && raw !== '') {
       const n = Number(raw)
-      if (!isNaN(n) && n >= 0) return n
+      if (!isNaN(n)) return n
     }
   }
   return 0
@@ -159,10 +159,10 @@ export function buildEbayProductCreateInput(
   row: EbayRow,
   opts: { parentId: string | null; variationTheme: string | null; isParent: boolean },
 ): ProductCreateData {
-  const sku = String(row.sku !== undefined ? row.sku : '').trim()
-  const name = String(row.title !== undefined ? row.title : '').trim() || sku
+  const sku = String(row.sku ?? '').trim()
+  const name = String(row.title ?? '').trim() || sku
   const basePrice = parsePriceFields(row)
-  const brand = row.brand !== undefined && String(row.brand).trim() ? String(row.brand).trim() : undefined
+  const brand = row.brand != null && String(row.brand).trim() ? String(row.brand).trim() : undefined
 
   const data: ProductCreateData = {
     sku,
@@ -229,7 +229,7 @@ export function planEbayFamilyCreates(input: {
   // ── Step 1: Dedupe by SKU ────────────────────────────────────────────
   const skuCounts = new Map<string, number>()
   for (const row of rows) {
-    const sku = String(row.sku !== undefined ? row.sku : '').trim()
+    const sku = String(row.sku ?? '').trim()
     if (!sku) continue
     skuCounts.set(sku, (skuCounts.get(sku) ?? 0) + 1)
   }
@@ -242,21 +242,21 @@ export function planEbayFamilyCreates(input: {
   }
   // Rows with a duped SKU are excluded from all further processing
   const validRows = rows.filter(row => {
-    const sku = String(row.sku !== undefined ? row.sku : '').trim()
-    return !dupedSkus.has(sku)
+    const sku = String(row.sku ?? '').trim()
+    return sku !== '' && !dupedSkus.has(sku)
   })
 
   // ── Step 2 + 4: First pass — collect parentCreates ──────────────────
   // Must be fully built before processing children so temp-id lookups work.
   for (const row of validRows) {
-    const sku = String(row.sku !== undefined ? row.sku : '').trim()
+    const sku = String(row.sku ?? '').trim()
     const needsCreate = !existingBySku.has(sku)
     if (!needsCreate) continue
 
     const { isChild } = inferIsChild(row)
     if (!isChild) {
       const tempRowId = String(
-        row._rowId !== undefined ? row._rowId : (row._productId !== undefined ? row._productId : sku)
+        row._rowId ?? row._productId ?? sku
       )
       const variationTheme = row.variation_theme ? String(row.variation_theme) : null
       parentCreates.push({ tempRowId, sku, row, variationTheme })
@@ -265,7 +265,7 @@ export function planEbayFamilyCreates(input: {
 
   // ── Step 3 + 5 + 6: Second pass — childCreates, reparents, warnings ─
   for (const row of validRows) {
-    const sku = String(row.sku !== undefined ? row.sku : '').trim()
+    const sku = String(row.sku ?? '').trim()
     const { isChild, ppid } = inferIsChild(row)
     const isParentInferred = !isChild
     const needsCreate = !existingBySku.has(sku)
@@ -291,7 +291,7 @@ export function planEbayFamilyCreates(input: {
       const tempParent = parentCreates.find(p => p.tempRowId === ppid)
       if (tempParent) {
         const tempRowId = String(
-          row._rowId !== undefined ? row._rowId : (row._productId !== undefined ? row._productId : sku)
+          row._rowId ?? row._productId ?? sku
         )
         childCreates.push({
           tempRowId,
@@ -304,7 +304,7 @@ export function planEbayFamilyCreates(input: {
         const existingParent = existingParentById.get(ppid)
         if (existingParent) {
           const tempRowId = String(
-            row._rowId !== undefined ? row._rowId : (row._productId !== undefined ? row._productId : sku)
+            row._rowId ?? row._productId ?? sku
           )
           childCreates.push({
             tempRowId,
