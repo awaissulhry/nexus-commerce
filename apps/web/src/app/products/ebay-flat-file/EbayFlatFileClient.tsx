@@ -9,6 +9,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
+import { Badge } from '@/components/ui/Badge'
 import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
 import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx, RenderCellContent } from '@/components/flat-file/FlatFileGrid.types'
 import { Modal } from '@/design-system/components/Modal'
@@ -77,6 +78,10 @@ export interface EbayRow extends BaseRow {
   _isParent?: boolean
   /** Phase 4 — publish this family via the Trading-API shared-SKU path (parent-level). */
   shared_sku_listing?: boolean
+  /** Task 5 (shared-mgmt) — synthesized membership row from GET /rows; grid must not allow edits. */
+  _shared?: boolean
+  /** Task 5 (shared-mgmt) — row must be treated as non-editable by the grid. */
+  _readonly?: boolean
   it_price?: number | null; it_qty?: number | null; it_item_id?: string | null
   it_status?: string | null; it_listing_id?: string | null
   de_price?: number | null; de_qty?: number | null; de_item_id?: string | null
@@ -1033,6 +1038,10 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           {isVariant && (
             <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700">Variant</span>
           )}
+          {/* Task 5 (shared-mgmt) — synthesized membership row badge */}
+          {er._shared && (
+            <Badge variant="default" size="sm" className="shrink-0 uppercase tracking-wide text-[9px]">Shared</Badge>
+          )}
           {total > 0 && (
             <span className={cn('ml-auto shrink-0 font-mono text-[9px] rounded px-1 py-0.5 tabular-nums',
               complete ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
@@ -1144,6 +1153,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── Edit intercept for modal-based editing ─────────────────────────────
   const onBeforeEditCell = useCallback((col: FlatFileColumn, row: BaseRow): boolean => {
+    // Task 5 (shared-mgmt) — synthesized shared membership rows are fully read-only.
+    if ((row as EbayRow)._readonly === true) return true
     if (col.kind === 'longtext') {
       setDescModal({ rowId: row._rowId })
       return true
