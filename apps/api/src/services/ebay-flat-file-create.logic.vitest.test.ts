@@ -456,6 +456,91 @@ describe('planEbayFamilyCreates', () => {
     expect(result.parentCreates).toHaveLength(2)
   })
 
+  // ── Detach-to-standalone (null-reparent) ────────────────────────────
+  it('detach: existing child with parentId set, ppid cleared → reparents entry with newParentId:null', () => {
+    const row = {
+      sku: 'C1',
+      _productId: 'idC1',
+      platformProductId: '', // cleared
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['C1', { id: 'idC1', parentId: 'A', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.warnings).toHaveLength(0)
+    expect(result.reparents).toHaveLength(1)
+    expect(result.reparents[0]).toEqual({ productId: 'idC1', sku: 'C1', newParentId: null })
+  })
+
+  it('detach suppressed: existing child, ppid cleared, but current parentId is a sharedFamilyKey → warning, no reparent', () => {
+    const row = {
+      sku: 'C1',
+      _productId: 'idC1',
+      platformProductId: '', // cleared
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['C1', { id: 'idC1', parentId: 'A', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+      sharedFamilyKeys: new Set(['A']), // current parent is shared
+    })
+
+    expect(result.reparents).toHaveLength(0)
+    expect(result.warnings).toHaveLength(1)
+    expect(result.warnings[0].sku).toBe('C1')
+    expect(result.warnings[0].reason).toMatch(/detach suppressed.*shared family/)
+    expect(result.errors).toHaveLength(0)
+  })
+
+  it('detach no-op: existing STANDALONE (parentId null), ppid cleared → no reparent', () => {
+    const row = {
+      sku: 'SA1',
+      _productId: 'idSA1',
+      platformProductId: '', // cleared
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['SA1', { id: 'idSA1', parentId: null, variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.reparents).toHaveLength(0)
+    expect(result.warnings).toHaveLength(0)
+    expect(result.errors).toHaveLength(0)
+  })
+
+  it('detach no-op: existing PARENT row (parentId null, isParent true), ppid cleared → no reparent', () => {
+    const row = {
+      sku: 'PAR1',
+      _productId: 'idPAR1',
+      platformProductId: '', // cleared
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['PAR1', { id: 'idPAR1', parentId: null, variationTheme: 'Colore', isParent: true }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.reparents).toHaveLength(0)
+    expect(result.warnings).toHaveLength(0)
+    expect(result.errors).toHaveLength(0)
+  })
+
   it('I3 CONTROL: same NEW child SKU under two NON-shared parents → still ONE duplicate-SKU error, both dropped', () => {
     const parentA = { sku: 'PARENT-A', _rowId: 'pa', _isParent: true, platformProductId: 'pa', variation_theme: 'Colore' }
     const parentB = { sku: 'PARENT-B', _rowId: 'pb', _isParent: true, platformProductId: 'pb', variation_theme: 'Colore' }

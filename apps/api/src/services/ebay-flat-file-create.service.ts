@@ -25,7 +25,7 @@ import {
 export type CreateResult = {
   /** tempRowId + sku → real productId; for client temp→real reconciliation (reparents go to `reparented`, not here) */
   idMap: Array<{ tempRowId?: string; sku: string; productId: string }>
-  reparented: Array<{ sku: string; productId: string; newParentId: string }>
+  reparented: Array<{ sku: string; productId: string; newParentId: string | null }>
   errors: Array<{ sku?: string; tempRowId?: string; reason: string }>
   warnings: Array<{ sku?: string; reason: string }>
 }
@@ -293,6 +293,17 @@ export async function runEbayFlatFileCreates(
 
   // ── Step 5: Reparents ────────────────────────────────────────────────
   for (const reparentEntry of plan.reparents) {
+    // Null-reparent: detach from parent → standalone (no parent validation needed).
+    if (reparentEntry.newParentId === null) {
+      try {
+        await p.product.update({ where: { id: reparentEntry.productId }, data: { parentId: null } })
+        reparented.push({ sku: reparentEntry.sku, productId: reparentEntry.productId, newParentId: null })
+      } catch (err) {
+        errors.push({ sku: reparentEntry.sku, reason: `detach failed: ${err instanceof Error ? err.message : String(err)}` })
+      }
+      continue
+    }
+
     // Validate that newParentId exists: check existingParentById, then idMap (newly created), then fresh DB lookup.
     const isKnownExisting = existingParentById.has(reparentEntry.newParentId)
     const isNewlyCreated = idMap.some(e => e.productId === reparentEntry.newParentId)

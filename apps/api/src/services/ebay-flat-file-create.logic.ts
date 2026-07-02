@@ -71,7 +71,7 @@ export type CreatePlan = {
   reparents: Array<{
     productId: string
     sku: string
-    newParentId: string
+    newParentId: string | null
   }>
   errors: Array<{ sku?: string; tempRowId?: string; reason: string }>
   warnings: Array<{ sku?: string; reason: string }>
@@ -365,6 +365,17 @@ export function planEbayFamilyCreates(input: {
           }
         }
         // else ppid === existing.parentId → no-op (already on the right parent)
+      } else if (!isChild) {
+        const existing = existingBySku.get(sku)!
+        if (existing.parentId != null) {
+          // Was a child (had a parent), now standalone (ppid cleared) → detach = null-reparent.
+          if (sharedFamilyKeys.has(String(existing.parentId ?? ''))) {
+            warnings.push({ sku, reason: 'detach suppressed: shared family (membership-managed)' })
+          } else {
+            reparents.push({ productId: existing.id, sku, newParentId: null })
+          }
+        }
+        // else existing.parentId == null → already standalone/parent → no-op (do NOT detach parents or standalones)
       }
     }
   }

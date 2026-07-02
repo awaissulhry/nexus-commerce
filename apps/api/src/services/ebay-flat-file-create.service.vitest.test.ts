@@ -295,6 +295,41 @@ describe('idMap correctness', () => {
 // ──────────────────────────────────────────────────────────────────────
 // Test: empty / invalid reparent target is skipped, not thrown
 // ──────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────
+// Test: null-reparent (detach to standalone)
+// ──────────────────────────────────────────────────────────────────────
+describe('null-reparent — detach to standalone', () => {
+  it('calls product.update with parentId:null and records in reparented when newParentId is null', async () => {
+    const { prisma, calls } = makeMock({
+      existingBySku: [{ id: 'p1', sku: 'C', parentId: 'old-parent', variationTheme: null, isParent: false }],
+      existingParentById: [],
+    })
+
+    const rows = [
+      // Existing child with cleared platformProductId → detach
+      { sku: 'C', _productId: 'p1', platformProductId: '' },
+    ]
+
+    const result = await runEbayFlatFileCreates(prisma, rows)
+
+    expect(result.errors).toHaveLength(0)
+    expect(calls.update).toHaveLength(1)
+
+    const [updateCall] = calls.update as any[]
+    expect(updateCall).toEqual({
+      where: { id: 'p1' },
+      data: { parentId: null },
+    })
+
+    expect(result.reparented).toHaveLength(1)
+    expect(result.reparented[0]).toMatchObject({
+      sku: 'C',
+      productId: 'p1',
+      newParentId: null,
+    })
+  })
+})
+
 describe('invalid reparent target — skipped not thrown', () => {
   it('adds an error entry but does NOT throw when newParentId cannot be resolved', async () => {
     const { prisma, calls } = makeMock({
