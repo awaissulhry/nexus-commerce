@@ -195,7 +195,7 @@ export function AddListingPopover({ categoryAxisNames = [], existingParents, onC
   }
 
   const canConfirm = familyMode === 'existing'
-    ? targetParentId.trim().length > 0 && variantCount > 0
+    ? targetParentId.trim().length > 0 && variantCount > 0 && selectedAxes.length > 0
     : parentSku.trim().length > 0 && (listingType === 'single' || (variantCount > 0 && selectedAxes.length > 0))
 
   // ── Axis management ─────────────────────────────────────────────────────────
@@ -459,10 +459,13 @@ export function AddListingPopover({ categoryAxisNames = [], existingParents, onC
           {familyMode === 'existing' && !targetParentId && (
             <span>Select a parent listing above</span>
           )}
-          {familyMode === 'existing' && targetParentId && variantCount > 0 && (
+          {familyMode === 'existing' && targetParentId && selectedAxes.length === 0 && (
+            <span className="text-amber-500">Parent has no variation theme — cannot add variants</span>
+          )}
+          {familyMode === 'existing' && targetParentId && selectedAxes.length > 0 && variantCount > 0 && (
             <span><strong className="text-slate-600 dark:text-slate-300">{variantCount}</strong> variant{variantCount !== 1 ? 's' : ''} added under {parentSku}</span>
           )}
-          {familyMode === 'existing' && targetParentId && variantCount === 0 && selectedAxes.length > 0 && (
+          {familyMode === 'existing' && targetParentId && selectedAxes.length > 0 && variantCount === 0 && (
             <span className="text-amber-500">Add values to the selected axes</span>
           )}
           {familyMode === 'new' && listingType === 'single' && parentSku && (
