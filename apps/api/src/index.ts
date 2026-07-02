@@ -10,6 +10,7 @@ void initOtel();
 import Fastify from "fastify";
 import { runWithRequestId } from "./utils/request-context.js";
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
 import { ALLOWED_WEB_ORIGINS } from "./lib/cors-origins.js";
 import compress from "@fastify/compress";
 import multipart from "@fastify/multipart";
@@ -255,6 +256,8 @@ import { startAlertEvaluatorCron } from "./jobs/alert-evaluator.job.js";
 import { startRepricingEvaluatorCron } from "./jobs/repricing-evaluator.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
 import pricingRulesRoutes from "./routes/pricing-rules.routes.js";
+// Phase S1 (auth core) — human authentication endpoints.
+import authRoutes from "./routes/auth.routes.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
 // initializeQueue pings Redis and throws on failure; tryStartQueueWorkers
 // catches that so a missing/unreachable Redis can't crash the API process
@@ -420,6 +423,20 @@ app.addHook('onRequest', (request, reply, done) => {
   runWithRequestId(id, 'http', () => done())
 });
 
+// Phase S1 (auth core) — security headers on every response (S0 finding
+// F9). Conservative + safe for a JSON/file API: browsers ignore CSP on
+// non-HTML responses, so downloads (PDF/CSV/ZIP) are unaffected, while
+// any HTML error page is locked down. HSTS pins TLS; nosniff blocks MIME
+// sniffing; frame denial blocks clickjacking.
+app.addHook('onSend', (_request, reply, payload, done) => {
+  reply.header('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
+  reply.header('X-Content-Type-Options', 'nosniff')
+  reply.header('X-Frame-Options', 'DENY')
+  reply.header('Referrer-Policy', 'no-referrer')
+  reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
+  done(null, payload)
+});
+
 // Compress responses (gzip / brotli). Threshold 1KB so small payloads
 // don't pay the compression cost. Critical for /products/bulk-fetch
 // at 10k rows (5.4 MB JSON → ~1 MB on the wire).
@@ -484,8 +501,18 @@ app.register(cors, {
   credentials: true,
 });
 
+// Phase S1 (auth core) — cookie parsing/signing. Must register before
+// any route reads request.cookies / writes reply.setCookie (the auth
+// session + CSRF cookies). No global secret needed: session/CSRF tokens
+// are opaque random values validated against the DB, not signed cookies.
+app.register(cookie);
+
 // HTTP routes — all queue references are lazy (see lib/queue.ts), so registering
 // these does not open Redis connections. Workers/jobs remain disabled (Phase 2).
+// Phase S1 (auth core) — auth endpoints declare full /api/auth/* paths
+// inline, so register without a prefix. Protects only its own surface;
+// the deny-by-default sweep over the rest of the API is S2.
+app.register(authRoutes);
 app.register(listingsRoutes);
 app.register(inventoryRoutes, { prefix: '/api' });
 app.register(aiRoutes);

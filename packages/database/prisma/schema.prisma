@@ -3517,7 +3517,11 @@ model ApiKey {
 model UserProfile {
   id                   String                   @id @default(cuid())
   displayName          String                   @default("")
-  email                String                   @default("")
+  // S1 (auth core): email is the login identity → must be unique. Safe
+  // for the single-operator row today; enforced in app logic too. The
+  // legacy default("") is retained only so the pre-S1 singleton row (if
+  // its email was never set) doesn't block the migration.
+  email                String                   @unique @default("")
   avatarUrl            String                   @default("")
   // Password hash. Phase C migrates from sha256 (legacy) to bcrypt;
   // the verifier auto-detects format and re-hashes on next successful
@@ -3559,6 +3563,31 @@ model UserProfile {
   // Phase H — privacy + consent + export requests.
   consents             ConsentRecord[]
   exportRequests       DataExportRequest[]
+
+  // ── Phase S1 (auth core) — account lifecycle + login hardening ──
+  // Deactivation is the offboarding switch: status="deactivated"
+  // blocks login and (via the session layer) revokes on next request.
+  // A newly invited user starts "active" but holds zero roles → no
+  // access until a role is assigned (least-privilege default).
+  status              String    @default("active") // "active" | "deactivated"
+  deactivatedAt       DateTime?
+  // Progressive lockout counters. Persisted here (not in-memory) so
+  // they survive restarts and hold across Railway replicas without
+  // depending on Redis uptime.
+  failedLoginCount    Int       @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  // Immediate propagation (§3.5): bumped on any role/permission/user
+  // mutation affecting this user. Cached permission sets are keyed by
+  // (userId, permissionsVersion); a bump invalidates them on next request.
+  permissionsVersion  Int       @default(0)
+  // Per-user MFA override. The assigned role's requireMfa also applies;
+  // effective requirement is the OR of the two (enforced in S5).
+  mfaRequired         Boolean   @default(false)
+  // ── Phase S1 relations ──
+  roleAssignments     UserRole[]
+  resetTokens         PasswordResetToken[]
+  invitationsSent     Invitation[]         @relation("invitedBy")
 }
 
 // Phase H — consent log (GDPR Art. 7). Append-only; each row pins a
@@ -3678,6 +3707,22 @@ model UserSession {
   lastSeenAt  DateTime    @default(now())
   revokedAt   DateTime?
 
+  // ── Phase S1 (auth core) — make this the live session store ──
+  // sha256 of the opaque session token carried in the httpOnly cookie.
+  // Nullable so pre-S1 rows (none in prod) don't break the migration;
+  // unique so a token maps to exactly one session. The lookup is by
+  // this hash; the raw token never touches the DB.
+  sessionTokenHash String?   @unique
+  // Sliding idle timeout: bumped on each authenticated request; a
+  // session past idleExpiry is dead even if not explicitly revoked.
+  idleExpiry       DateTime?
+  // Absolute lifetime cap: a session cannot outlive this regardless of
+  // activity, forcing periodic re-auth.
+  absoluteExpiry   DateTime?
+  // Step-up bookkeeping: set once this session has satisfied TOTP for
+  // this login (S5). Sessions started before MFA enforcement read false.
+  mfaSatisfied     Boolean   @default(false)
+
   @@index([userId])
   @@index([userId, revokedAt])
 }
@@ -3706,6 +3751,114 @@ model LoginEvent {
 
   @@index([userId])
   @@index([createdAt])
+}
+
+// ══ Phase S1/S2 — RBAC (roles, assignments, invitations) ═══════════
+//
+// Seeded system roles are protected: they cannot be deleted, and OWNER
+// is implicit-all (the permission resolver short-circuits before ever
+// reading Role.permissions for an OWNER). Custom roles carry
+// isSystem=false and any permission subset. See docs/security/.
+
+enum SystemRole {
+  OWNER
+  ADMIN
+  OPS_MANAGER
+  FULFILLMENT
+  FINANCE
+  VIEWER
+}
+
+// A role is a named permission set. The six SystemRole rows are seeded
+// (OWNER in S1; the rest + their permission arrays in S2). Owners may
+// create unlimited custom roles.
+model Role {
+  id          String   @id @default(cuid())
+  // For seeded roles this equals a SystemRole value ("OWNER"); for
+  // custom roles it is a slug. Unique so lookups + seeds are idempotent.
+  key         String   @unique
+  name        String
+  description String   @default("")
+  // OWNER is implicit-all: enforcement never reads this list for OWNER.
+  // Everyone else is deny-by-default — a permission absent here is denied.
+  // String[] (not a join table) mirrors the existing ApiKey.scopes model
+  // and avoids a join on every permission resolve.
+  permissions String[] @default([])
+  isSystem    Boolean  @default(false)
+  // S5 — force MFA for holders of this role (seeded true for
+  // OWNER/ADMIN/FINANCE in S5). Effective requirement OR's with
+  // UserProfile.mfaRequired.
+  requireMfa  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignments UserRole[]
+  invitations Invitation[]
+
+  @@index([isSystem])
+}
+
+// Assignment of a role to a user, optionally scoped to channels/markets.
+// A user may hold multiple assignments; the effective permission set is
+// the union. OWNER assignment ignores channelScope (implicit-all).
+model UserRole {
+  id     String      @id @default(cuid())
+  userId String
+  user   UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId String
+  role   Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  // null = all channels/marketplaces (fast path — most assignments).
+  // Else e.g. { "channels": ["EBAY"], "marketplaces": ["IT"] }.
+  // Column exists from day one; enforcement wiring + UI ship in S4+.
+  channelScope    Json?
+  // Accountability — who granted this assignment, when.
+  grantedByUserId String?
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+// Invite-only access. No public registration. Single-use, hashed token,
+// 72h TTL, bound to an email + role (+ optional channel scope). Delivered
+// as a copyable link and/or a Resend email.
+model Invitation {
+  id           String      @id @default(cuid())
+  email        String
+  roleId       String
+  role         Role        @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  // sha256 of the raw token. The raw token is shown once at creation and
+  // emailed; only the hash is stored, so a DB read cannot forge an invite.
+  tokenHash    String      @unique
+  // Mirrors UserRole.channelScope for the assignment created on accept.
+  channelScope Json?
+  invitedByUserId String
+  invitedBy    UserProfile @relation("invitedBy", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  acceptedUserId String?
+  revokedAt    DateTime?
+  createdAt    DateTime    @default(now())
+
+  @@index([email])
+  @@index([expiresAt])
+}
+
+// Password reset. Single-use, hashed token, ≤60min TTL. On successful
+// reset every session for the user is revoked.
+model PasswordResetToken {
+  id        String      @id @default(cuid())
+  userId    String
+  user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String      @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime    @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 // ── Webhook Event Tracking ─────────────────────────────────────────
