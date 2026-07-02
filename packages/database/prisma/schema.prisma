@@ -13459,6 +13459,7 @@ model SharedListingMembership {
   parentSku          String // parent listing grouping (operator-facing)
   productId          String? // Nexus product whose StockLevel feeds this SKU
   variationSpecifics Json // { "Size": "M", "Color": "Nero" }
+  price              Decimal?  @db.Decimal(10, 2) // per-listing price; null → fall back to child Product price
   status             String    @default("ACTIVE") // ACTIVE | ENDED
   lastQtyPushed      Int?
   lastPushedAt       DateTime?
