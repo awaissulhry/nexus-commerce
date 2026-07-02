@@ -2085,6 +2085,17 @@ export default function AmazonFlatFileClient({
 
   useEffect(() => {
     function handle(e: globalThis.KeyboardEvent) {
+      // When focus is in a NON-grid form field (the Create/Manage-Groups name
+      // input, Find & Replace, a filter box, a dropdown search), let that field
+      // own every key. Without this, typing a group name hit the printable-key
+      // branch below → preventDefault + setIsEditing opened the cell editor on
+      // the selected SKU cell, so the name landed in the SKU instead. The grid's
+      // OWN cell editor has isEditingRef.current === true and is handled by the
+      // dedicated editing branch, so it stays exempt.
+      const tgt = e.target as HTMLElement | null
+      const inField = !!tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable)
+      if (inField && !isEditingRef.current) return
+
       const mod = e.metaKey || e.ctrlKey
       // Undo/redo — but NOT while editing a cell, so ⌘Z does a native text-undo
       // inside the input instead of reverting the whole grid.
