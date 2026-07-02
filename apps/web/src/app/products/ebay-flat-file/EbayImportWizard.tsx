@@ -33,6 +33,12 @@ import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
 import { getBackendUrl } from '@/lib/backend-url'
 
 // ── Contract ──────────────────────────────────────────────────────────
+export interface ExistingParent {
+  id: string
+  sku: string
+  variationTheme?: string
+}
+
 export interface EbayImportWizardProps {
   open: boolean
   onClose: () => void
@@ -40,13 +46,16 @@ export interface EbayImportWizardProps {
   columns: { id: string; label: string }[]
   /** to count new vs update in the preview */
   existingSkus?: Set<string>
-  onImport: (rows: Record<string, unknown>[], mode: 'fill-missing' | 'overwrite') => void
+  /** parents available for "import under parent" mode */
+  existingParents?: ExistingParent[]
+  onImport: (rows: Record<string, unknown>[], mode: 'fill-missing' | 'overwrite', targetParentId?: string) => void
   marketplace: string
   /** when set + open, auto-parse this file (the drag-drop-on-grid entry) */
   initialFile?: File | null
 }
 
 type MergeMode = 'fill-missing' | 'overwrite'
+type ImportTarget = 'new' | 'parent'
 type Confidence = 'exact' | 'fuzzy' | 'none'
 const SKIP = '__skip__'
 const MAX_BYTES = 15 * 1024 * 1024
@@ -114,6 +123,7 @@ export function EbayImportWizard({
   onClose,
   columns,
   existingSkus,
+  existingParents,
   onImport,
   marketplace,
   initialFile,
@@ -125,6 +135,8 @@ export function EbayImportWizard({
   const [pasteText, setPasteText] = useState('')
   const [mapping, setMapping] = useState<HeaderRow[]>([])
   const [mode, setMode] = useState<MergeMode>('fill-missing')
+  const [importTarget, setImportTarget] = useState<ImportTarget>('new')
+  const [targetParentId, setTargetParentId] = useState<string>('')
 
   // Reset ALL state whenever the modal closes/reopens.
   useEffect(() => {
@@ -136,6 +148,8 @@ export function EbayImportWizard({
       setPasteText('')
       setMapping([])
       setMode('fill-missing')
+      setImportTarget('new')
+      setTargetParentId('')
     }
   }, [open])
 
@@ -290,6 +304,12 @@ export function EbayImportWizard({
     }
     return { newCount: mappedRows.length - update, updateCount: update }
   }, [mappedRows, skuColumnId, existingSkus])
+
+  // Parent picker options for "Import under parent" mode.
+  const parentOptions: ComboboxOption[] = useMemo(
+    () => (existingParents ?? []).map((p) => ({ value: p.id, label: p.sku })),
+    [existingParents],
+  )
 
   // ── Render nothing when closed ──────────────────────────────────────
   if (!open) return null
@@ -486,8 +506,41 @@ export function EbayImportWizard({
 
   const previewRows = mappedRows.slice(0, PREVIEW_LIMIT)
 
+  const hasParents = (existingParents?.length ?? 0) > 0
+
   const previewBody = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Import destination: new families vs under an existing parent */}
+      {hasParents && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--h10-text-2)' }}>
+            Import as
+          </span>
+          <SegmentedControl
+            size="sm"
+            value={importTarget}
+            onChange={(v) => {
+              setImportTarget(v as ImportTarget)
+              if (v === 'new') setTargetParentId('')
+            }}
+            options={[
+              { value: 'new', label: 'New families' },
+              { value: 'parent', label: 'Under parent' },
+            ]}
+          />
+          {importTarget === 'parent' && (
+            <div style={{ marginTop: 4 }}>
+              <Combobox
+                options={parentOptions}
+                value={targetParentId || undefined}
+                onChange={(id) => setTargetParentId(id)}
+                placeholder="Search by parent SKU…"
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--h10-text-2)' }}>
           When a row matches an existing SKU…
@@ -566,9 +619,13 @@ export function EbayImportWizard({
         </Button>
         <Button
           variant="primary"
-          disabled={mappedRows.length === 0 || mappedColumnIds.length === 0}
+          disabled={
+            mappedRows.length === 0 ||
+            mappedColumnIds.length === 0 ||
+            (importTarget === 'parent' && !targetParentId)
+          }
           onClick={() => {
-            onImport(mappedRows, mode)
+            onImport(mappedRows, mode, importTarget === 'parent' ? targetParentId : undefined)
             onClose()
           }}
         >

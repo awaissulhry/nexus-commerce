@@ -18,6 +18,7 @@ import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { pinBlankRowsLast } from './rowOrder'
 import { AddListingPopover } from './AddListingPopover'
 import { EbayImportWizard } from './EbayImportWizard'
+import { stampUnderParent } from './importUnderParent'
 import { EbayFlatFileImageModal } from './EbayFlatFileImageModal'
 import { AspectsPanel } from './AspectsPanel'
 import { ChannelStrip } from './ChannelStrip'
@@ -1364,6 +1365,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     allRows: BaseRow[],
     setRows: (rows: BaseRow[]) => void,
     pushHistory: (rows: BaseRow[]) => void,
+    targetParentId?: string,
   ) => {
     const bySku = new Map(allRows.map((r) => [String(r.sku ?? '').trim(), r]))
     const next = [...allRows]
@@ -1372,6 +1374,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       const sku = String(imp.sku ?? '').trim()
       const existing = sku ? bySku.get(sku) : undefined
       if (existing) {
+        // Update branch: never re-parent an existing SKU.
         const idx = next.findIndex((r) => r._rowId === existing._rowId)
         if (idx === -1) continue
         const merged = { ...next[idx] } as Record<string, unknown>
@@ -1383,7 +1386,10 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         next[idx] = merged as BaseRow
         updated++
       } else {
-        next.push({ ...makeBlankRow(), ...imp, _isNew: true, _dirty: true } as BaseRow)
+        // New-row branch: stamp under a parent when the operator chose "Under parent".
+        const baseRow: Record<string, unknown> = { ...makeBlankRow(), ...imp, _isNew: true, _dirty: true }
+        const newRow = targetParentId ? stampUnderParent(baseRow, targetParentId) : baseRow
+        next.push(newRow as BaseRow)
         added++
       }
     }
@@ -1684,9 +1690,18 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           onClose={() => { setImportWizardOpen(false); setImportInitialFile(null) }}
           columns={exportColumns}
           existingSkus={new Set(rows.map((r) => String(r.sku ?? '').trim()).filter(Boolean))}
+          existingParents={rows
+            .filter((r) => (r as EbayRow)._isParent === true)
+            .map((r) => ({
+              id: String((r as EbayRow)._productId ?? (r as EbayRow).platformProductId ?? r._rowId),
+              sku: String((r as EbayRow).sku ?? ''),
+              variationTheme: (r as EbayRow).variation_theme
+                ? String((r as EbayRow).variation_theme)
+                : undefined,
+            }))}
           marketplace={marketplace}
           initialFile={importInitialFile}
-          onImport={(imported, mode) => handleImport(imported, mode, rows, setRows, pushHistory)}
+          onImport={(imported, mode, targetParentId) => handleImport(imported, mode, rows, setRows, pushHistory, targetParentId)}
         />
       </>
     )
