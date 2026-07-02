@@ -710,3 +710,11 @@
 /* RGD.5 — schedule templates modal (reuses .h10-rte box) */
 .h10-rte .list { overflow-y: auto; }
 .h10-rte .ft .cnt { font-size: 11.5px; color: #8a93a1; }
+
+/* Rank Goals list (Dayparting Schedules tab) — first-column name truncates inside the sticky
+   flex cell (matches Ads Manager .t), keeping the hover Manage button contained. */
+.h10-am-grid td.nm .h10-rg-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Baseline chip — compact, read-only version of the builder's target chip (h10-rp-chip). */
+.h10-rg-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; font-size: 12px; font-weight: 600; color: #2b3440; background: #fff; border: 1px solid #d8dde4; border-radius: 999px; padding: 3px 9px; }
+.h10-rg-chip .sw { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+.h10-rg-chip .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

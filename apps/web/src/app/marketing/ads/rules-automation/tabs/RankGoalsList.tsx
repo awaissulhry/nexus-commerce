@@ -5,7 +5,9 @@
  * (GET /advertising/schedules, goal-mode), created by the Rank Goal builder; the legacy RuleListTab
  * only listed AutomationRule dayparting rules, so goal-mode schedules never appeared. This lists
  * them on the shared AdsDataGrid — same grid/filters/toolbar/customize/selection chrome as the
- * Apply Rules and Ads Manager grids — with a Manage link into the builder and persisted enable/pause.
+ * Apply Rules and Ads Manager grids — with a truncating name + Manage link (contained in the sticky
+ * first column), a colored Baseline chip matching the builder's target palette, and persisted
+ * enable/pause.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, ExternalLink } from 'lucide-react'
@@ -14,13 +16,17 @@ import { NoDataIllus } from '../_shared/NoDataIllus'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface SchedWindow { targetKey?: string }
-interface RankRow { id: string; name: string; baseline: string; baselineKey: string; windows: number; enabled: boolean }
+interface RankRow { id: string; name: string; baseline: string; baselineKey: string; baselineColor: string | null; windows: number; enabled: boolean }
+type TargetMeta = { name: string; color: string | null }
 
-const TARGET_LABEL: Record<string, string> = {
-  'own-top': 'Own Top of Search', 'defend-top': 'Defend Top', 'rest-of-search': 'Rest of Search',
-  'pause': 'Min bid', 'own-top-allout': 'Own Top — All-Out',
+// Fallbacks used until /rank-targets resolves (built-in keys + the builder palette colors).
+const FALLBACK: Record<string, TargetMeta> = {
+  'own-top': { name: 'Own Top of Search', color: '#0a7d48' },
+  'defend-top': { name: 'Defend Top', color: '#3aa873' },
+  'rest-of-search': { name: 'Rest of Search', color: '#e6b067' },
+  'pause': { name: 'Min bid', color: '#d97757' },
+  'own-top-allout': { name: 'Own Top — All-Out', color: '#b91c1c' },
 }
-const label = (k: string | null | undefined) => (k ? (TARGET_LABEL[k] ?? k) : '—')
 const isGoalMode = (s: { defaultTargetKey?: string | null; windows?: SchedWindow[] }) =>
   !!s.defaultTargetKey || (Array.isArray(s.windows) && s.windows.some((w) => !!w?.targetKey))
 const builderHref = (id?: string) => `/marketing/ads/rules-automation/builder/dayparting-schedule${id ? `?scheduleId=${id}` : ''}`
@@ -34,16 +40,28 @@ export function RankGoalsList() {
     let alive = true
     ;(async () => {
       try {
-        const j = await fetch(`${getBackendUrl()}/api/advertising/schedules`, { cache: 'no-store' }).then((r) => r.json())
-        const all = (Array.isArray(j) ? j : Array.isArray(j?.items) ? j.items : []) as Array<Record<string, unknown>>
-        const goals = all.filter((s) => isGoalMode(s as never)).map((s): RankRow => ({
-          id: String(s.id),
-          name: String(s.name ?? 'Rank goal'),
-          baseline: label(s.defaultTargetKey as string | null),
-          baselineKey: String(s.defaultTargetKey ?? ''),
-          windows: Array.isArray(s.windows) ? (s.windows as SchedWindow[]).length : 0,
-          enabled: s.enabled !== false,
-        }))
+        const [sj, tj] = await Promise.all([
+          fetch(`${getBackendUrl()}/api/advertising/schedules`, { cache: 'no-store' }).then((r) => r.json()).catch(() => []),
+          fetch(`${getBackendUrl()}/api/advertising/rank-targets`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
+        ])
+        // real target name + color (falls back to built-in palette for any missing key)
+        const tmeta: Record<string, TargetMeta> = { ...FALLBACK }
+        const titems = (Array.isArray(tj?.items) ? tj.items : Array.isArray(tj) ? tj : []) as Array<{ key?: string; name?: string; color?: string | null }>
+        for (const t of titems) if (t.key) tmeta[t.key] = { name: String(t.name ?? t.key), color: t.color ?? null }
+        const all = (Array.isArray(sj) ? sj : Array.isArray(sj?.items) ? sj.items : []) as Array<Record<string, unknown>>
+        const goals = all.filter((s) => isGoalMode(s as never)).map((s): RankRow => {
+          const key = String(s.defaultTargetKey ?? '')
+          const meta = tmeta[key]
+          return {
+            id: String(s.id),
+            name: String(s.name ?? 'Rank goal'),
+            baseline: meta?.name ?? (key || '—'),
+            baselineKey: key,
+            baselineColor: meta?.color ?? null,
+            windows: Array.isArray(s.windows) ? (s.windows as SchedWindow[]).length : 0,
+            enabled: s.enabled !== false,
+          }
+        })
         if (alive) setRows(goals)
       } catch { if (alive) setRows([]) }
       finally { if (alive) setLoading(false) }
@@ -63,7 +81,15 @@ export function RankGoalsList() {
   }, [])
 
   const columns: GridColumn<RankRow>[] = useMemo(() => [
-    { key: 'baseline', label: 'Baseline rank', metric: false, sortable: true, sortValue: (r) => r.baseline, render: (r) => <span className="h10-nt-crit">{r.baseline}</span> },
+    {
+      key: 'baseline', label: 'Baseline rank', metric: false, sortable: true, sortValue: (r) => r.baseline,
+      render: (r) => (
+        <span className="h10-rg-chip" style={r.baselineColor ? { borderColor: r.baselineColor } : undefined} title={r.baseline}>
+          <span className="sw" style={{ background: r.baselineColor ?? '#99a1ac' }} />
+          <span className="lbl">{r.baseline}</span>
+        </span>
+      ),
+    },
     { key: 'windows', label: 'Windows', metric: true, sortable: true, sortValue: (r) => r.windows, render: (r) => <span>{r.windows}</span> },
     { key: 'status', label: 'Status', metric: false, sortable: true, sortValue: (r) => (r.enabled ? 0 : 1), render: (r) => <span className={`h10-pill ${r.enabled ? 'ok' : 'warn'}`}>{r.enabled ? 'Active' : 'Paused'}</span> },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -71,19 +97,20 @@ export function RankGoalsList() {
 
   const filters: GridFilter[] = useMemo(() => {
     const baselines = Array.from(new Set(rows.map((r) => r.baselineKey).filter(Boolean)))
+    const nameOf = (k: string) => rows.find((r) => r.baselineKey === k)?.baseline ?? k
     return [
       { key: 'status', label: 'Status', kind: 'select', placeholder: 'Any status', options: [{ value: 'active', label: 'Active' }, { value: 'paused', label: 'Paused' }], value: (r) => ((r as RankRow).enabled ? 'active' : 'paused') },
-      { key: 'baseline', label: 'Baseline', kind: 'multiselect', placeholder: 'Any baseline', options: baselines.map((k) => ({ value: k, label: label(k) })), value: (r) => (r as RankRow).baselineKey },
+      { key: 'baseline', label: 'Baseline', kind: 'multiselect', placeholder: 'Any baseline', options: baselines.map((k) => ({ value: k, label: nameOf(k) })), value: (r) => (r as RankRow).baselineKey },
     ]
   }, [rows])
 
   const renderFirst = (r: RankRow) => (
-    <span className="h10-nt-first">
-      <span className="cp-name" title={r.name}>{r.name}</span>
+    <>
+      <a className="h10-nt-name h10-rg-name" href={builderHref(r.id)} onClick={(e) => e.stopPropagation()} title={r.name}>{r.name}</a>
       <span className="h10-nt-acts">
         <a className="h10-nt-open" href={builderHref(r.id)} onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Manage</a>
       </span>
-    </span>
+    </>
   )
 
   return (
