@@ -24,6 +24,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { RuleTypeModal } from './_shared/RuleTypeModal'
 import { NoDataIllus } from './_shared/NoDataIllus'
 import { RuleListTab } from './tabs/RuleListTab'
+import { RankGoalsList } from './tabs/RankGoalsList'
 import { SovTrackerTab } from './tabs/SovTrackerTab'
 import { BudgetScheduleTab } from './_schedule/BudgetScheduleTab'
 import { TAB_RULES } from './tabs/placeholderSeeds'
@@ -329,20 +330,10 @@ export function RulesAutomationClient() {
           )}
         />
       ) : tab === 'dayparting' ? (
-        <RuleListTab
-          noun="Dayparting Schedule"
-          seed={[]}
-          liveType="dayparting-schedule"
-          editHref={(id) => `/marketing/ads/rules-automation/builder/dayparting-schedule?scheduleId=${id}`}
-          onAddRule={() => { window.location.href = '/marketing/ads/rules-automation/builder/dayparting-schedule' }}
-          emptyNode={(
-            <span className="h10-rr-empty">
-              <NoDataIllus size={104} />
-              <b>Create a Dayparting Schedule to control when your campaigns run!</b>
-              <a className="h10-am-btn primary" href="/marketing/ads/rules-automation/builder/dayparting-schedule"><Plus size={13} /> Create Schedule</a>
-            </span>
-          )}
-        />
+        // Rank goals are AdSchedule rows (GET /advertising/schedules) created by the Rank Goal
+        // builder — the legacy RuleListTab only listed AutomationRule dayparting rules, so goal-mode
+        // schedules never showed. RankGoalsList surfaces the real active rank goals here.
+        <RankGoalsList />
       ) : tab === 'placement' ? (
         <RuleListTab
           noun="Placement Rule"

@@ -67,8 +67,11 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear 
         if (!alive) return
         const items = (Array.isArray(cj?.items) ? cj.items : Array.isArray(cj) ? cj : []) as Array<Record<string, unknown>>
         setAll(items.map(toCampaign))
-        const praw = (pj.items ?? pj ?? []) as Array<{ id: string | number; name?: string }>
-        setPortfolios((Array.isArray(praw) ? praw : []).map((x) => ({ id: String(x.id), name: String(x.name ?? x.id) })))
+        // /api/advertising/portfolios returns { portfolios: [{ portfolioId, name }] } — the id key is
+        // portfolioId (the Amazon external id, matching Campaign.portfolioId), not `id`. Reading pj.items
+        // silently yielded [] → names never resolved and the tab showed raw numeric ids.
+        const praw = (pj.portfolios ?? pj.items ?? (Array.isArray(pj) ? pj : [])) as Array<{ portfolioId?: string | number; id?: string | number; name?: string }>
+        setPortfolios((Array.isArray(praw) ? praw : []).map((x) => { const pid = String(x.portfolioId ?? x.id ?? ''); return { id: pid, name: String(x.name ?? pid) } }))
       } catch { /* fail soft */ }
       finally { if (alive) setLoading(false) }
     })()
