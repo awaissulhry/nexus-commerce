@@ -72,7 +72,7 @@ export function EbayChangeLog() {
   ], [all])
 
   return (
-    <div className="h10-am">
+    <div className="h10-am eb-changelog">
       <AdsPageHeader
         channel="ebay"
         title="eBay Change Log"

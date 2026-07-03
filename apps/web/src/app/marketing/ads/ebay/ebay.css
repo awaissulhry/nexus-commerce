@@ -176,3 +176,9 @@
 .eb-qty-cell { display: inline-flex; align-items: center; gap: 5px; }
 .eb-cl-change { display: inline-block; max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #3d4653; }
 .eb-cl-result { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+
+/* ER3.4 — selectable={false} grids have no 40px checkbox column, but the
+   shared sticky first-column CSS assumes one (left: 40px) and overlays the
+   second column. Page-scoped correction; the shared-grid defect is flagged
+   for ER4 (an Amazon-affecting fix needs its own approval). */
+.eb-changelog .h10-am-grid th.nm.fz, .eb-changelog .h10-am-grid td.nm.fz { left: 0; }
