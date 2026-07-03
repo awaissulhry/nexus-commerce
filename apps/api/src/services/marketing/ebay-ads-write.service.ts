@@ -28,7 +28,7 @@ import { normalizeCampaignStatus, canTransitionCampaignStatus, EBAY_CAMPAIGN_STA
 import {
   getActiveEbayAdsAuth,
   createCampaignApi, campaignLifecycleApi, cloneCampaignApi,
-  updateAdRateStrategyApi, updateCampaignBudgetApi,
+  updateAdRateStrategyApi, updateCampaignBudgetApi, updateCampaignIdentificationApi,
   bulkCreateAdsByListingIdApi, bulkUpdateAdsBidApi, bulkDeleteAdsApi,
   createAdGroupApi, bulkCreateKeywordApi, bulkUpdateKeywordApi, bulkCreateNegativeKeywordApi,
   type BulkItemResult, type CreateCampaignPayload,
@@ -531,6 +531,44 @@ export async function updateBudget(ctx: OpContext, campaignId: string, dailyBudg
   })
   await audit({ ctx, actionType: 'set_campaign_budget', entityType: 'CAMPAIGN', entityId: c.externalCampaignId, before: { dailyBudget: c.dailyBudget?.toString() ?? null, budgetUpdatesToday: used }, after: { dailyBudgetCents, budgetUpdatesToday: used + 1 }, mode: decision.mode, status: 'SUCCESS' })
   return { ok: true, mode: decision.mode, budgetUpdatesToday: used + 1 }
+}
+
+// ER1 — rename + end-date edits via eBay updateCampaignIdentification
+// (Details tab v2). Start date is immutable once a campaign has launched.
+export async function updateCampaignIdentification(ctx: OpContext, campaignId: string, input: { name?: string; endDate?: string | null }) {
+  const c = await prisma.ebayCampaign.findUniqueOrThrow({ where: { id: campaignId } })
+  await killSwitchCheck(c.marketplace)
+  const name = input.name?.trim()
+  if (name != null && (name.length === 0 || name.length > 80)) throw new Error('campaign name must be 1–80 characters')
+  if (name == null && input.endDate === undefined) throw new Error('nothing to update')
+  if (input.endDate != null && Number.isNaN(Date.parse(input.endDate))) throw new Error('invalid end date')
+  const status = normalizeCampaignStatus(EBAY_CAMPAIGN_STATUS_MAP, c.status)
+  if (status === 'ENDED') throw new Error('campaign has ended — clone to relaunch')
+
+  const decision = gate(c.marketplace)
+  if (!decision.allowed) throw new Error(`write gate blocked: ${'reason' in decision ? decision.reason : 'unknown'}`)
+  if (decision.mode === 'live' && !c.externalCampaignId.startsWith('sandbox-')) {
+    const auth = await getActiveEbayAdsAuth()
+    if (!auth) throw new Error('no active eBay connection')
+    await updateCampaignIdentificationApi(auth.token, c.externalCampaignId, {
+      campaignName: name ?? c.name,
+      ...(input.endDate !== undefined ? { endDate: input.endDate === null ? null : new Date(input.endDate).toISOString() } : {}),
+    })
+  }
+  await prisma.ebayCampaign.update({
+    where: { id: c.id },
+    data: {
+      ...(name != null ? { name } : {}),
+      ...(input.endDate !== undefined ? { endDate: input.endDate === null ? null : new Date(input.endDate) } : {}),
+    },
+  })
+  await audit({
+    ctx, actionType: 'update_campaign_identification', entityType: 'CAMPAIGN', entityId: c.externalCampaignId,
+    before: { name: c.name, endDate: c.endDate?.toISOString() ?? null },
+    after: { ...(name != null ? { name } : {}), ...(input.endDate !== undefined ? { endDate: input.endDate } : {}) },
+    mode: decision.mode, status: 'SUCCESS',
+  })
+  return { ok: true, mode: decision.mode }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

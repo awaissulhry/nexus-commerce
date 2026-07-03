@@ -189,6 +189,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
         adGroups: { orderBy: { name: 'asc' } },
         keywords: { orderBy: { text: 'asc' } },
         negativeKeywords: { orderBy: { text: 'asc' } },
+        automationPolicy: true, // ER1
       },
     })
     if (!c) return reply.code(404).send({ error: 'campaign not found' })
@@ -239,11 +240,23 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
         startDate: c.startDate,
         endDate: c.endDate,
         lastEntitySyncAt: c.lastEntitySyncAt,
+        // ER1 — per-campaign automation policy (null = INHERIT defaults)
+        automationPolicy: c.automationPolicy ? {
+          posture: c.automationPolicy.posture,
+          protected: c.automationPolicy.protected,
+          rateCapPct: c.automationPolicy.rateCapPct != null ? Number(c.automationPolicy.rateCapPct.toString()) : null,
+          rateFloorPct: c.automationPolicy.rateFloorPct != null ? Number(c.automationPolicy.rateFloorPct.toString()) : null,
+          bidCapCents: c.automationPolicy.bidCapCents,
+          bidFloorCents: c.automationPolicy.bidFloorCents,
+        } : null,
       },
       ads: c.ads.map((a) => ({
         id: a.id,
         listingId: a.listingId,
         inventoryReference: a.inventoryReference,
+        adGroupId: a.adGroupId, // ER1
+        hiddenReason: a.hiddenReason, // ER1 — OOS auto-hide surfaced as state
+        productId: a.productId, // ER1 — deep link to Products
         status: a.status,
         bidPercentage: a.bidPercentage != null ? Number(a.bidPercentage.toString()) : null,
         createdVia: a.createdVia,
@@ -275,10 +288,57 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       })),
       negativeKeywords: c.negativeKeywords.map((n) => ({
         id: n.id,
+        adGroupId: n.adGroupId, // ER1 — campaign-level (null) vs group-level split
         text: n.text,
         matchType: n.matchType,
         status: n.status,
       })),
+      freshness: await freshness(),
+    }
+  })
+
+  // ── ER1: ad-group drill-down ────────────────────────────────────────────
+  app.get<{ Params: { id: string }; Querystring: WindowQuery }>('/ebay-ads/ad-groups/:id', async (req, reply) => {
+    const g = await prisma.ebayAdGroup.findUnique({
+      where: { id: req.params.id },
+      include: { campaign: { select: { id: true, externalCampaignId: true, name: true, marketplace: true, fundingModel: true, campaignTargetingType: true, status: true, budgetCurrency: true } } },
+    })
+    if (!g) return reply.code(404).send({ error: 'ad group not found' })
+    const r = resolveRange(req.query)
+    const short = SHORT_BY_MKT[g.campaign.marketplace] ?? 'IT'
+    const [ads, keywords, negatives] = await Promise.all([
+      prisma.ebayAd.findMany({ where: { adGroupId: g.id }, orderBy: { updatedAt: 'desc' } }),
+      prisma.ebayKeyword.findMany({ where: { adGroupId: g.id }, orderBy: { text: 'asc' } }),
+      prisma.ebayNegativeKeyword.findMany({ where: { adGroupId: g.id }, orderBy: { text: 'asc' } }),
+    ])
+    const listingIds = ads.map((a) => a.listingId).filter((x): x is string => !!x)
+    const [listingFacts, keywordFacts, index] = await Promise.all([
+      prisma.ebayAdsDailyPerformance.groupBy({ by: ['entityId'], where: { entityType: 'LISTING', entityId: { in: listingIds.length ? listingIds : ['−'] }, date: { gte: r.since, lte: r.until } }, _sum: sumFields }),
+      prisma.ebayAdsDailyPerformance.groupBy({ by: ['entityId'], where: { entityType: 'KEYWORD', entityId: { in: keywords.length ? keywords.map((k) => k.externalKeywordId) : ['−'] }, date: { gte: r.since, lte: r.until } }, _sum: sumFields }),
+      prisma.ebayListingIndex.findMany({ where: { marketplace: short, itemId: { in: listingIds.length ? listingIds : ['−'] } }, select: { itemId: true, title: true, price: true, quantity: true } }),
+    ])
+    const lf = new Map(listingFacts.map((f) => [f.entityId, derive(toSums(f))]))
+    const kf = new Map(keywordFacts.map((f) => [f.entityId, derive(toSums(f))]))
+    const idx = new Map(index.map((i) => [i.itemId, i]))
+    return {
+      window: { preset: r.preset, since: r.sinceStr, until: r.untilStr },
+      currency: g.campaign.budgetCurrency ?? 'EUR',
+      adGroup: { id: g.id, externalAdGroupId: g.externalAdGroupId, name: g.name, status: g.status, defaultBidCents: g.defaultBidCents },
+      campaign: { id: g.campaign.id, externalCampaignId: g.campaign.externalCampaignId, name: g.campaign.name, marketplace: g.campaign.marketplace, fundingModel: g.campaign.fundingModel ?? 'COST_PER_CLICK', targetingType: g.campaign.campaignTargetingType, status: g.campaign.status },
+      ads: ads.map((a) => ({
+        id: a.id, listingId: a.listingId, status: a.status, hiddenReason: a.hiddenReason, productId: a.productId,
+        bidPercentage: a.bidPercentage != null ? Number(a.bidPercentage.toString()) : null,
+        title: a.listingId ? idx.get(a.listingId)?.title ?? null : null,
+        priceCents: a.listingId && idx.get(a.listingId)?.price != null ? Math.round(Number(idx.get(a.listingId)!.price!.toString()) * 100) : null,
+        quantity: a.listingId ? idx.get(a.listingId)?.quantity ?? null : null,
+        metrics: a.listingId ? lf.get(a.listingId) ?? derive(zeroSums) : derive(zeroSums),
+      })),
+      keywords: keywords.map((k) => ({
+        id: k.id, adGroupId: k.adGroupId, adGroupName: g.name, externalKeywordId: k.externalKeywordId,
+        text: k.text, matchType: k.matchType, bidCents: k.bidCents, status: k.status,
+        metrics: kf.get(k.externalKeywordId) ?? derive(zeroSums),
+      })),
+      negativeKeywords: negatives.map((n) => ({ id: n.id, adGroupId: n.adGroupId, text: n.text, matchType: n.matchType, status: n.status })),
       freshness: await freshness(),
     }
   })
@@ -883,14 +943,158 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
   })
 
   // Audit trail for the console's activity panels (immutable event log —
-  // pass entityId=<externalCampaignId> for one campaign's history)
-  app.get<{ Querystring: { limit?: string; entityId?: string } }>('/ebay-ads/actions', async (req) => {
+  // pass entityId=<externalCampaignId> for one campaign's history; `before`
+  // = createdAt cursor for pagination — ER1)
+  app.get<{ Querystring: { limit?: string; entityId?: string; before?: string } }>('/ebay-ads/actions', async (req) => {
     const actions = await prisma.campaignAction.findMany({
-      where: { channel: 'EBAY', ...(req.query.entityId ? { entityId: req.query.entityId } : {}) },
+      where: {
+        channel: 'EBAY',
+        ...(req.query.entityId ? { entityId: req.query.entityId } : {}),
+        ...(req.query.before && !Number.isNaN(Date.parse(req.query.before)) ? { createdAt: { lt: new Date(req.query.before) } } : {}),
+      },
       orderBy: { createdAt: 'desc' },
       take: Math.min(Number(req.query.limit ?? 50), 200),
     })
     return { actions }
+  })
+
+  // ═══ ER1 — campaign detail v2 endpoints ═════════════════════════════════
+
+  // Rename + end-date (eBay updateCampaignIdentification; guarded + audited)
+  app.patch<{ Params: { id: string }; Body: { name?: string; endDate?: string | null } }>('/ebay-ads/campaigns/:id/identification', async (req) => {
+    return writes.updateCampaignIdentification(actor(req), req.params.id, req.body)
+  })
+
+  // Per-campaign automation aggregate: policy + applicable rules + scoped
+  // proposals / applied / drift — the Automation tab's single fetch.
+  app.get<{ Params: { id: string } }>('/ebay-ads/campaigns/:id/automation', async (req, reply) => {
+    const c = await prisma.ebayCampaign.findUnique({ where: { id: req.params.id }, include: { automationPolicy: true } })
+    if (!c) return reply.code(404).send({ error: 'campaign not found' })
+    const auto = await import('../services/marketing/ebay-ads-automation.service.js')
+    const [allRules, proposals, applied, drifts, state] = await Promise.all([
+      prisma.ebayAdsRule.findMany({ orderBy: { name: 'asc' } }),
+      prisma.ebayAdsProposal.findMany({ where: { status: 'PENDING', entityRef: { path: ['campaignId'], equals: c.id } }, orderBy: { createdAt: 'desc' }, take: 50 }),
+      prisma.ebayAdsProposal.findMany({ where: { status: 'APPLIED', entityRef: { path: ['campaignId'], equals: c.id } }, orderBy: { decidedAt: 'desc' }, take: 20 }),
+      auto.detectDrift(c.id),
+      auto.getAutomationState(),
+    ])
+    const rules = allRules
+      .map((r0) => ({ id: r0.id, name: r0.name, enabled: r0.enabled, mode: r0.mode, marketplace: r0.marketplace, lastEvaluatedAt: r0.lastEvaluatedAt, scoped: (((r0.scope as { campaignIds?: string[] } | null)?.campaignIds) ?? []).includes(c.id), global: ((((r0.scope as { campaignIds?: string[] } | null)?.campaignIds) ?? []).length === 0) }))
+      .filter((r0) => r0.scoped || (r0.global && (!r0.marketplace || r0.marketplace === c.marketplace)))
+    return {
+      policy: c.automationPolicy ? {
+        posture: c.automationPolicy.posture, protected: c.automationPolicy.protected,
+        rateCapPct: c.automationPolicy.rateCapPct != null ? Number(c.automationPolicy.rateCapPct.toString()) : null,
+        rateFloorPct: c.automationPolicy.rateFloorPct != null ? Number(c.automationPolicy.rateFloorPct.toString()) : null,
+        bidCapCents: c.automationPolicy.bidCapCents, bidFloorCents: c.automationPolicy.bidFloorCents,
+      } : { posture: 'INHERIT', protected: false, rateCapPct: null, rateFloorPct: null, bidCapCents: null, bidFloorCents: null },
+      globalMode: state.globalMode, halted: state.halted,
+      rules, proposals, applied, drifts,
+    }
+  })
+
+  // Policy write — local governance (no eBay call), still audited.
+  app.put<{ Params: { id: string }; Body: { posture?: string; protected?: boolean; rateCapPct?: number | null; rateFloorPct?: number | null; bidCapCents?: number | null; bidFloorCents?: number | null } }>('/ebay-ads/campaigns/:id/automation-policy', async (req, reply) => {
+    const c = await prisma.ebayCampaign.findUnique({ where: { id: req.params.id }, include: { automationPolicy: true } })
+    if (!c) return reply.code(404).send({ error: 'campaign not found' })
+    const b = req.body
+    if (b.posture != null && !['INHERIT', 'OFF', 'SUGGEST', 'AUTO'].includes(b.posture)) return reply.code(400).send({ error: 'posture must be INHERIT | OFF | SUGGEST | AUTO' })
+    for (const k of ['rateCapPct', 'rateFloorPct'] as const) {
+      const v = b[k]
+      if (v != null && (!Number.isFinite(v) || v < 0 || v > 100)) return reply.code(400).send({ error: `${k} must be 0–100` })
+    }
+    if (b.rateCapPct != null && b.rateFloorPct != null && b.rateFloorPct > b.rateCapPct) return reply.code(400).send({ error: 'rate floor cannot exceed rate cap' })
+    const data = {
+      ...(b.posture != null ? { posture: b.posture } : {}),
+      ...(b.protected != null ? { protected: b.protected } : {}),
+      ...(b.rateCapPct !== undefined ? { rateCapPct: b.rateCapPct } : {}),
+      ...(b.rateFloorPct !== undefined ? { rateFloorPct: b.rateFloorPct } : {}),
+      ...(b.bidCapCents !== undefined ? { bidCapCents: b.bidCapCents } : {}),
+      ...(b.bidFloorCents !== undefined ? { bidFloorCents: b.bidFloorCents } : {}),
+      updatedBy: actor(req).actorUserId,
+    }
+    const before = c.automationPolicy
+    const saved = await prisma.ebayCampaignAutomationPolicy.upsert({ where: { campaignId: c.id }, create: { campaignId: c.id, ...data }, update: data })
+    await prisma.campaignAction.create({
+      data: {
+        userId: actor(req).actorUserId, channel: 'EBAY', actionType: 'set_automation_policy', entityType: 'CAMPAIGN', entityId: c.externalCampaignId,
+        payloadBefore: (before ? { posture: before.posture, protected: before.protected } : {}) as object,
+        payloadAfter: { posture: saved.posture, protected: saved.protected, rateCapPct: saved.rateCapPct?.toString() ?? null, rateFloorPct: saved.rateFloorPct?.toString() ?? null, _mode: 'local' } as object,
+        channelResponseStatus: 'SUCCESS',
+      },
+    }).catch(() => {})
+    return { ok: true, policy: { posture: saved.posture, protected: saved.protected, rateCapPct: saved.rateCapPct != null ? Number(saved.rateCapPct.toString()) : null, rateFloorPct: saved.rateFloorPct != null ? Number(saved.rateFloorPct.toString()) : null, bidCapCents: saved.bidCapCents, bidFloorCents: saved.bidFloorCents } }
+  })
+
+  // Suggested keyword bids (quota-governed passthrough)
+  app.post<{ Params: { id: string }; Body: { adGroupId: string; keywords: Array<{ text: string; matchType: string }> } }>('/ebay-ads/campaigns/:id/keyword-bid-suggestions', async (req, reply) => {
+    const c = await prisma.ebayCampaign.findUnique({ where: { id: req.params.id } })
+    const g = await prisma.ebayAdGroup.findUnique({ where: { id: req.body.adGroupId } })
+    if (!c || !g) return reply.code(404).send({ error: 'campaign or ad group not found' })
+    const auth = await getActiveEbayAdsAuth()
+    if (!auth) return reply.code(503).send({ error: 'no active eBay connection' })
+    try {
+      const out = await suggestBidsApi(auth.token, c.externalCampaignId, g.externalAdGroupId, req.body.keywords.map((k) => ({ keywordText: k.text, matchType: k.matchType })))
+      return { ok: true, suggestions: out }
+    } catch (e) { return reply.code(502).send({ error: (e as Error).message }) }
+  })
+
+  // Criterion preview — matches selection rules against the live index
+  // (shared by DetailsTab display + the ER2 builder). Condition rules can't
+  // be previewed (the index doesn't carry condition) and say so.
+  app.post<{ Body: { marketplace: string; rules: Array<{ brands?: string[]; categoryIds?: string[]; minPrice?: number; maxPrice?: number; listingConditionIds?: string[] }> } }>('/ebay-ads/criterion-preview', async (req) => {
+    const short = SHORT_BY_MKT[req.body.marketplace] ?? req.body.marketplace ?? 'IT'
+    const live = await prisma.ebayListingIndex.findMany({ where: { marketplace: short, endedAt: null }, select: { itemId: true, title: true, price: true, categoryId: true, aspects: true } })
+    const rules = req.body.rules ?? []
+    const matches = rules.length === 0 ? live : live.filter((l) => rules.some((rule) => {
+      if (rule.categoryIds?.length && (!l.categoryId || !rule.categoryIds.includes(l.categoryId))) return false
+      const price = l.price != null ? Number(l.price.toString()) : null
+      if (rule.minPrice != null && (price == null || price < rule.minPrice)) return false
+      if (rule.maxPrice != null && (price == null || price > rule.maxPrice)) return false
+      if (rule.brands?.length) {
+        const aspects = (l.aspects ?? {}) as Record<string, string[] | string>
+        const brandVals = ([] as string[]).concat(...(['Marca', 'Brand', 'marca', 'brand'].map((k) => { const v = aspects[k]; return Array.isArray(v) ? v : v ? [v] : [] })))
+        if (!rule.brands.some((b) => brandVals.some((v) => v.toLowerCase() === b.toLowerCase()))) return false
+      }
+      return true
+    }))
+    const conditionRuleUsed = rules.some((rule) => (rule.listingConditionIds?.length ?? 0) > 0)
+    return {
+      count: matches.length,
+      totalLive: live.length,
+      sample: matches.slice(0, 5).map((m) => ({ itemId: m.itemId, title: m.title, priceCents: m.price != null ? Math.round(Number(m.price.toString()) * 100) : null })),
+      note: conditionRuleUsed ? 'condition rules are applied by eBay but not previewable here (the index does not carry item condition)' : null,
+    }
+  })
+
+  // Search terms — latest SEARCH_QUERY snapshot for a Priority campaign
+  app.get<{ Params: { id: string } }>('/ebay-ads/campaigns/:id/search-terms', async (req, reply) => {
+    const c = await prisma.ebayCampaign.findUnique({ where: { id: req.params.id }, select: { externalCampaignId: true, fundingModel: true, marketplace: true } })
+    if (!c) return reply.code(404).send({ error: 'campaign not found' })
+    if ((c.fundingModel ?? '') !== 'COST_PER_CLICK') return reply.code(400).send({ error: 'search-query reporting exists for Priority (CPC) campaigns only' })
+    const latest = await prisma.ebayAdsDailyPerformance.findFirst({
+      where: { entityType: 'SEARCH_QUERY', entityId: { startsWith: `${c.externalCampaignId}::` } },
+      orderBy: { date: 'desc' }, select: { date: true },
+    })
+    if (!latest) return { terms: [], window: null, freshness: await freshness() }
+    const rows = await prisma.ebayAdsDailyPerformance.findMany({
+      where: { entityType: 'SEARCH_QUERY', entityId: { startsWith: `${c.externalCampaignId}::` }, date: latest.date },
+      orderBy: { adFeesCents: 'desc' }, take: 500,
+    })
+    return {
+      window: { until: latest.date.toISOString().slice(0, 10), trailingDays: 30 },
+      terms: rows.map((row) => {
+        const extra = (row.extra ?? {}) as Record<string, string>
+        return {
+          query: extra.search_query ?? row.entityId.split('::').slice(1).join('::'),
+          adGroupId: extra.ad_group_id ?? null,
+          impressions: row.impressions, clicks: row.clicks,
+          adFeesCents: row.adFeesCents, salesCents: row.salesCents, soldQty: row.soldQty,
+          acosPct: row.salesCents > 0 ? (row.adFeesCents / row.salesCents) * 100 : null,
+        }
+      }),
+      freshness: await freshness(),
+    }
   })
 
   // ── E7 #25 — reconciliation (Nexus intent vs eBay live state) ──────────

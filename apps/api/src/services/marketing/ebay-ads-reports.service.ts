@@ -35,6 +35,7 @@ export const HEADER_MAP: Record<string, string> = {
   item_id: 'listing_id',
   keyword_id: 'keyword_id',
   seller_keyword_id: 'keyword_id',
+  search_query: 'search_query', // ER1 — SEARCH_QUERY_PERFORMANCE_REPORT (CPC); ad_group_id stays unmapped → lands in extra
   date: 'date',
   day: 'date',
   // counts
@@ -65,7 +66,7 @@ export const HEADER_MAP: Record<string, string> = {
 
 export interface ParsedReportRow {
   entityId: string
-  entityType: 'CAMPAIGN' | 'LISTING' | 'KEYWORD'
+  entityType: 'CAMPAIGN' | 'LISTING' | 'KEYWORD' | 'SEARCH_QUERY'
   date: string // YYYY-MM-DD
   impressions: number
   clicks: number
@@ -109,10 +110,11 @@ export function parseReportTsv(tsv: string, fallbackDate?: string): ParsedReport
   const mapped = norm.map((h) => HEADER_MAP[h] ?? null)
 
   const idxOf = (key: string) => mapped.indexOf(key)
-  const entityIdx = ['listing_id', 'keyword_id', 'campaign_id'].map((k) => ({ k, i: idxOf(k) })).find((e) => e.i >= 0)
+  // ER1: search_query outranks campaign_id (search rows carry campaign lineage)
+  const entityIdx = ['listing_id', 'keyword_id', 'search_query', 'campaign_id'].map((k) => ({ k, i: idxOf(k) })).find((e) => e.i >= 0)
   const dateIdx = idxOf('date')
   if (!entityIdx || (dateIdx < 0 && !fallbackDate)) return null
-  const entityType = entityIdx.k === 'listing_id' ? 'LISTING' : entityIdx.k === 'keyword_id' ? 'KEYWORD' : 'CAMPAIGN'
+  const entityType = entityIdx.k === 'listing_id' ? 'LISTING' : entityIdx.k === 'keyword_id' ? 'KEYWORD' : entityIdx.k === 'search_query' ? 'SEARCH_QUERY' : 'CAMPAIGN'
 
   const rows: ParsedReportRow[] = []
   for (const line of lines.slice(1)) {
@@ -212,7 +214,7 @@ export async function scheduleEbayReportTasks(): Promise<ScheduleReport> {
   // chunkDays=1 where eBay rejects the `day` dimension (LISTING — error
   // 35107 despite metadata listing it): single-day tasks make the window
   // date the fact date via the parser's fallbackDate.
-  const GRAINS: { reportType: string; dims: (fm: string) => string[]; chunkDays: number; cpcOnly?: boolean; cpsOnly?: boolean }[] = [
+  const GRAINS: { reportType: string; dims: (fm: string) => string[]; chunkDays: number; cpcOnly?: boolean; cpsOnly?: boolean; perCampaign?: boolean; trailingDays?: number }[] = [
     // No CAMPAIGN_PERFORMANCE_REPORT task: eBay's minimum dims force listing
     // lineage onto it anyway (verified: min = listing_id,campaign_id), so the
     // LISTING report IS the atomic truth. Campaign-grain facts + the
@@ -223,6 +225,10 @@ export async function scheduleEbayReportTasks(): Promise<ScheduleReport> {
       chunkDays: 1,
     },
     { reportType: 'KEYWORD_PERFORMANCE_REPORT', dims: () => ['campaign_id', 'ad_group_id', 'seller_keyword_id', 'keyword_match_type', 'day'], chunkDays: 7, cpcOnly: true },
+    // ER1 — search-term grain (verified: CPC-only, ONE campaign per task, no
+    // `day` dim ⇒ window totals dated at dateTo via fallbackDate). Scheduled
+    // per RUNNING/PAUSED CPC campaign over a trailing 30-day window.
+    { reportType: 'SEARCH_QUERY_PERFORMANCE_REPORT', dims: () => ['campaign_id', 'ad_group_id', 'search_query'], chunkDays: 0, cpcOnly: true, perCampaign: true, trailingDays: 30 },
   ]
 
   // Desired metric sets per funding model (live metadata vocabulary; the
@@ -240,6 +246,48 @@ export async function scheduleEbayReportTasks(): Promise<ScheduleReport> {
     for (const g of GRAINS) {
       if (g.cpcOnly && m.fundingModel !== 'COST_PER_CLICK') continue
       if (g.cpsOnly && m.fundingModel !== 'COST_PER_SALE') continue
+
+      // ER1 — per-campaign grains (search-query): one task per campaign over
+      // a trailing window; dedupe includes the campaignIds array.
+      if (g.perCampaign) {
+        const from = new Date(new Date(`${windowTo}T00:00:00Z`).getTime() - ((g.trailingDays ?? 30) - 1) * 86_400_000).toISOString().slice(0, 10)
+        const cIds = campaigns.filter((c) => (c.fundingModel ?? 'COST_PER_SALE') === m.fundingModel).map((c) => c.externalCampaignId)
+        if (!cIds.length) continue
+        const metaRaw = await getReportMetadata(auth.token, g.reportType).catch(() => null)
+        const meta = ((metaRaw as { reportMetadata?: Record<string, unknown> } | null)?.reportMetadata ?? metaRaw) as { metricMetadata?: { metricKey?: string; key?: string }[] } | null
+        const available = new Set<string>((meta?.metricMetadata ?? []).map((mm) => mm.metricKey ?? mm.key ?? '').filter(Boolean))
+        const desired = DESIRED_METRICS[m.fundingModel] ?? []
+        const metricKeys = available.size ? desired.filter((k) => available.has(k)) : desired
+        if (metricKeys.length === 0) { report.errors.push(`${g.reportType}/${m.fundingModel}: no usable metrics in metadata`); continue }
+        for (const extId of cIds) {
+          const open = await prisma.ebayAdsReportTask.findFirst({
+            where: { reportType: g.reportType, fundingModel: m.fundingModel, campaignIds: { equals: [extId] }, dateFrom: new Date(`${from}T00:00:00Z`), dateTo: new Date(`${windowTo}T00:00:00Z`), status: { in: ['PENDING', 'IN_PROGRESS', 'SUCCESS', 'INGESTED'] } },
+            select: { id: true },
+          })
+          if (open) { report.skippedOpen++; continue }
+          try {
+            const spec: CreateReportTaskSpec = {
+              reportType: g.reportType, fundingModel: m.fundingModel, dateFrom: from, dateTo: windowTo,
+              marketplaceIds: marketplaces, campaignIds: [extId],
+              dimensions: g.dims(m.fundingModel).map((dimensionKey) => ({ dimensionKey })), metricKeys,
+            }
+            const externalTaskId = await createReportTask(auth.token, spec)
+            await prisma.ebayAdsReportTask.create({
+              data: {
+                reportType: g.reportType, fundingModel: m.fundingModel, marketplaces, campaignIds: [extId],
+                dateFrom: new Date(`${from}T00:00:00Z`), dateTo: new Date(`${windowTo}T00:00:00Z`),
+                dimensions: spec.dimensions as object, metrics: metricKeys as unknown as object,
+                externalTaskId, status: 'PENDING',
+              },
+            })
+            report.created++
+          } catch (e) {
+            report.errors.push(`${g.reportType}/${extId} ${from}..${windowTo}: ${(e as Error).message}`)
+          }
+        }
+        continue
+      }
+
       for (const w of chunkDateWindow(windowFrom, windowTo, g.chunkDays)) {
       const dateFrom = w.from
       const dateTo = w.to
@@ -352,7 +400,10 @@ export async function pollAndIngestEbayReports(limit = 10): Promise<PollReport> 
       const raw = await downloadReport(auth.token, task.reportHref!)
       const tsv = gunzipSync(raw).toString('utf8')
       const singleDay = task.dateFrom.getTime() === task.dateTo.getTime()
-      const rows = parseReportTsv(tsv, singleDay ? task.dateFrom.toISOString().slice(0, 10) : undefined)
+      // ER1: search-query tasks are window totals (no day dim) — date them at
+      // the window END so "latest snapshot" queries are natural.
+      const isSearch = task.reportType === 'SEARCH_QUERY_PERFORMANCE_REPORT'
+      const rows = parseReportTsv(tsv, singleDay ? task.dateFrom.toISOString().slice(0, 10) : isSearch ? task.dateTo.toISOString().slice(0, 10) : undefined)
       if (rows === null) {
         await prisma.ebayAdsReportTask.update({ where: { id: task.id }, data: { status: 'FAILED', failureReason: 'unrecognized TSV schema (no entity/date column)' } })
         report.failed++
@@ -364,8 +415,18 @@ export async function pollAndIngestEbayReports(limit = 10): Promise<PollReport> 
       // Campaign-grain derivation: aggregate this task's listing rows by
       // their campaign_id lineage (kept in extra). A task = one day × one
       // funding model, so per-campaign sums are absolute ⇒ rerun-safe.
+      // ER1: search-query rows never derive campaign facts (they'd double-count
+      // on top of the listing-derived campaign grain) and get a composite
+      // entityId — the same query can exist in several campaigns.
+      for (const r of rows) {
+        if (r.entityType !== 'SEARCH_QUERY') continue
+        const cid = r.extra?.campaign_id ?? task.campaignIds[0] ?? ''
+        r.extra = { ...(r.extra ?? {}), search_query: r.entityId }
+        r.entityId = `${cid}::${r.entityId}`.slice(0, 500)
+      }
       const byCampaign = new Map<string, { date: string; impressions: number; clicks: number; adFeesCents: number; salesCents: number; soldQty: number }>()
       for (const r of rows) {
+        if (r.entityType === 'SEARCH_QUERY') continue
         const cid = r.entityType === 'CAMPAIGN' ? r.entityId : r.extra?.campaign_id
         if (!cid) continue
         const k = `${cid}|${r.date}`

@@ -11465,6 +11465,7 @@ model EbayCampaign {
   ads              EbayAd[]
   keywords         EbayKeyword[]
   negativeKeywords EbayNegativeKeyword[]
+  automationPolicy EbayCampaignAutomationPolicy?
 
   // ── Aggregated metrics (refreshed by sync) ───────────────────────
   impressions Int       @default(0)
@@ -11482,6 +11483,28 @@ model EbayCampaign {
   @@unique([channelConnectionId, externalCampaignId])
   @@index([channelConnectionId, status])
   @@index([marketplace, status])
+}
+
+/// ER1 — per-campaign automation governance: posture override (INHERIT
+/// defers to the global dial), Protected flag (excluded from ALL automation
+/// incl. coverage guard), and per-campaign guardrail caps/floors — always
+/// clamped by the economics engine (can never exceed break-even).
+model EbayCampaignAutomationPolicy {
+  id         String       @id @default(cuid())
+  campaign   EbayCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId String       @unique
+
+  posture   String  @default("INHERIT") // INHERIT | OFF | SUGGEST | AUTO
+  protected Boolean @default(false)
+
+  rateCapPct    Decimal? @db.Decimal(6, 2)
+  rateFloorPct  Decimal? @db.Decimal(6, 2)
+  bidCapCents   Int?
+  bidFloorCents Int?
+
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 /// E2 (eBay Ads) — CPC ad group. Campaign → ad groups → ads + keywords.

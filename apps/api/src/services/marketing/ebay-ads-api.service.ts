@@ -283,6 +283,12 @@ export const updateCampaignBudgetApi = async (token: string, campaignId: string,
   await expectOk(await marketingPost(`/sell/marketing/v1/ad_campaign/${campaignId}/update_campaign_budget`, token, body), 'updateCampaignBudget')
 }
 
+// ER1 — rename + schedule edits (eBay: updateCampaignIdentification changes
+// name and start/end date on an existing campaign).
+export const updateCampaignIdentificationApi = async (token: string, campaignId: string, body: { campaignName?: string; startDate?: string; endDate?: string | null }): Promise<void> => {
+  await expectOk(await marketingPost(`/sell/marketing/v1/ad_campaign/${campaignId}/update_campaign_identification`, token, body), 'updateCampaignIdentification')
+}
+
 /** Bulk per-item results normalized to { key, ok, id?, error? }. */
 export interface BulkItemResult { key: string; ok: boolean; id?: string | null; error?: string | null; statusCode?: number }
 

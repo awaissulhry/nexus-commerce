@@ -98,6 +98,30 @@ interface CandidateChange {
   reasoning: object
   apply: () => Promise<{ ok: boolean; detail: string }>
   inverse: object // stored for rollback
+  forcePropose?: boolean // ER1 — campaign posture SUGGEST downgrades apply→propose
+}
+
+// ER1 — per-campaign automation policy (EbayCampaignAutomationPolicy).
+// Protected or posture=OFF campaigns are excluded from evaluation entirely;
+// SUGGEST forces PROPOSE; caps/floors clamp after the break-even clamp.
+export interface CampaignPolicy { posture: string; protected: boolean; rateCapPct: number | null; rateFloorPct: number | null; bidCapCents: number | null; bidFloorCents: number | null }
+
+const POLICY_ALLOWS = {
+  OR: [
+    { automationPolicy: null },
+    { automationPolicy: { protected: false, posture: { not: 'OFF' } } },
+  ],
+}
+
+async function policiesFor(campaignIds: string[]): Promise<Map<string, CampaignPolicy>> {
+  if (!campaignIds.length) return new Map()
+  const rows = await prisma.ebayCampaignAutomationPolicy.findMany({ where: { campaignId: { in: [...new Set(campaignIds)] } } })
+  return new Map(rows.map((r) => [r.campaignId, {
+    posture: r.posture, protected: r.protected,
+    rateCapPct: r.rateCapPct != null ? Number(r.rateCapPct.toString()) : null,
+    rateFloorPct: r.rateFloorPct != null ? Number(r.rateFloorPct.toString()) : null,
+    bidCapCents: r.bidCapCents, bidFloorCents: r.bidFloorCents,
+  }]))
 }
 
 async function factsFor(entityType: 'LISTING' | 'KEYWORD', ids: string[], windowDays: number): Promise<Map<string, EntityFacts>> {
@@ -133,10 +157,11 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
       where: {
         listingId: { not: null },
         status: { in: action.type === 'reactivate_ad' ? ['STALE'] : ['ACTIVE'] },
-        campaign: { fundingModel: 'COST_PER_SALE', status: 'RUNNING', ...(rule.marketplace ? { marketplace: rule.marketplace } : {}), ...campaignScope },
+        campaign: { fundingModel: 'COST_PER_SALE', status: 'RUNNING', ...(rule.marketplace ? { marketplace: rule.marketplace } : {}), ...campaignScope, ...POLICY_ALLOWS },
       },
       include: { campaign: { select: { id: true, externalCampaignId: true, name: true, marketplace: true, bidPercentage: true } } },
     })
+    const policies = await policiesFor(ads.map((a) => a.campaignId))
     const short = (m: string) => ({ EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES' } as Record<string, string>)[m] ?? 'IT'
     const listingIds = ads.map((a) => a.listingId!)
     const facts = await factsFor('LISTING', listingIds, windowDays)
@@ -159,23 +184,32 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
         entityRef: { campaignId: ad.campaign.id, externalCampaignId: ad.campaign.externalCampaignId, campaignName: ad.campaign.name, listingId: ad.listingId!, marketplace: ad.campaign.marketplace },
         reasoning: { rule: rule.id, windowDays, facts: f, ratePct, breakEven: e?.be ?? null, conditions: trigger.all },
       }
+      const policy = policies.get(ad.campaignId)
+      const forcePropose = policy?.posture === 'SUGGEST'
       if (action.type === 'adjust_ad_rate' || action.type === 'set_rate_to_breakeven_factor') {
         if (ratePct == null) continue
         const target = action.type === 'adjust_ad_rate' ? ratePct * (1 + (action.deltaPct ?? -10) / 100) : (e!.be!) * (action.factor ?? 0.8)
         const clamped = clampAutoRate(target, e?.be ?? null, action.minRatePct)
-        if (clamped.rate == null || Math.abs(clamped.rate - ratePct) < 0.1) continue
+        if (clamped.rate == null) continue
+        // ER1 — per-campaign guardrail overrides clamp AFTER break-even
+        let rate = clamped.rate
+        let policyNote: string | null = null
+        if (policy?.rateCapPct != null && rate > policy.rateCapPct) { rate = policy.rateCapPct; policyNote = `campaign cap ${policy.rateCapPct}%` }
+        if (policy?.rateFloorPct != null && rate < policy.rateFloorPct) { rate = Math.min(policy.rateFloorPct, clamped.rate); policyNote = `campaign floor ${policy.rateFloorPct}%` }
+        rate = Math.round(rate * 10) / 10
+        if (Math.abs(rate - ratePct) < 0.1) continue
         candidates.push({
-          ...base, kind: 'adjust_ad_rate', from: `${ratePct}%`, to: `${clamped.rate}%`,
-          reasoning: { ...base.reasoning, clampNote: clamped.note },
+          ...base, kind: 'adjust_ad_rate', from: `${ratePct}%`, to: `${rate}%`, forcePropose,
+          reasoning: { ...base.reasoning, clampNote: policyNote ? `${clamped.note ? `${clamped.note} · ` : ''}${policyNote}` : clamped.note },
           inverse: { type: 'set_rate', listingId: ad.listingId!, ratePct },
           apply: async () => {
-            const r = await writes.setAdRates(ctx, ad.campaign.id, [{ listingId: ad.listingId!, ratePct: clamped.rate! }])
-            return { ok: !!r.results[0]?.ok, detail: r.results[0]?.blocked ?? r.results[0]?.error ?? `rate ${ratePct}% → ${clamped.rate}% (${r.mode})` }
+            const r = await writes.setAdRates(ctx, ad.campaign.id, [{ listingId: ad.listingId!, ratePct: rate }])
+            return { ok: !!r.results[0]?.ok, detail: r.results[0]?.blocked ?? r.results[0]?.error ?? `rate ${ratePct}% → ${rate}% (${r.mode})` }
           },
         })
       } else if (action.type === 'pause_ad') {
         candidates.push({
-          ...base, kind: 'pause_ad', from: 'ACTIVE', to: 'removed from campaign',
+          ...base, kind: 'pause_ad', from: 'ACTIVE', to: 'removed from campaign', forcePropose,
           inverse: { type: 'promote', listingId: ad.listingId!, ratePct },
           apply: async () => {
             const r = await writes.removeAds(ctx, ad.campaign.id, [ad.listingId!])
@@ -186,7 +220,7 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
         const idx = liveIdx.get(ad.listingId!)
         if (!idx || idx.endedAt != null || (idx.quantity ?? 0) <= 0) continue
         candidates.push({
-          ...base, kind: 'reactivate_ad', from: 'STALE', to: 're-promoted',
+          ...base, kind: 'reactivate_ad', from: 'STALE', to: 're-promoted', forcePropose,
           inverse: { type: 'remove_ad', listingId: ad.listingId! },
           apply: async () => {
             const r = await writes.promoteListings(ctx, { campaignId: ad.campaign.id, items: [{ listingId: ad.listingId!, ratePct: ratePct ?? undefined }] })
@@ -200,22 +234,25 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
     }
   } else if (trigger.scope === 'CPC_KEYWORD') {
     const keywords = await prisma.ebayKeyword.findMany({
-      where: { status: 'ACTIVE', campaign: { fundingModel: 'COST_PER_CLICK', status: 'RUNNING', ...(rule.marketplace ? { marketplace: rule.marketplace } : {}), ...campaignScope } },
+      where: { status: 'ACTIVE', campaign: { fundingModel: 'COST_PER_CLICK', status: 'RUNNING', ...(rule.marketplace ? { marketplace: rule.marketplace } : {}), ...campaignScope, ...POLICY_ALLOWS } },
       include: { campaign: { select: { id: true, externalCampaignId: true, name: true, marketplace: true } } },
     })
+    const kwPolicies = await policiesFor(keywords.map((k) => k.campaignId))
     const facts = await factsFor('KEYWORD', keywords.map((k) => k.externalKeywordId), windowDays)
     for (const kw of keywords) {
       evaluated++
       const f = facts.get(kw.externalKeywordId) ?? zeroFacts
       const results = trigger.all.map((c) => evalCondition(c, f, null, null))
       if (!results.every((r) => r === true)) continue
+      const kwPolicy = kwPolicies.get(kw.campaignId)
+      const forcePropose = kwPolicy?.posture === 'SUGGEST'
       const base = {
         entityRef: { campaignId: kw.campaign.id, externalCampaignId: kw.campaign.externalCampaignId, campaignName: kw.campaign.name, keywordId: kw.id, keywordText: kw.text, marketplace: kw.campaign.marketplace },
         reasoning: { rule: rule.id, windowDays, facts: f, conditions: trigger.all },
       }
       if (action.type === 'pause_keyword') {
         candidates.push({
-          ...base, kind: 'pause_keyword', from: 'ACTIVE', to: 'PAUSED',
+          ...base, kind: 'pause_keyword', from: 'ACTIVE', to: 'PAUSED', forcePropose,
           inverse: { type: 'keyword_status', keywordId: kw.id, status: 'ACTIVE' },
           apply: async () => {
             const r = await writes.updateKeywords(ctx, kw.campaign.id, [{ keywordId: kw.id, status: 'PAUSED' }])
@@ -223,10 +260,11 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
           },
         })
       } else if (action.type === 'bid_down_keyword' && kw.bidCents != null) {
-        const newBid = Math.max(2, Math.round(kw.bidCents * (1 + (action.bidDeltaPct ?? -20) / 100)))
+        // ER1 — per-campaign bid floor clamps the reduction
+        const newBid = Math.max(2, kwPolicy?.bidFloorCents ?? 2, Math.round(kw.bidCents * (1 + (action.bidDeltaPct ?? -20) / 100)))
         if (newBid >= kw.bidCents) continue
         candidates.push({
-          ...base, kind: 'bid_down_keyword', from: `€${(kw.bidCents / 100).toFixed(2)}`, to: `€${(newBid / 100).toFixed(2)}`,
+          ...base, kind: 'bid_down_keyword', from: `€${(kw.bidCents / 100).toFixed(2)}`, to: `€${(newBid / 100).toFixed(2)}`, forcePropose,
           inverse: { type: 'keyword_bid', keywordId: kw.id, bidCents: kw.bidCents },
           apply: async () => {
             const r = await writes.updateKeywords(ctx, kw.campaign.id, [{ keywordId: kw.id, bidCents: newBid }])
@@ -276,7 +314,8 @@ export async function evaluateEbayAdsRules(onlyRuleId?: string): Promise<Evaluat
           reasoning: cand.reasoning,
           expiresAt: new Date(Date.now() + 14 * 86_400_000),
         }
-        if (mode === 'apply' && cand.kind !== 'alert') {
+        const candMode = cand.forcePropose ? 'propose' : mode // ER1 posture SUGGEST downgrade
+        if (candMode === 'apply' && cand.kind !== 'alert') {
           const outcome = await cand.apply()
           await prisma.ebayAdsProposal.upsert({
             where: { proposedKey },
@@ -616,7 +655,8 @@ export async function runCoverageGuard(): Promise<{ unpromoted: number; proposal
     return { unpromoted: 0, proposal: false }
   }
   const catchAll = await prisma.ebayCampaign.findFirst({
-    where: { nexusManaged: true, fundingModel: 'COST_PER_SALE', status: 'RUNNING', name: { startsWith: 'catch_all-' } },
+    // ER1 — never propose enrolling into a Protected / posture-OFF campaign
+    where: { nexusManaged: true, fundingModel: 'COST_PER_SALE', status: 'RUNNING', name: { startsWith: 'catch_all-' }, ...POLICY_ALLOWS },
     orderBy: { createdAt: 'desc' },
   })
   await prisma.ebayAdsProposal.upsert({
