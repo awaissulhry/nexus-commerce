@@ -350,3 +350,89 @@ export function expandPermissions(stored: string[]): Set<string> {
 }
 
 export const OWNER_ROLE_KEY: SystemRoleKey = 'OWNER'
+
+// ── Permission catalog (for the S4 role-matrix UI) ─────────────────
+export interface PermissionCatalogItem {
+  key: string
+  label: string
+}
+export interface PermissionCatalogGroup {
+  module: string
+  label: string
+  layer: 'page' | 'feature' | 'field'
+  items: PermissionCatalogItem[]
+}
+
+const MODULE_LABELS: Record<string, string> = {
+  pages: 'Pages',
+  products: 'Products & catalog',
+  pim: 'Products & catalog',
+  listings: 'Listings & channels',
+  channels: 'Listings & channels',
+  orders: 'Orders',
+  reviews: 'Reviews',
+  inventory: 'Fulfillment & inventory',
+  stock: 'Fulfillment & inventory',
+  lots: 'Fulfillment & inventory',
+  inbound: 'Fulfillment & inventory',
+  outbound: 'Fulfillment & inventory',
+  returns: 'Fulfillment & inventory',
+  suppliers: 'Fulfillment & inventory',
+  po: 'Fulfillment & inventory',
+  replenishment: 'Fulfillment & inventory',
+  carriers: 'Fulfillment & inventory',
+  fnsku: 'Fulfillment & inventory',
+  fulfillment: 'Fulfillment & inventory',
+  pricing: 'Pricing',
+  repricing: 'Pricing',
+  ads: 'Advertising',
+  marketing: 'Marketing & content',
+  assets: 'Marketing & content',
+  aplus: 'Marketing & content',
+  brand: 'Marketing & content',
+  analytics: 'Analytics & insights',
+  insights: 'Analytics & insights',
+  forecast: 'Analytics & insights',
+  reports: 'Analytics & insights',
+  customers: 'Customers',
+  settings: 'Settings',
+  admin: 'Admin & ops',
+  sync: 'Admin & ops',
+  jobs: 'Admin & ops',
+  bulk: 'Admin & ops',
+  ai: 'AI & agents',
+  users: 'Team & access',
+  roles: 'Team & access',
+  invitations: 'Team & access',
+  audit: 'Team & access',
+  sessions: 'Team & access',
+  financials: 'Financial fields',
+}
+
+function humanize(key: string): string {
+  // "products.price.edit" → "Price edit"; "pages.orders" → "Orders"
+  const parts = key.split('.')
+  const tail = key.startsWith('pages.') ? parts.slice(1) : parts.slice(1)
+  const words = (tail.length ? tail : parts).join(' ').replace(/\./g, ' ')
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+/** Grouped permission catalog for the role-editor matrix. */
+export function permissionCatalog(): PermissionCatalogGroup[] {
+  const groups = new Map<string, PermissionCatalogGroup>()
+  const push = (module: string, layer: PermissionCatalogGroup['layer'], key: string) => {
+    const label = MODULE_LABELS[module] ?? module
+    const id = `${layer}:${label}`
+    if (!groups.has(id)) groups.set(id, { module, label, layer, items: [] })
+    groups.get(id)!.items.push({ key, label: humanize(key) })
+  }
+  for (const p of Object.values(PAGES)) push('pages', 'page', p)
+  for (const p of Object.values(FEATURES)) push(p.split('.')[0], 'feature', p)
+  for (const p of Object.values(FIELDS)) push('financials', 'field', p)
+  // Order: pages first, then features (alpha by label), then fields.
+  return [...groups.values()].sort((a, b) => {
+    const order = { page: 0, feature: 1, field: 2 }
+    if (order[a.layer] !== order[b.layer]) return order[a.layer] - order[b.layer]
+    return a.label.localeCompare(b.label)
+  })
+}
