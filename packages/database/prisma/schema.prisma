@@ -11415,23 +11415,56 @@ model EbayCampaign {
   name               String
 
   // ── Funding ──────────────────────────────────────────────────────
-  // 'STANDARD' = CPM bid percentage (legacy)
-  // 'ADVANCED' = CPC daily budget (newer)
+  // LEGACY naming, kept dual-written for one release while callers
+  // migrate to fundingModel: 'STANDARD' (= COST_PER_SALE, General;
+  // the old comment calling it CPM was wrong) | 'ADVANCED'
+  // (= COST_PER_CLICK, Priority).
   fundingStrategy String
 
-  // For STANDARD: bid percentage (e.g. 5.50 = 5.5% of sale price).
-  // 0.00–100.00 range; Decimal(6,2) gives plenty of headroom.
+  // E2 — current Marketing API vocabulary (authoritative going forward).
+  // 'COST_PER_SALE' (General) | 'COST_PER_CLICK' (Priority/Offsite).
+  fundingModel String?
+
+  // For COST_PER_SALE: campaign-level DEFAULT ad rate (e.g. 5.50 = 5.5%
+  // of total sale amount incl. shipping+taxes). Ad-level bidPercentage
+  // on EbayAd overrides this — rate-at-ad-level is the truth.
   bidPercentage Decimal? @db.Decimal(6, 2)
 
-  // For ADVANCED: daily budget cap in marketplace currency.
+  // For COST_PER_CLICK: daily budget cap in marketplace currency.
   dailyBudget    Decimal? @db.Decimal(10, 2)
   budgetCurrency String? // 'EUR', 'GBP', 'USD'
+
+  // ── E2 — modern campaign shape (verified v1.23.2) ────────────────
+  // CPC only: 'MANUAL' | 'SMART' (immutable after launch).
+  campaignTargetingType String?
+  // ['ON_SITE'] | ['OFF_SITE'] — single channel per campaign.
+  channels String[] @default([])
+  // CPS only: 'FIXED' | 'DYNAMIC'.
+  adRateStrategy String?
+  // CPS DYNAMIC prefs: { adRateAdjustmentPercent, adRateCapPercent }.
+  dynamicAdRatePrefs Json?
+  // Rules-based CPS: { autoSelectFutureInventory, criterionType,
+  // selectionRules[] } — IMMUTABLE on eBay after create (clone to change).
+  campaignCriterion Json?
+  isRulesBased      Boolean @default(false)
+  // Created/managed by Nexus vs discovered from Seller Hub.
+  nexusManaged Boolean @default(false)
+  // updateCampaignBudget hard quota: 15/day/campaign (verified).
+  budgetUpdatesToday Int       @default(0)
+  budgetUpdatesDay   DateTime?
+  lastEntitySyncAt   DateTime?
 
   // ── Lifecycle ────────────────────────────────────────────────────
   // 'DRAFT' | 'RUNNING' | 'PAUSED' | 'ENDED' | 'SUSPENDED'
   status    String
   startDate DateTime
   endDate   DateTime?
+
+  // ── E2 relations ─────────────────────────────────────────────────
+  adGroups         EbayAdGroup[]
+  ads              EbayAd[]
+  keywords         EbayKeyword[]
+  negativeKeywords EbayNegativeKeyword[]
 
   // ── Aggregated metrics (refreshed by sync) ───────────────────────
   impressions Int       @default(0)
@@ -11449,6 +11482,372 @@ model EbayCampaign {
   @@unique([channelConnectionId, externalCampaignId])
   @@index([channelConnectionId, status])
   @@index([marketplace, status])
+}
+
+/// E2 (eBay Ads) — CPC ad group. Campaign → ad groups → ads + keywords.
+model EbayAdGroup {
+  id         String       @id @default(cuid())
+  campaign   EbayCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId String
+
+  externalAdGroupId String
+  name              String
+  // eBay adGroupStatus + local 'STALE' for groups gone from the account.
+  status         String
+  defaultBidCents Int?
+
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  keywords EbayKeyword[]
+  ads      EbayAd[]
+
+  @@unique([campaignId, externalAdGroupId])
+  @@index([campaignId, status])
+}
+
+/// E2 (eBay Ads) — one promoted listing in one campaign. RATE-AT-AD-LEVEL
+/// TRUTH: bidPercentage here overrides the campaign default (rule-created
+/// ads inherit the campaign rate at creation; per-ad updates land here).
+model EbayAd {
+  id         String       @id @default(cuid())
+  campaign   EbayCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId String
+  adGroup    EbayAdGroup? @relation(fields: [adGroupId], references: [id], onDelete: SetNull)
+  adGroupId  String?
+
+  marketplace String
+  // eBay ItemID — the universal attach key (nullable only for
+  // inventory-reference ads whose listing isn't resolved yet).
+  listingId              String?
+  inventoryReference     String?
+  inventoryReferenceType String? // 'INVENTORY_ITEM' | 'INVENTORY_ITEM_GROUP'
+  externalAdId           String?
+
+  // CPS ad rate — THE authoritative rate for this listing in this campaign.
+  bidPercentage Decimal? @db.Decimal(6, 2)
+  // eBay adStatus + local 'STALE' when the listingId is no longer live.
+  status String
+  // 'RULE' | 'KEY_BULK' | 'CONSOLE' | 'AUTOMATION' | 'DISCOVERED'
+  createdVia String @default("DISCOVERED")
+  // Surfaced state, not an error (eBay auto-hides OOS ads): 'OUT_OF_STOCK'.
+  hiddenReason String?
+  // Resolved Nexus product (null until matched via the listing index).
+  productId String?
+
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([campaignId, listingId])
+  @@unique([campaignId, inventoryReference])
+  @@index([listingId])
+  @@index([productId])
+  @@index([marketplace, status])
+}
+
+/// E2 (eBay Ads) — CPC keyword with bid. Match types BROAD|PHRASE|EXACT.
+model EbayKeyword {
+  id         String       @id @default(cuid())
+  campaign   EbayCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId String
+  adGroup    EbayAdGroup  @relation(fields: [adGroupId], references: [id], onDelete: Cascade)
+  adGroupId  String
+
+  externalKeywordId String
+  text              String
+  matchType         String // 'BROAD' | 'PHRASE' | 'EXACT'
+  bidCents          Int? // null under DYNAMIC bidding (bid edits locked)
+  status            String
+
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([adGroupId, externalKeywordId])
+  @@index([campaignId, status])
+  @@index([text])
+}
+
+/// E2 (eBay Ads) — CPC negative keyword (EXACT|PHRASE only — verified;
+/// broad unsupported). Attaches at ad-group scope via the top-level API.
+model EbayNegativeKeyword {
+  id         String       @id @default(cuid())
+  campaign   EbayCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId String
+  adGroupId  String?
+
+  externalId String
+  text       String
+  matchType  String // 'EXACT' | 'PHRASE'
+  status     String
+
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([campaignId, externalId])
+  @@index([campaignId, status])
+}
+
+/// E2 (eBay Ads) — async report task state (mirror of AmazonAdsReportJob;
+/// implements the ads-core ReportTaskDriver contract). One funding model
+/// per task (verified: mixing deprecated); CPS tasks enumerate campaignIds
+/// (≤1,000), CPC tasks may run account-wide (empty campaignIds).
+model EbayAdsReportTask {
+  id String @id @default(cuid())
+
+  reportType   String // CAMPAIGN_PERFORMANCE_REPORT | LISTING_PERFORMANCE_REPORT | ...
+  fundingModel String // COST_PER_SALE | COST_PER_CLICK
+  marketplaces String[] @default([])
+  campaignIds  String[] @default([])
+  dateFrom     DateTime @db.Date
+  dateTo       DateTime @db.Date
+  dimensions   Json
+  metrics      Json
+
+  externalTaskId String? @unique
+  // ads-core ReportTaskState: PENDING | IN_PROGRESS | SUCCESS | FAILED |
+  // EXPIRED | INGESTED
+  status        String    @default("PENDING")
+  reportHref    String?
+  attempts      Int       @default(0)
+  lastPolledAt  DateTime?
+  downloadedAt  DateTime?
+  ingestedAt    DateTime?
+  failureReason String?
+  rowsIngested  Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, lastPolledAt])
+  @@index([reportType, fundingModel, dateFrom, dateTo])
+}
+
+/// E2 (eBay Ads) — daily performance facts (absolute values, rerun-safe
+/// upserts on the natural key; reportTaskId + reportedAt = freshness).
+/// Sales/fee figures inside eBay's 72h "Reconciliation Period" are
+/// provisional — the scheduler re-pulls the trailing window daily.
+model EbayAdsDailyPerformance {
+  id String @id @default(cuid())
+
+  marketplace  String
+  fundingModel String // COST_PER_SALE | COST_PER_CLICK
+  entityType   String // ACCOUNT | CAMPAIGN | LISTING | KEYWORD
+  entityId     String // external id at that grain
+  date         DateTime @db.Date
+
+  impressions          Int      @default(0)
+  clicks               Int      @default(0)
+  ctr                  Decimal? @db.Decimal(8, 5)
+  avgCostPerClickCents Int?
+  adFeesCents          Int      @default(0)
+  salesCents           Int      @default(0)
+  soldQty              Int      @default(0)
+  currency             String   @default("EUR")
+  // Unmapped TSV columns land here verbatim — no silent drops.
+  extra Json?
+
+  reportTaskId String?
+  reportedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([marketplace, fundingModel, entityType, entityId, date])
+  @@index([entityType, entityId, date])
+  @@index([date])
+}
+
+/// E2 (eBay Ads) — ads-side index of every live eBay listing (the
+/// product-first resolver's source of truth; discovery via Trading
+/// GetMyeBaySelling). Never written by the flat-file paths.
+model EbayListingIndex {
+  id String @id @default(cuid())
+
+  marketplace String // 'IT' | 'DE' | 'FR' | 'ES' | 'UK'
+  itemId      String
+
+  title         String?
+  categoryId    String?
+  price         Decimal? @db.Decimal(10, 2)
+  currency      String?
+  quantity      Int?
+  quantitySold  Int?
+  format        String? // 'FixedPriceItem' | 'Chinese' (auction)
+  variationSkus String[] @default([])
+  aspects       Json?
+
+  // 'CHANNEL_LISTING' | 'SHARED_MEMBERSHIP' | 'DISCOVERED'
+  source String @default("DISCOVERED")
+  // Resolved Nexus products (variant-level ids; may be several).
+  productIds  String[] @default([])
+  // 'MATCHED' | 'UNMATCHED' | 'CONFIRMED' | 'IGNORED'
+  matchStatus String   @default("UNMATCHED")
+
+  firstSeenAt        DateTime  @default(now())
+  lastSeenAt         DateTime?
+  endedAt            DateTime?
+  relistedFromItemId String?
+  detailSyncAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([marketplace, itemId])
+  @@index([matchStatus])
+  @@index([endedAt])
+}
+
+/// E2 (eBay Ads) — margin read model per live listing. Break-even ad rate
+/// = contribution margin ÷ ad-fee base (total sale amount). feesSource
+/// labels estimate vs actuals — estimates are NEVER presented as real.
+model EbayListingEconomics {
+  id String @id @default(cuid())
+
+  marketplace String
+  itemId      String
+  productId   String?
+
+  priceCents Int?
+  currency   String @default("EUR")
+  cogsCents  Int?
+  // 'ORDER_HISTORY' | 'CATEGORY_ESTIMATE'
+  ebayFeesCents     Int?
+  feesSource        String?
+  shippingCostCents Int?
+
+  contributionMarginCents Int?
+  contributionMarginPct   Decimal? @db.Decimal(6, 2)
+  breakEvenAdRatePct      Decimal? @db.Decimal(6, 2)
+  breakEvenCpcCents       Int?
+
+  // 'OK' | 'ESTIMATED' | 'MISSING_COGS' | 'MISSING_PRICE' — MISSING_* ⇒
+  // "manual only": excluded from automations, badged in UI.
+  dataStatus String   @default("MISSING_COGS")
+  computedAt DateTime @default(now())
+
+  @@unique([marketplace, itemId])
+  @@index([productId])
+  @@index([dataStatus])
+}
+
+/// E5 schema (created in E2 migrations per the workstream plan) — global
+/// automation posture per channel: OFF | SUGGEST | AUTO + circuit breaker.
+model MarketingAutomationState {
+  id      String @id @default(cuid())
+  channel String @unique // 'EBAY' (Amazon keeps its legacy singleton)
+
+  globalMode String  @default("OFF") // OFF | SUGGEST | AUTO
+  halted     Boolean @default(false)
+  haltReason String?
+  haltedBy   String?
+
+  maxHourlySpendCentsEur Int?
+  maxActionsPerHour      Int?
+
+  updatedAt DateTime @updatedAt
+}
+
+/// E5 schema — hard monthly ad-spend ceiling per channel × marketplace.
+/// Ceiling math models eBay pacing (CPC may spend 2× daily in a day;
+/// General has NO native cap — we project fee run-rate).
+model MarketingSpendCeiling {
+  id String @id @default(cuid())
+
+  channel        String
+  marketplace    String
+  monthlyCapCents Int
+  currency       String  @default("EUR")
+  killSwitch     Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([channel, marketplace])
+}
+
+/// E5 schema — one automation rule: trigger conditions over metric windows
+/// → clamped action. Mode PROPOSE (default) queues EbayAdsProposal;
+/// AUTOPILOT applies within guardrails and logs CampaignAction.
+model EbayAdsRule {
+  id String @id @default(cuid())
+
+  name        String
+  enabled     Boolean @default(false)
+  mode        String  @default("PROPOSE") // PROPOSE | AUTOPILOT
+  marketplace String?
+  scope       Json? // campaign/product filters
+  trigger     Json // conditions: [{metric, windowDays, op, threshold}]
+  action      Json // {type, params, caps}
+  guardrails  Json? // margin floor, min/max rate, spend checks
+
+  cooldownHours   Int       @default(24)
+  lastEvaluatedAt DateTime?
+  cooldownUntil   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  executions EbayAdsRuleExecution[]
+
+  @@index([enabled, mode])
+}
+
+/// E5 schema — one evaluation run of one rule (observability).
+model EbayAdsRuleExecution {
+  id     String      @id @default(cuid())
+  rule   EbayAdsRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  ruleId String
+
+  status    String // SUCCESS | PARTIAL | FAILED | DRY_RUN
+  evaluated Int    @default(0)
+  matched   Int    @default(0)
+  proposed  Int    @default(0)
+  applied   Int    @default(0)
+  summary   Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([ruleId, createdAt])
+}
+
+/// E5 schema — propose-then-apply queue. proposedKey dedupes: one PENDING
+/// proposal per (entity, change-kind). Rollback via CampaignAction
+/// payloadBefore (the shared audit table — no new audit log).
+model EbayAdsProposal {
+  id String @id @default(cuid())
+
+  ruleId    String?
+  kind      String // adjust_ad_rate | adjust_bid | pause_ad | add_negative | ...
+  entityRef Json // {campaignId, listingId?, keywordId?, marketplace}
+  proposedAction Json // {field, from, to, params}
+  reasoning      Json? // inputs + rule + math that produced this
+  proposedKey    String @unique
+
+  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED | APPLIED | ROLLED_BACK | EXPIRED
+  estimatedImpact Json?
+  decidedBy       String?
+  decidedAt       DateTime?
+  appliedResult   Json?
+  expiresAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+}
+
+/// E5 schema — weekly digest (data + renderer split; channels pluggable).
+model EbayAdsDigest {
+  id String @id @default(cuid())
+
+  weekStart   DateTime  @unique @db.Date
+  payload     Json
+  generatedAt DateTime  @default(now())
+  reviewedAt  DateTime?
 }
 
 model EbayWatcherStats {

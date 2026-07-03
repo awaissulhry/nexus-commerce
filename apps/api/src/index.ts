@@ -209,6 +209,7 @@ import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
 import { startReservationSweepCron } from "./jobs/reservation-sweep.job.js";
 import { startReservationReconcileCron } from "./jobs/reservation-reconcile.job.js";
 import { startEbayReadbackCron } from "./jobs/ebay-readback.job.js";
+import { startEbayAdsSyncCrons } from "./jobs/ebay-ads-sync.job.js";
 import { startReconcileCron } from "./jobs/reconcile-cron.job.js";
 import { startLateShipmentFlagCron } from "./jobs/late-shipment-flag.job.js";
 import { startTrackingPushbackCron } from "./jobs/tracking-pushback.job.js";
@@ -1120,6 +1121,8 @@ async function start() {
     startReservationReconcileCron();
     // P5.2 — eBay inventory read-back → ChannelStockEvent (NEXUS_EBAY_READBACK=0 to disable)
     startEbayReadbackCron();
+    // E2 eBay Ads read-side sync (prod default-ON; NEXUS_ENABLE_EBAY_ADS_SYNC gates)
+    startEbayAdsSyncCrons();
     // P5.3 — daily reconcile cron: Amazon drift + cumulative bleed + stale-conflict escalation
     startReconcileCron();
 

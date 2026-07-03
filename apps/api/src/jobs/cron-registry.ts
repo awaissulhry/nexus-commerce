@@ -23,6 +23,10 @@ import { runSalesDriftDetector } from './sales-drift-detector.job.js'
 import { runAmazonOrderItemsRetry } from './amazon-order-items-retry.job.js'
 import { runFinancialSync as runAmazonFinancialSync } from './amazon-financial-sync.job.js'
 import { runEbayFinancialSync } from './ebay-financial-sync.job.js'
+import { syncEbayAdsEntities } from '../services/marketing/ebay-ads-entity-sync.service.js'
+import { discoverEbayListings } from '../services/marketing/ebay-listing-index.service.js'
+import { scheduleEbayReportTasks, pollAndIngestEbayReports } from '../services/marketing/ebay-ads-reports.service.js'
+import { rebuildEbayListingEconomics } from '../services/ads-core/ebay-margin.js'
 import { runInventorySweep as runAmazonInventorySweep } from './amazon-inventory-sync.job.js'
 import { runOrdersPoll as runEbayOrdersPoll } from './ebay-orders-sync.job.js'
 import { runRefreshSweep as runEbayTokenRefresh } from './ebay-token-refresh.job.js'
@@ -144,6 +148,12 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'amazon-order-items-retry': () => runAmazonOrderItemsRetry(),
   'amazon-financial-sync': () => runAmazonFinancialSync(),
   'ebay-financial-sync': () => runEbayFinancialSync(),
+  // E2 eBay Ads (raw service fns — the trigger endpoint adds the CronRun wrap)
+  'ebay-ads-entity-sync': () => syncEbayAdsEntities(),
+  'ebay-listing-discovery': () => discoverEbayListings(),
+  'ebay-ads-report-schedule': () => scheduleEbayReportTasks(),
+  'ebay-ads-report-poll': () => pollAndIngestEbayReports(),
+  'ebay-ads-economics-rebuild': () => rebuildEbayListingEconomics(),
   'amazon-inventory-sync': () => runAmazonInventorySweep(),
   'amazon-mcf-status': () => runMCFStatusSyncOnce(),
   'amazon-returns-poll': () => runAmazonReturnsPoll(),

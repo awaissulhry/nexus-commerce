@@ -69,15 +69,33 @@ export interface RedisLikeClient {
 
 export class RedisQuotaStore implements QuotaStore {
   /** Lazy client getter so importing this module never opens a connection. */
-  constructor(private readonly getClient: () => Promise<RedisLikeClient> | RedisLikeClient) {}
+  constructor(
+    private readonly getClient: () => Promise<RedisLikeClient> | RedisLikeClient,
+    private readonly opTimeoutMs = 3000,
+  ) {}
+
+  /** ioredis with maxRetriesPerRequest:null QUEUES commands forever while
+   *  reconnecting — an unreachable Redis would hang callers instead of
+   *  failing into the ledger's failMode. Race every op against a timeout so
+   *  outages degrade (fail-open/closed) rather than block syncs. */
+  private withTimeout<T>(p: Promise<T> | T): Promise<T> {
+    const guarded = Promise.resolve(p)
+    guarded.catch(() => {}) // a post-timeout rejection must not surface as unhandled
+    return Promise.race([
+      guarded,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`quota store op timed out after ${this.opTimeoutMs}ms`)), this.opTimeoutMs).unref?.(),
+      ),
+    ])
+  }
 
   async incr(key: string, ttlSec: number): Promise<number> {
-    const client = await this.getClient()
-    const n = await client.incr(key)
+    const client = await this.withTimeout(Promise.resolve(this.getClient()))
+    const n = await this.withTimeout(client.incr(key))
     // First increment creates the key → arm the window TTL. A crash between
     // INCR and EXPIRE could leave a keyless TTL only for that first call;
     // the +60s slack and the provider's own enforcement bound the harm.
-    if (n === 1) await client.expire(key, ttlSec + 60)
+    if (n === 1) await this.withTimeout(client.expire(key, ttlSec + 60))
     return n
   }
 }
