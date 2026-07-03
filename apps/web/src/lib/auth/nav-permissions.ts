@@ -34,11 +34,51 @@ const NAV_PERMS: Array<[string, string]> = [
   ['/settings', 'pages.settings'],
 ]
 
+// Self-service settings any signed-in user may reach (their own profile,
+// notifications, security/2FA) — never gated by role permission.
+const SELF_SERVICE = ['/settings/profile', '/settings/notifications', '/settings/security']
+function isSelfService(href: string): boolean {
+  return SELF_SERVICE.some((p) => href === p || href.startsWith(p + '/'))
+}
+
 export function navPagePermission(href: string): string | null {
+  if (isSelfService(href)) return null // self-service → any authenticated user
   let best: string | null = null
   let bestLen = -1
   for (const [prefix, perm] of NAV_PERMS) {
     if ((href === prefix || href.startsWith(prefix + '/') || href.startsWith(prefix)) && prefix.length > bestLen) {
+      best = perm
+      bestLen = prefix.length
+    }
+  }
+  return best
+}
+
+// Finer per-item permissions for the settings sub-rail (more specific than
+// the coarse page-level map above). null = self-service (always shown).
+const SETTINGS_NAV_PERMS: Array<[string, string]> = [
+  ['/settings/team', 'users.manage'],
+  ['/settings/account', 'settings.workspace.edit'],
+  ['/settings/company', 'settings.workspace.edit'],
+  ['/settings/terminology', 'settings.workspace.edit'],
+  ['/settings/pim', 'pim.manage'],
+  ['/settings/dam', 'assets.manage'],
+  ['/settings/channels', 'settings.integrations.manage'],
+  ['/settings/mappings', 'settings.integrations.manage'],
+  ['/settings/advertising', 'settings.integrations.manage'],
+  ['/settings/ai', 'settings.integrations.manage'],
+  ['/settings/api-keys', 'settings.apikeys.manage'],
+  ['/settings/webhooks', 'settings.webhooks.manage'],
+  ['/settings/audit', 'audit.view'],
+  ['/settings/privacy', 'settings.privacy.manage'],
+]
+
+export function settingsNavPermission(href: string): string | null {
+  if (isSelfService(href)) return null
+  let best: string | null = null
+  let bestLen = -1
+  for (const [prefix, perm] of SETTINGS_NAV_PERMS) {
+    if ((href === prefix || href.startsWith(prefix + '/')) && prefix.length > bestLen) {
       best = perm
       bestLen = prefix.length
     }

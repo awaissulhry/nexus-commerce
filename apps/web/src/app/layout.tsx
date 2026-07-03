@@ -41,6 +41,7 @@ import { CompetitiveAlertWatcher } from "@/components/dashboard/CompetitiveAlert
 import { ToastProvider } from "@/components/ui/Toast";
 import { ConfirmProvider } from "@/components/ui/ConfirmProvider";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
+import { PageGuard } from "@/lib/auth/PageGuard";
 import CopilotMount from "@/components/CopilotMount";
 import { getServerLocale, getServerT } from "@/lib/i18n/server";
 
@@ -108,7 +109,7 @@ export default async function RootLayout({
                 </>
               }
             >
-              {children}
+              <PageGuard>{children}</PageGuard>
             </AppShell>
             {/* ACP.7b — page-aware copilot on EVERY route (incl. standalone
                 surfaces); excludes public customer pages. One mount, no

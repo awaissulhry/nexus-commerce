@@ -26,6 +26,8 @@ import { usePathname } from 'next/navigation'
 import { Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SETTINGS_NAV, findNavItemForPath } from './settings-nav'
+import { useAuth } from '@/lib/auth/AuthProvider'
+import { settingsNavPermission } from '@/lib/auth/nav-permissions'
 
 // ─── tiny mobile-open store ──────────────────────────────────────
 // useSyncExternalStore avoids a Context+Provider layer for one
@@ -75,6 +77,20 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 export function SettingsRail() {
   const pathname = usePathname() ?? '/settings'
   const activeItem = findNavItemForPath(pathname)
+
+  // Filter the rail by permission for a signed-in user (self-service items
+  // always show; others need their permission). Anonymous/shadow shows all.
+  const { status, has } = useAuth()
+  const visibleNav =
+    status === 'authed'
+      ? SETTINGS_NAV.map((group) => ({
+          ...group,
+          items: group.items.filter((it) => {
+            const perm = settingsNavPermission(it.href)
+            return perm === null || has(perm)
+          }),
+        })).filter((group) => group.items.length > 0)
+      : SETTINGS_NAV
   const open = useSyncExternalStore(subscribe, getSnapshot, () => false)
 
   // Close the mobile sheet when the route changes — without this the
@@ -122,7 +138,7 @@ export function SettingsRail() {
         </div>
 
         <nav className="px-2 pb-6">
-          {SETTINGS_NAV.map((group) => (
+          {visibleNav.map((group) => (
             <div key={group.label} className="mt-4 first:mt-2">
               <div className="px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 {group.label}
