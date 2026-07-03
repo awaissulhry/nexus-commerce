@@ -164,6 +164,7 @@ export function EbayCampaignBuilder() {
   return (
     <div className="h10-am">
       <AdsPageHeader
+        channel="ebay"
         title="New eBay campaign"
         subtitle="Pick a goal — everything else is derived from your economics, inspectable, and overridable."
         markets={EBAY_MARKETS.filter((m) => m.id !== 'all').map((m) => m.id)}

@@ -76,6 +76,7 @@ export function EbayAutomationClient() {
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
+        channel="ebay"
         title="eBay Rules & Automation"
         subtitle="Rules propose; you approve — or grant autopilot within hard margin guardrails. Everything is audited and reversible."
         markets={['EBAY_IT']} market="EBAY_IT" onMarketChange={() => {}}

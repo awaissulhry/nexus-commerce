@@ -119,6 +119,7 @@ export function EbayCampaignsGrid() {
   return (
     <div className="h10-am">
       <AdsPageHeader
+        channel="ebay"
         title="eBay Ad Manager"
         subtitle="Promoted Listings — General (cost-per-sale) and Priority (cost-per-click), Seller-Hub-created and Nexus-managed."
         markets={EBAY_MARKETS.map((x) => x.id)}

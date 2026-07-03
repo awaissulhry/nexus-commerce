@@ -67,7 +67,7 @@ export function EbayDigestClient() {
 
   return (
     <div className="eb-page h10-am">
-      <AdsPageHeader title="eBay Weekly Digest" subtitle="The one weekly review: money, movers, what autopilot did, what needs your decision." markets={['EBAY_IT']} market="EBAY_IT" onMarketChange={() => {}} />
+      <AdsPageHeader channel="ebay" title="eBay Weekly Digest" subtitle="The one weekly review: money, movers, what autopilot did, what needs your decision." markets={['EBAY_IT']} market="EBAY_IT" onMarketChange={() => {}} />
       <div className="eb-controls">
         <button type="button" className="h10-am-btn" onClick={() => void generate()} disabled={busy}>{busy ? 'Generating…' : 'Generate now'}</button>
         {digest && !digest.reviewedAt && <button type="button" className="h10-am-btn primary" onClick={() => void markReviewed()} disabled={busy}>Mark week reviewed ✓</button>}

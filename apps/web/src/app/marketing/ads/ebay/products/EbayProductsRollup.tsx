@@ -99,6 +99,7 @@ export function EbayProductsRollup() {
   return (
     <div className="h10-am">
       <AdsPageHeader
+        channel="ebay"
         title="eBay Products"
         subtitle="Product-first: every live eBay listing, grouped by the product behind it — promote a product and all its item IDs come along."
         markets={EBAY_MARKETS.map((x) => x.id)}

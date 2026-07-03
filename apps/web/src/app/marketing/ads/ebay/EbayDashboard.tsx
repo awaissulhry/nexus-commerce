@@ -49,6 +49,7 @@ export function EbayDashboard() {
   return (
     <div className="dash">
       <AdsPageHeader
+        channel="ebay"
         title="eBay Advertising"
         subtitle="Promoted Listings — General (cost-per-sale) + Priority (cost-per-click). All sales figures are any-click attributed."
         markets={EBAY_MARKETS.map((m) => m.id)}
