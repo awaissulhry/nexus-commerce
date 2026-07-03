@@ -365,6 +365,14 @@ async function applyProposalAction(actorUserId: string | null, p: { kind: string
     if (!r.results[0]?.ok) throw new Error(r.results[0]?.error ?? 'failed')
     return `bid → €${(bidCents / 100).toFixed(2)} (${r.mode})`
   }
+  if (p.kind === 'enroll_catch_all') {
+    const ref2 = p.entityRef as { campaignId: string; listingIds?: string[] }
+    const listingIds = ref2.listingIds ?? []
+    if (!ref2.campaignId || !listingIds.length) throw new Error('nothing to enroll')
+    const r = await writes.promoteListings(ctx, { campaignId: ref2.campaignId, items: listingIds.map((listingId) => ({ listingId })) })
+    const ok = r.results.filter((x) => x.ok).length
+    return `enrolled ${ok}/${listingIds.length} listing(s) (${r.mode})${ok < listingIds.length ? ' — see campaign for per-item blocks' : ''}`
+  }
   if (p.kind === 'alert') return 'acknowledged'
   throw new Error(`unsupported proposal kind ${p.kind}`)
 }
@@ -393,6 +401,13 @@ export async function rollbackProposal(actorUserId: string | null, id: string): 
   } else if (inv.type === 'keyword_bid' && ref.keywordId) {
     const r = await writes.updateKeywords(ctx, ref.campaignId, [{ keywordId: ref.keywordId, bidCents: Number(inv.bidCents) }])
     detail = r.results[0]?.ok ? `bid restored` : (r.results[0]?.error ?? 'failed')
+  } else if (inv.type === 'remove_ads' && ref.campaignId) {
+    // inverse of enroll_catch_all — un-promote the batch that was enrolled
+    const ids = ((inv.listingIds as string[] | undefined) ?? []).filter(Boolean)
+    if (!ids.length) throw new Error('no listing ids recorded for this enrollment')
+    const r = await writes.removeAds(ctx, ref.campaignId, ids)
+    const ok = r.results.filter((x) => x.ok).length
+    detail = `${ok}/${ids.length} enrollment(s) removed`
   } else {
     throw new Error('no inverse recorded for this proposal')
   }
@@ -458,8 +473,69 @@ export async function detectAnomalies(): Promise<Anomaly[]> {
   return anomalies
 }
 
+/**
+ * E7 #21 (coverage guard): live listings not promoted in ANY active General
+ * campaign → ONE aggregate PENDING proposal to enroll them into the newest
+ * running catch-all (or an alert proposing to create one). Refreshed each
+ * run; approving promotes all listed items through the guarded write path.
+ */
+export async function runCoverageGuard(): Promise<{ unpromoted: number; proposal: boolean }> {
+  const live = await prisma.ebayListingIndex.findMany({ where: { endedAt: null }, select: { itemId: true, marketplace: true } })
+  const promoted = new Set((await prisma.ebayAd.findMany({
+    where: { listingId: { not: null }, status: { notIn: ['STALE'] }, campaign: { fundingModel: 'COST_PER_SALE', status: { in: ['RUNNING', 'PAUSED'] } } },
+    select: { listingId: true },
+  })).map((a) => a.listingId!))
+  const unpromoted = live.filter((l) => !promoted.has(l.itemId))
+  const proposedKey = 'coverage:enroll-catch-all'
+  if (unpromoted.length === 0) {
+    await prisma.ebayAdsProposal.deleteMany({ where: { proposedKey, status: 'PENDING' } })
+    return { unpromoted: 0, proposal: false }
+  }
+  const catchAll = await prisma.ebayCampaign.findFirst({
+    where: { nexusManaged: true, fundingModel: 'COST_PER_SALE', status: 'RUNNING', name: { startsWith: 'catch_all-' } },
+    orderBy: { createdAt: 'desc' },
+  })
+  await prisma.ebayAdsProposal.upsert({
+    where: { proposedKey },
+    create: {
+      kind: catchAll ? 'enroll_catch_all' : 'alert',
+      entityRef: (catchAll
+        ? { campaignId: catchAll.id, externalCampaignId: catchAll.externalCampaignId, campaignName: catchAll.name, listingIds: unpromoted.map((u) => u.itemId), marketplace: catchAll.marketplace }
+        : { campaignName: '— no catch-all campaign exists —', listingIds: unpromoted.map((u) => u.itemId), marketplace: 'EBAY_IT' }) as object,
+      proposedAction: { from: `${unpromoted.length} unpromoted listing(s)`, to: catchAll ? `enroll into "${catchAll.name}"` : 'create a catch-all campaign (builder → Protect margin)', inverse: { type: 'remove_ads', listingIds: unpromoted.map((u) => u.itemId) } } as object,
+      reasoning: { coverage: `${promoted.size}/${live.length} live listings promoted` } as object,
+      proposedKey,
+      status: 'PENDING',
+      expiresAt: new Date(Date.now() + 7 * 86_400_000),
+    },
+    update: {
+      kind: catchAll ? 'enroll_catch_all' : 'alert',
+      entityRef: (catchAll
+        ? { campaignId: catchAll.id, externalCampaignId: catchAll.externalCampaignId, campaignName: catchAll.name, listingIds: unpromoted.map((u) => u.itemId), marketplace: catchAll.marketplace }
+        : { campaignName: '— no catch-all campaign exists —', listingIds: unpromoted.map((u) => u.itemId), marketplace: 'EBAY_IT' }) as object,
+      proposedAction: { from: `${unpromoted.length} unpromoted listing(s)`, to: catchAll ? `enroll into "${catchAll.name}"` : 'create a catch-all campaign (builder → Protect margin)', inverse: { type: 'remove_ads', listingIds: unpromoted.map((u) => u.itemId) } } as object,
+      status: 'PENDING', decidedBy: null, decidedAt: null,
+    },
+  })
+  return { unpromoted: unpromoted.length, proposal: true }
+}
+
 export async function runAnomalyGuard(): Promise<{ anomalies: number; ceilings: number }> {
   const [anoms, ceils] = await Promise.all([detectAnomalies(), checkSpendCeilings()])
+  await runCoverageGuard().catch((e) => logger.warn(`[E7][coverage] ${(e as Error).message}`))
+  // E7 #12 Floor Watch: DYNAMIC campaigns whose applied ad rates exceed the
+  // configured cap (eBay's stealth-floor precedent, Nov 2024).
+  try {
+    const dynamics = await prisma.ebayCampaign.findMany({ where: { adRateStrategy: 'DYNAMIC', status: 'RUNNING' }, include: { ads: { where: { status: { notIn: ['STALE'] } }, select: { listingId: true, bidPercentage: true } } } })
+    for (const d of dynamics) {
+      const cap = Number(((d.dynamicAdRatePrefs as Array<{ adRateCapPercent?: string }> | null)?.[0]?.adRateCapPercent) ?? NaN)
+      if (!Number.isFinite(cap)) continue
+      const over = d.ads.filter((a) => a.bidPercentage != null && Number(a.bidPercentage.toString()) > cap + 0.05)
+      if (over.length) {
+        anoms.push({ type: 'dynamic_rate_over_cap', severity: 'CRITICAL', message: `Floor Watch: ${over.length} ad(s) in "${d.name}" carry rates above the configured cap ${cap}% — eBay-side drift`, entityId: d.externalCampaignId })
+      }
+    }
+  } catch (e) { logger.warn(`[E7][floor-watch] ${(e as Error).message}`) }
   if (anoms.length || ceils.some((c) => c.pct >= 80)) {
     try {
       const { notifyAutomation } = await import('../advertising/ads-automation-notify.service.js')

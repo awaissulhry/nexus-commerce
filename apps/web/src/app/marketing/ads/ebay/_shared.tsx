@@ -25,6 +25,7 @@ export interface SummaryPayload {
   campaignCounts: Record<string, number>
   economicsStatus: Record<string, number>
   attributionModel: string
+  coverage?: { liveListings: number; promoted: number; pct: number | null }
   freshness: Freshness
 }
 export interface TrendPayload {

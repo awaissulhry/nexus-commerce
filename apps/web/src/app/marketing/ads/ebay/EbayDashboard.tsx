@@ -123,6 +123,12 @@ export function EbayDashboard() {
             {s && Object.entries(s.campaignCounts).map(([k, v]) => (
               <div key={k}><span className="k">{k}</span><span className="v">{v}</span></div>
             ))}
+            {s?.coverage && (
+              <div title="Live listings promoted in ≥1 active General campaign — the coverage guard proposes enrollment for the rest">
+                <span className="k">Ad coverage</span>
+                <span className="v" style={{ color: (s.coverage.pct ?? 0) >= 90 ? '#12855f' : '#b87503' }}>{s.coverage.pct != null ? `${s.coverage.pct}%` : '—'} <span style={{ fontSize: 11, fontWeight: 500, color: '#8a93a1' }}>({s.coverage.promoted}/{s.coverage.liveListings})</span></span>
+              </div>
+            )}
             <div><span className="k">Attribution</span><span className="v" style={{ fontSize: 13 }}>any-click (30d)</span></div>
             <div><span className="k">Facts as of</span><span className="v" style={{ fontSize: 13 }}>{s?.freshness.factsReportedAt ? new Date(s.freshness.factsReportedAt).toLocaleString('en-GB') : '—'}</span></div>
             <div><span className="k">Entities as of</span><span className="v" style={{ fontSize: 13 }}>{s?.freshness.entitySyncAt ? new Date(s.freshness.entitySyncAt).toLocaleString('en-GB') : '—'}</span></div>

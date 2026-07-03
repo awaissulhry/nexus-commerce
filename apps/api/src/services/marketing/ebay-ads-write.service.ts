@@ -173,8 +173,54 @@ export async function cloneCampaign(ctx: OpContext, campaignId: string, name: st
       startDate: new Date(),
     },
   })
-  await audit({ ctx, actionType: 'clone_campaign', entityType: 'CAMPAIGN', entityId: c.externalCampaignId, before: { source: c.externalCampaignId }, after: { newExternalId, name }, mode: decision.mode, status: 'SUCCESS', responseId: newExternalId })
-  return { ok: true, mode: decision.mode, campaignId: row.id, externalCampaignId: newExternalId }
+  // E7 #16 — clone-by-rematerialization (eBay's cloneCampaign only serves
+  // ENDED rules-based CPS). Structure always copies; MEMBERS copy when legal:
+  // CPS ads only if the source is ENDED (a live source still owns its
+  // listings — one-listing-one-General); CPC groups/keywords/negatives can
+  // always duplicate across campaigns.
+  const counts = { ads: 0, adGroups: 0, keywords: 0, negatives: 0, rules: 0, skippedAds: 0 }
+  const isCps = (c.fundingModel ?? 'COST_PER_SALE') === 'COST_PER_SALE'
+  const sourceEnded = normalizeCampaignStatus(EBAY_CAMPAIGN_STATUS_MAP, c.status) === 'ENDED'
+  if (isCps && !c.isRulesBased) {
+    const ads = await prisma.ebayAd.findMany({ where: { campaignId: c.id, listingId: { not: null } } })
+    if (sourceEnded && ads.length) {
+      const r = await promoteListings(ctx, {
+        campaignId: row.id,
+        items: ads.map((a) => ({ listingId: a.listingId!, ratePct: a.bidPercentage != null ? Number(a.bidPercentage.toString()) : undefined })),
+        override: { reason: `clone of ended campaign ${c.externalCampaignId}` },
+      })
+      counts.ads = r.results.filter((x) => x.ok).length
+    } else {
+      counts.skippedAds = ads.length // live source keeps its listings; move via the builder
+    }
+  } else if (!isCps) {
+    const groups = await prisma.ebayAdGroup.findMany({ where: { campaignId: c.id }, include: { keywords: true } })
+    const negs = await prisma.ebayNegativeKeyword.findMany({ where: { campaignId: c.id } })
+    for (const g of groups) {
+      const ng = await createAdGroup(ctx, row.id, g.name, g.defaultBidCents ?? undefined)
+      counts.adGroups++
+      if (g.keywords.length) {
+        const kr = await addKeywords(ctx, row.id, ng.adGroupId, g.keywords.map((k) => ({ text: k.text, matchType: k.matchType, bidCents: k.bidCents ?? undefined })))
+        counts.keywords += kr.results.filter((x) => x.ok).length
+      }
+      const groupNegs = negs.filter((n) => n.adGroupId === g.id)
+      if (groupNegs.length) {
+        const nr = await addNegatives(ctx, row.id, ng.adGroupId, groupNegs.map((n) => ({ text: n.text, matchType: n.matchType as 'EXACT' | 'PHRASE' })))
+        counts.negatives += nr.results.filter((x) => x.ok).length
+      }
+    }
+  }
+  // scoped rule bindings referencing the source clone over to the new campaign
+  const scopedRules = await prisma.ebayAdsRule.findMany({ where: { scope: { path: ['campaignIds'], array_contains: c.id } } }).catch(() => [] as Array<{ name: string; mode: string; marketplace: string | null; trigger: unknown; action: unknown; guardrails: unknown; cooldownHours: number }>)
+  for (const sr of scopedRules) {
+    await prisma.ebayAdsRule.create({
+      data: { name: sr.name.replace(c.name, name), enabled: true, mode: sr.mode, marketplace: sr.marketplace, scope: { campaignIds: [row.id] } as object, trigger: sr.trigger as object, action: sr.action as object, guardrails: (sr.guardrails ?? {}) as object, cooldownHours: sr.cooldownHours },
+    })
+    counts.rules++
+  }
+
+  await audit({ ctx, actionType: 'clone_campaign', entityType: 'CAMPAIGN', entityId: c.externalCampaignId, before: { source: c.externalCampaignId }, after: { newExternalId, name, counts }, mode: decision.mode, status: 'SUCCESS', responseId: newExternalId })
+  return { ok: true, mode: decision.mode, campaignId: row.id, externalCampaignId: newExternalId, counts }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

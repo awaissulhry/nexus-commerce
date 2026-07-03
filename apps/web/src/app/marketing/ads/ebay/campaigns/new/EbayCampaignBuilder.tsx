@@ -31,8 +31,11 @@ interface Prefill {
   derived: { label: string; strategy: 'CPS' | 'CPC'; name: string; marketplace: string; goalFactor: number; endDate: string | null; rulePacks: string[]; rateMode: string; defaultBudgetCents: number | null }
   listings: PlanListing[]
   totals: { listings: number; conflicts: number; missingCost: number; forecastMonthlyFeeCents: number; trailingSales30dCents: number }
+  keywordSeeds?: Array<{ text: string; source: string; matchType: string; bidCents: number }>
+  budget?: { suggestedCents: number; formula: string } | null
 }
-interface LaunchOut { ok: boolean; mode: string; campaignId: string; rulePacksBound: string[]; timeline: string[]; promoteResults: Array<{ key: string; ok: boolean; blocked?: string | null; error?: string | null; warning?: string | null }> }
+interface Seed { text: string; source: string; matchType: 'PHRASE' | 'EXACT' | 'BROAD'; bidEur: string; on: boolean }
+interface LaunchOut { ok: boolean; mode: string; campaignId: string; rulePacksBound: string[]; timeline: string[]; promoteResults: Array<{ key: string; ok: boolean; blocked?: string | null; error?: string | null; warning?: string | null }>; keywordResults?: Array<{ key: string; ok: boolean; blocked?: string | null; error?: string | null }> }
 
 const GOALS = [
   { key: 'catch_all', Icon: Shield, title: 'Protect margin — promote everything', desc: 'One evergreen General campaign. Every listing at its own break-even-clamped rate; new listings enroll via automation. The always-on baseline.', chips: ['General · fixed', 'rate = break-even × 0.7', '4 rule packs'] },
@@ -59,6 +62,8 @@ export function EbayCampaignBuilder() {
   const [resolutions, setResolutions] = useState<Record<string, 'include' | 'skip' | 'move'>>({})
   const [perRate, setPerRate] = useState<Record<string, string>>({})
   const [ack, setAck] = useState<Set<string>>(new Set())
+  const [seeds, setSeeds] = useState<Seed[]>([])
+  const [newSeed, setNewSeed] = useState('')
   const [launched, setLaunched] = useState<LaunchOut | null>(null)
 
   const pickGoal = useCallback(async (goal: string) => {
@@ -72,6 +77,9 @@ export function EbayCampaignBuilder() {
       setResolutions(Object.fromEntries(p.listings.filter((l) => l.conflict).map((l) => [l.itemId, 'skip' as const])))
       setPerRate({})
       setAck(new Set())
+      setSeeds((p.keywordSeeds ?? []).map((s) => ({ text: s.text, source: s.source, matchType: s.matchType as Seed['matchType'], bidEur: (s.bidCents / 100).toFixed(2), on: true })))
+      setNewSeed('')
+      if (p.budget?.suggestedCents) setBudgetEur((p.budget.suggestedCents / 100).toFixed(2))
       setStep('plan')
     } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }, [market])
@@ -96,6 +104,8 @@ export function EbayCampaignBuilder() {
     if (badRates.length) blocking.push(`${badRates.length} listing(s) have no valid rate (2–100%)`)
     if (!isCps && (Number(budgetEur) || 0) < 1) blocking.push('Daily budget must be ≥ €1.00')
     if (!isCps && targeting === 'SMART' && (Number(maxCpcEur) || 0) < 0.02) blocking.push('Smart targeting needs a max CPC ≥ €0.02')
+    const badSeeds = seeds.filter((s) => s.on && (!s.text.trim() || (Number(s.bidEur) || 0) < 0.05))
+    if (!isCps && targeting === 'MANUAL' && badSeeds.length) blocking.push(`${badSeeds.length} keyword(s) invalid — need text + bid ≥ €0.05`)
     const unresolved = included.filter((l) => l.conflict && (resolutions[l.itemId] ?? 'include') === 'include')
     if (unresolved.length) blocking.push(`${unresolved.length} conflicted listing(s) unresolved — choose skip or move (one listing = one General campaign)`)
     const overBe = included.filter((l) => { const r = effRate(l); return l.breakEvenPct != null && r != null && r > l.breakEvenPct })
@@ -139,6 +149,9 @@ export function EbayCampaignBuilder() {
           ...(effRate(l) != null ? { ratePct: effRate(l)! } : {}),
         })),
         rulePacks: [...packs],
+        ...(!isCps && targeting === 'MANUAL' && seeds.some((s) => s.on)
+          ? { keywords: seeds.filter((s) => s.on && s.text.trim()).map((s) => ({ text: s.text.trim(), matchType: s.matchType, bidCents: Math.round(Number(s.bidEur) * 100) })) }
+          : {}),
         ...(overrideReason ? { override: { reason: overrideReason.trim() } } : {}),
       })
       setLaunched(out)
@@ -195,7 +208,7 @@ export function EbayCampaignBuilder() {
                 <div><label>Rate override — blank = per-listing computed</label><input className="h10-cd-input" style={{ width: 170 }} type="number" min={2} max={100} step={0.1} value={ratePct} onChange={(e) => setRatePct(e.target.value)} placeholder="per-listing" /></div>
               ) : (
                 <>
-                  <div><label>Daily budget €</label><input className="h10-cd-input" style={{ width: 100 }} type="number" min={1} step={0.5} value={budgetEur} onChange={(e) => setBudgetEur(e.target.value)} /></div>
+                  <div><label>Daily budget €{plan.budget ? ' (suggested)' : ''}</label><input className="h10-cd-input" style={{ width: 100 }} type="number" min={1} step={0.5} value={budgetEur} onChange={(e) => setBudgetEur(e.target.value)} title={plan.budget?.formula} /></div>
                   <div><label>Targeting</label>
                     <select className="h10-cd-input" value={targeting} onChange={(e) => setTargeting(e.target.value as 'MANUAL' | 'SMART')}><option value="MANUAL">Manual (keywords after launch)</option><option value="SMART">Smart (eBay targets, irreversible)</option></select>
                   </div>
@@ -203,6 +216,7 @@ export function EbayCampaignBuilder() {
                 </>
               )}
             </div>
+            {!isCps && plan.budget && <p className="eb-be-hint" style={{ marginTop: 6 }}>Budget provenance: <code>{plan.budget.formula}</code></p>}
             <div style={{ marginTop: 10 }}>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: '#667085', marginBottom: 6 }}>Rule packs bound at launch (PROPOSE mode — item #10)</label>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -261,6 +275,48 @@ export function EbayCampaignBuilder() {
             </div>
           )}
 
+          {/* Keyword seeds from OUR catalog data (#7) — CPC manual only */}
+          {!isCps && targeting === 'MANUAL' && (
+            <div className="h10-am-card">
+              <div className="h10-am-toolbar">
+                <span className="cnt">Keyword seeds — mined from your listing titles + item aspects (no eBay suggest API needed) · <b>{seeds.filter((s) => s.on).length}</b> selected</span>
+                <span className="grow" style={{ flex: 1 }} />
+                <input className="h10-cd-input" style={{ width: 220 }} placeholder="add your own keyword…" value={newSeed}
+                  onChange={(e) => setNewSeed(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && newSeed.trim()) { setSeeds((s) => [{ text: newSeed.trim(), source: 'MANUAL', matchType: 'PHRASE', bidEur: '0.30', on: true }, ...s]); setNewSeed('') } }} />
+                <button type="button" className="h10-am-btn sm" disabled={!newSeed.trim()} onClick={() => { setSeeds((s) => [{ text: newSeed.trim(), source: 'MANUAL', matchType: 'PHRASE', bidEur: '0.30', on: true }, ...s]); setNewSeed('') }}>Add</button>
+              </div>
+              {seeds.length === 0 ? (
+                <p className="eb-be-hint" style={{ padding: '10px 14px' }}>No seeds could be mined for this scope — add keywords above, or launch without and add them from the campaign's Keywords tab.</p>
+              ) : (
+                <div className="h10-am-grid" style={{ maxHeight: 300 }}>
+                  <table>
+                    <thead><tr><th className="ed">Keyword</th><th className="ed">Source</th><th className="ed">Match</th><th className="num">Bid €</th></tr></thead>
+                    <tbody>
+                      {seeds.map((s, i) => (
+                        <tr key={`${s.text}-${i}`} style={s.on ? undefined : { opacity: 0.45 }}>
+                          <td className="ed">
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                              <input type="checkbox" checked={s.on} onChange={(e) => setSeeds((all) => all.map((x, j) => (j === i ? { ...x, on: e.target.checked } : x)))} />
+                              <span className="t">{s.text}</span>
+                            </label>
+                          </td>
+                          <td className="ed"><span className={`h10-pill ${s.source === 'MANUAL' ? 'ok' : 'arch'}`}>{s.source === 'ASPECT/FREQUENT' ? 'aspects' : s.source.toLowerCase()}</span></td>
+                          <td className="ed">
+                            <select className="h10-cd-input" value={s.matchType} onChange={(e) => setSeeds((all) => all.map((x, j) => (j === i ? { ...x, matchType: e.target.value as Seed['matchType'] } : x)))}>
+                              <option value="PHRASE">Phrase</option><option value="EXACT">Exact</option><option value="BROAD">Broad</option>
+                            </select>
+                          </td>
+                          <td className="num"><input className="h10-cd-input" style={{ width: 70 }} type="number" min={0.05} step={0.05} value={s.bidEur} onChange={(e) => setSeeds((all) => all.map((x, j) => (j === i ? { ...x, bidEur: e.target.value } : x)))} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Preflight (#22) */}
           <div className="h10-cd-card pad">
             {blocking.length > 0 && <ul className="eb-results">{blocking.map((b2) => <li key={b2} className="err">{b2}</li>)}</ul>}
@@ -279,7 +335,7 @@ export function EbayCampaignBuilder() {
             )}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12.5, color: '#5b6573' }}>
-                Will create: <b>1 campaign</b>{isCps ? <>, <b>{included.length} ads</b></> : null}, <b>{packs.size} rule binding(s)</b>
+                Will create: <b>1 campaign</b>{isCps ? <>, <b>{included.length} ads</b></> : null}{!isCps && targeting === 'MANUAL' && seeds.some((s) => s.on) ? <>, <b>1 ad group + {seeds.filter((s) => s.on).length} keywords</b></> : null}, <b>{packs.size} rule binding(s)</b>
               </span>
               <span className="grow" style={{ flex: 1 }} />
               <button type="button" className="h10-am-btn" onClick={() => { setStep('goal'); setPlan(null) }}>Back</button>
@@ -299,6 +355,9 @@ export function EbayCampaignBuilder() {
           </div>
           {launched.promoteResults?.some((r) => !r.ok) && (
             <ul className="eb-results">{launched.promoteResults.filter((r) => !r.ok).map((r, i) => <li key={i} className="err"><code>{r.key}</code> — {r.blocked ?? r.error}</li>)}</ul>
+          )}
+          {launched.keywordResults?.some((r) => !r.ok) && (
+            <ul className="eb-results">{launched.keywordResults.filter((r) => !r.ok).map((r, i) => <li key={`kw-${i}`} className="err">keyword <code>{r.key}</code> — {r.blocked ?? r.error}</li>)}</ul>
           )}
           <p style={{ fontSize: 12, color: '#667085', margin: '8px 0 4px', fontWeight: 700, textTransform: 'uppercase' }}>What happens next</p>
           <ul className="eb-results">{launched.timeline.map((t, i) => <li key={i} className="ok">{t}</li>)}</ul>

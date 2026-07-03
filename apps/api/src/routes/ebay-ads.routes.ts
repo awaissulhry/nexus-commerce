@@ -73,12 +73,14 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: WindowQuery }>('/ebay-ads/summary', async (req) => {
     const r = resolveRange(req.query)
     const p = priorRange(r)
-    const [cur, prev, campaigns, economics, fr] = await Promise.all([
+    const [cur, prev, campaigns, economics, fr, liveCount, promotedRows] = await Promise.all([
       prisma.ebayAdsDailyPerformance.aggregate({ where: factWhere(req.query, r, 'CAMPAIGN'), _sum: sumFields }),
       prisma.ebayAdsDailyPerformance.aggregate({ where: factWhere(req.query, p, 'CAMPAIGN'), _sum: sumFields }),
       prisma.ebayCampaign.groupBy({ by: ['status'], _count: { _all: true } }),
       prisma.ebayListingEconomics.groupBy({ by: ['dataStatus'], _count: { _all: true } }),
       freshness(),
+      prisma.ebayListingIndex.count({ where: { endedAt: null } }),
+      prisma.ebayAd.findMany({ where: { listingId: { not: null }, status: { notIn: ['STALE'] }, campaign: { fundingModel: 'COST_PER_SALE', status: { in: ['RUNNING', 'PAUSED'] } } }, select: { listingId: true }, distinct: ['listingId'] }),
     ])
     const current = derive(toSums(cur))
     const prior = derive(toSums(prev))
@@ -99,6 +101,9 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       // today most listings are MISSING_COGS ("manual only"); surface that.
       economicsStatus: Object.fromEntries(economics.map((e) => [e.dataStatus, e._count._all])),
       attributionModel: 'ebay-any-click',
+      // E7 #21 — coverage KPI: % of live listings promoted in ≥1 active
+      // General campaign (the standing guard proposes enrollment for the rest)
+      coverage: { liveListings: liveCount, promoted: promotedRows.length, pct: liveCount > 0 ? Math.round((promotedRows.length / liveCount) * 1000) / 10 : null },
       freshness: fr,
     }
   })
@@ -616,6 +621,36 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     const seq = (await prisma.ebayCampaign.count({ where: { marketplace } })) + 1
     const name = `${req.body.goal}-${def.strategy.toLowerCase()}-${ids.size ? 'selected' : 'all'}-${short}-${String(seq).padStart(3, '0')}`
 
+    // E7 Stage 2 (#7): keyword seeds for CPC goals from OUR data — title
+    // n-grams + brand/type aspects, tagged by source, default bids clamped
+    // low (learning phase). eBay suggestKeywords needs an ad group, which
+    // doesn't exist pre-launch — our own seeds fill that gap.
+    let keywordSeeds: Array<{ text: string; source: string; matchType: string; bidCents: number }> = []
+    let budget: { suggestedCents: number; formula: string } | null = null
+    if (def.strategy === 'CPC') {
+      const idx = await prisma.ebayListingIndex.findMany({ where: { marketplace: short, itemId: { in: itemIds } }, select: { title: true, aspects: true } })
+      const STOP = new Set(['con', 'per', 'the', 'and', 'del', 'della', 'di', 'da', 'in', 'su', 'e', 'a', 'il', 'la', 'le', 'un', 'una', 'protezione', 'livello'])
+      const counts = new Map<string, number>()
+      for (const l of idx) {
+        const words = (l.title ?? '').toLowerCase().replace(/[^a-zà-ù0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w))
+        for (let i = 0; i < words.length - 1; i++) {
+          const bi = `${words[i]} ${words[i + 1]}`
+          counts.set(bi, (counts.get(bi) ?? 0) + 1)
+        }
+        const a = (l.aspects ?? {}) as Record<string, string[]>
+        const brand = (a['Marca'] ?? a['Brand'] ?? [])[0]
+        const tipo = (a['Tipo'] ?? a['Type'] ?? [])[0]
+        if (brand && tipo) counts.set(`${brand} ${tipo}`.toLowerCase(), (counts.get(`${brand} ${tipo}`.toLowerCase()) ?? 0) + 3)
+      }
+      keywordSeeds = [...counts.entries()]
+        .sort((x, y) => y[1] - x[1])
+        .slice(0, 20)
+        .map(([text, n]) => ({ text, source: n >= 3 ? 'ASPECT/FREQUENT' : 'TITLE', matchType: 'PHRASE', bidCents: 30 }))
+      const trailingSales = [...salesBy.values()].reduce((a, b) => a + b, 0)
+      const suggested = Math.max(500, Math.round((trailingSales * 0.05) / 30))
+      budget = { suggestedCents: suggested, formula: `max(€5, trailing-30d sales ${(trailingSales / 100).toFixed(0)}€ × 5% ÷ 30 days) — efficiency rules unlock at ≥30 attributed conversions` }
+    }
+
     const listings = live.map((l) => {
       const e = ecoBy.get(l.itemId)
       const be = e?.breakEvenAdRatePct != null ? Number(e.breakEvenAdRatePct.toString()) : null
@@ -653,6 +688,8 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
         defaultBudgetCents: def.strategy === 'CPC' ? 500 : null,
       },
       listings,
+      keywordSeeds,
+      budget,
       totals: {
         listings: listings.length,
         conflicts: listings.filter((l) => l.conflict).length,
@@ -668,6 +705,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     ratePct?: number; dailyBudgetCents?: number; maxCpcCents?: number; targetingType?: 'MANUAL' | 'SMART'
     endDate?: string | null
     items: Array<{ listingId: string; ratePct?: number; resolution?: 'include' | 'skip' | 'move' }>
+    keywords?: Array<{ text: string; matchType: string; bidCents?: number }>
     rulePacks?: string[]
     override?: { reason: string }
   } }>('/ebay-ads/builder/launch', async (req, reply) => {
@@ -713,6 +751,16 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       promoteResults = out.results
     }
 
+    // 3b. CPC goals: default ad group + seeded keywords launch WITH the
+    // campaign (blueprint #7) — no more "add keywords later" gap.
+    let keywordResults: unknown[] = []
+    if (def.strategy === 'CPC' && b.keywords?.length) {
+      const kws = b.keywords
+      const grp = await writesSvc.createAdGroup(ctx, created.campaignId, 'Default', undefined)
+      const out = await writesSvc.addKeywords(ctx, created.campaignId, grp.adGroupId, kws)
+      keywordResults = out.results
+    }
+
     // 4. bind scoped rule packs (PROPOSE, disabled→enabled per pack)
     const bound: string[] = []
     for (const packName of b.rulePacks ?? []) {
@@ -741,6 +789,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       externalCampaignId: created.externalCampaignId,
       moveResults,
       promoteResults,
+      keywordResults,
       rulePacksBound: bound,
       timeline: [
         'eBay reviews and starts serving ads (typically within hours)',
