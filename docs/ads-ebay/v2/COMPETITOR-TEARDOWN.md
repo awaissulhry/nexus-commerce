@@ -1,0 +1,115 @@
+# ER0 — Competitor Teardown (v2 refinement workstream)
+<!-- ER0 deliverable 2. Method: help-center docs, vendor blogs/videos, review-site screenshots,
+     eBay primary docs; every claim carries a source; findings marked unverified where sources
+     ran out. Verdicts (adopt / adapt / beat / ignore-with-reason) are OURS, mapped to ER phases.
+     Research date 2026-07-03. Supersedes E0-COMPETITOR-TEARDOWN.md for the refinement scope. -->
+
+## 1. Helium 10 Adtomic ("Helium 10 Ads") — the primary UI reference
+
+Console chrome: page-per-function left nav — **Account Overview, Dashboard, Suggestions, Analytics, Ad Manager, Rules & Automation, Change Log, Dayparting Schedules, Budget Manager, Training, Settings** — with global profile + date-range selectors top-right and a per-page Learn button ([Getting Started](https://kb.helium10.com/hc/en-us/articles/11208570974875-Getting-Started-With-Helium-10-Ads)). Our internal Amazon console mirrors this nav almost 1:1 (§PL-1 `ADS_NAV`).
+
+**Ad Manager / campaign list** ([KB](https://kb.helium10.com/hc/en-us/articles/360038393793-Helium-10-Ads-Ad-Manager)): one grid; + Campaign opens the builder chooser; gear-icon column chooser + drag-reorder with a blue drop bar; `Show Filters` panel mixing entity filters (Portfolio/Type/Targeting/Status/Budget) with metric-threshold filters (ACoS/ROAS/Spend/Sales/Clicks/Orders/CPC/CVR/Impressions); **Filter Library** — saveable, renameable filter presets shared between Ad Manager and Analytics ([KB](https://kb.helium10.com/hc/en-us/articles/42466899840027)). **Far-right control columns per row: Automate dial · Rules cog (count of attached rules, click-to-edit) · Schedules gear** ([KB](https://kb.helium10.com/hc/en-us/articles/4760865288475)).
+**Drill-in**: no routed campaign page — clicking a row filter-hops the same Analytics grid down the level tabs (Portfolio→Campaign→Ad Group→Target→Search Term→Product) with segmentation toggles and per-view actions (+ Negative, + Keyword, Copy Search Terms, Bulk Actions staged wizard, emailed Export) ([KB](https://kb.helium10.com/hc/en-us/articles/11338518823835)).
+**Automation**: two tiers — opt-in AI bid algorithms (Target ACoS 30% default / Max Impressions / Max Orders) + user rules of exactly 4 types (Bid, Keyword Harvest, Negative Targeting, Budget), one Rules page, per-rule Automate toggles; **everything proposes into a tabbed Suggestions queue** (A.I. Bids / Bids / New Keywords / Negative Keywords / Budget) with per-row **✓ apply / ✕ snooze / ⏸ stop-suggesting** committed by one `Apply N Changes` button; account-level AI settings incl. a max-bid clamp ([KB Suggestions](https://kb.helium10.com/hc/en-us/articles/12125578841883), [KB Rules](https://kb.helium10.com/hc/en-us/articles/18076439623963)). Harvest rules promote search terms Auto→Research(Broad)→Performance(Exact) with order/ACoS thresholds and "60-day lookback excluding the last 3 days"; Search Term Isolation auto-negates promoted terms at the source ([KB video](https://kb.helium10.com/hc/en-us/articles/34053378274331), [KB Creating Campaigns](https://kb.helium10.com/hc/en-us/articles/360046281853)).
+**Change Log**: every mutation filterable by Change Type AND **Change Source** — auto / semi-auto (approved suggestion) / manual-in-tool / **"In Seller Central or 3rd party"** — traceable to the exact rule/schedule/AI ([KB](https://kb.helium10.com/hc/en-us/articles/27613163890715)).
+**Dayparting**: day×hour graph (2 metrics) + schedules of state-changing time blocks ([KB](https://kb.helium10.com/hc/en-us/articles/8950447598875)). **Budget Manager**: auto pacing, Stop Over Spend (pause at cap, re-enable on the 1st), allocation bubble chart ([KB](https://kb.helium10.com/hc/en-us/articles/40774520833051)).
+**Builders**: 5 chooser cards (Quick/Guided/Single/SP Super Wizard/AI Goal), all top-stepper wizards ending in Review & Launch; scaffold multi-campaign structures wired together by harvest rules; automation toggles default OFF ([KB](https://kb.helium10.com/hc/en-us/articles/360046281853)).
+**Dashboard**: KPI tiles with prior-period comparisons, Highest-ACoS campaigns, Highest-Spend targets, day/hour performance graph, preset-row performance table ([KB](https://kb.helium10.com/hc/en-us/articles/11331720950939)).
+
+**Verdicts (H10):**
+| Finding | Verdict | Where |
+|---|---|---|
+| Filter Library (saved filter presets, cross-page) | **adopt** | ER3 Ad Manager (AdsDataGrid extension, additive) |
+| Row control columns (Automate/Rules count) | **adapt** — one Automation column: rules-bound count + Protected badge + posture glyph | ER1 spillover + ER3 Ad Manager |
+| Filter-hop drill-in instead of routed detail | **ignore** — our console upgraded to routed detail pages deliberately; Owner prefers structure over grid-hopping | — |
+| Suggestions queue: ✓/✕-snooze/⏸ + one Apply-N batch + max-bid clamp settings | **adopt** — snooze maps to our `proposedKey` dedupe; batch-commit for Approvals | ER3 hub |
+| Two-tier automation + graduated trust (queue until trusted) | **already ours** (dial + PROPOSE/AUTOPILOT) → **beat**: ours is margin-anchored with rollback inverses; H10 documents no rollback | ER1/ER3 copy states it |
+| Change Log incl. external-change source | **adopt** (D4) — our `CampaignAction._mode` + drift detection already classify; needs the page | ER3 (Products slot) |
+| Budget Manager pacing/stop-overspend | **adapt-lite** — ceilings + auto-halt exist; add pacing visual + forecast | ER3 Dashboard |
+| Dayparting page | **ignore for now** — eBay PL reporting is daily-grain; no hourly data exists to daypart against (revisit if eBay ships hourly) | — |
+| Multi-campaign scaffolds + harvest wiring | **ignore for eBay structure** (one campaign per launch is eBay's honest shape); **adapt** the harvest *loop* via Search Terms → keywords/negatives when query grain confirms | ER1 §5.6 / ER3 |
+| Emailed exports | **ignore** — direct CSV download already ours and better | — |
+
+## 2. Pacvue
+
+Rules are if-this-then-that with **benchmark-relative conditions** — a metric vs "campaign average ROAS, profile average ROAS, customized Target ROAS, a hard dollar amount, or any AND/OR combination", plus min/max click-spend-impression **noise guards** ([Pacvue blog](https://pacvue.com/blog/using-bid-placement-modifier-rules-to-succeed-on-amazon/)); lookbacks are first-class ("last 7 days excluding yesterday"; event variants "every 2 days with a 2-day lookback") ([blog](https://pacvue.com/blog/overview-and-benefits-of-advertising-optimization-rules/)); bid actions carry inline caps/floors ("raise 5% capped at $16") ([blog](https://pacvue.com/blog/six-ways-to-optimize-your-amazon-dsp-campaigns-with-pacvue/)). Keyword harvesting with source/destination selection ([blog](https://pacvue.com/blog/how-aggregators-use-pacvue-organize-campaigns-to-improve-roas/)). **Dayparting = hour×day heat map** (5 metric lenses) with recommended % adjustments applied to the whole grid then manually overridable, incl. go-dark hours; temporary schedules auto-revert ([blog](https://pacvue.com/blog/new-hourly-data-upgrade-major-dayparting-support-for-walmart-advertisers/)). **Budget**: yearly caps that pause on breach and refresh monthly; budget calendar/templates with lead-in/lead-out; auto-refill-on-performance; over/under-delivery notifications ([blog](https://pacvue.com/blog/optimization-tips-using-pacvue-for-cyber-5-and-the-holidays/), [blog](https://pacvue.com/blog/setting-up-pacvue-before-you-leave-for-vacation/)). **Inventory-aware Commerce Rules** watch "25+ real-time retail signals" — stock/weeks-of-cover, Buy Box, eligibility — pausing and rolling back automatically ([video page](https://pacvue.com/videos/power-by-pacvue-commerce-rules/)). **Pacvue Agent** (2026-04): governed agentic workflows with approvals + auditability ([newsroom](https://pacvue.com/newsroom/pacvue-launches-pacvue-agent-advancing-ai-powered-commerce-media-execution/)). Rule execution-history screen: unverified (KB blocks fetching).
+**⚠ Pacvue has an eBay product** — Promoted Listings Standard + Advanced: bid/budget automation, query harvesting, out-of-budget alerts, SKU+keyword analytics ([product page](https://pacvue.com/marketplaces/pacvue-for-ebay/), [launch blog](https://pacvue.com/blog/introducing-pacvue-for-ebay/)).
+
+**Verdicts (Pacvue):**
+| Finding | Verdict | Where |
+|---|---|---|
+| Benchmark-relative conditions (vs campaign avg / account avg / target / hard value, AND/OR stacked) | **adopt** — the ER3 rule editor's condition rows get a benchmark selector; **beat**: our unique benchmark is *break-even* (margin-anchored, from the commerce system) | ER3 hub |
+| Noise guards + lookback-excluding-recent | **adopt** — add min-volume guards + exclude-last-N-days to rule windows (attribution honesty we already preach) | ER3 hub |
+| Inline caps/floors on actions | **already ours** (clamps) — surface them in the rule editor UI explicitly | ER3 |
+| Inventory-aware circuit breaker | **adapt** — eBay itself auto-hides OOS ads (we display it, ER1); add stock-signal rule triggers + Products inventory state | ER1 §5.2 / ER3 Products |
+| Dayparting heat map | **ignore** — no hourly grain on eBay PL reports (same reason as H10) | — |
+| Budget calendar / lead-in-out phases | **ignore for now** — volume trigger; our monthly ceiling + halt covers the risk today | — |
+| Pacvue Agent governed workflows | **beat where it counts** — posture dial + PROPOSE queue + rollback + kill switch already implement governed autonomy, anchored to break-even clamps no generic agent has; approval-chains idea noted for multi-user future | recorded |
+| Pacvue-for-eBay (the direct competitor) | **beat** — they market bid/budget automation; nothing suggests margin integration (no COGS pipeline on eBay), no immutable audit with external-change drift detection, no rollback. Our scorecard items in ER4 cite this page | ER4 scorecard |
+
+## 3. Teikametrics
+
+**Campaign creator (AI Smart Campaigns)**: 6 steps — Setup (dates/type/strategy) → Select products (individual or hierarchical include/exclude) → Goal (Grow/Protect/Launch) → **Review AI targeting suggestions** (per-ad-group keyword lists: edit/remove, match-type switches, custom adds, negatives) → **Preview & finalize** (all generated campaigns/ad groups, cost limits, **flags ad groups missing keywords**, bulk actions) → Launch ([help](https://help.teikametrics.com/en/articles/8653478-campaign-creator-creating-new-ai-smart-campaigns)). Bidder goals are durable per-ad-group policies with **"The Anchor" = ACOS limit set to average pre-ad gross margin**; the Profit goal literally requires COGS entry ([help](https://help.teikametrics.com/en/articles/9547059)). Hourly "Always On" bidding weighing seasonality/events/inventory ([blog](https://learn.teikametrics.com/blog/hourly-bidder-under-the-hood/)). **Recommendations hub** with transparent eligibility criteria (e.g. "Unadvertised Products = eligible SKUs with sales>0 in 30d and inventory>10") rendered as pre-filled accept-or-edit forms ([help](https://help.teikametrics.com/en/articles/8307966-intro-to-recommendations)). **View Trends side panel** on any grid row: metric cards, daily/weekly/hourly toggle, previous-period + seasonal-event overlays, entity switcher, CSV ([help](https://help.teikametrics.com/en/articles/9016248)). **Budget Pacing dashboard**: month-to-date with honest per-channel data-lag definitions, full-month forecast, drill merchant→group→campaign, pencil + CSV edits ([help](https://help.teikametrics.com/en/articles/8728385)). Dayparting = % bid schedules per campaign/ad-group column; 0% = scheduled pause; manual overrides the AI ([help](https://help.teikametrics.com/en/articles/9917485)).
+**⚠ Teikametrics × eBay Ads partnership (2025-09)**: Promoted Listings **Advanced (beta)** — CPC keyword/budget controls, goal-based strategies ([blog](https://www.teikametrics.com/blog/teikametrics-announces-partnership-with-ebay-ads/)).
+
+**Verdicts (Teikametrics):**
+| Finding | Verdict | Where |
+|---|---|---|
+| Mandatory review/edit gate on AI-derived structure | **adopt** — ER2 Review & Launch step is exactly this (edit-in-place + structural-gap flags + jump-to-fix) | ER2 §5⑤ |
+| "The Anchor" (one margin-derived number per ad group; COGS unlocks Profit) | **validates our core** → **beat**: their anchor needs manual COGS entry into an ads tool; our break-even flows per listing from the commerce system of record and clamps automation, not just goals | copy + ER4 scorecard |
+| Recommendations hub with transparent eligibility | **adopt** — Dashboard Recommendations panel: unmatched listings / missing cost / unpromoted listings / campaigns without rules / rate-above-BE — each a pre-filled accept-or-edit action with its criteria stated | ER3 Dashboard |
+| View Trends side panel per row | **adapt** — per-row trend popover from existing daily facts (no hourly claim) | ER3 candidate (Ad Manager/Products) |
+| Budget pacing w/ forecast + honest lag notes | **adapt-lite** — ceiling MTD + run-rate forecast tile; we already state 72h adjustment lag in freshness lines | ER3 Dashboard |
+| Hourly bidding | **ignore** — eBay grain is daily; CPS fees bind at sale, not click-time bid | — |
+| Dayparting bid scheduler (0% = pause; precedence rules) | **ignore for now** — same hourly-grain reason; precedence-over-AI idea noted for posture docs | — |
+| Goal presets as durable policies (not one-time wizard settings) | **adapt** — our rule packs + automation policy (ER1) make launch-time goals durable; templates stay pre-fills | ER1 §5.7 / ER2 §2 |
+| Teikametrics-on-eBay (Advanced beta) | **beat** — Advanced/CPC-only beta; no General/CPS coverage, no margin substrate on eBay | ER4 scorecard |
+
+## 4. Rithum (ex-ChannelAdvisor) — eBay CPS rate strategies
+
+Two campaign-template modes layered on eBay CPS ([Rithum blog](https://www.rithum.com/blog/whats-new-with-rithum-and-ebay-promoted-listings/)): **Configured Rate** — follow eBay's published *trending* category rate within a user range + absolute min/max bounds; **Discover Rate** — "automatically determine your best advertising rate" by *testing* rates within a min–max range (or a range around trending) "to find the optimal rate… best ROI without overpaying"; Rithum recommends everyone start with Discover ("you might be able to have a lower ad rate than the trending rate"). Settings are **campaign-level**; per-item overrides only via business rules/attributes. Trending rate = seller-average at subcategory level, updated weekly by eBay. Testing cadence: unverified. CPC support since 2021 (US/UK/DE/IT/AU; keyword + budget controls) ([press](https://www.rithum.com/press/rithum-adds-support-for-ebay-promoted-listings-advancedbeta-helping-brands-and-retailers-boost-product-visibility-and-drive-online-sales/)). Deeper UI mechanics: unverified (docs not public).
+
+**Verdicts (Rithum):**
+| Finding | Verdict | Where |
+|---|---|---|
+| Discover Rate (bounded rate testing) | **adopt & beat** — our Rate Discovery is per-campaign bounded testing like theirs, but anchored to **per-listing break-even** (cap hard-clamped ≤ BE) and emitting auditable PROPOSE steps with rollback; theirs is campaign-level with no margin floor concept | ER2 §5④ |
+| Configured Rate (follow trending within bounds) | **adapt with honesty** — the trending anchor has **no API on IT/FR/ES** (fact #12); where available (AU/DE/GB/US) show trending beside inputs; everywhere else our break-even anchors instead; eBay's own DYNAMIC strategy + `adRateCapPercent` remains the native follow-mode we already support | ER1 §5.1 / ER2 §5④ |
+| Campaign-level rate grain | **beat** — we operate at ad grain (eBay's true grain, fact #3); campaign-level only where eBay itself works that way (rules-based) | already ours |
+
+## 5. eBay Seller Hub Advertising (the native baseline to beat)
+
+Dashboard = 7 sections ([tour](https://export.ebay.com/en/services-tools/advertising/ebay-advertising-dashboards/)): offers banner · **"Today's recommendations"** (daily, actionable) · Campaign performance (ad-supported vs organic trend; general/priority split) · **Trend-based campaigns** (AI builds ready-to-launch campaigns from trending inventory) · Suggested campaigns (from historical data) · Campaign overview (list; row → campaign dashboard) · insights news. Metrics: Impressions, Clicks, Quantity sold, Sales, Ad fees, Conversion rate, ROAS, Avg CPC ([help 4164](https://www.ebay.com/help/selling/ebay-advertising/promoted-listings/general-campaign-strategy?id=4164), [help 5299](https://www.ebay.com/help/selling/ebay-advertising/promoted-listings/priority-campaign-strategy?id=5299)). Status vocabulary includes **"Limited by budget"** (spent daily budget / repeatedly out of budget / budget below suggestion). Per-row **Actions menu**: change budget, on/off, generate listing/keyword/**search query** reports. Freshness: entities real-time, metrics near-real-time with **72h reconciliation**. Creation flows: General (listings via manual/rules/CSV → Dynamic-vs-Fixed rate → name/dates; rate 2–100%; rules review inventory **daily**), Priority (Smart w/ optional maxCpc · Manual w/ Dynamic-or-Fixed bidding; limits **500 ad groups/campaign, 1,000 listings + 1,000 keywords + 1,000 negatives per ad group**). Budget semantics: daily target = monthly÷30.4, day can spend **2×**, min $3; **Suggested budget**; opt-in Automated Campaign Controls (ROAS-triggered budget raise / end-date extension, ≤5 triggers). "Easy boost" CONFIRMED app-only (slider promotes ALL listings at one rate, auto-applies to future listings) — the drift source our reconciliation watches for.
+
+**Verdicts (Seller Hub):**
+| Finding | Verdict | Where |
+|---|---|---|
+| "Today's recommendations" + suggested campaigns | **adapt** — ER3 Dashboard Recommendations panel (Teika verdict merged); ours carry margin context Seller Hub can't have | ER3 |
+| "Limited by budget" status | **adopt** — derive the same state for CPC campaigns (budget spent / repeatedly capped) into our status pills + Ad Manager filter | ER3 Ad Manager |
+| Per-row Actions incl. report generation | **adapt** — our per-row menu grows Clone/Budget (critique 2.4); report generation stays console-side (we ingest reports automatically — beat: no manual report pulls at all) | ER3 |
+| Suggested budget + 2×-day/30.4×-month semantics | **adopt** — surface `suggestBudget` (fact #11) in the builder budget step; use 2×/30.4 semantics in any pacing forecast | ER2 §5④ / ER3 Dashboard |
+| Trend-based auto-built campaigns | **ignore for now** — no API exposure; our templates + coverage guard cover the always-on need | — |
+| Attribution reporting (3 definitions, per-transaction sales report) | **beat** — we already label any-click and derive fees-as-%-of-total-sales; implication #7 hardens this: prefer incrementality-style views over "attributed sales" as ROI | ER3 Dashboard copy |
+
+## 6. eBay ground truth — verified fact table (Part III re-verification)
+
+| # | Claim (master prompt) | Verdict | Precision |
+|---|---|---|---|
+| 1 | Any-click CPS attribution | **CONFIRMED, dates corrected** | DE 2025-02-26; **UK/AU/FR/IT/ES 2025-06-24**; US/CA 2026-01-13 (last, not first). 80–90% attributed-share = seller-reported, not official ([VAR](https://www.valueaddedresource.net/ebay-promoted-listings-ad-attribution-update-fallout/)) |
+| 2 | Priority exclusive top ad slot "Jan 2026" | **CONFIRMED, dates corrected** | Exclusive first slot on **UK/FR/IT/ES/AU since 2025-06-24**; US/CA 2026-01-13. No priority ad → a non-promoted listing shows. DE date unverified |
+| 3 | Rate immutable at campaign; lives at ad level | **CONFIRMED + nuance** | `updateBid`/bulk (CPS, 500/call) at ad grain; **rules-based CPS campaigns DO have a mutable campaign-level rate** via `updateAdRateStrategy` (fixed % or DYNAMIC = suggested ± adjustment, capped by `adRateCapPercent`) |
+| 4 | Budget 15 edits/day/campaign | **CONFIRMED verbatim** | CPC-only method; blocked-until-next-day on breach |
+| 5 | PRI negatives "exact only" | **CORRECTED — EXACT + PHRASE** | `negativeKeywordMatchType`: EXACT, PHRASE; broad unsupported. The master prompt's exact-only claim is wrong; our write layer (both types) was right — internal Part III note to fix |
+| 6 | Rules-based: CPS-only, ≤10 rules, auto-select-future | **CONFIRMED except cap** | CPS-only + `autoSelectFutureInventory` confirmed (default false); SelectionRule = brands/categoryIds/scope/conditionIds/min-maxPrice; **"10 rules" cap unverified in primary docs** (3rd-party only) — verify at ER1/ER2 build. Seller Hub reviews rule matches daily |
+| 7 | ≤50,000 items/campaign | **CONFIRMED** | createCampaign doc |
+| 8 | OOS ads auto-hide/resurface | **CONFIRMED** | pl-overview; Priority additionally excludes OOS at creation → builder validates stock before adding (PRI) |
+| 9 | 72h figure adjustment | **CONFIRMED** | "Reconciliation Period" (API) + Seller Hub help; last-72h = provisional in UI copy |
+| 10 | Search-term grain unavailable? | **CORRECTED — BUILDABLE** | `SEARCH_QUERY_PERFORMANCE_REPORT` with `search_query`/`campaign_id`/`ad_group_id` dims; **CPC campaigns only**, one campaign per task |
+| 11 | suggestMaxCpc / suggestKeywords / suggestBids | **CONFIRMED** | + `suggestBudget` and `suggestItems` also exist (builder step ④ uses suggestBudget) |
+| 12 | CPS suggested-rate API DE-only | **CORRECTED — AU/DE/GB/US** | Recommendation API `findListingRecommendations` (`bidPercentages` ITEM + TRENDING); **still nothing for IT/FR/ES** — break-even stays our anchor there |
+| 13 | Reports 200/hr; 7-day span cap | **CONFIRMED + narrowed** | 200/hr per seller + 1M-row threshold; the 7-day cap applies **only when the `day` dimension is used** |
+
+**Implications carried into the specs** (already reflected): Search Terms tab ships for Priority campaigns only (detail spec §5.6/§4) · negatives UI offers EXACT+PHRASE (§5.5) · budget editor debounces against the 15/day meter (§5.1) · suggested/trending rates render only on AU/DE/GB/US with an honest n/a elsewhere (builder §5④) · last-72h provisional labeling joins the freshness idiom · PRI listing picker validates stock · Seller Hub's baseline (8 metrics, "Limited by budget", per-row actions, suggested budget) is the ER3 Ad Manager/Dashboard floor.
+
+## 7. The beat-checklist seed (ER4 scorecard input)
+
+Nobody in this field has: (1) per-listing break-even from the commerce system of record clamping every rate/bid/automation (Teika needs manual COGS; Pacvue/Rithum have no margin substrate on eBay); (2) an immutable audit trail with **external-change drift detection + one-click re-apply/accept** (H10's Change Log classifies external changes but can't reconcile them); (3) proposal rollback inverses; (4) honest attribution framing post-any-click (fees vs total sales, not "attributed ROI"). Everyone has and we must match: saved filter presets (H10), automation visibility on the campaign row (H10), recommendations-as-prefilled-actions (Teika/Seller Hub), benchmark-relative rule conditions (Pacvue), review-gated AI output (Teika), "Limited by budget" style derived states (Seller Hub).
