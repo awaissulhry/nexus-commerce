@@ -30,6 +30,7 @@ import {
   Database,
   Webhook,
   History,
+  Users,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -101,6 +102,20 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
           'low stock',
           'orders',
         ],
+        status: 'live',
+      },
+    ],
+  },
+  {
+    label: 'Team & access',
+    description: 'People, roles, permissions, and invitations.',
+    items: [
+      {
+        href: '/settings/team',
+        label: 'Team & Access',
+        icon: Users,
+        description: 'Manage members, assign roles, edit permissions, and send invitations.',
+        keywords: ['team', 'users', 'members', 'roles', 'permissions', 'rbac', 'access', 'invite', 'invitation', 'staff'],
         status: 'live',
       },
     ],
