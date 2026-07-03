@@ -58,4 +58,29 @@ export function installAuthFetch(): void {
     }
     return original(input, init)
   }
+
+  // EventSource isn't window.fetch, so the wrapper above doesn't cover the
+  // 26+ SSE streams. Under enforce a cross-site EventSource must set
+  // withCredentials to send the (Partitioned) session cookie — otherwise it
+  // connects anonymously and 401s. Patch the constructor once so every
+  // API-origin stream is credentialed, without editing each callsite.
+  const OrigES = window.EventSource
+  if (OrigES) {
+    const PatchedES = function (this: unknown, url: string | URL, opts?: EventSourceInit) {
+      try {
+        if (new URL(url, window.location.href).origin === apiOrigin) {
+          return new OrigES(url, { ...(opts ?? {}), withCredentials: true })
+        }
+      } catch {
+        /* fall through */
+      }
+      return new OrigES(url, opts)
+    } as unknown as typeof EventSource
+    const P = PatchedES as unknown as Record<string, unknown>
+    P.prototype = OrigES.prototype
+    P.CONNECTING = OrigES.CONNECTING
+    P.OPEN = OrigES.OPEN
+    P.CLOSED = OrigES.CLOSED
+    window.EventSource = PatchedES
+  }
 }
