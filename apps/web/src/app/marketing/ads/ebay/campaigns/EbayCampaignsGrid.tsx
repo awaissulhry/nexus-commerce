@@ -41,7 +41,10 @@ function StatusCell({ c, onAction }: { c: CampaignRow; onAction: (id: string, ac
   const sp = EBAY_STATUS_PILL[c.status] ?? { label: c.status, cls: '' }
   const can = (a: string) => (a === 'pause' ? c.status === 'RUNNING' : a === 'resume' ? c.status === 'PAUSED' || c.status === 'DRAFT' : c.status !== 'ENDED')
   return (
-    <span className="h10-statuscell" ref={ref}>
+    // eb-statusrel/eb-statusfix: keep the menu OUT of normal flow (absolute)
+    // so an open dropdown never grows the row height. Scoped classes — never
+    // restyles the Amazon pages.
+    <span className="h10-statuscell eb-statusrel" ref={ref}>
       <span className={`h10-pill ${sp.cls}`}>{sp.label}</span>
       {c.status !== 'ENDED' && (
         <button type="button" className="ch" aria-label="Change status" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }}>
@@ -49,7 +52,7 @@ function StatusCell({ c, onAction }: { c: CampaignRow; onAction: (id: string, ac
         </button>
       )}
       {open && (
-        <span className="h10-statusmenu" onClick={(e) => e.stopPropagation()}>
+        <span className="h10-statusmenu eb-statusfix" onClick={(e) => e.stopPropagation()}>
           {can('resume') && <button type="button" onClick={() => { setOpen(false); onAction(c.id, 'resume') }}>{c.status === 'DRAFT' ? 'Activate' : 'Enable'}</button>}
           {can('pause') && <button type="button" onClick={() => { setOpen(false); onAction(c.id, 'pause') }}>Pause</button>}
           {can('end') && <button type="button" onClick={() => { setOpen(false); onAction(c.id, 'end') }}>End</button>}

@@ -1,80 +1,62 @@
-/* E3 — eBay Ads console pages (inside the h10 shell). Chips + layout only;
-   the design system carries everything else. */
+/* E6.2 — eBay console page extras, LIGHT theme matching the h10 idiom.
+   Everything structural comes from ads.css (global under /marketing/ads);
+   these are only the pieces the shared CSS doesn't carry. All selectors are
+   eb-* scoped so nothing can restyle the Amazon pages. */
 
-.eb-page { padding: 0 20px 32px; display: flex; flex-direction: column; gap: 14px; }
+/* status dropdown must never sit in row flow (row-height bug fix) */
+.eb-statusrel { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+.eb-statusfix { position: absolute; top: calc(100% + 4px); left: 0; z-index: 70; display: flex; flex-direction: column; min-width: 120px; background: #fff; border: 1px solid #d6dbe2; border-radius: 8px; box-shadow: 0 10px 28px rgba(20, 28, 38, 0.16); padding: 4px; }
+.eb-statusfix button { border: none; background: none; text-align: left; font-size: 12.5px; color: #1c2530; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+.eb-statusfix button:hover { background: #f1f6ff; color: #1f6fde; }
 
-.eb-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.eb-controls select { min-width: 150px; }
+/* forms inside h10 modals */
+.eb-form { display: flex; flex-direction: column; gap: 12px; padding: 10px 6px; }
+.eb-form label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #667085; margin-bottom: 4px; }
+.eb-form-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.eb-modal-f { display: flex; align-items: center; gap: 8px; padding: 12px 18px 14px; }
 
-.eb-fresh { margin-left: auto; font-size: 11.5px; color: #94a3b8; white-space: nowrap; }
+.eb-textarea { width: 100%; background: #fff; color: #1c2530; border: 1px solid #d8dde4; border-radius: 8px; padding: 8px 10px; font-size: 12.5px; font-family: inherit; resize: vertical; }
+.eb-textarea:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
 
-.eb-kpis { margin-top: 2px; }
-.eb-kpi-skeleton { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+/* per-item write results */
+.eb-results { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; }
+.eb-results li { font-size: 12px; color: #283441; padding: 5px 9px; border-radius: 6px; background: #f7f9fb; border-left: 3px solid #d6dbe2; }
+.eb-results li code { font-size: 11px; background: #eef1f5; padding: 1px 4px; border-radius: 4px; }
+.eb-results li.ok { border-left-color: #12855f; }
+.eb-results li.warn { border-left-color: #b87503; }
+.eb-results li.err, .eb-results li.blocked { border-left-color: #e5484d; }
 
-.eb-panel { background: rgba(148, 163, 184, 0.06); border: 1px solid rgba(148, 163, 184, 0.16); border-radius: 10px; padding: 14px 16px; }
+/* sandbox banner (light, amber) */
+.eb-sandbox { border: 1px solid #f0d9a8; background: #fdf6e3; color: #7a5b00; border-radius: 8px; padding: 8px 12px; font-size: 12px; }
+.eb-sandbox code { font-size: 11px; background: rgba(122, 91, 0, 0.08); padding: 1px 4px; border-radius: 4px; }
+
+.eb-be-hint { font-size: 11.5px; color: #5b6573; line-height: 1.5; }
+.eb-be-hint b { color: #b87503; }
+.eb-be-hint code { font-size: 10.5px; background: #f1f4f8; padding: 1px 4px; border-radius: 4px; }
+
+/* key/value stat rows (detail Settings card, dashboard Status card) */
+.eb-headstats { display: flex; gap: 26px; flex-wrap: wrap; }
+.eb-headstats .k { display: block; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #8a93a1; margin-bottom: 2px; }
+.eb-headstats .v { display: block; font-size: 15px; font-weight: 650; color: #1c2530; }
+
+/* CSV dry-run diff table (inside the import modal) */
+.eb-difftable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.eb-difftable th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #667085; padding: 6px 8px; border-bottom: 1px solid #e6e9ee; background: #f7f9fb; position: sticky; top: 0; }
+.eb-difftable td { padding: 6px 8px; border-bottom: 1px solid #eef1f5; color: #283441; }
+
+/* input shim for inline grid edits + modal fields (matches h10 fields) */
+.h10-cd-input { background: #fff; border: 1px solid #d8dde4; border-radius: 6px; padding: 5px 9px; font-size: 12.5px; color: #1c2530; }
+.h10-cd-input:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
+
+/* digest page (light) */
+.eb-panel { background: #fff; border: 1px solid #e3e7ec; border-radius: 12px; padding: 14px 16px; }
 .eb-panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
-.eb-panel-head h3 { font-size: 14px; font-weight: 600; margin: 0; }
-.eb-panel-note { font-size: 11.5px; color: #94a3b8; }
-
-.eb-panel--head .eb-headchips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
-.eb-headstats { display: flex; gap: 28px; flex-wrap: wrap; }
-.eb-headstats .k { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; }
-.eb-headstats .v { display: block; font-size: 16px; font-weight: 600; }
-.eb-headstats .v em { font-style: normal; font-size: 10px; color: #94a3b8; margin-left: 4px; }
-
-.eb-cell-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.eb-cell-name .nm { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.eb-cell-name .sub { font-size: 11px; color: #94a3b8; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
-
-.eb-chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 600; line-height: 1.6; border: 1px solid transparent; }
-.eb-chip em { font-style: normal; font-weight: 400; opacity: 0.7; margin-left: 2px; }
-.eb-chip--cps { background: rgba(16, 185, 129, 0.12); color: #34d399; border-color: rgba(16, 185, 129, 0.3); }
-.eb-chip--cpc { background: rgba(59, 130, 246, 0.12); color: #60a5fa; border-color: rgba(59, 130, 246, 0.3); }
-.eb-chip--offsite { background: rgba(168, 85, 247, 0.12); color: #c084fc; border-color: rgba(168, 85, 247, 0.3); }
-.eb-chip--run { background: rgba(16, 185, 129, 0.12); color: #34d399; }
-.eb-chip--pause { background: rgba(245, 158, 11, 0.12); color: #fbbf24; }
-.eb-chip--end { background: rgba(148, 163, 184, 0.12); color: #94a3b8; }
-.eb-chip--stale { background: rgba(244, 63, 94, 0.12); color: #fb7185; margin-left: 5px; }
-.eb-chip--warn { background: rgba(245, 158, 11, 0.14); color: #fbbf24; }
-.eb-chip--rules { background: rgba(56, 189, 248, 0.12); color: #38bdf8; }
-.eb-chip--nexus { background: rgba(99, 102, 241, 0.14); color: #a5b4fc; }
-.eb-chip--dim { background: rgba(148, 163, 184, 0.1); color: #94a3b8; }
-.eb-chip--neg { background: rgba(244, 63, 94, 0.08); color: #fda4af; border-color: rgba(244, 63, 94, 0.2); }
-.eb-chip--item { background: rgba(148, 163, 184, 0.1); color: #cbd5e1; text-decoration: none; }
-.eb-chip--item:hover { background: rgba(148, 163, 184, 0.2); }
-
-.eb-itemids { display: flex; gap: 4px; flex-wrap: wrap; }
-
-.eb-linkbtn { background: none; border: none; color: #60a5fa; cursor: pointer; font-size: 12.5px; padding: 0; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
+.eb-panel-head h3 { font-size: 13px; font-weight: 700; color: #1c2530; margin: 0; }
+.eb-panel-note { font-size: 11.5px; color: #8a93a1; }
+.eb-page { display: flex; flex-direction: column; gap: 14px; }
+.eb-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.eb-linkbtn { background: none; border: none; color: #1f6fde; cursor: pointer; font-size: 12.5px; padding: 0; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
 .eb-linkbtn:hover { text-decoration: underline; }
-
-.eb-extlink { color: #94a3b8; display: inline-flex; align-items: center; gap: 2px; text-decoration: none; }
-.eb-extlink:hover { color: #cbd5e1; text-decoration: underline; }
-
-.eb-negatives { display: flex; gap: 6px; flex-wrap: wrap; }
-
-.eb-kw { font-weight: 500; }
-
-/* E4 — write affordances */
-.eb-sandbox { border: 1px solid rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.08); color: #fcd34d; border-radius: 8px; padding: 8px 12px; font-size: 12px; }
-.eb-sandbox code { font-size: 11px; background: rgba(0,0,0,0.25); padding: 1px 4px; border-radius: 4px; }
-.eb-results { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; }
-.eb-results li { font-size: 12px; padding: 4px 8px; border-radius: 6px; background: rgba(148,163,184,0.08); }
-.eb-results li.ok { border-left: 3px solid #34d399; }
-.eb-results li.warn { border-left: 3px solid #fbbf24; }
-.eb-results li.err, .eb-results li.blocked { border-left: 3px solid #fb7185; }
-.eb-form { display: flex; flex-direction: column; gap: 10px; }
-.eb-form label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: #94a3b8; display: block; margin-bottom: 3px; }
-.eb-form-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
-.eb-form-row > div { min-width: 140px; }
-.eb-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.eb-be-hint { font-size: 11.5px; color: #94a3b8; }
-.eb-be-hint b { color: #fbbf24; }
-.eb-textarea { width: 100%; background: rgba(15,23,42,0.6); color: #e2e8f0; border: 1px solid rgba(148,163,184,0.25); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; font-family: inherit; resize: vertical; }
-.eb-textarea:focus { outline: none; border-color: #60a5fa; }
-.eb-rules { display: flex; flex-direction: column; gap: 8px; }
-.eb-rule { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; background: rgba(148,163,184,0.06); flex-wrap: wrap; }
-
-/* E6.1 — input shim for inline grid edits (matches h10 field styling) */
-.h10-cd-input { background: #fff; border: 1px solid #d8dde4; border-radius: 6px; padding: 4px 8px; font-size: 12.5px; color: #1c2530; }
-.h10-cd-input:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 2px rgba(31,111,222,.12); }
+.eb-chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600; background: #eef1f5; color: #475467; }
+.eb-chip--run { background: #d2e6fc; color: #0a4ba8; }
+.eb-chip--warn { background: #fdf3d3; color: #9a6700; }
