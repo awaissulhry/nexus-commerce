@@ -57,12 +57,13 @@ function DecideMenu({ row, busy, onDecide }: { row: SuggestionRow; busy: boolean
   )
 }
 
-export function SuggestionsTab({ busy, act, bump }: { busy: boolean; act: (fn: () => Promise<unknown>, done?: string) => Promise<void>; bump: number }) {
+export function SuggestionsTab({ busy, act, bump, highlightId }: { busy: boolean; act: (fn: () => Promise<unknown>, done?: string) => Promise<void>; bump: number; highlightId?: string | null }) {
   const [rows, setRows] = useState<SuggestionRow[]>([])
   const [ruleNames, setRuleNames] = useState<Map<string, string>>(new Map())
   const [kind, setKind] = useState<string>('all')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [why, setWhy] = useState<SuggestionRow | null>(null)
+  const [loaded, setLoaded] = useState(false)
 
   const reload = useCallback(async () => {
     const [p, r] = await Promise.all([
@@ -71,7 +72,14 @@ export function SuggestionsTab({ busy, act, bump }: { busy: boolean; act: (fn: (
     ])
     setRows(p.proposals); setRuleNames(new Map(r.rules.map((x) => [x.id, x.name])))
   }, [])
-  useEffect(() => { reload().catch(() => {}) }, [reload, bump])
+  useEffect(() => { reload().catch(() => {}).finally(() => setLoaded(true)) }, [reload, bump])
+  // ER3.5 — digest deep link: scroll the highlighted suggestion into view
+  useEffect(() => {
+    if (!highlightId || !loaded) return
+    const el = document.querySelector('.eb-hl-row')
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [highlightId, loaded, rows])
+  const highlightMissing = !!highlightId && loaded && !rows.some((r) => r.id === highlightId)
 
   const kinds = useMemo(() => {
     const m = new Map<string, number>()
@@ -106,6 +114,11 @@ export function SuggestionsTab({ busy, act, bump }: { busy: boolean; act: (fn: (
 
   return (
     <>
+      {highlightMissing && (
+        <p className="eb-be-hint" role="status" style={{ margin: '0 0 8px' }}>
+          The suggestion from your digest was already decided — see the <b>Applied</b> tab or the Change Log.
+        </p>
+      )}
       <div className="eb-kind-chips" role="tablist" aria-label="Suggestion kinds">
         <button type="button" role="tab" aria-selected={kind === 'all'} className={`eb-kind-chip ${kind === 'all' ? 'on' : ''}`} onClick={() => setKind('all')}>All · {rows.length}</button>
         {kinds.map(([k, n]) => (
@@ -136,6 +149,7 @@ export function SuggestionsTab({ busy, act, bump }: { busy: boolean; act: (fn: (
           </span>
         )}
         storageKey="h10-ebay-suggestions-cols"
+        rowClassName={(p2) => (highlightId && p2.id === highlightId ? 'eb-hl-row' : undefined)}
         emptyLabel="Nothing awaiting review — suggestions appear after the daily evaluation (or Evaluate now)."
       />
       <WhyModal open={why != null} onClose={() => setWhy(null)}

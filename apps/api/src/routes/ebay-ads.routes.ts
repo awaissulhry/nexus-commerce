@@ -816,6 +816,12 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     return { digest: d }
   })
   app.get('/ebay-ads/digests', async () => ({ digests: await prisma.ebayAdsDigest.findMany({ orderBy: { weekStart: 'desc' }, take: 12, select: { id: true, weekStart: true, generatedAt: true, reviewedAt: true } }) }))
+  // ER3.5 — one stored week by id (the picker's fetch; history renders what was true then)
+  app.get<{ Params: { id: string } }>('/ebay-ads/digests/:id', async (req, reply) => {
+    const digest = await prisma.ebayAdsDigest.findUnique({ where: { id: req.params.id } })
+    if (!digest) return reply.code(404).send({ error: 'digest not found' })
+    return { digest }
+  })
   app.post('/ebay-ads/digest/generate', async () => {
     const auto = await import('../services/marketing/ebay-ads-automation.service.js')
     return auto.generateWeeklyDigest()

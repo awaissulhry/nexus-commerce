@@ -1,19 +1,16 @@
 'use client'
 
 /**
- * E5 — the weekly review. One page = the whole week: money, movers, what
- * autopilot did, what awaits approval (deep-link), anomalies, data health.
- * Data + renderer split: this renders EbayAdsDigest.payload; delivery
- * channels (email/WhatsApp) can plug into the same payload later.
- * E7 consistency pass: pure h10 idiom (no design-system imports) like every
- * other page in the ads console.
+ * ER3.5 — the weekly review with history: 12-week picker (stored payloads
+ * render what was true then), movers as an aligned mini-table, per-proposal
+ * deep links into the hub's Suggestions tab, honest "All markets" label,
+ * week-over-week ▲▼ deltas. Generate now / Mark reviewed semantics unchanged.
  */
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { getBackendUrl } from '@/lib/backend-url'
 import '../ebay.css'
-import { postEbayAds, eurC, pctP, intlN } from '../_lib'
+import { postEbayAds, getEbayAds, eurC, pctP, intlN } from '../_lib'
 
 interface DigestPayload {
   week: { start: string; end: string }
@@ -26,6 +23,8 @@ interface DigestPayload {
   economics: Record<string, number>
   generatedAt: string
 }
+interface DigestRow { id: string; weekStart: string; reviewedAt: string | null; payload: DigestPayload }
+interface DigestMeta { id: string; weekStart: string; generatedAt: string; reviewedAt: string | null }
 
 function EmptyNote({ title, description }: { title: string; description?: string }) {
   return (
@@ -36,18 +35,31 @@ function EmptyNote({ title, description }: { title: string; description?: string
   )
 }
 
+/** ER3.5 — WoW delta chip, dashboard idiom (goodUp: is an increase good?) */
+function Wow({ cur, prev, goodUp }: { cur: number; prev: number; goodUp: boolean }) {
+  if (prev <= 0) return null
+  const pctD = ((cur - prev) / prev) * 100
+  const up = pctD >= 0
+  return <span className={`dd ${up === goodUp ? 'up' : 'down'}`} title="vs prior week">{up ? '▲' : '▼'} {Math.abs(pctD).toFixed(0)}%</span>
+}
+
 export function EbayDigestClient() {
-  const [digest, setDigest] = useState<{ id: string; weekStart: string; reviewedAt: string | null; payload: DigestPayload } | null>(null)
+  const [weeks, setWeeks] = useState<DigestMeta[]>([])
+  const [digest, setDigest] = useState<DigestRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (id?: string) => {
     setLoading(true)
     try {
-      const r = await fetch(`${getBackendUrl()}/api/ebay-ads/digest/latest`, { credentials: 'include' })
-      const j = await r.json()
-      setDigest(j.digest)
+      const [list, d] = await Promise.all([
+        getEbayAds<{ digests: DigestMeta[] }>('/digests'),
+        id ? getEbayAds<{ digest: DigestRow }>(`/digests/${id}`) : getEbayAds<{ digest: DigestRow | null }>('/digest/latest'),
+      ])
+      setWeeks(list.digests)
+      setDigest(d.digest)
+      setError(null)
     } catch (e) { setError((e as Error).message) } finally { setLoading(false) }
   }, [])
   useEffect(() => { void reload() }, [reload])
@@ -59,16 +71,31 @@ export function EbayDigestClient() {
   const markReviewed = async () => {
     if (!digest) return
     setBusy(true)
-    try { await postEbayAds(`/digest/${digest.id}/reviewed`, {}); await reload() } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
+    try { await postEbayAds(`/digest/${digest.id}/reviewed`, {}); await reload(digest.id) } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
 
   const p = digest?.payload
-  const delta = (cur: number, prev: number) => (prev > 0 ? ` (${cur >= prev ? '+' : ''}${(((cur - prev) / prev) * 100).toFixed(0)}% vs prior wk)` : '')
+  const maxMoverFees = p ? Math.max(...p.movers.map((m) => m.feesCents), 1) : 1
 
   return (
     <div className="eb-page h10-am">
-      <AdsPageHeader channel="ebay" title="eBay Weekly Digest" subtitle="The one weekly review: money, movers, what autopilot did, what needs your decision." markets={['EBAY_IT']} market="EBAY_IT" onMarketChange={() => {}} />
+      <AdsPageHeader channel="ebay" title="eBay Weekly Digest"
+        subtitle="The one weekly review: money, movers, what autopilot did, what needs your decision. Aggregated across every eBay marketplace."
+        markets={[]} market="all" onMarketChange={() => {}} />
       <div className="eb-controls">
+        {weeks.length > 0 && (
+          <span className="eb-week-chips" role="tablist" aria-label="Digest weeks">
+            {weeks.map((w) => (
+              <button key={w.id} type="button" role="tab" aria-selected={digest?.id === w.id}
+                className={`eb-kind-chip ${digest?.id === w.id ? 'on' : ''}`}
+                title={w.reviewedAt ? `Reviewed ${new Date(w.reviewedAt).toLocaleDateString('en-GB')}` : 'Not yet reviewed'}
+                onClick={() => void reload(w.id)}>
+                {new Date(w.weekStart).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}{w.reviewedAt ? ' ✓' : ''}
+              </button>
+            ))}
+          </span>
+        )}
+        <span style={{ flex: 1 }} />
         <button type="button" className="h10-am-btn" onClick={() => void generate()} disabled={busy}>{busy ? 'Generating…' : 'Generate now'}</button>
         {digest && !digest.reviewedAt && <button type="button" className="h10-am-btn primary" onClick={() => void markReviewed()} disabled={busy}>Mark week reviewed ✓</button>}
         {digest?.reviewedAt && <span className="eb-chip eb-chip--run">reviewed {new Date(digest.reviewedAt).toLocaleDateString('en-GB')}</span>}
@@ -86,14 +113,14 @@ export function EbayDigestClient() {
       ) : (
         <>
           <section className="eb-panel eb-panel--head">
-            <header className="eb-panel-head"><h3>Week {p.week.start} → {p.week.end}</h3><span className="eb-panel-note">any-click attribution · generated {new Date(p.generatedAt).toLocaleString('en-GB')}</span></header>
+            <header className="eb-panel-head"><h3>Week {p.week.start} → {p.week.end}</h3><span className="eb-panel-note">all markets · any-click attribution · generated {new Date(p.generatedAt).toLocaleString('en-GB')}</span></header>
             <div className="eb-headstats">
-              <div><span className="k">Ad fees</span><span className="v">{eurC(p.totals.adFeesCents)}{delta(p.totals.adFeesCents, p.prior.adFeesCents)}</span></div>
-              <div><span className="k">Ad sales</span><span className="v">{eurC(p.totals.salesCents)}{delta(p.totals.salesCents, p.prior.salesCents)}</span></div>
+              <div><span className="k">Ad fees</span><span className="v">{eurC(p.totals.adFeesCents)} <Wow cur={p.totals.adFeesCents} prev={p.prior.adFeesCents} goodUp={false} /></span></div>
+              <div><span className="k">Ad sales</span><span className="v">{eurC(p.totals.salesCents)} <Wow cur={p.totals.salesCents} prev={p.prior.salesCents} goodUp /></span></div>
               <div><span className="k">eBay ACOS</span><span className="v">{pctP(p.totals.acosPct)}</span></div>
               <div><span className="k">Clicks</span><span className="v">{intlN(p.totals.clicks)}</span></div>
               <div><span className="k">Impressions</span><span className="v">{intlN(p.totals.impressions)}</span></div>
-              <div><span className="k">Sold</span><span className="v">{intlN(p.totals.soldQty)}{delta(p.totals.soldQty, p.prior.soldQty)}</span></div>
+              <div><span className="k">Sold</span><span className="v">{intlN(p.totals.soldQty)} <Wow cur={p.totals.soldQty} prev={p.prior.soldQty} goodUp /></span></div>
             </div>
           </section>
 
@@ -105,13 +132,22 @@ export function EbayDigestClient() {
           )}
 
           <section className="eb-panel">
-            <header className="eb-panel-head"><h3>Campaign movers</h3></header>
+            <header className="eb-panel-head"><h3>Campaign movers</h3><span className="eb-panel-note">by week ad fees</span></header>
             {p.movers.length === 0 ? <EmptyNote title="No campaign activity this week" /> : (
-              <ul className="eb-results">
-                {p.movers.map((m, i) => (
-                  <li key={i} className="ok"><b>{m.campaign}</b> — {eurC(m.feesCents)} fees · {eurC(m.salesCents)} sales · {m.sold} sold</li>
-                ))}
-              </ul>
+              <table className="eb-movers">
+                <thead><tr><th>Campaign</th><th>Ad fees</th><th>Ad sales</th><th>Sold</th><th aria-label="Share of week" /></tr></thead>
+                <tbody>
+                  {p.movers.map((m, i) => (
+                    <tr key={i}>
+                      <td className="nm" title={m.campaign}>{m.campaign}</td>
+                      <td className="num">{eurC(m.feesCents)}</td>
+                      <td className="num">{eurC(m.salesCents)}</td>
+                      <td className="num">{intlN(m.sold)}</td>
+                      <td className="bar"><span style={{ width: `${Math.round((m.feesCents / maxMoverFees) * 100)}%` }} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </section>
 
@@ -125,10 +161,19 @@ export function EbayDigestClient() {
           <section className="eb-panel">
             <header className="eb-panel-head">
               <h3>Awaiting your decision ({p.pendingProposals.length})</h3>
-              <Link href="/marketing/ads/ebay/automation" className="eb-linkbtn">Open approval queue →</Link>
+              <Link href="/marketing/ads/ebay/automation?tab=suggestions" className="eb-linkbtn">Open approval queue →</Link>
             </header>
             {p.pendingProposals.length === 0 ? <EmptyNote title="Queue is clear" /> : (
-              <ul className="eb-results">{p.pendingProposals.slice(0, 10).map((pr) => <li key={pr.id} className="warn">{pr.kind.replace(/_/g, ' ')} · {pr.entityRef.campaignName} · {pr.entityRef.listingId ?? pr.entityRef.keywordText ?? ''}</li>)}</ul>
+              <ul className="eb-results">
+                {p.pendingProposals.slice(0, 10).map((pr) => (
+                  <li key={pr.id} className="warn">
+                    <Link className="eb-digest-plink" href={`/marketing/ads/ebay/automation?tab=suggestions&highlight=${pr.id}`}
+                      title="Open this suggestion in the approval queue">
+                      {pr.kind.replace(/_/g, ' ')} · {pr.entityRef.campaignName} · {pr.entityRef.listingId ?? pr.entityRef.keywordText ?? ''} →
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             )}
           </section>
 

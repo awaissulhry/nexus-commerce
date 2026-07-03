@@ -6,6 +6,7 @@
  * (EbayAutomationClient) is dissolved into tabs/ + rules/ + _lib/.
  */
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import '../ebay.css'
 import { postEbayAds, getEbayAds, useWriteMode, SandboxBanner } from '../_lib'
@@ -24,7 +25,11 @@ const TABS = [
 
 export function EbayAutomationHub() {
   const writeMode = useWriteMode()
-  const [tab, setTab] = useState('rules')
+  // ER3.5 — digest deep links: ?tab=suggestions&highlight=<proposalId>
+  const sp = useSearchParams()
+  const urlTab = sp.get('tab')
+  const highlightId = sp.get('highlight')
+  const [tab, setTab] = useState(TABS.some((t) => t.key === urlTab) ? urlTab! : 'rules')
   const [state, setState] = useState<StatePayload | null>(null)
   const [counts, setCounts] = useState<{ suggestions: number; drift: number }>({ suggestions: 0, drift: 0 })
   const [busy, setBusy] = useState(false)
@@ -81,7 +86,7 @@ export function EbayAutomationHub() {
       </nav>
 
       {tab === 'rules' && <RulesTab busy={busy} act={act} bump={bump} />}
-      {tab === 'suggestions' && <SuggestionsTab busy={busy} act={act} bump={bump} />}
+      {tab === 'suggestions' && <SuggestionsTab busy={busy} act={act} bump={bump} highlightId={highlightId} />}
       {tab === 'applied' && <AppliedTab busy={busy} act={act} bump={bump} />}
       {tab === 'drift' && <DriftTab busy={busy} act={act} bump={bump} />}
 

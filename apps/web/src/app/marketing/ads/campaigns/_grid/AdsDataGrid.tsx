@@ -120,6 +120,9 @@ export interface AdsDataGridProps<T> {
   /** ER3.3 — seed the filter state on mount (deep links like ?status=LIMITED).
    *  Additive: consumers that omit it start empty exactly as before. */
   initialFilters?: FilterState
+  /** ER3.5 — optional extra class per row (e.g. digest deep-link highlight).
+   *  Additive: consumers that omit it render exactly as before. */
+  rowClassName?: (row: T) => string | undefined
   /** optional row grouping: returns the group key + label for a row. When set, the grid
    *  clusters same-group rows (groups ordered by label) and renders a header row before
    *  each group. Additive — consumers that omit it are unaffected. */
@@ -155,7 +158,7 @@ export function AdsDataGrid<T>({
   showTotal, totalFirst = 'Total',
   reportLabel, emptyLabel = 'No data.', emptyNode, defaultSort, editMode, selectionActions,
   searchable, searchPlaceholder = 'Search…', searchValue, pagerCentered, filtersDefaultOpen = true,
-  groupBy, onRowClick, keyboardNav, onRowKey, initialFilters,
+  groupBy, onRowClick, keyboardNav, onRowKey, initialFilters, rowClassName,
 }: AdsDataGridProps<T>) {
   const [filtersOpen, setFiltersOpen] = useState(filtersDefaultOpen)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -557,7 +560,7 @@ export function AdsDataGrid<T>({
                         <tr className="h10-am-grp"><td colSpan={visibleCols.length + (selectable ? 2 : 1)}><span className="gl">{grp.label}</span><span className="gc">{groupCounts?.get(grp.key) ?? 0} {pluralize(noun, groupCounts?.get(grp.key) ?? 0)}</span></td></tr>
                       )}
                       <tr
-                        className={`${sel.has(id) ? 'on' : ''}${onRowClick ? ' clickable' : ''}${keyboardNav && idx === focusIdx ? ' kbd-focus' : ''}`}
+                        className={`${sel.has(id) ? 'on' : ''}${onRowClick ? ' clickable' : ''}${keyboardNav && idx === focusIdx ? ' kbd-focus' : ''}${rowClassName?.(row) ? ` ${rowClassName(row)}` : ''}`}
                         onClick={onRowClick ? (e) => { if (!(e.target as HTMLElement).closest('button, a, input, label, select')) onRowClick(row) } : undefined}
                       >
                         {selectable && <td className="ck"><input type="checkbox" checked={sel.has(id)} onChange={() => toggle(id)} aria-label="Select row" /></td>}

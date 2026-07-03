@@ -182,3 +182,17 @@
    second column. Page-scoped correction; the shared-grid defect is flagged
    for ER4 (an Amazon-affecting fix needs its own approval). */
 .eb-changelog .h10-am-grid th.nm.fz, .eb-changelog .h10-am-grid td.nm.fz { left: 0; }
+
+/* ER3.5 — digest: week chips · movers table · proposal deep links · highlight */
+.eb-week-chips { display: inline-flex; gap: 5px; flex-wrap: wrap; }
+.eb-movers { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.eb-movers th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: #8a93a1; padding: 4px 10px; border-bottom: 1px solid #eef1f5; }
+.eb-movers th:nth-child(n+2) { text-align: right; }
+.eb-movers td { padding: 6px 10px; border-bottom: 1px solid #f4f6f9; color: #283441; }
+.eb-movers td.nm { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.eb-movers td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.eb-movers td.bar { width: 140px; }
+.eb-movers td.bar span { display: block; height: 7px; border-radius: 999px; background: #d2e6fc; min-width: 2px; }
+.eb-digest-plink { color: inherit; text-decoration: none; }
+.eb-digest-plink:hover { color: #1f6fde; text-decoration: underline; }
+.eb-hl-row td { background: #fdf6e3 !important; transition: background 1.2s ease; }
