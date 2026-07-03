@@ -321,16 +321,18 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       metrics: lf.get(l.itemId) ?? derive(zeroSums),
     })
 
+    // ONE row per listing, grouped under its primary product — a listing
+    // matched to N variant products must not appear N times (duplicated rows
+    // double-count the totals; caught on prod 2026-07-03).
     const byProduct = new Map<string, ReturnType<typeof listingRow>[]>()
     const unmatched: ReturnType<typeof listingRow>[] = []
     for (const l of listings) {
       const row = listingRow(l)
       if (l.productIds.length === 0) { unmatched.push(row); continue }
-      for (const pid of l.productIds) {
-        const arr = byProduct.get(pid) ?? []
-        arr.push(row)
-        byProduct.set(pid, arr)
-      }
+      const pid = l.productIds[0]!
+      const arr = byProduct.get(pid) ?? []
+      arr.push(row)
+      byProduct.set(pid, arr)
     }
     const sumRows = (rows: ReturnType<typeof listingRow>[]): Sums =>
       rows.reduce<Sums>((acc, row) => ({
