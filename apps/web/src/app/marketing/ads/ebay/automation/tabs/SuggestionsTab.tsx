@@ -25,6 +25,8 @@ export interface SuggestionRow {
 
 function DecideMenu({ row, busy, onDecide }: { row: SuggestionRow; busy: boolean; onDecide: (ids: string[], decision: 'approve' | 'reject', snoozeDays?: number, label?: string) => void }) {
   const [open, setOpen] = useState(false)
+  // fixed-position: the grid scroller clips absolute menus on the last row
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const ref = useRef<HTMLSpanElement>(null)
   useEffect(() => {
     if (!open) return
@@ -32,12 +34,19 @@ function DecideMenu({ row, busy, onDecide }: { row: SuggestionRow; busy: boolean
     document.addEventListener('mousedown', close)
     return () => document.removeEventListener('mousedown', close)
   }, [open])
+  const toggle = () => {
+    if (!open) {
+      const r = ref.current?.getBoundingClientRect()
+      if (r) setPos({ top: r.bottom + 4, left: Math.max(8, r.right - 168) })
+    }
+    setOpen((o) => !o)
+  }
   const pick = (snoozeDays: number | undefined, label: string) => { setOpen(false); onDecide([row.id], 'reject', snoozeDays, label) }
   return (
     <span className="eb-rule-menu" ref={ref}>
-      <button type="button" className="h10-am-btn sm" disabled={busy} aria-label="Dismiss options" onClick={() => setOpen((o) => !o)}>✕ <ChevronDown size={11} /></button>
-      {open && (
-        <span className="h10-statusmenu eb-statusfix">
+      <button type="button" className="h10-am-btn sm" disabled={busy} aria-label="Dismiss options" onClick={toggle}>✕ <ChevronDown size={11} /></button>
+      {open && pos && (
+        <span className="h10-statusmenu eb-statusfix" style={{ position: 'fixed', top: pos.top, left: pos.left }}>
           <button type="button" title="May re-suggest on the next evaluation if conditions still hold" onClick={() => pick(undefined, 'dismissed (may re-suggest)')}>Dismiss</button>
           <button type="button" onClick={() => pick(7, 'snoozed 7d')}>Snooze 7 days</button>
           <button type="button" onClick={() => pick(30, 'snoozed 30d')}>Snooze 30 days</button>
