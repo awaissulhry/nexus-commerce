@@ -53,7 +53,11 @@ export interface CampaignRow {
   adRateStrategy: string | null; bidPercentage: number | null; dailyBudgetCents: number | null
   budgetCurrency: string; isRulesBased: boolean; nexusManaged: boolean
   startDate: string; endDate: string | null; lastEntitySyncAt: string | null
-  ads: { total: number; stale: number }
+  budgetUpdatesToday?: number
+  ads: { total: number; stale: number; hidden?: number }
+  // ER3.1 — Ad Manager automation column + budget-cap heuristic
+  automation?: { rules: number; protected: boolean; posture: string }
+  limitedByBudget?: boolean
   metrics: Derived
 }
 export interface AdRow {

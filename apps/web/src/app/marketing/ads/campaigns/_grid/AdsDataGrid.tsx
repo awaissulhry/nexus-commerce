@@ -113,6 +113,10 @@ export interface AdsDataGridProps<T> {
   pagerCentered?: boolean
   /** initial filters-panel open state (H10 rules grid loads collapsed). */
   filtersDefaultOpen?: boolean
+  /** ER3.1 (additive; default off) — Filter Library: when set, the filter
+   *  panel gains saveable named presets persisted in localStorage under this
+   *  key. Grids that don't pass it render exactly as before. */
+  filterPresetsKey?: string
   /** optional row grouping: returns the group key + label for a row. When set, the grid
    *  clusters same-group rows (groups ordered by label) and renders a header row before
    *  each group. Additive — consumers that omit it are unaffected. */
@@ -142,7 +146,7 @@ const pluralize = (noun: string, n: number) => (n === 1 ? noun : `${noun}s`)
 export function AdsDataGrid<T>({
   rows, loading, rowId, noun,
   firstColLabel, renderFirst, firstSortValue,
-  columns, filters,
+  columns, filters, filterPresetsKey,
   toolbarLeft, toolbarRight, exportable, onExport, customizable = true, storageKey,
   selectable = true, selected, onSelectedChange,
   showTotal, totalFirst = 'Total',
@@ -154,6 +158,19 @@ export function AdsDataGrid<T>({
   const [searchOpen, setSearchOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [fstate, setFstate] = useState<FilterState>({})
+  // ── ER3.1 Filter Library (only when filterPresetsKey is set) ──
+  const [presets, setPresets] = useState<Array<{ name: string; values: FilterState }>>([])
+  const [presetSaveOpen, setPresetSaveOpen] = useState(false)
+  const [presetName, setPresetName] = useState('')
+  const [presetRenaming, setPresetRenaming] = useState<string | null>(null)
+  useEffect(() => {
+    if (!filterPresetsKey) return
+    try { const raw = localStorage.getItem(filterPresetsKey); if (raw) setPresets(JSON.parse(raw)) } catch { /* ignore */ }
+  }, [filterPresetsKey])
+  const persistPresets = (next: Array<{ name: string; values: FilterState }>) => {
+    setPresets(next)
+    if (filterPresetsKey) { try { localStorage.setItem(filterPresetsKey, JSON.stringify(next)) } catch { /* ignore */ } }
+  }
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(defaultSort ?? null)
   // ── inline edit mode (H10 "Edit Groups") ──
   const [editing, setEditing] = useState(false)
@@ -398,6 +415,42 @@ export function AdsDataGrid<T>({
                 ))}
               </div>
               <div className="fft">
+                {filterPresetsKey && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11.5, fontWeight: 600, color: '#667085' }}>Presets:</span>
+                    {presets.map((p) => (
+                      <span key={p.name} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                        {presetRenaming === p.name ? (
+                          <input
+                            className="h10-edit-in" autoFocus defaultValue={p.name} style={{ width: 120 }}
+                            aria-label="Rename preset"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') { const nn = (e.target as HTMLInputElement).value.trim().slice(0, 60); if (nn) persistPresets(presets.map((x) => (x.name === p.name ? { ...x, name: nn } : x))); setPresetRenaming(null) }
+                              if (e.key === 'Escape') setPresetRenaming(null)
+                            }}
+                            onBlur={() => setPresetRenaming(null)}
+                          />
+                        ) : (
+                          <button type="button" className="h10-am-btn sm" title="Apply preset · double-click to rename" onClick={() => { setFstate(p.values); setPage(1) }} onDoubleClick={() => setPresetRenaming(p.name)}>{p.name}</button>
+                        )}
+                        <button type="button" className="h10-am-link" aria-label={`Delete preset ${p.name}`} style={{ fontSize: 11 }} onClick={() => persistPresets(presets.filter((x) => x.name !== p.name))}>✕</button>
+                      </span>
+                    ))}
+                    {presetSaveOpen ? (
+                      <input
+                        className="h10-edit-in" autoFocus placeholder="preset name…" value={presetName} style={{ width: 140 }}
+                        aria-label="Preset name"
+                        onChange={(e) => setPresetName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') { const nn = presetName.trim().slice(0, 60); if (nn) persistPresets([...presets.filter((x) => x.name !== nn), { name: nn, values: fstate }]); setPresetName(''); setPresetSaveOpen(false) }
+                          if (e.key === 'Escape') { setPresetName(''); setPresetSaveOpen(false) }
+                        }}
+                      />
+                    ) : (
+                      <button type="button" className="h10-am-link" style={{ fontSize: 12 }} disabled={!hasActiveFilters} onClick={() => setPresetSaveOpen(true)}>Save preset</button>
+                    )}
+                  </span>
+                )}
                 <span className="grow" />
                 <button type="button" className="h10-am-btn sm" onClick={clearFilters} disabled={!hasActiveFilters}>Clear</button>
               </div>

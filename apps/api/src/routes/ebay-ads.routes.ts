@@ -133,7 +133,8 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
   // ── Campaign grid ───────────────────────────────────────────────────────
   app.get<{ Querystring: WindowQuery }>('/ebay-ads/campaigns', async (req) => {
     const r = resolveRange(req.query)
-    const [camps, facts, adCounts] = await Promise.all([
+    const yday = new Date(); yday.setUTCDate(yday.getUTCDate() - 1); yday.setUTCHours(0, 0, 0, 0)
+    const [camps, facts, adCounts, hiddenCounts, policies, allRules, ydayFacts] = await Promise.all([
       prisma.ebayCampaign.findMany({
         where: req.query.marketplace && req.query.marketplace !== 'all' ? { marketplace: req.query.marketplace } : {},
         orderBy: [{ status: 'asc' }, { startDate: 'desc' }],
@@ -144,6 +145,12 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
         _sum: sumFields,
       }),
       prisma.ebayAd.groupBy({ by: ['campaignId', 'status'], _count: { _all: true } }),
+      // ER3.1 — ads eBay auto-hid (out of stock): a state, not an error
+      prisma.ebayAd.groupBy({ by: ['campaignId'], where: { hiddenReason: { not: null } }, _count: { _all: true } }),
+      prisma.ebayCampaignAutomationPolicy.findMany(),
+      prisma.ebayAdsRule.findMany({ where: { enabled: true }, select: { marketplace: true, scope: true } }),
+      // ER3.1 — "Limited by budget" heuristic input: yesterday's campaign fees
+      prisma.ebayAdsDailyPerformance.groupBy({ by: ['entityId'], where: { entityType: 'CAMPAIGN', date: yday }, _sum: { adFeesCents: true } }),
     ])
     const factsByExt = new Map(facts.map((f) => [f.entityId, derive(toSums(f))]))
     const adsByCampaign = new Map<string, { total: number; stale: number }>()
@@ -153,6 +160,14 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       if (a.status === 'STALE') cur.stale += a._count._all
       adsByCampaign.set(a.campaignId, cur)
     }
+    const hiddenByCampaign = new Map(hiddenCounts.map((h) => [h.campaignId, h._count._all]))
+    const policyByCampaign = new Map(policies.map((p) => [p.campaignId, p]))
+    const ydayFeesByExt = new Map(ydayFacts.map((f) => [f.entityId, f._sum.adFeesCents ?? 0]))
+    const ruleCountFor = (id: string, marketplace: string): number =>
+      allRules.filter((r0) => {
+        const scoped = ((r0.scope as { campaignIds?: string[] } | null)?.campaignIds) ?? []
+        return scoped.length ? scoped.includes(id) : (!r0.marketplace || r0.marketplace === marketplace)
+      }).length
     return {
       window: { preset: r.preset, since: r.sinceStr, until: r.untilStr },
       currency: 'EUR',
@@ -174,11 +189,29 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
         startDate: c.startDate,
         endDate: c.endDate,
         lastEntitySyncAt: c.lastEntitySyncAt,
-        ads: adsByCampaign.get(c.id) ?? { total: 0, stale: 0 },
+        budgetUpdatesToday: c.budgetUpdatesToday, // ER3.1 — grid Budget modal meter
+        ads: { ...(adsByCampaign.get(c.id) ?? { total: 0, stale: 0 }), hidden: hiddenByCampaign.get(c.id) ?? 0 },
         metrics: factsByExt.get(c.externalCampaignId) ?? derive(zeroSums),
+        // ER3.1 — automation column (rules that apply + policy) + honest
+        // budget-cap heuristic (yesterday fees ≥ 90% of daily budget)
+        automation: {
+          rules: ruleCountFor(c.id, c.marketplace),
+          protected: policyByCampaign.get(c.id)?.protected ?? false,
+          posture: policyByCampaign.get(c.id)?.posture ?? 'INHERIT',
+        },
+        limitedByBudget: (c.fundingModel === 'COST_PER_CLICK' && c.status === 'RUNNING' && c.dailyBudget != null)
+          ? (ydayFeesByExt.get(c.externalCampaignId) ?? 0) >= Math.round(Number(c.dailyBudget.toString()) * 100) * 0.9
+          : false,
       })),
       freshness: await freshness(),
     }
+  })
+
+  // ER3.1 — manual entity sync (the header's Data Sync button)
+  app.post('/ebay-ads/sync', async () => {
+    const { syncEbayAdsEntities } = await import('../services/marketing/ebay-ads-entity-sync.service.js')
+    const report = await syncEbayAdsEntities()
+    return { ok: true, report }
   })
 
   // ── Campaign detail ─────────────────────────────────────────────────────
