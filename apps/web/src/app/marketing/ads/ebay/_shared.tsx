@@ -71,7 +71,7 @@ export interface ProductListingRow {
 export interface ProductsPayload {
   window: { preset: string; since: string; until: string }
   currency: string
-  products: Array<{ productId: string; sku: string | null; name: string | null; hasCost: boolean; listings: ProductListingRow[]; metrics: Derived }>
+  products: Array<{ productId: string; sku: string | null; name: string | null; hasCost: boolean; costPriceCents: number | null; listings: ProductListingRow[]; metrics: Derived }>
   unmatchedListings: ProductListingRow[]
   freshness: Freshness
 }

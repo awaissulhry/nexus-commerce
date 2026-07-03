@@ -176,7 +176,7 @@ export async function discoverEbayListings(): Promise<DiscoveryReport> {
   let detailBudget = DETAIL_MAX
   const now = new Date()
   for (const it of items.values()) {
-    const existing = await prisma.ebayListingIndex.findFirst({ where: { itemId: it.itemId }, select: { id: true, marketplace: true, detailSyncAt: true } })
+    const existing = await prisma.ebayListingIndex.findFirst({ where: { itemId: it.itemId }, select: { id: true, marketplace: true, detailSyncAt: true, productIds: true, matchStatus: true } })
     let marketplace = existing?.marketplace ?? 'IT'
     let detail: ItemDetail | null = null
     if ((!existing || !existing.detailSyncAt) && detailBudget > 0) {
@@ -189,7 +189,11 @@ export async function discoverEbayListings(): Promise<DiscoveryReport> {
         report.errors.push(`GetItem ${it.itemId}: ${(e as Error).message}`)
       }
     }
-    const productIds = await resolveProducts(marketplace, it.itemId, detail?.variationSkus ?? [])
+    const resolved = await resolveProducts(marketplace, it.itemId, detail?.variationSkus ?? [])
+    // Operator-confirmed matches (matchStatus MANUAL, set from the ads console)
+    // are sticky: sweeps union them in and never downgrade the status.
+    const manual = existing?.matchStatus === 'MANUAL' ? existing.productIds : []
+    const productIds = [...new Set([...manual, ...resolved])]
     if (productIds.length) report.matched++
     const base = {
       title: it.title ?? null,
@@ -206,7 +210,7 @@ export async function discoverEbayListings(): Promise<DiscoveryReport> {
         aspects: detail.aspects as object,
         detailSyncAt: now,
       } : {}),
-      ...(productIds.length ? { productIds, matchStatus: 'MATCHED' } : {}),
+      ...(productIds.length ? { productIds, matchStatus: manual.length ? 'MANUAL' : 'MATCHED' } : {}),
     }
     await prisma.ebayListingIndex.upsert({
       where: { marketplace_itemId: { marketplace, itemId: it.itemId } },

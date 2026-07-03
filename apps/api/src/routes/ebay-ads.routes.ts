@@ -16,6 +16,7 @@ import { resolveRange, priorRange, bucketFor, type ResolvedRange } from '../serv
 import * as writes from '../services/marketing/ebay-ads-write.service.js'
 import { exportAdsCsv, parseAdsOpsCsv, diffOps, applyOps } from '../services/marketing/ebay-ads-csv.service.js'
 import { getLiveEbayItemIds } from '../services/marketing/ebay-listing-index.service.js'
+import { rebuildEbayListingEconomics } from '../services/ads-core/ebay-margin.js'
 import { getActiveEbayAdsAuth, suggestMaxCpcApi, suggestKeywordsApi, suggestBidsApi } from '../services/marketing/ebay-ads-api.service.js'
 
 const SHORT_BY_MKT: Record<string, string> = { EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES', EBAY_GB: 'UK' }
@@ -348,12 +349,89 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
         sku: pById.get(pid)?.sku ?? null,
         name: pById.get(pid)?.name ?? null,
         hasCost: pById.get(pid)?.costPrice != null,
+        costPriceCents: pById.get(pid)?.costPrice != null ? Math.round(Number(pById.get(pid)!.costPrice!.toString()) * 100) : null,
         listings: rows,
         metrics: derive(sumRows(rows)),
       })).sort((a, b) => b.metrics.adFeesCents - a.metrics.adFeesCents),
       unmatchedListings: unmatched.sort((a, b) => b.metrics.impressions - a.metrics.impressions),
       freshness: await freshness(),
     }
+  })
+
+  // ── Match queue + cost entry (activates the margin engine) ─────────────
+  // Suggestions score catalog products by rarity-weighted token overlap with
+  // the listing title — suggestions only; the OPERATOR confirms identity.
+  app.get<{ Querystring: { itemId: string; marketplace: string; q?: string } }>('/ebay-ads/products/match-candidates', async (req, reply) => {
+    const idx = await prisma.ebayListingIndex.findFirst({ where: { itemId: req.query.itemId, marketplace: req.query.marketplace }, select: { title: true } })
+    if (!idx) return reply.code(404).send({ error: 'listing not indexed' })
+    const q = (req.query.q ?? '').trim()
+    const pool = await prisma.product.findMany({
+      where: { deletedAt: null, ...(q ? { OR: [{ name: { contains: q, mode: 'insensitive' } }, { sku: { contains: q, mode: 'insensitive' } }] } : {}) },
+      select: { id: true, sku: true, name: true, costPrice: true },
+      ...(q ? { take: 30, orderBy: { sku: 'asc' } } : {}),
+    })
+    if (q) return { candidates: pool.map((p) => ({ id: p.id, sku: p.sku, name: p.name, costPriceCents: p.costPrice != null ? Math.round(Number(p.costPrice.toString()) * 100) : null, suggested: false })) }
+    const tokens = (s: string) => [...new Set(s.toLowerCase().normalize('NFD').replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((t) => t.length >= 3))]
+    const titleToks = new Set(tokens(idx.title ?? ''))
+    const freq = new Map<string, number>()
+    const prodToks = pool.map((p) => {
+      const ts = tokens(`${p.name} ${p.sku}`)
+      for (const t of ts) freq.set(t, (freq.get(t) ?? 0) + 1)
+      return ts
+    })
+    const scored = pool.map((p, i) => {
+      let score = 0
+      for (const t of prodToks[i]!) if (titleToks.has(t)) score += 1 / Math.sqrt(freq.get(t) ?? 1)
+      return { p, score }
+    }).filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score || a.p.sku.length - b.p.sku.length)
+      .slice(0, 8)
+    return { candidates: scored.map(({ p, score }) => ({ id: p.id, sku: p.sku, name: p.name, costPriceCents: p.costPrice != null ? Math.round(Number(p.costPrice.toString()) * 100) : null, suggested: true, score: Math.round(score * 100) / 100 })) }
+  })
+
+  app.post<{ Body: { itemId: string; marketplace: string; productId: string | null } }>('/ebay-ads/products/match', async (req, reply) => {
+    const { itemId, marketplace, productId } = req.body
+    const idx = await prisma.ebayListingIndex.findUnique({ where: { marketplace_itemId: { marketplace, itemId } }, select: { productIds: true } })
+    if (!idx) return reply.code(404).send({ error: 'listing not indexed' })
+    if (productId) {
+      const p = await prisma.product.findUnique({ where: { id: productId }, select: { deletedAt: true } })
+      if (!p || p.deletedAt) return reply.code(400).send({ error: 'product not found (or deleted)' })
+    }
+    await prisma.ebayListingIndex.update({
+      where: { marketplace_itemId: { marketplace, itemId } },
+      data: productId ? { productIds: [productId], matchStatus: 'MANUAL' } : { productIds: [], matchStatus: 'UNMATCHED' },
+    })
+    await prisma.campaignAction.create({
+      data: {
+        userId: (req as { authUser?: { id?: string } }).authUser?.id ?? null, channel: 'EBAY', actionType: 'match_listing', entityType: 'LISTING', entityId: itemId,
+        payloadBefore: { productIds: idx.productIds }, payloadAfter: { productIds: productId ? [productId] : [], _mode: 'local' } as object, channelResponseStatus: 'SUCCESS',
+      },
+    }).catch(() => {})
+    await rebuildEbayListingEconomics()
+    const eco = await prisma.ebayListingEconomics.findUnique({ where: { marketplace_itemId: { marketplace, itemId } } })
+    return { ok: true, matchStatus: productId ? 'MANUAL' : 'UNMATCHED', economicsStatus: eco?.dataStatus ?? null, breakEvenAdRatePct: eco?.breakEvenAdRatePct != null ? Number(eco.breakEvenAdRatePct.toString()) : null }
+  })
+
+  // Sets Product.costPrice (the canonical cost field) on the listing's
+  // matched product(s) — per-variant refinement stays in the product editor.
+  app.post<{ Body: { itemId: string; marketplace: string; costEur: number } }>('/ebay-ads/products/cost', async (req, reply) => {
+    const { itemId, marketplace, costEur } = req.body
+    if (!Number.isFinite(costEur) || costEur <= 0 || costEur > 100000) return reply.code(400).send({ error: 'costEur must be a positive number' })
+    const idx = await prisma.ebayListingIndex.findUnique({ where: { marketplace_itemId: { marketplace, itemId } }, select: { productIds: true } })
+    if (!idx) return reply.code(404).send({ error: 'listing not indexed' })
+    if (!idx.productIds.length) return reply.code(400).send({ error: 'match the listing to a product first' })
+    const products = await prisma.product.findMany({ where: { id: { in: idx.productIds } }, select: { id: true, sku: true, costPrice: true } })
+    await prisma.product.updateMany({ where: { id: { in: idx.productIds } }, data: { costPrice: costEur.toFixed(2) } })
+    await prisma.campaignAction.create({
+      data: {
+        userId: (req as { authUser?: { id?: string } }).authUser?.id ?? null, channel: 'EBAY', actionType: 'set_product_cost', entityType: 'LISTING', entityId: itemId,
+        payloadBefore: { costs: Object.fromEntries(products.map((p) => [p.sku, p.costPrice?.toString() ?? null])) },
+        payloadAfter: { costEur, products: products.map((p) => p.sku), _mode: 'local' } as object, channelResponseStatus: 'SUCCESS',
+      },
+    }).catch(() => {})
+    await rebuildEbayListingEconomics()
+    const eco = await prisma.ebayListingEconomics.findUnique({ where: { marketplace_itemId: { marketplace, itemId } } })
+    return { ok: true, updatedProducts: products.map((p) => p.sku), economicsStatus: eco?.dataStatus ?? null, breakEvenAdRatePct: eco?.breakEvenAdRatePct != null ? Number(eco.breakEvenAdRatePct.toString()) : null }
   })
 
   // ── Sync status (powers the "as of" panel) ──────────────────────────────

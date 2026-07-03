@@ -23,10 +23,14 @@ Monday: open **Weekly Digest** → read totals vs prior week, movers, anomalies 
 
 ## Turning on break-evens (the one missing input)
 
-Break-even columns show "add cost" because no product costs exist anywhere yet. Enter costs either way:
-- `Product.costPrice` (product edit page), or
-- receive stock through POs with unit costs → WAC (`weightedAvgCostCents`) fills itself.
-Next economics rebuild (or trigger `ebay-ads-economics-rebuild`) lights up break-evens, net margins, and gives rate guardrails + the "Rate above break-even — repair" rule real teeth.
+Everything happens on **eBay → Products**, no other page needed:
+
+1. **Match** — most live listings predate Nexus and carry no usable eBay SKUs, so economics can't find their product. Unmatched rows show a **Match…** button → pick the catalog product (title-similarity suggestions + free search; your confirmation is what links them). Manual matches are sticky: discovery sweeps union them in and never downgrade them (`matchStatus: MANUAL`).
+2. **Add cost** — on any matched row the Break-even cell shows **add cost** → enter the unit cost in EUR. It writes `Product.costPrice` (the canonical field) on the listing's matched product(s), rebuilds economics on the spot, and the modal echoes the new break-even. Click an existing break-even value to edit the cost later.
+
+Alternative paths that also work: `Product.costPrice` via the product edit page, or receive stock through POs with unit costs → WAC (`weightedAvgCostCents`) fills itself; the next economics rebuild picks either up (costPrice wins when both exist).
+
+Once costs exist: break-evens + net margins light up, rate guardrails get real teeth, the "Rate above break-even — repair" rule and the builder's per-listing computed rates activate. Both actions are audited (`match_listing` / `set_product_cost` in the activity stream).
 
 ## Automation
 
