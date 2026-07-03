@@ -470,7 +470,131 @@ export async function detectAnomalies(): Promise<Anomaly[]> {
     const audited = await prisma.campaignAction.findFirst({ where: { channel: 'EBAY', actionType: 'end_campaign', entityId: c.externalCampaignId } })
     if (!audited) anomalies.push({ type: 'campaign_ended_externally', severity: 'WARN', message: `campaign "${c.name}" (${c.externalCampaignId}) ended outside Nexus — Seller Hub or eBay-side change (easy boost?)`, entityId: c.externalCampaignId })
   }
+  // E7 #12 Floor Watch: DYNAMIC campaigns whose applied ad rates exceed the
+  // configured cap (eBay's stealth-floor precedent, Nov 2024).
+  try {
+    const dynamics = await prisma.ebayCampaign.findMany({ where: { adRateStrategy: 'DYNAMIC', status: 'RUNNING' }, include: { ads: { where: { status: { notIn: ['STALE'] } }, select: { listingId: true, bidPercentage: true } } } })
+    for (const d of dynamics) {
+      const cap = Number(((d.dynamicAdRatePrefs as Array<{ adRateCapPercent?: string }> | null)?.[0]?.adRateCapPercent) ?? NaN)
+      if (!Number.isFinite(cap)) continue
+      const over = d.ads.filter((a) => a.bidPercentage != null && Number(a.bidPercentage.toString()) > cap + 0.05)
+      if (over.length) {
+        anomalies.push({ type: 'dynamic_rate_over_cap', severity: 'CRITICAL', message: `Floor Watch: ${over.length} ad(s) in "${d.name}" carry rates above the configured cap ${cap}% — eBay-side drift`, entityId: d.externalCampaignId })
+      }
+    }
+  } catch (e) { logger.warn(`[E7][floor-watch] ${(e as Error).message}`) }
+  // E7 #25: any Nexus-set value drifted eBay-side ("easy boost" overwrites,
+  // Seller Hub edits) → one WARN pointing at the reconciliation tab.
+  try {
+    const drifts = await detectDrift()
+    if (drifts.length) anomalies.push({ type: 'nexus_ebay_drift', severity: 'WARN', message: `${drifts.length} value(s) on eBay differ from what Nexus last set (rate / budget / removed ad) — review Automation → Drift` })
+  } catch (e) { logger.warn(`[E7][drift] ${(e as Error).message}`) }
   return anomalies
+}
+
+// ── E7 #25 — post-launch reconciliation ──────────────────────────────────────
+// Intent = replay of OUR audit trail (CampaignAction); current = the hourly
+// entity mirror (which IS eBay state). Anything eBay changed under us —
+// "easy boost" rate overwrites, Seller Hub edits, removed ads — shows as a
+// drift row. Repair either re-applies the Nexus value through the guarded
+// write layer or accepts eBay's value as the new baseline (audited).
+
+export interface DriftRow {
+  campaignId: string; externalCampaignId: string; campaignName: string; marketplace: string
+  kind: 'ad_rate' | 'budget' | 'ad_removed'
+  listingId: string | null
+  /** ratePct for ad kinds; cents for budget */
+  nexusValue: number
+  ebayValue: number | null
+  setAt: string
+  sourceAction: string
+}
+
+const DRIFT_ACTIONS = ['bulk_create_ads', 'bulk_update_ad_rates', 'bulk_delete_ads', 'set_campaign_budget', 'create_campaign', 'accept_drift']
+
+export async function detectDrift(campaignId?: string): Promise<DriftRow[]> {
+  const camps = await prisma.ebayCampaign.findMany({
+    where: {
+      ...(campaignId ? { id: campaignId } : {}),
+      status: { in: ['RUNNING', 'PAUSED'] },
+      NOT: { externalCampaignId: { startsWith: 'sandbox-' } },
+    },
+    include: { ads: { where: { status: { notIn: ['STALE'] } }, select: { listingId: true, bidPercentage: true } } },
+  })
+  if (!camps.length) return []
+  const actions = await prisma.campaignAction.findMany({
+    where: { channel: 'EBAY', entityId: { in: camps.map((c) => c.externalCampaignId) }, actionType: { in: DRIFT_ACTIONS }, channelResponseStatus: { in: ['SUCCESS', 'PARTIAL'] } },
+    orderBy: { createdAt: 'asc' },
+  })
+  const out: DriftRow[] = []
+  for (const c of camps) {
+    const rateIntent = new Map<string, { pct: number; at: Date; src: string }>()
+    let budgetIntent: { cents: number; at: Date; src: string } | null = null
+    for (const a of actions.filter((x) => x.entityId === c.externalCampaignId)) {
+      const after = (a.payloadAfter ?? {}) as Record<string, unknown>
+      const results = ((after.results as Array<{ key: string; ok: boolean }> | undefined) ?? [])
+      const failed = new Set(results.filter((r) => !r.ok).map((r) => r.key))
+      if ((a.actionType === 'bulk_update_ad_rates' || a.actionType === 'bulk_create_ads') && after.rates && typeof after.rates === 'object') {
+        for (const [lid, v] of Object.entries(after.rates as Record<string, unknown>)) {
+          const pctv = Number(v)
+          if (Number.isFinite(pctv) && !failed.has(lid)) rateIntent.set(lid, { pct: pctv, at: a.createdAt, src: a.actionType })
+        }
+      } else if (a.actionType === 'bulk_delete_ads') {
+        for (const r of results.filter((r) => r.ok)) rateIntent.delete(r.key)
+      } else if ((a.actionType === 'set_campaign_budget' || a.actionType === 'create_campaign') && after.dailyBudgetCents != null) {
+        budgetIntent = { cents: Number(after.dailyBudgetCents), at: a.createdAt, src: a.actionType }
+      } else if (a.actionType === 'accept_drift') {
+        if (after.field === 'budget' && after.value != null) budgetIntent = { cents: Number(after.value), at: a.createdAt, src: 'accept_drift' }
+        else if (typeof after.listingId === 'string') {
+          if (after.value == null) rateIntent.delete(after.listingId)
+          else rateIntent.set(after.listingId, { pct: Number(after.value), at: a.createdAt, src: 'accept_drift' })
+        }
+      }
+    }
+    const adByListing = new Map(c.ads.filter((x) => x.listingId).map((x) => [x.listingId!, x]))
+    for (const [lid, intent] of rateIntent) {
+      const ad = adByListing.get(lid)
+      const base = { campaignId: c.id, externalCampaignId: c.externalCampaignId, campaignName: c.name, marketplace: c.marketplace, listingId: lid, nexusValue: intent.pct, setAt: intent.at.toISOString(), sourceAction: intent.src }
+      if (!ad) out.push({ ...base, kind: 'ad_removed', ebayValue: null })
+      else if (ad.bidPercentage != null && Math.abs(Number(ad.bidPercentage.toString()) - intent.pct) > 0.05) out.push({ ...base, kind: 'ad_rate', ebayValue: Number(ad.bidPercentage.toString()) })
+    }
+    if (budgetIntent && c.dailyBudget != null) {
+      const curCents = Math.round(Number(c.dailyBudget.toString()) * 100)
+      if (curCents !== budgetIntent.cents) out.push({ campaignId: c.id, externalCampaignId: c.externalCampaignId, campaignName: c.name, marketplace: c.marketplace, kind: 'budget', listingId: null, nexusValue: budgetIntent.cents, ebayValue: curCents, setAt: budgetIntent.at.toISOString(), sourceAction: budgetIntent.src })
+    }
+  }
+  return out
+}
+
+export async function repairDrift(actorUserId: string | null, req: { campaignId: string; kind: string; listingId?: string | null; action: 'reapply' | 'accept' }): Promise<string> {
+  const drifts = await detectDrift(req.campaignId)
+  const d = drifts.find((x) => x.kind === req.kind && (x.listingId ?? null) === (req.listingId ?? null))
+  if (!d) throw new Error('drift no longer present — already reconciled or re-synced')
+  const ctx = { actorUserId: actorUserId ?? AUTOMATION_ACTOR }
+  if (req.action === 'reapply') {
+    if (d.kind === 'ad_rate') {
+      const r = await writes.setAdRates(ctx, req.campaignId, [{ listingId: d.listingId!, ratePct: d.nexusValue }], { reason: `drift repair: restore Nexus rate ${d.nexusValue}%` })
+      if (!r.results[0]?.ok) throw new Error(r.results[0]?.blocked ?? r.results[0]?.error ?? 'failed')
+      return `rate restored to ${d.nexusValue}% (${r.mode})`
+    }
+    if (d.kind === 'ad_removed') {
+      const r = await writes.promoteListings(ctx, { campaignId: req.campaignId, items: [{ listingId: d.listingId!, ratePct: d.nexusValue }], override: { reason: 'drift repair: re-promote listing removed eBay-side' } })
+      if (!r.results[0]?.ok) throw new Error(r.results[0]?.blocked ?? r.results[0]?.error ?? 'failed')
+      return `re-promoted at ${d.nexusValue}% (${r.mode})`
+    }
+    const r = await writes.updateBudget(ctx, req.campaignId, d.nexusValue)
+    return `budget restored to €${(d.nexusValue / 100).toFixed(2)} (${r.mode})`
+  }
+  const c = await prisma.ebayCampaign.findUniqueOrThrow({ where: { id: req.campaignId } })
+  await prisma.campaignAction.create({
+    data: {
+      userId: actorUserId, channel: 'EBAY', actionType: 'accept_drift', entityType: 'CAMPAIGN', entityId: c.externalCampaignId,
+      payloadBefore: { nexusValue: d.nexusValue },
+      payloadAfter: { field: d.kind === 'budget' ? 'budget' : d.kind, listingId: d.listingId, value: d.ebayValue, _mode: 'accept' } as object,
+      channelResponseStatus: 'SUCCESS',
+    },
+  })
+  return 'accepted eBay value as the new baseline'
 }
 
 /**
@@ -523,19 +647,6 @@ export async function runCoverageGuard(): Promise<{ unpromoted: number; proposal
 export async function runAnomalyGuard(): Promise<{ anomalies: number; ceilings: number }> {
   const [anoms, ceils] = await Promise.all([detectAnomalies(), checkSpendCeilings()])
   await runCoverageGuard().catch((e) => logger.warn(`[E7][coverage] ${(e as Error).message}`))
-  // E7 #12 Floor Watch: DYNAMIC campaigns whose applied ad rates exceed the
-  // configured cap (eBay's stealth-floor precedent, Nov 2024).
-  try {
-    const dynamics = await prisma.ebayCampaign.findMany({ where: { adRateStrategy: 'DYNAMIC', status: 'RUNNING' }, include: { ads: { where: { status: { notIn: ['STALE'] } }, select: { listingId: true, bidPercentage: true } } } })
-    for (const d of dynamics) {
-      const cap = Number(((d.dynamicAdRatePrefs as Array<{ adRateCapPercent?: string }> | null)?.[0]?.adRateCapPercent) ?? NaN)
-      if (!Number.isFinite(cap)) continue
-      const over = d.ads.filter((a) => a.bidPercentage != null && Number(a.bidPercentage.toString()) > cap + 0.05)
-      if (over.length) {
-        anoms.push({ type: 'dynamic_rate_over_cap', severity: 'CRITICAL', message: `Floor Watch: ${over.length} ad(s) in "${d.name}" carry rates above the configured cap ${cap}% — eBay-side drift`, entityId: d.externalCampaignId })
-      }
-    }
-  } catch (e) { logger.warn(`[E7][floor-watch] ${(e as Error).message}`) }
   if (anoms.length || ceils.some((c) => c.pct >= 80)) {
     try {
       const { notifyAutomation } = await import('../advertising/ads-automation-notify.service.js')

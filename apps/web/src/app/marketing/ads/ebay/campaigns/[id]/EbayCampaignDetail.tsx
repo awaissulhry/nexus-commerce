@@ -8,10 +8,11 @@
  * pause/enable bulk; Settings tab = .h10-cd-card summary (budget w/ 15-day
  * meter, rate strategy, criterion, sandbox note).
  */
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { ExternalLink, Plus } from 'lucide-react'
 import { CampaignDetailHeader } from '../../../_shell/CampaignDetailHeader'
+import { getBackendUrl } from '@/lib/backend-url'
 import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../../campaigns/_grid/AdsDataGrid'
 import { eur, int, pct, latestReportLabel } from '../../../campaigns/_grid/format'
 import '../../ebay.css'
@@ -24,6 +25,21 @@ import { AddKeywordsModal, AddNegativesModal, CloneModal, PromoteModal, BudgetMo
 const pill = (status: string) => {
   const sp = EBAY_STATUS_PILL[status] ?? { label: status, cls: '' }
   return <span className={`h10-pill ${sp.cls}`}>{sp.label}</span>
+}
+
+interface ActionRow { id: string; actionType: string; channelResponseStatus: string; createdAt: string; payloadBefore: Record<string, unknown> | null; payloadAfter: Record<string, unknown> | null }
+
+// one-line human summary of an audit row (immutable event log — E7 #25)
+function actionSummary(a: ActionRow): string {
+  const after = a.payloadAfter ?? {}
+  const parts: string[] = []
+  if (after.rates && typeof after.rates === 'object') parts.push(`${Object.keys(after.rates as object).length} rate(s)`)
+  if (Array.isArray(after.results)) { const r = after.results as Array<{ ok: boolean }>; parts.push(`${r.filter((x) => x.ok).length}/${r.length} ok`) }
+  if (after.dailyBudgetCents != null) parts.push(`budget → €${(Number(after.dailyBudgetCents) / 100).toFixed(2)}`)
+  if (after.status != null) parts.push(`status → ${String(after.status)}`)
+  if (after.field != null) parts.push(`${String(after.field)}${after.value != null ? ` → ${String(after.value)}` : ''}`)
+  if (after.counts && typeof after.counts === 'object') parts.push(Object.entries(after.counts as Record<string, number>).filter(([, v]) => v > 0).map(([k, v]) => `${v} ${k}`).join(', '))
+  return parts.join(' · ')
 }
 
 export function EbayCampaignDetail({ campaignId }: { campaignId: string }) {
@@ -48,6 +64,7 @@ export function EbayCampaignDetail({ campaignId }: { campaignId: string }) {
       t.push({ key: 'negatives', label: `Negative Keywords${data ? ` (${data.negativeKeywords.length})` : ''}` })
     }
     t.push({ key: 'settings', label: 'Settings' })
+    t.push({ key: 'activity', label: 'Activity' })
     return t
   }, [isOffsite, isManualCpc, data])
   const tab = search.get('tab') ?? TABS[0]?.key ?? 'ads'
@@ -56,6 +73,16 @@ export function EbayCampaignDetail({ campaignId }: { campaignId: string }) {
     if (key === TABS[0]?.key) q.delete('tab'); else q.set('tab', key)
     router.replace(`/marketing/ads/ebay/campaigns/${campaignId}${q.size ? `?${q}` : ''}`, { scroll: false })
   }
+
+  // Activity tab — fetched on first open (immutable audit log for THIS campaign)
+  const [activity, setActivity] = useState<ActionRow[] | null>(null)
+  useEffect(() => {
+    if (tab !== 'activity' || !c || activity != null) return
+    fetch(`${getBackendUrl()}/api/ebay-ads/actions?entityId=${encodeURIComponent(c.externalCampaignId)}&limit=100`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((j: { actions: ActionRow[] }) => setActivity(j.actions))
+      .catch(() => setActivity([]))
+  }, [tab, c, activity])
 
   const lifecycle = useCallback(async (action: 'pause' | 'resume' | 'end') => {
     if (action === 'end' && !window.confirm('End this campaign? Ended campaigns cannot be resumed (clone instead).')) return
@@ -307,6 +334,28 @@ export function EbayCampaignDetail({ campaignId }: { campaignId: string }) {
             )}
             {isOffsite && <p className="eb-be-hint" style={{ marginTop: 12 }}>Promoted Offsite is campaign-level only: eBay manages placement and CPC on external networks. No per-listing ads or keywords exist.</p>}
             {c.adRateStrategy === 'DYNAMIC' && <p className="eb-be-hint" style={{ marginTop: 12 }}>Dynamic rate follows eBay's suggestion daily under your hard cap: <code>{JSON.stringify(c.dynamicAdRatePrefs)}</code></p>}
+          </div>
+        )}
+
+        {c && tab === 'activity' && (
+          <div className="h10-am-card" style={{ padding: '6px 0', maxWidth: 980 }}>
+            <p style={{ fontSize: 12, color: '#5b6573', padding: '10px 18px 4px', margin: 0 }}>Every write Nexus made to this campaign — immutable, oldest at the bottom. Drift repairs and accepted eBay-side changes appear here too.</p>
+            {activity == null ? (
+              <div style={{ padding: '24px 18px', fontSize: 13, color: '#8a93a1' }}>Loading…</div>
+            ) : activity.length === 0 ? (
+              <div style={{ padding: '28px 18px', textAlign: 'center', fontSize: 13, color: '#5b6573' }}>No Nexus writes yet — this campaign has only been synced (Seller Hub-managed or read-only so far).</div>
+            ) : activity.map((a) => {
+              const mode = String((a.payloadAfter as { _mode?: string } | null)?._mode ?? '')
+              return (
+                <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 18px', borderBottom: '1px solid #eef1f5', flexWrap: 'wrap', fontSize: 12.5 }}>
+                  <span style={{ color: '#8a93a1', minWidth: 128 }}>{new Date(a.createdAt).toLocaleString('en-GB')}</span>
+                  <span className="h10-pill arch">{a.actionType.replace(/_/g, ' ')}</span>
+                  {mode && <span className={`h10-pill ${mode === 'live' ? 'ok' : 'warn'}`}>{mode}</span>}
+                  <span className={`h10-pill ${a.channelResponseStatus === 'SUCCESS' ? 'ok' : 'warn'}`}>{a.channelResponseStatus.toLowerCase()}</span>
+                  <span style={{ color: '#283441' }}>{actionSummary(a)}</span>
+                </div>
+              )
+            })}
           </div>
         )}
 

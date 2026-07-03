@@ -5,18 +5,13 @@
  * autopilot did, what awaits approval (deep-link), anomalies, data health.
  * Data + renderer split: this renders EbayAdsDigest.payload; delivery
  * channels (email/WhatsApp) can plug into the same payload later.
+ * E7 consistency pass: pure h10 idiom (no design-system imports) like every
+ * other page in the ads console.
  */
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { Button } from '@/design-system/primitives/Button'
-import { Banner } from '@/design-system/components/Banner'
-import { EmptyState } from '@/design-system/components/EmptyState'
-import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { getBackendUrl } from '@/lib/backend-url'
-import '@/design-system/styles/tokens.css'
-import '@/design-system/styles/primitives.css'
-import '@/design-system/styles/components.css'
 import '../ebay.css'
 import { postEbayAds, eurC, pctP, intlN } from '../_shared'
 
@@ -30,6 +25,15 @@ interface DigestPayload {
   anomalies: Array<{ type: string; severity: string; message: string }>
   economics: Record<string, number>
   generatedAt: string
+}
+
+function EmptyNote({ title, description }: { title: string; description?: string }) {
+  return (
+    <div style={{ padding: '20px 8px', textAlign: 'center' }}>
+      <p style={{ fontSize: 13, fontWeight: 600, color: '#475467', margin: 0 }}>{title}</p>
+      {description && <p style={{ fontSize: 12, color: '#8a93a1', margin: '4px 0 0' }}>{description}</p>}
+    </div>
+  )
 }
 
 export function EbayDigestClient() {
@@ -62,16 +66,23 @@ export function EbayDigestClient() {
   const delta = (cur: number, prev: number) => (prev > 0 ? ` (${cur >= prev ? '+' : ''}${(((cur - prev) / prev) * 100).toFixed(0)}% vs prior wk)` : '')
 
   return (
-    <div className="eb-page">
+    <div className="eb-page h10-am">
       <AdsPageHeader title="eBay Weekly Digest" subtitle="The one weekly review: money, movers, what autopilot did, what needs your decision." markets={['EBAY_IT']} market="EBAY_IT" onMarketChange={() => {}} />
       <div className="eb-controls">
-        <Button variant="ghost" onClick={generate} disabled={busy}>{busy ? 'Generating…' : 'Generate now'}</Button>
-        {digest && !digest.reviewedAt && <Button onClick={markReviewed} disabled={busy}>Mark week reviewed ✓</Button>}
+        <button type="button" className="h10-am-btn" onClick={() => void generate()} disabled={busy}>{busy ? 'Generating…' : 'Generate now'}</button>
+        {digest && !digest.reviewedAt && <button type="button" className="h10-am-btn primary" onClick={() => void markReviewed()} disabled={busy}>Mark week reviewed ✓</button>}
         {digest?.reviewedAt && <span className="eb-chip eb-chip--run">reviewed {new Date(digest.reviewedAt).toLocaleDateString('en-GB')}</span>}
       </div>
-      {error && <Banner tone="danger" title="Digest error">{error}</Banner>}
-      {loading ? <Skeleton height={420} /> : !p ? (
-        <EmptyState title="No digest yet" description="Digests generate every Monday morning (Rome) — or press Generate now." action={<Button onClick={generate}>Generate now</Button>} />
+      {error && <div className="h10-am-latest" role="alert"><b>Digest error:</b> {error}</div>}
+      {loading ? (
+        <div className="eb-panel" aria-busy="true"><EmptyNote title="Loading digest…" /></div>
+      ) : !p ? (
+        <div className="eb-panel">
+          <EmptyNote title="No digest yet" description="Digests generate every Monday morning (Rome) — or press Generate now." />
+          <div style={{ textAlign: 'center', paddingBottom: 16 }}>
+            <button type="button" className="h10-am-btn primary" onClick={() => void generate()} disabled={busy}>Generate now</button>
+          </div>
+        </div>
       ) : (
         <>
           <section className="eb-panel eb-panel--head">
@@ -87,14 +98,15 @@ export function EbayDigestClient() {
           </section>
 
           {p.anomalies.length > 0 && (
-            <Banner tone="warning" title={`${p.anomalies.length} anomal${p.anomalies.length === 1 ? 'y' : 'ies'} this week`}>
+            <section className="eb-panel" style={{ borderColor: '#f0d9a8', background: '#fdf6e3' }}>
+              <header className="eb-panel-head"><h3 style={{ color: '#7a5b00' }}>{p.anomalies.length} anomal{p.anomalies.length === 1 ? 'y' : 'ies'} this week</h3></header>
               <ul className="eb-results">{p.anomalies.map((a, i) => <li key={i} className={a.severity === 'CRITICAL' ? 'err' : 'warn'}>{a.message}</li>)}</ul>
-            </Banner>
+            </section>
           )}
 
           <section className="eb-panel">
             <header className="eb-panel-head"><h3>Campaign movers</h3></header>
-            {p.movers.length === 0 ? <EmptyState title="No campaign activity this week" /> : (
+            {p.movers.length === 0 ? <EmptyNote title="No campaign activity this week" /> : (
               <ul className="eb-results">
                 {p.movers.map((m, i) => (
                   <li key={i} className="ok"><b>{m.campaign}</b> — {eurC(m.feesCents)} fees · {eurC(m.salesCents)} sales · {m.sold} sold</li>
@@ -105,7 +117,7 @@ export function EbayDigestClient() {
 
           <section className="eb-panel">
             <header className="eb-panel-head"><h3>What autopilot did ({p.autopilotApplied.length})</h3></header>
-            {p.autopilotApplied.length === 0 ? <EmptyState title="No autopilot actions" description="Rules in AUTOPILOT mode (with the global dial on AUTO) apply within guardrails and report here." /> : (
+            {p.autopilotApplied.length === 0 ? <EmptyNote title="No autopilot actions" description="Rules in AUTOPILOT mode (with the global dial on AUTO) apply within guardrails and report here." /> : (
               <ul className="eb-results">{p.autopilotApplied.map((a, i) => <li key={i} className="ok">{a.kind.replace(/_/g, ' ')} · {a.entityRef.campaignName} · {a.entityRef.listingId ?? a.entityRef.keywordText ?? ''} — {a.result?.detail ?? ''}</li>)}</ul>
             )}
           </section>
@@ -115,15 +127,15 @@ export function EbayDigestClient() {
               <h3>Awaiting your decision ({p.pendingProposals.length})</h3>
               <Link href="/marketing/ads/ebay/automation" className="eb-linkbtn">Open approval queue →</Link>
             </header>
-            {p.pendingProposals.length === 0 ? <EmptyState title="Queue is clear" /> : (
+            {p.pendingProposals.length === 0 ? <EmptyNote title="Queue is clear" /> : (
               <ul className="eb-results">{p.pendingProposals.slice(0, 10).map((pr) => <li key={pr.id} className="warn">{pr.kind.replace(/_/g, ' ')} · {pr.entityRef.campaignName} · {pr.entityRef.listingId ?? pr.entityRef.keywordText ?? ''}</li>)}</ul>
             )}
           </section>
 
           {(p.economics.MISSING_COGS ?? 0) > 0 && (
-            <Banner tone="warning" title={`${p.economics.MISSING_COGS} listing(s) still lack cost data`}>
-              Break-even guardrails and net-margin reporting stay partial until product costs land — those listings remain manual-only for automation.
-            </Banner>
+            <div className="eb-sandbox">
+              <b>{p.economics.MISSING_COGS} listing(s) still lack cost data</b> — break-even guardrails and net-margin reporting stay partial until product costs land; those listings remain manual-only for automation.
+            </div>
           )}
         </>
       )}

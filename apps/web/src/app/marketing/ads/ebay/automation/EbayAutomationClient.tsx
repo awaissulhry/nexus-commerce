@@ -17,6 +17,7 @@ import { postEbayAds, eurC, useWriteMode, SandboxBanner } from '../_shared'
 interface RuleRow { id: string; name: string; enabled: boolean; mode: string; marketplace: string | null; cooldownHours: number; lastEvaluatedAt: string | null; executions: Array<{ status: string; evaluated: number; matched: number; proposed: number; applied: number; createdAt: string }> }
 interface ProposalRow { id: string; kind: string; status: string; entityRef: { campaignName?: string; listingId?: string; keywordText?: string; marketplace?: string }; proposedAction: { from?: unknown; to?: unknown }; reasoning?: { clampNote?: string | null } | null; createdAt: string }
 interface StatePayload { state: { globalMode: string; halted: boolean; haltReason: string | null }; ceilings: Array<{ marketplace: string; mtdCents: number; capCents: number; pct: number }> }
+interface DriftRow { campaignId: string; externalCampaignId: string; campaignName: string; marketplace: string; kind: 'ad_rate' | 'budget' | 'ad_removed'; listingId: string | null; nexusValue: number; ebayValue: number | null; setAt: string; sourceAction: string }
 
 const fetchJson = async <T,>(path: string): Promise<T> => {
   const r = await fetch(`${getBackendUrl()}/api/ebay-ads${path}`, { credentials: 'include' })
@@ -28,6 +29,7 @@ const TABS = [
   { key: 'rules', label: 'Rules' },
   { key: 'approvals', label: 'Approvals' },
   { key: 'applied', label: 'Applied' },
+  { key: 'drift', label: 'Drift' },
 ]
 
 export function EbayAutomationClient() {
@@ -37,6 +39,7 @@ export function EbayAutomationClient() {
   const [rules, setRules] = useState<RuleRow[]>([])
   const [proposals, setProposals] = useState<ProposalRow[]>([])
   const [applied, setApplied] = useState<ProposalRow[]>([])
+  const [drifts, setDrifts] = useState<DriftRow[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -44,13 +47,14 @@ export function EbayAutomationClient() {
 
   const reload = useCallback(async () => {
     try {
-      const [s, r, p, a] = await Promise.all([
+      const [s, r, p, a, d] = await Promise.all([
         fetchJson<StatePayload>('/automation/state'),
         fetchJson<{ rules: RuleRow[] }>('/automation/rules'),
         fetchJson<{ proposals: ProposalRow[] }>('/automation/proposals?status=PENDING'),
         fetchJson<{ proposals: ProposalRow[] }>('/automation/proposals?status=APPLIED'),
+        fetchJson<{ drifts: DriftRow[] }>('/reconciliation'),
       ])
-      setState(s); setRules(r.rules); setProposals(p.proposals); setApplied(a.proposals.slice(0, 30))
+      setState(s); setRules(r.rules); setProposals(p.proposals); setApplied(a.proposals.slice(0, 30)); setDrifts(d.drifts)
       const cap = s.ceilings.find((c) => c.marketplace === 'EBAY_IT')
       if (cap) setCapInput(String(Math.round(cap.capCents / 100)))
     } catch (e) { setToast((e as Error).message) }
@@ -112,7 +116,7 @@ export function EbayAutomationClient() {
       <nav className="h10-cd-tabs h10-rules-tabs" role="tablist">
         {TABS.map((t) => (
           <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={`h10-cd-tab ${tab === t.key ? 'on' : ''}`} onClick={() => setTab(t.key)}>
-            {t.label}{t.key === 'approvals' && proposals.length > 0 && <span className="h10-cd-new">{proposals.length}</span>}
+            {t.label}{t.key === 'approvals' && proposals.length > 0 && <span className="h10-cd-new">{proposals.length}</span>}{t.key === 'drift' && drifts.length > 0 && <span className="h10-cd-new">{drifts.length}</span>}
           </button>
         ))}
       </nav>
@@ -187,6 +191,29 @@ export function EbayAutomationClient() {
               <span>{String(p.proposedAction.from ?? '')} → <b>{String(p.proposedAction.to ?? '')}</b></span>
               <span className="grow" style={{ flex: 1 }} />
               <button type="button" className="h10-am-btn sm" disabled={busy} onClick={() => void act(() => postEbayAds(`/automation/proposals/${p.id}/rollback`, {}), 'rolled back')}>Rollback</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === 'drift' && (
+        <div className="h10-am-card" style={{ padding: '6px 0' }}>
+          <p style={{ fontSize: 12, color: '#5b6573', padding: '10px 18px 4px', margin: 0 }}>
+            Values eBay changed under us — "easy boost" rate overwrites, Seller Hub edits, removed ads — vs what Nexus last set (from the audit trail). <b>Re-apply</b> pushes the Nexus value back through the guarded write layer; <b>Accept</b> makes eBay's value the new baseline (audited).
+          </p>
+          {drifts.length === 0 ? (
+            <div style={{ padding: '28px 18px', textAlign: 'center', fontSize: 13, color: '#5b6573' }}>No drift — everything on eBay matches what Nexus last set.</div>
+          ) : drifts.map((d) => (
+            <div key={`${d.campaignId}-${d.kind}-${d.listingId ?? 'campaign'}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', borderBottom: '1px solid #eef1f5', flexWrap: 'wrap', fontSize: 12.5 }}>
+              <span className={`h10-pill ${d.kind === 'ad_removed' ? 'warn' : 'arch'}`}>{d.kind.replace(/_/g, ' ')}</span>
+              <span style={{ fontWeight: 600 }}>{d.campaignName}</span>
+              <span style={{ color: '#8a93a1' }}>{d.listingId ?? ''}</span>
+              <span>
+                Nexus set <b>{d.kind === 'budget' ? eurC(d.nexusValue) : `${d.nexusValue}%`}</b> ({new Date(d.setAt).toLocaleDateString('en-GB')}) · eBay now <b>{d.ebayValue == null ? 'removed' : d.kind === 'budget' ? eurC(d.ebayValue) : `${d.ebayValue}%`}</b>
+              </span>
+              <span className="grow" style={{ flex: 1 }} />
+              <button type="button" className="h10-am-btn sm primary" disabled={busy} onClick={() => void act(() => postEbayAds('/reconciliation/repair', { campaignId: d.campaignId, kind: d.kind, listingId: d.listingId, action: 'reapply' }), 'Nexus value re-applied')}>Re-apply</button>
+              <button type="button" className="h10-am-btn sm" disabled={busy} onClick={() => void act(() => postEbayAds('/reconciliation/repair', { campaignId: d.campaignId, kind: d.kind, listingId: d.listingId, action: 'accept' }), 'eBay value accepted')}>Accept</button>
             </div>
           ))}
         </div>

@@ -697,6 +697,8 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
         forecastMonthlyFeeCents: listings.reduce((a, l) => a + (l.forecastMonthlyFeeCents ?? 0), 0),
         trailingSales30dCents: listings.reduce((a, l) => a + l.trailingSales30dCents, 0),
       },
+      // E7 #17 sprawl cap — builder shows an advisory past 25 active campaigns
+      activeCampaigns: await prisma.ebayCampaign.count({ where: { marketplace, status: 'RUNNING', NOT: { externalCampaignId: { startsWith: 'sandbox-' } } } }),
     }
   })
 
@@ -800,14 +802,25 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
-  // Audit trail for the console's activity panel
-  app.get<{ Querystring: { limit?: string } }>('/ebay-ads/actions', async (req) => {
+  // Audit trail for the console's activity panels (immutable event log —
+  // pass entityId=<externalCampaignId> for one campaign's history)
+  app.get<{ Querystring: { limit?: string; entityId?: string } }>('/ebay-ads/actions', async (req) => {
     const actions = await prisma.campaignAction.findMany({
-      where: { channel: 'EBAY' },
+      where: { channel: 'EBAY', ...(req.query.entityId ? { entityId: req.query.entityId } : {}) },
       orderBy: { createdAt: 'desc' },
       take: Math.min(Number(req.query.limit ?? 50), 200),
     })
     return { actions }
+  })
+
+  // ── E7 #25 — reconciliation (Nexus intent vs eBay live state) ──────────
+  app.get('/ebay-ads/reconciliation', async () => {
+    const auto = await import('../services/marketing/ebay-ads-automation.service.js')
+    return { drifts: await auto.detectDrift(), freshness: await freshness() }
+  })
+  app.post<{ Body: { campaignId: string; kind: string; listingId?: string | null; action: 'reapply' | 'accept' } }>('/ebay-ads/reconciliation/repair', async (req) => {
+    const auto = await import('../services/marketing/ebay-ads-automation.service.js')
+    return { ok: true, detail: await auto.repairDrift((req as { authUser?: { id?: string } }).authUser?.id ?? null, req.body) }
   })
 }
 

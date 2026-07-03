@@ -393,7 +393,8 @@ export async function promoteListings(ctx: OpContext, input: PromoteInput): Prom
   await audit({
     ctx, actionType: 'bulk_create_ads', entityType: 'CAMPAIGN', entityId: c.externalCampaignId,
     before: { existingAds: existing.size },
-    after: { requested: input.items.length, created: toCreate.length, results: results.slice(0, 100) },
+    // rates map = the reconciliation baseline (E7 #25 drift detection)
+    after: { requested: input.items.length, created: toCreate.length, rates: Object.fromEntries(toCreate.map((i) => [i.listingId, i.ratePct])), results: results.slice(0, 100) },
     mode: decision.mode, status: okCount === results.length ? 'SUCCESS' : okCount > 0 ? 'PARTIAL' : 'FAILED',
   })
   return { mode: decision.mode, results }

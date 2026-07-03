@@ -33,6 +33,7 @@ interface Prefill {
   totals: { listings: number; conflicts: number; missingCost: number; forecastMonthlyFeeCents: number; trailingSales30dCents: number }
   keywordSeeds?: Array<{ text: string; source: string; matchType: string; bidCents: number }>
   budget?: { suggestedCents: number; formula: string } | null
+  activeCampaigns?: number
 }
 interface Seed { text: string; source: string; matchType: 'PHRASE' | 'EXACT' | 'BROAD'; bidEur: string; on: boolean }
 interface LaunchOut { ok: boolean; mode: string; campaignId: string; rulePacksBound: string[]; timeline: string[]; promoteResults: Array<{ key: string; ok: boolean; blocked?: string | null; error?: string | null; warning?: string | null }>; keywordResults?: Array<{ key: string; ok: boolean; blocked?: string | null; error?: string | null }> }
@@ -111,6 +112,7 @@ export function EbayCampaignBuilder() {
     const overBe = included.filter((l) => { const r = effRate(l); return l.breakEvenPct != null && r != null && r > l.breakEvenPct })
     if (overBe.length) advisory.push({ key: 'over-be', text: `${overBe.length} listing(s) priced ABOVE break-even — every attributed sale loses margin (needs an override reason at launch)` })
     if (plan.totals.missingCost > 0) advisory.push({ key: 'missing-cost', text: `${plan.totals.missingCost} listing(s) have no cost data — rates fall back to the goal default, margin unverified` })
+    if ((plan.activeCampaigns ?? 0) >= 25) advisory.push({ key: 'sprawl', text: `${plan.activeCampaigns} campaigns already running on this market — more campaigns rarely help; consider consolidating or ending stale ones first` })
     if (isCps && forecast > 0) advisory.push({ key: 'forecast', text: `Projected ≈ ${eur(forecast / 100)}/month in ad fees at current trailing sales (any-click attribution)` })
   }
   const unacked = advisory.filter((a) => a.key !== 'forecast' && !ack.has(a.key))
