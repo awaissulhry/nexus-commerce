@@ -16,7 +16,7 @@ import { getEbayAds, postEbayAds } from '../../_lib'
 import {
   type AutomationRule, type RuleCondition, type RuleTrigger, type RuleActionDef, type RuleTemplate,
   METRIC_LABELS, OP_LABELS, BENCH_LABELS, ACTIONS_FOR_SCOPE, ACTION_LABELS, CENTS_METRICS, PCT_METRICS,
-  type RuleMetric, type RuleOp, type RuleBenchmark, conditionSentence, actionSentence,
+  type RuleMetric, type RuleOp, type RuleBenchmark, conditionSentence, actionSentence, conditionValueLabel,
 } from '../_lib/rules'
 
 interface CampaignLite { id: string; name: string; marketplace: string; fundingModel: string; status: string }
@@ -96,8 +96,7 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
   const suggestedName = useMemo(() => {
     const c0 = trigger.all[0]
     if (!c0) return ''
-    const val = c0.benchmark ? `${(c0.multiplier ?? 1) === 1 ? '' : `${c0.multiplier}× `}${BENCH_LABELS[c0.benchmark]}` : ''
-    return `${ACTION_LABELS[action.type]} — ${METRIC_LABELS[c0.metric]} ${OP_LABELS[c0.op]} ${val || ''} (${c0.windowDays}d)`.replace('  ', ' ')
+    return `${ACTION_LABELS[action.type]} — ${METRIC_LABELS[c0.metric]} ${OP_LABELS[c0.op]} ${conditionValueLabel(c0)} (${c0.windowDays}d)`
   }, [trigger, action])
 
   const eligibleCampaigns = useMemo(() => {
