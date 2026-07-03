@@ -74,3 +74,7 @@
 .eb-textarea:focus { outline: none; border-color: #60a5fa; }
 .eb-rules { display: flex; flex-direction: column; gap: 8px; }
 .eb-rule { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; background: rgba(148,163,184,0.06); flex-wrap: wrap; }
+
+/* E6.1 — input shim for inline grid edits (matches h10 field styling) */
+.h10-cd-input { background: #fff; border: 1px solid #d8dde4; border-radius: 6px; padding: 4px 8px; font-size: 12.5px; color: #1c2530; }
+.h10-cd-input:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 2px rgba(31,111,222,.12); }

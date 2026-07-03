@@ -1,144 +1,155 @@
 'use client'
 
 /**
- * E3 — product-first rollup: each Nexus product with EVERY live eBay item ID
- * behind it (the resolver's union), aggregated window performance, and cost
- * readiness. Unmatched listings (legacy, no SKUs) surface in their own panel
- * so nothing is silently invisible — matching actions land in E4.
+ * E6.1 — Products, rebuilt on the console idiom: ONE AdsDataGrid of live
+ * LISTINGS grouped by resolved product (group bands = product name + count;
+ * "Unmatched listings" band last, nothing hidden). Rows carry price/qty/
+ * break-even/promoted-state pills + full window metrics with totals.
+ * Per-row hover action = Promote; selection → bulk Promote.
  */
 import { useMemo, useState } from 'react'
-import { ExternalLink, Megaphone } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Megaphone, ExternalLink } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { Button } from '@/design-system/primitives/Button'
-import { PromoteModal } from '../_write-modals'
-import { DataGrid, type Column } from '@/design-system/components/DataGrid'
-import { Banner } from '@/design-system/components/Banner'
-import { EmptyState } from '@/design-system/components/EmptyState'
-import { Skeleton } from '@/design-system/primitives/Skeleton'
-import { Select } from '@/design-system/primitives/Select'
-import '@/design-system/styles/tokens.css'
-import '@/design-system/styles/primitives.css'
-import '@/design-system/styles/components.css'
+import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
+import { eur, int, pct, latestReportLabel } from '../../campaigns/_grid/format'
 import '../ebay.css'
 import {
-  useEbayAdsFetch, EBAY_MARKETS, PRESETS, eurC, pctP, intlN,
-  FreshnessLine, BreakEvenCell, type ProductsPayload, type ProductListingRow,
+  useEbayAdsFetch, EBAY_MARKETS, PRESETS, useWriteMode, SandboxBanner,
+  type ProductsPayload, type ProductListingRow,
 } from '../_shared'
+import { PromoteModal } from '../_write-modals'
 
-type ProductRow = ProductsPayload['products'][number]
+interface Row extends ProductListingRow {
+  groupKey: string
+  groupLabel: string
+  productSku: string | null
+  hasCost: boolean
+}
 
 export function EbayProductsRollup() {
+  const router = useRouter()
   const [market, setMarket] = useState('all')
   const [preset, setPreset] = useState('last30')
-  const { data, error, loading, reload } = useEbayAdsFetch<ProductsPayload>('/products', market, preset)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [selectedUnmatched, setSelectedUnmatched] = useState<Set<string>>(new Set())
-  const [promoteOpen, setPromoteOpen] = useState(false)
+  const [promote, setPromote] = useState<{ listingIds: string[] } | null>(null)
+  const writeMode = useWriteMode()
+  const { data, error, loading, reload } = useEbayAdsFetch<ProductsPayload>('/products', market, preset)
 
-  const productColumns: Column<ProductRow>[] = useMemo(() => [
-    {
-      key: 'product', label: 'Product', sticky: true, width: 300, sortable: true, sortValue: (p) => p.sku ?? '',
-      render: (p) => (
-        <div className="eb-cell-name">
-          <span className="nm">{p.name ?? p.sku ?? p.productId}</span>
-          <span className="sub">{p.sku ?? '—'}{!p.hasCost && <span className="eb-chip eb-chip--warn" title="No cost on file — break-even unavailable; manual-only for automations">add cost</span>}</span>
-        </div>
-      ),
-    },
-    {
-      key: 'listings', label: 'Live listings', width: 210,
-      render: (p) => (
-        <span className="eb-itemids">
-          {p.listings.map((l) => (
-            <a key={l.itemId} href={`https://www.ebay.it/itm/${l.itemId}`} target="_blank" rel="noopener noreferrer" className="eb-chip eb-chip--item" title={`${l.title ?? l.itemId} · ${l.marketplace} · ${l.priceCents != null ? eurC(l.priceCents) : ''}`}>
-              {l.itemId.slice(-6)} <ExternalLink size={10} aria-hidden />
-            </a>
-          ))}
-        </span>
-      ),
-    },
-    { key: 'breakEven', label: 'Break-even', align: 'right', width: 100, render: (p) => { const l = p.listings.find((x) => x.breakEvenAdRatePct != null) ?? p.listings[0]; return l ? <BreakEvenCell pct={l.breakEvenAdRatePct} status={l.economicsStatus} /> : <span>—</span> } },
-    { key: 'impr', label: 'Impr.', align: 'right', width: 90, sortable: true, sortValue: (p) => p.metrics.impressions, render: (p) => intlN(p.metrics.impressions) },
-    { key: 'clicks', label: 'Clicks', align: 'right', width: 80, sortable: true, sortValue: (p) => p.metrics.clicks, render: (p) => intlN(p.metrics.clicks) },
-    { key: 'ctr', label: 'CTR', align: 'right', width: 80, render: (p) => pctP(p.metrics.ctrPct, 2) },
-    { key: 'fees', label: 'Ad fees', align: 'right', width: 100, sortable: true, sortValue: (p) => p.metrics.adFeesCents, render: (p) => eurC(p.metrics.adFeesCents) },
-    { key: 'sales', label: 'Ad sales', align: 'right', width: 105, sortable: true, sortValue: (p) => p.metrics.salesCents, render: (p) => eurC(p.metrics.salesCents) },
-    { key: 'acos', label: 'eBay ACOS', align: 'right', width: 100, sortable: true, sortValue: (p) => p.metrics.acosPct ?? -1, render: (p) => pctP(p.metrics.acosPct) },
-    { key: 'sold', label: 'Sold', align: 'right', width: 70, sortable: true, sortValue: (p) => p.metrics.soldQty, render: (p) => intlN(p.metrics.soldQty) },
-  ], [])
+  const rows: Row[] = useMemo(() => {
+    if (!data) return []
+    const out: Row[] = []
+    for (const p of data.products) {
+      for (const l of p.listings) {
+        out.push({ ...l, groupKey: p.productId, groupLabel: p.name ?? p.sku ?? p.productId, productSku: p.sku, hasCost: p.hasCost })
+      }
+    }
+    for (const l of data.unmatchedListings) {
+      out.push({ ...l, groupKey: '~unmatched', groupLabel: 'Unmatched listings (no SKU on eBay — real spend still counted)', productSku: null, hasCost: false })
+    }
+    return out
+  }, [data])
 
-  const unmatchedColumns: Column<ProductListingRow>[] = useMemo(() => [
+  const columns: GridColumn<Row>[] = useMemo(() => [
     {
-      key: 'listing', label: 'Listing', sticky: true, width: 340, sortable: true, sortValue: (l) => l.title ?? l.itemId,
-      render: (l) => (
-        <div className="eb-cell-name">
-          <span className="nm">{l.title ?? l.itemId}</span>
-          <span className="sub">
-            <a href={`https://www.ebay.it/itm/${l.itemId}`} target="_blank" rel="noopener noreferrer" className="eb-extlink">{l.itemId} <ExternalLink size={11} aria-hidden /></a>
-            {' '}· {l.marketplace}{l.priceCents != null && <> · {eurC(l.priceCents)}</>}{l.quantity != null && <> · qty {l.quantity}</>}
-          </span>
-        </div>
-      ),
+      key: 'state', label: 'State', metric: false, sortValue: (r) => r.matchStatus,
+      render: (r) => r.matchStatus === 'MATCHED' || r.matchStatus === 'CONFIRMED'
+        ? <span className="h10-pill ok">Matched</span>
+        : <span className="h10-pill warn" title="No SKU on the eBay listing — match actions land with the match queue">Unmatched</span>,
     },
-    { key: 'impr', label: 'Impr.', align: 'right', width: 90, sortable: true, sortValue: (l) => l.metrics.impressions, render: (l) => intlN(l.metrics.impressions) },
-    { key: 'clicks', label: 'Clicks', align: 'right', width: 80, sortable: true, sortValue: (l) => l.metrics.clicks, render: (l) => intlN(l.metrics.clicks) },
-    { key: 'fees', label: 'Ad fees', align: 'right', width: 100, sortable: true, sortValue: (l) => l.metrics.adFeesCents, render: (l) => eurC(l.metrics.adFeesCents) },
-    { key: 'sales', label: 'Ad sales', align: 'right', width: 105, render: (l) => eurC(l.metrics.salesCents) },
-    { key: 'match', label: 'Match', width: 110, render: () => <span className="eb-chip eb-chip--warn" title="No SKU on the eBay listing — product matching lands with the E4 match queue">unmatched</span> },
+    { key: 'price', label: 'Price', render: (r) => (r.priceCents != null ? eur(r.priceCents / 100) : '—'), sortValue: (r) => r.priceCents ?? -1, filterValue: (r) => (r.priceCents ?? 0) / 100 },
+    { key: 'qty', label: 'Qty', render: (r) => (r.quantity != null ? int(r.quantity) : '—'), sortValue: (r) => r.quantity ?? -1 },
+    {
+      key: 'breakeven', label: 'Break-even', tip: 'Max profitable General ad rate = contribution margin ÷ total sale amount. "Add cost" = no product cost on file yet (manual-only for automations).',
+      render: (r) => r.breakEvenAdRatePct != null
+        ? <span>{pct(r.breakEvenAdRatePct / 100)}</span>
+        : r.economicsStatus === 'MISSING_PRICE' ? <span className="h10-pill arch">no price</span> : <span className="h10-pill warn">add cost</span>,
+      sortValue: (r) => r.breakEvenAdRatePct ?? -1,
+    },
+    { key: 'impressions', label: 'Impressions', render: (r) => int(r.metrics.impressions), sortValue: (r) => r.metrics.impressions, filterValue: (r) => r.metrics.impressions, total: int(rows.reduce((a, r) => a + r.metrics.impressions, 0)) },
+    { key: 'clicks', label: 'Clicks', render: (r) => int(r.metrics.clicks), sortValue: (r) => r.metrics.clicks, filterValue: (r) => r.metrics.clicks, total: int(rows.reduce((a, r) => a + r.metrics.clicks, 0)) },
+    { key: 'ctr', label: 'CTR', render: (r) => (r.metrics.ctrPct != null ? pct(r.metrics.ctrPct / 100) : '—'), sortValue: (r) => r.metrics.ctrPct ?? -1 },
+    { key: 'spend', label: 'Ad Fees', render: (r) => eur(r.metrics.adFeesCents / 100), sortValue: (r) => r.metrics.adFeesCents, filterValue: (r) => r.metrics.adFeesCents / 100, total: eur(rows.reduce((a, r) => a + r.metrics.adFeesCents, 0) / 100) },
+    { key: 'sales', label: 'Ad Sales', tip: 'Any-click attributed sales.', render: (r) => eur(r.metrics.salesCents / 100), sortValue: (r) => r.metrics.salesCents, filterValue: (r) => r.metrics.salesCents / 100, total: eur(rows.reduce((a, r) => a + r.metrics.salesCents, 0) / 100) },
+    {
+      key: 'acos', label: 'eBay ACOS', render: (r) => (r.metrics.acosPct != null ? pct(r.metrics.acosPct / 100) : '—'), sortValue: (r) => r.metrics.acosPct ?? -1,
+      total: (() => { const f = rows.reduce((a, r) => a + r.metrics.adFeesCents, 0); const s = rows.reduce((a, r) => a + r.metrics.salesCents, 0); return s > 0 ? pct(f / s) : '—' })(),
+    },
+    { key: 'sold', label: 'Sold', render: (r) => int(r.metrics.soldQty), sortValue: (r) => r.metrics.soldQty, total: int(rows.reduce((a, r) => a + r.metrics.soldQty, 0)) },
+  ], [rows])
+
+  const filters: GridFilter[] = useMemo(() => [
+    { key: 'state', label: 'Match state', kind: 'select', options: [{ value: 'MATCHED', label: 'Matched' }, { value: 'UNMATCHED', label: 'Unmatched' }], placeholder: 'All', value: (r) => ((r as Row).matchStatus === 'MATCHED' || (r as Row).matchStatus === 'CONFIRMED' ? 'MATCHED' : 'UNMATCHED') },
+    { key: 'spend', label: 'Ad Fees', kind: 'range', unit: '€' },
+    { key: 'price', label: 'Price', kind: 'range', unit: '€' },
+    { key: 'impressions', label: 'Impressions', kind: 'range' },
+    { key: 'clicks', label: 'Clicks', kind: 'range' },
   ], [])
 
   return (
-    <div className="eb-page">
+    <div className="h10-am">
       <AdsPageHeader
         title="eBay Products"
-        subtitle="Product-first view: every live eBay item ID behind each product, with aggregated ad performance."
-        markets={EBAY_MARKETS.map((m) => m.id)}
+        subtitle="Product-first: every live eBay listing, grouped by the product behind it — promote a product and all its item IDs come along."
+        markets={EBAY_MARKETS.map((x) => x.id)}
         market={market}
         onMarketChange={setMarket}
+        showLearn={false} showDataSync={false} showDateRange={false}
       />
+      <SandboxBanner mode={writeMode} />
+      {error && <div className="h10-am-latest" role="alert"><b>Load failed:</b> {error} · <button className="h10-am-link" onClick={reload}>Retry</button></div>}
 
-      <div className="eb-controls">
-        <Select value={preset} onChange={(e) => setPreset(e.target.value)} aria-label="Date range">
-          {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-        </Select>
-        <Button onClick={() => setPromoteOpen(true)} disabled={selected.size === 0 && selectedUnmatched.size === 0}>
-          <Megaphone size={14} aria-hidden /> Promote {selected.size + selectedUnmatched.size > 0 ? `(${selected.size + selectedUnmatched.size})` : ''}
-        </Button>
-        <FreshnessLine f={data?.freshness} />
-      </div>
+      <AdsDataGrid<Row>
+        rows={rows}
+        loading={loading}
+        rowId={(r) => r.itemId}
+        noun="Listing"
+        firstColLabel="Listing"
+        renderFirst={(r) => (
+          <div className="nmw">
+            <span className="t" title={r.title ?? r.itemId}>{r.title ?? r.itemId}</span>
+            <span className="mk">{r.itemId.slice(-6)}</span>
+            {r.productSku && <span className="mk" title={r.productSku}>{r.productSku.length > 14 ? `${r.productSku.slice(0, 13)}…` : r.productSku}</span>}
+            <a className="h10-open" href={`https://www.ebay.it/itm/${r.itemId}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Open</a>
+            <button type="button" className="h10-open" style={{ background: '#0a7d4d' }} onClick={(e) => { e.stopPropagation(); setPromote({ listingIds: [r.itemId] }) }}><Megaphone size={11} /> Promote</button>
+          </div>
+        )}
+        firstSortValue={(r) => (r.title ?? r.itemId).toLowerCase()}
+        columns={columns}
+        filters={filters}
+        filtersDefaultOpen={false}
+        searchable
+        searchPlaceholder="Search listings / SKUs…"
+        searchValue={(r) => `${r.title ?? ''} ${r.itemId} ${r.productSku ?? ''} ${r.groupLabel}`}
+        groupBy={(r) => ({ key: r.groupKey, label: r.groupLabel })}
+        showTotal
+        defaultSort={{ key: 'spend', dir: 'desc' }}
+        storageKey="h10-ebay-products-cols"
+        selected={selected}
+        onSelectedChange={setSelected}
+        selectionActions={(ids, clear) => (
+          <span className="h10-bulkrow">
+            <button type="button" className="h10-am-btn bulk" onClick={() => { setPromote({ listingIds: ids }); clear() }}><Megaphone size={13} /> Promote</button>
+          </span>
+        )}
+        reportLabel={latestReportLabel([data?.freshness.factsReportedAt ?? null])}
+        toolbarLeft={
+          <select className="h10-am-btn" value={preset} onChange={(e) => setPreset(e.target.value)} aria-label="Date range" style={{ paddingRight: 8 }}>
+            {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+          </select>
+        }
+        toolbarRight={
+          <button type="button" className="h10-am-btn primary" onClick={() => router.push('/marketing/ads/ebay/campaigns/new')}>New campaign</button>
+        }
+        emptyLabel="No live eBay listings indexed yet — discovery runs every 4 hours."
+      />
 
       <PromoteModal
-        open={promoteOpen}
-        onClose={() => setPromoteOpen(false)}
-        productIds={[...selected]}
-        listingIds={[...selectedUnmatched]}
+        open={promote != null}
+        onClose={() => setPromote(null)}
+        listingIds={promote?.listingIds ?? []}
         onDone={reload}
       />
-
-      {error && <Banner tone="danger" title="Couldn't load product rollups">{error} — <button className="eb-linkbtn" onClick={reload}>retry</button></Banner>}
-      {loading && <Skeleton height={420} />}
-
-      {data && !loading && (
-        <>
-          <section className="eb-panel">
-            <header className="eb-panel-head"><h3>Products with live eBay listings ({data.products.length})</h3><span className="eb-panel-note">Aggregates every mapped item ID per product · {data.window.since} → {data.window.until}</span></header>
-            {data.products.length === 0 ? (
-              <EmptyState title="No matched products yet" description="Listings match to products via their eBay SKUs and the shared-SKU map. Legacy listings without SKUs appear below until matched." />
-            ) : (
-              <DataGrid<ProductRow> columns={productColumns} rows={data.products} rowKey={(p) => p.productId} initialSort={{ key: 'fees', dir: 'desc' }} maxHeight={430} selectable selected={selected} onSelectedChange={setSelected} />
-            )}
-          </section>
-
-          <section className="eb-panel">
-            <header className="eb-panel-head"><h3>Unmatched live listings ({data.unmatchedListings.length})</h3><span className="eb-panel-note">Live on eBay but not yet linked to a product (legacy, no SKUs). They still show real ad performance — nothing is hidden.</span></header>
-            {data.unmatchedListings.length === 0 ? (
-              <EmptyState title="Everything is matched" description="All live eBay listings resolve to products." />
-            ) : (
-              <DataGrid<ProductListingRow> columns={unmatchedColumns} rows={data.unmatchedListings} rowKey={(l) => l.itemId} initialSort={{ key: 'impr', dir: 'desc' }} maxHeight={360} selectable selected={selectedUnmatched} onSelectedChange={setSelectedUnmatched} />
-            )}
-          </section>
-        </>
-      )}
     </div>
   )
 }

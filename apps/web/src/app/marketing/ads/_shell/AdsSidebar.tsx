@@ -65,10 +65,22 @@ export function AdsSidebar() {
         <span className="logo" aria-hidden>N</span>
         <span className="word"><span className="mk">Nexus</span> <b>Ads</b></span>
       </div>
-      {/* E4.1 — channel switch: same console, shift the channel, then pick the market on-page */}
+      {/* E4.1/E6.1 — channel switch (brand logos): same console, shift the channel, then pick the market on-page */}
       <div className="h10-channel" role="tablist" aria-label="Ad channel">
-        <button type="button" role="tab" aria-selected={!isEbay} className={`h10-channel-btn ${!isEbay ? 'on' : ''}`} onClick={() => switchChannel('amazon')}>Amazon</button>
-        <button type="button" role="tab" aria-selected={isEbay} className={`h10-channel-btn ${isEbay ? 'on' : ''}`} onClick={() => switchChannel('ebay')}>eBay</button>
+        <button type="button" role="tab" aria-selected={!isEbay} aria-label="Amazon ads" title="Amazon ads" className={`h10-channel-btn ${!isEbay ? 'on' : ''}`} onClick={() => switchChannel('amazon')}>
+          <svg viewBox="0 0 74 24" className="h10-channel-logo" aria-hidden focusable="false">
+            <text x="37" y="13" textAnchor="middle" fontSize="13.5" fontWeight="700" letterSpacing="-0.4" fill="currentColor" fontFamily="'Amazon Ember','Helvetica Neue',Arial,sans-serif">amazon</text>
+            <path d="M18 17.2c9.5 4.6 27.5 4.7 37.5-.3" fill="none" stroke="#FF9900" strokeWidth="2" strokeLinecap="round" />
+            <path d="M55.5 16.9l2.8-.9-1.5 2.6z" fill="#FF9900" />
+          </svg>
+        </button>
+        <button type="button" role="tab" aria-selected={isEbay} aria-label="eBay ads" title="eBay ads" className={`h10-channel-btn ${isEbay ? 'on' : ''}`} onClick={() => switchChannel('ebay')}>
+          <svg viewBox="0 0 52 24" className="h10-channel-logo" aria-hidden focusable="false">
+            <text x="26" y="16.5" textAnchor="middle" fontSize="15" fontWeight="700" letterSpacing="-0.6" fontFamily="'Helvetica Neue',Arial,sans-serif">
+              <tspan fill="#E53238">e</tspan><tspan fill="#0064D2">b</tspan><tspan fill="#F5AF02">a</tspan><tspan fill="#86B817">y</tspan>
+            </text>
+          </svg>
+        </button>
       </div>
       <nav className="h10-nav">
         {nav.map((it) => {

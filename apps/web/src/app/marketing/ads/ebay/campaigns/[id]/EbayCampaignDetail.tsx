@@ -1,257 +1,323 @@
 'use client'
 
 /**
- * E3 — campaign detail. General: ads with RATE-AT-AD-LEVEL truth +
- * break-even column + per-listing window performance. Priority: ad groups →
- * keywords (+ bids, locked note under DYNAMIC) + exact/phrase negatives.
- * Offsite: campaign-level only (eBay exposes no children).
+ * E6.1 — campaign detail, 1:1 with the Amazon detail idiom:
+ * CampaignDetailHeader (Action ▾: pause/resume/end/clone) + .h10-cd-tabs +
+ * AdsDataGrid tabs. Ads tab has INLINE ad-rate editing (hover pencil + bulk
+ * Edit toolbar → guardrail-checked setAdRates); keywords tab has bid edit +
+ * pause/enable bulk; Settings tab = .h10-cd-card summary (budget w/ 15-day
+ * meter, rate strategy, criterion, sandbox note).
  */
-import { useMemo, useState } from 'react'
-import Link from 'next/link'
-import { ArrowLeft, ExternalLink, Pause, Play, Square, CopyPlus, Euro, Plus, Trash2, Tag } from 'lucide-react'
-import { AdsPageHeader } from '../../../_shell/AdsPageHeader'
-import { Button } from '@/design-system/primitives/Button'
-import { postEbayAds, useWriteMode, SandboxBanner } from '../../_shared'
-import { PromoteModal, SetRatesModal, BudgetModal, AddKeywordsModal, AddNegativesModal, CloneModal } from '../../_write-modals'
-import { DataGrid, type Column } from '@/design-system/components/DataGrid'
-import { Banner } from '@/design-system/components/Banner'
-import { EmptyState } from '@/design-system/components/EmptyState'
-import { Skeleton } from '@/design-system/primitives/Skeleton'
-import { Select } from '@/design-system/primitives/Select'
-import '@/design-system/styles/tokens.css'
-import '@/design-system/styles/primitives.css'
-import '@/design-system/styles/components.css'
+import { useCallback, useMemo, useState } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
+import { ExternalLink, Plus } from 'lucide-react'
+import { CampaignDetailHeader } from '../../../_shell/CampaignDetailHeader'
+import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../../campaigns/_grid/AdsDataGrid'
+import { eur, int, pct, latestReportLabel } from '../../../campaigns/_grid/format'
 import '../../ebay.css'
 import {
-  useEbayAdsFetch, PRESETS, eurC, pctP, intlN, FreshnessLine,
-  StrategyChip, StatusChip, BreakEvenCell,
+  useEbayAdsFetch, postEbayAds, PRESETS, useWriteMode, SandboxBanner, EBAY_STATUS_PILL,
   type CampaignDetailPayload, type AdRow, type KeywordRow,
 } from '../../_shared'
+import { AddKeywordsModal, AddNegativesModal, CloneModal, PromoteModal, BudgetModal } from '../../_write-modals'
+
+const pill = (status: string) => {
+  const sp = EBAY_STATUS_PILL[status] ?? { label: status, cls: '' }
+  return <span className={`h10-pill ${sp.cls}`}>{sp.label}</span>
+}
 
 export function EbayCampaignDetail({ campaignId }: { campaignId: string }) {
+  const router = useRouter()
+  const search = useSearchParams()
   const [preset, setPreset] = useState('last30')
   const { data, error, loading, reload } = useEbayAdsFetch<CampaignDetailPayload>(`/campaigns/${campaignId}`, 'all', preset)
   const writeMode = useWriteMode()
-  const [selectedAds, setSelectedAds] = useState<Set<string>>(new Set())
-  const [modal, setModal] = useState<null | 'rates' | 'budget' | 'keywords' | 'negatives' | 'clone' | 'addListings'>(null)
-  const [actionMsg, setActionMsg] = useState<string | null>(null)
-  const [actionBusy, setActionBusy] = useState(false)
-
-  const lifecycle = async (action: 'pause' | 'resume' | 'end') => {
-    if (action === 'end' && !window.confirm('End this campaign? Ended campaigns cannot be resumed (clone instead).')) return
-    setActionBusy(true); setActionMsg(null)
-    try {
-      const out = await postEbayAds<{ status: string; mode: string }>(`/campaigns/${campaignId}/action`, { action })
-      setActionMsg(`${action} ✓ → ${out.status} (${out.mode})`)
-      reload()
-    } catch (e) { setActionMsg((e as Error).message) } finally { setActionBusy(false) }
-  }
-  const selectedListingIds = useMemo(
-    () => (data?.ads ?? []).filter((a) => selectedAds.has(a.id) && a.listingId).map((a) => a.listingId!),
-    [data, selectedAds],
-  )
-  const removeSelected = async () => {
-    if (!selectedListingIds.length || !window.confirm(`Remove ${selectedListingIds.length} ad(s) from this campaign?`)) return
-    setActionBusy(true); setActionMsg(null)
-    try {
-      await postEbayAds(`/campaigns/${campaignId}/ads/remove`, { listingIds: selectedListingIds })
-      setActionMsg(`removed ${selectedListingIds.length} ad(s)`)
-      setSelectedAds(new Set())
-      reload()
-    } catch (e) { setActionMsg((e as Error).message) } finally { setActionBusy(false) }
-  }
+  const [modal, setModal] = useState<null | 'keywords' | 'negatives' | 'clone' | 'addListings' | 'budget'>(null)
+  const [toast, setToast] = useState<string | null>(null)
 
   const c = data?.campaign
   const isOffsite = (c?.channels ?? []).includes('OFF_SITE')
   const isCps = c?.fundingModel === 'COST_PER_SALE'
-  const isSmart = c?.targetingType === 'SMART'
-  const dynamicBidding = c?.adRateStrategy === 'DYNAMIC'
+  const isManualCpc = !isCps && !isOffsite && c?.targetingType !== 'SMART'
 
-  const totals = useMemo(() => {
+  const TABS = useMemo(() => {
+    const t: Array<{ key: string; label: string }> = []
+    if (!isOffsite) t.push({ key: 'ads', label: `Ads${data ? ` (${data.ads.length})` : ''}` })
+    if (isManualCpc) {
+      t.push({ key: 'keywords', label: `Keywords${data ? ` (${data.keywords.length})` : ''}` })
+      t.push({ key: 'negatives', label: `Negative Keywords${data ? ` (${data.negativeKeywords.length})` : ''}` })
+    }
+    t.push({ key: 'settings', label: 'Settings' })
+    return t
+  }, [isOffsite, isManualCpc, data])
+  const tab = search.get('tab') ?? TABS[0]?.key ?? 'ads'
+  const setTab = (key: string) => {
+    const q = new URLSearchParams(search.toString())
+    if (key === TABS[0]?.key) q.delete('tab'); else q.set('tab', key)
+    router.replace(`/marketing/ads/ebay/campaigns/${campaignId}${q.size ? `?${q}` : ''}`, { scroll: false })
+  }
+
+  const lifecycle = useCallback(async (action: 'pause' | 'resume' | 'end') => {
+    if (action === 'end' && !window.confirm('End this campaign? Ended campaigns cannot be resumed (clone instead).')) return
+    try {
+      const out = await postEbayAds<{ status: string; mode: string }>(`/campaigns/${campaignId}/action`, { action })
+      setToast(`${action} ✓ → ${out.status} (${out.mode})`)
+      reload()
+    } catch (e) { setToast((e as Error).message) }
+  }, [campaignId, reload])
+
+  // ── Ads tab ────────────────────────────────────────────────────────────────
+  const adColumns: GridColumn<AdRow>[] = useMemo(() => {
     const ads = data?.ads ?? []
-    const t = ads.reduce(
-      (acc, a) => ({
-        impressions: acc.impressions + a.metrics.impressions,
-        clicks: acc.clicks + a.metrics.clicks,
-        adFeesCents: acc.adFeesCents + a.metrics.adFeesCents,
-        salesCents: acc.salesCents + a.metrics.salesCents,
-        soldQty: acc.soldQty + a.metrics.soldQty,
-      }),
-      { impressions: 0, clicks: 0, adFeesCents: 0, salesCents: 0, soldQty: 0 },
-    )
-    return { ...t, acosPct: t.salesCents > 0 ? (t.adFeesCents / t.salesCents) * 100 : null }
+    return [
+      {
+        key: 'status', label: 'State', metric: false, sortValue: (a) => a.status,
+        render: (a) => <span>{pill(a.status)}{a.listingEnded && <span className="h10-pill warn" style={{ marginLeft: 6 }} title="The listing behind this ad is no longer live">listing ended</span>}</span>,
+      },
+      {
+        key: 'rate', label: 'Ad Rate', metric: false, sortValue: (a) => a.bidPercentage ?? -1,
+        render: (a) => (
+          <span title={a.bidPercentage == null && c?.bidPercentage != null ? `Inherits campaign default ${c.bidPercentage}%` : 'Ad-level rate (authoritative)'}>
+            {a.bidPercentage != null ? `${a.bidPercentage}%` : c?.bidPercentage != null ? `(${c.bidPercentage}%)` : '—'}
+          </span>
+        ),
+      },
+      {
+        key: 'breakeven', label: 'Break-even', metric: false, sortValue: (a) => a.breakEvenAdRatePct ?? -1,
+        tip: 'Max profitable rate for this listing. Rates above it are blocked for automations and need a named override for operators.',
+        render: (a) => a.breakEvenAdRatePct != null ? <span>{pct(a.breakEvenAdRatePct / 100)}</span> : a.economicsStatus === 'MISSING_PRICE' ? <span className="h10-pill arch">no price</span> : <span className="h10-pill warn">add cost</span>,
+      },
+      { key: 'price', label: 'Price', render: (a) => (a.priceCents != null ? eur(a.priceCents / 100) : '—'), sortValue: (a) => a.priceCents ?? -1 },
+      { key: 'qty', label: 'Qty', render: (a) => (a.quantity != null ? int(a.quantity) : '—'), sortValue: (a) => a.quantity ?? -1 },
+      { key: 'impressions', label: 'Impressions', render: (a) => int(a.metrics.impressions), sortValue: (a) => a.metrics.impressions, total: int(ads.reduce((x, a) => x + a.metrics.impressions, 0)) },
+      { key: 'clicks', label: 'Clicks', render: (a) => int(a.metrics.clicks), sortValue: (a) => a.metrics.clicks, total: int(ads.reduce((x, a) => x + a.metrics.clicks, 0)) },
+      { key: 'ctr', label: 'CTR', render: (a) => (a.metrics.ctrPct != null ? pct(a.metrics.ctrPct / 100) : '—'), sortValue: (a) => a.metrics.ctrPct ?? -1 },
+      { key: 'spend', label: 'Ad Fees', render: (a) => eur(a.metrics.adFeesCents / 100), sortValue: (a) => a.metrics.adFeesCents, total: eur(ads.reduce((x, a) => x + a.metrics.adFeesCents, 0) / 100) },
+      { key: 'sales', label: 'Ad Sales', tip: 'Any-click attributed sales.', render: (a) => eur(a.metrics.salesCents / 100), sortValue: (a) => a.metrics.salesCents, total: eur(ads.reduce((x, a) => x + a.metrics.salesCents, 0) / 100) },
+      { key: 'acos', label: 'ACOS', render: (a) => (a.metrics.acosPct != null ? pct(a.metrics.acosPct / 100) : '—'), sortValue: (a) => a.metrics.acosPct ?? -1 },
+      { key: 'sold', label: 'Sold', render: (a) => int(a.metrics.soldQty), sortValue: (a) => a.metrics.soldQty, total: int(ads.reduce((x, a) => x + a.metrics.soldQty, 0)) },
+    ]
+  }, [data, c])
+
+  const adEditMode: GridEditMode<AdRow> | undefined = useMemo(() => (!isCps ? undefined : {
+    label: 'Edit Ad Rates',
+    fields: [{
+      key: 'rate',
+      initial: (a) => (a.bidPercentage != null ? String(a.bidPercentage) : c?.bidPercentage != null ? String(c.bidPercentage) : ''),
+      render: (value, set) => (
+        <input className="h10-cd-input" style={{ width: 72 }} type="number" min={2} max={100} step={0.1} value={value} onChange={(e) => set(e.target.value)} aria-label="Ad rate %" />
+      ),
+    }],
+    onApply: async (edits) => {
+      const ads = data?.ads ?? []
+      const items = edits
+        .map((e) => ({ listingId: ads.find((a) => a.id === e.id)?.listingId, ratePct: Number(e.values.rate) }))
+        .filter((x): x is { listingId: string; ratePct: number } => !!x.listingId && Number.isFinite(x.ratePct))
+      if (!items.length) return
+      const out = await postEbayAds<{ results: Array<{ key: string; ok: boolean; blocked?: string | null; error?: string | null; warning?: string | null }> }>(`/campaigns/${campaignId}/ad-rates`, { items })
+      const bad = out.results.filter((r) => !r.ok)
+      setToast(bad.length ? `${bad.length} blocked/failed — ${bad[0]!.blocked ?? bad[0]!.error ?? ''}` : `rates updated (${out.results.length})`)
+      reload()
+    },
+  }), [isCps, data, c, campaignId, reload])
+
+  // ── Keywords tab ───────────────────────────────────────────────────────────
+  const kwColumns: GridColumn<KeywordRow>[] = useMemo(() => {
+    const ks = data?.keywords ?? []
+    return [
+      { key: 'match', label: 'Match', metric: false, sortValue: (k) => k.matchType, render: (k) => <span className="h10-pill arch">{k.matchType}</span> },
+      { key: 'group', label: 'Ad Group', metric: false, sortValue: (k) => k.adGroupName ?? '', render: (k) => k.adGroupName ?? '—' },
+      { key: 'bid', label: 'Bid', metric: false, sortValue: (k) => k.bidCents ?? -1, render: (k) => (k.bidCents != null ? eur(k.bidCents / 100) : '—') },
+      { key: 'status', label: 'Status', metric: false, sortValue: (k) => k.status, render: (k) => pill(k.status) },
+      { key: 'impressions', label: 'Impressions', render: (k) => int(k.metrics.impressions), sortValue: (k) => k.metrics.impressions, total: int(ks.reduce((x, k) => x + k.metrics.impressions, 0)) },
+      { key: 'clicks', label: 'Clicks', render: (k) => int(k.metrics.clicks), sortValue: (k) => k.metrics.clicks, total: int(ks.reduce((x, k) => x + k.metrics.clicks, 0)) },
+      { key: 'spend', label: 'Ad Fees', render: (k) => eur(k.metrics.adFeesCents / 100), sortValue: (k) => k.metrics.adFeesCents, total: eur(ks.reduce((x, k) => x + k.metrics.adFeesCents, 0) / 100) },
+      { key: 'sales', label: 'Ad Sales', render: (k) => eur(k.metrics.salesCents / 100), sortValue: (k) => k.metrics.salesCents, total: eur(ks.reduce((x, k) => x + k.metrics.salesCents, 0) / 100) },
+    ]
   }, [data])
 
-  const adColumns: Column<AdRow>[] = useMemo(() => [
-    {
-      key: 'listing', label: 'Listing', sticky: true, width: 320, sortable: true, sortValue: (a) => a.title ?? a.listingId ?? '',
-      render: (a) => (
-        <div className="eb-cell-name">
-          <span className="nm">{a.title ?? a.inventoryReference ?? a.listingId ?? '—'}</span>
-          <span className="sub">
-            {a.listingId && (
-              <a href={`https://www.ebay.it/itm/${a.listingId}`} target="_blank" rel="noopener noreferrer" className="eb-extlink">
-                {a.listingId} <ExternalLink size={11} aria-hidden />
-              </a>
-            )}
-            {a.priceCents != null && <> · {eurC(a.priceCents)}</>}
-            {a.quantity != null && <> · qty {a.quantity}</>}
-            {a.createdVia === 'DISCOVERED' && <span className="eb-chip eb-chip--dim">Seller Hub</span>}
-          </span>
-        </div>
+  const kwEditMode: GridEditMode<KeywordRow> = useMemo(() => ({
+    label: 'Edit Bids',
+    fields: [{
+      key: 'bid',
+      initial: (k) => (k.bidCents != null ? (k.bidCents / 100).toFixed(2) : ''),
+      render: (value, set) => (
+        <input className="h10-cd-input" style={{ width: 72 }} type="number" min={0.02} max={100} step={0.01} value={value} onChange={(e) => set(e.target.value)} aria-label="Bid EUR" />
       ),
+    }],
+    onApply: async (edits) => {
+      const updates = edits
+        .map((e) => ({ keywordId: e.id, bidCents: Math.round(Number(e.values.bid) * 100) }))
+        .filter((u) => Number.isFinite(u.bidCents) && u.bidCents >= 2)
+      if (!updates.length) return
+      await postEbayAds(`/campaigns/${campaignId}/keywords/update`, { updates })
+      setToast(`bids updated (${updates.length})`)
+      reload()
     },
-    {
-      key: 'status', label: 'State', width: 110,
-      render: (a) => (
-        <span>
-          <StatusChip status={a.status} />
-          {a.listingEnded && <span className="eb-chip eb-chip--stale" title="The listing behind this ad is no longer live on eBay">listing ended</span>}
-        </span>
-      ),
-    },
-    {
-      key: 'rate', label: 'Ad rate', align: 'right', width: 90, sortable: true, sortValue: (a) => a.bidPercentage ?? -1,
-      render: (a) => (
-        <span title={a.bidPercentage == null && c?.bidPercentage != null ? `Inherits campaign default ${c.bidPercentage}%` : 'Ad-level rate (authoritative)'}>
-          {a.bidPercentage != null ? `${a.bidPercentage}%` : c?.bidPercentage != null ? `(${c.bidPercentage}%)` : '—'}
-        </span>
-      ),
-    },
-    { key: 'breakEven', label: 'Break-even', align: 'right', width: 100, render: (a) => <BreakEvenCell pct={a.breakEvenAdRatePct} status={a.economicsStatus} /> },
-    { key: 'impr', label: 'Impr.', align: 'right', width: 90, sortable: true, sortValue: (a) => a.metrics.impressions, render: (a) => intlN(a.metrics.impressions) },
-    { key: 'clicks', label: 'Clicks', align: 'right', width: 75, sortable: true, sortValue: (a) => a.metrics.clicks, render: (a) => intlN(a.metrics.clicks) },
-    { key: 'ctr', label: 'CTR', align: 'right', width: 75, render: (a) => pctP(a.metrics.ctrPct, 2) },
-    { key: 'fees', label: 'Ad fees', align: 'right', width: 95, sortable: true, sortValue: (a) => a.metrics.adFeesCents, render: (a) => eurC(a.metrics.adFeesCents) },
-    { key: 'sales', label: 'Ad sales', align: 'right', width: 100, sortable: true, sortValue: (a) => a.metrics.salesCents, render: (a) => eurC(a.metrics.salesCents) },
-    { key: 'acos', label: 'ACOS', align: 'right', width: 85, sortable: true, sortValue: (a) => a.metrics.acosPct ?? -1, render: (a) => pctP(a.metrics.acosPct) },
-    { key: 'sold', label: 'Sold', align: 'right', width: 65, render: (a) => intlN(a.metrics.soldQty) },
-  ], [c])
+  }), [campaignId, reload])
 
-  const kwColumns: Column<KeywordRow>[] = useMemo(() => [
-    { key: 'text', label: 'Keyword', sticky: true, width: 240, sortable: true, sortValue: (k) => k.text, render: (k) => <span className="eb-kw">{k.text}</span> },
-    { key: 'match', label: 'Match', width: 90, render: (k) => <span className="eb-chip eb-chip--dim">{k.matchType}</span> },
-    { key: 'group', label: 'Ad group', width: 160, sortable: true, sortValue: (k) => k.adGroupName ?? '', render: (k) => k.adGroupName ?? '—' },
-    {
-      key: 'bid', label: 'Bid', align: 'right', width: 90, sortable: true, sortValue: (k) => k.bidCents ?? -1,
-      render: (k) => (k.bidCents != null ? eurC(k.bidCents) : <span title={dynamicBidding ? 'Dynamic bidding — eBay sets bids; manual edits locked' : undefined}>{dynamicBidding ? 'dynamic' : '—'}</span>),
-    },
-    { key: 'status', label: 'Status', width: 90, render: (k) => <StatusChip status={k.status} /> },
-    { key: 'impr', label: 'Impr.', align: 'right', width: 85, sortable: true, sortValue: (k) => k.metrics.impressions, render: (k) => intlN(k.metrics.impressions) },
-    { key: 'clicks', label: 'Clicks', align: 'right', width: 75, sortable: true, sortValue: (k) => k.metrics.clicks, render: (k) => intlN(k.metrics.clicks) },
-    { key: 'fees', label: 'Ad fees', align: 'right', width: 95, sortable: true, sortValue: (k) => k.metrics.adFeesCents, render: (k) => eurC(k.metrics.adFeesCents) },
-    { key: 'sales', label: 'Ad sales', align: 'right', width: 100, render: (k) => eurC(k.metrics.salesCents) },
-  ], [dynamicBidding])
+  const patchKeywords = useCallback(async (ids: string[], status: 'ACTIVE' | 'PAUSED', clear: () => void) => {
+    await postEbayAds(`/campaigns/${campaignId}/keywords/update`, { updates: ids.map((keywordId) => ({ keywordId, status })) })
+    setToast(`${ids.length} keyword(s) → ${status.toLowerCase()}`)
+    clear()
+    reload()
+  }, [campaignId, reload])
+
+  const removeAds = useCallback(async (ids: string[], clear: () => void) => {
+    const ads = data?.ads ?? []
+    const listingIds = ids.map((id) => ads.find((a) => a.id === id)?.listingId).filter((x): x is string => !!x)
+    if (!listingIds.length || !window.confirm(`Remove ${listingIds.length} ad(s) from this campaign?`)) return
+    await postEbayAds(`/campaigns/${campaignId}/ads/remove`, { listingIds })
+    setToast(`removed ${listingIds.length} ad(s)`)
+    clear()
+    reload()
+  }, [data, campaignId, reload])
 
   return (
-    <div className="eb-page">
-      <AdsPageHeader
-        title={c ? c.name : 'Campaign'}
-        subtitle={c ? `started ${new Date(c.startDate).toLocaleDateString('en-GB')}${c.endDate ? ` · ended ${new Date(c.endDate).toLocaleDateString('en-GB')}` : ''}` : 'Loading campaign…'}
+    <div className="h10-cd">
+      <CampaignDetailHeader
+        title={c?.name ?? 'Campaign'}
+        label="Campaign Details"
+        backLabel="Back to eBay Ad Manager"
+        backHref="/marketing/ads/ebay/campaigns"
         markets={c ? [c.marketplace] : []}
         market={c?.marketplace ?? ''}
         onMarketChange={() => {}}
+        showDateRange={false}
+        dateRange={{ start: new Date(), end: new Date() }}
+        onDateRange={() => {}}
+        actions={[
+          ...(c?.status === 'RUNNING' ? [{ label: 'Pause', onClick: () => void lifecycle('pause') }] : []),
+          ...(c?.status === 'PAUSED' || c?.status === 'DRAFT' ? [{ label: c?.status === 'DRAFT' ? 'Activate' : 'Enable', onClick: () => void lifecycle('resume') }] : []),
+          { label: 'Clone', onClick: () => setModal('clone') },
+          ...(isCps && !c?.isRulesBased ? [{ label: 'Add listings', onClick: () => setModal('addListings') }] : []),
+          ...(isManualCpc ? [{ label: 'Add keywords', onClick: () => setModal('keywords') }, { label: 'Add negatives', onClick: () => setModal('negatives') }] : []),
+          ...(!isCps && !isOffsite ? [{ label: 'Edit budget', onClick: () => setModal('budget') }] : []),
+          ...(c?.status !== 'ENDED' ? [{ label: 'End campaign', onClick: () => void lifecycle('end'), danger: true }] : []),
+        ]}
       />
 
-      <div className="eb-controls">
-        <Link href="/marketing/ads/ebay/campaigns" className="eb-linkbtn"><ArrowLeft size={13} aria-hidden /> All campaigns</Link>
-        <Select value={preset} onChange={(e) => setPreset(e.target.value)} aria-label="Date range">
-          {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-        </Select>
-        <FreshnessLine f={data?.freshness} />
+      <nav className="h10-cd-tabs" role="tablist">
+        {TABS.map((t) => (
+          <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={`h10-cd-tab ${tab === t.key ? 'on' : ''}`} onClick={() => setTab(t.key)}>{t.label}</button>
+        ))}
+      </nav>
+
+      <div className="h10-cd-body">
+        <SandboxBanner mode={writeMode} />
+        {error && <div className="h10-am-latest" role="alert"><b>Load failed:</b> {error} · <button className="h10-am-link" onClick={reload}>Retry</button></div>}
+        {loading && !data && <div className="h10-cd-skel"><span className="sk-line w40" /><span className="sk-line w70" /><span className="sk-block" /></div>}
+
+        {data && c && tab === 'ads' && (
+          <AdsDataGrid<AdRow>
+            rows={data.ads}
+            rowId={(a) => a.id}
+            noun="Ad"
+            firstColLabel="Listing"
+            renderFirst={(a) => (
+              <div className="nmw">
+                <span className="t" title={a.title ?? a.listingId ?? ''}>{a.title ?? a.inventoryReference ?? a.listingId ?? '—'}</span>
+                {a.listingId && <span className="mk">{a.listingId.slice(-6)}</span>}
+                {a.createdVia === 'DISCOVERED' && <span className="mk" title="Created in Seller Hub">hub</span>}
+                {a.listingId && <a className="h10-open" href={`https://www.ebay.it/itm/${a.listingId}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Open</a>}
+              </div>
+            )}
+            firstSortValue={(a) => (a.title ?? a.listingId ?? '').toLowerCase()}
+            columns={adColumns}
+            showTotal
+            defaultSort={{ key: 'spend', dir: 'desc' }}
+            storageKey="h10-ebay-cd-ads-cols"
+            editMode={adEditMode}
+            selectionActions={isCps ? (ids, clear) => (
+              <span className="h10-bulkrow">
+                <button type="button" className="h10-am-btn bulk" onClick={() => void removeAds(ids, clear)}>Remove</button>
+              </span>
+            ) : undefined}
+            reportLabel={latestReportLabel([data.freshness.factsReportedAt])}
+            toolbarLeft={
+              <select className="h10-am-btn" value={preset} onChange={(e) => setPreset(e.target.value)} aria-label="Date range" style={{ paddingRight: 8 }}>
+                {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            }
+            toolbarRight={isCps && !c.isRulesBased ? <button type="button" className="h10-am-btn primary" onClick={() => setModal('addListings')}><Plus size={13} /> Add listings</button> : undefined}
+            emptyLabel={c.isRulesBased ? 'Rules-based: eBay attaches matching listings daily; the hourly sync mirrors them here.' : 'No ads yet — Add listings to promote.'}
+          />
+        )}
+
+        {data && tab === 'keywords' && (
+          <AdsDataGrid<KeywordRow>
+            rows={data.keywords}
+            rowId={(k) => k.id}
+            noun="Keyword"
+            firstColLabel="Keyword"
+            renderFirst={(k) => <div className="nmw"><span className="t" title={k.text}>{k.text}</span></div>}
+            firstSortValue={(k) => k.text.toLowerCase()}
+            columns={kwColumns}
+            showTotal
+            defaultSort={{ key: 'clicks', dir: 'desc' }}
+            storageKey="h10-ebay-cd-kw-cols"
+            editMode={kwEditMode}
+            selectionActions={(ids, clear) => (
+              <span className="h10-bulkrow">
+                <button type="button" className="h10-am-btn bulk" onClick={() => void patchKeywords(ids, 'ACTIVE', clear)}>Enable</button>
+                <button type="button" className="h10-am-btn bulk" onClick={() => void patchKeywords(ids, 'PAUSED', clear)}>Pause</button>
+              </span>
+            )}
+            reportLabel={latestReportLabel([data.freshness.factsReportedAt])}
+            toolbarRight={<button type="button" className="h10-am-btn primary" onClick={() => setModal('keywords')}><Plus size={13} /> Add keywords</button>}
+            emptyLabel="No keywords — add some, or use suggested keywords from the Add dialog."
+          />
+        )}
+
+        {data && tab === 'negatives' && (
+          <AdsDataGrid<CampaignDetailPayload['negativeKeywords'][number]>
+            rows={data.negativeKeywords}
+            rowId={(n) => n.id}
+            noun="Negative Keyword"
+            firstColLabel="Negative Keyword"
+            renderFirst={(n) => <div className="nmw"><span className="t">−{n.text}</span></div>}
+            firstSortValue={(n) => n.text.toLowerCase()}
+            columns={[
+              { key: 'match', label: 'Match', metric: false, render: (n) => <span className="h10-pill arch">{n.matchType}</span> },
+              { key: 'status', label: 'Status', metric: false, render: (n) => pill(n.status) },
+            ]}
+            storageKey="h10-ebay-cd-neg-cols"
+            toolbarRight={<button type="button" className="h10-am-btn primary" onClick={() => setModal('negatives')}><Plus size={13} /> Add negatives</button>}
+            emptyLabel="No negative keywords (eBay supports EXACT and PHRASE — no broad)."
+          />
+        )}
+
+        {data && c && tab === 'settings' && (
+          <div className="h10-cd-card pad" style={{ maxWidth: 760 }}>
+            <div className="eb-headstats">
+              <div><span className="k">Strategy</span><span className="v">{isOffsite ? 'Offsite' : isCps ? `General · ${c.adRateStrategy?.toLowerCase() ?? 'fixed'}` : `Priority · ${c.targetingType?.toLowerCase() ?? 'manual'}`}</span></div>
+              <div><span className="k">Status</span><span className="v">{pill(c.status)}</span></div>
+              {isCps && <div><span className="k">Campaign rate</span><span className="v">{c.bidPercentage != null ? `${c.bidPercentage}%` : 'per-ad'}</span></div>}
+              {!isCps && <div><span className="k">Daily budget</span><span className="v">{c.dailyBudgetCents != null ? `${eur(c.dailyBudgetCents / 100)}/day` : '—'} <button type="button" className="h10-am-link" onClick={() => setModal('budget')}>edit</button></span></div>}
+              {!isCps && <div><span className="k">Budget edits today</span><span className="v" title="eBay hard limit: 15 per campaign per day">{c.budgetUpdatesToday} / 15</span></div>}
+              <div><span className="k">Started</span><span className="v">{new Date(c.startDate).toLocaleDateString('en-GB')}</span></div>
+              {c.endDate && <div><span className="k">Ended</span><span className="v">{new Date(c.endDate).toLocaleDateString('en-GB')}</span></div>}
+              <div><span className="k">Managed by</span><span className="v">{c.nexusManaged ? 'Nexus' : 'Seller Hub'}</span></div>
+            </div>
+            {c.isRulesBased && (
+              <p className="eb-be-hint" style={{ marginTop: 12 }}>
+                Rules-based campaign — selection rules are immutable on eBay; <b>Clone</b> (Action ▾) is how you change them.
+                Criterion: <code>{JSON.stringify(c.campaignCriterion)}</code>
+              </p>
+            )}
+            {isOffsite && <p className="eb-be-hint" style={{ marginTop: 12 }}>Promoted Offsite is campaign-level only: eBay manages placement and CPC on external networks. No per-listing ads or keywords exist.</p>}
+            {c.adRateStrategy === 'DYNAMIC' && <p className="eb-be-hint" style={{ marginTop: 12 }}>Dynamic rate follows eBay's suggestion daily under your hard cap: <code>{JSON.stringify(c.dynamicAdRatePrefs)}</code></p>}
+          </div>
+        )}
+
+        {toast && <div className="h10-am-toast" role="status">{toast}</div>}
       </div>
 
-      {error && <Banner tone="danger" title="Couldn't load this campaign">{error} — <button className="eb-linkbtn" onClick={reload}>retry</button></Banner>}
-      {loading && <Skeleton height={380} />}
-
-      {c && (
-        <>
-          <SandboxBanner mode={writeMode} />
-          <div className="eb-actions">
-            {c.status === 'RUNNING' && <Button variant="ghost" onClick={() => lifecycle('pause')} disabled={actionBusy}><Pause size={13} aria-hidden /> Pause</Button>}
-            {(c.status === 'PAUSED' || c.status === 'DRAFT') && <Button variant="ghost" onClick={() => lifecycle('resume')} disabled={actionBusy}><Play size={13} aria-hidden /> {c.status === 'DRAFT' ? 'Activate' : 'Resume'}</Button>}
-            {c.status !== 'ENDED' && <Button variant="ghost" onClick={() => lifecycle('end')} disabled={actionBusy}><Square size={13} aria-hidden /> End</Button>}
-            <Button variant="ghost" onClick={() => setModal('clone')}><CopyPlus size={13} aria-hidden /> Clone</Button>
-            {!isCps || c.isRulesBased ? null : <Button variant="ghost" onClick={() => setModal('addListings')}><Plus size={13} aria-hidden /> Add listings</Button>}
-            {isCps && <Button variant="ghost" onClick={() => setModal('rates')} disabled={selectedListingIds.length === 0}><Tag size={13} aria-hidden /> Set rate ({selectedListingIds.length})</Button>}
-            {isCps && <Button variant="ghost" onClick={removeSelected} disabled={selectedListingIds.length === 0 || actionBusy}><Trash2 size={13} aria-hidden /> Remove ({selectedListingIds.length})</Button>}
-            {!isCps && !isOffsite && <Button variant="ghost" onClick={() => setModal('budget')}><Euro size={13} aria-hidden /> Budget</Button>}
-            {!isCps && !isSmart && !isOffsite && <Button variant="ghost" onClick={() => setModal('keywords')}><Plus size={13} aria-hidden /> Keywords</Button>}
-            {!isCps && !isSmart && !isOffsite && <Button variant="ghost" onClick={() => setModal('negatives')}><Plus size={13} aria-hidden /> Negatives</Button>}
-            {actionMsg && <span className="eb-be-hint">{actionMsg}</span>}
-          </div>
-
-          <SetRatesModal open={modal === 'rates'} onClose={() => setModal(null)} campaignId={campaignId} listingIds={selectedListingIds} onDone={reload} />
-          <BudgetModal open={modal === 'budget'} onClose={() => setModal(null)} campaignId={campaignId} currentCents={c.dailyBudgetCents} usedToday={c.budgetUpdatesToday} onDone={reload} />
-          <AddKeywordsModal open={modal === 'keywords'} onClose={() => setModal(null)} campaignId={campaignId} adGroups={data.adGroups} onDone={reload} />
-          <AddNegativesModal open={modal === 'negatives'} onClose={() => setModal(null)} campaignId={campaignId} adGroups={data.adGroups} onDone={reload} />
-          <CloneModal open={modal === 'clone'} onClose={() => setModal(null)} campaignId={campaignId} sourceName={c.name} onDone={() => reload()} />
-          <PromoteModal open={modal === 'addListings'} onClose={() => setModal(null)} presetCampaignId={campaignId} listingIds={[]} productIds={[]} onDone={reload} />
-
-          <section className="eb-panel eb-panel--head">
-            <div className="eb-headchips">
-              <StrategyChip fundingModel={c.fundingModel} targetingType={c.targetingType} channels={c.channels} />
-              <StatusChip status={c.status} />
-              {c.isRulesBased && <span className="eb-chip eb-chip--rules" title="eBay auto-adds/removes matching listings daily; selection rules are immutable (clone to change)">rules-based</span>}
-              {c.nexusManaged ? <span className="eb-chip eb-chip--nexus">Nexus-managed</span> : <span className="eb-chip eb-chip--dim">Seller Hub</span>}
-              {c.adRateStrategy && <span className="eb-chip eb-chip--dim" title={c.adRateStrategy === 'DYNAMIC' ? `Follows eBay's suggested rate${(c.dynamicAdRatePrefs as { adRateCapPercent?: string })?.adRateCapPercent ? ` capped at ${(c.dynamicAdRatePrefs as { adRateCapPercent?: string }).adRateCapPercent}%` : ''}` : 'Fixed rate'}>{c.adRateStrategy.toLowerCase()} rate</span>}
-              {isSmart && <span className="eb-chip eb-chip--dim" title="eBay picks keywords + bids under your max CPC">smart targeting</span>}
-            </div>
-            <div className="eb-headstats">
-              <div><span className="k">{isCps ? 'Campaign rate' : 'Daily budget'}</span><span className="v">{isCps ? (c.bidPercentage != null ? `${c.bidPercentage}%` : 'per-ad') : c.dailyBudgetCents != null ? `${eurC(c.dailyBudgetCents)}/day` : '—'}</span></div>
-              {!isCps && <div><span className="k">Budget edits today</span><span className="v" title="eBay hard limit: 15 budget updates per campaign per day">{c.budgetUpdatesToday} / 15</span></div>}
-              <div><span className="k">Window ad fees</span><span className="v">{eurC(totals.adFeesCents)}</span></div>
-              <div><span className="k">Window ad sales</span><span className="v">{eurC(totals.salesCents)} <em>any-click</em></span></div>
-              <div><span className="k">eBay ACOS</span><span className="v">{pctP(totals.acosPct)}</span></div>
-              <div><span className="k">Sold</span><span className="v">{intlN(totals.soldQty)}</span></div>
-            </div>
-          </section>
-
-          {isOffsite ? (
-            <EmptyState title="Promoted Offsite campaign" description="Offsite campaigns are campaign-level only: eBay manages placement and CPC on external networks (Google). There are no per-listing ads or keywords to show; performance appears in the trend once eBay reports it." />
-          ) : (
-            <>
-              <section className="eb-panel">
-                <header className="eb-panel-head"><h3>Ads ({data.ads.length})</h3><span className="eb-panel-note">Rate-at-ad-level is the truth — ad rates override the campaign default{c.bidPercentage != null ? ` (${c.bidPercentage}%)` : ''}.</span></header>
-                {data.ads.length === 0 ? (
-                  <EmptyState title="No ads synced for this campaign" description={c.isRulesBased ? 'Rules-based campaigns attach listings on eBay side; the hourly entity sync mirrors them here.' : 'The hourly entity sync mirrors ads from eBay.'} />
-                ) : (
-                  <DataGrid<AdRow> columns={adColumns} rows={data.ads} rowKey={(a) => a.id} initialSort={{ key: 'fees', dir: 'desc' }} maxHeight={430} selectable selected={selectedAds} onSelectedChange={setSelectedAds} />
-                )}
-              </section>
-
-              {!isCps && !isSmart && (
-                <>
-                  <section className="eb-panel">
-                    <header className="eb-panel-head">
-                      <h3>Keywords ({data.keywords.length}) · {data.adGroups.length} ad groups</h3>
-                      {dynamicBidding && <span className="eb-panel-note">Dynamic bidding is ON — eBay adjusts bids daily; manual bid edits are locked by eBay.</span>}
-                    </header>
-                    {data.keywords.length === 0 ? (
-                      <EmptyState title="No keywords" description="Manual Priority campaigns target keywords per ad group; the hourly sync mirrors them here." />
-                    ) : (
-                      <DataGrid<KeywordRow> columns={kwColumns} rows={data.keywords} rowKey={(k) => k.id} initialSort={{ key: 'clicks', dir: 'desc' }} maxHeight={380} />
-                    )}
-                  </section>
-
-                  <section className="eb-panel">
-                    <header className="eb-panel-head"><h3>Negative keywords ({data.negativeKeywords.length})</h3><span className="eb-panel-note">eBay supports EXACT and PHRASE negatives (no broad).</span></header>
-                    {data.negativeKeywords.length === 0 ? (
-                      <EmptyState title="No negative keywords" />
-                    ) : (
-                      <div className="eb-negatives">
-                        {data.negativeKeywords.map((n) => (
-                          <span key={n.id} className="eb-chip eb-chip--neg" title={`${n.matchType} · ${n.status}`}>−{n.text}<em>{n.matchType.toLowerCase()}</em></span>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-                </>
-              )}
-            </>
-          )}
-        </>
-      )}
+      <AddKeywordsModal open={modal === 'keywords'} onClose={() => setModal(null)} campaignId={campaignId} adGroups={data?.adGroups ?? []} onDone={reload} />
+      <AddNegativesModal open={modal === 'negatives'} onClose={() => setModal(null)} campaignId={campaignId} adGroups={data?.adGroups ?? []} onDone={reload} />
+      <CloneModal open={modal === 'clone'} onClose={() => setModal(null)} campaignId={campaignId} sourceName={c?.name ?? ''} onDone={(id) => router.push(`/marketing/ads/ebay/campaigns/${id}`)} />
+      <PromoteModal open={modal === 'addListings'} onClose={() => setModal(null)} presetCampaignId={campaignId} onDone={reload} />
+      {c && <BudgetModal open={modal === 'budget'} onClose={() => setModal(null)} campaignId={campaignId} currentCents={c.dailyBudgetCents} usedToday={c.budgetUpdatesToday} onDone={reload} />}
     </div>
   )
 }

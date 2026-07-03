@@ -167,6 +167,19 @@ export function ResultsList({ results }: { results: WriteItemOutcome[] }) {
   )
 }
 
+// ── E6.1 — h10 grid idiom helpers (visual parity with the Amazon console) ────
+/** eBay statuses → the console's .h10-pill classes (ok=blue, warn=amber, arch=grey). */
+export const EBAY_STATUS_PILL: Record<string, { label: string; cls: string }> = {
+  RUNNING: { label: 'Enabled', cls: 'ok' },
+  ACTIVE: { label: 'Enabled', cls: 'ok' },
+  PAUSED: { label: 'Paused', cls: 'warn' },
+  DRAFT: { label: 'Draft', cls: 'arch' },
+  ENDED: { label: 'Ended', cls: 'arch' },
+  SUSPENDED: { label: 'Suspended', cls: 'warn' },
+  STALE: { label: 'Stale', cls: 'warn' },
+  SANDBOX: { label: 'Sandbox', cls: 'arch' },
+}
+
 // ── Small shared UI atoms ────────────────────────────────────────────────────
 export function FreshnessLine({ f }: { f: Freshness | undefined }) {
   if (!f) return null

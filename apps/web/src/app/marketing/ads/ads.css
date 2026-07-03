@@ -2455,3 +2455,8 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-channel-btn { aspect-ratio: 2.4 / 1; border-radius: 8px; border: 1px solid rgba(148, 163, 184, 0.22); background: rgba(148, 163, 184, 0.07); color: #94a3b8; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 120ms, color 120ms, border-color 120ms; }
 .h10-channel-btn:hover { background: rgba(148, 163, 184, 0.14); color: #cbd5e1; }
 .h10-channel-btn.on { background: rgba(59, 130, 246, 0.16); border-color: rgba(59, 130, 246, 0.45); color: #93c5fd; }
+/* E6.1 — logo variant of the channel buttons */
+.h10-channel-btn { display: flex; align-items: center; justify-content: center; padding: 4px 6px; }
+.h10-channel-logo { height: 20px; width: auto; max-width: 100%; opacity: 0.55; filter: grayscale(0.35); transition: opacity 120ms, filter 120ms; }
+.h10-channel-btn:hover .h10-channel-logo { opacity: 0.85; filter: grayscale(0.1); }
+.h10-channel-btn.on .h10-channel-logo { opacity: 1; filter: none; }
