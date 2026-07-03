@@ -97,6 +97,17 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ ok: true, revoked: n })
   })
 
+  // Admin reset of a user's 2FA (e.g. lost device). Clears the secret +
+  // recovery codes so they can re-enrol; audited (S5).
+  fastify.post<{ Params: { id: string } }>('/api/team/users/:id/reset-mfa', async (req, reply) => {
+    await prisma.$transaction(async (tx: any) => {
+      await tx.userProfile.update({ where: { id: req.params.id }, data: { twoFactorSecret: null, twoFactorEnabledAt: null } })
+      await tx.twoFactorRecoveryCode.deleteMany({ where: { userId: req.params.id } })
+    })
+    await audit(req, 'user.reset_mfa', 'User', req.params.id)
+    return reply.send({ ok: true })
+  })
+
   fastify.post<{ Params: { id: string }; Body: { roleKey?: string; channelScope?: unknown } }>(
     '/api/team/users/:id/roles',
     async (req, reply) => {

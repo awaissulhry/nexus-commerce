@@ -21,6 +21,8 @@ function LoginInner() {
   const { refresh } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [code, setCode] = useState('')
+  const [mfaStep, setMfaStep] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -37,9 +39,15 @@ function LoginInner() {
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json', 'x-nexus-csrf': csrf.csrfToken },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, ...(mfaStep ? { code } : {}) }),
       })
       const data = await res.json().catch(() => ({}))
+      // Password OK, but this account has 2FA — ask for the code.
+      if (res.ok && data.mfaRequired) {
+        setMfaStep(true)
+        setBusy(false)
+        return
+      }
       if (!res.ok) {
         setError(data.error || 'Sign in failed.')
         setBusy(false)
@@ -56,38 +64,54 @@ function LoginInner() {
   }
 
   return (
-    <AuthCard title="Sign in to Nexus" subtitle="Enter your credentials to continue.">
+    <AuthCard title="Sign in to Nexus" subtitle={mfaStep ? 'Enter your authentication code.' : 'Enter your credentials to continue.'}>
       <form onSubmit={onSubmit} className="space-y-4">
         {error && (
           <div role="alert" className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
             {error}
           </div>
         )}
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-slate-700">Email</span>
-          <input
-            type="email" autoComplete="username" required value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-slate-700">Password</span>
-          <input
-            type="password" autoComplete="current-password" required value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-          />
-        </label>
+        {!mfaStep ? (
+          <>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-slate-700">Email</span>
+              <input
+                type="email" autoComplete="username" required value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-slate-700">Password</span>
+              <input
+                type="password" autoComplete="current-password" required value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
+          </>
+        ) : (
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-slate-700">Authentication code</span>
+            <input
+              type="text" inputMode="numeric" autoComplete="one-time-code" autoFocus required value={code}
+              onChange={(e) => setCode(e.target.value)} placeholder="6-digit code or recovery code"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm tracking-widest outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+            <span className="mt-1 block text-xs text-slate-500">From your authenticator app, or a one-time recovery code.</span>
+          </label>
+        )}
         <button
           type="submit" disabled={busy}
           className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
         >
-          {busy ? 'Signing in…' : 'Sign in'}
+          {busy ? 'Working…' : mfaStep ? 'Verify' : 'Sign in'}
         </button>
-        <div className="text-center">
-          <a href="/forgot-password" className="text-sm text-blue-600 hover:underline">Forgot password?</a>
-        </div>
+        {!mfaStep && (
+          <div className="text-center">
+            <a href="/forgot-password" className="text-sm text-blue-600 hover:underline">Forgot password?</a>
+          </div>
+        )}
       </form>
     </AuthCard>
   )

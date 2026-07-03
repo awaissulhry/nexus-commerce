@@ -258,6 +258,7 @@ import pricingRoutes from "./routes/pricing.routes.js";
 import pricingRulesRoutes from "./routes/pricing-rules.routes.js";
 // Phase S1 (auth core) — human authentication endpoints.
 import authRoutes from "./routes/auth.routes.js";
+import mfaRoutes from "./routes/mfa.routes.js";
 import teamRoutes from "./routes/team.routes.js";
 // Phase S2 (RBAC engine) — the one global permission gate (shadow/enforce).
 import { rbacHook } from "./lib/auth/rbac-hook.js";
@@ -550,6 +551,8 @@ app.addHook('preSerialization', financialFilterHook);
 // inline, so register without a prefix. Protects only its own surface;
 // the deny-by-default sweep over the rest of the API is S2.
 app.register(authRoutes);
+// Phase S5 — self-service TOTP 2FA (/api/auth/2fa/*).
+app.register(mfaRoutes);
 // Phase S4 — Team & Access API (/api/team/*), gated by the RBAC manifest.
 app.register(teamRoutes);
 app.register(listingsRoutes);

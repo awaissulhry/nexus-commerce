@@ -78,6 +78,9 @@ const ENTRIES: Entry[] = [
   // Owner-gated auth admin (also guarded in S1 by requireOwner):
   P(F.usersManage, (_m, p) => p === '/api/auth/logout-all'),
   RW(F.invitationsManage, F.invitationsManage, pfx('/api/auth/invitations')),
+  // Self-service 2FA (S5): any authenticated user manages their own — the
+  // handler operates on req.authUser, so pages.dashboard = "signed in".
+  P(PG.dashboard, pfx('/api/auth/2fa')),
 
   // ── Team & Access (S4 console) ──────────────────────────────────
   RW(F.usersManage, F.usersManage, pfx('/api/team/users')),

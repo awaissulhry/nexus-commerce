@@ -294,7 +294,7 @@ export const SYSTEM_ROLES: Record<SystemRoleKey, SystemRoleDef> = {
     description:
       'Full, implicit access to everything. System-protected — cannot be deleted or demoted, and only an Owner can grant Owner.',
     permissions: [], // implicit-all; never read by the resolver
-    requireMfa: false, // S5 flips on
+    requireMfa: true, // S5 — privileged roles must set up 2FA
   },
   ADMIN: {
     key: 'ADMIN',
@@ -302,7 +302,7 @@ export const SYSTEM_ROLES: Record<SystemRoleKey, SystemRoleDef> = {
     description:
       'Everything except granting Owner or deleting/demoting Owners. Full settings + user management.',
     permissions: [...ALL_PERMISSIONS], // all; OWNER-only ops blocked in the service layer
-    requireMfa: false,
+    requireMfa: true, // S5
   },
   OPS_MANAGER: {
     key: 'OPS_MANAGER',
@@ -324,7 +324,7 @@ export const SYSTEM_ROLES: Record<SystemRoleKey, SystemRoleDef> = {
     name: 'Finance',
     description: 'Financial pages, fields and reports. Read-only on operational data.',
     permissions: FINANCE_PERMS,
-    requireMfa: false,
+    requireMfa: true, // S5 — finance handles money data
   },
   VIEWER: {
     key: 'VIEWER',

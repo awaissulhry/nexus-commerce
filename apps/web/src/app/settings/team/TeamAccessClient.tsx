@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePermission } from '@/lib/auth/AuthProvider'
+import MfaSetup from './MfaSetup'
 
 interface Role {
   id: string; key: string; name: string; description: string
@@ -90,6 +91,8 @@ export default function TeamAccessClient() {
         <p className="mt-1 text-sm text-slate-500">Manage who has access, what they can do, and pending invitations.</p>
       </header>
 
+      <MfaSetup />
+
       {msg && (
         <div className={`mb-4 rounded-md border px-3 py-2 text-sm ${msg.tone === 'ok' ? badge('green') : 'border-red-200 bg-red-50 text-red-700'}`} role="alert">{msg.text}</div>
       )}
@@ -118,7 +121,7 @@ export default function TeamAccessClient() {
                     <td className="px-4 py-3"><span className={`rounded border px-1.5 py-0.5 text-xs ${u.status === 'active' ? badge('green') : badge('amber')}`}>{u.status}</span></td>
                     <td className="px-4 py-3 text-xs text-slate-500">{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : '—'}</td>
                     <td className="px-4 py-3 text-right">
-                      <UserActions user={u} roles={roles} onAssign={(rk) => act(`/api/team/users/${u.id}/roles`, 'POST', { roleKey: rk }, 'Role assigned')} onRemove={(rk) => act(`/api/team/users/${u.id}/roles/${rk}`, 'DELETE', undefined, 'Role removed')} onDeactivate={() => { if (confirm(`Deactivate ${u.email}? Their sessions end immediately.`)) act(`/api/team/users/${u.id}/deactivate`, 'POST', {}, 'User deactivated') }} onReactivate={() => act(`/api/team/users/${u.id}/reactivate`, 'POST', {}, 'User reactivated')} onSignout={() => act(`/api/team/users/${u.id}/force-signout`, 'POST', {}, 'Signed out everywhere')} />
+                      <UserActions user={u} roles={roles} onAssign={(rk) => act(`/api/team/users/${u.id}/roles`, 'POST', { roleKey: rk }, 'Role assigned')} onRemove={(rk) => act(`/api/team/users/${u.id}/roles/${rk}`, 'DELETE', undefined, 'Role removed')} onDeactivate={() => { if (confirm(`Deactivate ${u.email}? Their sessions end immediately.`)) act(`/api/team/users/${u.id}/deactivate`, 'POST', {}, 'User deactivated') }} onReactivate={() => act(`/api/team/users/${u.id}/reactivate`, 'POST', {}, 'User reactivated')} onSignout={() => act(`/api/team/users/${u.id}/force-signout`, 'POST', {}, 'Signed out everywhere')} onResetMfa={() => { if (confirm(`Reset 2FA for ${u.email}? They'll need to set it up again.`)) act(`/api/team/users/${u.id}/reset-mfa`, 'POST', {}, '2FA reset') }} />
                     </td>
                   </tr>
                 ))}
@@ -174,7 +177,7 @@ export default function TeamAccessClient() {
   )
 }
 
-function UserActions({ user, roles, onAssign, onRemove, onDeactivate, onReactivate, onSignout }: { user: UserRow; roles: Role[]; onAssign: (rk: string) => void; onRemove: (rk: string) => void; onDeactivate: () => void; onReactivate: () => void; onSignout: () => void }) {
+function UserActions({ user, roles, onAssign, onRemove, onDeactivate, onReactivate, onSignout, onResetMfa }: { user: UserRow; roles: Role[]; onAssign: (rk: string) => void; onRemove: (rk: string) => void; onDeactivate: () => void; onReactivate: () => void; onSignout: () => void; onResetMfa: () => void }) {
   const [open, setOpen] = useState(false)
   const assignable = roles.filter((r) => !user.roles.some((ur) => ur.key === r.key))
   return (
@@ -187,6 +190,7 @@ function UserActions({ user, roles, onAssign, onRemove, onDeactivate, onReactiva
           {user.roles.length > 0 && <><div className="mt-1 border-t border-subtle px-3 py-1 text-xs font-medium uppercase text-tertiary">Remove role</div>{user.roles.map((r) => <button key={r.key} onClick={() => { onRemove(r.key); setOpen(false) }} className="block w-full px-3 py-1.5 text-left hover:bg-slate-50">{r.name}</button>)}</>}
           <div className="mt-1 border-t border-subtle" />
           <button onClick={() => { onSignout(); setOpen(false) }} className="block w-full px-3 py-1.5 text-left hover:bg-slate-50">Force sign-out</button>
+          {user.mfaEnabled && <button onClick={() => { onResetMfa(); setOpen(false) }} className="block w-full px-3 py-1.5 text-left hover:bg-slate-50">Reset 2FA</button>}
           {user.status === 'active' ? <button onClick={() => { onDeactivate(); setOpen(false) }} className="block w-full px-3 py-1.5 text-left text-red-600 hover:bg-red-50">Deactivate</button> : <button onClick={() => { onReactivate(); setOpen(false) }} className="block w-full px-3 py-1.5 text-left text-green-700 hover:bg-green-50">Reactivate</button>}
         </div>
       )}

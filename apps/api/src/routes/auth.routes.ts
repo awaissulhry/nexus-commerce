@@ -57,6 +57,7 @@ import {
 } from '../lib/auth/lockout.js'
 import { writeAuthAudit } from '../lib/auth/audit.js'
 import { resolvePermissions } from '../lib/auth/rbac.js'
+import { verifyTotp, consumeRecoveryCode } from '../lib/auth/mfa.js'
 import {
   sendInvitationEmail,
   sendPasswordResetEmail,
@@ -117,7 +118,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── Login ──────────────────────────────────────────────────────
-  fastify.post<{ Body: { email?: string; password?: string } }>(
+  fastify.post<{ Body: { email?: string; password?: string; code?: string } }>(
     '/api/auth/login',
     { preHandler: requireCsrf },
     async (req, reply) => {
@@ -153,6 +154,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           status: true,
           lockedUntil: true,
           twoFactorEnabledAt: true,
+          twoFactorSecret: true,
           roleAssignments: { select: { role: { select: { key: true } } } },
         },
       })
@@ -196,6 +198,24 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send({ error: 'This account is deactivated.', code: 'deactivated' })
       }
 
+      // MFA step (S5): an enrolled user must present a valid TOTP code (or a
+      // single-use recovery code) before a session is issued. Users who have
+      // NOT enrolled pass here — the role-level requireMfa flag drives a UI
+      // nudge to set up 2FA, never a hard lockout (so no one gets stranded).
+      const mfaEnrolled = !!user.twoFactorEnabledAt && !!user.twoFactorSecret
+      if (mfaEnrolled) {
+        const code = (req.body?.code ?? '').toString().trim()
+        if (!code) {
+          // Password is correct; ask the client for the second factor.
+          return reply.code(200).send({ mfaRequired: true })
+        }
+        const ok = verifyTotp(user.twoFactorSecret as string, code) || (await consumeRecoveryCode(user.id, code))
+        if (!ok) {
+          await logEvent('totp_failed', user.id)
+          return reply.code(401).send({ error: 'Invalid authentication code.', code: 'mfa_failed' })
+        }
+      }
+
       // Success. Rehash legacy hashes to argon2id opportunistically.
       if (verify.needsRehash) {
         try {
@@ -205,14 +225,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       }
       await clearLoginFailures(user.id)
 
-      // NOTE: MFA verification is enforced in S5. Until then a valid
-      // password fully satisfies login and mfaSatisfied is set true so
-      // S5 can distinguish pre-enforcement sessions.
+      // mfaSatisfied reflects whether the second factor was actually used
+      // this login (true for enrolled users who passed the code step above).
       const { rawToken } = await createSession({
         userId: user.id,
         userAgent: ua(req),
         ip: req.ip,
-        mfaSatisfied: true,
+        mfaSatisfied: mfaEnrolled,
       })
       // Rotate the CSRF token on login and RETURN it in the body: the
       // web origin can't read the API-origin cookie, so the client
@@ -260,6 +279,12 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/api/auth/me', { preHandler: loadSession }, async (req, reply) => {
     if (!req.authUser) return reply.code(401).send({ error: 'Not authenticated', code: 'unauthenticated' })
     const resolved = await resolvePermissions(req.authUser)
+    // S5 — does the user's role (or their per-user flag) require 2FA that
+    // they haven't set up yet? Drives the "set up 2FA" nudge (never a block).
+    const rolesRequireMfa = req.authUser.roleKeys.length
+      ? await (prisma as any).role.count({ where: { key: { in: req.authUser.roleKeys }, requireMfa: true } })
+      : 0
+    const mfaSetupRequired = (rolesRequireMfa > 0 || req.authUser.mfaRequired) && !req.authUser.twoFactorEnabledAt
     return {
       user: {
         id: req.authUser.id,
@@ -268,6 +293,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         roleKeys: req.authUser.roleKeys,
         mfaEnabled: !!req.authUser.twoFactorEnabledAt,
         mfaRequired: req.authUser.mfaRequired,
+        mfaSetupRequired,
       },
       isOwner: resolved.isOwner,
       permissions: resolved.isOwner ? ['*'] : [...resolved.permissions],
