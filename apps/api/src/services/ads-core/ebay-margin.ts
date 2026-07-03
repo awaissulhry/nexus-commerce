@@ -103,8 +103,12 @@ export async function rebuildEbayListingEconomics(): Promise<EconomicsRebuildRep
     let cogsCents: number | null = null
     const productId = l.productIds[0] ?? null
     if (productId) {
-      const p = await prisma.product.findUnique({ where: { id: productId }, select: { costPrice: true } })
+      // Cost sources in precedence order: explicit costPrice, then the WAC
+      // cost master (Product.weightedAvgCostCents, fed by StockCostLayer).
+      // Whichever gets populated first lights up break-evens — no code change.
+      const p = await prisma.product.findUnique({ where: { id: productId }, select: { costPrice: true, weightedAvgCostCents: true } })
       if (p?.costPrice != null) cogsCents = Math.round(Number(p.costPrice.toString()) * 100)
+      else if ((p?.weightedAvgCostCents ?? 0) > 0) cogsCents = p!.weightedAvgCostCents!
     }
     const fees = priceCents != null ? estimateEbayFeesCents(priceCents) : null
     const eco = computeEconomics({ priceCents, cogsCents, ebayFeesCents: fees, shippingCostCents: 0 }, true)
