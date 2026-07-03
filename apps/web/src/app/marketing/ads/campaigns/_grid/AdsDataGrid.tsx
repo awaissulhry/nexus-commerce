@@ -117,6 +117,9 @@ export interface AdsDataGridProps<T> {
    *  panel gains saveable named presets persisted in localStorage under this
    *  key. Grids that don't pass it render exactly as before. */
   filterPresetsKey?: string
+  /** ER3.3 — seed the filter state on mount (deep links like ?status=LIMITED).
+   *  Additive: consumers that omit it start empty exactly as before. */
+  initialFilters?: FilterState
   /** optional row grouping: returns the group key + label for a row. When set, the grid
    *  clusters same-group rows (groups ordered by label) and renders a header row before
    *  each group. Additive — consumers that omit it are unaffected. */
@@ -152,12 +155,12 @@ export function AdsDataGrid<T>({
   showTotal, totalFirst = 'Total',
   reportLabel, emptyLabel = 'No data.', emptyNode, defaultSort, editMode, selectionActions,
   searchable, searchPlaceholder = 'Search…', searchValue, pagerCentered, filtersDefaultOpen = true,
-  groupBy, onRowClick, keyboardNav, onRowKey,
+  groupBy, onRowClick, keyboardNav, onRowKey, initialFilters,
 }: AdsDataGridProps<T>) {
   const [filtersOpen, setFiltersOpen] = useState(filtersDefaultOpen)
   const [searchOpen, setSearchOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [fstate, setFstate] = useState<FilterState>({})
+  const [fstate, setFstate] = useState<FilterState>(initialFilters ?? {})
   // ── ER3.1 Filter Library (only when filterPresetsKey is set) ──
   const [presets, setPresets] = useState<Array<{ name: string; values: FilterState }>>([])
   const [presetSaveOpen, setPresetSaveOpen] = useState(false)

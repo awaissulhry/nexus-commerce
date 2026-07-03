@@ -618,7 +618,9 @@ export async function checkSpendCeilings(): Promise<Array<{ marketplace: string;
   return out
 }
 
-export interface Anomaly { type: string; severity: 'WARN' | 'CRITICAL'; message: string; entityId?: string }
+// ER3.3 — campaignId (internal) lets the dashboard Alerts card deep-link to
+// the campaign page; entityId stays the EXTERNAL id for message context.
+export interface Anomaly { type: string; severity: 'WARN' | 'CRITICAL'; message: string; entityId?: string; campaignId?: string }
 
 export async function detectAnomalies(): Promise<Anomaly[]> {
   const anomalies: Anomaly[] = []
@@ -641,10 +643,10 @@ export async function detectAnomalies(): Promise<Anomaly[]> {
     anomalies.push({ type: 'ctr_collapse', severity: 'WARN', message: `CTR collapsed to ${(yCtr * 100).toFixed(2)}% vs trailing ${(tCtr * 100).toFixed(2)}% on ${yImpr} impressions` })
   }
   // Campaign ended outside Nexus (no end_campaign audit in the last 3 days)
-  const recentlyEnded = await prisma.ebayCampaign.findMany({ where: { status: 'ENDED', endDate: { gte: new Date(Date.now() - 3 * 86_400_000) } }, select: { externalCampaignId: true, name: true } })
+  const recentlyEnded = await prisma.ebayCampaign.findMany({ where: { status: 'ENDED', endDate: { gte: new Date(Date.now() - 3 * 86_400_000) } }, select: { id: true, externalCampaignId: true, name: true } })
   for (const c of recentlyEnded) {
     const audited = await prisma.campaignAction.findFirst({ where: { channel: 'EBAY', actionType: 'end_campaign', entityId: c.externalCampaignId } })
-    if (!audited) anomalies.push({ type: 'campaign_ended_externally', severity: 'WARN', message: `campaign "${c.name}" (${c.externalCampaignId}) ended outside Nexus — Seller Hub or eBay-side change (easy boost?)`, entityId: c.externalCampaignId })
+    if (!audited) anomalies.push({ type: 'campaign_ended_externally', severity: 'WARN', message: `campaign "${c.name}" (${c.externalCampaignId}) ended outside Nexus — Seller Hub or eBay-side change (easy boost?)`, entityId: c.externalCampaignId, campaignId: c.id })
   }
   // E7 #12 Floor Watch: DYNAMIC campaigns whose applied ad rates exceed the
   // configured cap (eBay's stealth-floor precedent, Nov 2024).
@@ -655,7 +657,7 @@ export async function detectAnomalies(): Promise<Anomaly[]> {
       if (!Number.isFinite(cap)) continue
       const over = d.ads.filter((a) => a.bidPercentage != null && Number(a.bidPercentage.toString()) > cap + 0.05)
       if (over.length) {
-        anomalies.push({ type: 'dynamic_rate_over_cap', severity: 'CRITICAL', message: `Floor Watch: ${over.length} ad(s) in "${d.name}" carry rates above the configured cap ${cap}% — eBay-side drift`, entityId: d.externalCampaignId })
+        anomalies.push({ type: 'dynamic_rate_over_cap', severity: 'CRITICAL', message: `Floor Watch: ${over.length} ad(s) in "${d.name}" carry rates above the configured cap ${cap}% — eBay-side drift`, entityId: d.externalCampaignId, campaignId: d.id })
       }
     }
   } catch (e) { logger.warn(`[E7][floor-watch] ${(e as Error).message}`) }

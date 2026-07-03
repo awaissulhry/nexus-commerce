@@ -148,3 +148,16 @@ export interface ProductsPayload {
 }
 
 export interface WriteItemOutcome { key: string; ok: boolean; mode: string; id?: string | null; error?: string | null; warning?: string | null; blocked?: string | null }
+
+// ER3.3 — dashboard aggregate (GET /ebay-ads/dashboard) + anomaly link-through
+export interface RecommendationRow {
+  type: string; count: number; title: string; criteria: string; samples: string[]
+  cta: { label: string; href: string }
+}
+export interface PacingPayload {
+  ceilings: Array<{ marketplace: string; mtdCents: number; capCents: number; pct: number; projectedCents: number }>
+  cpc: { campaigns: number; dailyBudgetCents: number; ydayFeesCents: number; utilizationPct: number | null; limitedCount: number }
+  asOf: string
+}
+export interface DashboardPayload { recommendations: RecommendationRow[]; pacing: PacingPayload }
+export interface AnomalyRow { type: string; severity: 'WARN' | 'CRITICAL' | string; message: string; entityId?: string; campaignId?: string }

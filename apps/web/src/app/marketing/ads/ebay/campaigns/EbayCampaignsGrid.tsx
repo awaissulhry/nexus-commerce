@@ -10,7 +10,7 @@
  * in the Ads tooltip · live Data Sync header button.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ExternalLink, ChevronDown, Plus, Upload, Cog } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { DateRangePicker } from '../../_shell/DateRangePicker'
@@ -82,6 +82,8 @@ function StatusCell({ c, onAction, onMenu }: {
 
 export function EbayCampaignsGrid() {
   const router = useRouter()
+  // ER3.3 — dashboard deep link (?status=LIMITED) seeds the grid filter
+  const statusParam = useSearchParams().get('status')
   const [market, setMarket] = useState('all')
   const [dateRange, setDateRange] = useState(defaultRange)
   const [importOpen, setImportOpen] = useState(false)
@@ -214,6 +216,7 @@ export function EbayCampaignsGrid() {
         filters={filters}
         filtersDefaultOpen={false}
         filterPresetsKey="er3-ebay-campaigns"
+        initialFilters={statusParam ? { status: [statusParam] } : undefined}
         searchable
         searchPlaceholder="Search campaigns…"
         searchValue={(c) => `${c.name} ${c.externalCampaignId}`}

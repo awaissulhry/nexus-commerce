@@ -793,6 +793,11 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     const auto = await import('../services/marketing/ebay-ads-automation.service.js')
     return { anomalies: await auto.detectAnomalies() }
   })
+  // ER3.3 — dashboard aggregate: Recommendations panel + budget pacing.
+  app.get('/ebay-ads/dashboard', async () => {
+    const dash = await import('../services/marketing/ebay-ads-dashboard.service.js')
+    return dash.getEbayAdsDashboard()
+  })
   app.get('/ebay-ads/digest/latest', async () => {
     const d = await prisma.ebayAdsDigest.findFirst({ orderBy: { weekStart: 'desc' } })
     return { digest: d }
