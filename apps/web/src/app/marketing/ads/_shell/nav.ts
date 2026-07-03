@@ -7,7 +7,7 @@
  * and Rules (H10's wand-with-stars = WandSparkles, not in 0.263 → Wand2, near-identical).
  */
 import {
-  LayoutGrid, Gauge, BadgeDollarSign, Atom, Sparkles, ListChecks, Lightbulb, HeartPulse, BarChart3, Table, Briefcase, Wand2, Users, PieChart, History, HelpCircle, Settings,
+  LayoutGrid, Gauge, BadgeDollarSign, Atom, Sparkles, ListChecks, Lightbulb, HeartPulse, BarChart3, Table, Briefcase, Wand2, Users, PieChart, History, HelpCircle, Settings, ShoppingBag,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -34,6 +34,12 @@ export const ADS_NAV: NavItem[] = [
   { label: 'Analytics', route: 'analytics', Icon: BarChart3 },
   { label: 'Ad Manager', route: 'campaigns', Icon: Table },
   { label: 'Portfolios', route: 'portfolios', Icon: Briefcase },
+  // E3 — eBay Ads console (additive; the eBay workstream lives inside this shell)
+  { label: 'eBay Ads', route: 'ebay', Icon: ShoppingBag, children: [
+    { label: 'Dashboard', route: 'ebay' },
+    { label: 'Campaigns', route: 'ebay/campaigns' },
+    { label: 'Products', route: 'ebay/products' },
+  ] },
   { label: 'Rules & Automation', route: 'rules-automation', Icon: Wand2 },
   { label: 'AMC', route: 'amc', Icon: Users, children: [{ label: 'AMC Insights', route: 'amc' }, { label: 'Audience Insights', route: 'amc/audiences' }] },
   { label: 'Reporting', route: 'reporting', Icon: PieChart, children: [{ label: 'Brand Metrics', route: 'reporting/brand-metrics' }] },

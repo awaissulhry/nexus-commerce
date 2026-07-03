@@ -65,6 +65,7 @@ import settingsWebhooksRoutes from "./routes/settings-webhooks.routes.js";
 import settingsPrivacyRoutes from "./routes/settings-privacy.routes.js";
 import marketingRoutes from "./routes/marketing.routes.js";
 import marketingOsRoutes from "./routes/marketing-os.routes.js";
+import ebayAdsRoutes from "./routes/ebay-ads.routes.js";
 import advertisingRoutes from "./routes/advertising.routes.js";
 import advertisingIntelRoutes from "./routes/advertising-intel.routes.js";
 import amazonAdsAuthRoutes from "./routes/amazon-ads-auth.routes.js";
@@ -613,6 +614,7 @@ app.register(pricingRoutes, { prefix: '/api' });
 app.register(pricingRulesRoutes, { prefix: '/api' });
 app.register(marketingRoutes, { prefix: '/api' });
 app.register(marketingOsRoutes, { prefix: '/api' });
+app.register(ebayAdsRoutes, { prefix: '/api' }); // E3 eBay ads console (reads)
 app.register(advertisingRoutes, { prefix: '/api' });
 app.register(advertisingIntelRoutes, { prefix: '/api' });
 app.register(amazonAdsAuthRoutes, { prefix: '/api' });

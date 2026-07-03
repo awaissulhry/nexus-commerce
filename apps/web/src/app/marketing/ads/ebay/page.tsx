@@ -1,0 +1,7 @@
+import { EbayDashboard } from './EbayDashboard'
+
+export const dynamic = 'force-dynamic'
+
+export default function Page() {
+  return <EbayDashboard />
+}
