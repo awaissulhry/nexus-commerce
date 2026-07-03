@@ -29,6 +29,8 @@ export interface CookieAttrs {
   sameSite: SameSite
   domain?: string
   path: string
+  /** CHIPS — see baseAttrs(). Set for cross-site (SameSite=None) cookies. */
+  partitioned?: boolean
 }
 
 // Session lifetimes. Absolute = the cookie maxAge; idle = server-side
@@ -89,6 +91,15 @@ function baseAttrs(httpOnly: boolean): CookieAttrs {
     sameSite,
     domain: cookieDomain(),
     path: '/',
+    // CHIPS (Cookies Having Independent Partitioned State): under Chrome's
+    // third-party-cookie phase-out, a cross-site (SameSite=None) cookie is
+    // only stored/sent if it's `Partitioned`. Our interim topology (web on
+    // vercel.app, API on railway.app) is exactly a third-party context, so
+    // WITHOUT this the session + CSRF cookies never ride and login fails.
+    // Partitioned requires Secure + host-only (no Domain) — true in interim.
+    // Option A (same-site Lax on a shared parent domain) is first-party and
+    // needs no partitioning.
+    partitioned: sameSite === 'none',
   }
 }
 
