@@ -15,6 +15,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useAuth } from '@/lib/auth/AuthProvider'
+import { filterNavByPermission } from '@/lib/auth/nav-permissions'
 import { Search, Sun, Moon, Monitor, ChevronDown, Pin, PinOff } from 'lucide-react'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -297,7 +299,15 @@ export function AppNavRail() {
     </>
   )
 
-  const navItems = buildAppNav(counts, conn)
+  // Filter the rail by permission when we have a resolved session. Anonymous
+  // (shadow, pre-enforce) shows the full nav so the open app is unchanged;
+  // a signed-in user sees only permitted links.
+  const { status, has } = useAuth()
+  const builtNav = buildAppNav(counts, conn)
+  const navItems = useMemo(
+    () => (status === 'authed' ? filterNavByPermission(builtNav, has) : builtNav),
+    [status, has, builtNav],
+  )
 
   return (
     <>

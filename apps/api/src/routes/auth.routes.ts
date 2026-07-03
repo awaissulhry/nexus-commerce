@@ -56,6 +56,7 @@ import {
   IP_MAX_FAILURES,
 } from '../lib/auth/lockout.js'
 import { writeAuthAudit } from '../lib/auth/audit.js'
+import { resolvePermissions } from '../lib/auth/rbac.js'
 import {
   sendInvitationEmail,
   sendPasswordResetEmail,
@@ -252,8 +253,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── Who am I ───────────────────────────────────────────────────
+  // Returns the caller's identity AND resolved permission set so the web
+  // can render nav + gate UI without a second round-trip (S3). `isOwner`
+  // short-circuits every client-side check; `permissions` is the expanded
+  // effective set (financials.view already includes its finer grains).
   fastify.get('/api/auth/me', { preHandler: loadSession }, async (req, reply) => {
     if (!req.authUser) return reply.code(401).send({ error: 'Not authenticated', code: 'unauthenticated' })
+    const resolved = await resolvePermissions(req.authUser)
     return {
       user: {
         id: req.authUser.id,
@@ -263,6 +269,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         mfaEnabled: !!req.authUser.twoFactorEnabledAt,
         mfaRequired: req.authUser.mfaRequired,
       },
+      isOwner: resolved.isOwner,
+      permissions: resolved.isOwner ? ['*'] : [...resolved.permissions],
     }
   })
 

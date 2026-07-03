@@ -22,7 +22,17 @@ import type { ReactNode } from 'react'
 import '../../app/marketing/ads/ads.css'
 
 /** Route prefixes that render with NO Nexus chrome (full-screen). */
-const STANDALONE_PREFIXES = ['/marketing/ads-console', '/marketing/ads', '/products/next']
+const STANDALONE_PREFIXES = [
+  '/marketing/ads-console',
+  '/marketing/ads',
+  '/products/next',
+  // Phase S3 — auth surfaces render full-screen, no app chrome.
+  '/login',
+  '/403',
+  '/accept-invite',
+  '/reset-password',
+  '/forgot-password',
+]
 
 export default function AppShell({
   sidebar,

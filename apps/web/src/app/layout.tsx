@@ -40,6 +40,7 @@ import { GlobalAccountHealthBanner } from "@/components/dashboard/GlobalAccountH
 import { CompetitiveAlertWatcher } from "@/components/dashboard/CompetitiveAlertWatcher";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ConfirmProvider } from "@/components/ui/ConfirmProvider";
+import { AuthProvider } from "@/lib/auth/AuthProvider";
 import CopilotMount from "@/components/CopilotMount";
 import { getServerLocale, getServerT } from "@/lib/i18n/server";
 
@@ -80,6 +81,7 @@ export default async function RootLayout({
         >
           {t('a11y.skipToContent')}
         </a>
+        <AuthProvider>
         <ToastProvider>
           <ConfirmProvider>
             {/* AppShell renders the full Nexus chrome for normal routes and a
@@ -114,6 +116,7 @@ export default async function RootLayout({
             <CopilotMount />
           </ConfirmProvider>
         </ToastProvider>
+        </AuthProvider>
       </body>
     </html>
   );
