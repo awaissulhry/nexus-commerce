@@ -6,10 +6,10 @@ Enterprise access control: hardened auth, role-based access control with page/fe
 
 | Phase | Title | Status |
 |---|---|---|
-| **S0** | Discovery & architecture (read-only) | ✅ **Complete — awaiting gate approval** |
-| S1 | Authentication core | Blocked on S0 gate |
-| S2 | RBAC engine (server-side enforcement) | — |
-| S3 | Frontend enforcement & UX | — |
+| **S0** | Discovery & architecture (read-only) | ✅ Complete ([report](./S0-AUDIT.md)) |
+| **S1** | Authentication core | ✅ Complete + deployed ([report](./S1-REPORT.md)) |
+| **S2** | RBAC engine (server-side enforcement) | ✅ Complete + deployed in shadow mode ([report](./S2-REPORT.md)) |
+| S3 | Frontend enforcement & UX (+ flip RBAC to enforce) | — |
 | S4 | Admin console (Settings › Team & Access) | — |
 | S5 | MFA & hardening | — |
 
