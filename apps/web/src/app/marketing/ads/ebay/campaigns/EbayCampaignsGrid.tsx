@@ -216,7 +216,7 @@ export function EbayCampaignsGrid() {
         filters={filters}
         filtersDefaultOpen={false}
         filterPresetsKey="er3-ebay-campaigns"
-        initialFilters={statusParam ? { status: [statusParam] } : undefined}
+        initialFilters={statusParam ? { status: statusParam } : undefined}
         searchable
         searchPlaceholder="Search campaigns…"
         searchValue={(c) => `${c.name} ${c.externalCampaignId}`}
