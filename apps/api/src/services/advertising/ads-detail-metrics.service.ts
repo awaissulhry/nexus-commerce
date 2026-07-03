@@ -10,7 +10,7 @@
  * Σ(ad groups) === campaign and Σ(ads) === ad group for every metric.
  */
 import prisma from '../../db.js'
-import { allocate, microsToCents } from './ads-metrics-math.js'
+import { allocate, microsToCents } from '../ads-core/metrics-math.js'
 
 export interface AllocatedMetrics {
   impressions: number

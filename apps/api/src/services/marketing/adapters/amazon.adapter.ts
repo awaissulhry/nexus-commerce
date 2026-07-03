@@ -33,6 +33,7 @@ import {
   type MutationResult,
   type DateRange,
 } from './types.js'
+import { AMAZON_CAMPAIGN_STATUS_MAP as STATUS_MAP } from '../../ads-core/campaign-status.js'
 
 // Legacy CampaignType (SP|SB|SD) → MktSurface. type is non-null on
 // Campaign so it's the reliable surface source; adProduct (which may
@@ -43,13 +44,9 @@ const SURFACE_BY_TYPE: Record<string, MktSurface> = {
   SD: 'SD',
 }
 
-// Legacy CampaignStatus → MktStatus.
-const STATUS_MAP: Record<string, string> = {
-  ENABLED: 'ACTIVE',
-  PAUSED: 'PAUSED',
-  ARCHIVED: 'ENDED',
-  DRAFT: 'DRAFT',
-}
+// Legacy CampaignStatus → MktStatus: STATUS_MAP now single-sourced in
+// ads-core (same mapping, one home — the um2 backfill script mirror noted
+// above should read from here too when next touched).
 
 const CAPABILITIES: AdapterCapabilities = {
   surfaces: ['SP', 'SB', 'SD'],

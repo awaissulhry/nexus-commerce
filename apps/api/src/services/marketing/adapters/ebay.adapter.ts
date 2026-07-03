@@ -27,13 +27,8 @@ import {
   type DateRange,
 } from './types.js'
 
-const STATUS_MAP: Record<string, string> = {
-  RUNNING: 'ACTIVE',
-  PAUSED: 'PAUSED',
-  ENDED: 'ENDED',
-  SUSPENDED: 'SUSPENDED',
-  DRAFT: 'DRAFT',
-}
+// E1: status vocabulary single-sourced in ads-core (same mapping, one home).
+import { EBAY_CAMPAIGN_STATUS_MAP as STATUS_MAP } from '../../ads-core/campaign-status.js'
 
 const CAPABILITIES: AdapterCapabilities = {
   surfaces: ['PROMOTED_LISTINGS'],

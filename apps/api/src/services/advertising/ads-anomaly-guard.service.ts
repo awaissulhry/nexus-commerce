@@ -7,7 +7,7 @@
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { microsToCents } from './ads-metrics-math.js'
+import { microsToCents } from '../ads-core/metrics-math.js'
 import { getAutomationState, haltAutomation, markGuardChecked } from './ads-automation-state.service.js'
 
 const DEFAULT_MAX_ACTIONS_PER_HOUR = 250

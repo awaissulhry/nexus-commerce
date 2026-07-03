@@ -9,7 +9,7 @@
  * ?startDate&endDate) and localStorage so it persists across navigation and is
  * shareable, and exposed via useAdRange() for client-side fetches.
  *
- * Ranges are resolved Rome-anchored on the server (ads-date-range.ts); this
+ * Ranges are resolved Rome-anchored on the server (services/ads-core/date-range.ts); this
  * component only carries the preset/custom intent.
  */
 

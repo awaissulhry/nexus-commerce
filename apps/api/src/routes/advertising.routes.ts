@@ -24,7 +24,7 @@ import prisma from '../db.js'
 import { Prisma } from '@prisma/client'
 import { logger } from '../utils/logger.js'
 import { testConnection, adsMode, listPortfolios, createPortfolio, type AdsRegion } from '../services/advertising/ads-api-client.js'
-import { allocate, microsToCents, toEurCents } from '../services/advertising/ads-metrics-math.js'
+import { allocate, microsToCents, toEurCents } from '../services/ads-core/metrics-math.js'
 import { detectKeywordConflicts } from '../services/advertising/keyword-conflicts.service.js'
 import { getFxRate } from '../services/fx-rate.service.js'
 import {
@@ -135,7 +135,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // columns, so other callers are unchanged.
     const qd = q as { preset?: string; startDate?: string; endDate?: string; windowDays?: string }
     const hasDateParams = !!(qd.preset || qd.startDate || qd.endDate || qd.windowDays)
-    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const { resolveRange } = await import('../services/ads-core/date-range.js')
     const range = hasDateParams ? resolveRange(qd) : null
 
     const { cached } = await import('../services/advertising/ads-cache.js')
@@ -249,7 +249,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const q = request.query as { windowDays?: string; preset?: string; startDate?: string; endDate?: string }
     // DR.1 — Rome-anchored range (preset/custom) with windowDays back-compat.
-    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const { resolveRange } = await import('../services/ads-core/date-range.js')
     const range = resolveRange(q)
     const since = range.since
     const windowDays = range.days
@@ -366,7 +366,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/advertising/ad-groups/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const q = request.query as { windowDays?: string; preset?: string; startDate?: string; endDate?: string }
-    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const { resolveRange } = await import('../services/ads-core/date-range.js')
     const range = resolveRange(q)
     const since = range.since
     const windowDays = range.days
@@ -1570,7 +1570,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // page server component can merge into its existing campaign list.
   fastify.get('/advertising/campaigns/v1-metrics', async (request, reply) => {
     const query = request.query as { windowDays?: string; marketplace?: string; preset?: string; startDate?: string; endDate?: string }
-    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const { resolveRange } = await import('../services/ads-core/date-range.js')
     const range = resolveRange(query)
     const since = range.since
     const windowDays = range.days
@@ -1665,7 +1665,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!query.productId && !query.asin && !query.sku) {
       return reply.code(400).send({ error: 'productId, asin, or sku required' })
     }
-    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const { resolveRange } = await import('../services/ads-core/date-range.js')
     const range = resolveRange(query)
     const windowDays = range.days
     const since = range.since
@@ -1909,7 +1909,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /advertising/by-product?windowDays=&marketplace=&search=&sort=&dir=&limit=
   fastify.get('/advertising/by-product', async (request, reply) => {
     const q = request.query as { windowDays?: string; marketplace?: string; search?: string; sort?: string; dir?: string; limit?: string; compare?: string; mode?: string; preset?: string; startDate?: string; endDate?: string }
-    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const { resolveRange } = await import('../services/ads-core/date-range.js')
     const range = resolveRange(q)
     const windowDays = range.days
     const since = range.since
@@ -2258,7 +2258,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/advertising/by-product/campaigns', async (request, reply) => {
     const q = request.query as { productId?: string; windowDays?: string; marketplace?: string; status?: string; preset?: string; startDate?: string; endDate?: string }
     if (!q.productId) { reply.status(400); return { error: 'productId required' } }
-    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const { resolveRange } = await import('../services/ads-core/date-range.js')
     const range = resolveRange(q)
     const since = range.since
     const dateFilterBPC = { gte: since, lte: range.until }
@@ -2561,7 +2561,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       startDate?: string
       endDate?: string
     }
-    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const { resolveRange } = await import('../services/ads-core/date-range.js')
     const range = resolveRange(query)
     const windowDays = range.days
     const since = range.since
@@ -3885,7 +3885,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // Targeting screen. Filterable by kind / match type / campaign / text.
   fastify.get('/advertising/targets', async (request, reply) => {
     const q = request.query as { windowDays?: string; limit?: string; search?: string; kind?: string; matchType?: string; campaignId?: string; preset?: string; startDate?: string; endDate?: string; negative?: string }
-    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const { resolveRange } = await import('../services/ads-core/date-range.js')
     const range = resolveRange(q)
     const limit = Math.max(1, Math.min(2000, Number(q.limit ?? 500)))
     const targets = await prisma.adTarget.findMany({
@@ -6008,7 +6008,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // Date range: explicit from/to (or a preset), else windowDays fallback. TZ note:
     // the demand SQL buckets in Europe/Rome — correct for IT v1; multi-market needs
     // the bucket TZ parameterised (tracked for expansion).
-    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const { resolveRange } = await import('../services/ads-core/date-range.js')
     const range = resolveRange({ preset: q.preset, startDate: q.from, endDate: q.to, windowDays: q.windowDays })
     const to = new Date(range.until.getTime() + 86_400_000) // include the until day (SQL uses < to)
     const d = await blendedFamilyDemand(fam.productIds, marketplace, range.days, { from: range.since, to }, fam.skus)

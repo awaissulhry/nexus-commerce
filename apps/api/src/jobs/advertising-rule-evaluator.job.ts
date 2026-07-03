@@ -35,7 +35,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { evaluateAllRulesForTrigger } from '../services/automation-rule.service.js'
-import { microsToCents } from '../services/advertising/ads-metrics-math.js'
+import { microsToCents } from '../services/ads-core/metrics-math.js'
 import cron from 'node-cron'
 
 // Trigger thresholds — env-tunable for testing.

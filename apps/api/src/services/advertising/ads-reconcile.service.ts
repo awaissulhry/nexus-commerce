@@ -15,7 +15,7 @@
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { microsToCents, toEurCents } from './ads-metrics-math.js'
+import { microsToCents, toEurCents } from '../ads-core/metrics-math.js'
 import { getFxRate } from '../fx-rate.service.js'
 
 // A.3 — Amazon ad report data keeps restating for up to ~72h: impressions/

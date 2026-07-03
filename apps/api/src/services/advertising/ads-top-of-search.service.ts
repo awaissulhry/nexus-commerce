@@ -12,7 +12,7 @@
  * 'PLACEMENT_TOP'.
  */
 import prisma from '../../db.js'
-import { microsToCents } from './ads-metrics-math.js'
+import { microsToCents } from '../ads-core/metrics-math.js'
 import { ACTION_HANDLERS, type ActionResult } from '../automation-rule.service.js'
 import { logger } from '../../utils/logger.js'
 
