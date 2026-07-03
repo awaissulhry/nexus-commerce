@@ -19,6 +19,12 @@ const POSTURES = [
   { id: 'AUTO', label: 'Auto', tip: 'Rule modes decide (autopilot rules apply within guardrails)' },
 ]
 
+interface DiscoveryPlan {
+  status: string; floorPct: number; capPct: number; stepPct: number; dwellDays: number
+  currentPct: number | null; bestPct: number | null; lastStepAt: string | null
+  history: Array<{ pct: number; from: string; to: string; days: number; adFeesCents: number; salesCents: number }>
+}
+
 export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange }: { campaignId: string; campaignStatus: string; say: (m: string) => void; onPolicyChange: () => void }) {
   const [data, setData] = useState<CampaignAutomationPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -145,6 +151,38 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
           </div>
         ))}
       </div>
+
+      {/* ER2 — Rate Discovery progress */}
+      {(data as unknown as { rateDiscovery?: DiscoveryPlan | null }).rateDiscovery && (() => {
+        const rd = (data as unknown as { rateDiscovery: DiscoveryPlan }).rateDiscovery
+        return (
+          <div className="h10-cd-card pad">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+              <b style={{ fontSize: 13.5 }}>Rate Discovery</b>
+              <span className={`h10-pill ${rd.status === 'ACTIVE' ? 'ok' : rd.status === 'COMPLETE' ? 'arch' : 'warn'}`}>{rd.status}</span>
+              <span className="h10-pill arch">{rd.floorPct}% → {rd.capPct}% · {rd.stepPct}% steps · {rd.dwellDays}-day windows</span>
+              {rd.currentPct != null && <span className="h10-pill ok">now at {rd.currentPct}%</span>}
+              {rd.bestPct != null && <span className="h10-pill ok" title="Best net-of-fees attributed sales per day">best: {rd.bestPct}%</span>}
+            </div>
+            {rd.history.length === 0 ? (
+              <p className="eb-be-hint">No completed windows yet — each step arrives as a proposal above; approving it moves every ad&apos;s rate (clamped per listing to break-even).</p>
+            ) : (
+              <table className="eb-difftable">
+                <thead><tr><th>Rate</th><th>Window</th><th>Days</th><th>Ad fees</th><th>Ad sales</th><th>Net/day</th></tr></thead>
+                <tbody>
+                  {rd.history.map((h, i) => (
+                    <tr key={i}>
+                      <td>{h.pct}%</td><td>{h.from} → {h.to}</td><td>{h.days}</td>
+                      <td>{money(h.adFeesCents)}</td><td>{money(h.salesCents)}</td>
+                      <td>{money(Math.round((h.salesCents - h.adFeesCents) / Math.max(1, h.days)))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Drift */}
       <div className="h10-am-card" style={{ padding: '6px 0' }}>

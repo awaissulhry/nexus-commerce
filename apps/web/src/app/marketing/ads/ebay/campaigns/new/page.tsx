@@ -1,7 +1,3 @@
-import { EbayCampaignBuilder } from './EbayCampaignBuilder'
-
-export const dynamic = 'force-dynamic'
-
-export default function Page() {
-  return <EbayCampaignBuilder />
-}
+/** ER2 — builder entry: the type-card chooser (replaces the goal-first v1). */
+import { EbayCampaignChooser } from './EbayCampaignChooser'
+export default function Page() { return <EbayCampaignChooser /> }
