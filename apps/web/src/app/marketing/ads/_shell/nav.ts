@@ -22,6 +22,20 @@ export interface NavItem {
   external?: string
 }
 
+/**
+ * E4.1 — ONE console, channel-switched (user decision 2026-07-03): the rail
+ * carries an [Amazon | eBay] switch in the brand area instead of a separate
+ * eBay nav group. In eBay mode the SAME rail renders this list (same look,
+ * separate pages → zero interference with the in-flight Amazon grid).
+ * Page-level merging (channel dropdown inside one grid) is the later
+ * convergence path once the Amazon console stabilizes.
+ */
+export const EBAY_ADS_NAV: NavItem[] = [
+  { label: 'Dashboard', route: 'ebay', Icon: Gauge },
+  { label: 'Ad Manager', route: 'ebay/campaigns', Icon: Table },
+  { label: 'Products', route: 'ebay/products', Icon: ShoppingBag },
+]
+
 export const ADS_NAV: NavItem[] = [
   { label: 'Account Overview', route: 'account-overview', Icon: LayoutGrid },
   { label: 'Dashboard', route: 'dashboard', Icon: Gauge },
@@ -34,12 +48,6 @@ export const ADS_NAV: NavItem[] = [
   { label: 'Analytics', route: 'analytics', Icon: BarChart3 },
   { label: 'Ad Manager', route: 'campaigns', Icon: Table },
   { label: 'Portfolios', route: 'portfolios', Icon: Briefcase },
-  // E3 — eBay Ads console (additive; the eBay workstream lives inside this shell)
-  { label: 'eBay Ads', route: 'ebay', Icon: ShoppingBag, children: [
-    { label: 'Dashboard', route: 'ebay' },
-    { label: 'Campaigns', route: 'ebay/campaigns' },
-    { label: 'Products', route: 'ebay/products' },
-  ] },
   { label: 'Rules & Automation', route: 'rules-automation', Icon: Wand2 },
   { label: 'AMC', route: 'amc', Icon: Users, children: [{ label: 'AMC Insights', route: 'amc' }, { label: 'Audience Insights', route: 'amc/audiences' }] },
   { label: 'Reporting', route: 'reporting', Icon: PieChart, children: [{ label: 'Brand Metrics', route: 'reporting/brand-metrics' }] },

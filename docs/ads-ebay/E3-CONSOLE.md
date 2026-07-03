@@ -1,6 +1,8 @@
 # E3 — eBay Ads Console (read/analytics)
 
-> eBay Ads workstream, Phase E3. UI placement per the user-confirmed decision: **inside the `/marketing/ads` shell** (the H10-style console), as an additive "eBay Ads" nav group. Zero edits to existing Amazon pages. Read-only — every write surface waits for E4.
+> eBay Ads workstream, Phase E3. UI placement per the user-confirmed decision: **inside the `/marketing/ads` shell** (the H10-style console). Zero edits to existing Amazon pages. Read-only — every write surface waits for E4.
+>
+> **E4.1 update (user direction 2026-07-03): ONE console, channel-switched.** The separate "eBay Ads" nav group was replaced by an **[Amazon | eBay] switch in the rail's brand area**: same rail, same layout; eBay mode renders Dashboard / Ad Manager / Products against the eBay routes below, then the on-page market dropdown narrows further (channel → market, exactly the intended flow). Switching keeps you on the counterpart page (Ad Manager ↔ Ad Manager). Pages stay physically separate under the hood so the in-flight Amazon grid and the eBay grid can never interfere; merging into one grid with a channel dropdown remains the later convergence path.
 
 ## Pages (apps/web/src/app/marketing/ads/ebay/**)
 

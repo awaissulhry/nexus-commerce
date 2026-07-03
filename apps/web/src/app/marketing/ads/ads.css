@@ -2449,3 +2449,9 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-st-toggle button.ai, .h10-spw-st-toggle button.ai.on { background: linear-gradient(105deg, #1fa3dd, #7b39e8); border-color: transparent; color: #fff; }
 .h10-spw-st-toggle button.ai:hover:not(:disabled) { filter: brightness(1.05); border-color: transparent; }
 .h10-spw-st-toggle button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* E4.1 — channel switch (square buttons in the rail, under the brand) */
+.h10-channel { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 12px 10px; }
+.h10-channel-btn { aspect-ratio: 2.4 / 1; border-radius: 8px; border: 1px solid rgba(148, 163, 184, 0.22); background: rgba(148, 163, 184, 0.07); color: #94a3b8; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 120ms, color 120ms, border-color 120ms; }
+.h10-channel-btn:hover { background: rgba(148, 163, 184, 0.14); color: #cbd5e1; }
+.h10-channel-btn.on { background: rgba(59, 130, 246, 0.16); border-color: rgba(59, 130, 246, 0.45); color: #93c5fd; }

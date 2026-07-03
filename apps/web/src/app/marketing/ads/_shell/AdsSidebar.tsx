@@ -1,14 +1,36 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { ChevronDown, ExternalLink } from 'lucide-react'
-import { ADS_NAV, ADS_BASE } from './nav'
+import { ADS_NAV, EBAY_ADS_NAV, ADS_BASE } from './nav'
 import { getBackendUrl } from '@/lib/backend-url'
+
+// E4.1 — channel counterparts: switching keeps you on the equivalent page.
+const TO_EBAY: Record<string, string> = {
+  campaigns: 'ebay/campaigns',
+  dashboard: 'ebay',
+}
+const TO_AMAZON: Record<string, string> = {
+  'ebay/campaigns': 'campaigns',
+  'ebay/products': 'campaigns',
+  ebay: 'dashboard',
+}
 
 export function AdsSidebar() {
   const pathname = usePathname() || ''
+  const router = useRouter()
+  const isEbay = pathname.startsWith(`${ADS_BASE}/ebay`)
+  const nav = isEbay ? EBAY_ADS_NAV : ADS_NAV
+
+  const switchChannel = (target: 'amazon' | 'ebay') => {
+    if ((target === 'ebay') === isEbay) return
+    const current = pathname.slice(ADS_BASE.length + 1) // strip "/marketing/ads/"
+    const map = target === 'ebay' ? TO_EBAY : TO_AMAZON
+    const hit = Object.entries(map).find(([from]) => current === from || current.startsWith(`${from}/`))
+    router.push(`${ADS_BASE}/${hit ? hit[1] : target === 'ebay' ? 'ebay' : 'dashboard'}`)
+  }
   // F1 — pending-suggestions count badge on the Suggestions nav item.
   const [pendingSuggestions, setPendingSuggestions] = useState(0)
   useEffect(() => {
@@ -30,7 +52,7 @@ export function AdsSidebar() {
   // route is inside it, so deep-linking to a sub-page lands with the group expanded.
   const [open, setOpen] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {}
-    for (const it of ADS_NAV)
+    for (const it of nav)
       if (it.children?.length)
         init[it.route] = isActive(it.route) || it.children.some((c) => isActive(c.route))
     return init
@@ -43,8 +65,13 @@ export function AdsSidebar() {
         <span className="logo" aria-hidden>N</span>
         <span className="word"><span className="mk">Nexus</span> <b>Ads</b></span>
       </div>
+      {/* E4.1 — channel switch: same console, shift the channel, then pick the market on-page */}
+      <div className="h10-channel" role="tablist" aria-label="Ad channel">
+        <button type="button" role="tab" aria-selected={!isEbay} className={`h10-channel-btn ${!isEbay ? 'on' : ''}`} onClick={() => switchChannel('amazon')}>Amazon</button>
+        <button type="button" role="tab" aria-selected={isEbay} className={`h10-channel-btn ${isEbay ? 'on' : ''}`} onClick={() => switchChannel('ebay')}>eBay</button>
+      </div>
       <nav className="h10-nav">
-        {ADS_NAV.map((it) => {
+        {nav.map((it) => {
           const href = `${ADS_BASE}/${it.route}`
           const hasChildren = !!it.children?.length
           const active = !it.external && isActive(it.route)
