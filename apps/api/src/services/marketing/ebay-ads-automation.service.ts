@@ -116,9 +116,13 @@ async function factsFor(entityType: 'LISTING' | 'KEYWORD', ids: string[], window
 
 const zeroFacts: EntityFacts = { impressions: 0, clicks: 0, adFeesCents: 0, salesCents: 0, soldQty: 0 }
 
-async function candidatesForRule(rule: { id: string; marketplace: string | null; trigger: unknown; action: unknown }): Promise<{ evaluated: number; candidates: CandidateChange[] }> {
+async function candidatesForRule(rule: { id: string; marketplace: string | null; trigger: unknown; action: unknown; scope?: unknown }): Promise<{ evaluated: number; candidates: CandidateChange[] }> {
   const trigger = rule.trigger as RuleTrigger
   const action = rule.action as RuleAction
+  // E7 — campaign-scoped rule packs: rules bound at launch carry
+  // scope.campaignIds and evaluate ONLY those campaigns.
+  const scopeCampaignIds = ((rule.scope as { campaignIds?: string[] } | null)?.campaignIds ?? []).filter(Boolean)
+  const campaignScope = scopeCampaignIds.length ? { id: { in: scopeCampaignIds } } : {}
   const ctx = { actorUserId: AUTOMATION_ACTOR }
   const candidates: CandidateChange[] = []
   let evaluated = 0
@@ -129,7 +133,7 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
       where: {
         listingId: { not: null },
         status: { in: action.type === 'reactivate_ad' ? ['STALE'] : ['ACTIVE'] },
-        campaign: { fundingModel: 'COST_PER_SALE', status: 'RUNNING', ...(rule.marketplace ? { marketplace: rule.marketplace } : {}) },
+        campaign: { fundingModel: 'COST_PER_SALE', status: 'RUNNING', ...(rule.marketplace ? { marketplace: rule.marketplace } : {}), ...campaignScope },
       },
       include: { campaign: { select: { id: true, externalCampaignId: true, name: true, marketplace: true, bidPercentage: true } } },
     })
@@ -196,7 +200,7 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
     }
   } else if (trigger.scope === 'CPC_KEYWORD') {
     const keywords = await prisma.ebayKeyword.findMany({
-      where: { status: 'ACTIVE', campaign: { fundingModel: 'COST_PER_CLICK', status: 'RUNNING', ...(rule.marketplace ? { marketplace: rule.marketplace } : {}) } },
+      where: { status: 'ACTIVE', campaign: { fundingModel: 'COST_PER_CLICK', status: 'RUNNING', ...(rule.marketplace ? { marketplace: rule.marketplace } : {}), ...campaignScope } },
       include: { campaign: { select: { id: true, externalCampaignId: true, name: true, marketplace: true } } },
     })
     const facts = await factsFor('KEYWORD', keywords.map((k) => k.externalKeywordId), windowDays)

@@ -566,6 +566,191 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     return prisma.ebayAdsDigest.update({ where: { id: req.params.id }, data: { reviewedAt: new Date() } })
   })
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // E7 Stage 1 — goal-first builder: prefill (derive everything from a goal
+  // card: scope, break-even-clamped rates, collision preflight, any-click
+  // fee forecast) + launch (create → resolve collisions → promote → bind
+  // scoped rule packs → timeline).
+  // ═══════════════════════════════════════════════════════════════════════
+  const GOAL_DEFS: Record<string, { label: string; strategy: 'CPS' | 'CPC'; goalFactor: number; fallbackRatePct: number; endDays: number | null; rulePacks: string[] }> = {
+    catch_all: { label: 'Protect margin — promote everything', strategy: 'CPS', goalFactor: 0.7, fallbackRatePct: 5, endDays: null, rulePacks: ['Fee % creep-down (CPS)', 'Click bleeder — remove ad (CPS)', 'Rate above break-even — repair (CPS)', 'Restock re-promote (CPS)'] },
+    hero: { label: 'Push hero products', strategy: 'CPC', goalFactor: 1.0, fallbackRatePct: 0, endDays: null, rulePacks: ['Keyword bleeder — pause (CPC)', 'Keyword bid-down on thin CTR (CPC)'] },
+    clearance: { label: 'Clear stock', strategy: 'CPS', goalFactor: 1.0, fallbackRatePct: 12, endDays: 30, rulePacks: ['Click bleeder — remove ad (CPS)'] },
+    defend: { label: 'Defend visibility', strategy: 'CPC', goalFactor: 1.0, fallbackRatePct: 0, endDays: null, rulePacks: ['Keyword bleeder — pause (CPC)'] },
+  }
+
+  app.post<{ Body: { goal: string; marketplace?: string; productIds?: string[]; listingIds?: string[] } }>('/ebay-ads/builder/prefill', async (req, reply) => {
+    const def = GOAL_DEFS[req.body.goal]
+    if (!def) return reply.code(400).send({ error: `unknown goal (${Object.keys(GOAL_DEFS).join('|')})` })
+    const marketplace = req.body.marketplace ?? 'EBAY_IT'
+    const short = SHORT_BY_MKT[marketplace] ?? 'IT'
+    if (marketplace === 'EBAY_ES' && def.strategy === 'CPC') return reply.code(400).send({ error: 'Priority is not available on eBay Spain' })
+
+    // Scope: explicit listings/products, else every live listing (catch-all)
+    const ids = new Set<string>(req.body.listingIds ?? [])
+    for (const pid of req.body.productIds ?? []) {
+      for (const hit of await getLiveEbayItemIds(pid, short)) ids.add(hit.itemId)
+    }
+    const live = await prisma.ebayListingIndex.findMany({
+      where: { marketplace: short, endedAt: null, ...(ids.size ? { itemId: { in: [...ids] } } : {}) },
+      select: { itemId: true, title: true, price: true, quantity: true },
+    })
+    const itemIds = live.map((l) => l.itemId)
+
+    const [eco, conflicts, facts30] = await Promise.all([
+      prisma.ebayListingEconomics.findMany({ where: { marketplace: short, itemId: { in: itemIds } }, select: { itemId: true, breakEvenAdRatePct: true, dataStatus: true } }),
+      prisma.ebayAd.findMany({
+        where: { listingId: { in: itemIds }, status: { notIn: ['STALE'] }, campaign: { fundingModel: 'COST_PER_SALE', status: { in: ['RUNNING', 'PAUSED'] } } },
+        select: { listingId: true, bidPercentage: true, campaign: { select: { id: true, name: true } } },
+      }),
+      prisma.ebayAdsDailyPerformance.groupBy({
+        by: ['entityId'],
+        where: { entityType: 'LISTING', entityId: { in: itemIds }, date: { gte: new Date(Date.now() - 30 * 86_400_000) } },
+        _sum: { salesCents: true, adFeesCents: true },
+      }),
+    ])
+    const ecoBy = new Map(eco.map((e) => [e.itemId, e]))
+    const conflictBy = new Map(conflicts.map((c) => [c.listingId!, c]))
+    const salesBy = new Map(facts30.map((f) => [f.entityId, f._sum.salesCents ?? 0]))
+
+    const seq = (await prisma.ebayCampaign.count({ where: { marketplace } })) + 1
+    const name = `${req.body.goal}-${def.strategy.toLowerCase()}-${ids.size ? 'selected' : 'all'}-${short}-${String(seq).padStart(3, '0')}`
+
+    const listings = live.map((l) => {
+      const e = ecoBy.get(l.itemId)
+      const be = e?.breakEvenAdRatePct != null ? Number(e.breakEvenAdRatePct.toString()) : null
+      const computedRatePct = def.strategy === 'CPS'
+        ? be != null ? Math.min(100, Math.max(2, Math.round(be * def.goalFactor * 10) / 10)) : def.fallbackRatePct
+        : null
+      const trailingSales = salesBy.get(l.itemId) ?? 0
+      const conflict = conflictBy.get(l.itemId)
+      return {
+        itemId: l.itemId,
+        title: l.title,
+        priceCents: l.price != null ? Math.round(Number(l.price.toString()) * 100) : null,
+        quantity: l.quantity,
+        breakEvenPct: be,
+        economicsStatus: e?.dataStatus ?? null,
+        computedRatePct,
+        rateSource: be != null ? `break-even ${be}% × ${def.goalFactor}` : `goal default (no cost data)`,
+        trailingSales30dCents: trailingSales,
+        forecastMonthlyFeeCents: def.strategy === 'CPS' && computedRatePct != null ? Math.round(trailingSales * (computedRatePct / 100)) : null,
+        conflict: conflict ? { campaignId: conflict.campaign.id, campaignName: conflict.campaign.name, currentRatePct: conflict.bidPercentage != null ? Number(conflict.bidPercentage.toString()) : null } : null,
+      }
+    })
+
+    return {
+      goal: req.body.goal,
+      derived: {
+        label: def.label,
+        strategy: def.strategy,
+        name,
+        marketplace,
+        goalFactor: def.goalFactor,
+        endDate: def.endDays ? new Date(Date.now() + def.endDays * 86_400_000).toISOString().slice(0, 10) : null,
+        rulePacks: def.rulePacks,
+        rateMode: 'FIXED',
+        defaultBudgetCents: def.strategy === 'CPC' ? 500 : null,
+      },
+      listings,
+      totals: {
+        listings: listings.length,
+        conflicts: listings.filter((l) => l.conflict).length,
+        missingCost: listings.filter((l) => l.breakEvenPct == null).length,
+        forecastMonthlyFeeCents: listings.reduce((a, l) => a + (l.forecastMonthlyFeeCents ?? 0), 0),
+        trailingSales30dCents: listings.reduce((a, l) => a + l.trailingSales30dCents, 0),
+      },
+    }
+  })
+
+  app.post<{ Body: {
+    goal: string; name: string; marketplace: string
+    ratePct?: number; dailyBudgetCents?: number; maxCpcCents?: number; targetingType?: 'MANUAL' | 'SMART'
+    endDate?: string | null
+    items: Array<{ listingId: string; ratePct?: number; resolution?: 'include' | 'skip' | 'move' }>
+    rulePacks?: string[]
+    override?: { reason: string }
+  } }>('/ebay-ads/builder/launch', async (req, reply) => {
+    const b = req.body
+    const def = GOAL_DEFS[b.goal]
+    if (!def) return reply.code(400).send({ error: 'unknown goal' })
+    const ctx = actor(req)
+    const auto = await import('../services/marketing/ebay-ads-automation.service.js')
+    const writesSvc = writes
+
+    // 1. create the campaign
+    const created = await writesSvc.createCampaign(ctx, {
+      name: b.name,
+      marketplace: b.marketplace,
+      fundingModel: def.strategy === 'CPS' ? 'COST_PER_SALE' : 'COST_PER_CLICK',
+      ...(def.strategy === 'CPS'
+        ? { adRateStrategy: 'FIXED' as const, ratePct: b.ratePct ?? def.fallbackRatePct }
+        : { targetingType: b.targetingType ?? 'MANUAL', dailyBudgetCents: b.dailyBudgetCents ?? 500, ...(b.targetingType === 'SMART' ? { maxCpcCents: b.maxCpcCents ?? 40 } : {}) }),
+    })
+
+    // 2. resolve collisions (move = remove from the old campaign first)
+    const include = b.items.filter((i) => i.resolution !== 'skip')
+    const moves = b.items.filter((i) => i.resolution === 'move')
+    const moveResults: Array<{ listingId: string; ok: boolean; error?: string | null }> = []
+    for (const m of moves) {
+      const old = await prisma.ebayAd.findFirst({ where: { listingId: m.listingId, status: { notIn: ['STALE'] }, campaignId: { not: created.campaignId }, campaign: { fundingModel: 'COST_PER_SALE', status: { in: ['RUNNING', 'PAUSED'] } } }, select: { campaignId: true } })
+      if (!old) { moveResults.push({ listingId: m.listingId, ok: true }); continue }
+      try {
+        const r = await writesSvc.removeAds(ctx, old.campaignId, [m.listingId])
+        moveResults.push({ listingId: m.listingId, ok: !!r.results[0]?.ok, error: r.results[0]?.error })
+      } catch (e) { moveResults.push({ listingId: m.listingId, ok: false, error: (e as Error).message }) }
+    }
+
+    // 3. promote (CPS) — CPC campaigns attach listings via their own flows
+    let promoteResults: unknown[] = []
+    if (def.strategy === 'CPS' && include.length) {
+      const out = await writesSvc.promoteListings(ctx, {
+        campaignId: created.campaignId,
+        items: include.map((i) => ({ listingId: i.listingId, ratePct: i.ratePct })),
+        defaultRatePct: b.ratePct ?? def.fallbackRatePct,
+        override: b.override,
+      })
+      promoteResults = out.results
+    }
+
+    // 4. bind scoped rule packs (PROPOSE, disabled→enabled per pack)
+    const bound: string[] = []
+    for (const packName of b.rulePacks ?? []) {
+      const starter = auto.STARTER_RULES.find((r) => r.name === packName)
+      if (!starter) continue
+      await prisma.ebayAdsRule.create({
+        data: {
+          name: `${packName} — ${b.name}`,
+          enabled: true,
+          mode: 'PROPOSE',
+          marketplace: b.marketplace,
+          scope: { campaignIds: [created.campaignId] } as object,
+          trigger: starter.trigger as object,
+          action: starter.action as object,
+          guardrails: starter.guardrails as object,
+          cooldownHours: starter.cooldownHours,
+        },
+      })
+      bound.push(packName)
+    }
+
+    return {
+      ok: true,
+      mode: created.mode,
+      campaignId: created.campaignId,
+      externalCampaignId: created.externalCampaignId,
+      moveResults,
+      promoteResults,
+      rulePacksBound: bound,
+      timeline: [
+        'eBay reviews and starts serving ads (typically within hours)',
+        def.strategy === 'CPS' ? 'Any-click attribution: fees appear on sales within 30 days of any ad click' : 'CPC clicks bill immediately; budget edits take effect next day',
+        `Rule packs (${bound.length}) evaluate daily at ~07:45 and PROPOSE changes for your approval`,
+        'Check back in 7 days: impressions per listing, eBay ACOS vs break-even, stale ads',
+      ],
+    }
+  })
+
   // Audit trail for the console's activity panel
   app.get<{ Querystring: { limit?: string } }>('/ebay-ads/actions', async (req) => {
     const actions = await prisma.campaignAction.findMany({
