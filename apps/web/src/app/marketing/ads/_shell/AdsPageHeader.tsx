@@ -11,6 +11,7 @@ import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Video, ExternalLink, RefreshCw, ChevronDown } from 'lucide-react'
 import { DateRangePicker } from './DateRangePicker'
+import { EbayMark } from './EbayMark'
 
 const FLAG: Record<string, string> = {
   IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', GB: '🇬🇧', UK: '🇬🇧', NL: '🇳🇱',
@@ -50,7 +51,7 @@ export interface HeaderPrimary { label: string; icon?: ReactNode; href?: string;
 
 export function AdsPageHeader({
   title, subtitle, markets, market, onMarketChange, onDataSync, syncing, actions, onDateRange,
-  showLearn = true, showDataSync = true, showDateRange = true, primaryAction,
+  showLearn = true, showDataSync = true, showDateRange = true, primaryAction, channel = 'amazon',
 }: {
   title: string; subtitle: string
   markets: string[]; market: string; onMarketChange: (m: string) => void
@@ -63,6 +64,9 @@ export function AdsPageHeader({
   // and swaps the Action ▾ dropdown for a single "+ Rule" primary button).
   showLearn?: boolean; showDataSync?: boolean; showDateRange?: boolean
   primaryAction?: HeaderPrimary
+  // ER1 (additive; Amazon default) — the account-cluster brand mark. eBay
+  // pages pass 'ebay' so the header stops showing the amazon wordmark.
+  channel?: 'amazon' | 'ebay'
 }) {
   const [open, setOpen] = useState<'' | 'market' | 'action'>('')
   const close = () => setOpen('')
@@ -86,7 +90,7 @@ export function AdsPageHeader({
         {/* market / account selector */}
         <div className="h10-hsel">
           <button type="button" className="h10-hbtn acct" onClick={() => setOpen(open === 'market' ? '' : 'market')}>
-            <span className="amz">amazon</span><span className="chip">{marketChip}</span><ChevronDown size={13} />
+            {channel === 'ebay' ? <EbayMark /> : <span className="amz">amazon</span>}<span className="chip">{marketChip}</span><ChevronDown size={13} />
           </button>
           {open === 'market' && <>
             <button type="button" className="h10-menu-back" aria-label="Close" onClick={close} />

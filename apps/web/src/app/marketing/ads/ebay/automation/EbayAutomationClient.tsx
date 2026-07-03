@@ -12,7 +12,7 @@ import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
 import '../ebay.css'
-import { postEbayAds, eurC, useWriteMode, SandboxBanner } from '../_shared'
+import { postEbayAds, eurC, useWriteMode, SandboxBanner } from '../_lib'
 
 interface RuleRow { id: string; name: string; enabled: boolean; mode: string; marketplace: string | null; cooldownHours: number; lastEvaluatedAt: string | null; executions: Array<{ status: string; evaluated: number; matched: number; proposed: number; applied: number; createdAt: string }> }
 interface ProposalRow { id: string; kind: string; status: string; entityRef: { campaignName?: string; listingId?: string; keywordText?: string; marketplace?: string }; proposedAction: { from?: unknown; to?: unknown }; reasoning?: { clampNote?: string | null } | null; createdAt: string }

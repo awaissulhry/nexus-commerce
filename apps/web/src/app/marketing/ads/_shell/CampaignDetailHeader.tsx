@@ -7,10 +7,11 @@
  * date-range (grid tabs only) · account selector · Action ▾. Reuses DateRangePicker and
  * the shared .h10-hbtn / .h10-hsel / .h10-menu styling so the two headers stay in sync.
  */
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Video, ExternalLink, ChevronDown } from 'lucide-react'
 import { DateRangePicker } from './DateRangePicker'
+import { EbayMark } from './EbayMark'
 
 const FLAG: Record<string, string> = {
   IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', GB: '🇬🇧', UK: '🇬🇧', NL: '🇳🇱',
@@ -27,6 +28,7 @@ export function CampaignDetailHeader({
   badge, title, markets, market, onMarketChange,
   showDateRange, dateRange, onDateRange, actions,
   backLabel = 'Back to Ad Manager', backHref = '/marketing/ads/campaigns', label = 'Campaign Details',
+  channel = 'amazon', titleBadges,
 }: {
   badge?: string
   title: string
@@ -40,6 +42,9 @@ export function CampaignDetailHeader({
   backLabel?: string
   backHref?: string
   label?: string
+  // ER1 (additive; Amazon default) — brand mark + optional pills after the title
+  channel?: 'amazon' | 'ebay'
+  titleBadges?: ReactNode
 }) {
   const [open, setOpen] = useState<'' | 'market' | 'action'>('')
   const close = () => setOpen('')
@@ -51,7 +56,7 @@ export function CampaignDetailHeader({
       <div className="h10-cd-titlerow">
         <div className="h10-cd-titlecol">
           <div className="lbl">{label}</div>
-          <h1 title={title}>{badge ? <span className="h10-cd-badge" data-t={badge}>{badge}</span> : null}<span className="nm">{title || '—'}</span></h1>
+          <h1 title={title}>{badge ? <span className="h10-cd-badge" data-t={badge}>{badge}</span> : null}<span className="nm">{title || '—'}</span>{titleBadges}</h1>
         </div>
         <div className="h10-cd-actions">
           <button type="button" className="h10-hbtn"><Video size={15} /> Learn</button>
@@ -62,7 +67,7 @@ export function CampaignDetailHeader({
           {/* account / market selector — same pattern as the list header */}
           <div className="h10-hsel">
             <button type="button" className="h10-hbtn acct" onClick={() => setOpen(open === 'market' ? '' : 'market')}>
-              <span className="amz">amazon</span><span className="chip">{marketChip}</span><ChevronDown size={13} />
+              {channel === 'ebay' ? <EbayMark /> : <span className="amz">amazon</span>}<span className="chip">{marketChip}</span><ChevronDown size={13} />
             </button>
             {open === 'market' && <>
               <button type="button" className="h10-menu-back" aria-label="Close" onClick={close} />

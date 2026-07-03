@@ -47,3 +47,9 @@ export const latestReportLabel = (stamps: Array<string | null | undefined>): str
   for (const s of stamps) { const t = s ? Date.parse(s) : 0; if (t > max) max = t }
   return max ? new Date(max).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'
 }
+
+/** ER1 (C7) — currency-aware money from integer cents; the eBay side's ONLY
+ *  money formatter on rebuilt surfaces (never hardcode €). `eur` above stays
+ *  for the Amazon console's decimal payloads. */
+export const money = (cents: number | null | undefined, currency = 'EUR'): string =>
+  cents == null ? '—' : (cents / 100).toLocaleString('en-IE', { style: 'currency', currency })

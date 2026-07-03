@@ -16,7 +16,7 @@ import { ArrowLeft, Shield, Rocket, Tag, Crosshair, CheckCircle2 } from 'lucide-
 import { AdsPageHeader } from '../../../_shell/AdsPageHeader'
 import { eur, pct } from '../../../campaigns/_grid/format'
 import '../../ebay.css'
-import { postEbayAds, useWriteMode, SandboxBanner, EBAY_MARKETS } from '../../_shared'
+import { postEbayAds, useWriteMode, SandboxBanner, EBAY_MARKETS } from '../../_lib'
 
 // ── Types mirroring the prefill/launch API ───────────────────────────────────
 interface PlanListing {

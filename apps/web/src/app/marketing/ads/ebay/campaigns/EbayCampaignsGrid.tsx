@@ -17,8 +17,8 @@ import '../ebay.css'
 import {
   useEbayAdsFetch, postEbayAds, EBAY_MARKETS, PRESETS,
   useWriteMode, SandboxBanner, EBAY_STATUS_PILL, type CampaignRow,
-} from '../_shared'
-import { ImportCsvModal } from '../_write-modals'
+} from '../_lib'
+import { ImportCsvModal } from '../_modals/ImportCsvModal'
 
 type CampaignsPayload = {
   window: { since: string; until: string }

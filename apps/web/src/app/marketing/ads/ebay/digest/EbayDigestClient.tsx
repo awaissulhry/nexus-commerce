@@ -13,7 +13,7 @@ import Link from 'next/link'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { getBackendUrl } from '@/lib/backend-url'
 import '../ebay.css'
-import { postEbayAds, eurC, pctP, intlN } from '../_shared'
+import { postEbayAds, eurC, pctP, intlN } from '../_lib'
 
 interface DigestPayload {
   week: { start: string; end: string }

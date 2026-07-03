@@ -14,7 +14,7 @@ import './ebay.css'
 import {
   useEbayAdsFetch, EBAY_MARKETS, PRESETS, eurC, pctP, intlN,
   useWriteMode, type SummaryPayload, type TrendPayload,
-} from './_shared'
+} from './_lib'
 import { Select } from '@/design-system/primitives/Select'
 
 interface Anomaly { type: string; severity: string; message: string }

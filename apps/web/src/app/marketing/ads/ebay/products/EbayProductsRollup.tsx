@@ -17,8 +17,10 @@ import '../ebay.css'
 import {
   useEbayAdsFetch, EBAY_MARKETS, PRESETS, useWriteMode, SandboxBanner,
   type ProductsPayload, type ProductListingRow,
-} from '../_shared'
-import { PromoteModal, MatchModal, CostModal } from '../_write-modals'
+} from '../_lib'
+import { PromoteModal } from '../_modals/PromoteModal'
+import { MatchModal } from './modals/MatchModal'
+import { CostModal } from './modals/CostModal'
 
 interface Row extends ProductListingRow {
   groupKey: string

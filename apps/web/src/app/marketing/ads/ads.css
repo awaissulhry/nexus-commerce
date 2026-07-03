@@ -2460,3 +2460,9 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-channel-logo { height: 20px; width: auto; max-width: 100%; opacity: 0.55; filter: grayscale(0.35); transition: opacity 120ms, filter 120ms; }
 .h10-channel-btn:hover .h10-channel-logo { opacity: 0.85; filter: grayscale(0.1); }
 .h10-channel-btn.on .h10-channel-logo { opacity: 1; filter: none; }
+
+/* ER1 — danger menu items: CampaignDetailHeader has always emitted
+   `.h10-menu button.danger` (CampaignDetailHeader.tsx:88) but no rule ever
+   styled it. Additive; visible only where a danger action exists. */
+.h10-menu button.danger { color: var(--h10-danger, #e5484d); }
+.h10-menu button.danger:hover { background: #fdecec; color: #c11208; }
