@@ -26,7 +26,15 @@ const AUTOMATION_ACTOR = 'automation:ebay-ads'
 
 // ── Trigger/action DSL ───────────────────────────────────────────────────────
 export type Metric = 'ad_fees_cents' | 'sales_cents' | 'clicks' | 'impressions' | 'sold_qty' | 'acos_pct' | 'ctr_pct' | 'fee_pct_of_sales' | 'rate_minus_breakeven'
-export interface Condition { metric: Metric; windowDays: number; op: 'gt' | 'gte' | 'lt' | 'lte'; threshold: number }
+// ER3.2 — benchmark-relative conditions (Pacvue adopt; break_even is ours alone):
+// when `benchmark` is set the comparison value is benchmark × multiplier and
+// `threshold` is ignored. Absent ⇒ absolute threshold, exactly as before.
+export type Benchmark = 'account_avg' | 'campaign_avg' | 'break_even'
+export interface Condition {
+  metric: Metric; windowDays: number; op: 'gt' | 'gte' | 'lt' | 'lte'; threshold?: number
+  benchmark?: Benchmark; multiplier?: number
+  excludeRecentDays?: number // ER3.2 window honesty — eBay reconciles attribution for ~72h
+}
 export interface RuleTrigger { scope: 'CPS_AD' | 'CPC_KEYWORD'; all: Condition[] }
 export interface RuleAction {
   type: 'adjust_ad_rate' | 'set_rate_to_breakeven_factor' | 'pause_ad' | 'reactivate_ad' | 'pause_keyword' | 'bid_down_keyword' | 'alert'
@@ -37,28 +45,81 @@ export interface RuleAction {
 }
 
 export interface EntityFacts { impressions: number; clicks: number; adFeesCents: number; salesCents: number; soldQty: number }
+/** ER3.2 — population aggregate for account/campaign benchmarks: summed facts
+ *  over the eligible entity set + how many entities that set holds. */
+export interface BenchFacts { sums: EntityFacts; entities: number }
+
+/** ER3.2 pure — [since, until) day bounds for a window that excludes the most
+ *  recent `excludeRecentDays` calendar days (today counts as day 1 of the
+ *  exclusion). exclude=0 reproduces the original open-ended behaviour. */
+export function windowBounds(windowDays: number, excludeRecentDays = 0, now = new Date()): { since: Date; until: Date | null } {
+  if (excludeRecentDays <= 0) {
+    const since = new Date(now); since.setUTCDate(since.getUTCDate() - windowDays)
+    return { since, until: null }
+  }
+  const until = new Date(now); until.setUTCHours(0, 0, 0, 0)
+  until.setUTCDate(until.getUTCDate() - (excludeRecentDays - 1)) // rows are day-grain: date < until drops the last N days incl. today
+  const since = new Date(until); since.setUTCDate(since.getUTCDate() - windowDays)
+  return { since, until }
+}
+
+/** Pure: one metric over aggregated facts (+per-entity economics). Null = not computable. */
+export function metricValue(metric: Metric, f: EntityFacts, ratePct: number | null, breakEvenPct: number | null): number | null {
+  switch (metric) {
+    case 'ad_fees_cents': return f.adFeesCents
+    case 'sales_cents': return f.salesCents
+    case 'clicks': return f.clicks
+    case 'impressions': return f.impressions
+    case 'sold_qty': return f.soldQty
+    case 'acos_pct': return f.salesCents > 0 ? (f.adFeesCents / f.salesCents) * 100 : null
+    case 'ctr_pct': return f.impressions > 0 ? (f.clicks / f.impressions) * 100 : null
+    case 'fee_pct_of_sales': return f.salesCents > 0 ? (f.adFeesCents / f.salesCents) * 100 : null
+    case 'rate_minus_breakeven': return ratePct != null && breakEvenPct != null ? ratePct - breakEvenPct : null
+  }
+}
+
+/** ER3.2 pure — the value a benchmark condition compares against. Ratio metrics
+ *  come from population sums (aggregate ratio); count metrics are per-entity
+ *  means. break_even compares against the entity's own BE%. Null ⇒ fail-safe. */
+export function benchmarkValue(c: Condition, breakEvenPct: number | null, bench: BenchFacts | null | undefined): number | null {
+  const mult = c.multiplier ?? 1
+  if (c.benchmark === 'break_even') return breakEvenPct != null ? breakEvenPct * mult : null
+  if (!bench || bench.entities <= 0) return null
+  if (c.metric === 'rate_minus_breakeven') return null // per-entity economics — population average is meaningless
+  const ratio = c.metric === 'acos_pct' || c.metric === 'ctr_pct' || c.metric === 'fee_pct_of_sales'
+  const v = ratio
+    ? metricValue(c.metric, bench.sums, null, null)
+    : (metricValue(c.metric, bench.sums, null, null)! / bench.entities)
+  return v != null ? v * mult : null
+}
+
+export interface ConditionResult { pass: boolean | null; value: number | null; cmp: number | null }
+
+/** ER3.2 pure — detailed evaluation: the entity's value, the comparison value
+ *  (threshold or resolved benchmark) and the verdict. Null pass = fail-safe skip. */
+export function evalConditionDetailed(
+  c: Condition, f: EntityFacts, ratePct: number | null, breakEvenPct: number | null,
+  bench?: { account?: BenchFacts | null; campaign?: BenchFacts | null },
+): ConditionResult {
+  const value = metricValue(c.metric, f, ratePct, breakEvenPct)
+  const cmp = c.benchmark
+    ? benchmarkValue(c, breakEvenPct, c.benchmark === 'campaign_avg' ? bench?.campaign : bench?.account)
+    : (c.threshold ?? null)
+  if (value == null || cmp == null) return { pass: null, value, cmp } // not computable → condition not satisfied (fail-safe)
+  switch (c.op) {
+    case 'gt': return { pass: value > cmp, value, cmp }
+    case 'gte': return { pass: value >= cmp, value, cmp }
+    case 'lt': return { pass: value < cmp, value, cmp }
+    case 'lte': return { pass: value <= cmp, value, cmp }
+  }
+}
 
 /** Pure: evaluate one condition against aggregated facts (+economics). */
-export function evalCondition(c: Condition, f: EntityFacts, ratePct: number | null, breakEvenPct: number | null): boolean | null {
-  let v: number | null
-  switch (c.metric) {
-    case 'ad_fees_cents': v = f.adFeesCents; break
-    case 'sales_cents': v = f.salesCents; break
-    case 'clicks': v = f.clicks; break
-    case 'impressions': v = f.impressions; break
-    case 'sold_qty': v = f.soldQty; break
-    case 'acos_pct': v = f.salesCents > 0 ? (f.adFeesCents / f.salesCents) * 100 : null; break
-    case 'ctr_pct': v = f.impressions > 0 ? (f.clicks / f.impressions) * 100 : null; break
-    case 'fee_pct_of_sales': v = f.salesCents > 0 ? (f.adFeesCents / f.salesCents) * 100 : null; break
-    case 'rate_minus_breakeven': v = ratePct != null && breakEvenPct != null ? ratePct - breakEvenPct : null; break
-  }
-  if (v == null) return null // not computable → condition not satisfied (fail-safe)
-  switch (c.op) {
-    case 'gt': return v > c.threshold
-    case 'gte': return v >= c.threshold
-    case 'lt': return v < c.threshold
-    case 'lte': return v <= c.threshold
-  }
+export function evalCondition(
+  c: Condition, f: EntityFacts, ratePct: number | null, breakEvenPct: number | null,
+  bench?: { account?: BenchFacts | null; campaign?: BenchFacts | null },
+): boolean | null {
+  return evalConditionDetailed(c, f, ratePct, breakEvenPct, bench).pass
 }
 
 /** Pure: clamp a proposed rate for AUTOMATIONS — never above break-even,
@@ -124,12 +185,12 @@ async function policiesFor(campaignIds: string[]): Promise<Map<string, CampaignP
   }]))
 }
 
-async function factsFor(entityType: 'LISTING' | 'KEYWORD', ids: string[], windowDays: number): Promise<Map<string, EntityFacts>> {
+async function factsFor(entityType: 'LISTING' | 'KEYWORD', ids: string[], windowDays: number, excludeRecentDays = 0): Promise<Map<string, EntityFacts>> {
   if (!ids.length) return new Map()
-  const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays)
+  const { since, until } = windowBounds(windowDays, excludeRecentDays)
   const rows = await prisma.ebayAdsDailyPerformance.groupBy({
     by: ['entityId'],
-    where: { entityType, entityId: { in: ids }, date: { gte: since } },
+    where: { entityType, entityId: { in: ids }, date: { gte: since, ...(until ? { lt: until } : {}) } },
     _sum: { impressions: true, clicks: true, adFeesCents: true, salesCents: true, soldQty: true },
   })
   return new Map(rows.map((r) => [r.entityId, {
@@ -150,7 +211,28 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
   const ctx = { actorUserId: AUTOMATION_ACTOR }
   const candidates: CandidateChange[] = []
   let evaluated = 0
-  const windowDays = Math.max(...trigger.all.map((c) => c.windowDays), 1)
+  // ER3.2 — each condition is evaluated against ITS OWN window (v1 fetched one
+  // max-window and evaluated every condition against it; harmless while the
+  // starter rules used uniform windows, wrong once the editor allows mixing).
+  const wkey = (c: Condition) => `${c.windowDays}:${c.excludeRecentDays ?? 0}`
+  const windowSpecs = [...new Map(trigger.all.map((c) => [wkey(c), { windowDays: c.windowDays, exclude: c.excludeRecentDays ?? 0 }])).entries()]
+  const maxWindowDays = Math.max(...trigger.all.map((c) => c.windowDays), 1)
+  const maxKey = wkey(trigger.all.reduce((a, b) => (b.windowDays > a.windowDays ? b : a), trigger.all[0] ?? { windowDays: 1 } as Condition))
+  const needsBench = trigger.all.some((c) => c.benchmark === 'account_avg' || c.benchmark === 'campaign_avg')
+  const buildBench = (entityIds: Array<{ id: string; campaignId: string }>, facts: Map<string, EntityFacts>) => {
+    const zero = (): EntityFacts => ({ impressions: 0, clicks: 0, adFeesCents: 0, salesCents: 0, soldQty: 0 })
+    const add = (into: EntityFacts, f: EntityFacts) => { into.impressions += f.impressions; into.clicks += f.clicks; into.adFeesCents += f.adFeesCents; into.salesCents += f.salesCents; into.soldQty += f.soldQty }
+    const account: BenchFacts = { sums: zero(), entities: entityIds.length }
+    const campaign = new Map<string, BenchFacts>()
+    for (const e of entityIds) {
+      const f = facts.get(e.id) ?? zeroFacts
+      add(account.sums, f)
+      let cb = campaign.get(e.campaignId)
+      if (!cb) { cb = { sums: zero(), entities: 0 }; campaign.set(e.campaignId, cb) }
+      cb.entities++; add(cb.sums, f)
+    }
+    return { account, campaign }
+  }
 
   if (trigger.scope === 'CPS_AD') {
     const ads = await prisma.ebayAd.findMany({
@@ -164,25 +246,33 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
     const policies = await policiesFor(ads.map((a) => a.campaignId))
     const short = (m: string) => ({ EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES' } as Record<string, string>)[m] ?? 'IT'
     const listingIds = ads.map((a) => a.listingId!)
-    const facts = await factsFor('LISTING', listingIds, windowDays)
+    const factsByWindow = new Map<string, Map<string, EntityFacts>>()
+    for (const [k, w] of windowSpecs) factsByWindow.set(k, await factsFor('LISTING', listingIds, w.windowDays, w.exclude))
+    const benchByWindow = new Map<string, { account: BenchFacts; campaign: Map<string, BenchFacts> }>()
+    if (needsBench) for (const [k] of windowSpecs) benchByWindow.set(k, buildBench(ads.map((a) => ({ id: a.listingId!, campaignId: a.campaignId })), factsByWindow.get(k)!))
     const eco = new Map((await prisma.ebayListingEconomics.findMany({ where: { itemId: { in: listingIds } }, select: { itemId: true, breakEvenAdRatePct: true, dataStatus: true } }))
       .map((e) => [e.itemId, { be: e.breakEvenAdRatePct != null ? Number(e.breakEvenAdRatePct.toString()) : null, status: e.dataStatus }]))
     const liveIdx = new Map((await prisma.ebayListingIndex.findMany({ where: { itemId: { in: listingIds } }, select: { itemId: true, endedAt: true, quantity: true } })).map((l) => [l.itemId, l]))
 
     for (const ad of ads) {
       evaluated++
-      const f = facts.get(ad.listingId!) ?? zeroFacts
       const ratePct = ad.bidPercentage != null ? Number(ad.bidPercentage.toString()) : ad.campaign.bidPercentage != null ? Number(ad.campaign.bidPercentage.toString()) : null
       const e = eco.get(ad.listingId!)
       // manual-only: automations skip unknown economics for RATE actions
       const needsEconomics = action.type === 'adjust_ad_rate' || action.type === 'set_rate_to_breakeven_factor'
       if (needsEconomics && (e?.be == null)) continue
-      const results = trigger.all.map((c) => evalCondition(c, f, ratePct, e?.be ?? null))
-      if (!results.every((r) => r === true)) continue
+      const factsAt = (c: Condition) => factsByWindow.get(wkey(c))!.get(ad.listingId!) ?? zeroFacts
+      const benchAt = (c: Condition) => { const b = benchByWindow.get(wkey(c)); return b ? { account: b.account, campaign: b.campaign.get(ad.campaignId) ?? null } : undefined }
+      const detailed = trigger.all.map((c) => evalConditionDetailed(c, factsAt(c), ratePct, e?.be ?? null, benchAt(c)))
+      if (!detailed.every((r) => r.pass === true)) continue
+      const f = factsByWindow.get(maxKey)!.get(ad.listingId!) ?? zeroFacts
 
       const base = {
         entityRef: { campaignId: ad.campaign.id, externalCampaignId: ad.campaign.externalCampaignId, campaignName: ad.campaign.name, listingId: ad.listingId!, marketplace: ad.campaign.marketplace },
-        reasoning: { rule: rule.id, windowDays, facts: f, ratePct, breakEven: e?.be ?? null, conditions: trigger.all },
+        reasoning: {
+          rule: rule.id, windowDays: maxWindowDays, facts: f, ratePct, breakEven: e?.be ?? null, conditions: trigger.all,
+          conditionResults: trigger.all.map((c, i) => ({ ...c, value: detailed[i].value, cmp: detailed[i].cmp, pass: detailed[i].pass })),
+        },
       }
       const policy = policies.get(ad.campaignId)
       const forcePropose = policy?.posture === 'SUGGEST'
@@ -238,17 +328,26 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
       include: { campaign: { select: { id: true, externalCampaignId: true, name: true, marketplace: true } } },
     })
     const kwPolicies = await policiesFor(keywords.map((k) => k.campaignId))
-    const facts = await factsFor('KEYWORD', keywords.map((k) => k.externalKeywordId), windowDays)
+    const kwIds = keywords.map((k) => k.externalKeywordId)
+    const factsByWindow = new Map<string, Map<string, EntityFacts>>()
+    for (const [k, w] of windowSpecs) factsByWindow.set(k, await factsFor('KEYWORD', kwIds, w.windowDays, w.exclude))
+    const benchByWindow = new Map<string, { account: BenchFacts; campaign: Map<string, BenchFacts> }>()
+    if (needsBench) for (const [k] of windowSpecs) benchByWindow.set(k, buildBench(keywords.map((x) => ({ id: x.externalKeywordId, campaignId: x.campaignId })), factsByWindow.get(k)!))
     for (const kw of keywords) {
       evaluated++
-      const f = facts.get(kw.externalKeywordId) ?? zeroFacts
-      const results = trigger.all.map((c) => evalCondition(c, f, null, null))
-      if (!results.every((r) => r === true)) continue
+      const factsAt = (c: Condition) => factsByWindow.get(wkey(c))!.get(kw.externalKeywordId) ?? zeroFacts
+      const benchAt = (c: Condition) => { const b = benchByWindow.get(wkey(c)); return b ? { account: b.account, campaign: b.campaign.get(kw.campaignId) ?? null } : undefined }
+      const detailed = trigger.all.map((c) => evalConditionDetailed(c, factsAt(c), null, null, benchAt(c)))
+      if (!detailed.every((r) => r.pass === true)) continue
+      const f = factsByWindow.get(maxKey)!.get(kw.externalKeywordId) ?? zeroFacts
       const kwPolicy = kwPolicies.get(kw.campaignId)
       const forcePropose = kwPolicy?.posture === 'SUGGEST'
       const base = {
         entityRef: { campaignId: kw.campaign.id, externalCampaignId: kw.campaign.externalCampaignId, campaignName: kw.campaign.name, keywordId: kw.id, keywordText: kw.text, marketplace: kw.campaign.marketplace },
-        reasoning: { rule: rule.id, windowDays, facts: f, conditions: trigger.all },
+        reasoning: {
+          rule: rule.id, windowDays: maxWindowDays, facts: f, conditions: trigger.all,
+          conditionResults: trigger.all.map((c, i) => ({ ...c, value: detailed[i].value, cmp: detailed[i].cmp, pass: detailed[i].pass })),
+        },
       }
       if (action.type === 'pause_keyword') {
         candidates.push({
@@ -306,6 +405,10 @@ export async function evaluateEbayAdsRules(onlyRuleId?: string): Promise<Evaluat
         const existing = await prisma.ebayAdsProposal.findUnique({ where: { proposedKey } })
         if (existing && existing.status === 'PENDING') continue // one pending per kind+entity
         if (existing && existing.status === 'APPLIED' && existing.decidedAt && existing.decidedAt > new Date(Date.now() - rule.cooldownHours * 3600_000)) continue // per-entity cooldown
+        // ER3.2 — snoozed/stopped: a REJECTED row with a future expiresAt is the
+        // operator's "don't re-suggest until then" (plain dismiss leaves it null
+        // and the suggestion may return next run — stated in the UI).
+        if (existing && existing.status === 'REJECTED' && existing.expiresAt && existing.expiresAt > new Date()) continue
         const data = {
           ruleId: rule.id,
           kind: cand.kind,
@@ -352,14 +455,19 @@ export async function evaluateEbayAdsRules(onlyRuleId?: string): Promise<Evaluat
 }
 
 // ── Proposal decisions + rollback ────────────────────────────────────────────
-export async function decideProposals(actorUserId: string | null, ids: string[], decision: 'approve' | 'reject'): Promise<Array<{ id: string; ok: boolean; detail: string }>> {
+export async function decideProposals(actorUserId: string | null, ids: string[], decision: 'approve' | 'reject', snoozeDays?: number): Promise<Array<{ id: string; ok: boolean; detail: string }>> {
   const out: Array<{ id: string; ok: boolean; detail: string }> = []
   for (const id of ids) {
     const p = await prisma.ebayAdsProposal.findUnique({ where: { id } })
     if (!p || p.status !== 'PENDING') { out.push({ id, ok: false, detail: 'not pending' }); continue }
     if (decision === 'reject') {
-      await prisma.ebayAdsProposal.update({ where: { id }, data: { status: 'REJECTED', decidedBy: actorUserId, decidedAt: new Date() } })
-      out.push({ id, ok: true, detail: 'rejected' })
+      // ER3.2 — snooze rides expiresAt on the REJECTED row: the evaluator won't
+      // re-raise this kind+entity until it passes. Plain reject must CLEAR it —
+      // creation stamps every proposal with a +14d PENDING expiry, which would
+      // otherwise read as a two-week snooze.
+      const snooze = snoozeDays && snoozeDays > 0 ? new Date(Date.now() + Math.min(snoozeDays, 3650) * 86_400_000) : null
+      await prisma.ebayAdsProposal.update({ where: { id }, data: { status: 'REJECTED', decidedBy: actorUserId, decidedAt: new Date(), expiresAt: snooze } })
+      out.push({ id, ok: true, detail: snooze ? `snoozed until ${snooze.toISOString().slice(0, 10)}` : 'rejected' })
       continue
     }
     try {
@@ -878,6 +986,85 @@ export async function generateWeeklyDigest(): Promise<{ weekStart: string; creat
 }
 
 // ── Starter rule-pack (all PROPOSE, all disabled — §5 "useful on day one") ───
+// ── ER3.2 — rule-body validation + dry-run preview ───────────────────────────
+const METRICS: Metric[] = ['ad_fees_cents', 'sales_cents', 'clicks', 'impressions', 'sold_qty', 'acos_pct', 'ctr_pct', 'fee_pct_of_sales', 'rate_minus_breakeven']
+const OPS = ['gt', 'gte', 'lt', 'lte']
+const CPS_ACTIONS = ['adjust_ad_rate', 'set_rate_to_breakeven_factor', 'pause_ad', 'reactivate_ad', 'alert']
+const CPC_ACTIONS = ['pause_keyword', 'bid_down_keyword', 'alert']
+
+export interface RuleBody {
+  name: string; trigger: RuleTrigger; action: RuleAction
+  guardrails?: Record<string, unknown> | null; scope?: { campaignIds?: string[] } | null
+  marketplace?: string | null; cooldownHours?: number
+}
+
+/** ER3.2 pure — validate a rule body (create/edit/preview share it). Returns
+ *  human-readable problems; empty array = valid. */
+export function validateRuleBody(b: Partial<RuleBody>): string[] {
+  const errs: string[] = []
+  if (!b.name || typeof b.name !== 'string' || !b.name.trim() || b.name.length > 80) errs.push('name: required, ≤ 80 chars')
+  const t = b.trigger as RuleTrigger | undefined
+  if (!t || (t.scope !== 'CPS_AD' && t.scope !== 'CPC_KEYWORD')) errs.push('trigger.scope: CPS_AD or CPC_KEYWORD')
+  const conds = t?.all
+  if (!Array.isArray(conds) || conds.length < 1 || conds.length > 8) errs.push('trigger.all: 1–8 conditions')
+  for (const [i, c] of (Array.isArray(conds) ? conds : []).entries()) {
+    const at = `condition ${i + 1}`
+    if (!METRICS.includes(c?.metric)) errs.push(`${at}: unknown metric`)
+    if (!OPS.includes(c?.op)) errs.push(`${at}: unknown operator`)
+    if (!Number.isInteger(c?.windowDays) || c.windowDays < 1 || c.windowDays > 90) errs.push(`${at}: windowDays 1–90`)
+    const ex = c?.excludeRecentDays ?? 0
+    if (!Number.isInteger(ex) || ex < 0 || ex > 7 || (Number.isInteger(c?.windowDays) && ex > 0 && ex >= c.windowDays)) errs.push(`${at}: excludeRecentDays 0–7 and below windowDays`)
+    if (c?.benchmark != null) {
+      if (!['account_avg', 'campaign_avg', 'break_even'].includes(c.benchmark)) errs.push(`${at}: unknown benchmark`)
+      if (c.metric === 'rate_minus_breakeven') errs.push(`${at}: rate−break-even is already benchmark-relative — use an absolute threshold`)
+      if (c.benchmark === 'break_even' && !(t?.scope === 'CPS_AD' && (c.metric === 'acos_pct' || c.metric === 'fee_pct_of_sales'))) {
+        errs.push(`${at}: break-even benchmark applies to ACOS / fee-%-of-sales on CPS ads only`)
+      }
+      const m = c.multiplier ?? 1
+      if (typeof m !== 'number' || !(m >= 0.1 && m <= 10)) errs.push(`${at}: multiplier 0.1–10`)
+    } else if (typeof c?.threshold !== 'number' || !Number.isFinite(c.threshold)) {
+      errs.push(`${at}: threshold required (or pick a benchmark)`)
+    }
+  }
+  const a = b.action as RuleAction | undefined
+  const pool = t?.scope === 'CPC_KEYWORD' ? CPC_ACTIONS : CPS_ACTIONS
+  if (!a || !pool.includes(a.type)) errs.push(`action.type: one of ${pool.join(', ')} for this scope`)
+  if (a?.type === 'adjust_ad_rate') {
+    const d = a.deltaPct ?? -10
+    if (typeof d !== 'number' || d === 0 || d < -90 || d > 300) errs.push('action.deltaPct: −90…300, non-zero')
+  }
+  if (a?.type === 'set_rate_to_breakeven_factor') {
+    const f = a.factor ?? 0.8
+    if (typeof f !== 'number' || f < 0.1 || f > 1.5) errs.push('action.factor: 0.1–1.5')
+  }
+  if (a?.minRatePct != null && (typeof a.minRatePct !== 'number' || a.minRatePct < 2 || a.minRatePct > 100)) errs.push('action.minRatePct: 2–100')
+  if (a?.type === 'bid_down_keyword') {
+    const d = a.bidDeltaPct ?? -20
+    if (typeof d !== 'number' || d >= 0 || d < -90) errs.push('action.bidDeltaPct: −90…−1')
+  }
+  const ids = b.scope?.campaignIds
+  if (ids != null && (!Array.isArray(ids) || ids.length > 200 || ids.some((x) => typeof x !== 'string' || !x))) errs.push('scope.campaignIds: up to 200 ids')
+  if (b.marketplace != null && !/^EBAY_[A-Z]{2}$/.test(b.marketplace)) errs.push('marketplace: EBAY_XX or null')
+  if (b.cooldownHours != null && (!Number.isInteger(b.cooldownHours) || b.cooldownHours < 1 || b.cooldownHours > 720)) errs.push('cooldownHours: 1–720')
+  return errs
+}
+
+/** ER3.2 — dry-run an (unsaved) rule body against live data: counts + the first
+ *  matches with the facts that fired. Writes NOTHING (no proposals, no
+ *  execution rows, no cooldown bumps); the apply closures are never invoked. */
+export async function previewRule(body: RuleBody): Promise<{ evaluated: number; matched: number; samples: Array<{ kind: string; entityRef: unknown; from: unknown; to: unknown; reasoning: object }> }> {
+  const errs = validateRuleBody(body)
+  if (errs.length) throw new Error(`invalid rule: ${errs.join(' · ')}`)
+  const { evaluated, candidates } = await candidatesForRule({
+    id: 'preview', marketplace: body.marketplace ?? null,
+    trigger: body.trigger, action: body.action, scope: body.scope ?? null,
+  })
+  return {
+    evaluated, matched: candidates.length,
+    samples: candidates.slice(0, 10).map((c) => ({ kind: c.kind, entityRef: c.entityRef, from: c.from, to: c.to, reasoning: c.reasoning })),
+  }
+}
+
 export const STARTER_RULES: Array<{ name: string; trigger: RuleTrigger; action: RuleAction; guardrails: object; cooldownHours: number }> = [
   {
     name: 'Fee % creep-down (CPS)',

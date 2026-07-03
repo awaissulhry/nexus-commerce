@@ -40,7 +40,7 @@ export function useEbayAdsFetch<T>(path: string, market: string, window: EbayAds
   return { data, error, loading, reload: load }
 }
 
-export async function postEbayAds<T>(path: string, body: unknown, method: 'POST' | 'PUT' | 'PATCH' = 'POST'): Promise<T> {
+export async function postEbayAds<T>(path: string, body: unknown, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'POST'): Promise<T> {
   const r = await fetch(`${getBackendUrl()}/api/ebay-ads${path}`, {
     method,
     headers: { 'Content-Type': 'application/json' },

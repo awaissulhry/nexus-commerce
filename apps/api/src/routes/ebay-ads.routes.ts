@@ -700,15 +700,76 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/ebay-ads/automation/rules', async () => ({
     rules: await prisma.ebayAdsRule.findMany({ orderBy: { name: 'asc' }, include: { executions: { orderBy: { createdAt: 'desc' }, take: 1 } } }),
   }))
-  app.post<{ Body: { name: string; trigger: unknown; action: unknown; marketplace?: string; cooldownHours?: number } }>('/ebay-ads/automation/rules', async (req) => {
-    return prisma.ebayAdsRule.create({ data: { name: req.body.name, enabled: false, mode: 'PROPOSE', trigger: req.body.trigger as object, action: req.body.action as object, marketplace: req.body.marketplace ?? null, cooldownHours: req.body.cooldownHours ?? 24 } })
-  })
-  app.post<{ Params: { id: string }; Body: { enabled?: boolean; mode?: 'PROPOSE' | 'AUTOPILOT' } }>('/ebay-ads/automation/rules/:id', async (req) => {
-    return prisma.ebayAdsRule.update({ where: { id: req.params.id }, data: { ...(req.body.enabled !== undefined ? { enabled: req.body.enabled } : {}), ...(req.body.mode ? { mode: req.body.mode } : {}) } })
-  })
-  app.post<{ Params: { id?: string } }>('/ebay-ads/automation/evaluate', async () => {
+  // ER3.2 — starter archetypes as editor templates (single source: the service).
+  app.get('/ebay-ads/automation/rules/templates', async () => {
     const auto = await import('../services/marketing/ebay-ads-automation.service.js')
-    return auto.evaluateEbayAdsRules()
+    return { templates: auto.STARTER_RULES }
+  })
+  app.get<{ Params: { id: string } }>('/ebay-ads/automation/rules/:id', async (req, reply) => {
+    const rule = await prisma.ebayAdsRule.findUnique({ where: { id: req.params.id }, include: { executions: { orderBy: { createdAt: 'desc' }, take: 10 } } })
+    if (!rule) return reply.code(404).send({ error: 'rule not found' })
+    return rule
+  })
+  app.post<{ Body: { name: string; trigger: unknown; action: unknown; guardrails?: unknown; scope?: unknown; marketplace?: string | null; cooldownHours?: number } }>('/ebay-ads/automation/rules', async (req, reply) => {
+    const auto = await import('../services/marketing/ebay-ads-automation.service.js')
+    const errs = auto.validateRuleBody(req.body as Partial<import('../services/marketing/ebay-ads-automation.service.js').RuleBody>)
+    if (errs.length) return reply.code(400).send({ error: errs.join(' · ') })
+    return prisma.ebayAdsRule.create({ data: {
+      name: req.body.name.trim(), enabled: false, mode: 'PROPOSE',
+      trigger: req.body.trigger as object, action: req.body.action as object,
+      guardrails: (req.body.guardrails ?? undefined) as object | undefined, scope: (req.body.scope ?? undefined) as object | undefined,
+      marketplace: req.body.marketplace ?? null, cooldownHours: req.body.cooldownHours ?? 24,
+    } })
+  })
+  // ER3.2 — full edit: config fields validated against the merged rule; the
+  // original enabled/mode toggles keep their exact semantics.
+  app.post<{ Params: { id: string }; Body: { enabled?: boolean; mode?: 'PROPOSE' | 'AUTOPILOT'; name?: string; trigger?: unknown; action?: unknown; guardrails?: unknown; scope?: unknown; marketplace?: string | null; cooldownHours?: number } }>('/ebay-ads/automation/rules/:id', async (req, reply) => {
+    const rule = await prisma.ebayAdsRule.findUnique({ where: { id: req.params.id } })
+    if (!rule) return reply.code(404).send({ error: 'rule not found' })
+    const b = req.body
+    const touchesConfig = b.name !== undefined || b.trigger !== undefined || b.action !== undefined || b.guardrails !== undefined || b.scope !== undefined || b.marketplace !== undefined || b.cooldownHours !== undefined
+    if (touchesConfig) {
+      const auto = await import('../services/marketing/ebay-ads-automation.service.js')
+      const merged = {
+        name: b.name ?? rule.name,
+        trigger: (b.trigger ?? rule.trigger) as import('../services/marketing/ebay-ads-automation.service.js').RuleTrigger,
+        action: (b.action ?? rule.action) as import('../services/marketing/ebay-ads-automation.service.js').RuleAction,
+        guardrails: (b.guardrails ?? rule.guardrails) as Record<string, unknown> | null,
+        scope: (b.scope ?? rule.scope) as { campaignIds?: string[] } | null,
+        marketplace: b.marketplace !== undefined ? b.marketplace : rule.marketplace,
+        cooldownHours: b.cooldownHours ?? rule.cooldownHours,
+      }
+      const errs = auto.validateRuleBody(merged)
+      if (errs.length) return reply.code(400).send({ error: errs.join(' · ') })
+    }
+    return prisma.ebayAdsRule.update({ where: { id: req.params.id }, data: {
+      ...(b.enabled !== undefined ? { enabled: b.enabled } : {}),
+      ...(b.mode ? { mode: b.mode } : {}),
+      ...(b.name !== undefined ? { name: b.name.trim() } : {}),
+      ...(b.trigger !== undefined ? { trigger: b.trigger as object } : {}),
+      ...(b.action !== undefined ? { action: b.action as object } : {}),
+      ...(b.guardrails !== undefined ? { guardrails: b.guardrails as object } : {}),
+      ...(b.scope !== undefined ? { scope: b.scope as object } : {}),
+      ...(b.marketplace !== undefined ? { marketplace: b.marketplace } : {}),
+      ...(b.cooldownHours !== undefined ? { cooldownHours: b.cooldownHours } : {}),
+    } })
+  })
+  app.delete<{ Params: { id: string } }>('/ebay-ads/automation/rules/:id', async (req, reply) => {
+    const rule = await prisma.ebayAdsRule.findUnique({ where: { id: req.params.id }, select: { id: true } })
+    if (!rule) return reply.code(404).send({ error: 'rule not found' })
+    await prisma.ebayAdsRule.delete({ where: { id: req.params.id } }) // executions cascade; proposals keep ruleId (history survives)
+    return { ok: true }
+  })
+  // ER3.2 — dry-run an unsaved rule body: counts + first matches, zero writes.
+  app.post<{ Body: unknown }>('/ebay-ads/automation/rules/preview', async (req, reply) => {
+    const auto = await import('../services/marketing/ebay-ads-automation.service.js')
+    try {
+      return await auto.previewRule(req.body as import('../services/marketing/ebay-ads-automation.service.js').RuleBody)
+    } catch (e) { return reply.code(400).send({ error: (e as Error).message }) }
+  })
+  app.post<{ Body: { ruleId?: string } }>('/ebay-ads/automation/evaluate', async (req) => {
+    const auto = await import('../services/marketing/ebay-ads-automation.service.js')
+    return auto.evaluateEbayAdsRules(req.body?.ruleId || undefined) // ER3.2 — per-rule Run now (service always supported it)
   })
   app.post('/ebay-ads/automation/presets/starter-pack', async () => {
     const auto = await import('../services/marketing/ebay-ads-automation.service.js')
@@ -717,9 +778,9 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { status?: string } }>('/ebay-ads/automation/proposals', async (req) => ({
     proposals: await prisma.ebayAdsProposal.findMany({ where: { status: req.query.status ?? 'PENDING' }, orderBy: { createdAt: 'desc' }, take: 200 }),
   }))
-  app.post<{ Body: { ids: string[]; decision: 'approve' | 'reject' } }>('/ebay-ads/automation/proposals/decide', async (req) => {
+  app.post<{ Body: { ids: string[]; decision: 'approve' | 'reject'; snoozeDays?: number } }>('/ebay-ads/automation/proposals/decide', async (req) => {
     const auto = await import('../services/marketing/ebay-ads-automation.service.js')
-    return { results: await auto.decideProposals((req as { authUser?: { id?: string } }).authUser?.id ?? null, req.body.ids, req.body.decision) }
+    return { results: await auto.decideProposals((req as { authUser?: { id?: string } }).authUser?.id ?? null, req.body.ids, req.body.decision, req.body.snoozeDays) }
   })
   app.post<{ Params: { id: string } }>('/ebay-ads/automation/proposals/:id/rollback', async (req) => {
     const auto = await import('../services/marketing/ebay-ads-automation.service.js')

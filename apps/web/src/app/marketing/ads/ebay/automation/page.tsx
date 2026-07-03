@@ -1,7 +1,7 @@
-import { EbayAutomationClient } from './EbayAutomationClient'
+import { EbayAutomationHub } from './EbayAutomationHub'
 
 export const dynamic = 'force-dynamic'
 
 export default function Page() {
-  return <EbayAutomationClient />
+  return <EbayAutomationHub />
 }
