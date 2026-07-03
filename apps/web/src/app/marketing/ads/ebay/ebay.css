@@ -167,3 +167,12 @@
    the row-2 columns (ebay.css loads on eBay pages only — Amazon unaffected). */
 .dash-row2 > .dash-card { min-width: 0; }
 .eb-rec { min-width: 0; }
+
+/* ER3.4 — Products: promoted chips + qty badges · Change Log cells */
+.eb-promo-chips { display: inline-flex; gap: 4px; flex-wrap: wrap; max-width: 260px; }
+.eb-promo-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 600; color: #0a4ba8; background: #eaf2fe; border-radius: 999px; padding: 1px 8px; text-decoration: none; }
+.eb-promo-chip:hover { background: #d2e6fc; }
+.eb-promo-chip b { font-size: 9px; letter-spacing: 0.04em; color: #47617f; }
+.eb-qty-cell { display: inline-flex; align-items: center; gap: 5px; }
+.eb-cl-change { display: inline-block; max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #3d4653; }
+.eb-cl-result { display: inline-flex; gap: 4px; flex-wrap: wrap; }

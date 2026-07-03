@@ -381,7 +381,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: WindowQuery }>('/ebay-ads/products', async (req) => {
     const r = resolveRange(req.query)
     const short = req.query.marketplace && req.query.marketplace !== 'all' ? SHORT_BY_MKT[req.query.marketplace] : undefined
-    const [listings, listingFacts, economics] = await Promise.all([
+    const [listings, listingFacts, economics, adRows] = await Promise.all([
       prisma.ebayListingIndex.findMany({
         where: { endedAt: null, ...(short ? { marketplace: short } : {}) },
         select: { itemId: true, marketplace: true, title: true, price: true, currency: true, quantity: true, productIds: true, matchStatus: true, categoryId: true },
@@ -392,9 +392,21 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
         _sum: sumFields,
       }),
       prisma.ebayListingEconomics.findMany({ select: { itemId: true, breakEvenAdRatePct: true, dataStatus: true } }),
+      // ER3.4 — promoted-state: which active campaigns carry each listing (+
+      // eBay's OOS auto-hide flag at the ad level)
+      prisma.ebayAd.findMany({
+        where: { listingId: { not: null }, status: { notIn: ['STALE'] }, campaign: { status: { in: ['RUNNING', 'PAUSED'] } } },
+        select: { listingId: true, hiddenReason: true, campaign: { select: { id: true, name: true, fundingModel: true } } },
+      }),
     ])
     const lf = new Map(listingFacts.map((f) => [f.entityId, derive(toSums(f))]))
     const eco = new Map(economics.map((e) => [e.itemId, e]))
+    const promoBy = new Map<string, Array<{ id: string; name: string; fundingModel: string; adHidden: boolean }>>()
+    for (const a of adRows) {
+      const arr = promoBy.get(a.listingId!) ?? []
+      arr.push({ id: a.campaign.id, name: a.campaign.name, fundingModel: a.campaign.fundingModel, adHidden: a.hiddenReason != null })
+      promoBy.set(a.listingId!, arr)
+    }
 
     const productIds = [...new Set(listings.flatMap((l) => l.productIds))]
     const products = productIds.length
@@ -412,6 +424,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       matchStatus: l.matchStatus,
       breakEvenAdRatePct: eco.get(l.itemId)?.breakEvenAdRatePct != null ? Number(eco.get(l.itemId)!.breakEvenAdRatePct!.toString()) : null,
       economicsStatus: eco.get(l.itemId)?.dataStatus ?? null,
+      campaigns: promoBy.get(l.itemId) ?? [],
       metrics: lf.get(l.itemId) ?? derive(zeroSums),
     })
 
@@ -1021,15 +1034,35 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
   // Audit trail for the console's activity panels (immutable event log —
   // pass entityId=<externalCampaignId> for one campaign's history; `before`
   // = createdAt cursor for pagination — ER1)
-  app.get<{ Querystring: { limit?: string; entityId?: string; before?: string } }>('/ebay-ads/actions', async (req) => {
-    const actions = await prisma.campaignAction.findMany({
+  app.get<{ Querystring: { limit?: string; entityId?: string; before?: string; actionType?: string } }>('/ebay-ads/actions', async (req) => {
+    const rows = await prisma.campaignAction.findMany({
       where: {
         channel: 'EBAY',
         ...(req.query.entityId ? { entityId: req.query.entityId } : {}),
+        ...(req.query.actionType ? { actionType: req.query.actionType } : {}), // ER3.4
         ...(req.query.before && !Number.isNaN(Date.parse(req.query.before)) ? { createdAt: { lt: new Date(req.query.before) } } : {}),
       },
       orderBy: { createdAt: 'desc' },
       take: Math.min(Number(req.query.limit ?? 50), 200),
+    })
+    // ER3.4 Change Log — additive per-row fields: campaign name/id resolution
+    // (eBay audit rows are CAMPAIGN-grain, entityId = externalCampaignId) and
+    // the H10 change-source classification, derived from RECORDED actors:
+    // drift-Accept rows carry _mode='accept' (the change originated on eBay).
+    const extIds = [...new Set(rows.filter((a) => a.entityType === 'CAMPAIGN').map((a) => a.entityId))]
+    const camps = extIds.length
+      ? await prisma.ebayCampaign.findMany({ where: { externalCampaignId: { in: extIds } }, select: { id: true, externalCampaignId: true, name: true } })
+      : []
+    const campBy = new Map(camps.map((c) => [c.externalCampaignId, c]))
+    const actions = rows.map((a) => {
+      const mode = String((a.payloadAfter as { _mode?: string } | null)?._mode ?? '')
+      const c = a.entityType === 'CAMPAIGN' ? campBy.get(a.entityId) : undefined
+      return {
+        ...a,
+        campaignId: c?.id ?? null,
+        campaignName: c?.name ?? null,
+        source: mode === 'accept' ? 'external_accepted' : a.userId === 'automation:ebay-ads' ? 'automation' : 'operator',
+      }
     })
     return { actions }
   })

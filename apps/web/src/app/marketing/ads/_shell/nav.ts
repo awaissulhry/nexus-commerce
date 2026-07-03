@@ -35,6 +35,7 @@ export const EBAY_ADS_NAV: NavItem[] = [
   { label: 'Ad Manager', route: 'ebay/campaigns', Icon: Table },
   { label: 'Products', route: 'ebay/products', Icon: ShoppingBag },
   { label: 'Rules & Automation', route: 'ebay/automation', Icon: Wand2 }, // ER1 (D3) — parity with the Amazon rail
+  { label: 'Change Log', route: 'ebay/change-log', Icon: History }, // ER3.4 (D4) — account-wide audit trail
   { label: 'Weekly Digest', route: 'ebay/digest', Icon: PieChart },
 ]
 

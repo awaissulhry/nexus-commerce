@@ -95,7 +95,7 @@ export async function getEbayAdsDashboard(): Promise<{ recommendations: Recommen
       title: 'Promoted listings without a product match',
       criteria: 'Listings in active campaigns whose index row links to no Nexus product — no cost, no break-even, no margin telemetry.',
       samples: unmatched.slice(0, 3).map(titleOf),
-      cta: { label: 'Match products', href: '/marketing/ads/ebay/products' },
+      cta: { label: 'Match products', href: '/marketing/ads/ebay/products?state=UNMATCHED' }, // ER3.4 — lands pre-filtered on the triage set
     },
     {
       type: 'missing_costs', count: missingCost.length,

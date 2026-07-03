@@ -132,11 +132,17 @@ export interface SearchTermsPayload { window: { until: string; trailingDays: num
 export interface ActionRow {
   id: string; actionType: string; channelResponseStatus: string; createdAt: string
   payloadBefore: Record<string, unknown> | null; payloadAfter: Record<string, unknown> | null
+  // ER3.4 Change Log — additive fields from GET /actions
+  campaignId?: string | null; campaignName?: string | null
+  source?: 'automation' | 'operator' | 'external_accepted' | string
+  rolledBackAt?: string | null
 }
 
 export interface ProductListingRow {
   itemId: string; marketplace: string; title: string | null; priceCents: number | null; currency: string
   quantity: number | null; matchStatus: string; breakEvenAdRatePct: number | null; economicsStatus: string | null
+  // ER3.4 — promoted-state: active campaigns carrying this listing (+ eBay OOS auto-hide)
+  campaigns?: Array<{ id: string; name: string; fundingModel: string; adHidden: boolean }>
   metrics: Derived
 }
 export interface ProductsPayload {

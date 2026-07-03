@@ -8,14 +8,16 @@
  * Per-row hover action = Promote; selection → bulk Promote.
  */
 import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { Megaphone, ExternalLink } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { DateRangePicker } from '../../_shell/DateRangePicker'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { eur, int, pct, latestReportLabel } from '../../campaigns/_grid/format'
 import '../ebay.css'
 import {
-  useEbayAdsFetch, EBAY_MARKETS, PRESETS, useWriteMode, SandboxBanner,
+  useEbayAdsFetch, EBAY_MARKETS, useWriteMode, SandboxBanner,
   type ProductsPayload, type ProductListingRow,
 } from '../_lib'
 import { PromoteModal } from '../_modals/PromoteModal'
@@ -30,16 +32,20 @@ interface Row extends ProductListingRow {
   costPriceCents: number | null
 }
 
+const defaultRange = () => { const e = new Date(); e.setHours(0, 0, 0, 0); const s0 = new Date(e); s0.setDate(s0.getDate() - 29); return { start: s0, end: e } }
+
 export function EbayProductsRollup() {
   const router = useRouter()
+  // ER3.4 — dashboard deep link (?state=UNMATCHED) seeds the match-state filter
+  const stateParam = useSearchParams().get('state')
   const [market, setMarket] = useState('all')
-  const [preset, setPreset] = useState('last30')
+  const [dateRange, setDateRange] = useState(defaultRange)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [promote, setPromote] = useState<{ listingIds: string[] } | null>(null)
   const [matchRow, setMatchRow] = useState<Row | null>(null)
   const [costRow, setCostRow] = useState<Row | null>(null)
   const writeMode = useWriteMode()
-  const { data, error, loading, reload } = useEbayAdsFetch<ProductsPayload>('/products', market, preset)
+  const { data, error, loading, reload } = useEbayAdsFetch<ProductsPayload>('/products', market, dateRange)
 
   const rows: Row[] = useMemo(() => {
     if (!data) return []
@@ -50,7 +56,7 @@ export function EbayProductsRollup() {
       }
     }
     for (const l of data.unmatchedListings) {
-      out.push({ ...l, groupKey: '~unmatched', groupLabel: 'Unmatched listings — Match to a catalog product to unlock costs & break-evens (spend still counted)', productSku: null, hasCost: false, costPriceCents: null })
+      out.push({ ...l, groupKey: '~unmatched', groupLabel: 'Unmatched listings', productSku: null, hasCost: false, costPriceCents: null })
     }
     return out
   }, [data])
@@ -58,12 +64,33 @@ export function EbayProductsRollup() {
   const columns: GridColumn<Row>[] = useMemo(() => [
     {
       key: 'state', label: 'State', metric: false, sortValue: (r) => r.matchStatus,
+      tip: 'Match a listing to a catalog product to unlock costs, break-evens and margin guardrails — ad spend is counted either way.',
       render: (r) => r.matchStatus === 'MATCHED' || r.matchStatus === 'CONFIRMED' || r.matchStatus === 'MANUAL'
         ? <span className="h10-pill ok" title={r.matchStatus === 'MANUAL' ? 'Operator-confirmed match (sticky across syncs)' : 'Matched via eBay SKU / listing map'}>Matched</span>
-        : <button type="button" className="h10-pill warn" style={{ cursor: 'pointer', border: 'none' }} title="Link this listing to a catalog product — unlocks cost entry, break-evens and margin guardrails" onClick={(e) => { e.stopPropagation(); setMatchRow(r) }}>Match…</button>,
+        : <button type="button" className="h10-am-btn sm" title="Link this listing to a catalog product — unlocks cost entry, break-evens and margin guardrails" onClick={(e) => { e.stopPropagation(); setMatchRow(r) }}>Match…</button>,
+    },
+    {
+      key: 'promoted', label: 'Promoted', metric: false, sortValue: (r) => (r.campaigns?.length ?? 0),
+      tip: 'Active campaigns carrying this listing — click a chip to open the campaign.',
+      render: (r) => (r.campaigns && r.campaigns.length > 0)
+        ? <span className="eb-promo-chips">{r.campaigns.map((c) => (
+            <Link key={c.id} className="eb-promo-chip" href={`/marketing/ads/ebay/campaigns/${c.id}`} title={`${c.name}${c.adHidden ? ' — ad hidden by eBay (out of stock)' : ''}`} onClick={(e) => e.stopPropagation()}>
+              <b>{c.fundingModel === 'COST_PER_SALE' ? 'GEN' : 'PRI'}</b> {c.name}{c.adHidden ? ' ⌀' : ''}
+            </Link>
+          ))}</span>
+        : <span style={{ color: '#8a93a1' }}>—</span>,
     },
     { key: 'price', label: 'Price', render: (r) => (r.priceCents != null ? eur(r.priceCents / 100) : '—'), sortValue: (r) => r.priceCents ?? -1, filterValue: (r) => (r.priceCents ?? 0) / 100 },
-    { key: 'qty', label: 'Qty', render: (r) => (r.quantity != null ? int(r.quantity) : '—'), sortValue: (r) => r.quantity ?? -1 },
+    {
+      key: 'qty', label: 'Qty', sortValue: (r) => r.quantity ?? -1,
+      render: (r) => (
+        <span className="eb-qty-cell">
+          {r.quantity != null ? int(r.quantity) : '—'}
+          {r.quantity === 0 && <span className="h10-pill warn" title="Out of stock — eBay auto-hides its ads until restock">OOS</span>}
+          {r.quantity !== 0 && r.campaigns?.some((c) => c.adHidden) && <span className="h10-pill warn" title="An ad for this listing is hidden by eBay (auto-hide); it resurfaces on restock">hidden</span>}
+        </span>
+      ),
+    },
     {
       key: 'breakeven', label: 'Break-even', tip: 'Max profitable General ad rate = contribution margin ÷ total sale amount. Click "add cost" to enter the unit cost right here — break-even computes immediately.',
       render: (r) => {
@@ -71,8 +98,8 @@ export function EbayProductsRollup() {
           return <button type="button" className="h10-am-link" title={`Unit cost €${r.costPriceCents != null ? (r.costPriceCents / 100).toFixed(2) : '?'} — click to edit`} onClick={(e) => { e.stopPropagation(); setCostRow(r) }}>{pct(r.breakEvenAdRatePct / 100)}</button>
         }
         if (r.economicsStatus === 'MISSING_PRICE') return <span className="h10-pill arch">no price</span>
-        if (r.groupKey === '~unmatched') return <button type="button" className="h10-pill warn" style={{ cursor: 'pointer', border: 'none' }} title="Match the listing to a product first" onClick={(e) => { e.stopPropagation(); setMatchRow(r) }}>match first</button>
-        return <button type="button" className="h10-pill warn" style={{ cursor: 'pointer', border: 'none' }} title="Enter the unit cost — break-even + margin guardrails activate immediately" onClick={(e) => { e.stopPropagation(); setCostRow(r) }}>add cost</button>
+        if (r.groupKey === '~unmatched') return <button type="button" className="h10-am-btn sm" title="Match the listing to a product first" onClick={(e) => { e.stopPropagation(); setMatchRow(r) }}>match first</button>
+        return <button type="button" className="h10-am-btn sm" title="Enter the unit cost — break-even + margin guardrails activate immediately" onClick={(e) => { e.stopPropagation(); setCostRow(r) }}>add cost</button>
       },
       sortValue: (r) => r.breakEvenAdRatePct ?? -1,
     },
@@ -84,6 +111,12 @@ export function EbayProductsRollup() {
     {
       key: 'acos', label: 'eBay ACOS', render: (r) => (r.metrics.acosPct != null ? pct(r.metrics.acosPct / 100) : '—'), sortValue: (r) => r.metrics.acosPct ?? -1,
       total: (() => { const f = rows.reduce((a, r) => a + r.metrics.adFeesCents, 0); const s = rows.reduce((a, r) => a + r.metrics.salesCents, 0); return s > 0 ? pct(f / s) : '—' })(),
+    },
+    {
+      key: 'roas', label: 'ROAS', tip: 'Attributed sales ÷ ad fees (any-click).',
+      render: (r) => (r.metrics.adFeesCents > 0 ? (r.metrics.salesCents / r.metrics.adFeesCents).toFixed(2) : '—'),
+      sortValue: (r) => (r.metrics.adFeesCents > 0 ? r.metrics.salesCents / r.metrics.adFeesCents : -1),
+      total: (() => { const f = rows.reduce((a, r) => a + r.metrics.adFeesCents, 0); const sl = rows.reduce((a, r) => a + r.metrics.salesCents, 0); return f > 0 ? (sl / f).toFixed(2) : '—' })(),
     },
     { key: 'sold', label: 'Sold', render: (r) => int(r.metrics.soldQty), sortValue: (r) => r.metrics.soldQty, total: int(rows.reduce((a, r) => a + r.metrics.soldQty, 0)) },
   ], [rows])
@@ -133,6 +166,7 @@ export function EbayProductsRollup() {
         searchPlaceholder="Search listings / SKUs…"
         searchValue={(r) => `${r.title ?? ''} ${r.itemId} ${r.productSku ?? ''} ${r.groupLabel}`}
         groupBy={(r) => ({ key: r.groupKey, label: r.groupLabel })}
+        initialFilters={stateParam ? { state: stateParam } : undefined}
         showTotal
         defaultSort={{ key: 'spend', dir: 'desc' }}
         storageKey="h10-ebay-products-cols"
@@ -144,11 +178,7 @@ export function EbayProductsRollup() {
           </span>
         )}
         reportLabel={latestReportLabel([data?.freshness.factsReportedAt ?? null])}
-        toolbarLeft={
-          <select className="h10-am-btn" value={preset} onChange={(e) => setPreset(e.target.value)} aria-label="Date range" style={{ paddingRight: 8 }}>
-            {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-          </select>
-        }
+        toolbarLeft={<DateRangePicker value={dateRange} onChange={(start, end) => setDateRange({ start, end })} />}
         toolbarRight={
           <button type="button" className="h10-am-btn primary" onClick={() => router.push('/marketing/ads/ebay/campaigns/new')}>New campaign</button>
         }

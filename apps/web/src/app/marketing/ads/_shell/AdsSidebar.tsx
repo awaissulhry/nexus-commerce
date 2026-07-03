@@ -11,10 +11,12 @@ import { getBackendUrl } from '@/lib/backend-url'
 const TO_EBAY: Record<string, string> = {
   campaigns: 'ebay/campaigns',
   dashboard: 'ebay',
+  changelog: 'ebay/change-log',
 }
 const TO_AMAZON: Record<string, string> = {
   'ebay/campaigns': 'campaigns',
   'ebay/products': 'campaigns',
+  'ebay/change-log': 'changelog',
   ebay: 'dashboard',
 }
 
