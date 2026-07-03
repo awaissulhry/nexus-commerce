@@ -90,4 +90,16 @@ npx tsx apps/api/src/scripts/check-rbac-coverage.ts > /tmp/rbac-coverage.log 2>&
 grep -E "RBAC coverage:" /tmp/rbac-coverage.log || true
 echo "✓ RBAC coverage: every route maps to a permission"
 
+# Security workstream S5 — the auth/RBAC test suite (password hashing,
+# sessions, CSRF, lockout, field filter, permission matrix, guardrails,
+# MFA). Fast + DB-free; runs on every push.
+echo "→ Running security test suite (S5)..."
+npm run test:security --workspace=@nexus/api > /tmp/sec-tests.log 2>&1 || {
+  echo "❌ Security tests FAILED"
+  tail -40 /tmp/sec-tests.log
+  exit 1
+}
+grep -E "Tests +[0-9]+ passed" /tmp/sec-tests.log | tail -1 || true
+echo "✓ Security tests passed"
+
 echo "✅ All workspaces build cleanly — pushing"

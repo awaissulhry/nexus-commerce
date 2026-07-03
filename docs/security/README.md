@@ -11,11 +11,13 @@ Enterprise access control: hardened auth, role-based access control with page/fe
 | **S2** | RBAC engine (server-side enforcement) | ✅ Complete + deployed in shadow mode ([report](./S2-REPORT.md)) |
 | **S3** | Frontend enforcement & UX (+ flip RBAC to enforce) | ✅ **LIVE** — enforce on, owner login browser-verified; interim cross-site cookies fixed with CHIPS/Partitioned ([report](./S3-REPORT.md)) |
 | **S4** | Admin console (Settings › Team & Access) | ✅ **LIVE** — Members + Roles (permission matrix) + Invitations, browser-verified ([report](./S4-REPORT.md)) |
-| S5 | MFA & hardening | — |
+| **S5** | MFA & hardening | ✅ **LIVE** — TOTP at login + enrolment + per-role enforce + admin reset; security suite in pre-push; ASVS L2 self-audit + `SECURITY.md` ([report](./S5-REPORT.md)) |
 
-## Go-live
+## Operations & go-live
 
-**[SETUP-GUIDE.md](./SETUP-GUIDE.md)** — step-by-step runbook to take auth from shadow to enforcing (custom-domain and interim paths, owner password, the enforce flip, verification, rollback, troubleshooting).
+- **[SECURITY.md](./SECURITY.md)** — architecture, threat model, and the operational runbook (offboard in <30s, secret rotation, incident basics).
+- **[SETUP-GUIDE.md](./SETUP-GUIDE.md)** — step-by-step go-live runbook (custom-domain and interim paths, owner password, enforce flip, verification, rollback, troubleshooting).
+- **[ASVS-CHECKLIST.md](./ASVS-CHECKLIST.md)** — OWASP ASVS Level 2 self-audit (pass/partial/gap per item).
 
 ## S0 documents
 
