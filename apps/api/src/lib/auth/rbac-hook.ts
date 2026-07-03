@@ -63,6 +63,7 @@ export async function rbacHook(req: FastifyRequest, reply: FastifyReply): Promis
     deny = { status: 401, code: 'unauthenticated', reason: 'no valid session' }
   } else {
     const resolved = await resolvePermissions(req.authUser)
+    req.__rbacResolved = resolved // reused by the financial field filter
     if (!hasPermission(resolved, required)) {
       deny = { status: 403, code: 'forbidden', reason: `missing ${required}` }
     }

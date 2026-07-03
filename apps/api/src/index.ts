@@ -260,6 +260,10 @@ import pricingRulesRoutes from "./routes/pricing-rules.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 // Phase S2 (RBAC engine) — the one global permission gate (shadow/enforce).
 import { rbacHook } from "./lib/auth/rbac-hook.js";
+// Phase S2 (RBAC engine) — field-level financial stripping (enforce mode).
+import { financialFilterHook } from "./lib/auth/field-filter.js";
+// Phase S2 (RBAC engine) — converge system roles on boot.
+import { seedSystemRoles } from "./services/team-access.service.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
 // initializeQueue pings Redis and throws on failure; tryStartQueueWorkers
 // catches that so a missing/unreachable Redis can't crash the API process
@@ -532,6 +536,13 @@ app.register(cookie);
 // after body parsing and can read cookies / short-circuit with a reply.
 app.addHook('preHandler', rbacHook);
 
+// Phase S2 (RBAC engine) — strip restricted financial fields from every
+// JSON response for callers without the matching financials.* permission.
+// preSerialization runs on the raw object (so nested JSON blobs are covered
+// too) and is a no-op in shadow mode. SSE + export writers bypass this and
+// call filterFinancialPayload() directly (S2 follow-up).
+app.addHook('preSerialization', financialFilterHook);
+
 // HTTP routes — all queue references are lazy (see lib/queue.ts), so registering
 // these does not open Redis connections. Workers/jobs remain disabled (Phase 2).
 // Phase S1 (auth core) — auth endpoints declare full /api/auth/* paths
@@ -727,6 +738,19 @@ async function start() {
     // read uniformly. Idempotent: upsert keyed on (channelType,
     // managedBy='env').
     await seedEnvManagedConnections();
+
+    // Phase S2 (RBAC engine) — converge the six system roles to the
+    // registry on every boot (idempotent, prod-safe). Runs here (post-
+    // listen) so a DB blip never blocks HTTP startup. No version bump —
+    // that's the manual seed-roles script — to avoid re-resolving every
+    // user's permissions on each deploy.
+    try {
+      await seedSystemRoles();
+    } catch (err) {
+      logger.warn('seedSystemRoles failed on boot (non-fatal; retry via script)', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
 
     // ── BullMQ queue workers (outbound sync, channel sync, bulk list) ──
     // Opt-in via ENABLE_QUEUE_WORKERS=1. Requires REDIS_URL or REDIS_HOST.

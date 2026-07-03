@@ -24,6 +24,7 @@ import type {
 import { validateSession, type SessionUser } from './session.js'
 import { verifyCsrf } from './csrf.js'
 import { sessionCookieName } from './cookies.js'
+import type { ResolvedPermissions } from './rbac.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -32,6 +33,9 @@ declare module 'fastify' {
     authMfaSatisfied?: boolean
     /** Internal: whether loadSession has already run this request. */
     __sessionLoaded?: boolean
+    /** Permissions the RBAC gate resolved this request (reused by the
+     *  financial field filter to avoid a second resolve). */
+    __rbacResolved?: ResolvedPermissions
   }
 }
 

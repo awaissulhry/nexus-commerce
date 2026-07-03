@@ -239,7 +239,9 @@ const OPS_MANAGER_PERMS: string[] = [
   F.poReceive, F.replenishmentView, F.replenishmentRun, F.carriersManage,
   F.fnskuGenerate, F.fulfillmentExport,
   F.pricingView, F.pricingEdit, F.pricingRulesManage, F.repricingView,
-  F.repricingRulesManage, F.pricingTiersManage,
+  F.repricingRulesManage,
+  // NOTE: pricing.tiers.manage is intentionally excluded — B2B tier prices
+  // are restricted financial data and OPS_MANAGER holds no financials.
   F.adsView, F.adsCampaignsManage, F.adsBudgetsEdit, F.adsBidsEdit, F.adsExport,
   F.marketingView, F.marketingContentEdit, F.marketingCampaignsManage,
   F.marketingAutomationManage, F.marketingPublish, F.assetsManage, F.aplusManage,
