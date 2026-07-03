@@ -13,6 +13,10 @@ Enterprise access control: hardened auth, role-based access control with page/fe
 | S4 | Admin console (Settings › Team & Access) | — |
 | S5 | MFA & hardening | — |
 
+## Go-live
+
+**[SETUP-GUIDE.md](./SETUP-GUIDE.md)** — step-by-step runbook to take auth from shadow to enforcing (custom-domain and interim paths, owner password, the enforce flip, verification, rollback, troubleshooting).
+
 ## S0 documents
 
 | Document | What it contains |
