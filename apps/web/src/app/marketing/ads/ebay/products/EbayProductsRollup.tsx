@@ -7,8 +7,10 @@
  * so nothing is silently invisible — matching actions land in E4.
  */
 import { useMemo, useState } from 'react'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, Megaphone } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { Button } from '@/design-system/primitives/Button'
+import { PromoteModal } from '../_write-modals'
 import { DataGrid, type Column } from '@/design-system/components/DataGrid'
 import { Banner } from '@/design-system/components/Banner'
 import { EmptyState } from '@/design-system/components/EmptyState'
@@ -29,6 +31,9 @@ export function EbayProductsRollup() {
   const [market, setMarket] = useState('all')
   const [preset, setPreset] = useState('last30')
   const { data, error, loading, reload } = useEbayAdsFetch<ProductsPayload>('/products', market, preset)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [selectedUnmatched, setSelectedUnmatched] = useState<Set<string>>(new Set())
+  const [promoteOpen, setPromoteOpen] = useState(false)
 
   const productColumns: Column<ProductRow>[] = useMemo(() => [
     {
@@ -96,8 +101,19 @@ export function EbayProductsRollup() {
         <Select value={preset} onChange={(e) => setPreset(e.target.value)} aria-label="Date range">
           {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
         </Select>
+        <Button onClick={() => setPromoteOpen(true)} disabled={selected.size === 0 && selectedUnmatched.size === 0}>
+          <Megaphone size={14} aria-hidden /> Promote {selected.size + selectedUnmatched.size > 0 ? `(${selected.size + selectedUnmatched.size})` : ''}
+        </Button>
         <FreshnessLine f={data?.freshness} />
       </div>
+
+      <PromoteModal
+        open={promoteOpen}
+        onClose={() => setPromoteOpen(false)}
+        productIds={[...selected]}
+        listingIds={[...selectedUnmatched]}
+        onDone={reload}
+      />
 
       {error && <Banner tone="danger" title="Couldn't load product rollups">{error} — <button className="eb-linkbtn" onClick={reload}>retry</button></Banner>}
       {loading && <Skeleton height={420} />}
@@ -109,7 +125,7 @@ export function EbayProductsRollup() {
             {data.products.length === 0 ? (
               <EmptyState title="No matched products yet" description="Listings match to products via their eBay SKUs and the shared-SKU map. Legacy listings without SKUs appear below until matched." />
             ) : (
-              <DataGrid<ProductRow> columns={productColumns} rows={data.products} rowKey={(p) => p.productId} initialSort={{ key: 'fees', dir: 'desc' }} maxHeight={430} />
+              <DataGrid<ProductRow> columns={productColumns} rows={data.products} rowKey={(p) => p.productId} initialSort={{ key: 'fees', dir: 'desc' }} maxHeight={430} selectable selected={selected} onSelectedChange={setSelected} />
             )}
           </section>
 
@@ -118,7 +134,7 @@ export function EbayProductsRollup() {
             {data.unmatchedListings.length === 0 ? (
               <EmptyState title="Everything is matched" description="All live eBay listings resolve to products." />
             ) : (
-              <DataGrid<ProductListingRow> columns={unmatchedColumns} rows={data.unmatchedListings} rowKey={(l) => l.itemId} initialSort={{ key: 'impr', dir: 'desc' }} maxHeight={360} />
+              <DataGrid<ProductListingRow> columns={unmatchedColumns} rows={data.unmatchedListings} rowKey={(l) => l.itemId} initialSort={{ key: 'impr', dir: 'desc' }} maxHeight={360} selectable selected={selectedUnmatched} onSelectedChange={setSelectedUnmatched} />
             )}
           </section>
         </>

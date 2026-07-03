@@ -13,6 +13,10 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { resolveRange, priorRange, bucketFor, type ResolvedRange } from '../services/ads-core/date-range.js'
+import * as writes from '../services/marketing/ebay-ads-write.service.js'
+import { exportAdsCsv, parseAdsOpsCsv, diffOps, applyOps } from '../services/marketing/ebay-ads-csv.service.js'
+import { getLiveEbayItemIds } from '../services/marketing/ebay-listing-index.service.js'
+import { getActiveEbayAdsAuth, suggestMaxCpcApi, suggestKeywordsApi, suggestBidsApi } from '../services/marketing/ebay-ads-api.service.js'
 
 const SHORT_BY_MKT: Record<string, string> = { EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES', EBAY_GB: 'UK' }
 
@@ -369,6 +373,136 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       },
       freshness: await freshness(),
     }
+  })
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // E4 — WRITES. POST → ads.campaigns.manage (manifest RW mapping). All ops
+  // flow through the audited write service: gate → guardrails → mirror →
+  // CampaignAction. Sandbox until NEXUS_MARKETING_WRITES_EBAY=1.
+  // ═══════════════════════════════════════════════════════════════════════
+  const actor = (req: { authUser?: { id?: string } }): writes.OpContext => ({ actorUserId: req.authUser?.id ?? null })
+
+  app.get('/ebay-ads/write-mode', async () => ({ mode: writes.currentWriteMode(), gateEnv: 'NEXUS_MARKETING_WRITES_EBAY' }))
+
+  // Product-first promote: resolve products → live item IDs → bulk-create ads
+  app.post<{ Body: { productIds?: string[]; listingIds?: string[]; marketplace?: string; campaignId: string; defaultRatePct?: number; perListing?: Array<{ listingId: string; ratePct?: number }>; override?: { reason: string } } }>(
+    '/ebay-ads/promote', async (req, reply) => {
+      const b = req.body
+      const short = ({ EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES' } as Record<string, string>)[b.marketplace ?? 'EBAY_IT']
+      const resolved = new Map<string, string[]>() // listingId → productIds (provenance)
+      for (const lid of b.listingIds ?? []) resolved.set(lid, [])
+      for (const pid of b.productIds ?? []) {
+        for (const hit of await getLiveEbayItemIds(pid, short)) {
+          resolved.set(hit.itemId, [...(resolved.get(hit.itemId) ?? []), pid])
+        }
+      }
+      if (resolved.size === 0) return reply.code(400).send({ error: 'nothing to promote — no live eBay listings resolved for the selection' })
+      const rateBy = new Map((b.perListing ?? []).map((p) => [p.listingId, p.ratePct]))
+      const items = [...resolved.keys()].map((listingId) => ({ listingId, ratePct: rateBy.get(listingId) ?? undefined }))
+      const out = await writes.promoteListings(actor(req), { campaignId: b.campaignId, items, defaultRatePct: b.defaultRatePct, override: b.override })
+      return { ...out, resolved: Object.fromEntries(resolved) }
+    })
+
+  // Rules preview (local approximation over the listing index, labeled as such)
+  app.post<{ Body: { marketplace: string; selectionRules: Array<{ brands?: string[]; categoryIds?: string[]; minPrice?: number; maxPrice?: number }> } }>(
+    '/ebay-ads/campaigns/preview-rules', async (req) => {
+      const short = ({ EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES' } as Record<string, string>)[req.body.marketplace] ?? 'IT'
+      const live = await prisma.ebayListingIndex.findMany({ where: { marketplace: short, endedAt: null } })
+      const matches = live.filter((l) => req.body.selectionRules.some((r) => {
+        if (r.categoryIds?.length && (!l.categoryId || !r.categoryIds.includes(l.categoryId))) return false
+        const price = l.price != null ? Number(l.price.toString()) : null
+        if (r.minPrice != null && (price == null || price < r.minPrice)) return false
+        if (r.maxPrice != null && (price == null || price > r.maxPrice)) return false
+        if (r.brands?.length) {
+          const aspects = (l.aspects ?? {}) as Record<string, string[]>
+          const brand = (aspects['Marca'] ?? aspects['Brand'] ?? [])[0]?.toLowerCase()
+          if (!brand || !r.brands.some((x) => x.toLowerCase() === brand)) return false
+        }
+        return true
+      }))
+      return {
+        note: 'local approximation over currently-indexed LIVE listings — eBay evaluates its own rules daily (incl. FUTURE listings when auto-select is on)',
+        matched: matches.map((m) => ({ itemId: m.itemId, title: m.title, price: m.price, categoryId: m.categoryId })),
+        totalLive: live.length,
+      }
+    })
+
+  app.post<{ Body: writes.CreateCampaignInput }>('/ebay-ads/campaigns', async (req) =>
+    writes.createCampaign(actor(req), req.body))
+
+  app.post<{ Params: { id: string }; Body: { action: 'pause' | 'resume' | 'end' } }>('/ebay-ads/campaigns/:id/action', async (req) =>
+    writes.campaignLifecycle(actor(req), req.params.id, req.body.action))
+
+  app.post<{ Params: { id: string }; Body: { name: string } }>('/ebay-ads/campaigns/:id/clone', async (req) =>
+    writes.cloneCampaign(actor(req), req.params.id, req.body.name))
+
+  app.post<{ Params: { id: string }; Body: { adRateStrategy: 'FIXED' | 'DYNAMIC'; ratePct?: number; capPct?: number; adjustmentPct?: number } }>(
+    '/ebay-ads/campaigns/:id/rate-strategy', async (req) => writes.updateRateStrategy(actor(req), req.params.id, req.body))
+
+  app.post<{ Params: { id: string }; Body: { dailyBudgetCents: number } }>('/ebay-ads/campaigns/:id/budget', async (req) =>
+    writes.updateBudget(actor(req), req.params.id, req.body.dailyBudgetCents))
+
+  app.post<{ Params: { id: string }; Body: { items: Array<{ listingId: string; ratePct: number }>; override?: { reason: string } } }>(
+    '/ebay-ads/campaigns/:id/ad-rates', async (req) => writes.setAdRates(actor(req), req.params.id, req.body.items, req.body.override))
+
+  app.post<{ Params: { id: string }; Body: { listingIds: string[] } }>('/ebay-ads/campaigns/:id/ads/remove', async (req) =>
+    writes.removeAds(actor(req), req.params.id, req.body.listingIds))
+
+  app.post<{ Params: { id: string }; Body: { name: string; defaultBidCents?: number } }>('/ebay-ads/campaigns/:id/ad-groups', async (req) =>
+    writes.createAdGroup(actor(req), req.params.id, req.body.name, req.body.defaultBidCents))
+
+  app.post<{ Params: { id: string }; Body: { adGroupId: string; keywords: Array<{ text: string; matchType: string; bidCents?: number }> } }>(
+    '/ebay-ads/campaigns/:id/keywords', async (req) => writes.addKeywords(actor(req), req.params.id, req.body.adGroupId, req.body.keywords))
+
+  app.post<{ Params: { id: string }; Body: { updates: Array<{ keywordId: string; bidCents?: number; status?: 'ACTIVE' | 'PAUSED' }> } }>(
+    '/ebay-ads/campaigns/:id/keywords/update', async (req) => writes.updateKeywords(actor(req), req.params.id, req.body.updates))
+
+  app.post<{ Params: { id: string }; Body: { adGroupId: string; negatives: Array<{ text: string; matchType: 'EXACT' | 'PHRASE' }> } }>(
+    '/ebay-ads/campaigns/:id/negatives', async (req) => writes.addNegatives(actor(req), req.params.id, req.body.adGroupId, req.body.negatives))
+
+  // Suggestions (read-side; live eBay calls — sell.marketing verified)
+  app.post<{ Body: Record<string, unknown> }>('/ebay-ads/suggest/max-cpc', async (req, reply) => {
+    const auth = await getActiveEbayAdsAuth()
+    if (!auth) return reply.code(503).send({ error: 'no active eBay connection' })
+    return suggestMaxCpcApi(auth.token, req.body)
+  })
+  app.post<{ Body: { campaignExternalId: string; adGroupExternalId: string; listingIds: string[] } }>('/ebay-ads/suggest/keywords', async (req, reply) => {
+    const auth = await getActiveEbayAdsAuth()
+    if (!auth) return reply.code(503).send({ error: 'no active eBay connection' })
+    return suggestKeywordsApi(auth.token, req.body.campaignExternalId, req.body.adGroupExternalId, req.body.listingIds)
+  })
+  app.post<{ Body: { campaignExternalId: string; adGroupExternalId: string; keywords: Array<{ keywordText: string; matchType: string }> } }>('/ebay-ads/suggest/bids', async (req, reply) => {
+    const auth = await getActiveEbayAdsAuth()
+    if (!auth) return reply.code(503).send({ error: 'no active eBay connection' })
+    return suggestBidsApi(auth.token, req.body.campaignExternalId, req.body.adGroupExternalId, req.body.keywords)
+  })
+
+  // CSV round-trip
+  app.get('/ebay-ads/export.csv', async (_req, reply) => {
+    const csv = await exportAdsCsv()
+    reply.header('Content-Type', 'text/csv; charset=utf-8')
+    reply.header('Content-Disposition', `attachment; filename="ebay-ads-${new Date().toISOString().slice(0, 10)}.csv"`)
+    return csv
+  })
+  app.post<{ Body: { csv: string; dryRun?: boolean } }>('/ebay-ads/import', async (req) => {
+    const parsed = parseAdsOpsCsv(req.body.csv)
+    const diff = await diffOps(parsed.ops)
+    if (req.body.dryRun !== false) {
+      return { dryRun: true, parseErrors: parsed.errors, diff, applied: null }
+    }
+    const valid = parsed.ops.filter((op) => !diff.find((d) => d.row === op.row)?.error)
+    const applied = await applyOps(actor(req), valid)
+    return { dryRun: false, parseErrors: parsed.errors, diff, applied }
+  })
+
+  // Audit trail for the console's activity panel
+  app.get<{ Querystring: { limit?: string } }>('/ebay-ads/actions', async (req) => {
+    const actions = await prisma.campaignAction.findMany({
+      where: { channel: 'EBAY' },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Number(req.query.limit ?? 50), 200),
+    })
+    return { actions }
   })
 }
 

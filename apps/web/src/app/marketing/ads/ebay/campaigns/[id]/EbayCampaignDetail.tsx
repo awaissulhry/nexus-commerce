@@ -8,8 +8,11 @@
  */
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ExternalLink } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Pause, Play, Square, CopyPlus, Euro, Plus, Trash2, Tag } from 'lucide-react'
 import { AdsPageHeader } from '../../../_shell/AdsPageHeader'
+import { Button } from '@/design-system/primitives/Button'
+import { postEbayAds, useWriteMode, SandboxBanner } from '../../_shared'
+import { PromoteModal, SetRatesModal, BudgetModal, AddKeywordsModal, AddNegativesModal, CloneModal } from '../../_write-modals'
 import { DataGrid, type Column } from '@/design-system/components/DataGrid'
 import { Banner } from '@/design-system/components/Banner'
 import { EmptyState } from '@/design-system/components/EmptyState'
@@ -28,6 +31,35 @@ import {
 export function EbayCampaignDetail({ campaignId }: { campaignId: string }) {
   const [preset, setPreset] = useState('last30')
   const { data, error, loading, reload } = useEbayAdsFetch<CampaignDetailPayload>(`/campaigns/${campaignId}`, 'all', preset)
+  const writeMode = useWriteMode()
+  const [selectedAds, setSelectedAds] = useState<Set<string>>(new Set())
+  const [modal, setModal] = useState<null | 'rates' | 'budget' | 'keywords' | 'negatives' | 'clone' | 'addListings'>(null)
+  const [actionMsg, setActionMsg] = useState<string | null>(null)
+  const [actionBusy, setActionBusy] = useState(false)
+
+  const lifecycle = async (action: 'pause' | 'resume' | 'end') => {
+    if (action === 'end' && !window.confirm('End this campaign? Ended campaigns cannot be resumed (clone instead).')) return
+    setActionBusy(true); setActionMsg(null)
+    try {
+      const out = await postEbayAds<{ status: string; mode: string }>(`/campaigns/${campaignId}/action`, { action })
+      setActionMsg(`${action} ✓ → ${out.status} (${out.mode})`)
+      reload()
+    } catch (e) { setActionMsg((e as Error).message) } finally { setActionBusy(false) }
+  }
+  const selectedListingIds = useMemo(
+    () => (data?.ads ?? []).filter((a) => selectedAds.has(a.id) && a.listingId).map((a) => a.listingId!),
+    [data, selectedAds],
+  )
+  const removeSelected = async () => {
+    if (!selectedListingIds.length || !window.confirm(`Remove ${selectedListingIds.length} ad(s) from this campaign?`)) return
+    setActionBusy(true); setActionMsg(null)
+    try {
+      await postEbayAds(`/campaigns/${campaignId}/ads/remove`, { listingIds: selectedListingIds })
+      setActionMsg(`removed ${selectedListingIds.length} ad(s)`)
+      setSelectedAds(new Set())
+      reload()
+    } catch (e) { setActionMsg((e as Error).message) } finally { setActionBusy(false) }
+  }
 
   const c = data?.campaign
   const isOffsite = (c?.channels ?? []).includes('OFF_SITE')
@@ -134,6 +166,28 @@ export function EbayCampaignDetail({ campaignId }: { campaignId: string }) {
 
       {c && (
         <>
+          <SandboxBanner mode={writeMode} />
+          <div className="eb-actions">
+            {c.status === 'RUNNING' && <Button variant="ghost" onClick={() => lifecycle('pause')} disabled={actionBusy}><Pause size={13} aria-hidden /> Pause</Button>}
+            {(c.status === 'PAUSED' || c.status === 'DRAFT') && <Button variant="ghost" onClick={() => lifecycle('resume')} disabled={actionBusy}><Play size={13} aria-hidden /> {c.status === 'DRAFT' ? 'Activate' : 'Resume'}</Button>}
+            {c.status !== 'ENDED' && <Button variant="ghost" onClick={() => lifecycle('end')} disabled={actionBusy}><Square size={13} aria-hidden /> End</Button>}
+            <Button variant="ghost" onClick={() => setModal('clone')}><CopyPlus size={13} aria-hidden /> Clone</Button>
+            {!isCps || c.isRulesBased ? null : <Button variant="ghost" onClick={() => setModal('addListings')}><Plus size={13} aria-hidden /> Add listings</Button>}
+            {isCps && <Button variant="ghost" onClick={() => setModal('rates')} disabled={selectedListingIds.length === 0}><Tag size={13} aria-hidden /> Set rate ({selectedListingIds.length})</Button>}
+            {isCps && <Button variant="ghost" onClick={removeSelected} disabled={selectedListingIds.length === 0 || actionBusy}><Trash2 size={13} aria-hidden /> Remove ({selectedListingIds.length})</Button>}
+            {!isCps && !isOffsite && <Button variant="ghost" onClick={() => setModal('budget')}><Euro size={13} aria-hidden /> Budget</Button>}
+            {!isCps && !isSmart && !isOffsite && <Button variant="ghost" onClick={() => setModal('keywords')}><Plus size={13} aria-hidden /> Keywords</Button>}
+            {!isCps && !isSmart && !isOffsite && <Button variant="ghost" onClick={() => setModal('negatives')}><Plus size={13} aria-hidden /> Negatives</Button>}
+            {actionMsg && <span className="eb-be-hint">{actionMsg}</span>}
+          </div>
+
+          <SetRatesModal open={modal === 'rates'} onClose={() => setModal(null)} campaignId={campaignId} listingIds={selectedListingIds} onDone={reload} />
+          <BudgetModal open={modal === 'budget'} onClose={() => setModal(null)} campaignId={campaignId} currentCents={c.dailyBudgetCents} usedToday={c.budgetUpdatesToday} onDone={reload} />
+          <AddKeywordsModal open={modal === 'keywords'} onClose={() => setModal(null)} campaignId={campaignId} adGroups={data.adGroups} onDone={reload} />
+          <AddNegativesModal open={modal === 'negatives'} onClose={() => setModal(null)} campaignId={campaignId} adGroups={data.adGroups} onDone={reload} />
+          <CloneModal open={modal === 'clone'} onClose={() => setModal(null)} campaignId={campaignId} sourceName={c.name} onDone={() => reload()} />
+          <PromoteModal open={modal === 'addListings'} onClose={() => setModal(null)} presetCampaignId={campaignId} listingIds={[]} productIds={[]} onDone={reload} />
+
           <section className="eb-panel eb-panel--head">
             <div className="eb-headchips">
               <StrategyChip fundingModel={c.fundingModel} targetingType={c.targetingType} channels={c.channels} />
@@ -162,7 +216,7 @@ export function EbayCampaignDetail({ campaignId }: { campaignId: string }) {
                 {data.ads.length === 0 ? (
                   <EmptyState title="No ads synced for this campaign" description={c.isRulesBased ? 'Rules-based campaigns attach listings on eBay side; the hourly entity sync mirrors them here.' : 'The hourly entity sync mirrors ads from eBay.'} />
                 ) : (
-                  <DataGrid<AdRow> columns={adColumns} rows={data.ads} rowKey={(a) => a.id} initialSort={{ key: 'fees', dir: 'desc' }} maxHeight={430} />
+                  <DataGrid<AdRow> columns={adColumns} rows={data.ads} rowKey={(a) => a.id} initialSort={{ key: 'fees', dir: 'desc' }} maxHeight={430} selectable selected={selectedAds} onSelectedChange={setSelectedAds} />
                 )}
               </section>
 

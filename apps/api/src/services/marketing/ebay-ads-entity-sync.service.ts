@@ -129,9 +129,10 @@ async function syncCpsAds(localCampaignId: string, marketplace: string, token: s
     report.ads++
   }
 
-  // Stale pass (soft; guarded)
+  // Stale pass (soft; guarded). SANDBOX ads exist only locally (gate closed
+  // when created) — eBay can't return them, so they're exempt.
   const known = await prisma.ebayAd.findMany({
-    where: { campaignId: localCampaignId, status: { not: 'STALE' }, listingId: { not: null } },
+    where: { campaignId: localCampaignId, status: { notIn: ['STALE', 'SANDBOX'] }, listingId: { not: null } },
     select: { id: true, listingId: true },
   })
   const gone = known.filter((k) => k.listingId && !seenListingIds.has(k.listingId))

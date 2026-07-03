@@ -119,6 +119,54 @@ export const eurC = (cents?: number | null): string =>
 export const pctP = (p?: number | null, dp = 1): string => (p == null ? '—' : `${p.toFixed(dp)}%`)
 export const intlN = (n?: number | null): string => (n == null ? '—' : Math.round(n).toLocaleString('en-IE'))
 
+// ── E4 write helpers ─────────────────────────────────────────────────────────
+export async function postEbayAds<T>(path: string, body: unknown): Promise<T> {
+  const r = await fetch(`${getBackendUrl()}/api/ebay-ads${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  })
+  const j = (await r.json().catch(() => ({}))) as T & { error?: string; message?: string }
+  if (!r.ok) throw new Error(j.error ?? j.message ?? `HTTP ${r.status}`)
+  return j
+}
+
+export interface WriteItemOutcome { key: string; ok: boolean; mode: string; id?: string | null; error?: string | null; warning?: string | null; blocked?: string | null }
+
+export function useWriteMode(): 'sandbox' | 'live' | null {
+  const [mode, setMode] = useState<'sandbox' | 'live' | null>(null)
+  useEffect(() => {
+    fetch(`${getBackendUrl()}/api/ebay-ads/write-mode`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((j) => setMode(j.mode ?? null))
+      .catch(() => setMode(null))
+  }, [])
+  return mode
+}
+
+export function SandboxBanner({ mode }: { mode: 'sandbox' | 'live' | null }) {
+  if (mode !== 'sandbox') return null
+  return (
+    <div className="eb-sandbox" role="status">
+      <b>Sandbox mode</b> — changes are validated, guardrail-checked, mirrored locally and audited, but <b>not pushed to eBay</b> until
+      <code> NEXUS_MARKETING_WRITES_EBAY=1</code> is set (the E4 acceptance flip).
+    </div>
+  )
+}
+
+export function ResultsList({ results }: { results: WriteItemOutcome[] }) {
+  return (
+    <ul className="eb-results">
+      {results.map((r, i) => (
+        <li key={`${r.key}-${i}`} className={r.blocked ? 'blocked' : r.ok ? (r.warning ? 'warn' : 'ok') : 'err'}>
+          <code>{r.key}</code> — {r.blocked ?? r.error ?? r.warning ?? (r.ok ? `done (${r.mode})` : 'failed')}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 // ── Small shared UI atoms ────────────────────────────────────────────────────
 export function FreshnessLine({ f }: { f: Freshness | undefined }) {
   if (!f) return null

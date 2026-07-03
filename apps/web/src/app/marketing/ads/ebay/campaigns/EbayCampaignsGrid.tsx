@@ -6,7 +6,12 @@
  */
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Plus, Download, Upload } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { Button } from '@/design-system/primitives/Button'
+import { getBackendUrl } from '@/lib/backend-url'
+import { ImportCsvModal } from '../_write-modals'
+import { useWriteMode, SandboxBanner } from '../_shared'
 import { DataGrid, type Column } from '@/design-system/components/DataGrid'
 import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
 import { Select } from '@/design-system/primitives/Select'
@@ -41,6 +46,8 @@ export function EbayCampaignsGrid() {
   const [preset, setPreset] = useState('last30')
   const [strategy, setStrategy] = useState('all')
   const [status, setStatus] = useState('all')
+  const [importOpen, setImportOpen] = useState(false)
+  const writeMode = useWriteMode()
   const { data, error, loading, reload } = useEbayAdsFetch<CampaignsPayload>('/campaigns', market, preset)
 
   const rows = useMemo(() => {
@@ -108,8 +115,13 @@ export function EbayCampaignsGrid() {
         <Select value={preset} onChange={(e) => setPreset(e.target.value)} aria-label="Date range">
           {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
         </Select>
+        <Button onClick={() => router.push('/marketing/ads/ebay/campaigns/new')}><Plus size={14} aria-hidden /> New campaign</Button>
+        <Button variant="ghost" onClick={() => { window.location.href = `${getBackendUrl()}/api/ebay-ads/export.csv` }}><Download size={13} aria-hidden /> Export CSV</Button>
+        <Button variant="ghost" onClick={() => setImportOpen(true)}><Upload size={13} aria-hidden /> Import CSV</Button>
         <FreshnessLine f={data?.freshness} />
       </div>
+      <SandboxBanner mode={writeMode} />
+      <ImportCsvModal open={importOpen} onClose={() => setImportOpen(false)} onDone={reload} />
 
       {error && (
         <Banner tone="danger" title="Couldn't load campaigns">{error} — <button className="eb-linkbtn" onClick={reload}>retry</button></Banner>
