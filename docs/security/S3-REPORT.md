@@ -1,7 +1,18 @@
 # S3 — Frontend Enforcement & UX — Phase Report
 
-**Status:** Enforcement machinery built + deployed in **shadow** (inert). The **go-live flip needs you** (owner password + env flip + a couple of decisions). Nothing user-visible has changed yet.
+**Status:** ✅ **LIVE.** Enforcement is on (`NEXUS_RBAC_MODE=enforce` + `NEXT_PUBLIC_AUTH_ENFORCE=1`), owner login was browser-verified end-to-end (dashboard loads, data flows, unauthenticated users are redirected to `/login`).
 **Date:** 2026-07-03.
+
+## Go-live outcome (interim, current hostnames)
+
+- Owner password set; login works in Chrome; the session persists across navigation and every authenticated API call succeeds.
+- **Key fix — CHIPS/`Partitioned` cookies.** On the interim cross-site topology (web `vercel.app` ↔ API `railway.app`), modern Chrome's third-party-cookie phase-out blocked the `SameSite=None` session/CSRF cookies, so browser login failed `csrf_failed`. Adding the `Partitioned` attribute (set whenever `SameSite=None`) makes them ride in the third-party context. Verified live. (`cookies.ts`)
+- **Caveat — Safari.** CHIPS is supported by Chrome/Edge/Firefox; Safari's ITP is stricter and may still block the cross-site cookie. Safari users will want the custom domain (Option A), which makes the cookie first-party and needs no partitioning.
+- **Residual interim gaps** (close automatically with the custom-domain move): the datasheet-export download (low severity, single product) and ~6 proxy routes that now fail closed. The two dead Prisma-leak routes were deleted.
+- **Still pending (not blocking):** the financial-UI `<Can>` sweep (owner sees everything, so unaffected today; matters when non-finance users exist) and password rotation (the go-live password passed through chat).
+
+---
+_Original pre-go-live plan below._
 
 ---
 
