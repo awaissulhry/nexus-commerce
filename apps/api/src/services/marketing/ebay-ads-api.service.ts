@@ -289,12 +289,15 @@ export interface BulkItemResult { key: string; ok: boolean; id?: string | null; 
 function parseBulkResponses(items: Array<Record<string, unknown>> | undefined, keyField: string, idField: string): BulkItemResult[] {
   return (items ?? []).map((it) => {
     const status = Number(it.statusCode ?? 200)
-    const errors = it.errors as Array<{ message?: string }> | undefined
+    const errors = it.errors as Array<{ errorId?: number; message?: string; longMessage?: string }> | undefined
+    const href = typeof it.href === 'string' ? it.href : undefined
     return {
       key: String(it[keyField] ?? ''),
       ok: status >= 200 && status < 300,
-      id: (it[idField] as string | undefined) ?? null,
-      error: errors?.length ? errors.map((e) => e.message).join('; ').slice(0, 300) : null,
+      id: (it[idField] as string | undefined) ?? (href ? href.split('/').filter(Boolean).pop() ?? null : null),
+      error: errors?.length
+        ? errors.map((e) => e.message ?? e.longMessage ?? `error ${e.errorId ?? '?'}`).join('; ').slice(0, 400)
+        : status >= 300 ? `HTTP ${status}` : null,
       statusCode: status,
     }
   })

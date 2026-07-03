@@ -495,6 +495,77 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     return { dryRun: false, parseErrors: parsed.errors, diff, applied }
   })
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // E5 — automation ('/automation' paths → ads.automation.manage) + digest
+  // ═══════════════════════════════════════════════════════════════════════
+  app.get('/ebay-ads/automation/state', async () => {
+    const auto = await import('../services/marketing/ebay-ads-automation.service.js')
+    const [state, ceilings] = await Promise.all([auto.getAutomationState(), auto.checkSpendCeilings()])
+    return { state, ceilings }
+  })
+  app.post<{ Body: { globalMode?: 'OFF' | 'SUGGEST' | 'AUTO'; halted?: boolean; haltReason?: string } }>('/ebay-ads/automation/state', async (req) => {
+    const b = req.body
+    return prisma.marketingAutomationState.upsert({
+      where: { channel: 'EBAY' },
+      create: { channel: 'EBAY', globalMode: b.globalMode ?? 'OFF', halted: b.halted ?? false, haltReason: b.haltReason ?? null, haltedBy: b.halted ? (req as { authUser?: { id?: string } }).authUser?.id ?? 'operator' : null },
+      update: { ...(b.globalMode ? { globalMode: b.globalMode } : {}), ...(b.halted !== undefined ? { halted: b.halted, haltReason: b.halted ? b.haltReason ?? 'operator halt' : null, haltedBy: b.halted ? (req as { authUser?: { id?: string } }).authUser?.id ?? 'operator' : null } : {}) },
+    })
+  })
+  app.post<{ Body: { marketplace: string; monthlyCapCents: number; killSwitch?: boolean } }>('/ebay-ads/automation/ceilings', async (req) => {
+    return prisma.marketingSpendCeiling.upsert({
+      where: { channel_marketplace: { channel: 'EBAY', marketplace: req.body.marketplace } },
+      create: { channel: 'EBAY', marketplace: req.body.marketplace, monthlyCapCents: req.body.monthlyCapCents, killSwitch: req.body.killSwitch ?? false },
+      update: { monthlyCapCents: req.body.monthlyCapCents, ...(req.body.killSwitch !== undefined ? { killSwitch: req.body.killSwitch } : {}) },
+    })
+  })
+  app.get('/ebay-ads/automation/rules', async () => ({
+    rules: await prisma.ebayAdsRule.findMany({ orderBy: { name: 'asc' }, include: { executions: { orderBy: { createdAt: 'desc' }, take: 1 } } }),
+  }))
+  app.post<{ Body: { name: string; trigger: unknown; action: unknown; marketplace?: string; cooldownHours?: number } }>('/ebay-ads/automation/rules', async (req) => {
+    return prisma.ebayAdsRule.create({ data: { name: req.body.name, enabled: false, mode: 'PROPOSE', trigger: req.body.trigger as object, action: req.body.action as object, marketplace: req.body.marketplace ?? null, cooldownHours: req.body.cooldownHours ?? 24 } })
+  })
+  app.post<{ Params: { id: string }; Body: { enabled?: boolean; mode?: 'PROPOSE' | 'AUTOPILOT' } }>('/ebay-ads/automation/rules/:id', async (req) => {
+    return prisma.ebayAdsRule.update({ where: { id: req.params.id }, data: { ...(req.body.enabled !== undefined ? { enabled: req.body.enabled } : {}), ...(req.body.mode ? { mode: req.body.mode } : {}) } })
+  })
+  app.post<{ Params: { id?: string } }>('/ebay-ads/automation/evaluate', async () => {
+    const auto = await import('../services/marketing/ebay-ads-automation.service.js')
+    return auto.evaluateEbayAdsRules()
+  })
+  app.post('/ebay-ads/automation/presets/starter-pack', async () => {
+    const auto = await import('../services/marketing/ebay-ads-automation.service.js')
+    return auto.installStarterRules()
+  })
+  app.get<{ Querystring: { status?: string } }>('/ebay-ads/automation/proposals', async (req) => ({
+    proposals: await prisma.ebayAdsProposal.findMany({ where: { status: req.query.status ?? 'PENDING' }, orderBy: { createdAt: 'desc' }, take: 200 }),
+  }))
+  app.post<{ Body: { ids: string[]; decision: 'approve' | 'reject' } }>('/ebay-ads/automation/proposals/decide', async (req) => {
+    const auto = await import('../services/marketing/ebay-ads-automation.service.js')
+    return { results: await auto.decideProposals((req as { authUser?: { id?: string } }).authUser?.id ?? null, req.body.ids, req.body.decision) }
+  })
+  app.post<{ Params: { id: string } }>('/ebay-ads/automation/proposals/:id/rollback', async (req) => {
+    const auto = await import('../services/marketing/ebay-ads-automation.service.js')
+    return { detail: await auto.rollbackProposal((req as { authUser?: { id?: string } }).authUser?.id ?? null, req.params.id) }
+  })
+  app.get('/ebay-ads/automation/executions', async () => ({
+    executions: await prisma.ebayAdsRuleExecution.findMany({ orderBy: { createdAt: 'desc' }, take: 50, include: { rule: { select: { name: true } } } }),
+  }))
+  app.get('/ebay-ads/automation/anomalies', async () => {
+    const auto = await import('../services/marketing/ebay-ads-automation.service.js')
+    return { anomalies: await auto.detectAnomalies() }
+  })
+  app.get('/ebay-ads/digest/latest', async () => {
+    const d = await prisma.ebayAdsDigest.findFirst({ orderBy: { weekStart: 'desc' } })
+    return { digest: d }
+  })
+  app.get('/ebay-ads/digests', async () => ({ digests: await prisma.ebayAdsDigest.findMany({ orderBy: { weekStart: 'desc' }, take: 12, select: { id: true, weekStart: true, generatedAt: true, reviewedAt: true } }) }))
+  app.post('/ebay-ads/digest/generate', async () => {
+    const auto = await import('../services/marketing/ebay-ads-automation.service.js')
+    return auto.generateWeeklyDigest()
+  })
+  app.post<{ Params: { id: string } }>('/ebay-ads/digest/:id/reviewed', async (req) => {
+    return prisma.ebayAdsDigest.update({ where: { id: req.params.id }, data: { reviewedAt: new Date() } })
+  })
+
   // Audit trail for the console's activity panel
   app.get<{ Querystring: { limit?: string } }>('/ebay-ads/actions', async (req) => {
     const actions = await prisma.campaignAction.findMany({

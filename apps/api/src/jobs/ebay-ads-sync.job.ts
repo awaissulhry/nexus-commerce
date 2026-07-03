@@ -18,6 +18,7 @@ import { syncEbayAdsEntities } from '../services/marketing/ebay-ads-entity-sync.
 import { discoverEbayListings } from '../services/marketing/ebay-listing-index.service.js'
 import { scheduleEbayReportTasks, pollAndIngestEbayReports } from '../services/marketing/ebay-ads-reports.service.js'
 import { rebuildEbayListingEconomics } from '../services/ads-core/ebay-margin.js'
+import { evaluateEbayAdsRules, runAnomalyGuard, generateWeeklyDigest } from '../services/marketing/ebay-ads-automation.service.js'
 
 function gateOpen(): boolean {
   const v = process.env.NEXUS_ENABLE_EBAY_ADS_SYNC
@@ -26,7 +27,26 @@ function gateOpen(): boolean {
   return process.env.NODE_ENV === 'production'
 }
 
-const running = { entities: false, discovery: false, schedule: false, poll: false, economics: false }
+const running = { entities: false, discovery: false, schedule: false, poll: false, economics: false, evaluate: false, anomaly: false, digest: false }
+
+export async function runEbayAdsEvaluatorOnce(): Promise<unknown> {
+  return recordCronRun('ebay-ads-automation-evaluate', async () => {
+    const r = await evaluateEbayAdsRules()
+    return `rules=${r.rules} evaluated=${r.evaluated} matched=${r.matched} proposed=${r.proposed} applied=${r.applied}${r.skippedGlobal ? ' SKIPPED(mode)' : ''} errors=${r.errors.length}`
+  })
+}
+export async function runEbayAdsAnomalyGuardOnce(): Promise<unknown> {
+  return recordCronRun('ebay-ads-anomaly-guard', async () => {
+    const r = await runAnomalyGuard()
+    return `anomalies=${r.anomalies} ceilings=${r.ceilings}`
+  })
+}
+export async function runEbayAdsDigestOnce(): Promise<unknown> {
+  return recordCronRun('ebay-ads-digest', async () => {
+    const r = await generateWeeklyDigest()
+    return `week=${r.weekStart} created=${r.created}`
+  })
+}
 
 export async function runEbayAdsEntitySyncOnce(): Promise<unknown> {
   return recordCronRun('ebay-ads-entity-sync', async () => {
@@ -83,5 +103,11 @@ export function startEbayAdsSyncCrons(): void {
   cron.schedule(process.env.NEXUS_EBAY_ADS_REPORT_SCHEDULE ?? '40 2 * * *', guard('schedule', runEbayReportScheduleOnce))
   cron.schedule(process.env.NEXUS_EBAY_ADS_POLL_SCHEDULE ?? '*/3 * * * *', guard('poll', runEbayReportPollOnce))
   cron.schedule(process.env.NEXUS_EBAY_ADS_ECONOMICS_SCHEDULE ?? '15 5 * * *', guard('economics', runEbayEconomicsRebuildOnce))
-  logger.info('[E2][ebay-ads] sync crons scheduled (entity hourly, discovery 4h, reports daily, poll 3min, economics daily)')
+  // E5 — automation (evaluator daily after economics; anomaly guard hourly;
+  // digest Monday morning Rome). The evaluator self-gates on the global
+  // OFF/SUGGEST/AUTO dial + halted state + spend ceilings.
+  cron.schedule(process.env.NEXUS_EBAY_ADS_EVALUATE_SCHEDULE ?? '45 5 * * *', guard('evaluate', runEbayAdsEvaluatorOnce))
+  cron.schedule(process.env.NEXUS_EBAY_ADS_ANOMALY_SCHEDULE ?? '50 * * * *', guard('anomaly', runEbayAdsAnomalyGuardOnce))
+  cron.schedule(process.env.NEXUS_EBAY_ADS_DIGEST_SCHEDULE ?? '30 4 * * 1', guard('digest', runEbayAdsDigestOnce))
+  logger.info('[E2][ebay-ads] sync crons scheduled (entity hourly, discovery 4h, reports daily, poll 3min, economics daily, evaluator daily, anomaly hourly, digest weekly)')
 }

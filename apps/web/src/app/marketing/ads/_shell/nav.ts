@@ -34,6 +34,8 @@ export const EBAY_ADS_NAV: NavItem[] = [
   { label: 'Dashboard', route: 'ebay', Icon: Gauge },
   { label: 'Ad Manager', route: 'ebay/campaigns', Icon: Table },
   { label: 'Products', route: 'ebay/products', Icon: ShoppingBag },
+  { label: 'Automation', route: 'ebay/automation', Icon: Wand2 },
+  { label: 'Weekly Digest', route: 'ebay/digest', Icon: PieChart },
 ]
 
 export const ADS_NAV: NavItem[] = [

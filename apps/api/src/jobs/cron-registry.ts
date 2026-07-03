@@ -27,6 +27,7 @@ import { syncEbayAdsEntities } from '../services/marketing/ebay-ads-entity-sync.
 import { discoverEbayListings } from '../services/marketing/ebay-listing-index.service.js'
 import { scheduleEbayReportTasks, pollAndIngestEbayReports } from '../services/marketing/ebay-ads-reports.service.js'
 import { rebuildEbayListingEconomics } from '../services/ads-core/ebay-margin.js'
+import { evaluateEbayAdsRules, runAnomalyGuard, generateWeeklyDigest } from '../services/marketing/ebay-ads-automation.service.js'
 import { runInventorySweep as runAmazonInventorySweep } from './amazon-inventory-sync.job.js'
 import { runOrdersPoll as runEbayOrdersPoll } from './ebay-orders-sync.job.js'
 import { runRefreshSweep as runEbayTokenRefresh } from './ebay-token-refresh.job.js'
@@ -154,6 +155,9 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'ebay-ads-report-schedule': () => scheduleEbayReportTasks(),
   'ebay-ads-report-poll': () => pollAndIngestEbayReports(),
   'ebay-ads-economics-rebuild': () => rebuildEbayListingEconomics(),
+  'ebay-ads-automation-evaluate': () => evaluateEbayAdsRules(),
+  'ebay-ads-anomaly-guard': () => runAnomalyGuard(),
+  'ebay-ads-digest': () => generateWeeklyDigest(),
   'amazon-inventory-sync': () => runAmazonInventorySweep(),
   'amazon-mcf-status': () => runMCFStatusSyncOnce(),
   'amazon-returns-poll': () => runAmazonReturnsPoll(),

@@ -299,6 +299,7 @@ export async function promoteListings(ctx: OpContext, input: PromoteInput): Prom
   const decision = gate(c.marketplace)
   const results: ItemOutcome[] = []
   const toCreate: Array<{ listingId: string; ratePct: number }> = []
+  const warnings = new Map<string, string>()
 
   for (const item of input.items) {
     const ratePct = item.ratePct ?? input.defaultRatePct ?? (c.bidPercentage != null ? Number(c.bidPercentage.toString()) : NaN)
@@ -309,9 +310,8 @@ export async function promoteListings(ctx: OpContext, input: PromoteInput): Prom
     const guard = rateGuardrail(ratePct, eco?.be ?? null, eco?.status ?? null, input.override)
     if (guard.blocked) { results.push({ key: item.listingId, ok: false, mode: decision.mode, blocked: guard.blocked }); continue }
     toCreate.push({ listingId: item.listingId, ratePct })
-    if (guard.warning) results.push({ key: item.listingId, ok: true, mode: decision.mode, warning: guard.warning })
+    if (guard.warning) warnings.set(item.listingId, guard.warning)
   }
-  const warned = new Set(results.filter((r) => r.warning && r.ok).map((r) => r.key))
 
   let live: BulkItemResult[] = []
   if (decision.mode === 'live' && toCreate.length && !c.externalCampaignId.startsWith('sandbox-')) {
@@ -326,6 +326,9 @@ export async function promoteListings(ctx: OpContext, input: PromoteInput): Prom
   for (const item of toCreate) {
     const lr = liveByKey.get(item.listingId)
     const ok = decision.mode === 'sandbox' ? true : lr?.ok ?? false
+    if (!ok && decision.mode === 'live') {
+      logger.warn(`[E4][ebay-ads] bulkCreate item failed listing=${item.listingId}: ${lr?.error ?? 'no per-item response matched'}`)
+    }
     if (ok) {
       await prisma.ebayAd.upsert({
         where: { campaignId_listingId: { campaignId: c.id, listingId: item.listingId } },
@@ -337,9 +340,7 @@ export async function promoteListings(ctx: OpContext, input: PromoteInput): Prom
         update: { bidPercentage: item.ratePct.toFixed(1), externalAdId: lr?.id ?? undefined },
       })
     }
-    if (!warned.has(item.listingId)) {
-      results.push({ key: item.listingId, ok, mode: decision.mode, id: lr?.id ?? null, error: lr?.error ?? null })
-    }
+    results.push({ key: item.listingId, ok, mode: decision.mode, id: lr?.id ?? null, error: lr?.error ?? null, warning: warnings.get(item.listingId) ?? null })
   }
 
   const okCount = results.filter((r) => r.ok).length
