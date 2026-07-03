@@ -162,3 +162,8 @@
 .eb-status-pills { display: flex; gap: 6px; flex-wrap: wrap; }
 .eb-status-pill-link { text-decoration: none; }
 .eb-status-sub { font-size: 11.5px; color: #5b6573; margin: 4px 0 0; }
+
+/* ER3.3 — grid blowout guard: nowrap sample lines must ellipsize, never widen
+   the row-2 columns (ebay.css loads on eBay pages only — Amazon unaffected). */
+.dash-row2 > .dash-card { min-width: 0; }
+.eb-rec { min-width: 0; }
