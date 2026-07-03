@@ -15,6 +15,7 @@ import { OWNER_ROLE_KEY, permissionCatalog, isValidPermission } from '@nexus/sha
 import { GuardrailError } from '../lib/auth/team-guardrails.js'
 import { writeAuthAudit } from '../lib/auth/audit.js'
 import { truncateIp } from '../lib/auth/session.js'
+import { verifyCsrf } from '../lib/auth/csrf.js'
 import {
   assignRole,
   removeRole,
@@ -27,6 +28,17 @@ import {
 } from '../services/team-access.service.js'
 
 const teamRoutes: FastifyPluginAsync = async (fastify) => {
+  // Defense-in-depth CSRF on every mutating team route (the cookie's
+  // SameSite/Partitioned already blocks cross-site POST; this matches the
+  // S1 auth routes). The fetch wrapper adds x-nexus-csrf, so the console is
+  // unaffected.
+  fastify.addHook('preHandler', async (req, reply) => {
+    const m = req.method.toUpperCase()
+    if ((m === 'POST' || m === 'PUT' || m === 'PATCH' || m === 'DELETE') && !verifyCsrf(req)) {
+      return reply.code(403).send({ error: 'Invalid or missing CSRF token', code: 'csrf_failed' })
+    }
+  })
+
   const actorIsOwner = (req: any): boolean => !!req.authUser?.roleKeys?.includes(OWNER_ROLE_KEY)
   const audit = (req: any, action: string, entityType: any, entityId: string, meta?: any) =>
     writeAuthAudit({

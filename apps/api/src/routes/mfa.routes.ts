@@ -19,8 +19,17 @@ import { verifyPassword } from '../lib/auth/password.js'
 import { verifyTotp, generateEnrollment, generateRecoveryCodes } from '../lib/auth/mfa.js'
 import { writeAuthAudit } from '../lib/auth/audit.js'
 import { truncateIp } from '../lib/auth/session.js'
+import { verifyCsrf } from '../lib/auth/csrf.js'
 
 const mfaRoutes: FastifyPluginAsync = async (fastify) => {
+  // Defense-in-depth CSRF on the mutating 2FA routes (matches S1 auth).
+  fastify.addHook('preHandler', async (req, reply) => {
+    const m = req.method.toUpperCase()
+    if ((m === 'POST' || m === 'PUT' || m === 'PATCH' || m === 'DELETE') && !verifyCsrf(req)) {
+      return reply.code(403).send({ error: 'Invalid or missing CSRF token', code: 'csrf_failed' })
+    }
+  })
+
   const me = (req: any) => req.authUser?.id as string | undefined
   const audit = (req: any, action: string, meta?: any) =>
     writeAuthAudit({ actorUserId: me(req) ?? null, ip: truncateIp(req.ip), userAgent: (req.headers['user-agent'] as string | undefined)?.slice(0, 256) ?? null, entityType: 'User', entityId: me(req) ?? 'unknown', action, metadata: meta })
