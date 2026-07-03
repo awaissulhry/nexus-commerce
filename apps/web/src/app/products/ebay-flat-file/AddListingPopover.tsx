@@ -11,6 +11,7 @@ import { Combobox } from '@/design-system/components/Combobox'
 import type { BaseRow } from '@/components/flat-file/FlatFileGrid.types'
 import type { EbayRow } from './EbayFlatFileClient'
 import { generateVariantRowsUnderParent } from './addVariantRows'
+import { parseThemeAxes } from './themeAxes'
 
 // ── Predefined axes with value suggestions ───────────────────────────────────
 
@@ -113,11 +114,16 @@ export function AddListingPopover({ categoryAxisNames = [], existingParents, onC
     const parent = existingParents?.find((p) => p.id === targetParentId)
     if (!parent) return
     setParentSku(parent.sku)
-    const axes = parent.variationTheme
-      ?.split(',')
-      .map((s) => s.trim())
-      .filter(Boolean) ?? []
-    if (axes.length) setSelectedAxes(axes)
+    // 2a: split on both '/' and ',' so "Size / Color" parses correctly.
+    const axes = parseThemeAxes(parent.variationTheme)
+    // 2b: always apply (even when empty — clears forced defaults so operator must choose).
+    setSelectedAxes(axes)
+    // Auto-register any non-preset axes from the parent so they appear as checkboxes.
+    for (const axis of axes) {
+      if (!PRESET_AXES.some((p) => p.name === axis)) {
+        setCustomAxes((prev) => (prev.includes(axis) ? prev : [...prev, axis]))
+      }
+    }
     setTemplateEdited(false) // let the template effect rebuild from the new parentSku/axes
   // existingParents intentionally read inside the effect but tracked via stable existingParentsKey
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -306,76 +312,50 @@ export function AddListingPopover({ categoryAxisNames = [], existingParents, onC
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Variation axes</span>
               {familyMode === 'existing' && (
-                <Tag tone="neutral">locked — set by parent</Tag>
+                <Tag tone="neutral">from parent — editable</Tag>
               )}
             </div>
             <div className="space-y-2">
-              {familyMode === 'existing'
-                ? /* Locked axis display — values still editable; axis selection is read-only */
-                  selectedAxes.map((name) => {
-                    const preset = PRESET_AXES.find((p) => p.name === name)
-                    return (
-                      <div key={name}
-                        className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50"
-                      >
-                        <div className="flex items-center gap-2 px-3 py-2">
-                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{name}</span>
-                          {(axisValues[name] ?? []).length > 0 && (
-                            <span className="ml-auto text-[10px] text-slate-400">
-                              {(axisValues[name] ?? []).length} value{(axisValues[name] ?? []).length !== 1 ? 's' : ''}
-                            </span>
-                          )}
-                        </div>
-                        <div className="px-3 pb-2">
-                          <TagInput
-                            value={axisValues[name] ?? []}
-                            onChange={(tags) => setAxisValues((prev) => ({ ...prev, [name]: tags }))}
-                            suggestions={preset?.suggestions ?? []}
-                            placeholder={`Add ${name.toLowerCase()} values… (Enter or comma to confirm)`}
-                            aria-label={`${name} values`}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })
-                : /* New-family mode — editable axes with checkboxes */
-                  displayAxes.map(({ name, suggestions }) => (
-                    <div key={name}
-                      className={cn(
-                        'rounded-lg border transition-colors',
-                        selectedAxes.includes(name)
-                          ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50'
-                          : 'border-transparent',
-                      )}
-                    >
-                      <label className="flex items-center gap-2 px-3 py-2 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={selectedAxes.includes(name)}
-                          onChange={() => toggleAxis(name)}
-                          className="w-3.5 h-3.5 rounded accent-blue-600"
-                        />
-                        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{name}</span>
-                        {selectedAxes.includes(name) && (axisValues[name] ?? []).length > 0 && (
-                          <span className="ml-auto text-[10px] text-slate-400">
-                            {(axisValues[name] ?? []).length} value{(axisValues[name] ?? []).length !== 1 ? 's' : ''}
-                          </span>
-                        )}
-                      </label>
-                      {selectedAxes.includes(name) && (
-                        <div className="px-3 pb-2">
-                          <TagInput
-                            value={axisValues[name] ?? []}
-                            onChange={(tags) => setAxisValues((prev) => ({ ...prev, [name]: tags }))}
-                            suggestions={suggestions}
-                            placeholder={`Add ${name.toLowerCase()} values… (Enter or comma to confirm)`}
-                            aria-label={`${name} values`}
-                          />
-                        </div>
-                      )}
+              {/* Editable axes with checkboxes — same in both 'new' and 'existing' modes.
+                  In 'existing' mode the axes are seeded from the parent but can be
+                  changed by the operator (so they can do Size-only and avoid a forced
+                  -Black/-Color suffix). See fix 2c. */}
+              {displayAxes.map(({ name, suggestions }) => (
+                <div key={name}
+                  className={cn(
+                    'rounded-lg border transition-colors',
+                    selectedAxes.includes(name)
+                      ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50'
+                      : 'border-transparent',
+                  )}
+                >
+                  <label className="flex items-center gap-2 px-3 py-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={selectedAxes.includes(name)}
+                      onChange={() => toggleAxis(name)}
+                      className="w-3.5 h-3.5 rounded accent-blue-600"
+                    />
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{name}</span>
+                    {selectedAxes.includes(name) && (axisValues[name] ?? []).length > 0 && (
+                      <span className="ml-auto text-[10px] text-slate-400">
+                        {(axisValues[name] ?? []).length} value{(axisValues[name] ?? []).length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </label>
+                  {selectedAxes.includes(name) && (
+                    <div className="px-3 pb-2">
+                      <TagInput
+                        value={axisValues[name] ?? []}
+                        onChange={(tags) => setAxisValues((prev) => ({ ...prev, [name]: tags }))}
+                        suggestions={suggestions}
+                        placeholder={`Add ${name.toLowerCase()} values… (Enter or comma to confirm)`}
+                        aria-label={`${name} values`}
+                      />
                     </div>
-                  ))
-              }
+                  )}
+                </div>
+              ))}
 
               {/* Custom axis input — new-family mode only */}
               {familyMode === 'new' && (

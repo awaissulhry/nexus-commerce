@@ -150,7 +150,21 @@ export function EbayImportWizard({
       setMode('fill-missing')
       setImportTarget('new')
       setTargetParentId('')
+      return
     }
+    // Smart default: when exactly one family is loaded, pre-select "Under parent"
+    // so the operator doesn't have to switch — importing into a single family is
+    // the common case (wizard opened from that family's page).
+    if (existingParents?.length === 1) {
+      setImportTarget('parent')
+      setTargetParentId(existingParents[0].id)
+    } else {
+      setImportTarget('new')
+      setTargetParentId('')
+    }
+    // existingParents intentionally read from closure — only fires when `open`
+    // transitions; we don't want re-running mid-session if the array ref changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   // Drag-drop-on-grid entry: when opened with a pre-loaded file, parse it.

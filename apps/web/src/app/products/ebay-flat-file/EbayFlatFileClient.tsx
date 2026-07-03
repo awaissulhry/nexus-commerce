@@ -18,6 +18,7 @@ import { Combobox } from '@/design-system/components/Combobox'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { pinBlankRowsLast } from './rowOrder'
 import { moveRowsToParent, detachRowsToStandalone } from './moveRows'
+import { parseThemeAxes } from './themeAxes'
 import { AddListingPopover } from './AddListingPopover'
 import { EbayImportWizard } from './EbayImportWizard'
 import { stampUnderParent } from './importUnderParent'
@@ -1409,6 +1410,34 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       } else {
         // New-row branch: stamp under a parent when the operator chose "Under parent".
         const baseRow: Record<string, unknown> = { ...makeBlankRow(), ...imp, _isNew: true, _dirty: true }
+        // Aspect-split: when nesting under a parent, copy axis values from the
+        // imported row into canonical aspect_* fields using the parent's
+        // variation_theme. Do this BEFORE stampUnderParent so the grid can render
+        // the variant in the correct axis column immediately.
+        if (targetParentId) {
+          const parentRow = allRows.find(
+            (r) =>
+              String((r as EbayRow)._productId ?? (r as EbayRow).platformProductId ?? r._rowId) ===
+              targetParentId,
+          )
+          const axes = parseThemeAxes(
+            parentRow ? String((parentRow as EbayRow).variation_theme ?? '') : '',
+          )
+          for (const axis of axes) {
+            const val =
+              imp[axis] ??
+              imp[axis.toLowerCase()] ??
+              imp[`aspect_${axis}`] ??
+              imp[`aspect_${axis.toLowerCase()}`]
+            if (val !== undefined && val !== null) {
+              // Dual-write: both the canonical casing and lowercase_underscore form.
+              const canonKey = `aspect_${axis.replace(/\s+/g, '_')}`
+              const lowerKey = `aspect_${axis.toLowerCase().replace(/\s+/g, '_')}`
+              baseRow[canonKey] = val
+              if (lowerKey !== canonKey) baseRow[lowerKey] = val
+            }
+          }
+        }
         const newRow = targetParentId ? stampUnderParent(baseRow, targetParentId) : baseRow
         next.push(newRow as BaseRow)
         added++
