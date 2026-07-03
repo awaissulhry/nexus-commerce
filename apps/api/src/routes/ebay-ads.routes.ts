@@ -17,7 +17,8 @@ import * as writes from '../services/marketing/ebay-ads-write.service.js'
 import { exportAdsCsv, parseAdsOpsCsv, diffOps, applyOps } from '../services/marketing/ebay-ads-csv.service.js'
 import { getLiveEbayItemIds } from '../services/marketing/ebay-listing-index.service.js'
 import { rebuildEbayListingEconomics } from '../services/ads-core/ebay-margin.js'
-import { getActiveEbayAdsAuth, suggestMaxCpcApi, suggestKeywordsApi, suggestBidsApi } from '../services/marketing/ebay-ads-api.service.js'
+import { BUILDER_TEMPLATES, buildListingPlan, mineKeywordSeeds, suggestBudgetLocal, suggestName } from '../services/marketing/ebay-ads-builder.service.js'
+import { getActiveEbayAdsAuth, suggestMaxCpcApi, suggestKeywordsApi, suggestBidsApi, suggestBudgetApi } from '../services/marketing/ebay-ads-api.service.js'
 
 const SHORT_BY_MKT: Record<string, string> = { EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES', EBAY_GB: 'UK' }
 
@@ -717,129 +718,41 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
   // fee forecast) + launch (create → resolve collisions → promote → bind
   // scoped rule packs → timeline).
   // ═══════════════════════════════════════════════════════════════════════
-  const GOAL_DEFS: Record<string, { label: string; strategy: 'CPS' | 'CPC'; goalFactor: number; fallbackRatePct: number; endDays: number | null; rulePacks: string[] }> = {
-    catch_all: { label: 'Protect margin — promote everything', strategy: 'CPS', goalFactor: 0.7, fallbackRatePct: 5, endDays: null, rulePacks: ['Fee % creep-down (CPS)', 'Click bleeder — remove ad (CPS)', 'Rate above break-even — repair (CPS)', 'Restock re-promote (CPS)'] },
-    hero: { label: 'Push hero products', strategy: 'CPC', goalFactor: 1.0, fallbackRatePct: 0, endDays: null, rulePacks: ['Keyword bleeder — pause (CPC)', 'Keyword bid-down on thin CTR (CPC)'] },
-    clearance: { label: 'Clear stock', strategy: 'CPS', goalFactor: 1.0, fallbackRatePct: 12, endDays: 30, rulePacks: ['Click bleeder — remove ad (CPS)'] },
-    defend: { label: 'Defend visibility', strategy: 'CPC', goalFactor: 1.0, fallbackRatePct: 0, endDays: null, rulePacks: ['Keyword bleeder — pause (CPC)'] },
-  }
+  const GOAL_DEFS = BUILDER_TEMPLATES // ER2 — template registry lives in ebay-ads-builder.service
 
-  app.post<{ Body: { goal: string; marketplace?: string; productIds?: string[]; listingIds?: string[] } }>('/ebay-ads/builder/prefill', async (req, reply) => {
-    const def = GOAL_DEFS[req.body.goal]
-    if (!def) return reply.code(400).send({ error: `unknown goal (${Object.keys(GOAL_DEFS).join('|')})` })
-    const marketplace = req.body.marketplace ?? 'EBAY_IT'
-    const short = SHORT_BY_MKT[marketplace] ?? 'IT'
-    if (marketplace === 'EBAY_ES' && def.strategy === 'CPC') return reply.code(400).send({ error: 'Priority is not available on eBay Spain' })
+  // ═══ ER2 — builder v2: composable step endpoints (SPEC-campaign-builder §6.1) ═══
 
-    // Scope: explicit listings/products, else every live listing (catch-all)
-    const ids = new Set<string>(req.body.listingIds ?? [])
-    for (const pid of req.body.productIds ?? []) {
-      for (const hit of await getLiveEbayItemIds(pid, short)) ids.add(hit.itemId)
-    }
-    const live = await prisma.ebayListingIndex.findMany({
-      where: { marketplace: short, endedAt: null, ...(ids.size ? { itemId: { in: [...ids] } } : {}) },
-      select: { itemId: true, title: true, price: true, quantity: true },
-    })
-    const itemIds = live.map((l) => l.itemId)
+  // Template registry (chooser chips stay in sync with rule-pack defs)
+  app.get('/ebay-ads/builder/templates', async () => ({ templates: Object.values(BUILDER_TEMPLATES) }))
 
-    const [eco, conflicts, facts30] = await Promise.all([
-      prisma.ebayListingEconomics.findMany({ where: { marketplace: short, itemId: { in: itemIds } }, select: { itemId: true, breakEvenAdRatePct: true, dataStatus: true } }),
-      prisma.ebayAd.findMany({
-        where: { listingId: { in: itemIds }, status: { notIn: ['STALE'] }, campaign: { fundingModel: 'COST_PER_SALE', status: { in: ['RUNNING', 'PAUSED'] } } },
-        select: { listingId: true, bidPercentage: true, campaign: { select: { id: true, name: true } } },
-      }),
-      prisma.ebayAdsDailyPerformance.groupBy({
-        by: ['entityId'],
-        where: { entityType: 'LISTING', entityId: { in: itemIds }, date: { gte: new Date(Date.now() - 30 * 86_400_000) } },
-        _sum: { salesCents: true, adFeesCents: true },
-      }),
-    ])
-    const ecoBy = new Map(eco.map((e) => [e.itemId, e]))
-    const conflictBy = new Map(conflicts.map((c) => [c.listingId!, c]))
-    const salesBy = new Map(facts30.map((f) => [f.entityId, f._sum.salesCents ?? 0]))
+  // Per-listing plan rows (economics + conflicts + trailing sales) — the
+  // Listings/Rates steps' data. goalFactor comes from a template when one
+  // was picked; the default matches the margin-protect posture.
+  app.post<{ Body: { marketplace: string; listingIds?: string[]; productIds?: string[]; strategy: 'CPS' | 'CPC'; goalFactor?: number; fallbackRatePct?: number } }>('/ebay-ads/builder/listings', async (req, reply) => {
+    if (req.body.marketplace === 'EBAY_ES' && req.body.strategy === 'CPC') return reply.code(400).send({ error: 'Priority is not available on eBay Spain' })
+    const plan = await buildListingPlan(req.body)
+    const name = await suggestName(null, req.body.strategy, req.body.marketplace, (req.body.listingIds?.length ?? 0) + (req.body.productIds?.length ?? 0) > 0)
+    return { ...plan, suggestedName: name }
+  })
 
-    const seq = (await prisma.ebayCampaign.count({ where: { marketplace } })) + 1
-    const name = `${req.body.goal}-${def.strategy.toLowerCase()}-${ids.size ? 'selected' : 'all'}-${short}-${String(seq).padStart(3, '0')}`
+  // Keyword seeds mined from OUR titles + aspects for the selected listings
+  app.post<{ Body: { marketplace: string; listingIds?: string[] } }>('/ebay-ads/builder/seeds', async (req) => ({
+    seeds: await mineKeywordSeeds(req.body.marketplace, req.body.listingIds ?? []),
+  }))
 
-    // E7 Stage 2 (#7): keyword seeds for CPC goals from OUR data — title
-    // n-grams + brand/type aspects, tagged by source, default bids clamped
-    // low (learning phase). eBay suggestKeywords needs an ad group, which
-    // doesn't exist pre-launch — our own seeds fill that gap.
-    let keywordSeeds: Array<{ text: string; source: string; matchType: string; bidCents: number }> = []
-    let budget: { suggestedCents: number; formula: string } | null = null
-    if (def.strategy === 'CPC') {
-      const idx = await prisma.ebayListingIndex.findMany({ where: { marketplace: short, itemId: { in: itemIds } }, select: { title: true, aspects: true } })
-      const STOP = new Set(['con', 'per', 'the', 'and', 'del', 'della', 'di', 'da', 'in', 'su', 'e', 'a', 'il', 'la', 'le', 'un', 'una', 'protezione', 'livello'])
-      const counts = new Map<string, number>()
-      for (const l of idx) {
-        const words = (l.title ?? '').toLowerCase().replace(/[^a-zà-ù0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w))
-        for (let i = 0; i < words.length - 1; i++) {
-          const bi = `${words[i]} ${words[i + 1]}`
-          counts.set(bi, (counts.get(bi) ?? 0) + 1)
-        }
-        const a = (l.aspects ?? {}) as Record<string, string[]>
-        const brand = (a['Marca'] ?? a['Brand'] ?? [])[0]
-        const tipo = (a['Tipo'] ?? a['Type'] ?? [])[0]
-        if (brand && tipo) counts.set(`${brand} ${tipo}`.toLowerCase(), (counts.get(`${brand} ${tipo}`.toLowerCase()) ?? 0) + 3)
+  // Budget: our provenance formula + eBay's suggest_budget where it answers
+  app.post<{ Body: { marketplace: string; listingIds?: string[] } }>('/ebay-ads/builder/budget-suggest', async (req) => {
+    const local = await suggestBudgetLocal(req.body.marketplace, req.body.listingIds ?? [])
+    let ebaySuggestedCents: number | null = null
+    try {
+      const auth = await getActiveEbayAdsAuth()
+      if (auth) {
+        const out = await suggestBudgetApi(auth.token, { marketplaceId: req.body.marketplace, fundingStrategy: 'COST_PER_CLICK' }) as { suggestedBudget?: { amount?: { value?: string } } }
+        const v = out?.suggestedBudget?.amount?.value
+        if (v != null) ebaySuggestedCents = Math.round(Number(v) * 100)
       }
-      keywordSeeds = [...counts.entries()]
-        .sort((x, y) => y[1] - x[1])
-        .slice(0, 20)
-        .map(([text, n]) => ({ text, source: n >= 3 ? 'ASPECT/FREQUENT' : 'TITLE', matchType: 'PHRASE', bidCents: 30 }))
-      const trailingSales = [...salesBy.values()].reduce((a, b) => a + b, 0)
-      const suggested = Math.max(500, Math.round((trailingSales * 0.05) / 30))
-      budget = { suggestedCents: suggested, formula: `max(€5, trailing-30d sales ${(trailingSales / 100).toFixed(0)}€ × 5% ÷ 30 days) — efficiency rules unlock at ≥30 attributed conversions` }
-    }
-
-    const listings = live.map((l) => {
-      const e = ecoBy.get(l.itemId)
-      const be = e?.breakEvenAdRatePct != null ? Number(e.breakEvenAdRatePct.toString()) : null
-      const computedRatePct = def.strategy === 'CPS'
-        ? be != null ? Math.min(100, Math.max(2, Math.round(be * def.goalFactor * 10) / 10)) : def.fallbackRatePct
-        : null
-      const trailingSales = salesBy.get(l.itemId) ?? 0
-      const conflict = conflictBy.get(l.itemId)
-      return {
-        itemId: l.itemId,
-        title: l.title,
-        priceCents: l.price != null ? Math.round(Number(l.price.toString()) * 100) : null,
-        quantity: l.quantity,
-        breakEvenPct: be,
-        economicsStatus: e?.dataStatus ?? null,
-        computedRatePct,
-        rateSource: be != null ? `break-even ${be}% × ${def.goalFactor}` : `goal default (no cost data)`,
-        trailingSales30dCents: trailingSales,
-        forecastMonthlyFeeCents: def.strategy === 'CPS' && computedRatePct != null ? Math.round(trailingSales * (computedRatePct / 100)) : null,
-        conflict: conflict ? { campaignId: conflict.campaign.id, campaignName: conflict.campaign.name, currentRatePct: conflict.bidPercentage != null ? Number(conflict.bidPercentage.toString()) : null } : null,
-      }
-    })
-
-    return {
-      goal: req.body.goal,
-      derived: {
-        label: def.label,
-        strategy: def.strategy,
-        name,
-        marketplace,
-        goalFactor: def.goalFactor,
-        endDate: def.endDays ? new Date(Date.now() + def.endDays * 86_400_000).toISOString().slice(0, 10) : null,
-        rulePacks: def.rulePacks,
-        rateMode: 'FIXED',
-        defaultBudgetCents: def.strategy === 'CPC' ? 500 : null,
-      },
-      listings,
-      keywordSeeds,
-      budget,
-      totals: {
-        listings: listings.length,
-        conflicts: listings.filter((l) => l.conflict).length,
-        missingCost: listings.filter((l) => l.breakEvenPct == null).length,
-        forecastMonthlyFeeCents: listings.reduce((a, l) => a + (l.forecastMonthlyFeeCents ?? 0), 0),
-        trailingSales30dCents: listings.reduce((a, l) => a + l.trailingSales30dCents, 0),
-      },
-      // E7 #17 sprawl cap — builder shows an advisory past 25 active campaigns
-      activeCampaigns: await prisma.ebayCampaign.count({ where: { marketplace, status: 'RUNNING', NOT: { externalCampaignId: { startsWith: 'sandbox-' } } } }),
-    }
+    } catch { /* eBay suggest_budget is best-effort — the local formula always answers */ }
+    return { ...local, ebaySuggestedCents }
   })
 
   app.post<{ Body: {
@@ -848,25 +761,49 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     endDate?: string | null
     items: Array<{ listingId: string; ratePct?: number; resolution?: 'include' | 'skip' | 'move' }>
     keywords?: Array<{ text: string; matchType: string; bidCents?: number }>
+    // ER2 additive fields (SPEC §6.1)
+    criterion?: { autoSelectFutureInventory?: boolean; selectionRules: unknown[] }
+    adRateStrategy?: 'FIXED' | 'DYNAMIC'
+    dynamicCapPct?: number
+    adGroups?: Array<{ name: string; defaultBidCents?: number; keywords: Array<{ text: string; matchType: string; bidCents?: number }>; negatives?: Array<{ text: string; matchType: 'EXACT' | 'PHRASE' }> }>
+    rateDiscovery?: { floorPct: number; capPct: number; stepPct: number; dwellDays: number }
     rulePacks?: string[]
     override?: { reason: string }
   } }>('/ebay-ads/builder/launch', async (req, reply) => {
     const b = req.body
     const def = GOAL_DEFS[b.goal]
     if (!def) return reply.code(400).send({ error: 'unknown goal' })
+    if (b.rateDiscovery) {
+      const d = b.rateDiscovery
+      if (!(d.floorPct >= 2 && d.capPct <= 100 && d.floorPct < d.capPct && d.stepPct > 0 && d.dwellDays >= 1)) {
+        return reply.code(400).send({ error: 'rate discovery: need 2 ≤ floor < cap ≤ 100, step > 0, dwell ≥ 1 day' })
+      }
+      if (def.strategy !== 'CPS' || b.criterion) return reply.code(400).send({ error: 'rate discovery applies to key-based General campaigns' })
+    }
     const ctx = actor(req)
     const auto = await import('../services/marketing/ebay-ads-automation.service.js')
     const writesSvc = writes
 
-    // 1. create the campaign
+    // 1. create the campaign (ER2: rules-based criterion + DYNAMIC supported)
     const created = await writesSvc.createCampaign(ctx, {
       name: b.name,
       marketplace: b.marketplace,
       fundingModel: def.strategy === 'CPS' ? 'COST_PER_SALE' : 'COST_PER_CLICK',
       ...(def.strategy === 'CPS'
-        ? { adRateStrategy: 'FIXED' as const, ratePct: b.ratePct ?? def.fallbackRatePct }
+        ? (b.adRateStrategy === 'DYNAMIC'
+          ? { adRateStrategy: 'DYNAMIC' as const, dynamicCapPct: b.dynamicCapPct ?? 10, ratePct: b.ratePct ?? def.fallbackRatePct }
+          : { adRateStrategy: 'FIXED' as const, ratePct: b.ratePct ?? def.fallbackRatePct })
         : { targetingType: b.targetingType ?? 'MANUAL', dailyBudgetCents: b.dailyBudgetCents ?? 500, ...(b.targetingType === 'SMART' ? { maxCpcCents: b.maxCpcCents ?? 40 } : {}) }),
+      ...(b.criterion?.selectionRules?.length ? { selectionRules: b.criterion.selectionRules, autoSelectFutureInventory: b.criterion.autoSelectFutureInventory ?? false } : {}),
     })
+
+    // ER2 finding-fix: v1 accepted endDate but never sent it — createCampaign
+    // has no schedule field; set it post-create via identification.
+    if (b.endDate) {
+      await writesSvc.updateCampaignIdentification(ctx, created.campaignId, { endDate: b.endDate }).catch(() => {
+        /* end-date set is best-effort at launch; editable on the Details tab */
+      })
+    }
 
     // 2. resolve collisions (move = remove from the old campaign first)
     const include = b.items.filter((i) => i.resolution !== 'skip')
@@ -893,14 +830,50 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       promoteResults = out.results
     }
 
-    // 3b. CPC goals: default ad group + seeded keywords launch WITH the
-    // campaign (blueprint #7) — no more "add keywords later" gap.
+    // 3b. CPC structure — ER2: explicit ad groups (name + default bid +
+    // keywords + negatives each); legacy single-list `keywords` still lands
+    // in a Default group.
     let keywordResults: unknown[] = []
-    if (def.strategy === 'CPC' && b.keywords?.length) {
+    const groupResults: Array<{ name: string; adGroupId?: string; keywords: number; negatives: number; error?: string }> = []
+    if (def.strategy === 'CPC' && b.adGroups?.length) {
+      for (const g of b.adGroups) {
+        try {
+          const grp = await writesSvc.createAdGroup(ctx, created.campaignId, g.name, g.defaultBidCents)
+          let kwOk = 0, negOk = 0
+          if (g.keywords.length) {
+            const out = await writesSvc.addKeywords(ctx, created.campaignId, grp.adGroupId, g.keywords)
+            kwOk = out.results.filter((r) => r.ok).length
+            keywordResults = [...keywordResults, ...out.results]
+          }
+          if (g.negatives?.length) {
+            const out = await writesSvc.addNegatives(ctx, created.campaignId, grp.adGroupId, g.negatives)
+            negOk = out.results.filter((r) => r.ok).length
+          }
+          groupResults.push({ name: g.name, adGroupId: grp.adGroupId, keywords: kwOk, negatives: negOk })
+        } catch (e) { groupResults.push({ name: g.name, keywords: 0, negatives: 0, error: (e as Error).message }) }
+      }
+    } else if (def.strategy === 'CPC' && b.keywords?.length) {
       const kws = b.keywords
       const grp = await writesSvc.createAdGroup(ctx, created.campaignId, 'Default', undefined)
       const out = await writesSvc.addKeywords(ctx, created.campaignId, grp.adGroupId, kws)
       keywordResults = out.results
+    }
+
+    // 3c. ER2 — arm Rate Discovery (bounded ladder; evaluator walks it and
+    // PROPOSEs each step; cap is additionally clamped per listing to
+    // break-even at apply time).
+    let rateDiscoveryArmed = false
+    if (b.rateDiscovery && def.strategy === 'CPS') {
+      await prisma.ebayRateDiscoveryPlan.create({
+        data: {
+          campaignId: created.campaignId,
+          floorPct: b.rateDiscovery.floorPct.toFixed(1),
+          capPct: b.rateDiscovery.capPct.toFixed(1),
+          stepPct: b.rateDiscovery.stepPct.toFixed(1),
+          dwellDays: Math.round(b.rateDiscovery.dwellDays),
+        },
+      })
+      rateDiscoveryArmed = true
     }
 
     // 4. bind scoped rule packs (PROPOSE, disabled→enabled per pack)
@@ -932,10 +905,14 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       moveResults,
       promoteResults,
       keywordResults,
+      groupResults,
+      rateDiscoveryArmed,
       rulePacksBound: bound,
       timeline: [
         'eBay reviews and starts serving ads (typically within hours)',
         def.strategy === 'CPS' ? 'Any-click attribution: fees appear on sales within 30 days of any ad click' : 'CPC clicks bill immediately; budget edits take effect next day',
+        ...(b.criterion?.selectionRules?.length ? ['Rules-based selection: eBay re-evaluates matching listings daily' + (b.criterion.autoSelectFutureInventory ? ' — future listings enroll automatically' : '')] : []),
+        ...(rateDiscoveryArmed ? [`Rate Discovery armed: ${b.rateDiscovery!.floorPct}% → ${b.rateDiscovery!.capPct}% in ${b.rateDiscovery!.stepPct}% steps, ${b.rateDiscovery!.dwellDays}-day windows — each step arrives as a proposal`] : []),
         `Rule packs (${bound.length}) evaluate daily at ~07:45 and PROPOSE changes for your approval`,
         'Check back in 7 days: impressions per listing, eBay ACOS vs break-even, stale ads',
       ],
@@ -971,12 +948,13 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     const c = await prisma.ebayCampaign.findUnique({ where: { id: req.params.id }, include: { automationPolicy: true } })
     if (!c) return reply.code(404).send({ error: 'campaign not found' })
     const auto = await import('../services/marketing/ebay-ads-automation.service.js')
-    const [allRules, proposals, applied, drifts, state] = await Promise.all([
+    const [allRules, proposals, applied, drifts, state, discovery] = await Promise.all([
       prisma.ebayAdsRule.findMany({ orderBy: { name: 'asc' } }),
       prisma.ebayAdsProposal.findMany({ where: { status: 'PENDING', entityRef: { path: ['campaignId'], equals: c.id } }, orderBy: { createdAt: 'desc' }, take: 50 }),
       prisma.ebayAdsProposal.findMany({ where: { status: 'APPLIED', entityRef: { path: ['campaignId'], equals: c.id } }, orderBy: { decidedAt: 'desc' }, take: 20 }),
       auto.detectDrift(c.id),
       auto.getAutomationState(),
+      prisma.ebayRateDiscoveryPlan.findUnique({ where: { campaignId: c.id } }), // ER2
     ])
     const rules = allRules
       .map((r0) => ({ id: r0.id, name: r0.name, enabled: r0.enabled, mode: r0.mode, marketplace: r0.marketplace, lastEvaluatedAt: r0.lastEvaluatedAt, scoped: (((r0.scope as { campaignIds?: string[] } | null)?.campaignIds) ?? []).includes(c.id), global: ((((r0.scope as { campaignIds?: string[] } | null)?.campaignIds) ?? []).length === 0) }))
@@ -990,6 +968,16 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       } : { posture: 'INHERIT', protected: false, rateCapPct: null, rateFloorPct: null, bidCapCents: null, bidFloorCents: null },
       globalMode: state.globalMode, halted: state.halted,
       rules, proposals, applied, drifts,
+      // ER2 — Rate Discovery progress for the Automation tab
+      rateDiscovery: discovery ? {
+        status: discovery.status,
+        floorPct: Number(discovery.floorPct.toString()), capPct: Number(discovery.capPct.toString()),
+        stepPct: Number(discovery.stepPct.toString()), dwellDays: discovery.dwellDays,
+        currentPct: discovery.currentPct != null ? Number(discovery.currentPct.toString()) : null,
+        bestPct: discovery.bestPct != null ? Number(discovery.bestPct.toString()) : null,
+        lastStepAt: discovery.lastStepAt,
+        history: discovery.history,
+      } : null,
     }
   })
 

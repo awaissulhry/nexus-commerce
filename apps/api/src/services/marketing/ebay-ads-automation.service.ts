@@ -404,6 +404,25 @@ async function applyProposalAction(actorUserId: string | null, p: { kind: string
     if (!r.results[0]?.ok) throw new Error(r.results[0]?.error ?? 'failed')
     return `bid → €${(bidCents / 100).toFixed(2)} (${r.mode})`
   }
+  if (p.kind === 'rate_discovery_step') {
+    const refd = p.entityRef as { campaignId: string }
+    const target = Number((p.proposedAction as { targetPct?: number }).targetPct)
+    if (!Number.isFinite(target)) throw new Error('discovery step has no target rate recorded')
+    const ads = await prisma.ebayAd.findMany({ where: { campaignId: refd.campaignId, listingId: { not: null }, status: { notIn: ['STALE'] } }, select: { listingId: true } })
+    if (!ads.length) throw new Error('no active ads to step')
+    const camp = await prisma.ebayCampaign.findUniqueOrThrow({ where: { id: refd.campaignId }, select: { marketplace: true } })
+    const short = ({ EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES' } as Record<string, string>)[camp.marketplace] ?? 'IT'
+    const eco = new Map((await prisma.ebayListingEconomics.findMany({ where: { marketplace: short, itemId: { in: ads.map((a) => a.listingId!) } }, select: { itemId: true, breakEvenAdRatePct: true } }))
+      .map((e) => [e.itemId, e.breakEvenAdRatePct != null ? Number(e.breakEvenAdRatePct.toString()) : null]))
+    const items = ads.map((a) => {
+      const be = eco.get(a.listingId!) ?? null
+      return { listingId: a.listingId!, ratePct: Math.max(2, Math.round(Math.min(target, be ?? target) * 10) / 10) }
+    })
+    const r = await writes.setAdRates(ctx, refd.campaignId, items)
+    const ok = r.results.filter((x) => x.ok).length
+    await prisma.ebayRateDiscoveryPlan.update({ where: { campaignId: refd.campaignId }, data: { currentPct: target.toFixed(1), lastStepAt: new Date() } }).catch(() => {})
+    return `discovery step → ${target}%: ${ok}/${items.length} ad(s) set (${r.mode}); BE-clamped where costs exist`
+  }
   if (p.kind === 'enroll_catch_all') {
     const ref2 = p.entityRef as { campaignId: string; listingIds?: string[] }
     const listingIds = ref2.listingIds ?? []
@@ -440,6 +459,16 @@ export async function rollbackProposal(actorUserId: string | null, id: string): 
   } else if (inv.type === 'keyword_bid' && ref.keywordId) {
     const r = await writes.updateKeywords(ctx, ref.campaignId, [{ keywordId: ref.keywordId, bidCents: Number(inv.bidCents) }])
     detail = r.results[0]?.ok ? `bid restored` : (r.results[0]?.error ?? 'failed')
+  } else if (inv.type === 'discovery_rates' && ref.campaignId) {
+    // inverse of a discovery step: restore per-ad rates and HALT the ladder
+    // (a rollback is operator intervention — discovery must not re-propose).
+    const rates = (inv.rates as Record<string, number | null> | undefined) ?? {}
+    const items = Object.entries(rates).filter(([, v]) => v != null).map(([listingId, ratePct]) => ({ listingId, ratePct: ratePct! }))
+    if (!items.length) throw new Error('no previous rates recorded for this discovery step')
+    const r = await writes.setAdRates(ctx, ref.campaignId, items, { reason: `rollback of discovery step (proposal ${p.id})` })
+    const ok = r.results.filter((x) => x.ok).length
+    await prisma.ebayRateDiscoveryPlan.update({ where: { campaignId: ref.campaignId }, data: { status: 'HALTED' } }).catch(() => {})
+    detail = `${ok}/${items.length} rate(s) restored — discovery HALTED`
   } else if (inv.type === 'remove_ads' && ref.campaignId) {
     // inverse of enroll_catch_all — un-promote the batch that was enrolled
     const ids = ((inv.listingIds as string[] | undefined) ?? []).filter(Boolean)
@@ -684,9 +713,104 @@ export async function runCoverageGuard(): Promise<{ unpromoted: number; proposal
   return { unpromoted: unpromoted.length, proposal: true }
 }
 
+// ── ER2 — Rate Discovery ladder (SPEC-campaign-builder §5④) ─────────────────
+// Walks each ACTIVE plan floor→cap one dwell window at a time. Every step is
+// a PROPOSE proposal (never auto in v1); apply sets ALL the campaign's ad
+// rates to min(step, per-listing break-even) and advances the plan. Runs
+// with the anomaly guard daily — armed explicitly at launch, so it ticks
+// independently of the global dial.
+export async function evaluateRateDiscovery(): Promise<{ plans: number; proposed: number; completed: number }> {
+  const report = { plans: 0, proposed: 0, completed: 0 }
+  const plans = await prisma.ebayRateDiscoveryPlan.findMany({
+    where: { status: 'ACTIVE', campaign: { status: 'RUNNING', ...POLICY_ALLOWS } },
+    include: { campaign: { select: { id: true, externalCampaignId: true, name: true, marketplace: true } } },
+  })
+  const ctx = { actorUserId: AUTOMATION_ACTOR }
+  for (const plan of plans) {
+    report.plans++
+    const now = new Date()
+    const current = plan.currentPct != null ? Number(plan.currentPct.toString()) : null
+    const floor = Number(plan.floorPct.toString())
+    const cap = Number(plan.capPct.toString())
+    const step = Number(plan.stepPct.toString())
+    const dwellMs = plan.dwellDays * 86_400_000
+
+    // record the finished window into history before stepping on
+    let history = (plan.history as Array<Record<string, unknown>> | null) ?? []
+    if (current != null && plan.lastStepAt && now.getTime() - plan.lastStepAt.getTime() >= dwellMs) {
+      const win = await prisma.ebayAdsDailyPerformance.aggregate({
+        where: { entityType: 'CAMPAIGN', entityId: plan.campaign.externalCampaignId, date: { gte: plan.lastStepAt, lte: now } },
+        _sum: { adFeesCents: true, salesCents: true },
+      })
+      history = [...history, {
+        pct: current, from: plan.lastStepAt.toISOString().slice(0, 10), to: now.toISOString().slice(0, 10),
+        days: Math.round((now.getTime() - plan.lastStepAt.getTime()) / 86_400_000),
+        adFeesCents: win._sum.adFeesCents ?? 0, salesCents: win._sum.salesCents ?? 0,
+      }]
+      await prisma.ebayRateDiscoveryPlan.update({ where: { id: plan.id }, data: { history: history as object } })
+    } else if (current != null && plan.lastStepAt && now.getTime() - plan.lastStepAt.getTime() < dwellMs) {
+      continue // still dwelling on the current step
+    }
+
+    const target = current == null ? floor : Math.round((current + step) * 10) / 10
+    if (target > cap) {
+      // ladder complete — pick the best window by net-of-fees sales per day
+      const best = history.reduce<{ pct: number; score: number } | null>((acc, h) => {
+        const days = Math.max(1, Number(h.days ?? 1))
+        const score = ((Number(h.salesCents ?? 0) - Number(h.adFeesCents ?? 0)) / days)
+        return acc == null || score > acc.score ? { pct: Number(h.pct), score } : acc
+      }, null)
+      await prisma.ebayRateDiscoveryPlan.update({ where: { id: plan.id }, data: { status: 'COMPLETE', bestPct: best != null ? best.pct.toFixed(1) : null } })
+      await prisma.ebayAdsProposal.upsert({
+        where: { proposedKey: `discovery:${plan.campaignId}` },
+        create: {
+          kind: 'alert', proposedKey: `discovery:${plan.campaignId}`, status: 'PENDING',
+          entityRef: { campaignId: plan.campaign.id, externalCampaignId: plan.campaign.externalCampaignId, campaignName: plan.campaign.name, marketplace: plan.campaign.marketplace } as object,
+          proposedAction: { from: `ladder ${floor}%→${cap}%`, to: best != null ? `best net-of-fees sales/day at ${best.pct}% — consider settling there` : 'complete (no window data)', inverse: {} } as object,
+          reasoning: { discovery: history } as object,
+          expiresAt: new Date(Date.now() + 14 * 86_400_000),
+        },
+        update: {
+          kind: 'alert', status: 'PENDING', decidedBy: null, decidedAt: null,
+          proposedAction: { from: `ladder ${floor}%→${cap}%`, to: best != null ? `best net-of-fees sales/day at ${best.pct}% — consider settling there` : 'complete (no window data)', inverse: {} } as object,
+          reasoning: { discovery: history } as object,
+        },
+      })
+      report.completed++
+      continue
+    }
+
+    // propose the next step (ONE live discovery proposal per campaign)
+    const ads = await prisma.ebayAd.findMany({ where: { campaignId: plan.campaignId, listingId: { not: null }, status: { notIn: ['STALE'] } }, select: { listingId: true, bidPercentage: true } })
+    if (!ads.length) continue
+    const prevRates = Object.fromEntries(ads.map((a) => [a.listingId!, a.bidPercentage != null ? Number(a.bidPercentage.toString()) : null]))
+    const existing = await prisma.ebayAdsProposal.findUnique({ where: { proposedKey: `discovery:${plan.campaignId}` } })
+    if (existing?.status === 'PENDING') continue // step already awaiting a decision
+    await prisma.ebayAdsProposal.upsert({
+      where: { proposedKey: `discovery:${plan.campaignId}` },
+      create: {
+        kind: 'rate_discovery_step', proposedKey: `discovery:${plan.campaignId}`, status: 'PENDING',
+        entityRef: { campaignId: plan.campaign.id, externalCampaignId: plan.campaign.externalCampaignId, campaignName: plan.campaign.name, marketplace: plan.campaign.marketplace } as object,
+        proposedAction: { from: current != null ? `${current}%` : 'launch rates', to: `${target}% (all ads, clamped per listing to break-even)`, targetPct: target, inverse: { type: 'discovery_rates', rates: prevRates } } as object,
+        reasoning: { plan: { floor, cap, step, dwellDays: plan.dwellDays }, windows: history } as object,
+        expiresAt: new Date(Date.now() + 14 * 86_400_000),
+      },
+      update: {
+        kind: 'rate_discovery_step', status: 'PENDING', decidedBy: null, decidedAt: null,
+        proposedAction: { from: current != null ? `${current}%` : 'launch rates', to: `${target}% (all ads, clamped per listing to break-even)`, targetPct: target, inverse: { type: 'discovery_rates', rates: prevRates } } as object,
+        reasoning: { plan: { floor, cap, step, dwellDays: plan.dwellDays }, windows: history } as object,
+      },
+    })
+    report.proposed++
+    void ctx
+  }
+  return report
+}
+
 export async function runAnomalyGuard(): Promise<{ anomalies: number; ceilings: number }> {
   const [anoms, ceils] = await Promise.all([detectAnomalies(), checkSpendCeilings()])
   await runCoverageGuard().catch((e) => logger.warn(`[E7][coverage] ${(e as Error).message}`))
+  await evaluateRateDiscovery().catch((e) => logger.warn(`[ER2][discovery] ${(e as Error).message}`))
   if (anoms.length || ceils.some((c) => c.pct >= 80)) {
     try {
       const { notifyAutomation } = await import('../advertising/ads-automation-notify.service.js')

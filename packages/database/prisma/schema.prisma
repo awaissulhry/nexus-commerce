@@ -11466,6 +11466,7 @@ model EbayCampaign {
   keywords         EbayKeyword[]
   negativeKeywords EbayNegativeKeyword[]
   automationPolicy EbayCampaignAutomationPolicy?
+  rateDiscovery    EbayRateDiscoveryPlan?
 
   // ── Aggregated metrics (refreshed by sync) ───────────────────────
   impressions Int       @default(0)
@@ -11483,6 +11484,33 @@ model EbayCampaign {
   @@unique([channelConnectionId, externalCampaignId])
   @@index([channelConnectionId, status])
   @@index([marketplace, status])
+}
+
+/// ER2 — Rate Discovery (our answer to Rithum's Discover Rate, anchored to
+/// break-even): a bounded rate ladder per CPS campaign. The evaluator walks
+/// floor→cap by step, one dwell window at a time, records per-step
+/// (fees, sales) into history, and emits PROPOSE proposals — the cap is
+/// additionally clamped per listing to break-even at apply time.
+model EbayRateDiscoveryPlan {
+  id         String       @id @default(cuid())
+  campaign   EbayCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId String       @unique
+
+  status    String  @default("ACTIVE") // ACTIVE | COMPLETE | HALTED
+  floorPct  Decimal @db.Decimal(6, 2)
+  capPct    Decimal @db.Decimal(6, 2)
+  stepPct   Decimal @db.Decimal(6, 2)
+  dwellDays Int
+
+  currentPct Decimal?  @db.Decimal(6, 2)
+  lastStepAt DateTime?
+  history    Json      @default("[]") // [{pct, from, to, days, adFeesCents, salesCents}]
+  bestPct    Decimal?  @db.Decimal(6, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
 }
 
 /// ER1 — per-campaign automation governance: posture override (INHERIT

@@ -348,6 +348,13 @@ export const bulkCreateNegativeKeywordApi = async (token: string, negatives: Arr
   return parseBulkResponses(j.responses, 'negativeKeywordText', 'negativeKeywordId')
 }
 
+// ER2 — campaign budget suggestion (verified to exist in the method index;
+// response shape handled defensively at the caller: best-effort passthrough).
+export const suggestBudgetApi = async (token: string, body: Record<string, unknown>): Promise<Record<string, unknown>> => {
+  const r = await expectOk(await marketingPost('/sell/marketing/v1/ad_campaign/suggest_budget', token, body), 'suggestBudget')
+  return (await r.json().catch(() => ({}))) as Record<string, unknown>
+}
+
 // Suggestion endpoints (read-side; require full sell.marketing — verified)
 export const suggestMaxCpcApi = async (token: string, body: Record<string, unknown>): Promise<Record<string, unknown>> => {
   const r = await expectOk(await marketingPost('/sell/marketing/v1/ad_campaign/suggest_max_cpc', token, body), 'suggestMaxCpc')
