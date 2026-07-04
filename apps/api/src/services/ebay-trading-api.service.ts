@@ -236,3 +236,42 @@ export async function reviseInventoryStatus(
   const xml = buildReviseInventoryStatusXml(input)
   await callTradingApi('ReviseInventoryStatus', xml, { oauthToken: ctx.oauthToken, siteId })
 }
+
+// ── EndFixedPriceItem ──────────────────────────────────────────────────────
+
+export interface EndFixedPriceItemInput {
+  itemId: string
+  /** Defaults to 'NotAvailable' (seller-initiated end, relistable). */
+  endingReason?: string
+}
+
+/**
+ * Build the EndFixedPriceItem XML body.
+ * Valid EndingReason values: NotAvailable | LostOrBroken | OtherListingError.
+ * We default to NotAvailable since this is called from a delete/delist flow.
+ */
+export function buildEndFixedPriceItemXml(input: EndFixedPriceItemInput): string {
+  const reason = input.endingReason ?? 'NotAvailable'
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<EndFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <EndingReason>${escapeXml(reason)}</EndingReason>
+  <ItemID>${escapeXml(input.itemId)}</ItemID>
+</EndFixedPriceItemRequest>`
+}
+
+/**
+ * Call EndFixedPriceItem via the Trading API.
+ * Inherits the real-API gate from callTradingApi: throws in production when
+ * NEXUS_EBAY_REAL_API is not 'true', dry-runs in dev/test.
+ * Returns normalised { ack, itemId?, errors } on success/warning; throws on Failure.
+ */
+export async function endFixedPriceItem(
+  input: EndFixedPriceItemInput,
+  ctx: TradingCallContext,
+): Promise<{ ack: string; itemId?: string; errors: string[] }> {
+  const xml = buildEndFixedPriceItemXml(input)
+  const res = await callTradingApi('EndFixedPriceItem', xml, ctx)
+  return { ack: res.ack, itemId: res.itemId, errors: res.errors }
+}

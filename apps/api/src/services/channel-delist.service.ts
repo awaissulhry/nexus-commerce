@@ -45,6 +45,8 @@ import { logger } from '../utils/logger.js'
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 import { ShopifyService } from './marketplaces/shopify.service.js'
 import { prisma } from '@nexus/database'
+import { endFixedPriceItem, siteIdForMarket } from './ebay-trading-api.service.js'
+import { ebayAuthService } from './ebay-auth.service.js'
 
 export type ChannelAction = 'unpublish' | 'delete'
 
@@ -203,18 +205,103 @@ async function delistShopify(
   }
 }
 
+// ── eBay "already ended" idempotency helpers ──────────────────────────────
+
+/**
+ * eBay Trading-API error message patterns that mean the listing is
+ * already not live. Treating these as success keeps delist idempotent
+ * (the goal — listing not live — is already met).
+ *
+ * Error codes + typical ShortMessage text we match against:
+ *   291  "Item cannot be accessed" — item gone / seller doesn't own it
+ *   219  "Listing validation error" variants incl. "Listing is not active"
+ *   17   "Invalid item" / "Item not found"
+ *   various: "auction already closed", "already ended", "not currently available"
+ */
+const ALREADY_ENDED_PATTERNS: RegExp[] = [
+  /already ended/i,
+  /already closed/i,
+  /auction already closed/i,
+  /item cannot be accessed/i,
+  /item (is )?not (active|available)/i,
+  /listing (is )?not (active|available|found)/i,
+  /item not found/i,
+  /invalid item/i,
+  /not currently available/i,
+  /item has already been (deleted|removed)/i,
+]
+
+function isAlreadyEndedError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return ALREADY_ENDED_PATTERNS.some((p) => p.test(msg))
+}
+
+// ── Real EndFixedPriceItem delist ─────────────────────────────────────────
+
 async function delistEbay(
-  _job: ChannelDelistJob,
+  job: ChannelDelistJob,
   _action: ChannelAction,
 ): Promise<ChannelDelistResult> {
-  // W5.49b — eBay Trading API EndFixedPriceItem is stubbed. Mark the
-  // queue row as FAILED with a clear, actionable error so /sync-logs
-  // surfaces it; operator can end the listing manually in Seller Hub.
-  return {
-    success: false,
-    error: 'eBay delist not yet implemented (W5.49b pending). End the listing manually in Seller Hub.',
-    errorCode: 'EBAY_DELIST_NOT_IMPLEMENTED',
-    retryable: false,
+  // 1. ItemID guard
+  const itemId = job.externalListingId
+  if (!itemId) {
+    return {
+      success: false,
+      error: 'no eBay ItemID on delist job',
+      errorCode: 'EBAY_DELIST_NO_ITEMID',
+      retryable: false,
+    }
+  }
+
+  // 2. Resolve eBay connection + OAuth token (mirrors outbound-sync.service.ts auth path)
+  let oauthToken: string
+  let siteId: string
+  try {
+    const connection = await prisma.channelConnection.findFirst({
+      where: { channelType: 'EBAY', isActive: true },
+      orderBy: { updatedAt: 'desc' },
+    })
+    if (!connection) {
+      return {
+        success: false,
+        error: 'No active eBay connection found — link an eBay account in Settings',
+        errorCode: 'EBAY_DELIST_NO_CONNECTION',
+        retryable: false,
+      }
+    }
+    oauthToken = await ebayAuthService.getValidToken(connection.id)
+    // targetRegion may be null for legacy rows; default to IT (Xavia primary market)
+    siteId = siteIdForMarket(job.targetRegion ?? 'IT')
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: `eBay delist auth error: ${err instanceof Error ? err.message : String(err)}`,
+      errorCode: 'EBAY_DELIST_AUTH_ERROR',
+      retryable: false,
+    }
+  }
+
+  // 3. Call EndFixedPriceItem — inherits NEXUS_EBAY_REAL_API gate from callTradingApi
+  try {
+    await endFixedPriceItem({ itemId }, { oauthToken, siteId })
+    return { success: true }
+  } catch (err: unknown) {
+    // 4. Idempotency: already-ended listings are a success (goal = listing not live)
+    if (isAlreadyEndedError(err)) {
+      logger.info('ebay delist: item already ended (idempotent)', {
+        itemId,
+        marketplace: job.targetRegion,
+        error: err instanceof Error ? err.message : String(err),
+      })
+      return { success: true }
+    }
+    // 5. Genuine failures — retryable so the queue can re-attempt on transient errors
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+      errorCode: 'EBAY_DELIST_FAILED',
+      retryable: true,
+    }
   }
 }
 
