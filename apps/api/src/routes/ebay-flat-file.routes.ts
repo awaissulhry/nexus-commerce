@@ -44,6 +44,7 @@ import { renderExport } from '../services/export/renderers.js';
 import { parseCsv, parseFile, sniffDelimiter, detectFileKind, type ParsedFile } from '../services/import/parsers.js';
 // P1.2 — eBay flat-file create/reparent pre-pass (new products persist under their parent before ChannelListing loop runs)
 import { runEbayFlatFileCreates, type CreateResult } from '../services/ebay-flat-file-create.service.js';
+import { ebayFamilyKey } from '../services/ebay-flat-file-create.logic.js';
 // Task 4 — shared-SKU management: synthesize membership rows for the GET /rows response
 import { loadSharedMembershipRows } from '../services/ebay-shared-membership-rows.js';
 
@@ -295,10 +296,12 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       // ChannelListing loop so that newly-created rows are not silently skipped below.
       // Shared-SKU parents carry shared_sku_listing:true — derive their family keys so the
       // planner suppresses re-parents that must stay membership-managed.
+      // P2.B1 — key shared families by ebayFamilyKey() so they MATCH the planner's
+      // familyKeyOf (explicit rows key by sku, not product id), else suppression misses.
       const sharedFamilyKeys = new Set(
         rows
           .filter(r => (r as Record<string, unknown>).shared_sku_listing === true)
-          .map(r => String(r._productId ?? r._rowId ?? r.platformProductId ?? ''))
+          .map(r => ebayFamilyKey(r as Parameters<typeof ebayFamilyKey>[0]))
           .filter(Boolean),
       );
       const createResult: CreateResult = await runEbayFlatFileCreates(prisma, rows, { sharedFamilyKeys });

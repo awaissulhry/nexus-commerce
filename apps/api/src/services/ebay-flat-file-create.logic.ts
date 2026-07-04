@@ -245,6 +245,23 @@ export function buildEbayProductCreateInput(
 }
 
 /**
+ * Canonical family/group key for a row — the identity the create/reparent
+ * planner groups by. Exported so the route can build `sharedFamilyKeys` with
+ * the IDENTICAL keying (explicit rows key by sku, not product id).
+ *   explicit parent/standalone → own sku
+ *   explicit child             → parent_sku (fallback ppid)
+ *   no explicit parentage      → platformProductId (back-compat)
+ */
+export function ebayFamilyKey(row: EbayRow): string {
+  const cls = classifyRow(row)
+  if (cls.hasExplicitParentage) {
+    if (!cls.isChild) return String(row.sku ?? '').trim() || cls.selfId
+    return cls.parentSku ?? cls.ppid
+  }
+  return String(row.platformProductId ?? row._productId ?? row._rowId ?? '')
+}
+
+/**
  * Plan all create + reparent operations needed for a batch of eBay flat-file rows.
  *
  * Pure: all existing-product knowledge comes via `existingBySku` and
@@ -276,19 +293,8 @@ export function planEbayFamilyCreates(input: {
   }
   // Family key of a row — same precedence the client's isSharedDuplicateAllowed uses.
   // P2.A: derive from explicit columns when present so new-format rows group correctly.
-  const familyKeyOf = (row: EbayRow): string => {
-    const cls = classifyRow(row)
-    if (cls.hasExplicitParentage) {
-      if (!cls.isChild) {
-        // Parent/standalone: own sku is the family key
-        return String(row.sku ?? '').trim() || cls.selfId
-      }
-      // Child: parent_sku is the family key (fall back to ppid when absent)
-      return cls.parentSku ?? cls.ppid
-    }
-    // Back-compat: ppid-based key
-    return String(row.platformProductId ?? row._productId ?? row._rowId ?? '')
-  }
+  // P2.B1 — shared with the route (sharedFamilyKeys must match) via ebayFamilyKey().
+  const familyKeyOf = ebayFamilyKey
   const dupedSkus = new Set<string>()
   // Shared-allowed duplicates are NOT errors — they COLLAPSE to a single create (one
   // unique-SKU Product); the extra shared parents receive the child via
