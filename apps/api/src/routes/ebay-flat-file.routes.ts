@@ -45,6 +45,8 @@ import { parseCsv, parseFile, sniffDelimiter, detectFileKind, type ParsedFile } 
 // P1.2 — eBay flat-file create/reparent pre-pass (new products persist under their parent before ChannelListing loop runs)
 import { runEbayFlatFileCreates, type CreateResult } from '../services/ebay-flat-file-create.service.js';
 import { ebayFamilyKey } from '../services/ebay-flat-file-create.logic.js';
+// P2.D1 — eBay flat-file soft-delete (child / product / family)
+import { runEbayFlatFileDelete, type DeleteTarget } from '../services/ebay-flat-file-delete.service.js';
 // Task 4 — shared-SKU management: synthesize membership rows for the GET /rows response
 import { loadSharedMembershipRows } from '../services/ebay-shared-membership-rows.js';
 
@@ -1828,6 +1830,52 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       return reply.send(job);
     },
   );
+
+  // ── POST /api/ebay/flat-file/delete ─────────────────────────────────
+  // P2.D1 — Soft-delete one or more eBay flat-file targets.
+  //
+  // Body: { targets: Array<DeleteTarget> }
+  // Each target carries an `intent` that drives the operation:
+  //   • remove-listing  — removes one SharedListingMembership; Product untouched.
+  //   • delete-product  — soft-deletes the Product + all its memberships.
+  //   • delete-family   — soft-deletes parent + all non-deleted children + memberships.
+  //
+  // Results are collected per-target; one failure does not abort others.
+  // All DB writes are wrapped in a $transaction per target. eBay delist
+  // is best-effort (currently stubbed pending W5.49b) — a delist failure
+  // never rolls back the committed soft-delete.
+  //
+  // HARD DELETE IS NEVER PERFORMED.
+  fastify.post<{
+    Body: { targets: Array<Record<string, unknown>> }
+  }>('/ebay/flat-file/delete', async (request, reply) => {
+    const { targets } = request.body ?? {}
+
+    if (!Array.isArray(targets) || targets.length === 0) {
+      return reply.code(400).send({ error: 'targets must be a non-empty array' })
+    }
+
+    const VALID_INTENTS = new Set(['delete-product', 'delete-family', 'remove-listing'])
+    for (const t of targets) {
+      if (!VALID_INTENTS.has(String(t.intent ?? ''))) {
+        return reply
+          .code(400)
+          .send({
+            error: `Invalid intent: "${t.intent}". Must be one of: delete-product, delete-family, remove-listing`,
+          })
+      }
+    }
+
+    try {
+      const results = await runEbayFlatFileDelete(prisma as any, targets as unknown as DeleteTarget[])
+      return reply.send({ results })
+    } catch (err: unknown) {
+      request.log.error(err, 'ebay/flat-file/delete failed')
+      return reply
+        .code(500)
+        .send({ error: err instanceof Error ? err.message : 'Delete failed' })
+    }
+  })
 
   // ── POST /api/ebay/flat-file/pull-preview/apply ─────────────────────
   // Audit-log endpoint. Called after the operator confirms what to
