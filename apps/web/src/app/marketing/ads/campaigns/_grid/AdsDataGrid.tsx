@@ -510,7 +510,7 @@ export function AdsDataGrid<T>({
       </div>
 
       {/* grid */}
-      <div className="h10-am-grid">
+      <div className={`h10-am-grid${selectable ? '' : ' nosel'}`}>
         <table>
           <thead>
             <tr>

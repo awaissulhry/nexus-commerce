@@ -895,6 +895,10 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-am-grid thead th.ck { z-index: 6; background: #f7f9fb; }
 .h10-am-grid th.nm.fz, .h10-am-grid td.nm.fz { position: sticky; left: 40px; z-index: 3; background: #fff; border-right: 1px solid #d0d5dd; box-shadow: 4px 0 6px -3px rgba(16, 24, 40, 0.08); }
 .h10-am-grid thead th.nm.fz { z-index: 6; background: #f7f9fb; }
+/* ER4 F1 — selectable={false} grids have no 40px checkbox column; without this
+   the sticky first column pins 40px right of its slot and overlays column 2
+   whenever the table overflows (root-caused in ER3.4). */
+.h10-am-grid.nosel th.nm.fz, .h10-am-grid.nosel td.nm.fz { left: 0; }
 .h10-am-grid tbody tr:hover td.ck, .h10-am-grid tbody tr:hover td.nm.fz { background: #f7faff; }
 .h10-am-grid tbody tr.on td.ck, .h10-am-grid tbody tr.on td.nm.fz { background: #eef5ff; }
 
