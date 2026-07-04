@@ -88,6 +88,10 @@ export interface EbayRow extends BaseRow {
   _shared?: boolean
   /** Task 5 (shared-mgmt) — row must be treated as non-editable by the grid. */
   _readonly?: boolean
+  /** P2.B2 — explicit parentage column value: 'parent' | 'child' | '' | undefined */
+  parentage?: '' | 'parent' | 'child'
+  /** P2.B2 — parent row's SKU for child rows (drives live grouping + orphan validation) */
+  parent_sku?: string
   it_price?: number | null; it_qty?: number | null; it_item_id?: string | null
   it_status?: string | null; it_listing_id?: string | null
   de_price?: number | null; de_qty?: number | null; de_item_id?: string | null
@@ -142,10 +146,18 @@ export function validateRows(rows: BaseRow[], allRows: BaseRow[] = rows) {
   // orphaned variants, so catch them here instead of after a failed push.
   const parentIds = new Set<string>()
   const skuCount = new Map<string, number>()
+  // G.2 — explicit parent SKU set: rows with parentage='parent'|'' or _isParent legacy flag.
+  // Used by the orphan-child check below (P2.B2).
+  const parentSkuSet = new Set<string>()
   for (const r of allRows) {
     const er = r as EbayRow & Record<string, unknown>
     if (er._isParent === true) {
       for (const k of [er._rowId, er._productId, er.platformProductId]) if (k) parentIds.add(String(k))
+    }
+    // Collect explicit parent SKUs (covers P2.B2 explicit-parentage rows and legacy _isParent rows).
+    if (er.parentage === 'parent' || er.parentage === '' || er._isParent === true) {
+      const ps = String(r.sku ?? '').trim()
+      if (ps) parentSkuSet.add(ps)
     }
     const s = String(r.sku ?? '')
     if (s) skuCount.set(s, (skuCount.get(s) ?? 0) + 1)
@@ -162,11 +174,21 @@ export function validateRows(rows: BaseRow[], allRows: BaseRow[] = rows) {
 
     if (er._isParent === true) {
       // A parent groups its variants by an axis — without a theme they won't group.
-      if (!String(er.variation_theme ?? '').trim()) issues.push({ level: 'warn', sku, field: 'variation_theme', msg: 'Parent has no variation theme (e.g. Color, Size) — variants won’t group' })
+      if (!String(er.variation_theme ?? '').trim()) issues.push({ level: 'warn', sku, field: 'variation_theme', msg: "Parent has no variation theme (e.g. Color, Size) — variants won't group" })
     } else if (er._isParent === false) {
       // A variant must belong to a parent present in this sheet.
       const link = String(er.platformProductId ?? '')
-      if (link && !parentIds.has(link)) issues.push({ level: 'error', sku, field: 'parent', msg: 'Variant’s parent isn’t in this sheet — load the family before pushing' })
+      if (link && !parentIds.has(link)) issues.push({ level: 'error', sku, field: 'parent', msg: "Variant's parent isn't in this sheet — load the family before pushing" })
+    }
+
+    // G.2 — P2.B2 orphan-child: explicit child whose parent_sku matches no parent row's SKU in
+    // this sheet. isSharedDuplicateAllowed guards the DUPLICATE-SKU path above; this check is
+    // orthogonal (looking at the parent SKU, not the child's own SKU) so no skip needed there.
+    if (er.parentage === 'child') {
+      const pSku = String(er.parent_sku ?? '').trim()
+      if (pSku && !parentSkuSet.has(pSku)) {
+        issues.push({ level: 'warn', sku, field: 'parent_sku', msg: `Parent SKU '${pSku}' not found in this sheet` })
+      }
     }
   }
   return issues
@@ -1871,10 +1893,27 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   }, [descModal, categorySearchOpen, categorySearchRowId, marketplace, loadCategorySchema, pullDiffData, pullDiffOpen, makePullDiffApplyHandler, aspectsPanelRowId, categoryColumns, valueOrderOpen, familyId, importWizardOpen, importInitialFile, exportColumns, handleImport])
 
   // ── Group key for eBay variations ──────────────────────────────────────
+  // Mirrors server ebayFamilyKey (ebay-flat-file-create.logic.ts:255):
+  //   explicit parent/standalone → own sku (fallback _productId/_rowId)
+  //   explicit child             → parent_sku (fallback platformProductId)
+  //   no explicit parentage      → platformProductId (back-compat, ppid heuristic)
+  // Editing parent_sku on a child re-groups it live without a reload.
 
-  const getGroupKey = useCallback((row: BaseRow) =>
-    String((row as EbayRow).platformProductId ?? row._rowId),
-  [])
+  const getGroupKey = useCallback((row: BaseRow) => {
+    const er = row as EbayRow
+    const parentage = er.parentage
+    if (parentage === 'parent' || parentage === '') {
+      // Explicit parent or standalone: key by own SKU so children with parent_sku=this.sku join it.
+      return String(er.sku ?? '').trim() || String(row._productId ?? row._rowId)
+    }
+    if (parentage === 'child') {
+      // Explicit child: key by parent_sku, fallback to platformProductId (transition safety).
+      const ps = String(er.parent_sku ?? '').trim()
+      return ps || String(er.platformProductId ?? row._rowId)
+    }
+    // No explicit parentage (legacy data, back-compat): original ppid-based key.
+    return String(er.platformProductId ?? row._rowId)
+  }, [])
 
   // ── Replication handler ────────────────────────────────────────────────
 
