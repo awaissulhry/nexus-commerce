@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import { ListChecks, Wand2 } from 'lucide-react'
 import { money } from '../../../../../campaigns/_grid/format'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
+import { H10Select } from '../../../../../campaigns/FilterDropdown'
 import { postEbayAds } from '../../../../_lib'
 import type { CampaignPlan, SelectionRule } from '../plan'
 
@@ -69,7 +70,7 @@ export function TargetingStepGen({ plan, set }: { plan: CampaignPlan; set: (patc
         <p>A listing matches if it satisfies ANY rule; each rule combines its own conditions. Rules are immutable after launch.</p>
         <div className="h10-cd-card pad">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#283441' }}>
+            <label className="eb-toggle-lbl">
               <button type="button" role="switch" aria-checked={plan.criterion.autoSelectFutureInventory} className={`h10-bktoggle ${plan.criterion.autoSelectFutureInventory ? 'on' : ''}`}
                 onClick={() => set({ criterion: { ...plan.criterion, autoSelectFutureInventory: !plan.criterion.autoSelectFutureInventory } })}>
                 <span />
@@ -104,10 +105,11 @@ export function TargetingStepGen({ plan, set }: { plan: CampaignPlan; set: (patc
 
           <div className="eb-form-row" style={{ marginTop: 14, alignItems: 'flex-end' }}>
             <div className="h10-cd-field s"><label>Rate strategy <InfoTip tip="Fixed: one campaign-level % you control. Dynamic: eBay applies its daily suggested rate but never exceeds your cap." /></label>
-              <select className="h10-cd-input" value={plan.adRateStrategy} onChange={(e) => set({ adRateStrategy: e.target.value as 'FIXED' | 'DYNAMIC' })}>
-                <option value="FIXED">Fixed — campaign-level %</option>
-                <option value="DYNAMIC">Dynamic — eBay&apos;s daily suggestion under a cap</option>
-              </select></div>
+              <H10Select ariaLabel="Rate strategy" width={260} value={plan.adRateStrategy} onChange={(v) => set({ adRateStrategy: v as 'FIXED' | 'DYNAMIC' })}
+                options={[
+                  { value: 'FIXED', label: 'Fixed — campaign-level %' },
+                  { value: 'DYNAMIC', label: "Dynamic — eBay's daily suggestion under a cap" },
+                ]} /></div>
             <div className="h10-cd-field s" style={{ maxWidth: 140 }}><label>{plan.adRateStrategy === 'DYNAMIC' ? 'Base rate %' : 'Campaign rate %'} <InfoTip tip={plan.adRateStrategy === 'DYNAMIC' ? 'The starting rate before eBay begins adjusting.' : 'The one % every matched listing pays on attributed sales.'} /></label>
               <input type="number" min={2} max={100} step={0.1} value={plan.campaignRatePct} onChange={(e) => set({ campaignRatePct: e.target.value })} /></div>
             {plan.adRateStrategy === 'DYNAMIC' && (

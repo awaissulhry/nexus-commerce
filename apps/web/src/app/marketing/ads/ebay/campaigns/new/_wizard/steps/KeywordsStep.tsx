@@ -11,6 +11,7 @@
  */
 import { useState } from 'react'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
+import { H10Select } from '../../../../../campaigns/FilterDropdown'
 import { postEbayAds } from '../../../../_lib'
 import { emptyGroup, SUGGEST_MARKETS, type CampaignPlan, type PlanAdGroup, type Seed } from '../plan'
 
@@ -98,9 +99,9 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
                       </td>
                       <td className="ed"><span className={`h10-pill ${s.source === 'MANUAL' ? 'ok' : 'arch'}`}>{s.source === 'ASPECT/FREQUENT' ? 'aspects' : s.source.toLowerCase()}</span></td>
                       <td className="ed">
-                        <select className="h10-cd-input" value={s.matchType} onChange={(e) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, matchType: e.target.value as Seed['matchType'] } : x)) })}>
-                          <option value="PHRASE">Phrase</option><option value="EXACT">Exact</option><option value="BROAD">Broad</option>
-                        </select>
+                        <H10Select ariaLabel={`Match type for ${s.text}`} width={110} value={s.matchType}
+                          onChange={(v) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, matchType: v as Seed['matchType'] } : x)) })}
+                          options={[{ value: 'PHRASE', label: 'Phrase' }, { value: 'EXACT', label: 'Exact' }, { value: 'BROAD', label: 'Broad' }]} />
                       </td>
                       <td className="num"><input className="h10-cd-input" style={{ width: 70 }} type="number" min={0.05} step={0.05} value={s.bidEur} onChange={(e) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, bidEur: e.target.value } : x)) })} /></td>
                     </tr>
@@ -111,10 +112,10 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
           )}
 
           <div className="h10-cd-field" style={{ marginTop: 12, maxWidth: 520 }}>
-            <label>Negative keywords — one per line ·
-              <select className="h10-cd-input" style={{ marginLeft: 8 }} value={g.negMatch} onChange={(e) => setGroup(i, { negMatch: e.target.value as 'EXACT' | 'PHRASE' })}>
-                <option value="EXACT">EXACT</option><option value="PHRASE">PHRASE</option>
-              </select>
+            <label className="eb-neg-lbl">Negative keywords — one per line ·
+              <H10Select ariaLabel="Negative match type" width={110} value={g.negMatch}
+                onChange={(v) => setGroup(i, { negMatch: v as 'EXACT' | 'PHRASE' })}
+                options={[{ value: 'EXACT', label: 'EXACT' }, { value: 'PHRASE', label: 'PHRASE' }]} />
             </label>
             <textarea className="eb-textarea" rows={2} value={g.negativesText} onChange={(e) => setGroup(i, { negativesText: e.target.value })} placeholder="terms you never want to match (broad negatives don't exist on eBay)" />
           </div>

@@ -4,12 +4,13 @@
  * channel path) — an honest explainer instead of a dead flow.
  */
 import Link from 'next/link'
+import '../../../ebay.css'
 
 export default function Page() {
   return (
     <div className="h10-cd-card pad" style={{ maxWidth: 640, margin: '40px auto' }}>
-      <h2 style={{ fontSize: 17, margin: '0 0 10px' }}>Promoted Offsite</h2>
-      <p style={{ fontSize: 13, color: '#5b6573', lineHeight: 1.6 }}>
+      <h2 className="eb-explainer-h">Promoted Offsite</h2>
+      <p className="eb-explainer-p">
         Offsite campaigns put your listings on external networks (Google, social) with eBay managing placement
         and CPC — the daily budget is the only lever. Creating them from Nexus lands in a later phase; for now
         they are created in Seller Hub, and once live, this console tracks their spend, reports and lifecycle

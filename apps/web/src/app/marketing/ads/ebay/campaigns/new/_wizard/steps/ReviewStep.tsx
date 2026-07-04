@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2 } from 'lucide-react'
 import { money, pct } from '../../../../../campaigns/_grid/format'
+import { H10Select } from '../../../../../campaigns/FilterDropdown'
 import { postEbayAds } from '../../../../_lib'
 import { OverrideReasonModal } from '../../../../_modals/OverrideReasonModal'
 import { effRate, includedListings, type CampaignPlan, type PlanListing } from '../plan'
@@ -147,7 +148,7 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
       <div className="h10-cd-card pad" style={{ maxWidth: 760 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <CheckCircle2 size={18} color="#12855f" aria-hidden />
-          <b style={{ fontSize: 15 }}>Campaign launched ({launched.mode})</b>
+          <b className="eb-hd">Campaign launched ({launched.mode})</b>
         </div>
         {launched.groupResults?.length > 0 && (
           <ul className="eb-results">{launched.groupResults.map((g, i) => <li key={i} className={g.error ? 'err' : 'ok'}>{g.error ? `${g.name} — ${g.error}` : `${g.name}: ${g.keywords} keyword(s), ${g.negatives} negative(s)`}</li>)}</ul>
@@ -155,7 +156,7 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
         {launched.promoteResults?.some((r) => !r.ok) && (
           <ul className="eb-results">{launched.promoteResults.filter((r) => !r.ok).map((r, i) => <li key={i} className="err"><code>{r.key}</code> — {r.blocked ?? r.error}</li>)}</ul>
         )}
-        <p style={{ fontSize: 12, color: '#667085', margin: '8px 0 4px', fontWeight: 700, textTransform: 'uppercase' }}>What happens next</p>
+        <p className="eb-cap" style={{ margin: '8px 0 4px' }}>What happens next</p>
         <ul className="eb-results">{launched.timeline.map((t, i) => <li key={i} className="ok">{t}</li>)}</ul>
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
           <button type="button" className="h10-am-btn primary" onClick={() => router.push(`/marketing/ads/ebay/campaigns/${launched.campaignId}`)}>Open campaign</button>
@@ -178,22 +179,22 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
           {dynKey && <span className="h10-pill ok">dynamic rate ≤ {plan.dynamicCapPct}%</span>}
           {plan.rateDiscovery.on && isGen && !isRules && !dynKey && <span className="h10-pill ok">Rate Discovery {plan.rateDiscovery.floorPct}%→{plan.rateDiscovery.capPct}%</span>}
           <span className="grow" style={{ flex: 1 }} />
-          <span title={readiness.fixes.join('\n') || 'Ready'} style={{ fontSize: 12.5, fontWeight: 700, color: readiness.score >= 80 ? '#12855f' : readiness.score >= 50 ? '#b87503' : '#e5484d' }}>
+          <span title={readiness.fixes.join('\n') || 'Ready'} className={`eb-readiness ${readiness.score >= 80 ? 'ok' : readiness.score >= 50 ? 'mid' : 'bad'}`}>
             Launch readiness {readiness.score}/100
           </span>
         </div>
-        <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap', fontSize: 12.5, color: '#5b6573' }}>
+        <div className="eb-editlinks">
           <button type="button" className="h10-am-link" onClick={() => goTo('setup')}>edit setup</button>
           {isRules && <button type="button" className="h10-am-link" onClick={() => goTo('targeting')}>edit rules ({plan.criterion.rules.length}, auto-select {plan.criterion.autoSelectFutureInventory ? 'ON' : 'off'})</button>}
           {isGen && !isRules && <button type="button" className="h10-am-link" onClick={() => goTo('listings')}>edit listings ({included.length} staged)</button>}
           {isGen && !isRules && <button type="button" className="h10-am-link" onClick={() => goTo('rates')}>{dynKey ? `edit rate strategy (dynamic ≤ ${plan.dynamicCapPct}%)` : 'edit rates'}</button>}
           {!isGen && <button type="button" className="h10-am-link" onClick={() => goTo('listings')}>edit listings ({included.length} staged{plan.type === 'priority-manual' && included.length > 0 ? ` → ad group “${attachName}”` : ''})</button>}
           {plan.type === 'priority-manual' && included.length > 0 && plan.adGroups.length > 1 && (
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <label className="eb-neg-lbl">
               attach staged listings to
-              <select className="h10-cd-input eb-resolve" value={attachName} onChange={(e) => set({ attachGroup: e.target.value })}>
-                {plan.adGroups.map((g) => <option key={g.name} value={g.name}>{g.name}</option>)}
-              </select>
+              <H10Select ariaLabel="Ad group receiving the staged listings" width={150} value={attachName}
+                onChange={(v) => set({ attachGroup: v })}
+                options={plan.adGroups.map((g) => ({ value: g.name, label: g.name }))} />
             </label>
           )}
           {plan.type === 'priority-manual' && <button type="button" className="h10-am-link" onClick={() => goTo('keywords')}>edit keywords ({selectedSeeds.length} across {plan.adGroups.length} group(s))</button>}
@@ -238,10 +239,10 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
 
       {/* rule packs */}
       <div className="h10-cd-card pad">
-        <label style={{ display: 'block', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: '#667085', marginBottom: 8 }}>Rule packs bound at launch (PROPOSE mode — born governed)</label>
+        <label className="eb-cap eb-cap-lbl">Rule packs bound at launch (PROPOSE mode — born governed)</label>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {packOptions.map((p) => (
-            <label key={p} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#283441', border: '1px solid #d8dde4', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', background: plan.rulePacks.includes(p) ? '#eef5ff' : '#fff' }}>
+            <label key={p} className={`eb-pack ${plan.rulePacks.includes(p) ? 'on' : ''}`}>
               <input type="checkbox" checked={plan.rulePacks.includes(p)} onChange={(e) => set({ rulePacks: e.target.checked ? [...plan.rulePacks, p] : plan.rulePacks.filter((x) => x !== p) })} />
               {p}
             </label>
@@ -261,7 +262,7 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
             {advisories.map((a) => (
               <li key={a.key} className="warn">
                 {a.text}{a.key !== 'over-be' && (
-                  <label style={{ marginLeft: 8, fontSize: 11.5 }}>
+                  <label className="eb-ack">
                     <input type="checkbox" checked={plan.acks.includes(a.key)} onChange={(e) => set({ acks: e.target.checked ? [...plan.acks, a.key] : plan.acks.filter((x) => x !== a.key) })} /> acknowledge
                   </label>
                 )}
@@ -271,7 +272,7 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
         )}
         {gaps.length === 0 && advisories.length === 0 && <p className="eb-be-hint">All checks green.</p>}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
-          <span style={{ fontSize: 12.5, color: '#5b6573' }}>
+          <span className="eb-willcreate">
             Will create: <b>1 {plan.startDate ? 'scheduled campaign' : 'campaign'}</b>
             {isGen && !isRules ? <>, <b>{included.length} ads{dynKey ? ' (dynamic rates)' : ''}</b></> : null}
             {isRules ? <>, <b>rules-based selection ({plan.criterion.rules.length} rule(s))</b></> : null}

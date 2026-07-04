@@ -12,6 +12,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, Copy, Plus, Search, Trash2, X } from 'lucide-react'
 import { money, pct } from '../../../../../campaigns/_grid/format'
+import { H10Select } from '../../../../../campaigns/FilterDropdown'
 import { EbayMark } from '../../../../../_shell/EbayMark'
 import type { CampaignPlan, PlanListing } from '../plan'
 
@@ -207,12 +208,16 @@ export function ListingsStep({ plan, set, listings, isPriority, loading }: {
                 <Thumb l={l} />
                 <ListingMeta l={l} />
                 {l.conflict && (
-                  <select className="h10-cd-input eb-resolve" value={plan.resolutions[l.itemId] ?? 'skip'} title={`Already in "${l.conflict.campaignName}" at ${l.conflict.currentRatePct ?? '?'}% — one listing = one General campaign`}
-                    onChange={(e) => set({ resolutions: { ...plan.resolutions, [l.itemId]: e.target.value as 'include' | 'skip' | 'move' } })}>
-                    <option value="skip">skip</option>
-                    <option value="move">move here</option>
-                    <option value="include">include (will fail)</option>
-                  </select>
+                  <span title={`Already in "${l.conflict.campaignName}" at ${l.conflict.currentRatePct ?? '?'}% — one listing = one General campaign`}>
+                    <H10Select ariaLabel={`Conflict resolution for ${l.title ?? l.itemId}`} width={132}
+                      value={plan.resolutions[l.itemId] ?? 'skip'}
+                      onChange={(v) => set({ resolutions: { ...plan.resolutions, [l.itemId]: v as 'include' | 'skip' | 'move' } })}
+                      options={[
+                        { value: 'skip', label: 'skip' },
+                        { value: 'move', label: 'move here' },
+                        { value: 'include', label: 'include (will fail)' },
+                      ]} />
+                  </span>
                 )}
                 <button type="button" className="x" onClick={() => remove(l.itemId)} aria-label={`Remove ${l.title ?? l.itemId}`}><X size={14} /></button>
               </div>

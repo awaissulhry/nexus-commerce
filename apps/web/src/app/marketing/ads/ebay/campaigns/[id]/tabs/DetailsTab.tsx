@@ -10,6 +10,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { money } from '../../../../campaigns/_grid/format'
+import { EbDateField } from '../../../_lib/EbDateField'
 import { postEbayAds, type CampaignDetailPayload } from '../../../_lib'
 import type { Strategy } from '../tabs'
 import { CriterionCard } from './CriterionCard'
@@ -137,7 +138,10 @@ export function DetailsTab({ data, campaignId, strategy, onSaved, say }: {
                 </div>
                 <div className="h10-cd-field s">
                   <label>End date — blank = never expires</label>
-                  <input type="date" value={form.endDate} min={new Date().toISOString().slice(0, 10)} onChange={(e) => set('endDate', e.target.value)} disabled={ended} />
+                  {ended
+                    ? <input value={form.endDate || 'never'} disabled />
+                    : <EbDateField ariaLabel="End date" width={170} value={form.endDate} min={new Date().toISOString().slice(0, 10)}
+                        placeholder="never" clearLabel="clear — no end date" onChange={(v) => set('endDate', v)} />}
                 </div>
               </div>
               {ended && <p className="eb-be-hint" style={{ marginTop: 10 }}>This campaign has <b>ended</b> — ENDED is terminal on eBay. Use <b>Clone campaign</b> (Action ▾) to relaunch it.</p>}
