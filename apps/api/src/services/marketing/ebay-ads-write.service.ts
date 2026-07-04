@@ -331,27 +331,46 @@ export interface PromoteInput {
   items: Array<{ listingId: string; ratePct?: number }>
   defaultRatePct?: number
   override?: { reason: string }
+  /** ER4 E4 — MANUAL Priority (CPC) campaigns attach listings inside an ad
+   *  group; pass the INTERNAL EbayAdGroup id. CPS and Smart Priority omit it. */
+  adGroupId?: string
 }
 
 export async function promoteListings(ctx: OpContext, input: PromoteInput): Promise<{ mode: WriteMode; results: ItemOutcome[] }> {
   const c = await prisma.ebayCampaign.findUniqueOrThrow({ where: { id: input.campaignId } })
   await killSwitchCheck(c.marketplace)
-  if ((c.fundingModel ?? 'COST_PER_SALE') !== 'COST_PER_SALE') throw new Error('promote-by-listing targets General (CPS) campaigns; Priority attaches listings via its own builder')
-  if (c.isRulesBased) throw new Error('this campaign is rules-based — eBay selects its listings automatically (adjust the rules, or use a key-based campaign)')
+  const isCps = (c.fundingModel ?? 'COST_PER_SALE') === 'COST_PER_SALE'
+  if (isCps && c.isRulesBased) throw new Error('this campaign is rules-based — eBay selects its listings automatically (adjust the rules, or use a key-based campaign)')
+  if (isCps && input.adGroupId) throw new Error('adGroupId applies to Priority campaigns — CPS ads live at campaign level')
+  // ER4 E4 — Priority attach: MANUAL campaigns need the target ad group;
+  // Smart Priority has no ad groups (targeting is automated). Rates/BE
+  // guardrails are CPS semantics — CPC economics ride keyword bids instead.
+  let group: { id: string; externalAdGroupId: string } | null = null
+  if (!isCps) {
+    const smart = c.campaignTargetingType === 'SMART'
+    if (smart && input.adGroupId) throw new Error('Smart Priority campaigns have no ad groups — omit adGroupId')
+    if (!smart) {
+      if (!input.adGroupId) throw new Error('Manual Priority campaigns attach listings inside an ad group — pass adGroupId')
+      const g = await prisma.ebayAdGroup.findUniqueOrThrow({ where: { id: input.adGroupId } })
+      if (g.campaignId !== c.id) throw new Error('ad group belongs to a different campaign')
+      group = { id: g.id, externalAdGroupId: g.externalAdGroupId }
+    }
+  }
 
   const existing = new Set((await prisma.ebayAd.findMany({ where: { campaignId: c.id, listingId: { not: null } }, select: { listingId: true } })).map((a) => a.listingId!))
   const short = SHORT[c.marketplace] ?? 'IT'
-  const be = await loadBreakEvens(short, input.items.map((i) => i.listingId))
+  const be = isCps ? await loadBreakEvens(short, input.items.map((i) => i.listingId)) : new Map<string, { be: number | null; status: string | null }>()
   const decision = gate(c.marketplace)
   const results: ItemOutcome[] = []
-  const toCreate: Array<{ listingId: string; ratePct: number }> = []
+  const toCreate: Array<{ listingId: string; ratePct?: number }> = []
   const warnings = new Map<string, string>()
 
   for (const item of input.items) {
+    if (existing.has(item.listingId)) { results.push({ key: item.listingId, ok: true, mode: decision.mode, warning: 'already in this campaign — skipped' }); continue }
+    if (!isCps) { toCreate.push({ listingId: item.listingId }); continue }
     const ratePct = item.ratePct ?? input.defaultRatePct ?? (c.bidPercentage != null ? Number(c.bidPercentage.toString()) : NaN)
     const invalid = validateRatePct(ratePct)
     if (invalid) { results.push({ key: item.listingId, ok: false, mode: decision.mode, error: invalid }); continue }
-    if (existing.has(item.listingId)) { results.push({ key: item.listingId, ok: true, mode: decision.mode, warning: 'already in this campaign — skipped' }); continue }
     const eco = be.get(item.listingId)
     const guard = rateGuardrail(ratePct, eco?.be ?? null, eco?.status ?? null, input.override)
     if (guard.blocked) { results.push({ key: item.listingId, ok: false, mode: decision.mode, blocked: guard.blocked }); continue }
@@ -364,7 +383,11 @@ export async function promoteListings(ctx: OpContext, input: PromoteInput): Prom
     const auth = await getActiveEbayAdsAuth()
     if (!auth) throw new Error('no active eBay connection')
     for (const batch of chunk(toCreate)) {
-      live.push(...await bulkCreateAdsByListingIdApi(auth.token, c.externalCampaignId, batch.map((b) => ({ listingId: b.listingId, bidPercentage: b.ratePct.toFixed(1) }))))
+      live.push(...await bulkCreateAdsByListingIdApi(auth.token, c.externalCampaignId, batch.map((b) => (
+        isCps
+          ? { listingId: b.listingId, bidPercentage: b.ratePct!.toFixed(1) }
+          : { listingId: b.listingId, ...(group ? { adGroupId: group.externalAdGroupId } : {}) } // ER4 E4
+      ))))
     }
   }
   const liveByKey = new Map(live.map((l) => [l.key, l]))
@@ -380,10 +403,11 @@ export async function promoteListings(ctx: OpContext, input: PromoteInput): Prom
         where: { campaignId_listingId: { campaignId: c.id, listingId: item.listingId } },
         create: {
           campaignId: c.id, marketplace: c.marketplace, listingId: item.listingId,
-          externalAdId: lr?.id ?? null, bidPercentage: item.ratePct.toFixed(1),
+          externalAdId: lr?.id ?? null, bidPercentage: isCps ? item.ratePct!.toFixed(1) : null,
+          adGroupId: group?.id ?? null, // ER4 E4 — MANUAL Priority ads live in their group
           status: decision.mode === 'live' ? 'ACTIVE' : 'SANDBOX', createdVia: 'CONSOLE',
         },
-        update: { bidPercentage: item.ratePct.toFixed(1), externalAdId: lr?.id ?? undefined },
+        update: { ...(isCps ? { bidPercentage: item.ratePct!.toFixed(1) } : { adGroupId: group?.id ?? null }), externalAdId: lr?.id ?? undefined },
       })
     }
     results.push({ key: item.listingId, ok, mode: decision.mode, id: lr?.id ?? null, error: lr?.error ?? null, warning: warnings.get(item.listingId) ?? null })
@@ -394,7 +418,7 @@ export async function promoteListings(ctx: OpContext, input: PromoteInput): Prom
     ctx, actionType: 'bulk_create_ads', entityType: 'CAMPAIGN', entityId: c.externalCampaignId,
     before: { existingAds: existing.size },
     // rates map = the reconciliation baseline (E7 #25 drift detection)
-    after: { requested: input.items.length, created: toCreate.length, rates: Object.fromEntries(toCreate.map((i) => [i.listingId, i.ratePct])), results: results.slice(0, 100) },
+    after: { requested: input.items.length, created: toCreate.length, rates: isCps ? Object.fromEntries(toCreate.map((i) => [i.listingId, i.ratePct])) : {}, adGroupId: group?.id ?? null, results: results.slice(0, 100) },
     mode: decision.mode, status: okCount === results.length ? 'SUCCESS' : okCount > 0 ? 'PARTIAL' : 'FAILED',
   })
   return { mode: decision.mode, results }

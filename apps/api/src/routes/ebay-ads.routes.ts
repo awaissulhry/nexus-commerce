@@ -973,8 +973,28 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     } else if (def.strategy === 'CPC' && b.keywords?.length) {
       const kws = b.keywords
       const grp = await writesSvc.createAdGroup(ctx, created.campaignId, 'Default', undefined)
+      groupResults.push({ name: 'Default', adGroupId: grp.adGroupId, keywords: 0, negatives: 0 })
       const out = await writesSvc.addKeywords(ctx, created.campaignId, grp.adGroupId, kws)
       keywordResults = out.results
+    }
+
+    // 3b'. ER4 E4 — PRI listing-attach: included listings become ads. Smart
+    // Priority attaches at campaign level; MANUAL attaches into the FIRST
+    // created ad group (stated on the Review step). No group ⇒ honest error
+    // in the results instead of silently dropping the listings.
+    if (def.strategy === 'CPC' && include.length) {
+      try {
+        const campRow = await prisma.ebayCampaign.findUniqueOrThrow({ where: { id: created.campaignId }, select: { campaignTargetingType: true } })
+        const firstGroupId = groupResults.find((g) => g.adGroupId)?.adGroupId
+        const out = await writesSvc.promoteListings(ctx, {
+          campaignId: created.campaignId,
+          items: include.map((i) => ({ listingId: i.listingId })),
+          ...(campRow.campaignTargetingType === 'SMART' ? {} : { adGroupId: firstGroupId }),
+        })
+        promoteResults = out.results
+      } catch (e) {
+        promoteResults = include.map((i) => ({ key: i.listingId, ok: false, mode: 'skipped', error: (e as Error).message }))
+      }
     }
 
     // 3c. ER2 — arm Rate Discovery (bounded ladder; evaluator walks it and

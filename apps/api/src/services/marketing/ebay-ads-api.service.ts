@@ -309,7 +309,9 @@ function parseBulkResponses(items: Array<Record<string, unknown>> | undefined, k
   })
 }
 
-export const bulkCreateAdsByListingIdApi = async (token: string, campaignId: string, ads: Array<{ listingId: string; bidPercentage?: string }>): Promise<BulkItemResult[]> => {
+// ER4 E4 — adGroupId per ad: required by eBay for MANUAL Priority (CPC)
+// campaigns, absent for CPS and Smart Priority.
+export const bulkCreateAdsByListingIdApi = async (token: string, campaignId: string, ads: Array<{ listingId: string; bidPercentage?: string; adGroupId?: string }>): Promise<BulkItemResult[]> => {
   const r = await expectOk(await marketingPost(`/sell/marketing/v1/ad_campaign/${campaignId}/bulk_create_ads_by_listing_id`, token, { requests: ads }), 'bulkCreateAds')
   const j = (await r.json().catch(() => ({}))) as { responses?: Array<Record<string, unknown>> }
   return parseBulkResponses(j.responses, 'listingId', 'adId')
