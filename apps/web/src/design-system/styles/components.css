@@ -1215,3 +1215,31 @@
   font-size: 12px;
   color: var(--status-danger-strong);
 }
+
+/* ── Listbox (Wave 1 gap-fill) — plain single-select dropdown, zero native
+   controls. Trigger mirrors the Select box skin; options reuse the
+   Combobox popover. ─────────────────────────────────────────────────── */
+.h10-ds-listbox { position: relative; display: inline-flex; width: 100%; }
+.h10-ds-listbox-btn {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; border: 1px solid var(--border-default); border-radius: var(--h10-radius-lg);
+  padding: 7px 11px; font: inherit; font-size: 13px; color: var(--text-primary);
+  background: var(--surface-card); cursor: pointer; text-align: left;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-listbox-btn:hover:not(:disabled) { border-color: var(--border-strong); }
+.h10-ds-listbox-btn:focus-visible { outline: none; border-color: var(--color-primary); box-shadow: var(--h10-focus-ring); }
+.h10-ds-listbox-btn:disabled { opacity: 0.55; cursor: default; }
+.h10-ds-listbox-btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-ds-listbox-btn > span.ph { color: var(--h10-text-3); }
+.h10-ds-listbox-btn .chev { flex-shrink: 0; color: var(--h10-text-3); }
+
+/* ── DateField (Wave 1 gap-fill) — single-date calendar popover replacing
+   native <input type="date">. Reuses the DateRangePicker month grid. ── */
+.h10-ds-datefield { position: relative; display: inline-flex; width: 100%; }
+.h10-ds-dp-pop.single { left: 0; right: auto; min-width: 252px; }
+.h10-ds-dp-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.h10-ds-dp-nav button { border: none; background: none; color: var(--h10-text-2); cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
+.h10-ds-dp-nav button:hover { background: var(--h10-surface-hover); }
+.h10-ds-datefield-foot { border-top: 1px solid var(--border-subtle); margin-top: 6px; padding-top: 6px; display: flex; justify-content: flex-end; }
+.h10-ds-datefield-foot button { border: none; background: none; font: inherit; font-size: 12.5px; color: var(--color-primary); cursor: pointer; }

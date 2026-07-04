@@ -4,6 +4,19 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [ZERO-NATIVE] — 2026-07-04 — Listbox + DateField (Wave 1 conformance gap-fill)
+
+- **`Listbox`** (`components/Listbox.tsx`) — plain single-select styled dropdown
+  (button trigger in the Select box skin + the Combobox popover, no typeahead).
+  The zero-native-control replacement for the `Select` primitive, which styles a
+  native `<select>` and still opens the OS option list. New pages must use
+  Listbox; the DS-conformance ratchet (scripts/ds-conformance-guard.mjs) bans
+  new native selects in app code.
+- **`DateField`** (`components/DateField.tsx`) — single-date calendar popover
+  replacing native `<input type="date">` (same ban). Reuses the DateRangePicker
+  month-grid vocabulary; min/max + clearable.
+- No changes to existing components or tokens.
+
 ## [PREFERENCES] — 2026-06-28 — PreferencesModal pattern (two-panel "Customise") + DataGrid sticky-right
 
 - **`PreferencesModal`** (`patterns/PreferencesModal.tsx`) — the two-panel grid
