@@ -55,7 +55,17 @@ external-accepted), campaign-name resolution, type filter, cursor paging; shared
 the hub (`?tab=&highlight=`, additive `rowClassName`) · honest All-markets label · WoW
 deltas.
 
-## ER4 — Consistency & benchmark pass (2026-07-04)
+## ER4 — Consistency & benchmark pass (2026-07-04) · `51328fcb` `5a66edc8` `81f60231` `24f11a2e`
 ER4-AUDIT.md (C1–C14 side-by-side · component census · CSS audit · a11y/perf/i18n) ·
 SCORECARD.md (beat-checklist verdicts: 4/4 moats shipping, 6/6 table stakes landed) ·
-this changelog · fix register F1/F2 (Amazon-gated) + E1–E5 (eBay-only / backlog).
+this changelog. Fixes applied on approval:
+- **E1** `5a66edc8` — Run now greyed on disabled rules (evaluator only runs enabled).
+- **F1** `81f60231` — sticky first column pins at `left:0` on `selectable={false}` grids
+  (`.nosel` modifier; assumed 40px checkbox column overlaid column 2 under overflow —
+  Amazon Budget Manager + 7 eBay grids; ER3.4 page workaround swept).
+- **F2** `24f11a2e` — Total rows react to grid filters (function-form `total` over the
+  filtered set; 6 Amazon detail-tab grids + eBay Ad Manager/Products migrated, 65+ totals;
+  unfiltered values identical by construction). Verified live on GALE BROAD DE search
+  terms (147→68 clicks with exact sum/ratio recompute) and the eBay Ad Manager.
+Backlog carried: E2 digest per-marketplace split · E3 estimatedImpact modelling ·
+E4 PRI listing-attach · rule versioning.
