@@ -38,7 +38,11 @@ the phase gate reports (all prod-verified).
 
 - No AI-generated campaign structures (Teika Smart Campaigns) — deliberate; the review
   gate exists for when/if that ships.
-- `estimatedImpact` per suggestion unpopulated (H10 shows expected deltas) — backlog E3.
-- No per-marketplace digest split — backlog E2. No hourly dayparting on eBay (API has no
-  hourly grain). Pacvue-for-eBay remains the only direct competitor product; our margin
-  substrate + drift reconciliation + rollback remain unmatched there.
+- ~~`estimatedImpact` unpopulated~~ — **CLOSED 2026-07-04 (E3)**: honest weekly
+  extrapolations with the assumption stated on every suggestion.
+- ~~No per-marketplace digest split~~ — **CLOSED 2026-07-04 (E2)**.
+- ~~PRI listing-attach write-layer gap~~ — **CLOSED 2026-07-04 (E4)**: MANUAL Priority
+  attaches into ad groups, Smart at campaign level; wizard no longer drops the selection.
+- No hourly dayparting on eBay (the API has no hourly grain). Pacvue-for-eBay remains the
+  only direct competitor product; our margin substrate + drift reconciliation + rollback
+  remain unmatched there.

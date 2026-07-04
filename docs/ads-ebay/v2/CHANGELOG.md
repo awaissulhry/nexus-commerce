@@ -67,5 +67,15 @@ this changelog. Fixes applied on approval:
   filtered set; 6 Amazon detail-tab grids + eBay Ad Manager/Products migrated, 65+ totals;
   unfiltered values identical by construction). Verified live on GALE BROAD DE search
   terms (147→68 clicks with exact sum/ratio recompute) and the eBay Ad Manager.
-Backlog carried: E2 digest per-marketplace split · E3 estimatedImpact modelling ·
-E4 PRI listing-attach · rule versioning.
+Backlog carried: rule versioning.
+
+## ER4 follow-ups — E2/E3/E4 (2026-07-04) · `8be9b657` `62b1dde7` `1f5e3a6c`
+- **E2** — digest per-marketplace split (campaign-grain facts rolled up by marketplace;
+  deleted campaigns land under "unknown"; older stored weeks render unchanged).
+- **E3** — `estimatedImpact` on suggestions: rate steps scale fees with the rate,
+  bid-downs framed as upper bounds, pauses show saved fees AND sales-at-risk, assumption
+  stated on every row; kinds without a defensible model stay blank. 27 unit tests total.
+- **E4** — Priority listing-attach: `promoteListings` serves CPC (MANUAL → required ad
+  group, validated; Smart → campaign level; CPS guardrails untouched); the launch flow
+  attaches staged listings to the first ad group and the wizard stops sending `items: []`.
+  9-check sandbox smoke ALL PASS.
