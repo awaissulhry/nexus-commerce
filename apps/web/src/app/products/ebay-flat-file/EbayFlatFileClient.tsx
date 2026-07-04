@@ -2366,22 +2366,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
               <GitFork className="h-2.5 w-2.5" />↓
             </button>
           )}
-          {/* P2.D2 — Delete button (skip readonly non-shared rows and rows without SKU) */}
-          {(() => {
-            const er = row as EbayRow
-            if (!er.sku) return null
-            if (er._readonly === true && er._shared !== true) return null
-            return (
-              <button
-                onClick={(e) => { e.stopPropagation(); setDeleteConfirmRows([er]) }}
-                onPointerDown={(e) => e.stopPropagation()}
-                title="Delete this row — ends the live eBay listing permanently"
-                className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] leading-none transition-colors text-red-500 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/40"
-              >
-                <Trash2 className="h-2.5 w-2.5" />
-              </button>
-            )
-          })()}
+          {/* P2.D2 — per-row delete removed (inflated row height); delete via the
+              toolbar "Delete selected" (select rows → bulk delete) instead. */}
         </div>
       )}
     />
