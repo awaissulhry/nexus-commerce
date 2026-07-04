@@ -1302,6 +1302,7 @@ export function buildFlatRow(
     // EV.5b — family linkage + variation data (present at runtime; /rows
     // selects all Product scalars).
     parentId?: string | null;
+    isParent?: boolean | null;
     variationTheme?: string | null;
     categoryAttributes?: unknown;
     variantAttributes?: unknown;
@@ -1424,6 +1425,10 @@ export function buildFlatRow(
     variation_theme: variationAxisNames.join(','),
     // metadata flag (underscore-prefixed, not a display column).
     _isParent: !product.parentId,
+    // P1a — explicit parentage columns (display-only; parent_sku placeholder
+    // filled by the GET /rows route after the full product set is loaded).
+    parentage: product.parentId ? 'child' : (product.isParent ? 'parent' : ''),
+    parent_sku: '',
   };
 
   // Dynamic item specifics from first listing

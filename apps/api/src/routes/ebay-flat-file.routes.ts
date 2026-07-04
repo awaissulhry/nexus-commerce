@@ -99,6 +99,19 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         buildFlatRow(p as Parameters<typeof buildFlatRow>[0]),
       );
 
+      // P1a — fill parent_sku for each child row (buildFlatRow leaves it '').
+      // products and rows are parallel arrays (same index); build a sku lookup
+      // from the loaded set, then write row.parent_sku where parentId is set.
+      {
+        const skuById = new Map(products.map((p) => [p.id, p.sku]));
+        for (let i = 0; i < rows.length; i++) {
+          const p = products[i];
+          if (p.parentId) {
+            rows[i].parent_sku = skuById.get(p.parentId) ?? '';
+          }
+        }
+      }
+
       // Propagate ebay_item_id to new variants that haven't been pushed yet.
       // All variants in a variation group share the same eBay listing ID once
       // the group is live. When a new size/colour is added (never pushed), its

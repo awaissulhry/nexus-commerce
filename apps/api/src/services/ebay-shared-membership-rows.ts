@@ -51,6 +51,8 @@ export function synthesizeSharedRow(opts: {
     variationSpecifics: Record<string, string>
     /** Real child product id — used to seed _productId when there's no base row. */
     productId?: string | null
+    /** P1a — parent SKU for explicit parentage columns. */
+    parentSku?: string
   }
   childBaseRow: Record<string, unknown> | null
   parentProductId: string
@@ -70,6 +72,9 @@ export function synthesizeSharedRow(opts: {
     _shared: true,
     _readonly: true,
     _isParent: false,
+    // P1a — explicit parentage columns for shared-child rows.
+    parentage: 'child',
+    parent_sku: m.parentSku ?? '',
     platformProductId: parentProductId,
     ebay_item_id: m.itemId,
     [`${mp}_item_id`]: m.itemId,
@@ -214,6 +219,8 @@ export async function loadSharedMembershipRows(
           lastQtyPushed: m.lastQtyPushed,
           variationSpecifics: (m.variationSpecifics as Record<string, string>) ?? {},
           productId: m.productId,
+          // P1a — pass parentSku so synthesized row sets parent_sku correctly.
+          parentSku: m.parentSku,
         },
         childBaseRow,
         parentProductId,

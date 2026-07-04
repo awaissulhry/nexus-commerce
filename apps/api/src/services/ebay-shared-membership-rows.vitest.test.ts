@@ -61,6 +61,10 @@ describe('synthesizeSharedRow', () => {
     expect(row._shared).toBe(true)
     expect(row._readonly).toBe(true)
 
+    // P1a — explicit parentage fields
+    expect(row.parentage).toBe('child')
+    expect(row.parent_sku).toBe('P')
+
     // eBay item IDs
     expect(row.ebay_item_id).toBe('110')
     expect(row.it_item_id).toBe('110')
@@ -261,6 +265,10 @@ describe('loadSharedMembershipRows', () => {
     expect(row.it_price).toBe(99)
     expect(row.it_qty).toBe(3)
     expect(row.aspect_Colore).toBe('Nero')
+
+    // P1a — explicit parentage fields on synthesized rows
+    expect(row.parentage).toBe('child')
+    expect(row.parent_sku).toBe('parent-B')
 
     // Membership DB was queried with both parent SKUs
     expect(mockPrisma.sharedListingMembership.findMany).toHaveBeenCalledWith({
