@@ -152,7 +152,7 @@ export function EbayProductsRollup() {
         renderFirst={(r) => (
           <div className="nmw eb-nmw-thumb">
             <span className="eb-thumb">{r.imageUrl ? <img src={r.imageUrl} alt="" loading="lazy" /> : <span className="ph" />}</span>
-            <span style={{ minWidth: 0 }}>
+            <span className="body">
             <span className="t" title={r.title ?? r.itemId}>{r.title ?? r.itemId}</span>
             <span className="mk">{r.itemId.slice(-6)}</span>
             {r.productSku && <span className="mk" title={r.productSku}>{r.productSku.length > 14 ? `${r.productSku.slice(0, 13)}…` : r.productSku}</span>}

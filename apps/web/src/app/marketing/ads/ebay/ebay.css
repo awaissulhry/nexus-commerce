@@ -217,6 +217,7 @@
 
 /* EV2 — listing thumbnails (Products grid) + picker resolution select */
 .eb-nmw-thumb { display: flex; align-items: flex-start; gap: 8px; }
+.eb-nmw-thumb > .body { flex: 1; min-width: 0; display: block; overflow: hidden; }
 .eb-thumb { flex: 0 0 34px; width: 34px; height: 34px; border-radius: 6px; border: 1px solid #e6e9ee; overflow: hidden; background: #f7f9fb; display: inline-flex; align-items: center; justify-content: center; }
 .eb-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .eb-thumb .ph { width: 100%; height: 100%; background: linear-gradient(135deg, #f1f4f8, #e6ebf1); }
