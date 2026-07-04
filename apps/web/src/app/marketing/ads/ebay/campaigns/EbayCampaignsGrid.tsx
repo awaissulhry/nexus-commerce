@@ -113,8 +113,9 @@ export function EbayCampaignsGrid() {
   }, [reload, say])
 
   const um = (c: CampaignRow) => mapMetrics(c.metrics)
-  const totSpend = rows.reduce((a, c) => a + um(c).spendCents, 0)
-  const totSales = rows.reduce((a, c) => a + um(c).salesCents, 0)
+  // ER4 F2 — totals compute from the grid's FILTERED rows (function-form total)
+  const totSpendOf = (vr: CampaignRow[]) => vr.reduce((a, c) => a + um(c).spendCents, 0)
+  const totSalesOf = (vr: CampaignRow[]) => vr.reduce((a, c) => a + um(c).salesCents, 0)
   const columns: GridColumn<CampaignRow>[] = useMemo(() => [
     { key: 'status', label: 'Status', metric: false, sortValue: (c) => (c.limitedByBudget ? 'LIMITED' : c.status), render: (c) => <StatusCell c={c} onAction={onAction} onMenu={(cc, kind) => setModal({ kind, c: cc })} /> },
     {
@@ -148,23 +149,23 @@ export function EbayCampaignsGrid() {
         </span>
       ),
     },
-    { key: 'impressions', label: 'Impressions', tip: METRIC_TIPS.impressions, render: (c) => int(um(c).impressions), sortValue: (c) => um(c).impressions, filterValue: (c) => um(c).impressions, total: int(rows.reduce((a, c) => a + um(c).impressions, 0)) },
-    { key: 'clicks', label: 'Clicks', tip: METRIC_TIPS.clicks, render: (c) => int(um(c).clicks), sortValue: (c) => um(c).clicks, filterValue: (c) => um(c).clicks, total: int(rows.reduce((a, c) => a + um(c).clicks, 0)) },
+    { key: 'impressions', label: 'Impressions', tip: METRIC_TIPS.impressions, render: (c) => int(um(c).impressions), sortValue: (c) => um(c).impressions, filterValue: (c) => um(c).impressions, total: (vr) => int(vr.reduce((a, c) => a + um(c).impressions, 0)) },
+    { key: 'clicks', label: 'Clicks', tip: METRIC_TIPS.clicks, render: (c) => int(um(c).clicks), sortValue: (c) => um(c).clicks, filterValue: (c) => um(c).clicks, total: (vr) => int(vr.reduce((a, c) => a + um(c).clicks, 0)) },
     { key: 'ctr', label: 'CTR', tip: METRIC_TIPS.ctr, render: (c) => (um(c).ctr != null ? pct(um(c).ctr! / 100) : '—'), sortValue: (c) => um(c).ctr ?? -1 },
-    { key: 'spend', label: 'Ad Fees', tip: 'Attributed eBay ad fees (any-click) in the selected window.', render: (c) => money(um(c).spendCents, c.budgetCurrency), sortValue: (c) => um(c).spendCents, filterValue: (c) => um(c).spendCents / 100, total: money(totSpend) },
-    { key: 'sales', label: 'Ad Sales', tip: 'Any-click attributed sales: any buyer purchase within 30 days of any click on the ad.', render: (c) => money(um(c).salesCents, c.budgetCurrency), sortValue: (c) => um(c).salesCents, filterValue: (c) => um(c).salesCents / 100, total: money(totSales) },
+    { key: 'spend', label: 'Ad Fees', tip: 'Attributed eBay ad fees (any-click) in the selected window.', render: (c) => money(um(c).spendCents, c.budgetCurrency), sortValue: (c) => um(c).spendCents, filterValue: (c) => um(c).spendCents / 100, total: (vr) => money(totSpendOf(vr)) },
+    { key: 'sales', label: 'Ad Sales', tip: 'Any-click attributed sales: any buyer purchase within 30 days of any click on the ad.', render: (c) => money(um(c).salesCents, c.budgetCurrency), sortValue: (c) => um(c).salesCents, filterValue: (c) => um(c).salesCents / 100, total: (vr) => money(totSalesOf(vr)) },
     {
       key: 'acos', label: 'ACOS', tip: 'Ad fees ÷ any-click attributed sales. Post-any-click this trends high by construction — judge vs break-even.',
       render: (c) => (um(c).acos != null ? pct(um(c).acos! / 100) : '—'), sortValue: (c) => um(c).acos ?? -1, filterValue: (c) => um(c).acos ?? 0,
-      total: totSales > 0 ? pct(totSpend / totSales) : '—',
+      total: (vr) => { const f = totSpendOf(vr), sl = totSalesOf(vr); return sl > 0 ? pct(f / sl) : '—' },
     },
     {
       key: 'roas', label: 'ROAS', tip: 'Attributed sales ÷ ad fees.',
       render: (c) => (um(c).roas != null ? um(c).roas!.toFixed(2) : '—'), sortValue: (c) => um(c).roas ?? -1,
-      total: totSpend > 0 ? (totSales / totSpend).toFixed(2) : '—',
+      total: (vr) => { const f = totSpendOf(vr), sl = totSalesOf(vr); return f > 0 ? (sl / f).toFixed(2) : '—' },
     },
-    { key: 'sold', label: 'Sold', render: (c) => int(um(c).sold), sortValue: (c) => um(c).sold, total: int(rows.reduce((a, c) => a + um(c).sold, 0)) },
-  ], [rows, onAction, router, totSpend, totSales])
+    { key: 'sold', label: 'Sold', render: (c) => int(um(c).sold), sortValue: (c) => um(c).sold, total: (vr) => int(vr.reduce((a, c) => a + um(c).sold, 0)) },
+  ], [onAction, router])
 
   const filters: GridFilter[] = useMemo(() => [
     { key: 'strategy', label: 'Strategy', kind: 'select', options: [{ value: 'GEN', label: 'General' }, { value: 'PRI', label: 'Priority' }, { value: 'OFF', label: 'Offsite' }], placeholder: 'All strategies', value: (c) => strategyBadge(c as CampaignRow) },

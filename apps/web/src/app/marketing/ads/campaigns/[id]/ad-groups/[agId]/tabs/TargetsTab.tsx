@@ -49,30 +49,31 @@ const TYPE_LABEL: Record<string, string> = { EXACT: 'Exact', PHRASE: 'Phrase', B
 export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData | null; onRefresh?: () => void }) {
   const rows = useMemo<TargetRow[]>(() => ((adGroup?.targets as TargetRow[] | undefined) ?? []).filter((t) => !t.isNegative), [adGroup])
 
-  const T = useMemo(() => rows.reduce(
+  // ER4 F2 — totals compute from the grid's FILTERED rows (function-form total)
+  const tot = (vr: typeof rows) => vr.reduce(
     (a, r) => ({ spend: a.spend + spendOf(r), sales: a.sales + salesOf(r), impr: a.impr + num(r.impressions), clicks: a.clicks + num(r.clicks), orders: a.orders + num(r.ordersCount) }),
     { spend: 0, sales: 0, impr: 0, clicks: 0, orders: 0 },
-  ), [rows])
+  )
 
   const columns: GridColumn<TargetRow>[] = useMemo(() => [
     { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { const sp = STATUS_PILL[r.status] ?? { label: r.status, cls: '' }; return <span className={`h10-pill ${sp.cls}`}>{sp.label}</span> }, total: '' },
     { key: 'bid', label: 'Bid', render: (r) => eur(num(r.bidCents) / 100), sortValue: (r) => num(r.bidCents), filterValue: (r) => num(r.bidCents) / 100, total: '' },
-    { key: 'spend', label: 'Spend', tip: METRIC_TIPS.spend, render: (r) => eur(spendOf(r)), sortValue: spendOf, filterValue: spendOf, total: eur(T.spend) },
-    { key: 'sales', label: 'Sales', tip: METRIC_TIPS.sales, render: (r) => eur(salesOf(r)), sortValue: salesOf, filterValue: salesOf, total: eur(T.sales) },
-    { key: 'acos', label: 'ACoS', tip: METRIC_TIPS.acos, render: (r) => <span className="h10-acos">{salesOf(r) ? `${acosOf(r).toFixed(2)}%` : '-%'}<i className="dot" /></span>, sortValue: acosOf, filterValue: acosOf, total: <span className="h10-acos">{T.sales ? `${((T.spend / T.sales) * 100).toFixed(2)}%` : '-%'}<i className="dot" /></span> },
-    { key: 'roas', label: 'ROAS', tip: METRIC_TIPS.roas, render: (r) => (roasOf(r) ? roasOf(r).toFixed(2) : '0'), sortValue: roasOf, filterValue: roasOf, total: (T.spend && T.sales) ? (T.sales / T.spend).toFixed(2) : '0' },
-    { key: 'impressions', label: 'Impressions', tip: METRIC_TIPS.impressions, render: (r) => int(r.impressions), sortValue: (r) => num(r.impressions), filterValue: (r) => num(r.impressions), total: int(T.impr) },
-    { key: 'clicks', label: 'Clicks', tip: METRIC_TIPS.clicks, render: (r) => int(r.clicks), sortValue: (r) => num(r.clicks), filterValue: (r) => num(r.clicks), total: int(T.clicks) },
-    { key: 'ctr', label: 'CTR', tip: METRIC_TIPS.ctr, render: (r) => `${ctrOf(r).toFixed(2)}%`, sortValue: ctrOf, filterValue: ctrOf, total: `${(T.impr ? (T.clicks / T.impr) * 100 : 0).toFixed(2)}%` },
-    { key: 'cpc', label: 'CPC', tip: METRIC_TIPS.cpc, render: (r) => eur(cpcOf(r)), sortValue: cpcOf, filterValue: cpcOf, total: eur(T.clicks ? T.spend / T.clicks : 0) },
-    { key: 'ppcOrders', label: 'PPC Orders', tip: METRIC_TIPS.ppcOrders, render: (r) => int(r.ordersCount), sortValue: (r) => num(r.ordersCount), filterValue: (r) => num(r.ordersCount), total: int(T.orders) },
-    { key: 'cvr', label: 'CVR', tip: METRIC_TIPS.cvr, render: (r) => `${cvrOf(r).toFixed(2)}%`, sortValue: cvrOf, filterValue: cvrOf, total: `${(T.clicks ? (T.orders / T.clicks) * 100 : 0).toFixed(2)}%` },
+    { key: 'spend', label: 'Spend', tip: METRIC_TIPS.spend, render: (r) => eur(spendOf(r)), sortValue: spendOf, filterValue: spendOf, total: (vr) => { const T = tot(vr); return eur(T.spend) } },
+    { key: 'sales', label: 'Sales', tip: METRIC_TIPS.sales, render: (r) => eur(salesOf(r)), sortValue: salesOf, filterValue: salesOf, total: (vr) => { const T = tot(vr); return eur(T.sales) } },
+    { key: 'acos', label: 'ACoS', tip: METRIC_TIPS.acos, render: (r) => <span className="h10-acos">{salesOf(r) ? `${acosOf(r).toFixed(2)}%` : '-%'}<i className="dot" /></span>, sortValue: acosOf, filterValue: acosOf, total: (vr) => { const T = tot(vr); return <span className="h10-acos">{T.sales ? `${((T.spend / T.sales) * 100).toFixed(2)}%` : '-%'}<i className="dot" /></span> } },
+    { key: 'roas', label: 'ROAS', tip: METRIC_TIPS.roas, render: (r) => (roasOf(r) ? roasOf(r).toFixed(2) : '0'), sortValue: roasOf, filterValue: roasOf, total: (vr) => { const T = tot(vr); return (T.spend && T.sales) ? (T.sales / T.spend).toFixed(2) : '0' } },
+    { key: 'impressions', label: 'Impressions', tip: METRIC_TIPS.impressions, render: (r) => int(r.impressions), sortValue: (r) => num(r.impressions), filterValue: (r) => num(r.impressions), total: (vr) => { const T = tot(vr); return int(T.impr) } },
+    { key: 'clicks', label: 'Clicks', tip: METRIC_TIPS.clicks, render: (r) => int(r.clicks), sortValue: (r) => num(r.clicks), filterValue: (r) => num(r.clicks), total: (vr) => { const T = tot(vr); return int(T.clicks) } },
+    { key: 'ctr', label: 'CTR', tip: METRIC_TIPS.ctr, render: (r) => `${ctrOf(r).toFixed(2)}%`, sortValue: ctrOf, filterValue: ctrOf, total: (vr) => { const T = tot(vr); return `${(T.impr ? (T.clicks / T.impr) * 100 : 0).toFixed(2)}%` } },
+    { key: 'cpc', label: 'CPC', tip: METRIC_TIPS.cpc, render: (r) => eur(cpcOf(r)), sortValue: cpcOf, filterValue: cpcOf, total: (vr) => { const T = tot(vr); return eur(T.clicks ? T.spend / T.clicks : 0) } },
+    { key: 'ppcOrders', label: 'PPC Orders', tip: METRIC_TIPS.ppcOrders, render: (r) => int(r.ordersCount), sortValue: (r) => num(r.ordersCount), filterValue: (r) => num(r.ordersCount), total: (vr) => { const T = tot(vr); return int(T.orders) } },
+    { key: 'cvr', label: 'CVR', tip: METRIC_TIPS.cvr, render: (r) => `${cvrOf(r).toFixed(2)}%`, sortValue: cvrOf, filterValue: cvrOf, total: (vr) => { const T = tot(vr); return `${(T.clicks ? (T.orders / T.clicks) * 100 : 0).toFixed(2)}%` } },
     { key: 'kindleReads', label: 'Kindle Reads', defaultHidden: true, sortable: false, render: DASH, total: '—' },
     { key: 'kindleRoyalties', label: 'Kindle Royalties', defaultHidden: true, sortable: false, render: DASH, total: '—' },
     { key: 'saleUnits', label: 'Sale Units', defaultHidden: true, sortable: false, render: DASH, total: '—' },
-    { key: 'cpa', label: 'CPA', tip: 'Cost per acquisition = spend ÷ orders', defaultHidden: true, render: (r) => (num(r.ordersCount) ? eur(spendOf(r) / num(r.ordersCount)) : '—'), sortValue: (r) => (num(r.ordersCount) ? spendOf(r) / num(r.ordersCount) : 0), total: T.orders ? eur(T.spend / T.orders) : '—' },
+    { key: 'cpa', label: 'CPA', tip: 'Cost per acquisition = spend ÷ orders', defaultHidden: true, render: (r) => (num(r.ordersCount) ? eur(spendOf(r) / num(r.ordersCount)) : '—'), sortValue: (r) => (num(r.ordersCount) ? spendOf(r) / num(r.ordersCount) : 0), total: (vr) => { const T = tot(vr); return T.orders ? eur(T.spend / T.orders) : '—' } },
     { key: 'viewImpr', label: 'View Impr.', defaultHidden: true, sortable: false, render: DASH, total: '—' },
-    { key: 'aov', label: 'AOV', tip: 'Average order value = sales ÷ orders', defaultHidden: true, render: (r) => (num(r.ordersCount) ? eur(salesOf(r) / num(r.ordersCount)) : '—'), sortValue: (r) => (num(r.ordersCount) ? salesOf(r) / num(r.ordersCount) : 0), total: T.orders ? eur(T.sales / T.orders) : '—' },
+    { key: 'aov', label: 'AOV', tip: 'Average order value = sales ÷ orders', defaultHidden: true, render: (r) => (num(r.ordersCount) ? eur(salesOf(r) / num(r.ordersCount)) : '—'), sortValue: (r) => (num(r.ordersCount) ? salesOf(r) / num(r.ordersCount) : 0), total: (vr) => { const T = tot(vr); return T.orders ? eur(T.sales / T.orders) : '—' } },
     { key: 'asp', label: 'ASP', defaultHidden: true, sortable: false, render: DASH, total: '—' },
     { key: 'otherSales', label: 'Other Sales', defaultHidden: true, sortable: false, render: DASH, total: '—' },
     { key: 'otherSalesPct', label: 'Other Sales %', defaultHidden: true, sortable: false, render: DASH, total: '—' },
@@ -86,7 +87,7 @@ export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData 
     { key: 'sameSkuSales', label: 'SameSKU Sales', defaultHidden: true, sortable: false, render: DASH, total: '—' },
     { key: 'sameSkuSaleUnits', label: 'SameSKU Sale Units', defaultHidden: true, sortable: false, render: DASH, total: '—' },
     { key: 'sameSkuOrders', label: 'SameSKU Orders', defaultHidden: true, sortable: false, render: DASH, total: '—' },
-  ], [T])
+  ], [])
 
   const tgtNames = useMemo(() => Array.from(new Set(rows.map((r) => r.expressionValue))), [rows])
   const types = useMemo(() => Array.from(new Set(rows.map((r) => r.expressionType).filter(Boolean) as string[])), [rows])

@@ -103,23 +103,23 @@ export function EbayProductsRollup() {
       },
       sortValue: (r) => r.breakEvenAdRatePct ?? -1,
     },
-    { key: 'impressions', label: 'Impressions', render: (r) => int(r.metrics.impressions), sortValue: (r) => r.metrics.impressions, filterValue: (r) => r.metrics.impressions, total: int(rows.reduce((a, r) => a + r.metrics.impressions, 0)) },
-    { key: 'clicks', label: 'Clicks', render: (r) => int(r.metrics.clicks), sortValue: (r) => r.metrics.clicks, filterValue: (r) => r.metrics.clicks, total: int(rows.reduce((a, r) => a + r.metrics.clicks, 0)) },
+    { key: 'impressions', label: 'Impressions', render: (r) => int(r.metrics.impressions), sortValue: (r) => r.metrics.impressions, filterValue: (r) => r.metrics.impressions, total: (vr) => int(vr.reduce((a, r) => a + r.metrics.impressions, 0)) },
+    { key: 'clicks', label: 'Clicks', render: (r) => int(r.metrics.clicks), sortValue: (r) => r.metrics.clicks, filterValue: (r) => r.metrics.clicks, total: (vr) => int(vr.reduce((a, r) => a + r.metrics.clicks, 0)) },
     { key: 'ctr', label: 'CTR', render: (r) => (r.metrics.ctrPct != null ? pct(r.metrics.ctrPct / 100) : '—'), sortValue: (r) => r.metrics.ctrPct ?? -1 },
-    { key: 'spend', label: 'Ad Fees', render: (r) => eur(r.metrics.adFeesCents / 100), sortValue: (r) => r.metrics.adFeesCents, filterValue: (r) => r.metrics.adFeesCents / 100, total: eur(rows.reduce((a, r) => a + r.metrics.adFeesCents, 0) / 100) },
-    { key: 'sales', label: 'Ad Sales', tip: 'Any-click attributed sales.', render: (r) => eur(r.metrics.salesCents / 100), sortValue: (r) => r.metrics.salesCents, filterValue: (r) => r.metrics.salesCents / 100, total: eur(rows.reduce((a, r) => a + r.metrics.salesCents, 0) / 100) },
+    { key: 'spend', label: 'Ad Fees', render: (r) => eur(r.metrics.adFeesCents / 100), sortValue: (r) => r.metrics.adFeesCents, filterValue: (r) => r.metrics.adFeesCents / 100, total: (vr) => eur(vr.reduce((a, r) => a + r.metrics.adFeesCents, 0) / 100) },
+    { key: 'sales', label: 'Ad Sales', tip: 'Any-click attributed sales.', render: (r) => eur(r.metrics.salesCents / 100), sortValue: (r) => r.metrics.salesCents, filterValue: (r) => r.metrics.salesCents / 100, total: (vr) => eur(vr.reduce((a, r) => a + r.metrics.salesCents, 0) / 100) },
     {
       key: 'acos', label: 'eBay ACOS', render: (r) => (r.metrics.acosPct != null ? pct(r.metrics.acosPct / 100) : '—'), sortValue: (r) => r.metrics.acosPct ?? -1,
-      total: (() => { const f = rows.reduce((a, r) => a + r.metrics.adFeesCents, 0); const s = rows.reduce((a, r) => a + r.metrics.salesCents, 0); return s > 0 ? pct(f / s) : '—' })(),
+      total: (vr) => { const f = vr.reduce((a, r) => a + r.metrics.adFeesCents, 0); const s = vr.reduce((a, r) => a + r.metrics.salesCents, 0); return s > 0 ? pct(f / s) : '—' },
     },
     {
       key: 'roas', label: 'ROAS', tip: 'Attributed sales ÷ ad fees (any-click).',
       render: (r) => (r.metrics.adFeesCents > 0 ? (r.metrics.salesCents / r.metrics.adFeesCents).toFixed(2) : '—'),
       sortValue: (r) => (r.metrics.adFeesCents > 0 ? r.metrics.salesCents / r.metrics.adFeesCents : -1),
-      total: (() => { const f = rows.reduce((a, r) => a + r.metrics.adFeesCents, 0); const sl = rows.reduce((a, r) => a + r.metrics.salesCents, 0); return f > 0 ? (sl / f).toFixed(2) : '—' })(),
+      total: (vr) => { const f = vr.reduce((a, r) => a + r.metrics.adFeesCents, 0); const sl = vr.reduce((a, r) => a + r.metrics.salesCents, 0); return f > 0 ? (sl / f).toFixed(2) : '—' },
     },
-    { key: 'sold', label: 'Sold', render: (r) => int(r.metrics.soldQty), sortValue: (r) => r.metrics.soldQty, total: int(rows.reduce((a, r) => a + r.metrics.soldQty, 0)) },
-  ], [rows])
+    { key: 'sold', label: 'Sold', render: (r) => int(r.metrics.soldQty), sortValue: (r) => r.metrics.soldQty, total: (vr) => int(vr.reduce((a, r) => a + r.metrics.soldQty, 0)) },
+  ], [])
 
   const filters: GridFilter[] = useMemo(() => [
     { key: 'state', label: 'Match state', kind: 'select', options: [{ value: 'MATCHED', label: 'Matched' }, { value: 'UNMATCHED', label: 'Unmatched' }], placeholder: 'All', value: (r) => ((r as Row).matchStatus === 'MATCHED' || (r as Row).matchStatus === 'CONFIRMED' || (r as Row).matchStatus === 'MANUAL' ? 'MATCHED' : 'UNMATCHED') },

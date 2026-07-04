@@ -31,7 +31,10 @@ export interface GridColumn<T> {
   sortValue?: (row: T) => number | string
   /** numeric accessor used by range filters keyed on this column */
   filterValue?: (row: T) => number
-  total?: ReactNode
+  /** Total-row cell. ER4 F2: pass a FUNCTION to compute it from the currently
+   *  filtered rows (totals then react to the filter panel + search); a plain
+   *  ReactNode stays static exactly as before. */
+  total?: ReactNode | ((visibleRows: T[]) => ReactNode)
   defaultHidden?: boolean
 }
 
@@ -546,7 +549,7 @@ export function AdsDataGrid<T>({
                   <tr className="h10-am-total">
                     {selectable && <td className="ck" />}
                     <td className="nm fz"><b>{totalFirst}</b></td>
-                    {visibleCols.map((c) => <td key={c.key} className={c.metric === false ? 'ed' : 'num'}>{c.total ?? ''}</td>)}
+                    {visibleCols.map((c) => <td key={c.key} className={c.metric === false ? 'ed' : 'num'}>{(typeof c.total === 'function' ? (c.total as (r: T[]) => ReactNode)(sorted) : c.total) ?? ''}</td>)}
                   </tr>
                 )}
                 {paged.map((row, idx) => {
