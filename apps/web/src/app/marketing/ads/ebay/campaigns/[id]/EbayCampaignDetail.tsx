@@ -73,7 +73,7 @@ export function EbayCampaignDetail({ campaignId }: { campaignId: string }) {
   const policy = c?.automationPolicy
 
   return (
-    <div className="h10-am">
+    <div className="h10-am eb-root">
       <CampaignDetailHeader
         channel="ebay"
         badge={c ? STRATEGY_BADGE[strategy] : undefined}

@@ -45,7 +45,7 @@ export function TargetingStepGen({ plan, set }: { plan: CampaignPlan; set: (patc
     set({ criterion: { ...plan.criterion, rules: rules.map((r, j) => (j === i ? { ...r, ...patch } : r)) } })
 
   return (
-    <div style={{ maxWidth: 980 }}>
+    <div style={{ maxWidth: 1040 }}>
       <section className="h10-spw-sec">
         <h2>Targeting mode</h2>
         <p>Pick listings by hand, or describe the inventory and let eBay keep the campaign in sync.</p>

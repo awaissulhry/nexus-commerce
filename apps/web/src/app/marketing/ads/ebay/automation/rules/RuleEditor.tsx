@@ -156,7 +156,7 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
   if (!loaded) return <div className="h10-rules-page"><div className="h10-am-card" style={{ padding: 24 }}><p className="eb-be-hint">Loading rule…</p></div></div>
 
   return (
-    <div className="h10-rules-page eb-rule-editor">
+    <div className="h10-rules-page eb-rule-editor eb-root">
       <div className="eb-editor-head">
         <Link href="/marketing/ads/ebay/automation" className="h10-am-link">← Rules &amp; Automation</Link>
         <h2>{isEdit ? 'Edit rule' : 'New rule'}</h2>

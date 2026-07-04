@@ -8,7 +8,7 @@ import '../../../ebay.css'
 
 export default function Page() {
   return (
-    <div className="h10-cd-card pad" style={{ maxWidth: 640, margin: '40px auto' }}>
+    <div className="h10-cd-card pad eb-root" style={{ maxWidth: 640, margin: '40px auto' }}>
       <h2 className="eb-explainer-h">Promoted Offsite</h2>
       <p className="eb-explainer-p">
         Offsite campaigns put your listings on external networks (Google, social) with eBay managing placement

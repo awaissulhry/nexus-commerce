@@ -73,7 +73,7 @@ export function EbayCampaignChooser() {
     router.push(`/marketing/ads/ebay/campaigns/new/${key}?market=${market}${template ? `&template=${template}` : ''}`)
 
   return (
-    <div className="h10-cb">
+    <div className="h10-cb eb-root">
       <div className="h10-cb-top">
         <div className="h10-cb-h">
           <span className="t">Campaign Builder</span>

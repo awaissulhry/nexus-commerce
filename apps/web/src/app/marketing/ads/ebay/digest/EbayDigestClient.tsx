@@ -80,7 +80,7 @@ export function EbayDigestClient() {
   const maxMoverFees = p ? Math.max(...p.movers.map((m) => m.feesCents), 1) : 1
 
   return (
-    <div className="eb-page h10-am">
+    <div className="eb-page h10-am eb-root">
       <AdsPageHeader channel="ebay" title="eBay Weekly Digest"
         subtitle="The one weekly review: money, movers, what autopilot did, what needs your decision. Aggregated across every eBay marketplace."
         markets={[]} market="all" onMarketChange={() => {}} />

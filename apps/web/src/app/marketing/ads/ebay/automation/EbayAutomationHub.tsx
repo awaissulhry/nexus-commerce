@@ -56,7 +56,7 @@ export function EbayAutomationHub() {
   }, [say])
 
   return (
-    <div className="h10-rules-page">
+    <div className="h10-rules-page eb-root">
       <AdsPageHeader
         channel="ebay"
         title="eBay Rules & Automation"

@@ -35,7 +35,7 @@ export function WizardShell(props: {
     props.onNext()
   }
   return (
-    <div className="h10-spw">
+    <div className="h10-spw eb-root">
       <header className="h10-spw-top">
         <div>
           <div className="eyebrow">Nexus Ads · eBay</div>

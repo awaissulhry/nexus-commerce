@@ -44,7 +44,7 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
   }
 
   return (
-    <section className="h10-spw-sec" style={{ maxWidth: 980 }}>
+    <section className="h10-spw-sec" style={{ maxWidth: 1040 }}>
       <h2>Ad groups, keywords &amp; bids</h2>
       <p>
         Keywords live under ad groups; each group carries a default bid and its own negatives.{' '}

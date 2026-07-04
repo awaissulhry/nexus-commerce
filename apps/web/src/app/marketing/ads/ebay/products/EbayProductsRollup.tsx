@@ -130,7 +130,7 @@ export function EbayProductsRollup() {
   ], [])
 
   return (
-    <div className="h10-am">
+    <div className="h10-am eb-root">
       <AdsPageHeader
         channel="ebay"
         title="eBay Products"

@@ -297,3 +297,11 @@
    so under flex-end every NON-last field in a row rode 16px higher (the
    measured Marketplace-vs-name / Start-vs-End offset). Rows own their gaps. */
 .eb-form-row > .h10-cd-field { margin-bottom: 0; }
+
+/* ═══ EV4f — Owner: containers too tight (esp. vertically) + type renders
+   heavier than the platform. The eBay console adopts the PLATFORM's
+   antialiased rendering (globals.css register) and roomier card insets;
+   .eb-root scope keeps Amazon pages byte-identical. ═══ */
+.eb-root { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+.eb-root .h10-cd-card.pad { padding: 18px 24px; }
+.eb-root .h10-spw-sec > p { margin: 0 0 12px; }

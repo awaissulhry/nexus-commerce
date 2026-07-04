@@ -36,7 +36,7 @@ export function BudgetStep({ plan, set, showMaxCpc }: { plan: CampaignPlan; set:
   }
 
   return (
-    <div style={{ maxWidth: 860 }}>
+    <div style={{ maxWidth: 920 }}>
       <section className="h10-spw-sec">
         <h2>Daily budget</h2>
         <p>What the campaign may spend on clicks per day, on average.</p>

@@ -182,7 +182,7 @@ export function EbayCampaignsGrid() {
   ], [])
 
   return (
-    <div className="h10-am">
+    <div className="eb-root h10-am">
       <AdsPageHeader
         channel="ebay"
         title="eBay Ad Manager"

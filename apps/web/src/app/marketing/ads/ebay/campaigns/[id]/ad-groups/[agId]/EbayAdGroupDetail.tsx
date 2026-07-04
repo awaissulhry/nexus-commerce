@@ -55,7 +55,7 @@ export function EbayAdGroupDetail({ campaignId, adGroupId }: { campaignId: strin
   const groups = data ? [{ id: data.adGroup.id, name: data.adGroup.name }] : []
 
   return (
-    <div className="h10-am">
+    <div className="h10-am eb-root">
       <CampaignDetailHeader
         channel="ebay"
         label="Ad Group Details"

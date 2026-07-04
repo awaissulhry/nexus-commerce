@@ -21,7 +21,7 @@ export function SetupStep({ plan, set, suggestedName, onMarketChange }: {
   onMarketChange: (m: string) => void
 }) {
   return (
-    <div style={{ maxWidth: 860 }}>
+    <div style={{ maxWidth: 920 }}>
       <section className="h10-spw-sec">
         <h2>Campaign identity</h2>
         <p>Where the campaign lives and what it is called.</p>

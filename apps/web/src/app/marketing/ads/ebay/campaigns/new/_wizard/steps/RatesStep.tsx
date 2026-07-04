@@ -29,7 +29,7 @@ export function RatesStep({ plan, set, listings }: {
   const overCap = Number.isFinite(cap) ? included.filter((l) => l.breakEvenPct != null && cap > l.breakEvenPct) : []
 
   return (
-    <div style={{ maxWidth: 980 }}>
+    <div style={{ maxWidth: 1040 }}>
       <section className="h10-spw-sec">
         <h2>Rate strategy</h2>
         <p>How the ad rate (the % fee paid on attributed sales) is managed after launch.</p>

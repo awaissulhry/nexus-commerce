@@ -43,7 +43,7 @@ export function EbayDashboard() {
   const campaignsTotal = s ? Object.values(s.campaignCounts).reduce((a, b) => a + b, 0) : 0
 
   return (
-    <div className="dash">
+    <div className="dash eb-root">
       <AdsPageHeader
         channel="ebay"
         title="eBay Advertising"
