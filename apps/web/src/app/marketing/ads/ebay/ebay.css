@@ -303,7 +303,9 @@
    overrides here — Owner 2026-07-04: "copy from Amazon's platform, the
    text and all") and only ads.css palette colours (guard-enforced). ═══ */
 .eb-root .h10-cd-card.pad { padding: 18px 24px; }
-.eb-root .h10-spw-sec > p { margin: 0 0 12px; }
+.eb-root .h10-spw-sec > p { margin: 0 0 12px; font-size: 13px; color: #5b6573; } /* = Amazon .h10-spw-desc register (13/400/#5b6573) */
+.eb-root .h10-spw-sec .h10-cd-field > label { font-weight: 400; color: #4a5462; } /* wizard labels = Amazon wizard register, detail pages keep 600/#37495b */
+.eb-sandbox { font-size: 12.5px; }
 
 /* EV4g — overlap class-kill (Owner screenshot: strategy dropdown spilling
    into Base rate): a dropdown may NEVER exceed its column. .eb-dd renders
