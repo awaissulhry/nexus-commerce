@@ -19,9 +19,10 @@ const fmtVal = (c: RuleCondition, v: number | null): string => {
   return Math.round(v).toLocaleString('en-IE')
 }
 
-export function WhyModal({ open, onClose, title, reasoning, ruleName, campaignId }: {
+export function WhyModal({ open, onClose, title, reasoning, ruleName, campaignId, estimatedImpact }: {
   open: boolean; onClose: () => void; title: string
   reasoning: WhyReasoning | null; ruleName: string | null; campaignId?: string
+  estimatedImpact?: { feesDeltaCentsPerWeek?: number; salesAtRiskCentsPerWeek?: number; assumption: string } | null
 }) {
   const r = reasoning ?? {}
   const rows = r.conditionResults ?? r.conditions?.map((c) => ({ ...c, value: null, cmp: null, pass: null })) ?? []
@@ -53,6 +54,13 @@ export function WhyModal({ open, onClose, title, reasoning, ruleName, campaignId
         {r.breakEven != null && <>Break-even <b>{r.breakEven}%</b>. </>}
         {r.clampNote && <>Guardrail: <b>{r.clampNote}</b>.</>}
       </p>
+      {estimatedImpact && (
+        <p className="eb-be-hint" style={{ marginTop: 6 }}>
+          Estimated / week: {estimatedImpact.feesDeltaCentsPerWeek != null && <b>{estimatedImpact.feesDeltaCentsPerWeek <= 0 ? '−' : '+'}€{(Math.abs(estimatedImpact.feesDeltaCentsPerWeek) / 100).toFixed(2)} fees</b>}
+          {estimatedImpact.salesAtRiskCentsPerWeek != null && estimatedImpact.salesAtRiskCentsPerWeek > 0 && <> · <b>€{(estimatedImpact.salesAtRiskCentsPerWeek / 100).toFixed(2)} sales at risk</b></>}
+          {' — '}{estimatedImpact.assumption}
+        </p>
+      )}
     </H10Modal>
   )
 }

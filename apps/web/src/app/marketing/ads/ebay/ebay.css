@@ -199,3 +199,9 @@
 .eb-mkt-split { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; border-top: 1px dashed #eef1f5; padding-top: 10px; }
 .eb-mkt-chip { font-size: 11.5px; color: #475467; background: #f4f6f9; border-radius: 999px; padding: 3px 10px; }
 .eb-mkt-chip b { color: #1c2530; margin-right: 2px; }
+
+/* ER4 E3 — estimated weekly impact on suggestions */
+.eb-impact { display: inline-flex; flex-direction: column; gap: 1px; font-size: 11.5px; font-weight: 600; }
+.eb-impact .good { color: #12855f; }
+.eb-impact .bad { color: #b42318; }
+.eb-impact .risk { color: #b87503; font-weight: 500; }

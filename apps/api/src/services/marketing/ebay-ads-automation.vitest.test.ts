@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  evalCondition, evalConditionDetailed, benchmarkValue, metricValue, windowBounds, validateRuleBody,
+  evalCondition, evalConditionDetailed, benchmarkValue, metricValue, windowBounds, validateRuleBody, estimateImpact,
   type Condition, type EntityFacts, type BenchFacts, type RuleBody,
 } from './ebay-ads-automation.service.js'
 
@@ -150,5 +150,29 @@ describe('validateRuleBody — the editor/create/edit/preview contract', () => {
   it('rate_minus_breakeven refuses a benchmark', () => {
     const errs = validateRuleBody({ ...valid, trigger: { scope: 'CPS_AD', all: [{ metric: 'rate_minus_breakeven', windowDays: 7, op: 'gt', benchmark: 'account_avg' }] } })
     expect(errs.join(' ')).toMatch(/already benchmark-relative/)
+  })
+})
+
+describe('ER4 E3 — estimateImpact (honest weekly extrapolation)', () => {
+  const f = facts({ adFeesCents: 1_400, salesCents: 7_000 }) // 14d window
+  it('rate step scales fees with the rate', () => {
+    const ei = estimateImpact('adjust_ad_rate', f, 14, { fromPct: 10, toPct: 8 })!
+    expect(ei.feesDeltaCentsPerWeek).toBe(-140) // 1400 × (0.8−1) × 7/14
+    expect(ei.assumption).toMatch(/unchanged/)
+  })
+  it('bid down is framed as an upper bound', () => {
+    const ei = estimateImpact('bid_down_keyword', f, 14, { fromBidCents: 50, toBidCents: 40 })!
+    expect(ei.feesDeltaCentsPerWeek).toBe(-140)
+    expect(ei.assumption).toMatch(/upper bound/)
+  })
+  it('pause shows BOTH saved fees and sales at risk', () => {
+    const ei = estimateImpact('pause_ad', f, 14)!
+    expect(ei.feesDeltaCentsPerWeek).toBe(-700)
+    expect(ei.salesAtRiskCentsPerWeek).toBe(3_500)
+  })
+  it('null on kinds with no defensible model / bad params', () => {
+    expect(estimateImpact('reactivate_ad', f, 14)).toBeNull()
+    expect(estimateImpact('alert', f, 14)).toBeNull()
+    expect(estimateImpact('adjust_ad_rate', f, 14, { fromPct: 0, toPct: 8 })).toBeNull()
   })
 })

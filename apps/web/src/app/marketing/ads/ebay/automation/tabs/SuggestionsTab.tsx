@@ -20,6 +20,8 @@ export interface SuggestionRow {
   entityRef: { campaignId?: string; campaignName?: string; listingId?: string; keywordText?: string; marketplace?: string }
   proposedAction: { from?: unknown; to?: unknown }
   reasoning?: WhyReasoning | null
+  // ER4 E3 — honest weekly extrapolation from the entity's own window facts
+  estimatedImpact?: { feesDeltaCentsPerWeek?: number; salesAtRiskCentsPerWeek?: number; assumption: string } | null
   createdAt: string
 }
 
@@ -100,6 +102,26 @@ export function SuggestionsTab({ busy, act, bump, highlightId }: { busy: boolean
     { key: 'change', label: 'Change', metric: false, sortable: false, render: (p) => <span>{String(p.proposedAction.from ?? '')} → <b>{String(p.proposedAction.to ?? '')}</b></span> },
     { key: 'rule', label: 'Rule', metric: false, sortValue: (p) => (p.ruleId ? ruleNames.get(p.ruleId) ?? '' : ''), render: (p) => <span className="eb-be-hint">{p.ruleId ? ruleNames.get(p.ruleId) ?? '—' : 'guard'}</span> },
     { key: 'guard', label: 'Guardrail', metric: false, sortable: false, render: (p) => p.reasoning?.clampNote ? <span className="h10-pill warn">{p.reasoning.clampNote}</span> : <span className="h10-pill ok">within break-even</span> },
+    {
+      key: 'impact', label: 'Est. / wk', metric: false, sortValue: (p) => p.estimatedImpact?.feesDeltaCentsPerWeek ?? 0,
+      tip: 'Linear extrapolation of the entity\'s own window facts — hover a value for the exact assumption. Blank = no defensible model for this kind.',
+      render: (p) => {
+        const ei = p.estimatedImpact
+        if (!ei) return <span style={{ color: '#8a93a1' }}>—</span>
+        return (
+          <span className="eb-impact" title={ei.assumption}>
+            {ei.feesDeltaCentsPerWeek != null && (
+              <span className={ei.feesDeltaCentsPerWeek <= 0 ? 'good' : 'bad'}>
+                {ei.feesDeltaCentsPerWeek <= 0 ? '−' : '+'}€{(Math.abs(ei.feesDeltaCentsPerWeek) / 100).toFixed(2)} fees
+              </span>
+            )}
+            {ei.salesAtRiskCentsPerWeek != null && ei.salesAtRiskCentsPerWeek > 0 && (
+              <span className="risk">€{(ei.salesAtRiskCentsPerWeek / 100).toFixed(2)} sales at risk</span>
+            )}
+          </span>
+        )
+      },
+    },
     { key: 'why', label: 'Why', metric: false, sortable: false, render: (p) => <button type="button" className="h10-am-link" onClick={() => setWhy(p)}>Why…</button> },
     { key: 'age', label: 'Proposed', metric: false, sortValue: (p) => p.createdAt, render: (p) => new Date(p.createdAt).toLocaleDateString('en-GB') },
     {
@@ -156,7 +178,8 @@ export function SuggestionsTab({ busy, act, bump, highlightId }: { busy: boolean
         title={why ? `${kindLabel(why.kind)} — ${why.entityRef.campaignName ?? ''} ${why.entityRef.listingId ?? why.entityRef.keywordText ?? ''}` : ''}
         reasoning={why?.reasoning ?? null}
         ruleName={why?.ruleId ? ruleNames.get(why.ruleId) ?? null : 'engine guard'}
-        campaignId={why?.entityRef.campaignId} />
+        campaignId={why?.entityRef.campaignId}
+        estimatedImpact={why?.estimatedImpact} />
     </>
   )
 }

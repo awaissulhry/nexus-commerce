@@ -122,6 +122,40 @@ export function evalCondition(
   return evalConditionDetailed(c, f, ratePct, breakEvenPct, bench).pass
 }
 
+// ER4 E3 — honest per-week impact estimate stored on proposals. Every number
+// is a linear extrapolation of the entity's OWN window facts with the
+// assumption stated; kinds with no defensible model return null.
+export interface EstimatedImpact { feesDeltaCentsPerWeek?: number; salesAtRiskCentsPerWeek?: number; assumption: string }
+
+export function estimateImpact(
+  kind: string, f: EntityFacts, windowDays: number,
+  params: { fromPct?: number | null; toPct?: number | null; fromBidCents?: number | null; toBidCents?: number | null } = {},
+): EstimatedImpact | null {
+  const wk = 7 / Math.max(1, windowDays)
+  if (kind === 'adjust_ad_rate' || kind === 'set_rate_to_breakeven_factor') {
+    if (params.fromPct == null || params.toPct == null || params.fromPct <= 0) return null
+    return {
+      feesDeltaCentsPerWeek: Math.round(f.adFeesCents * (params.toPct / params.fromPct - 1) * wk),
+      assumption: `fees scale with the rate at unchanged sold volume (window run-rate ×7/${windowDays}d)`,
+    }
+  }
+  if (kind === 'bid_down_keyword') {
+    if (params.fromBidCents == null || params.toBidCents == null || params.fromBidCents <= 0) return null
+    return {
+      feesDeltaCentsPerWeek: Math.round(f.adFeesCents * (params.toBidCents / params.fromBidCents - 1) * wk),
+      assumption: `upper bound — assumes CPC follows the bid and click volume holds (window run-rate ×7/${windowDays}d)`,
+    }
+  }
+  if (kind === 'pause_ad' || kind === 'pause_keyword') {
+    return {
+      feesDeltaCentsPerWeek: -Math.round(f.adFeesCents * wk),
+      salesAtRiskCentsPerWeek: Math.round(f.salesCents * wk),
+      assumption: `removes this entity's weekly run-rate; its attributed sales shown as at-risk (window ×7/${windowDays}d)`,
+    }
+  }
+  return null
+}
+
 /** Pure: clamp a proposed rate for AUTOMATIONS — never above break-even,
  *  never outside eBay bounds, floored by the action's minRatePct. */
 export function clampAutoRate(targetPct: number, breakEvenPct: number | null, minRatePct = 2): { rate: number | null; note: string | null } {
@@ -160,6 +194,7 @@ interface CandidateChange {
   apply: () => Promise<{ ok: boolean; detail: string }>
   inverse: object // stored for rollback
   forcePropose?: boolean // ER1 — campaign posture SUGGEST downgrades apply→propose
+  estimatedImpact?: EstimatedImpact | null // ER4 E3
 }
 
 // ER1 — per-campaign automation policy (EbayCampaignAutomationPolicy).
@@ -290,6 +325,7 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
         if (Math.abs(rate - ratePct) < 0.1) continue
         candidates.push({
           ...base, kind: 'adjust_ad_rate', from: `${ratePct}%`, to: `${rate}%`, forcePropose,
+          estimatedImpact: estimateImpact('adjust_ad_rate', f, maxWindowDays, { fromPct: ratePct, toPct: rate }),
           reasoning: { ...base.reasoning, clampNote: policyNote ? `${clamped.note ? `${clamped.note} · ` : ''}${policyNote}` : clamped.note },
           inverse: { type: 'set_rate', listingId: ad.listingId!, ratePct },
           apply: async () => {
@@ -300,6 +336,7 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
       } else if (action.type === 'pause_ad') {
         candidates.push({
           ...base, kind: 'pause_ad', from: 'ACTIVE', to: 'removed from campaign', forcePropose,
+          estimatedImpact: estimateImpact('pause_ad', f, maxWindowDays),
           inverse: { type: 'promote', listingId: ad.listingId!, ratePct },
           apply: async () => {
             const r = await writes.removeAds(ctx, ad.campaign.id, [ad.listingId!])
@@ -352,6 +389,7 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
       if (action.type === 'pause_keyword') {
         candidates.push({
           ...base, kind: 'pause_keyword', from: 'ACTIVE', to: 'PAUSED', forcePropose,
+          estimatedImpact: estimateImpact('pause_keyword', f, maxWindowDays),
           inverse: { type: 'keyword_status', keywordId: kw.id, status: 'ACTIVE' },
           apply: async () => {
             const r = await writes.updateKeywords(ctx, kw.campaign.id, [{ keywordId: kw.id, status: 'PAUSED' }])
@@ -364,6 +402,7 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
         if (newBid >= kw.bidCents) continue
         candidates.push({
           ...base, kind: 'bid_down_keyword', from: `€${(kw.bidCents / 100).toFixed(2)}`, to: `€${(newBid / 100).toFixed(2)}`, forcePropose,
+          estimatedImpact: estimateImpact('bid_down_keyword', f, maxWindowDays, { fromBidCents: kw.bidCents, toBidCents: newBid }),
           inverse: { type: 'keyword_bid', keywordId: kw.id, bidCents: kw.bidCents },
           apply: async () => {
             const r = await writes.updateKeywords(ctx, kw.campaign.id, [{ keywordId: kw.id, bidCents: newBid }])
@@ -415,6 +454,7 @@ export async function evaluateEbayAdsRules(onlyRuleId?: string): Promise<Evaluat
           entityRef: cand.entityRef as object,
           proposedAction: { from: cand.from, to: cand.to, inverse: cand.inverse } as object,
           reasoning: cand.reasoning,
+          estimatedImpact: (cand.estimatedImpact ?? undefined) as object | undefined, // ER4 E3
           expiresAt: new Date(Date.now() + 14 * 86_400_000),
         }
         const candMode = cand.forcePropose ? 'propose' : mode // ER1 posture SUGGEST downgrade
