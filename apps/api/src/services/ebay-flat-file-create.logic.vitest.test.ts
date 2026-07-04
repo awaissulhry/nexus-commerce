@@ -560,4 +560,196 @@ describe('planEbayFamilyCreates', () => {
     // Both occurrences dropped — no child create for the duped SKU
     expect(result.childCreates.filter(c => c.sku === 'DUP-CHILD')).toHaveLength(0)
   })
+
+  // ── P2.A: explicit parentage + parent_sku columns ──────────────────────
+
+  it('P2.A — new family: parentage:parent row + parentage:child+parent_sku rows → temp-id resolution', () => {
+    // Parent row uses explicit parentage='parent' (no platformProductId needed)
+    const parentRow = {
+      sku: 'EXP-PARENT',
+      _rowId: 'ep-temp',
+      parentage: 'parent',
+      variation_theme: 'Colore,Taglia',
+    }
+    // Children use explicit parentage='child' + parent_sku pointing to parent's SKU
+    const child1 = {
+      sku: 'EXP-CHILD-1',
+      _rowId: 'ec1-temp',
+      parentage: 'child',
+      parent_sku: 'EXP-PARENT',
+      aspect_Colore: 'Nero',
+      aspect_Taglia: 'M',
+    }
+    const child2 = {
+      sku: 'EXP-CHILD-2',
+      _rowId: 'ec2-temp',
+      parentage: 'child',
+      parent_sku: 'EXP-PARENT',
+      aspect_Colore: 'Rosso',
+      aspect_Taglia: 'L',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [parentRow, child1, child2],
+      existingBySku: new Map(),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.warnings).toHaveLength(0)
+    // Parent created with correct tempRowId and variationTheme
+    expect(result.parentCreates).toHaveLength(1)
+    expect(result.parentCreates[0].sku).toBe('EXP-PARENT')
+    expect(result.parentCreates[0].tempRowId).toBe('ep-temp')
+    expect(result.parentCreates[0].variationTheme).toBe('Colore,Taglia')
+    // Both children created with kind:temp pointing to parent's tempRowId
+    expect(result.childCreates).toHaveLength(2)
+    expect(result.childCreates[0].parentRef).toEqual({ kind: 'temp', tempRowId: 'ep-temp' })
+    expect(result.childCreates[0].variationTheme).toBe('Colore,Taglia')
+    expect(result.childCreates[1].parentRef).toEqual({ kind: 'temp', tempRowId: 'ep-temp' })
+  })
+
+  it('P2.A — child via parent_sku resolved to EXISTING parent (existingBySku)', () => {
+    // Child row references an existing parent by SKU (no platformProductId needed)
+    const childRow = {
+      sku: 'NEW-CHILD-SKU',
+      _rowId: 'nc-temp',
+      parentage: 'child',
+      parent_sku: 'EXIST-PARENT-SKU',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [childRow],
+      existingBySku: new Map([
+        ['EXIST-PARENT-SKU', { id: 'exist-parent-id', parentId: null, variationTheme: 'Colore', isParent: true }],
+      ]),
+      existingParentById: new Map([
+        ['exist-parent-id', { id: 'exist-parent-id', variationTheme: 'Colore', isParent: true }],
+      ]),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.parentCreates).toHaveLength(0)
+    expect(result.childCreates).toHaveLength(1)
+    expect(result.childCreates[0].sku).toBe('NEW-CHILD-SKU')
+    // Resolved to kind:existing using the parent's real DB id
+    expect(result.childCreates[0].parentRef).toEqual({ kind: 'existing', productId: 'exist-parent-id' })
+    expect(result.childCreates[0].variationTheme).toBe('Colore')
+  })
+
+  it('P2.A — reparent: existing child, parent_sku points to different existing parent → 1 reparent', () => {
+    const row = {
+      sku: 'C1',
+      _productId: 'idC1',
+      parentage: 'child',
+      parent_sku: 'NEW-PARENT-SKU',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['C1', { id: 'idC1', parentId: 'old-parent-id', variationTheme: null, isParent: false }],
+        ['NEW-PARENT-SKU', { id: 'new-parent-id', parentId: null, variationTheme: 'Colore', isParent: true }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.warnings).toHaveLength(0)
+    expect(result.parentCreates).toHaveLength(0)
+    expect(result.childCreates).toHaveLength(0)
+    expect(result.reparents).toHaveLength(1)
+    expect(result.reparents[0]).toEqual({ productId: 'idC1', sku: 'C1', newParentId: 'new-parent-id' })
+  })
+
+  it('P2.A — detach: existing child with parentage:parent → reparent to null', () => {
+    const row = {
+      sku: 'C1',
+      _productId: 'idC1',
+      parentage: 'parent',  // was a child, now explicitly declared as parent
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['C1', { id: 'idC1', parentId: 'A', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.warnings).toHaveLength(0)
+    expect(result.reparents).toHaveLength(1)
+    expect(result.reparents[0]).toEqual({ productId: 'idC1', sku: 'C1', newParentId: null })
+    expect(result.parentCreates).toHaveLength(0)
+    expect(result.childCreates).toHaveLength(0)
+  })
+
+  it('P2.A — detach: existing child with parentage:\'\' (blank) → reparent to null', () => {
+    const row = {
+      sku: 'C1',
+      _productId: 'idC1',
+      parentage: '',  // explicitly blank = no longer a child
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['C1', { id: 'idC1', parentId: 'A', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.warnings).toHaveLength(0)
+    expect(result.reparents).toHaveLength(1)
+    expect(result.reparents[0]).toEqual({ productId: 'idC1', sku: 'C1', newParentId: null })
+  })
+
+  it('P2.A — back-compat: row with NO parentage/parent_sku (only platformProductId) → same plan as ppid path', () => {
+    // Identical to case 3 — existing child reparented via ppid — no explicit columns.
+    // Proves that omitting parentage/parent_sku leaves behavior exactly unchanged.
+    const row = {
+      sku: 'C1',
+      _productId: 'idC1',
+      platformProductId: 'B',
+      // parentage and parent_sku intentionally absent
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['C1', { id: 'idC1', parentId: 'A', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    // Must produce the identical result as the ppid-based case 3 test
+    expect(result.errors).toHaveLength(0)
+    expect(result.parentCreates).toHaveLength(0)
+    expect(result.childCreates).toHaveLength(0)
+    expect(result.reparents).toHaveLength(1)
+    expect(result.reparents[0]).toEqual({ productId: 'idC1', sku: 'C1', newParentId: 'B' })
+  })
+
+  it('P2.A — orphan: parent_sku matching no batch/existing parent → unresolved parent error', () => {
+    const childRow = {
+      sku: 'ORPHAN-CHILD',
+      _rowId: 'oc-temp',
+      parentage: 'child',
+      parent_sku: 'NONEXISTENT-PARENT',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [childRow],
+      existingBySku: new Map(),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].sku).toBe('ORPHAN-CHILD')
+    expect(result.errors[0].reason).toMatch(/unresolved parent/)
+    expect(result.childCreates).toHaveLength(0)
+    expect(result.parentCreates).toHaveLength(0)
+  })
 })

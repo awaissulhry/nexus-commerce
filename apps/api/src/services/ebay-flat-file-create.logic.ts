@@ -109,6 +109,44 @@ function inferIsChild(row: EbayRow): { isChild: boolean; selfId: string; ppid: s
   return { isChild, selfId, ppid }
 }
 
+/**
+ * P2.A — Explicit-first row classification.
+ *
+ * Reads `parentage` + `parent_sku` columns first; falls back to the
+ * `platformProductId` heuristic when `parentage` is absent/undefined.
+ *
+ *  parentage='child'           → isChild=true; parentSku from parent_sku (non-empty)
+ *  parentage='parent' | ''     → isChild=false (explicit non-child)
+ *  parentage absent/undefined  → ppid heuristic via inferIsChild (back-compat)
+ */
+function classifyRow(row: EbayRow): {
+  isChild: boolean
+  /** Non-null only when explicit parent_sku is present and non-empty. */
+  parentSku: string | null
+  selfId: string
+  ppid: string
+  /** True when parentage is 'parent', 'child', or '' (any explicit value). */
+  hasExplicitParentage: boolean
+} {
+  const selfId = String(row._productId ?? row._rowId ?? '')
+  const ppid = String(row.platformProductId ?? '')
+  const parentSkuRaw = row.parent_sku
+  const parentSku =
+    parentSkuRaw !== undefined && String(parentSkuRaw).trim() !== ''
+      ? String(parentSkuRaw).trim()
+      : null
+
+  if (row.parentage === 'child') {
+    return { isChild: true, parentSku, selfId, ppid, hasExplicitParentage: true }
+  }
+  if (row.parentage === 'parent' || row.parentage === '') {
+    return { isChild: false, parentSku: null, selfId, ppid, hasExplicitParentage: true }
+  }
+  // parentage absent/undefined → ppid heuristic (back-compat)
+  const { isChild } = inferIsChild(row)
+  return { isChild, parentSku: null, selfId, ppid, hasExplicitParentage: false }
+}
+
 /** Parse the first non-empty price field in eBay field priority order. */
 function parsePriceFields(row: EbayRow): number {
   const fields = ['it_price', 'de_price', 'fr_price', 'es_price', 'uk_price', 'price'] as const
@@ -237,8 +275,20 @@ export function planEbayFamilyCreates(input: {
     skuCounts.set(sku, (skuCounts.get(sku) ?? 0) + 1)
   }
   // Family key of a row — same precedence the client's isSharedDuplicateAllowed uses.
-  const familyKeyOf = (row: EbayRow) =>
-    String(row.platformProductId ?? row._productId ?? row._rowId ?? '')
+  // P2.A: derive from explicit columns when present so new-format rows group correctly.
+  const familyKeyOf = (row: EbayRow): string => {
+    const cls = classifyRow(row)
+    if (cls.hasExplicitParentage) {
+      if (!cls.isChild) {
+        // Parent/standalone: own sku is the family key
+        return String(row.sku ?? '').trim() || cls.selfId
+      }
+      // Child: parent_sku is the family key (fall back to ppid when absent)
+      return cls.parentSku ?? cls.ppid
+    }
+    // Back-compat: ppid-based key
+    return String(row.platformProductId ?? row._productId ?? row._rowId ?? '')
+  }
   const dupedSkus = new Set<string>()
   // Shared-allowed duplicates are NOT errors — they COLLAPSE to a single create (one
   // unique-SKU Product); the extra shared parents receive the child via
@@ -282,7 +332,7 @@ export function planEbayFamilyCreates(input: {
     const needsCreate = !existingBySku.has(sku)
     if (!needsCreate) continue
 
-    const { isChild } = inferIsChild(row)
+    const { isChild } = classifyRow(row)  // P2.A: explicit-first classification
     if (!isChild) {
       const tempRowId = String(
         row._rowId ?? row._productId ?? sku
@@ -295,7 +345,8 @@ export function planEbayFamilyCreates(input: {
   // ── Step 3 + 5 + 6: Second pass — childCreates, reparents, warnings ─
   for (const row of validRows) {
     const sku = String(row.sku ?? '').trim()
-    const { isChild, ppid } = inferIsChild(row)
+    // P2.A: explicit-first classification (falls back to ppid heuristic when parentage absent)
+    const { isChild, parentSku, ppid } = classifyRow(row)
     const isParentInferred = !isChild
     const needsCreate = !existingBySku.has(sku)
 
@@ -316,66 +367,121 @@ export function planEbayFamilyCreates(input: {
         continue
       }
 
-      // Resolve parentRef for new child
-      const tempParent = parentCreates.find(p => p.tempRowId === ppid)
-      if (tempParent) {
-        const tempRowId = String(
-          row._rowId ?? row._productId ?? sku
-        )
-        childCreates.push({
-          tempRowId,
-          sku,
-          row,
-          parentRef: { kind: 'temp', tempRowId: ppid },
-          variationTheme: tempParent.variationTheme,
-        })
-      } else {
-        const existingParent = existingParentById.get(ppid)
-        if (existingParent) {
-          const tempRowId = String(
-            row._rowId ?? row._productId ?? sku
-          )
+      // Resolve parentRef for new child.
+      // P2.A: prefer explicit parent_sku → batch parent (by sku) or existingBySku;
+      //        fall back to ppid path when parent_sku absent (back-compat).
+      if (parentSku) {
+        // Explicit parent_sku path: look for a batch parent being created in this same request
+        const batchParent = parentCreates.find(p => p.sku === parentSku)
+        if (batchParent) {
+          const tempRowId = String(row._rowId ?? row._productId ?? sku)
           childCreates.push({
             tempRowId,
             sku,
             row,
-            parentRef: { kind: 'existing', productId: ppid },
-            variationTheme: existingParent.variationTheme,
+            parentRef: { kind: 'temp', tempRowId: batchParent.tempRowId },
+            variationTheme: batchParent.variationTheme,
           })
         } else {
-          errors.push({
+          // Try an existing parent by SKU (ExistingProduct already carries variationTheme)
+          const existingParentBySku = existingBySku.get(parentSku)
+          if (existingParentBySku) {
+            const tempRowId = String(row._rowId ?? row._productId ?? sku)
+            childCreates.push({
+              tempRowId,
+              sku,
+              row,
+              parentRef: { kind: 'existing', productId: existingParentBySku.id },
+              variationTheme: existingParentBySku.variationTheme,
+            })
+          } else {
+            errors.push({
+              sku,
+              reason: 'unresolved parent (parent_sku does not match any new or existing parent)',
+            })
+          }
+        }
+      } else {
+        // ppid fallback path — unchanged from P1.1
+        const tempParent = parentCreates.find(p => p.tempRowId === ppid)
+        if (tempParent) {
+          const tempRowId = String(row._rowId ?? row._productId ?? sku)
+          childCreates.push({
+            tempRowId,
             sku,
-            reason: 'unresolved parent (platformProductId does not match any new or existing parent)',
+            row,
+            parentRef: { kind: 'temp', tempRowId: ppid },
+            variationTheme: tempParent.variationTheme,
           })
+        } else {
+          const existingParent = existingParentById.get(ppid)
+          if (existingParent) {
+            const tempRowId = String(row._rowId ?? row._productId ?? sku)
+            childCreates.push({
+              tempRowId,
+              sku,
+              row,
+              parentRef: { kind: 'existing', productId: ppid },
+              variationTheme: existingParent.variationTheme,
+            })
+          } else {
+            errors.push({
+              sku,
+              reason: 'unresolved parent (platformProductId does not match any new or existing parent)',
+            })
+          }
         }
       }
     } else {
-      // Existing row — check for reparent (children only)
-      if (isChild && ppid) {
-        const existing = existingBySku.get(sku)!
-        if (ppid === existing.id) {
-          // Self-parent guard
-          errors.push({ sku, reason: 'self-parent: platformProductId points to the product itself' })
-        } else if (ppid !== (existing.parentId ?? '')) {
-          // Suppress reparent for shared-SKU families — memberships own the parent linkage.
-          if (sharedFamilyKeys.has(ppid) || sharedFamilyKeys.has(String(existing.parentId ?? ''))) {
-            warnings.push({ sku, reason: 'reparent suppressed: shared family (membership-managed)' })
+      // Existing row — check for reparent/detach.
+      const existing = existingBySku.get(sku)!
+
+      if (isChild) {
+        // P2.A: resolve effective parent id — prefer parent_sku → existingBySku,
+        //        fall back to ppid when parent_sku absent (back-compat).
+        let resolvedParentId = ''
+        let parentUnresolved = false
+        if (parentSku) {
+          const resolvedParent = existingBySku.get(parentSku)
+          if (!resolvedParent) {
+            errors.push({
+              sku,
+              reason: 'unresolved parent (parent_sku does not match any existing parent)',
+            })
+            parentUnresolved = true
           } else {
-            reparents.push({ productId: existing.id, sku, newParentId: ppid })
+            resolvedParentId = resolvedParent.id
           }
+        } else {
+          resolvedParentId = ppid  // ppid fallback (isChild=true implies ppid !== '' here)
         }
-        // else ppid === existing.parentId → no-op (already on the right parent)
-      } else if (!isChild) {
-        const existing = existingBySku.get(sku)!
+
+        if (!parentUnresolved && resolvedParentId) {
+          if (resolvedParentId === existing.id) {
+            // Self-parent guard
+            errors.push({ sku, reason: 'self-parent: platformProductId points to the product itself' })
+          } else if (resolvedParentId !== (existing.parentId ?? '')) {
+            // Suppress reparent for shared-SKU families — memberships own the parent linkage.
+            if (sharedFamilyKeys.has(resolvedParentId) || sharedFamilyKeys.has(String(existing.parentId ?? ''))) {
+              warnings.push({ sku, reason: 'reparent suppressed: shared family (membership-managed)' })
+            } else {
+              reparents.push({ productId: existing.id, sku, newParentId: resolvedParentId })
+            }
+          }
+          // else resolvedParentId === existing.parentId → no-op (already on the right parent)
+        }
+      } else {
+        // !isChild: existing row now standalone/parent.
+        // Fires when: explicit parentage='parent'|'', OR ppid cleared (back-compat).
         if (existing.parentId != null) {
-          // Was a child (had a parent), now standalone (ppid cleared) → detach = null-reparent.
+          // Was a child (had a parent), now standalone — detach = null-reparent.
           if (sharedFamilyKeys.has(String(existing.parentId ?? ''))) {
             warnings.push({ sku, reason: 'detach suppressed: shared family (membership-managed)' })
           } else {
             reparents.push({ productId: existing.id, sku, newParentId: null })
           }
         }
-        // else existing.parentId == null → already standalone/parent → no-op (do NOT detach parents or standalones)
+        // else existing.parentId == null → already standalone/parent → no-op
       }
     }
   }
