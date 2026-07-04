@@ -305,3 +305,8 @@
 .eb-root { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 .eb-root .h10-cd-card.pad { padding: 18px 24px; }
 .eb-root .h10-spw-sec > p { margin: 0 0 12px; }
+
+/* EV4g — overlap class-kill (Owner screenshot: strategy dropdown spilling
+   into Base rate): a dropdown may NEVER exceed its column. .eb-dd renders
+   display:contents, so the clamp rides the inner .h10-dd box. */
+.eb-dd > .h10-dd, .eb-dd-self { max-width: 100%; min-width: 0; }

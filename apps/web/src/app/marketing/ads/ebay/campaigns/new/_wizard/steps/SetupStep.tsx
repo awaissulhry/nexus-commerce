@@ -29,7 +29,7 @@ export function SetupStep({ plan, set, suggestedName, onMarketChange }: {
           <div className="eb-form-row">
             <div className="h10-cd-field s">
               <label>Marketplace <InfoTip tip="A campaign lives on one marketplace — its currency drives rates, bids and budgets. Changing it re-derives listings and suggestions." /></label>
-              <span className="eb-dd"><H10Select ariaLabel="Marketplace" width={200} value={plan.marketplace} onChange={onMarketChange}
+              <span className="eb-dd"><H10Select ariaLabel="Marketplace" width="100%" value={plan.marketplace} onChange={onMarketChange}
                 options={EBAY_MARKETS.filter((m) => m.id !== 'all').map((m) => ({ value: m.id, label: m.label }))} /></span>
             </div>
             <div style={{ flex: 1 }} className="h10-cd-field">

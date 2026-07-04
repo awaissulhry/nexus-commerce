@@ -104,8 +104,8 @@ export function TargetingStepGen({ plan, set }: { plan: CampaignPlan; set: (patc
           ) : null}
 
           <div className="eb-form-row" style={{ marginTop: 14, alignItems: 'flex-end' }}>
-            <div className="h10-cd-field s"><label>Rate strategy <InfoTip tip="Fixed: one campaign-level % you control. Dynamic: eBay applies its daily suggested rate but never exceeds your cap." /></label>
-              <span className="eb-dd"><H10Select ariaLabel="Rate strategy" width={260} value={plan.adRateStrategy} onChange={(v) => set({ adRateStrategy: v as 'FIXED' | 'DYNAMIC' })}
+            <div className="h10-cd-field s" style={{ maxWidth: 280 }}><label>Rate strategy <InfoTip tip="Fixed: one campaign-level % you control. Dynamic: eBay applies its daily suggested rate but never exceeds your cap." /></label>
+              <span className="eb-dd"><H10Select ariaLabel="Rate strategy" width="100%" value={plan.adRateStrategy} onChange={(v) => set({ adRateStrategy: v as 'FIXED' | 'DYNAMIC' })}
                 options={[
                   { value: 'FIXED', label: 'Fixed — campaign-level %' },
                   { value: 'DYNAMIC', label: "Dynamic — eBay's daily suggestion under a cap" },
