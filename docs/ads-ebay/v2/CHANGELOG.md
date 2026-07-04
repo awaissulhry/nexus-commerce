@@ -67,7 +67,7 @@ this changelog. Fixes applied on approval:
   filtered set; 6 Amazon detail-tab grids + eBay Ad Manager/Products migrated, 65+ totals;
   unfiltered values identical by construction). Verified live on GALE BROAD DE search
   terms (147→68 clicks with exact sum/ratio recompute) and the eBay Ad Manager.
-Backlog carried: rule versioning.
+Backlog carried: rule versioning — closed by ER5 below.
 
 ## ER4 follow-ups — E2/E3/E4 (2026-07-04) · `8be9b657` `62b1dde7` `1f5e3a6c`
 - **E2** — digest per-marketplace split (campaign-grain facts rolled up by marketplace;
@@ -79,3 +79,13 @@ Backlog carried: rule versioning.
   group, validated; Smart → campaign level; CPS guardrails untouched); the launch flow
   attaches staged listings to the first ad group and the wizard stops sending `items: []`.
   9-check sandbox smoke ALL PASS.
+
+## ER5 — Rule-config versioning (2026-07-04) · `dec29390`
+Migration `20260704_er5_rule_versions` (reversible; existing rules backfilled as v1).
+Immutable `EbayAdsRuleVersion` snapshots on every config edit (enabled/mode toggles and
+no-op saves don't version); executions + proposal reasoning stamp the version that ran;
+revert re-validates the old config against today's DSL and APPENDS it as a new version —
+history is never rewritten. Editor History section (sentence-rendered versions + Restore),
+v# chips on rule cards, "ran vN" on last-run lines. Endpoints: GET /rules/:id/versions ·
+POST /rules/:id/revert. 30 unit tests; 11-check live smoke ALL PASS (backfill 6/6,
+create→edit→toggle→evaluate→revert→cascade). **The backlog is now empty.**
