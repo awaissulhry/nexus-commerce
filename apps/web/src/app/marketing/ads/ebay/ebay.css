@@ -309,3 +309,12 @@
    into Base rate): a dropdown may NEVER exceed its column. .eb-dd renders
    display:contents, so the clamp rides the inner .h10-dd box. */
 .eb-dd > .h10-dd, .eb-dd-self { max-width: 100%; min-width: 0; }
+
+/* EV4h — Ad Manager register parity with the Amazon flagship manager
+   (fingerprint-diffed 2026-07-04): sorted-header label stays grey like
+   Amazon's (#475467, not link-blue), and the totals row (an AdsDataGrid
+   feature Amazon's manager doesn't render) uses the grid body register —
+   12.5px, and no 700→bolder→900 on the Total label. */
+.eb-root .h10-am-grid th.sorted .hl, .eb-root .h10-am-grid th.sorted .sortable { color: #475467; }
+.eb-root .h10-am-grid tr.h10-am-total td { font-size: 12.5px; }
+.eb-root .h10-am-grid tr.h10-am-total b { font-weight: 700; }

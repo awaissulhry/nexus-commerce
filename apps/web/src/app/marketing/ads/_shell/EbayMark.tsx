@@ -6,7 +6,7 @@
 export function EbayMark() {
   return (
     <svg width="34" height="14" viewBox="0 0 34 14" aria-label="eBay" role="img">
-      <text x="0" y="11.5" fontSize="12.5" fontWeight="700" fontFamily="Arial, Helvetica, sans-serif" letterSpacing="-0.4">
+      <text x="0" y="11.5" fontSize="12.5" fontWeight="700" letterSpacing="-0.4">
         <tspan fill="#E53238">e</tspan>
         <tspan fill="#0064D2">b</tspan>
         <tspan fill="#F5AF02">a</tspan>
