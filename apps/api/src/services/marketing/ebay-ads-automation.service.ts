@@ -957,10 +957,24 @@ export async function generateWeeklyDigest(): Promise<{ weekStart: string; creat
     detectAnomalies(),
     prisma.ebayListingEconomics.groupBy({ by: ['dataStatus'], _count: { _all: true } }),
   ])
-  const names = new Map((await prisma.ebayCampaign.findMany({ select: { externalCampaignId: true, name: true } })).map((c) => [c.externalCampaignId, c.name]))
+  const campRows = await prisma.ebayCampaign.findMany({ select: { externalCampaignId: true, name: true, marketplace: true } })
+  const names = new Map(campRows.map((c) => [c.externalCampaignId, c.name]))
+  const mktOf = new Map(campRows.map((c) => [c.externalCampaignId, c.marketplace]))
   const movers = byCampaign
     .map((c) => ({ campaign: names.get(c.entityId) ?? c.entityId, feesCents: c._sum.adFeesCents ?? 0, salesCents: c._sum.salesCents ?? 0, sold: c._sum.soldQty ?? 0 }))
     .sort((a, b) => b.feesCents - a.feesCents)
+  // ER4 E2 — per-marketplace split (campaign-grain facts rolled up by the
+  // campaign's marketplace; campaigns deleted since the week keep their fees
+  // under "unknown" rather than being silently dropped)
+  const byMarketplace = new Map<string, { adFeesCents: number; salesCents: number; soldQty: number }>()
+  for (const c of byCampaign) {
+    const mkt = mktOf.get(c.entityId) ?? 'unknown'
+    const agg = byMarketplace.get(mkt) ?? { adFeesCents: 0, salesCents: 0, soldQty: 0 }
+    agg.adFeesCents += c._sum.adFeesCents ?? 0
+    agg.salesCents += c._sum.salesCents ?? 0
+    agg.soldQty += c._sum.soldQty ?? 0
+    byMarketplace.set(mkt, agg)
+  }
 
   const payload = {
     week: { start: weekStart.toISOString().slice(0, 10), end: weekEnd.toISOString().slice(0, 10) },
@@ -970,6 +984,9 @@ export async function generateWeeklyDigest(): Promise<{ weekStart: string; creat
       acosPct: (cur._sum.salesCents ?? 0) > 0 ? Math.round(((cur._sum.adFeesCents ?? 0) / (cur._sum.salesCents ?? 1)) * 1000) / 10 : null,
     },
     prior: { adFeesCents: prev._sum.adFeesCents ?? 0, salesCents: prev._sum.salesCents ?? 0, soldQty: prev._sum.soldQty ?? 0 },
+    byMarketplace: [...byMarketplace.entries()]
+      .map(([marketplace, v]) => ({ marketplace, ...v, acosPct: v.salesCents > 0 ? Math.round((v.adFeesCents / v.salesCents) * 1000) / 10 : null }))
+      .sort((a, b) => b.adFeesCents - a.adFeesCents),
     movers: movers.slice(0, 8),
     autopilotApplied: applied.map((p) => ({ kind: p.kind, entityRef: p.entityRef, result: p.appliedResult })),
     pendingProposals: pending.map((p) => ({ id: p.id, kind: p.kind, entityRef: p.entityRef, action: p.proposedAction, createdAt: p.createdAt })),

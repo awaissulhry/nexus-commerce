@@ -16,6 +16,8 @@ interface DigestPayload {
   week: { start: string; end: string }
   totals: { adFeesCents: number; salesCents: number; clicks: number; impressions: number; soldQty: number; acosPct: number | null }
   prior: { adFeesCents: number; salesCents: number; soldQty: number }
+  // ER4 E2 — present on digests generated after 2026-07-04; older weeks lack it
+  byMarketplace?: Array<{ marketplace: string; adFeesCents: number; salesCents: number; soldQty: number; acosPct: number | null }>
   movers: Array<{ campaign: string; feesCents: number; salesCents: number; sold: number }>
   autopilotApplied: Array<{ kind: string; entityRef: { campaignName?: string; listingId?: string; keywordText?: string }; result?: { detail?: string } | null }>
   pendingProposals: Array<{ id: string; kind: string; entityRef: { campaignName?: string; listingId?: string; keywordText?: string } }>
@@ -122,6 +124,15 @@ export function EbayDigestClient() {
               <div><span className="k">Impressions</span><span className="v">{intlN(p.totals.impressions)}</span></div>
               <div><span className="k">Sold</span><span className="v">{intlN(p.totals.soldQty)} <Wow cur={p.totals.soldQty} prev={p.prior.soldQty} goodUp /></span></div>
             </div>
+            {p.byMarketplace && p.byMarketplace.length > 0 && (
+              <div className="eb-mkt-split">
+                {p.byMarketplace.map((m) => (
+                  <span key={m.marketplace} className="eb-mkt-chip" title={`${m.marketplace} — week fees / sales / sold${m.acosPct != null ? ` · ACOS ${m.acosPct}%` : ''}`}>
+                    <b>{m.marketplace.replace('EBAY_', '')}</b> {eurC(m.adFeesCents)} fees · {eurC(m.salesCents)} sales · {m.soldQty} sold{m.acosPct != null ? ` · ${m.acosPct}%` : ''}
+                  </span>
+                ))}
+              </div>
+            )}
           </section>
 
           {p.anomalies.length > 0 && (
