@@ -1333,6 +1333,14 @@ export function buildFlatRow(
       masterQuantity?: number | null;
     }>;
   },
+  opts?: {
+    /**
+     * P4 — image inheritance: parent/SHARED images supplied by the caller.
+     * Used as a last-resort fallback when this variant has no own ProductImage
+     * rows AND no platformAttributes.imageUrls.
+     */
+    parentImages?: Array<{ url: string; sortOrder: number; type: string }>;
+  },
 ): Record<string, unknown> {
   // Shared fields come from the first listing that has data, or from the product
   const listings = product.channelListings;
@@ -1351,7 +1359,15 @@ export function buildFlatRow(
     .sort((a, b) => (a.type === 'MAIN' ? -1 : b.type === 'MAIN' ? 1 : 0) || a.sortOrder - b.sortOrder)
     .map((img) => img.url)
     .filter((url) => !!url);
-  const effectiveImageUrls = cloudinaryUrls.length > 0 ? cloudinaryUrls : firstImageUrls.filter(Boolean);
+  // P4 — image inheritance: sorted parent images used as last-resort fallback
+  // when this variant has no own ProductImage rows and no platformAttributes URLs.
+  const inheritedImageUrls = (opts?.parentImages ?? [])
+    .slice()
+    .sort((a, b) => (a.type === 'MAIN' ? -1 : b.type === 'MAIN' ? 1 : 0) || a.sortOrder - b.sortOrder)
+    .map((img) => img.url)
+    .filter((url) => !!url);
+  const ownOrPlatformUrls = cloudinaryUrls.length > 0 ? cloudinaryUrls : firstImageUrls.filter(Boolean);
+  const effectiveImageUrls = ownOrPlatformUrls.length > 0 ? ownOrPlatformUrls : inheritedImageUrls;
 
   // EV.5b — variation linkage. Axis names normalised to comma-separated
   // (what the variation publish's split(',') expects); axis values from
@@ -1602,5 +1618,10 @@ export async function buildEbayFamilyRows(
     },
     orderBy: { sku: 'asc' },
   })
-  return products.map((p) => buildFlatRow(p as Parameters<typeof buildFlatRow>[0]))
+  // P4 — image inheritance: pass parent images to child products.
+  const imagesByProductId = new Map(products.map((p) => [p.id, p.images ?? []]))
+  return products.map((p) => {
+    const parentImages = p.parentId ? (imagesByProductId.get(p.parentId) ?? []) : undefined
+    return buildFlatRow(p as Parameters<typeof buildFlatRow>[0], { parentImages })
+  })
 }

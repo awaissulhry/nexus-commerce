@@ -301,8 +301,18 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
     }, [colorValues, buckets])
 
     const resolveCell = useCallback((rowKey: string | null, colKey: string) => {
-      const url = (buckets.get(rowKey ?? SHARED) ?? [])[Number(colKey) - 1]
-      return url ? { url, origin: 'own' as const } : null
+      const idx = Number(colKey) - 1
+      const ownUrl = (buckets.get(rowKey ?? SHARED) ?? [])[idx]
+      if (ownUrl) return { url: ownUrl, origin: 'own' as const }
+      // P4 — inherit SHARED image when variant bucket has no own image at this position.
+      // Rendered with origin:'inherited' → dimmed + ∀ badge; remove button suppressed.
+      // Dropping an image onto the cell calls assign() which adds to the variant bucket,
+      // giving that variant its own image that then takes precedence over the inherited one.
+      if (rowKey !== null) {
+        const sharedUrl = (buckets.get(SHARED) ?? [])[idx]
+        if (sharedUrl) return { url: sharedUrl, origin: 'inherited' as const }
+      }
+      return null
     }, [buckets])
 
     // ── Save ──────────────────────────────────────────────────────────────────

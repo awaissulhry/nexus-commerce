@@ -65,3 +65,47 @@ describe('buildFlatRow — parentage column derivation (P1a)', () => {
     expect(rowParent.platformProductId).toBe('prod-1')
   })
 })
+
+// ── P4 image inheritance ────────────────────────────────────────────────────
+
+describe('buildFlatRow — P4 image inheritance', () => {
+  const parentImgs = [
+    { url: 'https://cdn.example.com/parent-main.jpg', sortOrder: 0, type: 'MAIN' },
+    { url: 'https://cdn.example.com/parent-2.jpg',    sortOrder: 1, type: 'PT01' },
+  ]
+
+  it('child with no own images inherits parent images into image_1..N', () => {
+    const product = makeProduct({ parentId: 'parent-id', isParent: false })
+    const row = buildFlatRow(product, { parentImages: parentImgs })
+    expect(row.image_1).toBe('https://cdn.example.com/parent-main.jpg')
+    expect(row.image_2).toBe('https://cdn.example.com/parent-2.jpg')
+    expect(row.image_3).toBe('')
+  })
+
+  it('child with own images does NOT inherit (own images take precedence)', () => {
+    const product: Parameters<typeof buildFlatRow>[0] = {
+      ...makeProduct({ parentId: 'parent-id', isParent: false }),
+      images: [{ url: 'https://cdn.example.com/own.jpg', sortOrder: 0, type: 'MAIN' }],
+    }
+    const row = buildFlatRow(product, { parentImages: parentImgs })
+    expect(row.image_1).toBe('https://cdn.example.com/own.jpg')
+    expect(row.image_2).toBe('')
+  })
+
+  it('standalone product with no parentImages stays empty', () => {
+    const row = buildFlatRow(makeProduct({ parentId: null, isParent: true }))
+    expect(row.image_1).toBe('')
+    expect(row.image_2).toBe('')
+  })
+
+  it('MAIN-typed parent image sorts first regardless of sortOrder position', () => {
+    const shuffled = [
+      { url: 'https://cdn.example.com/parent-2.jpg',    sortOrder: 0, type: 'PT01' },
+      { url: 'https://cdn.example.com/parent-main.jpg', sortOrder: 1, type: 'MAIN' },
+    ]
+    const product = makeProduct({ parentId: 'parent-id', isParent: false })
+    const row = buildFlatRow(product, { parentImages: shuffled })
+    expect(row.image_1).toBe('https://cdn.example.com/parent-main.jpg')
+    expect(row.image_2).toBe('https://cdn.example.com/parent-2.jpg')
+  })
+})

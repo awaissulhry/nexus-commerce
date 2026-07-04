@@ -98,9 +98,12 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         orderBy: { sku: 'asc' },
       });
 
-      const rows = products.map((p) =>
-        buildFlatRow(p as Parameters<typeof buildFlatRow>[0]),
-      );
+      // P4 — image inheritance: build a parent-images lookup for child products.
+      const imagesByProductId = new Map(products.map((p) => [p.id, p.images ?? []]))
+      const rows = products.map((p) => {
+        const parentImages = p.parentId ? (imagesByProductId.get(p.parentId) ?? []) : undefined
+        return buildFlatRow(p as Parameters<typeof buildFlatRow>[0], { parentImages })
+      });
 
       // P1a — fill parent_sku for each child row (buildFlatRow leaves it '').
       // products and rows are parallel arrays (same index); build a sku lookup
