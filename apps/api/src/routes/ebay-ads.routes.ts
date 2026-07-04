@@ -1084,6 +1084,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       rateDiscoveryArmed,
       rulePacksBound: bound,
       timeline: [
+        ...(b.startDate ? [`Campaign is SCHEDULED — eBay activates it on ${b.startDate} (editable or endable before then)`] : []),
         'eBay reviews and starts serving ads (typically within hours)',
         def.strategy === 'CPS' ? 'Any-click attribution: fees appear on sales within 30 days of any ad click' : 'CPC clicks bill immediately; budget edits take effect next day',
         ...(b.criterion?.selectionRules?.length ? ['Rules-based selection: eBay re-evaluates matching listings daily' + (b.criterion.autoSelectFutureInventory ? ' — future listings enroll automatically' : '')] : []),
