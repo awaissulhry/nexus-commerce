@@ -150,12 +150,15 @@ export function EbayProductsRollup() {
         noun="Listing"
         firstColLabel="Listing"
         renderFirst={(r) => (
-          <div className="nmw">
+          <div className="nmw eb-nmw-thumb">
+            <span className="eb-thumb">{r.imageUrl ? <img src={r.imageUrl} alt="" loading="lazy" /> : <span className="ph" />}</span>
+            <span style={{ minWidth: 0 }}>
             <span className="t" title={r.title ?? r.itemId}>{r.title ?? r.itemId}</span>
             <span className="mk">{r.itemId.slice(-6)}</span>
             {r.productSku && <span className="mk" title={r.productSku}>{r.productSku.length > 14 ? `${r.productSku.slice(0, 13)}…` : r.productSku}</span>}
             <a className="h10-open" href={`https://www.ebay.it/itm/${r.itemId}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Open</a>
             <button type="button" className="h10-open" style={{ background: '#0a7d4d' }} onClick={(e) => { e.stopPropagation(); setPromote({ listingIds: [r.itemId] }) }}><Megaphone size={11} /> Promote</button>
+            </span>
           </div>
         )}
         firstSortValue={(r) => (r.title ?? r.itemId).toLowerCase()}

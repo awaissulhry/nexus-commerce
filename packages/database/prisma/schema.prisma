@@ -11721,6 +11721,9 @@ model EbayListingIndex {
   marketplace String // 'IT' | 'DE' | 'FR' | 'ES' | 'UK'
   itemId      String
 
+  /// EV2 — eBay gallery thumbnail (Trading GalleryURL / GetItem PictureURL[0]);
+  /// picker + Products-page thumbnails. Catalog MAIN image is the serve-time fallback.
+  imageUrl String?
   title         String?
   categoryId    String?
   price         Decimal? @db.Decimal(10, 2)

@@ -59,7 +59,7 @@ export function PriorityManualWizard() {
       {w.step === 'listings' && (
         <>
           <p className="eb-be-hint" style={{ marginBottom: 10 }}>Staged listings scope the keyword mining and budget sizing. eBay attaches listings to Priority campaigns in Seller Hub for now (write-layer extension recorded) — <b>keywords are the targeting</b>.</p>
-          <ListingsStep plan={w.plan} set={w.set} listings={w.listings} isPriority />
+          <ListingsStep plan={w.plan} set={w.set} listings={w.listings} loading={w.data == null && !w.dataErr} isPriority />
         </>
       )}
       {w.step === 'keywords' && <KeywordsStep plan={w.plan} set={w.set} />}

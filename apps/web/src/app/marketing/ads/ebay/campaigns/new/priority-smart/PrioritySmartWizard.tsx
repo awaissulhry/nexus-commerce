@@ -48,7 +48,7 @@ export function PrioritySmartWizard() {
       {w.step === 'listings' && (
         <>
           <p className="eb-be-hint" style={{ marginBottom: 10 }}>Staged listings scope the budget sizing. eBay attaches listings to Priority campaigns in Seller Hub for now (write-layer extension recorded).</p>
-          <ListingsStep plan={w.plan} set={w.set} listings={w.listings} isPriority />
+          <ListingsStep plan={w.plan} set={w.set} listings={w.listings} loading={w.data == null && !w.dataErr} isPriority />
         </>
       )}
       {w.step === 'budget' && <BudgetStep plan={w.plan} set={w.set} showMaxCpc />}

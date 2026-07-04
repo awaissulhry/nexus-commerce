@@ -26,6 +26,8 @@ export const shortMkt = (m: string): string => SHORT_BY_MKT[m] ?? 'IT'
 
 export interface PlanListing {
   itemId: string; title: string | null; priceCents: number | null; quantity: number | null
+  // EV2 — picker thumbnails + family grouping (eBay gallery image, catalog MAIN fallback)
+  imageUrl: string | null; productId: string | null; productName: string | null
   breakEvenPct: number | null; economicsStatus: string | null
   computedRatePct: number | null; rateSource: string
   trailingSales30dCents: number; forecastMonthlyFeeCents: number | null
@@ -51,7 +53,7 @@ export async function buildListingPlan(opts: {
   }
   const live = await prisma.ebayListingIndex.findMany({
     where: { marketplace: short, endedAt: null, ...(ids.size ? { itemId: { in: [...ids] } } : {}) },
-    select: { itemId: true, title: true, price: true, quantity: true },
+    select: { itemId: true, title: true, price: true, quantity: true, imageUrl: true, productIds: true },
   })
   const itemIds = live.map((l) => l.itemId)
   const [eco, conflicts, facts30] = await Promise.all([
@@ -69,6 +71,17 @@ export async function buildListingPlan(opts: {
   const ecoBy = new Map(eco.map((e) => [e.itemId, e]))
   const conflictBy = new Map(conflicts.map((c) => [c.listingId!, c]))
   const salesBy = new Map(facts30.map((f) => [f.entityId, f._sum.salesCents ?? 0]))
+  // EV2 — catalog fallback images + product names for family grouping
+  const pids = [...new Set(live.flatMap((l) => l.productIds))]
+  const [prods, mains] = pids.length
+    ? await Promise.all([
+        prisma.product.findMany({ where: { id: { in: pids } }, select: { id: true, name: true, sku: true } }),
+        prisma.productImage.findMany({ where: { productId: { in: pids }, type: 'MAIN' }, orderBy: { sortOrder: 'asc' }, select: { productId: true, url: true } }),
+      ])
+    : [[], []]
+  const prodBy = new Map(prods.map((x) => [x.id, x]))
+  const mainBy = new Map<string, string>()
+  for (const m of mains) if (!mainBy.has(m.productId)) mainBy.set(m.productId, m.url)
 
   const listings: PlanListing[] = live.map((l) => {
     const e = ecoBy.get(l.itemId)
@@ -78,11 +91,15 @@ export async function buildListingPlan(opts: {
       : null
     const trailingSales = salesBy.get(l.itemId) ?? 0
     const conflict = conflictBy.get(l.itemId)
+    const pid = l.productIds[0] ?? null
     return {
       itemId: l.itemId,
       title: l.title,
       priceCents: l.price != null ? Math.round(Number(l.price.toString()) * 100) : null,
       quantity: l.quantity,
+      imageUrl: l.imageUrl ?? (pid ? mainBy.get(pid) ?? null : null),
+      productId: pid,
+      productName: pid ? prodBy.get(pid)?.name ?? prodBy.get(pid)?.sku ?? null : null,
       breakEvenPct: be,
       economicsStatus: e?.dataStatus ?? null,
       computedRatePct,

@@ -63,6 +63,8 @@ export interface BuilderTemplate { key: string; label: string; strategy: 'CPS' |
 /** Server listing-plan rows (POST /builder/listings). */
 export interface PlanListing {
   itemId: string; title: string | null; priceCents: number | null; quantity: number | null
+  // EV2 — picker thumbnails + family grouping
+  imageUrl: string | null; productId: string | null; productName: string | null
   breakEvenPct: number | null; economicsStatus: string | null
   computedRatePct: number | null; rateSource: string
   trailingSales30dCents: number; forecastMonthlyFeeCents: number | null

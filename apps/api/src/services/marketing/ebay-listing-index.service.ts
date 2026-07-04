@@ -69,9 +69,9 @@ ${bodyXml}
   return text
 }
 
-interface ActiveItem { itemId: string; title?: string; qty?: number; format?: string; priceValue?: number; priceCurrency?: string }
+export interface ActiveItem { itemId: string; title?: string; qty?: number; format?: string; priceValue?: number; priceCurrency?: string; galleryUrl?: string }
 
-function parseActiveList(xml: string): ActiveItem[] {
+export function parseActiveList(xml: string): ActiveItem[] {
   return [...xml.matchAll(/<Item>([\s\S]*?)<\/Item>/g)].map((m) => {
     const g = (tag: string) => m[1]!.match(new RegExp(`<${tag}>([^<]*)</${tag}>`))?.[1]
     const price = m[1]!.match(/<(?:CurrentPrice|BuyItNowPrice) currencyID="(\w+)">([\d.]+)</)
@@ -82,6 +82,7 @@ function parseActiveList(xml: string): ActiveItem[] {
       format: g('ListingType'),
       priceValue: price ? Number(price[2]) : undefined,
       priceCurrency: price?.[1],
+      galleryUrl: g('GalleryURL')?.replace(/&amp;/g, '&'), // EV2 — thumbnail, free in the sweep
     }
   }).filter((it) => it.itemId)
 }
@@ -93,6 +94,7 @@ export interface ItemDetail {
   quantitySold?: number
   variationSkus: string[]
   aspects: Record<string, string[]>
+  pictureUrl?: string // EV2 — GetItem PictureDetails.PictureURL[0]
 }
 
 export function parseItemDetail(xml: string): ItemDetail {
@@ -108,6 +110,7 @@ export function parseItemDetail(xml: string): ItemDetail {
   }
   return {
     site: g('Site'),
+    pictureUrl: xml.match(/<PictureDetails>[\s\S]*?<PictureURL>([^<]+)<\/PictureURL>/)?.[1]?.replace(/&amp;/g, '&'),
     categoryId: xml.match(/<PrimaryCategory>\s*<CategoryID>(\d+)<\/CategoryID>/)?.[1],
     quantity: g('Quantity') != null ? Number(g('Quantity')) : undefined,
     quantitySold: g('QuantitySold') != null ? Number(g('QuantitySold')) : undefined,
@@ -176,10 +179,10 @@ export async function discoverEbayListings(): Promise<DiscoveryReport> {
   let detailBudget = DETAIL_MAX
   const now = new Date()
   for (const it of items.values()) {
-    const existing = await prisma.ebayListingIndex.findFirst({ where: { itemId: it.itemId }, select: { id: true, marketplace: true, detailSyncAt: true, productIds: true, matchStatus: true } })
+    const existing = await prisma.ebayListingIndex.findFirst({ where: { itemId: it.itemId }, select: { id: true, marketplace: true, detailSyncAt: true, productIds: true, matchStatus: true, imageUrl: true } })
     let marketplace = existing?.marketplace ?? 'IT'
     let detail: ItemDetail | null = null
-    if ((!existing || !existing.detailSyncAt) && detailBudget > 0) {
+    if ((!existing || !existing.detailSyncAt || (!existing.imageUrl && !it.galleryUrl)) && detailBudget > 0) { // EV2 — also refetch when no image landed yet
       try {
         detail = parseItemDetail(await tradingCall('GetItem', `<ItemID>${it.itemId}</ItemID><IncludeItemSpecifics>true</IncludeItemSpecifics>`, token))
         detailBudget--
@@ -195,8 +198,10 @@ export async function discoverEbayListings(): Promise<DiscoveryReport> {
     const manual = existing?.matchStatus === 'MANUAL' ? existing.productIds : []
     const productIds = [...new Set([...manual, ...resolved])]
     if (productIds.length) report.matched++
+    const img = it.galleryUrl ?? detail?.pictureUrl
     const base = {
       title: it.title ?? null,
+      ...(img ? { imageUrl: img } : {}),
       price: it.priceValue != null ? it.priceValue.toFixed(2) : null,
       currency: it.priceCurrency ?? null,
       quantity: detail?.quantity ?? it.qty ?? null,

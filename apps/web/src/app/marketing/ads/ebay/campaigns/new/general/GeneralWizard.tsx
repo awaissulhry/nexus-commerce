@@ -61,7 +61,7 @@ export function GeneralWizard() {
       {w.dataErr && <div className="h10-cd-error">Couldn&apos;t load listings — {w.dataErr}.</div>}
       {w.step === 'setup' && <SetupStep plan={w.plan} set={w.set} suggestedName={w.data?.suggestedName ?? null} onMarketChange={w.changeMarket} />}
       {w.step === 'targeting' && <TargetingStepGen plan={w.plan} set={w.set} />}
-      {w.step === 'listings' && <ListingsStep plan={w.plan} set={w.set} listings={w.listings} isPriority={false} />}
+      {w.step === 'listings' && <ListingsStep plan={w.plan} set={w.set} listings={w.listings} loading={w.data == null && !w.dataErr} isPriority={false} />}
       {w.step === 'rates' && <RatesStep plan={w.plan} set={w.set} listings={w.listings} />}
       {w.step === 'review' && <ReviewStep plan={w.plan} set={w.set} listings={w.listings} activeCampaigns={w.data?.activeCampaigns ?? 0} packOptions={CPS_PACKS} goTo={w.go} />}
     </WizardShell>

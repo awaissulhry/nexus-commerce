@@ -141,6 +141,7 @@ export interface ActionRow {
 export interface ProductListingRow {
   itemId: string; marketplace: string; title: string | null; priceCents: number | null; currency: string
   quantity: number | null; matchStatus: string; breakEvenAdRatePct: number | null; economicsStatus: string | null
+  imageUrl?: string | null // EV2 — eBay gallery image, catalog MAIN fallback
   // ER3.4 — promoted-state: active campaigns carrying this listing (+ eBay OOS auto-hide)
   campaigns?: Array<{ id: string; name: string; fundingModel: string; adHidden: boolean }>
   metrics: Derived

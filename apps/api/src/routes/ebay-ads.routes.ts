@@ -384,7 +384,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     const [listings, listingFacts, economics, adRows] = await Promise.all([
       prisma.ebayListingIndex.findMany({
         where: { endedAt: null, ...(short ? { marketplace: short } : {}) },
-        select: { itemId: true, marketplace: true, title: true, price: true, currency: true, quantity: true, productIds: true, matchStatus: true, categoryId: true },
+        select: { itemId: true, marketplace: true, title: true, price: true, currency: true, quantity: true, productIds: true, matchStatus: true, categoryId: true, imageUrl: true },
       }),
       prisma.ebayAdsDailyPerformance.groupBy({
         by: ['entityId'],
@@ -409,10 +409,15 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const productIds = [...new Set(listings.flatMap((l) => l.productIds))]
-    const products = productIds.length
-      ? await prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true, sku: true, name: true, costPrice: true } })
-      : []
+    const [products, mainImages] = productIds.length
+      ? await Promise.all([
+          prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true, sku: true, name: true, costPrice: true } }),
+          prisma.productImage.findMany({ where: { productId: { in: productIds }, type: 'MAIN' }, orderBy: { sortOrder: 'asc' }, select: { productId: true, url: true } }),
+        ])
+      : [[], []]
     const pById = new Map(products.map((p) => [p.id, p]))
+    const mainBy = new Map<string, string>()
+    for (const m of mainImages) if (!mainBy.has(m.productId)) mainBy.set(m.productId, m.url) // EV2
 
     const listingRow = (l: (typeof listings)[number]) => ({
       itemId: l.itemId,
@@ -422,6 +427,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       currency: l.currency ?? 'EUR',
       quantity: l.quantity,
       matchStatus: l.matchStatus,
+      imageUrl: l.imageUrl ?? (l.productIds[0] ? mainBy.get(l.productIds[0]) ?? null : null), // EV2
       breakEvenAdRatePct: eco.get(l.itemId)?.breakEvenAdRatePct != null ? Number(eco.get(l.itemId)!.breakEvenAdRatePct!.toString()) : null,
       economicsStatus: eco.get(l.itemId)?.dataStatus ?? null,
       campaigns: promoBy.get(l.itemId) ?? [],
