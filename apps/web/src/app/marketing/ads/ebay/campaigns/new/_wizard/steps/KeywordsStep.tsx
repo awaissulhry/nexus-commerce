@@ -99,9 +99,9 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
                       </td>
                       <td className="ed"><span className={`h10-pill ${s.source === 'MANUAL' ? 'ok' : 'arch'}`}>{s.source === 'ASPECT/FREQUENT' ? 'aspects' : s.source.toLowerCase()}</span></td>
                       <td className="ed">
-                        <H10Select ariaLabel={`Match type for ${s.text}`} width={110} value={s.matchType}
+                        <span className="eb-dd dense"><H10Select ariaLabel={`Match type for ${s.text}`} width={110} value={s.matchType}
                           onChange={(v) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, matchType: v as Seed['matchType'] } : x)) })}
-                          options={[{ value: 'PHRASE', label: 'Phrase' }, { value: 'EXACT', label: 'Exact' }, { value: 'BROAD', label: 'Broad' }]} />
+                          options={[{ value: 'PHRASE', label: 'Phrase' }, { value: 'EXACT', label: 'Exact' }, { value: 'BROAD', label: 'Broad' }]} /></span>
                       </td>
                       <td className="num"><input className="h10-cd-input" style={{ width: 70 }} type="number" min={0.05} step={0.05} value={s.bidEur} onChange={(e) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, bidEur: e.target.value } : x)) })} /></td>
                     </tr>
@@ -113,9 +113,9 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
 
           <div className="h10-cd-field" style={{ marginTop: 12, maxWidth: 520 }}>
             <label className="eb-neg-lbl">Negative keywords — one per line ·
-              <H10Select ariaLabel="Negative match type" width={110} value={g.negMatch}
+              <span className="eb-dd dense"><H10Select ariaLabel="Negative match type" width={110} value={g.negMatch}
                 onChange={(v) => setGroup(i, { negMatch: v as 'EXACT' | 'PHRASE' })}
-                options={[{ value: 'EXACT', label: 'EXACT' }, { value: 'PHRASE', label: 'PHRASE' }]} />
+                options={[{ value: 'EXACT', label: 'EXACT' }, { value: 'PHRASE', label: 'PHRASE' }]} /></span>
             </label>
             <textarea className="eb-textarea" rows={2} value={g.negativesText} onChange={(e) => setGroup(i, { negativesText: e.target.value })} placeholder="terms you never want to match (broad negatives don't exist on eBay)" />
           </div>

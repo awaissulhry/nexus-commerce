@@ -51,10 +51,10 @@ export function AddKeywordsModal(props: {
       <SandboxBanner mode={mode} />
       <div className="eb-form-row">
         <div style={{ flex: 1 }}><label>Ad group</label>
-          <H10Select ariaLabel="Ad group" width="100%" value={adGroupId} onChange={setAdGroupId} options={props.adGroups.map((g) => ({ value: g.id, label: g.name }))} />
+          <span className="eb-dd dense"><H10Select ariaLabel="Ad group" width="100%" value={adGroupId} onChange={setAdGroupId} options={props.adGroups.map((g) => ({ value: g.id, label: g.name }))} /></span>
         </div>
         <div><label>Match</label>
-          <H10Select ariaLabel="Match type" width={130} value={matchType} onChange={setMatchType} options={['EXACT', 'PHRASE', 'BROAD'].map((m) => ({ value: m, label: m }))} />
+          <span className="eb-dd dense"><H10Select ariaLabel="Match type" width={130} value={matchType} onChange={setMatchType} options={['EXACT', 'PHRASE', 'BROAD'].map((m) => ({ value: m, label: m }))} /></span>
         </div>
         <div><label>Bid (EUR)</label><input className="h10-cd-input" style={{ width: 90 }} type="number" min={0.02} max={100} step={0.01} value={bid} onChange={(e) => setBid(e.target.value)} /></div>
       </div>

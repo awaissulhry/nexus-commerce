@@ -192,9 +192,9 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
           {plan.type === 'priority-manual' && included.length > 0 && plan.adGroups.length > 1 && (
             <label className="eb-neg-lbl">
               attach staged listings to
-              <H10Select ariaLabel="Ad group receiving the staged listings" width={150} value={attachName}
+              <span className="eb-dd dense"><H10Select ariaLabel="Ad group receiving the staged listings" width={150} value={attachName}
                 onChange={(v) => set({ attachGroup: v })}
-                options={plan.adGroups.map((g) => ({ value: g.name, label: g.name }))} />
+                options={plan.adGroups.map((g) => ({ value: g.name, label: g.name }))} /></span>
             </label>
           )}
           {plan.type === 'priority-manual' && <button type="button" className="h10-am-link" onClick={() => goTo('keywords')}>edit keywords ({selectedSeeds.length} across {plan.adGroups.length} group(s))</button>}

@@ -105,11 +105,11 @@ export function TargetingStepGen({ plan, set }: { plan: CampaignPlan; set: (patc
 
           <div className="eb-form-row" style={{ marginTop: 14, alignItems: 'flex-end' }}>
             <div className="h10-cd-field s"><label>Rate strategy <InfoTip tip="Fixed: one campaign-level % you control. Dynamic: eBay applies its daily suggested rate but never exceeds your cap." /></label>
-              <H10Select ariaLabel="Rate strategy" width={260} value={plan.adRateStrategy} onChange={(v) => set({ adRateStrategy: v as 'FIXED' | 'DYNAMIC' })}
+              <span className="eb-dd"><H10Select ariaLabel="Rate strategy" width={260} value={plan.adRateStrategy} onChange={(v) => set({ adRateStrategy: v as 'FIXED' | 'DYNAMIC' })}
                 options={[
                   { value: 'FIXED', label: 'Fixed — campaign-level %' },
                   { value: 'DYNAMIC', label: "Dynamic — eBay's daily suggestion under a cap" },
-                ]} /></div>
+                ]} /></span></div>
             <div className="h10-cd-field s" style={{ maxWidth: 140 }}><label>{plan.adRateStrategy === 'DYNAMIC' ? 'Base rate %' : 'Campaign rate %'} <InfoTip tip={plan.adRateStrategy === 'DYNAMIC' ? 'The starting rate before eBay begins adjusting.' : 'The one % every matched listing pays on attributed sales.'} /></label>
               <input type="number" min={2} max={100} step={0.1} value={plan.campaignRatePct} onChange={(e) => set({ campaignRatePct: e.target.value })} /></div>
             {plan.adRateStrategy === 'DYNAMIC' && (

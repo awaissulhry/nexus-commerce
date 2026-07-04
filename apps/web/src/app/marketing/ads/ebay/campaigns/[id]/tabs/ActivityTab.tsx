@@ -38,10 +38,10 @@ export function ActivityTab({ externalCampaignId }: { externalCampaignId: string
     <div className="h10-am-card eb-rowlist" style={{ maxWidth: 1080 }}>
       <div className="eb-rowlist-bar">
         <p>Every write Nexus made to this campaign — immutable. Drift repairs and accepted eBay-side changes appear here too.</p>
-        <H10Select ariaLabel="Action type" width={180} value={typeFilter} onChange={setTypeFilter}
-          options={[{ value: 'all', label: 'All actions' }, ...types.map((t) => ({ value: t, label: t.replace(/_/g, ' ') }))]} />
-        <H10Select ariaLabel="Mode" width={130} value={modeFilter} onChange={setModeFilter}
-          options={[{ value: 'all', label: 'All modes' }, { value: 'live', label: 'live' }, { value: 'sandbox', label: 'sandbox' }, { value: 'local', label: 'local' }]} />
+        <span className="eb-dd dense"><H10Select ariaLabel="Action type" width={180} value={typeFilter} onChange={setTypeFilter}
+          options={[{ value: 'all', label: 'All actions' }, ...types.map((t) => ({ value: t, label: t.replace(/_/g, ' ') }))]} /></span>
+        <span className="eb-dd dense"><H10Select ariaLabel="Mode" width={130} value={modeFilter} onChange={setModeFilter}
+          options={[{ value: 'all', label: 'All modes' }, { value: 'live', label: 'live' }, { value: 'sandbox', label: 'sandbox' }, { value: 'local', label: 'local' }]} /></span>
       </div>
       {rows == null ? (
         <div className="h10-cd-skel" aria-busy="true"><div className="sk-line w40" /><div className="sk-block" /></div>

@@ -24,7 +24,7 @@ function monthDays(year: number, month: number): Date[] {
   return Array.from({ length: 42 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d })
 }
 
-export function EbDateField({ value, onChange, min, max, placeholder = 'not set', clearable = true, clearLabel = 'clear', ariaLabel, width }: {
+export function EbDateField({ value, onChange, min, max, placeholder = 'not set', clearable = true, clearLabel = 'clear', ariaLabel, width, dense }: {
   value: string // 'YYYY-MM-DD' or ''
   onChange: (v: string) => void
   min?: string
@@ -34,6 +34,8 @@ export function EbDateField({ value, onChange, min, max, placeholder = 'not set'
   clearLabel?: string
   ariaLabel?: string
   width?: number | string
+  /** 28px register (dense tables/toolbars); default = the 38px field register */
+  dense?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number; up: boolean } | null>(null)
@@ -70,7 +72,7 @@ export function EbDateField({ value, onChange, min, max, placeholder = 'not set'
   const today = new Date(); today.setHours(0, 0, 0, 0)
 
   return (
-    <div className="h10-dd" style={width != null ? { width } : undefined}>
+    <div className={`h10-dd eb-dd-self ${dense ? 'dense' : ''}`} style={width != null ? { width } : undefined}>
       <button ref={btnRef} type="button" className={`h10-dd-btn ${open ? 'open' : ''}`} onClick={toggle} aria-haspopup="dialog" aria-expanded={open} aria-label={ariaLabel}>
         <span className={value ? undefined : 'ph'}>{value ? fmt(value) : placeholder}</span>
         <Calendar size={14} />

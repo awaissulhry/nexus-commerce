@@ -283,3 +283,13 @@
 .eb-panel.warn { border-color: #f0d9a8; background: #fdf6e3; }
 .eb-panel.warn .eb-panel-head h3 { color: #7a5b00; }
 .h10-cd-card.danger { border-color: #f0c8c8; }
+
+/* EV4e — ONE control height per register (Owner: "fields and headings are
+   uneven"). Scoped via the eBay-only .eb-dd hook — bare descendant selectors
+   would leak into Amazon pages (their pager + SearchTermActionModal combine
+   the same classes; audited 2026-07-04). */
+.eb-dd { display: contents; }
+.eb-dd .h10-dd-btn { height: 38px; border-color: #6d839f; font-size: 14px; padding: 0 12px; border-radius: 8px; }
+.eb-dd.dense .h10-dd-btn { height: 28px; padding: 2px 9px; font-size: 12.5px; border-radius: 6px; border-color: #d8dde4; }
+.eb-dd-self.h10-dd > .h10-dd-btn { height: 38px; border-color: #6d839f; font-size: 14px; padding: 0 12px; border-radius: 8px; }
+.eb-dd-self.h10-dd.dense > .h10-dd-btn { height: 28px; padding: 2px 9px; font-size: 12.5px; border-radius: 6px; border-color: #d8dde4; }

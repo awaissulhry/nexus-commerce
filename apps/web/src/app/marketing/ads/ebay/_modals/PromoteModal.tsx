@@ -82,8 +82,8 @@ export function PromoteModal(props: {
       <div className="eb-form-row">
         <div style={{ flex: 1 }}>
           <label>Target campaign (General, key-based)</label>
-          <H10Select ariaLabel="Target campaign" width="100%" value={campaignId} onChange={setCampaignId}
-            options={campaigns.map((c) => ({ value: c.id, label: `${c.name} — ${c.status}${c.bidPercentage != null ? ` · default ${c.bidPercentage}%` : ''}` }))} />
+          <span className="eb-dd dense"><H10Select ariaLabel="Target campaign" width="100%" value={campaignId} onChange={setCampaignId}
+            options={campaigns.map((c) => ({ value: c.id, label: `${c.name} — ${c.status}${c.bidPercentage != null ? ` · default ${c.bidPercentage}%` : ''}` }))} /></span>
         </div>
         <div>
           <label>Ad rate %</label>

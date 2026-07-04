@@ -49,10 +49,10 @@ export function AddNegativeKeywordsModal(props: {
       <SandboxBanner mode={mode} />
       <div className="eb-form-row">
         <div style={{ flex: 1 }}><label>Ad group</label>
-          <H10Select ariaLabel="Ad group" width="100%" value={adGroupId} onChange={setAdGroupId} options={props.adGroups.map((g) => ({ value: g.id, label: g.name }))} />
+          <span className="eb-dd dense"><H10Select ariaLabel="Ad group" width="100%" value={adGroupId} onChange={setAdGroupId} options={props.adGroups.map((g) => ({ value: g.id, label: g.name }))} /></span>
         </div>
         <div><label>Match</label>
-          <H10Select ariaLabel="Match type" width={130} value={matchType} onChange={(v) => setMatchType(v as 'EXACT' | 'PHRASE')} options={['EXACT', 'PHRASE'].map((m) => ({ value: m, label: m }))} />
+          <span className="eb-dd dense"><H10Select ariaLabel="Match type" width={130} value={matchType} onChange={(v) => setMatchType(v as 'EXACT' | 'PHRASE')} options={['EXACT', 'PHRASE'].map((m) => ({ value: m, label: m }))} /></span>
         </div>
       </div>
       <div><label>Negatives — one per line</label><textarea className="eb-textarea" rows={4} value={text} onChange={(e) => setText(e.target.value)} /></div>

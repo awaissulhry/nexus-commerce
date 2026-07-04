@@ -208,7 +208,7 @@ export function ListingsStep({ plan, set, listings, isPriority, loading }: {
                 <Thumb l={l} />
                 <ListingMeta l={l} />
                 {l.conflict && (
-                  <span title={`Already in "${l.conflict.campaignName}" at ${l.conflict.currentRatePct ?? '?'}% — one listing = one General campaign`}>
+                  <span className="eb-dd dense" title={`Already in "${l.conflict.campaignName}" at ${l.conflict.currentRatePct ?? '?'}% — one listing = one General campaign`}>
                     <H10Select ariaLabel={`Conflict resolution for ${l.title ?? l.itemId}`} width={132}
                       value={plan.resolutions[l.itemId] ?? 'skip'}
                       onChange={(v) => set({ resolutions: { ...plan.resolutions, [l.itemId]: v as 'include' | 'skip' | 'move' } })}
