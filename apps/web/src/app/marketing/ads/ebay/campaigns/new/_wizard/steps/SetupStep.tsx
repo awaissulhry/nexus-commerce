@@ -31,7 +31,7 @@ export function SetupStep({ plan, set, suggestedName, onMarketChange }: {
             </div>
             <div style={{ flex: 1 }} className="h10-cd-field">
               <label>Campaign name <InfoTip tip="Visible in Seller Hub too. The suggestion follows the console grammar (type-scope-market-sequence); one click applies it, editing stays free." /></label>
-              <input className="h10-cd-input" value={plan.name} maxLength={80} onChange={(e) => set({ name: e.target.value })} placeholder="name your campaign" />
+              <input className="h10-cd-input eb-input-full" value={plan.name} maxLength={80} onChange={(e) => set({ name: e.target.value })} placeholder="name your campaign" />
               {suggestedName && plan.name !== suggestedName && (
                 <button type="button" className="h10-am-link" style={{ marginTop: 6, fontSize: 12 }} onClick={() => set({ name: suggestedName })}>
                   use suggestion: <code>{suggestedName}</code>

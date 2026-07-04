@@ -211,3 +211,6 @@
 .eb-version-body { flex: 1; min-width: 0; }
 .eb-version-meta { font-size: 11px; color: #8a93a1; margin: 0; }
 .eb-version-sentence { font-size: 12px; color: #3d4653; margin: 2px 0 0; line-height: 1.5; }
+
+/* EV1 — full-width input inside a flexed field (Amazon wizard idiom) */
+.eb-input-full { width: 100%; }
