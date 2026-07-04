@@ -74,7 +74,7 @@ export function KeywordsTab({ data, campaignId, reload, say }: { data: CampaignD
     { key: 'bid', label: 'Bid', render: (r) => money(r.bidCents, currency), sortValue: (r) => r.bidCents ?? -1 },
     {
       key: 'suggested', label: 'Suggested Bid', tip: "eBay's suggested bid for the keyword + match type (suggest_bids).",
-      render: (r) => { const s = suggested?.get(r.text.toLowerCase()); return s != null ? money(s, currency) : suggested ? '—' : <span style={{ color: '#8a93a1' }}>load →</span> },
+      render: (r) => { const s = suggested?.get(r.text.toLowerCase()); return s != null ? money(s, currency) : suggested ? '—' : <span className="eb-dim">load →</span> },
       sortValue: (r) => suggested?.get(r.text.toLowerCase()) ?? -1,
     },
     ...metricColumns<KeywordRow>(rows, currency),

@@ -14,7 +14,7 @@ export function PacingCard({ pacing }: { pacing: PacingPayload | null }) {
     <div className="dash-card">
       <div className="dash-card-h"><span>Budget pacing</span></div>
       {pacing == null ? (
-        <div className="dash-empty">Loading…</div>
+        <div className="h10-cd-skel" aria-busy="true"><div className="sk-line w40" /><div className="sk-block" /></div>
       ) : (
         <div className="eb-pacing">
           {pacing.ceilings.map((cl) => (

@@ -54,7 +54,7 @@ export function SearchTermsTab({ data, campaignId, reload, say }: { data: Campai
           <div className="nmw">
             <span className="t">{r.query}</span>
             <button type="button" className="h10-open" onClick={(e) => { e.stopPropagation(); setPrefill({ kind: 'keyword', text: r.query, adGroupId: r.adGroupId }) }}>+ Keyword</button>
-            <button type="button" className="h10-open" style={{ background: '#b87503' }} onClick={(e) => { e.stopPropagation(); setPrefill({ kind: 'negative', text: r.query, adGroupId: r.adGroupId }) }}>+ Negative</button>
+            <button type="button" className="h10-open negative" onClick={(e) => { e.stopPropagation(); setPrefill({ kind: 'negative', text: r.query, adGroupId: r.adGroupId }) }}>+ Negative</button>
           </div>
         )}
         firstSortValue={(r) => r.query}

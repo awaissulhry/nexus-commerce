@@ -78,7 +78,7 @@ export function EbayProductsRollup() {
               <b>{c.fundingModel === 'COST_PER_SALE' ? 'GEN' : 'PRI'}</b> {c.name}{c.adHidden ? ' ⌀' : ''}
             </Link>
           ))}</span>
-        : <span style={{ color: '#8a93a1' }}>—</span>,
+        : <span className="eb-dim">—</span>,
     },
     { key: 'price', label: 'Price', render: (r) => (r.priceCents != null ? eur(r.priceCents / 100) : '—'), sortValue: (r) => r.priceCents ?? -1, filterValue: (r) => (r.priceCents ?? 0) / 100 },
     {
@@ -157,7 +157,7 @@ export function EbayProductsRollup() {
             <span className="mk">{r.itemId.slice(-6)}</span>
             {r.productSku && <span className="mk" title={r.productSku}>{r.productSku.length > 14 ? `${r.productSku.slice(0, 13)}…` : r.productSku}</span>}
             <a className="h10-open" href={`https://www.ebay.it/itm/${r.itemId}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Open</a>
-            <button type="button" className="h10-open" style={{ background: '#0a7d4d' }} onClick={(e) => { e.stopPropagation(); setPromote({ listingIds: [r.itemId] }) }}><Megaphone size={11} /> Promote</button>
+            <button type="button" className="h10-open promote" onClick={(e) => { e.stopPropagation(); setPromote({ listingIds: [r.itemId] }) }}><Megaphone size={11} /> Promote</button>
             </span>
           </div>
         )}

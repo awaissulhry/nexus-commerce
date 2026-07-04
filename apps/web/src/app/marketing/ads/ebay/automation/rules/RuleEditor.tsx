@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, X } from 'lucide-react'
 import '../../ebay.css'
+import { H10Select } from '../../../campaigns/FilterDropdown'
 import { getEbayAds, postEbayAds } from '../../_lib'
 import {
   type AutomationRule, type RuleCondition, type RuleTrigger, type RuleActionDef, type RuleTemplate, type RuleVersionRow,
@@ -195,10 +196,8 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
             </div>
           </div>
           <div><label>Marketplace</label>
-            <select className="h10-cd-input" value={marketplace ?? ''} onChange={(e) => { setMarketplace(e.target.value || null); setPreview(null) }}>
-              <option value="">All eBay markets</option>
-              {MARKETS.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
+            <H10Select ariaLabel="Marketplace" width={190} value={marketplace ?? ''} onChange={(v) => { setMarketplace(v || null); setPreview(null) }}
+              options={[{ value: '', label: 'All eBay markets' }, ...MARKETS.map((m) => ({ value: m, label: m }))]} />
           </div>
           <div><label>Campaigns</label>
             <div className="eb-posture-dial">
@@ -232,14 +231,13 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
           const benches = BENCH_FOR(trigger.scope, c.metric)
           return (
             <div key={i} className="eb-cond-row">
-              <select className="h10-cd-input" value={c.metric} aria-label="Metric"
-                onChange={(e) => {
-                  const metric = e.target.value as RuleMetric
+              <H10Select ariaLabel="Metric" width={190} value={c.metric}
+                onChange={(v) => {
+                  const metric = v as RuleMetric
                   const keepBench = c.benchmark && BENCH_FOR(trigger.scope, metric).includes(c.benchmark)
                   setCond(i, { metric, ...(keepBench ? {} : { benchmark: undefined, threshold: c.threshold ?? 0 }) })
-                }}>
-                {(Object.keys(METRIC_LABELS) as RuleMetric[]).map((m) => <option key={m} value={m}>{METRIC_LABELS[m]}</option>)}
-              </select>
+                }}
+                options={(Object.keys(METRIC_LABELS) as RuleMetric[]).map((m) => ({ value: m, label: METRIC_LABELS[m] }))} />
               <label className="eb-cond-lbl">last
                 <input className="h10-cd-input eb-cond-num" type="number" min={1} max={90} value={c.windowDays} aria-label="Window days"
                   onChange={(e) => setCond(i, { windowDays: Math.max(1, Math.min(90, Number(e.target.value) || 1)) })} />d
@@ -248,18 +246,14 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
                 <input className="h10-cd-input eb-cond-num" type="number" min={0} max={7} value={c.excludeRecentDays ?? 0} aria-label="Exclude recent days"
                   onChange={(e) => setCond(i, { excludeRecentDays: Math.max(0, Math.min(7, Number(e.target.value) || 0)) })} />d
               </label>
-              <select className="h10-cd-input" value={c.op} aria-label="Operator" onChange={(e) => setCond(i, { op: e.target.value as RuleOp })}>
-                {(Object.keys(OP_LABELS) as RuleOp[]).map((o) => <option key={o} value={o}>{OP_LABELS[o]}</option>)}
-              </select>
-              <select className="h10-cd-input" value={c.benchmark ?? '__abs'} aria-label="Compare against"
-                onChange={(e) => {
-                  const v = e.target.value
+              <H10Select ariaLabel="Operator" width={90} value={c.op} onChange={(v) => setCond(i, { op: v as RuleOp })}
+                options={(Object.keys(OP_LABELS) as RuleOp[]).map((o) => ({ value: o, label: OP_LABELS[o] }))} />
+              <H10Select ariaLabel="Compare against" width={150} value={c.benchmark ?? '__abs'}
+                onChange={(v) => {
                   if (v === '__abs') setCond(i, { benchmark: undefined, multiplier: undefined, threshold: c.threshold ?? 0 })
                   else setCond(i, { benchmark: v as RuleBenchmark, multiplier: c.multiplier ?? 1, threshold: undefined })
-                }}>
-                <option value="__abs">value</option>
-                {benches.map((b) => <option key={b} value={b}>{BENCH_LABELS[b]}</option>)}
-              </select>
+                }}
+                options={[{ value: '__abs', label: 'value' }, ...benches.map((b) => ({ value: b, label: BENCH_LABELS[b] }))]} />
               {c.benchmark ? (
                 <label className="eb-cond-lbl">×
                   <input className="h10-cd-input eb-cond-num" type="number" min={0.1} max={10} step={0.1} value={c.multiplier ?? 1} aria-label="Multiplier"
@@ -288,9 +282,8 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
         <h3>Action</h3>
         <div className="eb-form-row">
           <div><label>Then</label>
-            <select className="h10-cd-input" value={action.type} onChange={(e) => { setAction({ type: e.target.value as RuleActionDef['type'], ...(e.target.value === 'adjust_ad_rate' ? { deltaPct: -10, minRatePct: 2 } : e.target.value === 'set_rate_to_breakeven_factor' ? { factor: 0.8, minRatePct: 2 } : e.target.value === 'bid_down_keyword' ? { bidDeltaPct: -20 } : {}) }); setPreview(null) }}>
-              {ACTIONS_FOR_SCOPE[trigger.scope].map((t) => <option key={t} value={t}>{ACTION_LABELS[t]}</option>)}
-            </select>
+            <H10Select ariaLabel="Action" width={280} value={action.type} onChange={(v) => { setAction({ type: v as RuleActionDef['type'], ...(v === 'adjust_ad_rate' ? { deltaPct: -10, minRatePct: 2 } : v === 'set_rate_to_breakeven_factor' ? { factor: 0.8, minRatePct: 2 } : v === 'bid_down_keyword' ? { bidDeltaPct: -20 } : {}) }); setPreview(null) }}
+              options={ACTIONS_FOR_SCOPE[trigger.scope].map((t) => ({ value: t, label: ACTION_LABELS[t] }))} />
           </div>
           {action.type === 'adjust_ad_rate' && (
             <div><label>Step %</label>
@@ -340,7 +333,7 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
             </button>
           </h3>
           {historyOpen && (
-            history == null ? <p className="eb-be-hint">Loading…</p> : (
+            history == null ? <div className="h10-cd-skel" aria-busy="true"><div className="sk-line w40" /><div className="sk-block" /></div> : (
               <div className="eb-version-list">
                 {history.map((v) => (
                   <div key={v.id} className="eb-version-row">

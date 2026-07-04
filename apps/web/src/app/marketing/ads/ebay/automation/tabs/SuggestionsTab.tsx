@@ -107,7 +107,7 @@ export function SuggestionsTab({ busy, act, bump, highlightId }: { busy: boolean
       tip: 'Linear extrapolation of the entity\'s own window facts — hover a value for the exact assumption. Blank = no defensible model for this kind.',
       render: (p) => {
         const ei = p.estimatedImpact
-        if (!ei) return <span style={{ color: '#8a93a1' }}>—</span>
+        if (!ei) return <span className="eb-dim">—</span>
         return (
           <span className="eb-impact" title={ei.assumption}>
             {ei.feesDeltaCentsPerWeek != null && (

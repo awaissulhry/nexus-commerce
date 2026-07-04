@@ -31,8 +31,8 @@ interface DigestMeta { id: string; weekStart: string; generatedAt: string; revie
 function EmptyNote({ title, description }: { title: string; description?: string }) {
   return (
     <div style={{ padding: '20px 8px', textAlign: 'center' }}>
-      <p style={{ fontSize: 13, fontWeight: 600, color: '#475467', margin: 0 }}>{title}</p>
-      {description && <p style={{ fontSize: 12, color: '#8a93a1', margin: '4px 0 0' }}>{description}</p>}
+      <p className="eb-digest-t">{title}</p>
+      {description && <p className="eb-digest-d">{description}</p>}
     </div>
   )
 }
@@ -136,8 +136,8 @@ export function EbayDigestClient() {
           </section>
 
           {p.anomalies.length > 0 && (
-            <section className="eb-panel" style={{ borderColor: '#f0d9a8', background: '#fdf6e3' }}>
-              <header className="eb-panel-head"><h3 style={{ color: '#7a5b00' }}>{p.anomalies.length} anomal{p.anomalies.length === 1 ? 'y' : 'ies'} this week</h3></header>
+            <section className="eb-panel warn">
+              <header className="eb-panel-head"><h3>{p.anomalies.length} anomal{p.anomalies.length === 1 ? 'y' : 'ies'} this week</h3></header>
               <ul className="eb-results">{p.anomalies.map((a, i) => <li key={i} className={a.severity === 'CRITICAL' ? 'err' : 'warn'}>{a.message}</li>)}</ul>
             </section>
           )}

@@ -16,7 +16,7 @@ export function StatusCard({ s }: { s: SummaryPayload | null }) {
     <div className="dash-card">
       <div className="dash-card-h"><span>Status</span></div>
       {s == null ? (
-        <div className="dash-empty">Loading…</div>
+        <div className="h10-cd-skel" aria-busy="true"><div className="sk-line w40" /><div className="sk-block" /></div>
       ) : (
         <div className="eb-status-groups">
           <section>

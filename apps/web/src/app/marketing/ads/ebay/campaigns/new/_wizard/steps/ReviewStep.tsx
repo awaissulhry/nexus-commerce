@@ -227,7 +227,7 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
                     <tr key={l.itemId}>
                       <td className="ed"><span className="t">{l.title ?? l.itemId}</span></td>
                       <td className="num">{l.breakEvenPct != null ? pct(l.breakEvenPct / 100) : <span className="h10-pill warn">add cost</span>}</td>
-                      <td className="num"><input className="h10-cd-input" style={{ width: 74, borderColor: over ? '#e5484d' : undefined }} type="number" min={2} max={100} step={0.1} value={plan.perRate[l.itemId] ?? (plan.globalRate !== '' ? plan.globalRate : l.computedRatePct ?? '')} onChange={(e) => set({ perRate: { ...plan.perRate, [l.itemId]: e.target.value } })} /></td>
+                      <td className="num"><input className={`h10-cd-input ${over ? 'over-be' : ''}`} style={{ width: 74 }} type="number" min={2} max={100} step={0.1} value={plan.perRate[l.itemId] ?? (plan.globalRate !== '' ? plan.globalRate : l.computedRatePct ?? '')} onChange={(e) => set({ perRate: { ...plan.perRate, [l.itemId]: e.target.value } })} /></td>
                     </tr>
                   )
                 })}

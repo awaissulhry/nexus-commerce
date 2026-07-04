@@ -60,7 +60,7 @@ export function RulesTab({ busy, act, bump }: { busy: boolean; act: (fn: () => P
       </div>
       {rules.length === 0 ? (
         <div style={{ padding: '28px 18px', textAlign: 'center' }}>
-          <p style={{ fontSize: 13, color: '#5b6573', marginBottom: 12 }}>No rules yet. The starter pack ships six documented rules — fee creep-down, click-bleeder removal, break-even repair, restock re-promote, keyword bleeder pause, keyword bid-down — all disabled, all PROPOSE. Or build your own.</p>
+          <p className="eb-empty-note">No rules yet. The starter pack ships six documented rules — fee creep-down, click-bleeder removal, break-even repair, restock re-promote, keyword bleeder pause, keyword bid-down — all disabled, all PROPOSE. Or build your own.</p>
           <button type="button" className="h10-am-btn primary" disabled={busy} onClick={() => void act(() => postEbayAds('/automation/presets/starter-pack', {}), 'starter pack installed')}>Install starter rule-pack</button>
           <button type="button" className="h10-am-btn" style={{ marginLeft: 8 }} onClick={() => router.push('/marketing/ads/ebay/automation/rules/new')}>New rule…</button>
         </div>

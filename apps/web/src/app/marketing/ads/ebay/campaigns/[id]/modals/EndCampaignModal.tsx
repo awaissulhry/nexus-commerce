@@ -26,7 +26,7 @@ export function EndCampaignModal(props: { open: boolean; onClose: () => void; ca
       footer={<>
         <button type="button" className="h10-am-btn" onClick={props.onClose}>Cancel</button>
         <span style={{ flex: 1 }} />
-        <button type="button" className="h10-am-btn primary" style={{ background: '#e5484d' }} onClick={apply} disabled={busy}>{busy ? 'Ending…' : 'End campaign'}</button>
+        <button type="button" className="h10-am-btn danger-solid" onClick={apply} disabled={busy}>{busy ? 'Ending…' : 'End campaign'}</button>
       </>}>
       <SandboxBanner mode={mode} />
       <ul className="eb-results">

@@ -209,7 +209,7 @@ export function DetailsTab({ data, campaignId, strategy, onSaved, say }: {
 
           <section id="danger" ref={(el) => { refs.current.danger = el }} className="h10-cd-sec">
             <h2>Danger zone</h2>
-            <div className="h10-cd-card pad" style={{ borderColor: '#f0c8c8' }}>
+            <div className="h10-cd-card pad danger">
               <p className="eb-be-hint">Ending a campaign stops all its ads permanently — <b>ENDED is terminal on eBay</b> (history and Activity are retained; clone to relaunch). Use <b>Action ▾ → End campaign</b>; it confirms the consequences first.</p>
             </div>
           </section>

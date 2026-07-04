@@ -15,7 +15,7 @@ export function RecommendationsCard({ recs }: { recs: RecommendationRow[] | null
     <div className="dash-card">
       <div className="dash-card-h"><span>Recommendations</span></div>
       {recs == null ? (
-        <div className="dash-empty">Loading…</div>
+        <div className="h10-cd-skel" aria-busy="true"><div className="sk-line w40" /><div className="sk-block" /></div>
       ) : visible.length === 0 ? (
         <div className="dash-empty">Nothing to recommend — matching, costs, coverage and margins look clean.</div>
       ) : (
