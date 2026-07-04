@@ -293,3 +293,7 @@
 .eb-dd.dense .h10-dd-btn { height: 28px; padding: 2px 9px; font-size: 12.5px; border-radius: 6px; border-color: #d8dde4; }
 .eb-dd-self.h10-dd > .h10-dd-btn { height: 38px; border-color: #6d839f; font-size: 14px; padding: 0 12px; border-radius: 8px; }
 .eb-dd-self.h10-dd.dense > .h10-dd-btn { height: 28px; padding: 2px 9px; font-size: 12.5px; border-radius: 6px; border-color: #d8dde4; }
+/* EV4e.2 — the 16px .h10-cd-field bottom-margin only resets on :last-child,
+   so under flex-end every NON-last field in a row rode 16px higher (the
+   measured Marketplace-vs-name / Start-vs-End offset). Rows own their gaps. */
+.eb-form-row > .h10-cd-field { margin-bottom: 0; }
