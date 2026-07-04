@@ -12,6 +12,7 @@
  *
  * Built entirely on the design system.
  * Legacy /api/stock/bulk-import is superseded by /api/stock/import/*.
+import { Listbox } from '@/design-system/components/Listbox'
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -29,7 +30,7 @@ import { Tabs, type TabItem } from '@/design-system/components/Tabs'
 import { ToastProvider, useToast } from '@/design-system/components/Toast'
 import { Button } from '@/design-system/primitives/Button'
 import { Input } from '@/design-system/primitives/Input'
-import { Select } from '@/design-system/primitives/Select'
+import { Listbox } from '@/design-system/components/Listbox'
 import { Pill } from '@/design-system/primitives/Pill'
 import { Tag } from '@/design-system/primitives/Tag'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
@@ -678,10 +679,10 @@ function ImportWizardInner() {
                         <label className="text-sm font-medium">
                           {label}{required && <span className="text-rose-500 ml-0.5">*</span>}
                         </label>
-                        <Select
+                        <Listbox
                           value={current}
-                          onChange={(e) => {
-                            const newCol = e.target.value
+                          ariaLabel={label}
+                          onChange={(newCol) => {
                             setColMap((prev) => {
                               const next = { ...prev }
                               // remove old mapping for this target
@@ -690,12 +691,7 @@ function ImportWizardInner() {
                               return next
                             })
                           }}
-                        >
-                          <option value="">{t('stock.import.map.none')}</option>
-                          {parsedFile.headers.map((h) => (
-                            <option key={h} value={h}>{h}</option>
-                          ))}
-                        </Select>
+                          options={[{ value: '', label: t('stock.import.map.none') }, ...parsedFile.headers.map((h) => ({ value: h, label: h }))]} />
                       </div>
                     )
                   })}
@@ -736,26 +732,18 @@ function ImportWizardInner() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-default">
                   <div className="flex flex-col gap-1">
                     <label className="text-sm font-medium">{t('stock.import.map.mode')}</label>
-                    <Select value={mode} onChange={(e) => setMode(e.target.value as ImportMode)}>
-                      <option value="ADJUST">{t('stock.import.map.modeAdjust')}</option>
-                      <option value="SET">{t('stock.import.map.modeSet')}</option>
-                    </Select>
+                    <Listbox value={mode} onChange={(v) => setMode(v as ImportMode)} ariaLabel={t('stock.import.map.mode')}
+                      options={[{ value: 'ADJUST', label: t('stock.import.map.modeAdjust') }, { value: 'SET', label: t('stock.import.map.modeSet') }]} />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-sm font-medium">{t('stock.import.map.target')}</label>
-                    <Select value={target} onChange={(e) => setTarget(e.target.value as ImportTarget)}>
-                      <option value="WAREHOUSE">{t('stock.import.map.targetWarehouse')}</option>
-                      <option value="CHANNEL">{t('stock.import.map.targetChannel')}</option>
-                      <option value="BOTH">{t('stock.import.map.targetBoth')}</option>
-                    </Select>
+                    <Listbox value={target} onChange={(v) => setTarget(v as ImportTarget)} ariaLabel={t('stock.import.map.target')}
+                      options={[{ value: 'WAREHOUSE', label: t('stock.import.map.targetWarehouse') }, { value: 'CHANNEL', label: t('stock.import.map.targetChannel') }, { value: 'BOTH', label: t('stock.import.map.targetBoth') }]} />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-sm font-medium">{t('stock.import.map.location')}</label>
-                    <Select value={locationCode} onChange={(e) => setLocationCode(e.target.value)}>
-                      {locations.map((l) => (
-                        <option key={l.code} value={l.code}>{l.code} — {l.name}</option>
-                      ))}
-                    </Select>
+                    <Listbox value={locationCode} onChange={setLocationCode} ariaLabel={t('stock.import.map.location')}
+                      options={locations.map((l) => ({ value: l.code, label: `${l.code} — ${l.name}` }))} />
                   </div>
                 </div>
 

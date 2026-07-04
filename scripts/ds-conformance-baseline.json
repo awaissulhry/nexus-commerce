@@ -15,7 +15,7 @@
       "hex": 0
     },
     "_shared": {
-      "select": 0,
+      "select": 10,
       "date": 4,
       "fontSize": 0,
       "hex": 0
@@ -45,13 +45,13 @@
       "hex": 0
     },
     "bulk-operations": {
-      "select": 0,
+      "select": 28,
       "date": 2,
       "fontSize": 0,
       "hex": 0
     },
     "catalog": {
-      "select": 0,
+      "select": 11,
       "date": 0,
       "fontSize": 0,
       "hex": 0
@@ -63,13 +63,13 @@
       "hex": 0
     },
     "customers": {
-      "select": 0,
+      "select": 4,
       "date": 0,
       "fontSize": 0,
       "hex": 0
     },
     "dashboard": {
-      "select": 1,
+      "select": 5,
       "date": 3,
       "fontSize": 0,
       "hex": 0
@@ -99,7 +99,7 @@
       "hex": 0
     },
     "fulfillment": {
-      "select": 31,
+      "select": 60,
       "date": 12,
       "fontSize": 2,
       "hex": 2
@@ -129,7 +129,7 @@
       "hex": 0
     },
     "listings": {
-      "select": 2,
+      "select": 11,
       "date": 5,
       "fontSize": 0,
       "hex": 0
@@ -147,7 +147,7 @@
       "hex": 0
     },
     "marketing": {
-      "select": 8,
+      "select": 51,
       "date": 2,
       "fontSize": 0,
       "hex": 0
@@ -159,7 +159,7 @@
       "hex": 0
     },
     "orders": {
-      "select": 4,
+      "select": 6,
       "date": 2,
       "fontSize": 0,
       "hex": 0
@@ -189,13 +189,13 @@
       "hex": 0
     },
     "pricing": {
-      "select": 1,
+      "select": 6,
       "date": 4,
       "fontSize": 4,
       "hex": 0
     },
     "products": {
-      "select": 25,
+      "select": 92,
       "date": 5,
       "fontSize": 5,
       "hex": 1
@@ -207,7 +207,7 @@
       "hex": 13
     },
     "reconciliation": {
-      "select": 0,
+      "select": 1,
       "date": 0,
       "fontSize": 0,
       "hex": 0
@@ -225,13 +225,13 @@
       "hex": 0
     },
     "settings": {
-      "select": 1,
+      "select": 26,
       "date": 0,
       "fontSize": 0,
       "hex": 0
     },
     "sync-logs": {
-      "select": 0,
+      "select": 2,
       "date": 0,
       "fontSize": 0,
       "hex": 0

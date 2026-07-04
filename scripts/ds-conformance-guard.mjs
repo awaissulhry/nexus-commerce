@@ -34,7 +34,7 @@ const ALLOW = ['marketing/ads-console/', 'marketing/advertising/', 'marketing/ad
 const ENFORCE_ANYWAY = ['marketing/ads/ebay/']
 
 const METRICS = {
-  select: /<select[\s>]/g,
+  select: /<select\b/g,
   date: /type="date"/g,
   fontSize: /style=\{\{[^}]*fontSize/g,
   hex: /style=\{\{[^}]*#[0-9a-fA-F]{3,6}/g,

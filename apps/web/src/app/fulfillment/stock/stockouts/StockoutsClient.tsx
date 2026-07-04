@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
 import Link from 'next/link'
 import {
   AlertTriangle, ArrowLeft, Search, X, AlertCircle,
@@ -376,18 +377,13 @@ export default function StockoutsClient() {
           </div>
           <div className="flex items-center gap-1.5">
             <label htmlFor="stockouts-window" className="text-sm text-slate-500 dark:text-slate-400">{t('stock.stockouts.windowLabel')}</label>
-            <select id="stockouts-window" value={windowDays} onChange={e => setWindowDays(Number(e.target.value))}
-              className="h-8 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900">
-              {WINDOW_OPTIONS.map(d => <option key={d} value={d}>{d}d</option>)}
-            </select>
+            <Listbox value={String(windowDays)} onChange={v => setWindowDays(Number(v))} ariaLabel={t('stock.stockouts.windowLabel')} className="w-20"
+              options={WINDOW_OPTIONS.map(d => ({ value: String(d), label: `${d}d` }))} />
           </div>
           <div className="flex items-center gap-1.5">
             <label htmlFor="stockouts-location" className="text-sm text-slate-500 dark:text-slate-400">{t('stock.stockouts.locationLabel')}</label>
-            <select id="stockouts-location" value={locationFilter} onChange={e => setLocationFilter(e.target.value)}
-              className="h-8 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900">
-              <option value="">{t('stock.stockouts.locationAny')}</option>
-              {locations.map(l => <option key={l.id} value={l.id}>{l.code} — {l.name}</option>)}
-            </select>
+            <Listbox value={locationFilter} onChange={setLocationFilter} ariaLabel={t('stock.stockouts.locationLabel')} className="min-w-[180px]"
+              options={[{ value: '', label: t('stock.stockouts.locationAny') }, ...locations.map(l => ({ value: l.id, label: `${l.code} — ${l.name}` }))]} />
           </div>
           <div className="flex items-center gap-1 flex-1 min-w-[200px]">
             <Search className="w-3.5 h-3.5 text-tertiary" />

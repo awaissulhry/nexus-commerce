@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
 import Link from 'next/link'
 import {
   TrendingDown, ArrowLeft, Package, RefreshCw, AlertCircle,
@@ -885,13 +886,8 @@ function YearEndValuationCard({ t }: { t: (k: string, v?: Record<string, string 
           <div className="text-sm text-slate-500 dark:text-slate-400">{t('stock.analytics.yearEnd.subtitle')}</div>
         </div>
         <div className="flex items-center gap-2">
-          <select value={year} onChange={(e) => setYear(Number(e.target.value))}
-            className="h-8 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
-            aria-label={t('stock.analytics.yearEnd.yearSelect')}>
-            {[currentYear, currentYear - 1, currentYear - 2].map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
+          <Listbox value={String(year)} onChange={(v) => setYear(Number(v))} ariaLabel={t('stock.analytics.yearEnd.yearSelect')} className="w-24"
+            options={[currentYear, currentYear - 1, currentYear - 2].map((y) => ({ value: String(y), label: String(y) }))} />
           <Button variant="secondary" size="sm" onClick={fetchData} disabled={loading}>
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
           </Button>

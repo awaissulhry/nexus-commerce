@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { MapPin, Pencil, PowerOff, Plus, RefreshCw } from 'lucide-react'
 import { PageHeader } from '@/design-system/patterns/PageHeader'
 import { Card } from '@/design-system/components/Card'
@@ -10,7 +11,6 @@ import { EmptyState } from '@/design-system/components/EmptyState'
 import { ToastProvider, useToast } from '@/design-system/components/Toast'
 import { Button } from '@/design-system/primitives/Button'
 import { Input } from '@/design-system/primitives/Input'
-import { Select } from '@/design-system/primitives/Select'
 import { Toggle } from '@/design-system/primitives/Toggle'
 import { Pill } from '@/design-system/primitives/Pill'
 import { Tag, type TagTone } from '@/design-system/primitives/Tag'
@@ -439,13 +439,14 @@ function LocationsInner() {
                   <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
                     {t('stock.locations.form.type')}
                   </label>
-                  <Select
+                  <Listbox
                     value={form.type}
-                    onChange={(e) => setField('type', e.target.value as 'WAREHOUSE' | 'AMAZON_FBA')}
-                  >
-                    <option value="WAREHOUSE">{t('stock.locations.type.WAREHOUSE')}</option>
-                    <option value="AMAZON_FBA">{t('stock.locations.type.AMAZON_FBA')}</option>
-                  </Select>
+                    onChange={(v) => setField('type', v as 'WAREHOUSE' | 'AMAZON_FBA')}
+                    ariaLabel={t('stock.locations.form.type')}
+                    options={[
+                      { value: 'WAREHOUSE', label: t('stock.locations.type.WAREHOUSE') },
+                      { value: 'AMAZON_FBA', label: t('stock.locations.type.AMAZON_FBA') },
+                    ]} />
                 </div>
               </>
             )}

@@ -9,6 +9,7 @@
 // breakdown lives in Commit 4.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
 import {
   VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit,
   DensityToggle as SharedDensityToggle, AutoRefreshSelect, BulkActionShell,
@@ -3128,16 +3129,8 @@ function AdjustPanel({ stockLevelId, locationCode, onCancel, onDone }: { stockLe
           aria-label={t('stock.bulkAdjust.changeLabel')}
           className="h-11 sm:h-8 w-24 px-2 text-md border border-default dark:border-slate-700 rounded font-mono tabular-nums"
         />
-        <select
-          value={subReason}
-          onChange={(e) => setSubReason(e.target.value as AdjustSubReason)}
-          aria-label={t('stock.adjust.reasonAriaLabel')}
-          className="h-11 sm:h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 min-w-[140px]"
-        >
-          {SUB_REASON_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
-          ))}
-        </select>
+        <Listbox value={subReason} onChange={(v) => setSubReason(v as AdjustSubReason)} ariaLabel={t('stock.adjust.reasonAriaLabel')} className="min-w-[140px]"
+          options={SUB_REASON_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))} />
         <input
           type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
           placeholder={t('stock.adjust.notesPlaceholder')}
@@ -3185,17 +3178,11 @@ function TransferPanel({
         <ArrowRightLeft size={11} aria-hidden="true" /> {t('stock.transfer.heading')}
       </div>
       <div className="flex items-center gap-2">
-        <select value={fromId} onChange={(e) => setFromId(e.target.value)} aria-label={t('stock.transfer.fromLabel')} className="h-11 sm:h-8 flex-1 px-2 text-base border border-default dark:border-slate-700 rounded">
-          {stockLevels.map((sl) => (
-            <option key={sl.id} value={sl.location.id}>{t('stock.transfer.fromOption', { code: sl.location.code, avail: sl.available })}</option>
-          ))}
-        </select>
+        <Listbox value={fromId} onChange={setFromId} ariaLabel={t('stock.transfer.fromLabel')} className="flex-1"
+          options={stockLevels.map((sl) => ({ value: sl.location.id, label: t('stock.transfer.fromOption', { code: sl.location.code, avail: sl.available }) }))} />
         <ArrowRightLeft size={12} className="text-tertiary" aria-hidden="true" />
-        <select value={toId} onChange={(e) => setToId(e.target.value)} aria-label={t('stock.transfer.toLabel')} className="h-11 sm:h-8 flex-1 px-2 text-base border border-default dark:border-slate-700 rounded">
-          {stockLevels.map((sl) => (
-            <option key={sl.id} value={sl.location.id}>{t('stock.transfer.toOption', { code: sl.location.code })}</option>
-          ))}
-        </select>
+        <Listbox value={toId} onChange={setToId} ariaLabel={t('stock.transfer.toLabel')} className="flex-1"
+          options={stockLevels.map((sl) => ({ value: sl.location.id, label: t('stock.transfer.toOption', { code: sl.location.code }) }))} />
         <input
           type="number" value={qty} onChange={(e) => setQty(e.target.value)}
           placeholder={t('stock.transfer.qtyPlaceholder')}
@@ -3248,16 +3235,14 @@ function ReservePanel({
         <LockIcon size={11} aria-hidden="true" /> {t('stock.reserve.heading')}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <select value={locId} onChange={(e) => setLocId(e.target.value)} aria-label={t('stock.reserve.locationLabel')} className="h-11 sm:h-8 px-2 text-base border border-default dark:border-slate-700 rounded">
-          {stockLevels.map((sl) => (
-            <option key={sl.id} value={sl.location.id}>{t('stock.reserve.locationOption', { code: sl.location.code, avail: sl.available })}</option>
-          ))}
-        </select>
-        <select value={reason} onChange={(e) => setReason(e.target.value as any)} aria-label={t('stock.reserve.reasonLabel')} className="h-11 sm:h-8 px-2 text-base border border-default dark:border-slate-700 rounded">
-          <option value="MANUAL_HOLD">{t('stock.reserve.reasonOption.manualHold')}</option>
-          <option value="PENDING_ORDER">{t('stock.reserve.reasonOption.pendingOrder')}</option>
-          <option value="PROMOTION">{t('stock.reserve.reasonOption.promotion')}</option>
-        </select>
+        <Listbox value={locId} onChange={setLocId} ariaLabel={t('stock.reserve.locationLabel')}
+          options={stockLevels.map((sl) => ({ value: sl.location.id, label: t('stock.reserve.locationOption', { code: sl.location.code, avail: sl.available }) }))} />
+        <Listbox value={reason} onChange={(v) => setReason(v as 'PENDING_ORDER' | 'MANUAL_HOLD' | 'PROMOTION')} ariaLabel={t('stock.reserve.reasonLabel')}
+          options={[
+            { value: 'MANUAL_HOLD', label: t('stock.reserve.reasonOption.manualHold') },
+            { value: 'PENDING_ORDER', label: t('stock.reserve.reasonOption.pendingOrder') },
+            { value: 'PROMOTION', label: t('stock.reserve.reasonOption.promotion') },
+          ]} />
         <input
           type="number" value={qty} onChange={(e) => setQty(e.target.value)}
           placeholder={t('stock.reserve.qtyPlaceholder')}
@@ -4069,16 +4054,8 @@ function BulkAdjustModal({
           <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1" htmlFor="bulk-adjust-reason">
             {t('stock.bulkAdjust.reasonLabel')}
           </label>
-          <select
-            id="bulk-adjust-reason"
-            value={subReason}
-            onChange={(e) => setSubReason(e.target.value as AdjustSubReason)}
-            className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
-          >
-            {SUB_REASON_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
-            ))}
-          </select>
+          <Listbox value={subReason} onChange={(v) => setSubReason(v as AdjustSubReason)} ariaLabel={t('stock.bulkAdjust.reasonLabel')}
+            options={SUB_REASON_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))} />
         </div>
         <div>
           <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1" htmlFor="bulk-adjust-notes">
@@ -4180,20 +4157,8 @@ function BulkTransferModal({
           <label htmlFor="bulk-transfer-destination" className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">
             {t('stock.bulk.transferDest')}
           </label>
-          <select
-            id="bulk-transfer-destination"
-            value={toLocationId}
-            onChange={(e) => setToLocationId(e.target.value)}
-            aria-describedby="bulk-transfer-help"
-            className="w-full h-9 px-2 text-md border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
-          >
-            <option value="">{t('cycleCount.list.modal.locationPlaceholder')}</option>
-            {locations.map((l) => (
-              <option key={l.id} value={l.id} disabled={sourceIds.has(l.id)}>
-                {l.code} — {l.name} {sourceIds.has(l.id) ? t('stock.bulk.transferSourceTag') : ''}
-              </option>
-            ))}
-          </select>
+          <Listbox value={toLocationId} onChange={setToLocationId} ariaLabel={t('stock.bulk.transferDest')} placeholder={t('cycleCount.list.modal.locationPlaceholder')}
+            options={locations.map((l) => ({ value: l.id, label: `${l.code} — ${l.name}${sourceIds.has(l.id) ? ` ${t('stock.bulk.transferSourceTag')}` : ''}`, disabled: sourceIds.has(l.id) }))} />
           <div id="bulk-transfer-help" className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {t('stock.bulk.transferHelp')}
           </div>
