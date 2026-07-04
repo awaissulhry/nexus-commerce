@@ -56,7 +56,7 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
         <div key={i} className="h10-cd-card pad">
           <div className="eb-form-row" style={{ alignItems: 'flex-end', marginBottom: 10 }}>
             <div className="h10-cd-field s"><label>Ad group name <InfoTip tip="Structure for reporting and bid control — group keywords with a shared theme (e.g. one product family per group). Up to 500 groups per campaign." /></label>
-              <input value={g.name} onChange={(e) => setGroup(i, { name: e.target.value })} /></div>
+              <input type="text" value={g.name} onChange={(e) => setGroup(i, { name: e.target.value })} /></div>
             <div className="h10-cd-field s" style={{ maxWidth: 140 }}><label>Default bid € <InfoTip tip="Applies to keywords without their own bid. Every bid stays editable per keyword, here and after launch." /></label>
               <input type="number" min={0.02} step={0.01} value={g.defaultBidEur} onChange={(e) => setGroup(i, { defaultBidEur: e.target.value })} /></div>
             <span className="grow" style={{ flex: 1 }} />

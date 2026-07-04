@@ -84,9 +84,9 @@ export function TargetingStepGen({ plan, set }: { plan: CampaignPlan; set: (patc
           {rules.map((r, i) => (
             <div key={i} className="eb-form-row" style={{ alignItems: 'flex-end', marginBottom: 10 }}>
               <div className="h10-cd-field s"><label>Brands <InfoTip tip="Comma-separated; blank = any brand. Matches the listing's Brand aspect exactly as it appears on eBay." /></label>
-                <input value={r.brands.join(', ')} onChange={(e) => setRule(i, { brands: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="Xavia" /></div>
+                <input type="text" value={r.brands.join(', ')} onChange={(e) => setRule(i, { brands: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="Xavia" /></div>
               <div className="h10-cd-field s"><label>Category IDs <InfoTip tip="Comma-separated eBay category IDs; blank = any category. A listing's category ID shows on its detail page and in the listing index." /></label>
-                <input value={r.categoryIds.join(', ')} onChange={(e) => setRule(i, { categoryIds: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="177104" /></div>
+                <input type="text" value={r.categoryIds.join(', ')} onChange={(e) => setRule(i, { categoryIds: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="177104" /></div>
               <div className="h10-cd-field s" style={{ maxWidth: 120 }}><label>Min price € <InfoTip tip="Listing price floor for this rule; blank = no minimum." /></label>
                 <input type="number" min={0} value={r.minPrice} onChange={(e) => setRule(i, { minPrice: e.target.value })} /></div>
               <div className="h10-cd-field s" style={{ maxWidth: 120 }}><label>Max price € <InfoTip tip="Listing price ceiling for this rule; blank = no maximum." /></label>
