@@ -535,7 +535,7 @@ function EbayDeleteConfirmModal({
     >
       <p className="text-sm text-slate-700 dark:text-slate-300 mb-3">{mainText}</p>
       <Banner variant="warning">
-        The listing is removed from Nexus; end it on eBay manually in Seller Hub (auto-delist pending).
+        This permanently ends the live eBay listing and removes it from Nexus (Nexus record is recoverable; the eBay listing is not). If eBay can&apos;t be reached it stays live — end it manually in Seller Hub.
       </Banner>
     </Modal>
   )
@@ -923,13 +923,19 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       _ebay_swr.set(ebayKey, { rows: next, fetchedAt: Date.now() })
       latestSetRowsRef.current?.(next)
 
-      const deleted = json.results.filter((r) => !r.error).length
+      const succeeded = json.results.filter((r) => !r.error)
+      const deleted = succeeded.length
+      const delistedCount = succeeded.filter((r) => r.delisted).length
+      const notDelistedCount = deleted - delistedCount
       const label = deleted !== 1 ? 'items' : 'item'
-      const base = `Deleted ${deleted} ${label}; end the eBay listing${deleted !== 1 ? 's' : ''} manually in Seller Hub.`
-      if (warnCount > 0) {
+      if (notDelistedCount > 0) {
+        const base = `Deleted ${deleted} ${label} in Nexus — couldn't end ${notDelistedCount} on eBay (end manually in Seller Hub).`
+        toast({ title: base, tone: 'info' })
+      } else if (warnCount > 0) {
+        const base = `Deleted ${deleted} ${label} — eBay listing${deleted !== 1 ? 's' : ''} ended.`
         toast({ title: base, description: `${warnCount} item${warnCount !== 1 ? 's' : ''} had warnings — check the grid.`, tone: 'info' })
       } else {
-        toast.success(base)
+        toast.success(`Deleted ${deleted} ${label} — eBay listing${deleted !== 1 ? 's' : ''} ended.`)
       }
       setDeleteConfirmRows(null)
     } catch (err) {
@@ -1611,14 +1617,15 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         // imported row into canonical aspect_* fields using the parent's
         // variation_theme. Do this BEFORE stampUnderParent so the grid can render
         // the variant in the correct axis column immediately.
+        let importParentRow: BaseRow | undefined
         if (targetParentId) {
-          const parentRow = allRows.find(
+          importParentRow = allRows.find(
             (r) =>
               String((r as EbayRow)._productId ?? (r as EbayRow).platformProductId ?? r._rowId) ===
               targetParentId,
           )
           const axes = parseThemeAxes(
-            parentRow ? String((parentRow as EbayRow).variation_theme ?? '') : '',
+            importParentRow ? String((importParentRow as EbayRow).variation_theme ?? '') : '',
           )
           for (const axis of axes) {
             const val =
@@ -1635,7 +1642,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             }
           }
         }
-        const newRow = targetParentId ? stampUnderParent(baseRow, targetParentId) : baseRow
+        const newRow = targetParentId
+          ? stampUnderParent(baseRow, targetParentId, String((importParentRow as EbayRow | undefined)?.sku ?? ''))
+          : baseRow
         next.push(newRow as BaseRow)
         added++
       }
@@ -1772,7 +1781,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                   size="sm"
                   disabled={!moveTargetId}
                   onClick={() => {
-                    const next = pinBlankRowsLast(moveRowsToParent(rows, selectedRows, moveTargetId))
+                    const moveTargetSku = sheetParents.find((p) => p.id === moveTargetId)?.sku ?? ''
+                    const next = pinBlankRowsLast(moveRowsToParent(rows, selectedRows, moveTargetId, moveTargetSku))
                     pushHistory(next)
                     setRows(next)
                     setMoveParentOpen(false)
@@ -1853,7 +1863,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
               size="sm"
               variant="secondary"
               onClick={() => setDeleteConfirmRows(deletable)}
-              title="Delete selected rows from Nexus (soft-delete) — end the eBay listings manually in Seller Hub"
+              title="Delete selected rows — ends live eBay listing(s) permanently"
               className="text-danger-600 hover:text-danger-700 border-danger-200 hover:border-danger-300 dark:text-danger-400 dark:border-danger-800"
             >
               <Trash2 className="w-3.5 h-3.5 mr-1.5" />
@@ -2365,7 +2375,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
               <button
                 onClick={(e) => { e.stopPropagation(); setDeleteConfirmRows([er]) }}
                 onPointerDown={(e) => e.stopPropagation()}
-                title="Delete this row from Nexus (soft-delete) — end the listing on eBay separately in Seller Hub"
+                title="Delete this row — ends the live eBay listing permanently"
                 className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] leading-none transition-colors text-red-500 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/40"
               >
                 <Trash2 className="h-2.5 w-2.5" />

@@ -10,9 +10,11 @@ describe('moveRowsToParent', () => {
     const rows: MoveableRow[] = [
       mkRow({ _rowId: 'r1', _isParent: false, platformProductId: 'old-parent', _productId: 'p-r1' }),
     ]
-    const result = moveRowsToParent(rows, new Set(['r1']), 'new-parent')
+    const result = moveRowsToParent(rows, new Set(['r1']), 'new-parent', 'PARENT-SKU')
     expect(result[0].platformProductId).toBe('new-parent')
     expect(result[0]._isParent).toBe(false)
+    expect(result[0].parentage).toBe('child')
+    expect(result[0].parent_sku).toBe('PARENT-SKU')
     expect(result[0]._dirty).toBe(true)
   })
 
@@ -69,13 +71,15 @@ describe('moveRowsToParent', () => {
 })
 
 describe('detachRowsToStandalone', () => {
-  it('(a) selected child with parent link → clears platformProductId and marks dirty', () => {
+  it('(a) selected child with parent link → clears platformProductId, parentage, parent_sku and marks dirty', () => {
     const rows: MoveableRow[] = [
       mkRow({ _rowId: 'r1', _isParent: false, platformProductId: 'parent-123', _productId: 'p-r1' }),
     ]
     const result = detachRowsToStandalone(rows, new Set(['r1']))
     expect(result[0].platformProductId).toBe('')
     expect(result[0]._isParent).toBe(false)
+    expect(result[0].parentage).toBe('')
+    expect(result[0].parent_sku).toBe('')
     expect(result[0]._dirty).toBe(true)
   })
 

@@ -37,6 +37,8 @@ export interface VariantRowResult {
   sku: string
   _isParent: false
   platformProductId: string
+  parentage: 'child'
+  parent_sku: string
   [key: string]: unknown
 }
 
@@ -89,6 +91,8 @@ export function generateVariantRowsUnderParent(
       sku: varSku,
       _isParent: false,
       platformProductId: parentId,
+      parentage: 'child' as const,
+      parent_sku: parentSku,
       ...Object.fromEntries(
         axes.map((axis) => [`aspect_${axis.toLowerCase()}`, valueMap[axis]]),
       ),

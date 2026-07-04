@@ -17,6 +17,8 @@ describe('generateVariantRowsUnderParent', () => {
     for (const row of rows) {
       expect(row._isParent).toBe(false)
       expect(row.platformProductId).toBe('P')
+      expect(row.parentage).toBe('child')
+      expect(row.parent_sku).toBe('JKT')
       expect(row._isNew).toBe(true)
       expect(row._dirty).toBe(true)
       expect(row._status).toBe('idle')

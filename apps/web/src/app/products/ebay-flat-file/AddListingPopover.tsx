@@ -180,8 +180,9 @@ export function AddListingPopover({ categoryAxisNames = [], existingParents, onC
       _status: 'idle',
       sku: parentSku,
       _isParent: true,
+      parentage: 'parent',
       variation_theme: selectedAxes.join(','),
-    } as EbayRow & { variation_theme: string }
+    } as EbayRow & { variation_theme: string; parentage: string }
 
     const variantRows: EbayRow[] = combinations.map((combo, i) => {
       const valueMap: Record<string, string> = {}
@@ -195,6 +196,8 @@ export function AddListingPopover({ categoryAxisNames = [], existingParents, onC
         sku: varSku,
         _isParent: false,
         platformProductId: parentRowId,
+        parentage: 'child',
+        parent_sku: parentSku,
         // carry axis values as aspects (flat-file will map them to the right columns)
         ...Object.fromEntries(
           selectedAxes.map((axis) => [`aspect_${axis.toLowerCase()}`, valueMap[axis]]),
