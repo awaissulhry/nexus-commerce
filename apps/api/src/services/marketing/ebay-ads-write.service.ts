@@ -51,6 +51,21 @@ function chunk<T>(arr: T[], n = CHUNK): T[][] {
   return out
 }
 
+/** EV3 — scheduled start: YYYY-MM-DD ≥ today (UTC midnight), floored to
+ *  "not earlier than the call" (eBay rejects a startDate in the past —
+ *  picking today clamps to now). Blank/undefined ⇒ launch now. */
+export function resolveStartDate(startDate?: string, now = new Date()): { start: Date; scheduled: boolean } {
+  let start = now
+  if (startDate != null && startDate !== '') {
+    const d = new Date(`${startDate}T00:00:00Z`)
+    if (Number.isNaN(d.getTime())) throw new Error('startDate must be an ISO date (YYYY-MM-DD)')
+    const todayUtc = new Date(now); todayUtc.setUTCHours(0, 0, 0, 0)
+    if (d.getTime() < todayUtc.getTime()) throw new Error('startDate cannot be in the past')
+    start = new Date(Math.max(d.getTime(), now.getTime()))
+  }
+  return { start, scheduled: start.getTime() > now.getTime() + 60_000 }
+}
+
 export function validateRatePct(rate: number): string | null {
   if (!Number.isFinite(rate)) return 'rate is not a number'
   if (rate < 2 || rate > 100) return 'ad rate must be between 2% and 100% (eBay bounds)'
@@ -240,6 +255,9 @@ export interface CreateCampaignInput {
   maxCpcCents?: number
   selectionRules?: unknown[]
   autoSelectFutureInventory?: boolean
+  /** EV3 — scheduled start (YYYY-MM-DD, ≥ today). Omit = launch now.
+   *  A future date creates the campaign as SCHEDULED on eBay. */
+  startDate?: string
 }
 
 export async function createCampaign(ctx: OpContext, input: CreateCampaignInput) {
@@ -261,6 +279,7 @@ export async function createCampaign(ctx: OpContext, input: CreateCampaignInput)
   if (!isCps && input.targetingType === 'SMART' && (input.maxCpcCents == null || input.maxCpcCents < 2)) {
     throw new Error('a Smart Priority campaign requires maxCpc (≥ €0.02)')
   }
+  const { start, scheduled } = resolveStartDate(input.startDate)
 
   const decision = gate(input.marketplace, input.dailyBudgetCents ?? 0)
   const conn = await prisma.channelConnection.findFirstOrThrow({ where: { channelType: 'EBAY', isActive: true }, select: { id: true } })
@@ -272,7 +291,7 @@ export async function createCampaign(ctx: OpContext, input: CreateCampaignInput)
     const payload: CreateCampaignPayload = {
       campaignName: input.name,
       marketplaceId: input.marketplace,
-      startDate: new Date().toISOString(),
+      startDate: start.toISOString(),
       channels: input.channels?.length ? input.channels : ['ON_SITE'],
       fundingStrategy: isCps
         ? {
@@ -315,8 +334,8 @@ export async function createCampaign(ctx: OpContext, input: CreateCampaignInput)
       bidPercentage: isCps && input.adRateStrategy !== 'DYNAMIC' ? String(input.ratePct) : null,
       dailyBudget: !isCps ? (input.dailyBudgetCents! / 100).toFixed(2) : null,
       budgetCurrency: 'EUR',
-      status: decision.mode === 'live' ? 'RUNNING' : 'DRAFT',
-      startDate: new Date(),
+      status: decision.mode === 'live' ? (scheduled ? 'SCHEDULED' : 'RUNNING') : 'DRAFT',
+      startDate: start,
     },
   })
   await audit({ ctx, actionType: 'create_campaign', entityType: 'CAMPAIGN', entityId: externalCampaignId, before: {}, after: input as unknown as object, mode: decision.mode, status: 'SUCCESS', responseId: externalCampaignId })
@@ -365,9 +384,24 @@ export async function promoteListings(ctx: OpContext, input: PromoteInput): Prom
   const toCreate: Array<{ listingId: string; ratePct?: number }> = []
   const warnings = new Map<string, string>()
 
+  // EV3 — DYNAMIC key-based CPS: eBay manages the rate daily under the
+  // campaign cap, so ads attach WITHOUT bidPercentage. The margin guardrail
+  // still runs — against the cap (the worst rate eBay may apply).
+  const dynamicCps = isCps && c.adRateStrategy === 'DYNAMIC'
+  const dynPrefs = c.dynamicAdRatePrefs as Array<{ adRateCapPercent?: string }> | null
+  const dynCapPct = dynamicCps && Array.isArray(dynPrefs) && Number.isFinite(Number(dynPrefs[0]?.adRateCapPercent)) ? Number(dynPrefs[0]!.adRateCapPercent) : null
+
   for (const item of input.items) {
     if (existing.has(item.listingId)) { results.push({ key: item.listingId, ok: true, mode: decision.mode, warning: 'already in this campaign — skipped' }); continue }
     if (!isCps) { toCreate.push({ listingId: item.listingId }); continue }
+    if (dynamicCps) {
+      const eco = be.get(item.listingId)
+      const guard = rateGuardrail(dynCapPct ?? 0, eco?.be ?? null, eco?.status ?? null, input.override)
+      if (dynCapPct != null && guard.blocked) { results.push({ key: item.listingId, ok: false, mode: decision.mode, blocked: `dynamic cap: ${guard.blocked}` }); continue }
+      toCreate.push({ listingId: item.listingId })
+      if (guard.warning) warnings.set(item.listingId, dynCapPct != null ? `dynamic cap: ${guard.warning}` : guard.warning)
+      continue
+    }
     const ratePct = item.ratePct ?? input.defaultRatePct ?? (c.bidPercentage != null ? Number(c.bidPercentage.toString()) : NaN)
     const invalid = validateRatePct(ratePct)
     if (invalid) { results.push({ key: item.listingId, ok: false, mode: decision.mode, error: invalid }); continue }
@@ -385,7 +419,7 @@ export async function promoteListings(ctx: OpContext, input: PromoteInput): Prom
     for (const batch of chunk(toCreate)) {
       live.push(...await bulkCreateAdsByListingIdApi(auth.token, c.externalCampaignId, batch.map((b) => (
         isCps
-          ? { listingId: b.listingId, bidPercentage: b.ratePct!.toFixed(1) }
+          ? { listingId: b.listingId, ...(b.ratePct != null ? { bidPercentage: b.ratePct.toFixed(1) } : {}) } // EV3 — dynamic ads carry no fixed rate
           : { listingId: b.listingId, ...(group ? { adGroupId: group.externalAdGroupId } : {}) } // ER4 E4
       ))))
     }
@@ -403,11 +437,11 @@ export async function promoteListings(ctx: OpContext, input: PromoteInput): Prom
         where: { campaignId_listingId: { campaignId: c.id, listingId: item.listingId } },
         create: {
           campaignId: c.id, marketplace: c.marketplace, listingId: item.listingId,
-          externalAdId: lr?.id ?? null, bidPercentage: isCps ? item.ratePct!.toFixed(1) : null,
+          externalAdId: lr?.id ?? null, bidPercentage: isCps && item.ratePct != null ? item.ratePct.toFixed(1) : null,
           adGroupId: group?.id ?? null, // ER4 E4 — MANUAL Priority ads live in their group
           status: decision.mode === 'live' ? 'ACTIVE' : 'SANDBOX', createdVia: 'CONSOLE',
         },
-        update: { ...(isCps ? { bidPercentage: item.ratePct!.toFixed(1) } : { adGroupId: group?.id ?? null }), externalAdId: lr?.id ?? undefined },
+        update: { ...(isCps ? { bidPercentage: item.ratePct != null ? item.ratePct.toFixed(1) : null } : { adGroupId: group?.id ?? null }), externalAdId: lr?.id ?? undefined },
       })
     }
     results.push({ key: item.listingId, ok, mode: decision.mode, id: lr?.id ?? null, error: lr?.error ?? null, warning: warnings.get(item.listingId) ?? null })

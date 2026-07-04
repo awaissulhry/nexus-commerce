@@ -39,6 +39,11 @@ export function GeneralWizard() {
     }
     if (w.step === 'listings') return includedListings(w.plan, w.listings).length ? [] : ['Stage at least one listing']
     if (w.step === 'rates') {
+      // EV3 — DYNAMIC: the cap is the only rate input; per-listing rates don't apply
+      if (w.plan.adRateStrategy === 'DYNAMIC') {
+        const cap = Number(w.plan.dynamicCapPct)
+        return cap >= 2 && cap <= 100 ? [] : ['Set the dynamic cap (2–100%)']
+      }
       const bad = includedListings(w.plan, w.listings).filter((l) => { const r = effRate(w.plan, l); return r == null || r < 2 || r > 100 })
       return bad.length ? [`${bad.length} listing(s) need a valid rate (2–100%)`] : []
     }

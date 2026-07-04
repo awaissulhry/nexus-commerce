@@ -45,24 +45,37 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
   const isRules = isGen && plan.targetingMode === 'rules'
   const included = includedListings(plan, listings)
   const selectedSeeds = plan.adGroups.flatMap((g) => g.seeds.filter((s) => s.on))
+  // EV3 — key-based DYNAMIC: no per-listing rates; the cap is the margin lever
+  const dynKey = isGen && !isRules && plan.adRateStrategy === 'DYNAMIC'
+  const dynCap = Number(plan.dynamicCapPct)
+  // stale names (group renamed/removed after selection) fall back to the first group
+  const validAttach = plan.adGroups.some((g) => g.name === plan.attachGroup) ? plan.attachGroup : ''
+  const attachName = validAttach || plan.adGroups[0]?.name || 'Default'
+  const todayISO = new Date().toISOString().slice(0, 10)
 
   // ── gaps (blocking) + advisories (acknowledge) ─────────────────────────
   const gaps: Array<{ text: string; step: string }> = []
   if (!plan.name.trim()) gaps.push({ text: 'Campaign name is required', step: 'setup' })
+  if (plan.startDate && plan.startDate < todayISO) gaps.push({ text: 'Start date is in the past — clear it (launch now) or pick a future date', step: 'setup' })
+  if (plan.startDate && plan.endDate && plan.endDate <= plan.startDate) gaps.push({ text: 'End date must be after the start date', step: 'setup' })
   if (isGen && !isRules && included.length === 0) gaps.push({ text: 'No listings staged — a key-based General campaign cannot launch empty', step: 'listings' })
   if (isRules && plan.criterion.rules.length === 0) gaps.push({ text: 'Rules-based targeting needs at least one selection rule', step: 'targeting' })
   if (isRules && !(Number(plan.campaignRatePct) >= 2 && Number(plan.campaignRatePct) <= 100)) gaps.push({ text: 'Campaign rate must be 2–100%', step: 'targeting' })
-  if (isGen && !isRules) {
+  if (dynKey && !(dynCap >= 2 && dynCap <= 100)) gaps.push({ text: 'Dynamic cap must be 2–100%', step: 'rates' })
+  if (dynKey && plan.rateDiscovery.on) gaps.push({ text: 'Rate Discovery applies to fixed rates — turn it off or switch back to Fixed', step: 'rates' })
+  if (isGen && !isRules && !dynKey) {
     const bad = included.filter((l) => { const r = effRate(plan, l); return r == null || r < 2 || r > 100 })
     if (bad.length) gaps.push({ text: `${bad.length} listing(s) have no valid rate (2–100%)`, step: 'rates' })
-    const unresolved = included.filter((l) => l.conflict && (plan.resolutions[l.itemId] ?? 'include') === 'include')
-    if (unresolved.length) gaps.push({ text: `${unresolved.length} conflicted listing(s) set to "include" — eBay rejects them (one listing = one General campaign)`, step: 'listings' })
     if (plan.rateDiscovery.on) {
       const d = plan.rateDiscovery
       if (!(Number(d.floorPct) >= 2 && Number(d.capPct) <= 100 && Number(d.floorPct) < Number(d.capPct) && Number(d.stepPct) > 0 && Number(d.dwellDays) >= 1)) {
         gaps.push({ text: 'Rate Discovery bounds invalid (2 ≤ floor < cap ≤ 100, step > 0, dwell ≥ 1 day)', step: 'rates' })
       }
     }
+  }
+  if (isGen && !isRules) {
+    const unresolved = included.filter((l) => l.conflict && (plan.resolutions[l.itemId] ?? 'include') === 'include')
+    if (unresolved.length) gaps.push({ text: `${unresolved.length} conflicted listing(s) set to "include" — eBay rejects them (one listing = one General campaign)`, step: 'listings' })
   }
   if (!isGen) {
     if (!(Number(plan.budgetEur) >= 1)) gaps.push({ text: 'Daily budget must be ≥ €1.00', step: 'budget' })
@@ -76,12 +89,17 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
     }
   }
 
-  const overBe = isGen && !isRules ? included.filter((l) => { const r = effRate(plan, l); return l.breakEvenPct != null && r != null && r > l.breakEvenPct }) : []
+  // dynamic: the CAP is the worst rate eBay may apply — same margin test
+  const overBe = isGen && !isRules
+    ? included.filter((l) => { const r = dynKey ? (Number.isFinite(dynCap) ? dynCap : null) : effRate(plan, l); return l.breakEvenPct != null && r != null && r > l.breakEvenPct })
+    : []
   const missingCost = isGen && !isRules ? included.filter((l) => l.breakEvenPct == null).length : 0
   const advisories: Array<{ key: string; text: string }> = []
   if (missingCost > 0) advisories.push({ key: 'missing-cost', text: `${missingCost} listing(s) have no cost data — rates fall back to defaults, margin unverified` })
   if (activeCampaigns >= 25) advisories.push({ key: 'sprawl', text: `${activeCampaigns} campaigns already running on this market — consider consolidating before adding more` })
-  if (overBe.length) advisories.push({ key: 'over-be', text: `${overBe.length} listing(s) priced ABOVE break-even — every attributed sale loses margin (a named override reason is collected at launch)` })
+  if (overBe.length) advisories.push({ key: 'over-be', text: dynKey
+    ? `${overBe.length} listing(s) break even BELOW the ${Number.isFinite(dynCap) ? `${dynCap}%` : ''} dynamic cap — on days eBay pushes the rate to the ceiling those sales lose margin (a named override reason is collected at launch)`
+    : `${overBe.length} listing(s) priced ABOVE break-even — every attributed sale loses margin (a named override reason is collected at launch)` })
   const unacked = advisories.filter((a) => a.key !== 'over-be' && !plan.acks.includes(a.key))
 
   const readiness = useMemo(() => {
@@ -106,12 +124,16 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
         goal,
         name: plan.name.trim(),
         marketplace: plan.marketplace,
+        startDate: plan.startDate || null, // EV3 — blank = launch now
         endDate: plan.endDate || null,
         ...(isGen
           ? isRules
             ? { adRateStrategy: plan.adRateStrategy, ratePct: Number(plan.campaignRatePct), ...(plan.adRateStrategy === 'DYNAMIC' ? { dynamicCapPct: Number(plan.dynamicCapPct) } : {}), criterion: { autoSelectFutureInventory: plan.criterion.autoSelectFutureInventory, selectionRules: plan.criterion.rules.map((r) => ({ ...(r.brands.length ? { brands: r.brands } : {}), ...(r.categoryIds.length ? { categoryIds: r.categoryIds, categoryScope: 'ITEM' } : {}), ...(r.minPrice !== '' ? { minPrice: Number(r.minPrice) } : {}), ...(r.maxPrice !== '' ? { maxPrice: Number(r.maxPrice) } : {}) })) }, items: [] }
-            : { items: listings.filter((l) => plan.selected.includes(l.itemId)).map((l) => ({ listingId: l.itemId, resolution: plan.resolutions[l.itemId] ?? 'include', ...(effRate(plan, l) != null ? { ratePct: effRate(plan, l)! } : {}) })), ...(plan.globalRate !== '' ? { ratePct: Number(plan.globalRate) } : {}), ...(plan.rateDiscovery.on ? { rateDiscovery: { floorPct: Number(plan.rateDiscovery.floorPct), capPct: Number(plan.rateDiscovery.capPct), stepPct: Number(plan.rateDiscovery.stepPct), dwellDays: Number(plan.rateDiscovery.dwellDays) } } : {}) }
-          : { targetingType: plan.type === 'priority-smart' ? 'SMART' : 'MANUAL', dailyBudgetCents: Math.round(Number(plan.budgetEur) * 100), ...(plan.type === 'priority-smart' ? { maxCpcCents: Math.round(Number(plan.maxCpcEur) * 100) } : {}), items: listings.filter((l) => plan.selected.includes(l.itemId)).map((l) => ({ listingId: l.itemId, resolution: 'include' as const })), ...(plan.type === 'priority-manual' ? { adGroups: plan.adGroups.filter((g) => g.seeds.some((s) => s.on)).map((g) => ({ name: g.name, defaultBidCents: Math.round(Number(g.defaultBidEur) * 100), keywords: g.seeds.filter((s) => s.on).map((s) => ({ text: s.text, matchType: s.matchType, bidCents: Math.round(Number(s.bidEur) * 100) })), negatives: g.negativesText.split('\n').map((l) => l.trim()).filter(Boolean).map((t) => ({ text: t, matchType: g.negMatch })) })) } : {}) }),
+            : dynKey
+              // EV3 — key-based DYNAMIC: ads attach without fixed rates; the cap is the strategy
+              ? { adRateStrategy: 'DYNAMIC' as const, dynamicCapPct: dynCap, items: listings.filter((l) => plan.selected.includes(l.itemId)).map((l) => ({ listingId: l.itemId, resolution: plan.resolutions[l.itemId] ?? 'include' })) }
+              : { items: listings.filter((l) => plan.selected.includes(l.itemId)).map((l) => ({ listingId: l.itemId, resolution: plan.resolutions[l.itemId] ?? 'include', ...(effRate(plan, l) != null ? { ratePct: effRate(plan, l)! } : {}) })), ...(plan.globalRate !== '' ? { ratePct: Number(plan.globalRate) } : {}), ...(plan.rateDiscovery.on ? { rateDiscovery: { floorPct: Number(plan.rateDiscovery.floorPct), capPct: Number(plan.rateDiscovery.capPct), stepPct: Number(plan.rateDiscovery.stepPct), dwellDays: Number(plan.rateDiscovery.dwellDays) } } : {}) }
+          : { targetingType: plan.type === 'priority-smart' ? 'SMART' : 'MANUAL', dailyBudgetCents: Math.round(Number(plan.budgetEur) * 100), ...(plan.type === 'priority-smart' ? { maxCpcCents: Math.round(Number(plan.maxCpcEur) * 100) } : {}), items: listings.filter((l) => plan.selected.includes(l.itemId)).map((l) => ({ listingId: l.itemId, resolution: 'include' as const })), ...(plan.type === 'priority-manual' ? { adGroups: plan.adGroups.filter((g) => g.seeds.some((s) => s.on)).map((g) => ({ name: g.name, defaultBidCents: Math.round(Number(g.defaultBidEur) * 100), keywords: g.seeds.filter((s) => s.on).map((s) => ({ text: s.text, matchType: s.matchType, bidCents: Math.round(Number(s.bidEur) * 100) })), negatives: g.negativesText.split('\n').map((l) => l.trim()).filter(Boolean).map((t) => ({ text: t, matchType: g.negMatch })) })), ...(validAttach ? { attachAdGroupName: validAttach } : {}) } : {}) }),
         rulePacks: plan.rulePacks,
         ...(overrideReason ? { override: { reason: overrideReason } } : {}),
       })
@@ -151,8 +173,10 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
           <span className="h10-pill ok">{plan.name || 'unnamed'}</span>
           <span className="h10-pill arch">{plan.type === 'general' ? (isRules ? 'General · rules-based' : 'General · key-based') : plan.type === 'priority-manual' ? 'Priority · manual' : 'Priority · smart'}</span>
           <span className="h10-pill arch">{plan.marketplace}</span>
+          {plan.startDate && <span className="h10-pill arch">scheduled — starts {plan.startDate}</span>}
           {plan.endDate && <span className="h10-pill warn">ends {plan.endDate}</span>}
-          {plan.rateDiscovery.on && isGen && !isRules && <span className="h10-pill ok">Rate Discovery {plan.rateDiscovery.floorPct}%→{plan.rateDiscovery.capPct}%</span>}
+          {dynKey && <span className="h10-pill ok">dynamic rate ≤ {plan.dynamicCapPct}%</span>}
+          {plan.rateDiscovery.on && isGen && !isRules && !dynKey && <span className="h10-pill ok">Rate Discovery {plan.rateDiscovery.floorPct}%→{plan.rateDiscovery.capPct}%</span>}
           <span className="grow" style={{ flex: 1 }} />
           <span title={readiness.fixes.join('\n') || 'Ready'} style={{ fontSize: 12.5, fontWeight: 700, color: readiness.score >= 80 ? '#12855f' : readiness.score >= 50 ? '#b87503' : '#e5484d' }}>
             Launch readiness {readiness.score}/100
@@ -162,15 +186,33 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
           <button type="button" className="h10-am-link" onClick={() => goTo('setup')}>edit setup</button>
           {isRules && <button type="button" className="h10-am-link" onClick={() => goTo('targeting')}>edit rules ({plan.criterion.rules.length}, auto-select {plan.criterion.autoSelectFutureInventory ? 'ON' : 'off'})</button>}
           {isGen && !isRules && <button type="button" className="h10-am-link" onClick={() => goTo('listings')}>edit listings ({included.length} staged)</button>}
-          {isGen && !isRules && <button type="button" className="h10-am-link" onClick={() => goTo('rates')}>edit rates</button>}
-          {!isGen && <button type="button" className="h10-am-link" onClick={() => goTo('listings')}>edit listings ({included.length} staged{plan.type === 'priority-manual' && included.length > 0 ? ` → ad group “${plan.adGroups[0]?.name ?? 'Default'}”` : ''})</button>}
+          {isGen && !isRules && <button type="button" className="h10-am-link" onClick={() => goTo('rates')}>{dynKey ? `edit rate strategy (dynamic ≤ ${plan.dynamicCapPct}%)` : 'edit rates'}</button>}
+          {!isGen && <button type="button" className="h10-am-link" onClick={() => goTo('listings')}>edit listings ({included.length} staged{plan.type === 'priority-manual' && included.length > 0 ? ` → ad group “${attachName}”` : ''})</button>}
+          {plan.type === 'priority-manual' && included.length > 0 && plan.adGroups.length > 1 && (
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              attach staged listings to
+              <select className="h10-cd-input eb-resolve" value={attachName} onChange={(e) => set({ attachGroup: e.target.value })}>
+                {plan.adGroups.map((g) => <option key={g.name} value={g.name}>{g.name}</option>)}
+              </select>
+            </label>
+          )}
           {plan.type === 'priority-manual' && <button type="button" className="h10-am-link" onClick={() => goTo('keywords')}>edit keywords ({selectedSeeds.length} across {plan.adGroups.length} group(s))</button>}
           {!isGen && <button type="button" className="h10-am-link" onClick={() => goTo('budget')}>edit budget ({money(Math.round(Number(plan.budgetEur || '0') * 100))}/day{plan.type === 'priority-smart' ? ` · max CPC ${money(Math.round(Number(plan.maxCpcEur || '0') * 100))}` : ''})</button>}
         </div>
       </div>
 
-      {/* rates summary (GEN key-based, editable in place) */}
-      {isGen && !isRules && included.length > 0 && (
+      {/* dynamic-rate summary (GEN key-based DYNAMIC — no per-listing rates to edit) */}
+      {dynKey && included.length > 0 && (
+        <div className="h10-cd-card pad">
+          <span className="eb-be-hint">
+            <b>{included.length}</b> listing(s) attach <b>without fixed rates</b> — eBay applies its daily suggested rate per listing, hard-capped at <b>{Number.isFinite(dynCap) ? `${dynCap}%` : '—'}</b>.
+            {overBe.length > 0 ? <> {overBe.length} costed listing(s) break even below the cap — the launch collects a named override for those.</> : <> Every costed listing breaks even above the cap.</>}
+          </span>
+        </div>
+      )}
+
+      {/* rates summary (GEN key-based FIXED, editable in place) */}
+      {isGen && !isRules && !dynKey && included.length > 0 && (
         <div className="h10-am-card">
           <div className="h10-am-toolbar"><span className="cnt"><b>{included.length}</b> listing(s) · projected ≈ <b>{money(included.reduce((a, l) => { const r = effRate(plan, l); return a + (r != null ? Math.round(l.trailingSales30dCents * (r / 100)) : 0) }, 0))}</b>/month</span></div>
           <div className="h10-am-grid" style={{ maxHeight: 260 }}>
@@ -230,8 +272,8 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
         {gaps.length === 0 && advisories.length === 0 && <p className="eb-be-hint">All checks green.</p>}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
           <span style={{ fontSize: 12.5, color: '#5b6573' }}>
-            Will create: <b>1 campaign</b>
-            {isGen && !isRules ? <>, <b>{included.length} ads</b></> : null}
+            Will create: <b>1 {plan.startDate ? 'scheduled campaign' : 'campaign'}</b>
+            {isGen && !isRules ? <>, <b>{included.length} ads{dynKey ? ' (dynamic rates)' : ''}</b></> : null}
             {isRules ? <>, <b>rules-based selection ({plan.criterion.rules.length} rule(s))</b></> : null}
             {plan.type === 'priority-manual' ? <>, <b>{plan.adGroups.filter((g) => g.seeds.some((s) => s.on)).length} ad group(s) + {selectedSeeds.length} keywords</b></> : null}
             , <b>{plan.rulePacks.length} rule binding(s)</b>
@@ -248,8 +290,8 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
       <OverrideReasonModal
         open={overrideOpen}
         onClose={() => setOverrideOpen(false)}
-        title="Rates above break-even"
-        blockedItems={overBe.map((l) => `${l.title ?? l.itemId} → ${effRate(plan, l)}% (break-even ${l.breakEvenPct}%)`)}
+        title={dynKey ? 'Dynamic cap above break-even' : 'Rates above break-even'}
+        blockedItems={overBe.map((l) => `${l.title ?? l.itemId} → ${dynKey ? `cap ${dynCap}` : effRate(plan, l)}% (break-even ${l.breakEvenPct}%)`)}
         onSubmit={async (reason) => { setOverrideOpen(false); await launch(reason) }}
       />
     </div>

@@ -16,6 +16,7 @@ export interface CampaignPlan {
   template: string | null
   // ① setup
   name: string
+  startDate: string // EV3 — '' = launch now; a future date creates SCHEDULED
   endDate: string
   // ② targeting (GEN) / structure (PRI-manual) / max cpc (PRI-smart)
   targetingMode: 'key' | 'rules'
@@ -28,6 +29,7 @@ export interface CampaignPlan {
   // ③ listings
   selected: string[]
   resolutions: Record<string, 'include' | 'skip' | 'move'>
+  attachGroup: string // EV3 — MANUAL Priority: ad group receiving the staged listings ('' = first)
   // ④ rates / budget
   perRate: Record<string, string>
   globalRate: string
@@ -40,16 +42,20 @@ export interface CampaignPlan {
 
 export const emptyGroup = (): PlanAdGroup => ({ name: 'Default', defaultBidEur: '0.30', seeds: [], negativesText: '', negMatch: 'EXACT' })
 
+/** Markets where eBay serves suggested/trending rates + keyword bid
+ *  suggestions (both APIs share this list; IT/FR/ES honestly excluded). */
+export const SUGGEST_MARKETS = new Set(['EBAY_AU', 'EBAY_DE', 'EBAY_GB', 'EBAY_US'])
+
 export function newPlan(type: WizardType, marketplace: string, template: string | null): CampaignPlan {
   return {
     v: 1, type, marketplace, template,
-    name: '', endDate: template === 'clearance' ? new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10) : '',
+    name: '', startDate: '', endDate: template === 'clearance' ? new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10) : '',
     targetingMode: template === 'catch_all' ? 'rules' : 'key',
     criterion: { autoSelectFutureInventory: template === 'catch_all', rules: [] },
     adRateStrategy: 'FIXED', campaignRatePct: '', dynamicCapPct: '10',
     adGroups: [emptyGroup()],
     maxCpcEur: '0.40',
-    selected: [], resolutions: {},
+    selected: [], resolutions: {}, attachGroup: '',
     perRate: {}, globalRate: '',
     rateDiscovery: { on: false, floorPct: '2', capPct: '8', stepPct: '1', dwellDays: '7' },
     budgetEur: '5.00',

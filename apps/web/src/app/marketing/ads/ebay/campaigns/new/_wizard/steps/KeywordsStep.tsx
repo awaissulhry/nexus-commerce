@@ -1,17 +1,21 @@
 'use client'
 
 /**
- * ER2 — step ④ Keywords & Bids (Priority manual): per-ad-group keyword
- * baskets on the KeywordTargetingPanel PATTERN (§PL-8): tabs = Mined seeds
- * (our titles+aspects miner) / Enter keywords; suggested bids on demand
- * (post-launch API needs a group, so pre-launch we show BE-CPC context);
- * negatives per group; multi-group via "+ Ad group".
+ * EV3 — step ④ Keywords & Bids (Priority manual) on the section pattern:
+ * per-ad-group keyword baskets (tabs = Mined seeds from our titles+aspects
+ * miner / Enter keywords), negatives per group, multi-group via "+ Ad group".
+ * eBay's suggest_bids API is campaign-scoped — it CANNOT answer pre-launch
+ * (verified in ER1), so bids here anchor on our mined defaults and the
+ * campaign's Keywords tab serves eBay's suggestions after launch
+ * (AU/DE/GB/US only — stated honestly for the rest).
  */
 import { useState } from 'react'
+import { InfoTip } from '../../../../../campaigns/InfoTip'
 import { postEbayAds } from '../../../../_lib'
-import { emptyGroup, type CampaignPlan, type PlanAdGroup, type Seed } from '../plan'
+import { emptyGroup, SUGGEST_MARKETS, type CampaignPlan, type PlanAdGroup, type Seed } from '../plan'
 
 export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: Partial<CampaignPlan>) => void }) {
+  const suggestAvailable = SUGGEST_MARKETS.has(plan.marketplace)
   const [tab, setTab] = useState<Record<number, 'mined' | 'enter'>>({})
   const [entry, setEntry] = useState<Record<number, string>>({})
   const [mining, setMining] = useState(false)
@@ -39,13 +43,21 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <section className="h10-spw-sec" style={{ maxWidth: 980 }}>
+      <h2>Ad groups, keywords &amp; bids</h2>
+      <p>
+        Keywords live under ad groups; each group carries a default bid and its own negatives.{' '}
+        {suggestAvailable
+          ? "eBay's per-keyword suggested bids unlock on the campaign's Keywords tab after launch (the suggest-bids API needs an existing campaign)."
+          : `eBay has no keyword bid-suggestion API for ${plan.marketplace.replace('EBAY_', 'eBay ')} (AU/DE/GB/US only) — the mined defaults below come from your own data.`}
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {plan.adGroups.map((g, i) => (
         <div key={i} className="h10-cd-card pad">
           <div className="eb-form-row" style={{ alignItems: 'flex-end', marginBottom: 10 }}>
-            <div className="h10-cd-field s"><label>Ad group name</label>
+            <div className="h10-cd-field s"><label>Ad group name <InfoTip tip="Structure for reporting and bid control — group keywords with a shared theme (e.g. one product family per group). Up to 500 groups per campaign." /></label>
               <input value={g.name} onChange={(e) => setGroup(i, { name: e.target.value })} /></div>
-            <div className="h10-cd-field s" style={{ maxWidth: 140 }}><label>Default bid €</label>
+            <div className="h10-cd-field s" style={{ maxWidth: 140 }}><label>Default bid € <InfoTip tip="Applies to keywords without their own bid. Every bid stays editable per keyword, here and after launch." /></label>
               <input type="number" min={0.02} step={0.01} value={g.defaultBidEur} onChange={(e) => setGroup(i, { defaultBidEur: e.target.value })} /></div>
             <span className="grow" style={{ flex: 1 }} />
             {plan.adGroups.length > 1 && <button type="button" className="h10-am-btn sm" onClick={() => set({ adGroups: plan.adGroups.filter((_, j) => j !== i) })}>Remove group</button>}
@@ -110,6 +122,7 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
       ))}
       <div><button type="button" className="h10-am-btn" onClick={() => set({ adGroups: [...plan.adGroups, { ...emptyGroup(), name: `Group ${plan.adGroups.length + 1}` }] })}>+ Ad group</button>
         <span className="eb-be-hint" style={{ marginLeft: 10 }}>eBay allows up to 500 groups; 1,000 keywords + 1,000 negatives per group.</span></div>
-    </div>
+      </div>
+    </section>
   )
 }

@@ -44,16 +44,17 @@ export function SetupStep({ plan, set, suggestedName, onMarketChange }: {
 
       <section className="h10-spw-sec">
         <h2>Schedule</h2>
-        <p>Campaigns start on launch; the end date is optional and stays editable on the Details tab.</p>
+        <p>Blank start = the campaign goes live the moment you launch; a future date schedules it. The end date is optional and stays editable on the Details tab.</p>
         <div className="h10-cd-card pad">
           <div className="eb-form-row">
             <div className="h10-cd-field s">
-              <label>Start <InfoTip tip="Launches immediately on eBay. A scheduled start is on the roadmap (the eBay API supports it) — until then, launch when ready." /></label>
-              <input className="h10-cd-input" value="now (on launch)" disabled />
+              <label>Start date <InfoTip tip="Blank = launches immediately. A future date creates the campaign as SCHEDULED on eBay — it activates by itself on that date and can still be edited or ended before then." /></label>
+              <input className="h10-cd-input" type="date" min={new Date().toISOString().slice(0, 10)} value={plan.startDate} onChange={(e) => set({ startDate: e.target.value })} />
+              {plan.startDate && <button type="button" className="h10-am-link" style={{ marginTop: 6, fontSize: 12 }} onClick={() => set({ startDate: '' })}>clear — start on launch</button>}
             </div>
             <div className="h10-cd-field s">
               <label>End date <InfoTip tip="Blank = never expires. ENDED is terminal on eBay — a campaign cannot be un-ended (clone it instead)." /></label>
-              <input className="h10-cd-input" type="date" min={new Date().toISOString().slice(0, 10)} value={plan.endDate} onChange={(e) => set({ endDate: e.target.value })} />
+              <input className="h10-cd-input" type="date" min={plan.startDate || new Date().toISOString().slice(0, 10)} value={plan.endDate} onChange={(e) => set({ endDate: e.target.value })} />
             </div>
           </div>
           {plan.template === 'clearance' && <p className="eb-be-hint" style={{ marginTop: 10 }}>Clear-stock template pre-set a 30-day end date — clearance campaigns should not run forever. Editable.</p>}

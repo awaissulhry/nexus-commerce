@@ -909,6 +909,8 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     goal: string; name: string; marketplace: string
     ratePct?: number; dailyBudgetCents?: number; maxCpcCents?: number; targetingType?: 'MANUAL' | 'SMART'
     endDate?: string | null
+    startDate?: string | null // EV3 — scheduled start (YYYY-MM-DD); omit/blank = launch now
+    attachAdGroupName?: string // EV3 — MANUAL Priority: which ad group receives the staged listings (default: first created)
     items: Array<{ listingId: string; ratePct?: number; resolution?: 'include' | 'skip' | 'move' }>
     keywords?: Array<{ text: string; matchType: string; bidCents?: number }>
     // ER2 additive fields (SPEC §6.1)
@@ -939,6 +941,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       name: b.name,
       marketplace: b.marketplace,
       fundingModel: def.strategy === 'CPS' ? 'COST_PER_SALE' : 'COST_PER_CLICK',
+      ...(b.startDate ? { startDate: b.startDate } : {}), // EV3 — scheduled start
       ...(def.strategy === 'CPS'
         ? (b.adRateStrategy === 'DYNAMIC'
           ? { adRateStrategy: 'DYNAMIC' as const, dynamicCapPct: b.dynamicCapPct ?? 10, ratePct: b.ratePct ?? def.fallbackRatePct }
@@ -1011,13 +1014,15 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     // 3b'. ER4 E4 — PRI listing-attach: included listings become ads. Smart
-    // Priority attaches at campaign level; MANUAL attaches into the FIRST
-    // created ad group (stated on the Review step). No group ⇒ honest error
-    // in the results instead of silently dropping the listings.
+    // Priority attaches at campaign level; MANUAL attaches into the chosen
+    // ad group (EV3: attachAdGroupName from the Review step; fallback = the
+    // first created group). No group ⇒ honest error in the results instead
+    // of silently dropping the listings.
     if (def.strategy === 'CPC' && include.length) {
       try {
         const campRow = await prisma.ebayCampaign.findUniqueOrThrow({ where: { id: created.campaignId }, select: { campaignTargetingType: true } })
-        const firstGroupId = groupResults.find((g) => g.adGroupId)?.adGroupId
+        const firstGroupId = (b.attachAdGroupName ? groupResults.find((g) => g.adGroupId && g.name === b.attachAdGroupName)?.adGroupId : undefined)
+          ?? groupResults.find((g) => g.adGroupId)?.adGroupId
         const out = await writesSvc.promoteListings(ctx, {
           campaignId: created.campaignId,
           items: include.map((i) => ({ listingId: i.listingId })),

@@ -25,7 +25,9 @@ export function useWizard(type: WizardType, opts: { strategy: 'CPS' | 'CPC'; goa
     const template = params.get('template')
     const market = params.get('market') ?? 'EBAY_IT'
     const draft = loadDraft(type, market)
-    if (draft && !template) { setPlan(draft); setResume({ savedAt: draft.savedAt }) }
+    // EV3 — merge over fresh defaults so drafts saved before new plan fields
+    // existed hydrate them ('' defaults) instead of leaving undefined
+    if (draft && !template) { setPlan({ ...newPlan(type, market, draft.template), ...draft }); setResume({ savedAt: draft.savedAt }) }
     else setPlan(newPlan(type, market, template))
     hydrated.current = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -51,7 +53,7 @@ export function useWizard(type: WizardType, opts: { strategy: 'CPS' | 'CPC'; goa
 
   const changeMarket = useCallback((m: string) => {
     // re-derive: listing selections don't carry across markets
-    setPlan((p) => ({ ...newPlan(type, m, p.template), name: p.name, endDate: p.endDate }))
+    setPlan((p) => ({ ...newPlan(type, m, p.template), name: p.name, startDate: p.startDate, endDate: p.endDate }))
   }, [type])
 
   const go = useCallback((key: string) => {

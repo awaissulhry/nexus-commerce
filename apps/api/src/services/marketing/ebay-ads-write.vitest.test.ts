@@ -1,7 +1,31 @@
-/** E4 — pure guardrail + validation + CSV parsing tests. */
+/** E4 — pure guardrail + validation + CSV parsing tests (+ EV3 scheduling). */
 import { describe, it, expect } from 'vitest'
-import { rateGuardrail, validateRatePct } from './ebay-ads-write.service.js'
+import { rateGuardrail, resolveStartDate, validateRatePct } from './ebay-ads-write.service.js'
 import { parseAdsOpsCsv } from './ebay-ads-csv.service.js'
+
+describe('resolveStartDate (EV3 — scheduled campaign start)', () => {
+  const now = new Date('2026-07-04T15:30:00Z')
+  it('blank/undefined ⇒ launch now, not scheduled', () => {
+    expect(resolveStartDate(undefined, now)).toEqual({ start: now, scheduled: false })
+    expect(resolveStartDate('', now)).toEqual({ start: now, scheduled: false })
+  })
+  it('a future date ⇒ that UTC midnight, scheduled', () => {
+    const r = resolveStartDate('2026-07-10', now)
+    expect(r.start.toISOString()).toBe('2026-07-10T00:00:00.000Z')
+    expect(r.scheduled).toBe(true)
+  })
+  it("today ⇒ clamps to now (eBay rejects a startDate earlier than the call), not scheduled", () => {
+    const r = resolveStartDate('2026-07-04', now)
+    expect(r.start.getTime()).toBe(now.getTime())
+    expect(r.scheduled).toBe(false)
+  })
+  it('a past date throws', () => {
+    expect(() => resolveStartDate('2026-07-03', now)).toThrow(/cannot be in the past/)
+  })
+  it('garbage throws', () => {
+    expect(() => resolveStartDate('next tuesday', now)).toThrow(/ISO date/)
+  })
+})
 
 describe('validateRatePct (verified eBay bounds 2–100%)', () => {
   it('accepts in-range, rejects out-of-range', () => {
