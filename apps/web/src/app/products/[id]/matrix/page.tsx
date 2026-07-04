@@ -4,23 +4,21 @@
  * Shows the parent product's children laid out as a matrix on the
  * product's own variation axes (e.g. Color × Size). Built for catalog
  * managers who think in 2D grids rather than per-row tables.
- * (CL.1 removed the standalone /edit/bulk per-row editor — MatrixTab
- * on /products/[id]/edit covers price/qty bulk edits inline; channel
- * sub-tabs handle per-marketplace attribute editing.)
  *
- * Server fetches parent + children. Client renders:
- *   - 1 axis  → flat table (rows = variants)
- *   - 2 axes  → pivot grid (rows × cols, each cell = one child SKU)
- *   - 3+ axes → flat table with every axis as a column
+ * Server-loads parent + children for the fast first paint. Under RBAC
+ * enforce the server can't read the API-origin session cookie, so the load
+ * comes back `error` (401) — we then hand off to MatrixLoader, which re-runs
+ * the same fetches in the browser where the credentialed fetch wrapper
+ * authenticates them (per-user RBAC intact).
  *
- * 404 when the product isn't a parent — the matrix view doesn't make
- * sense for standalones, and the page surfaces a helpful message
- * pointing at /products/[id] for single-SKU edits.
+ * 404 when the product doesn't exist; a non-parent renders a helpful
+ * message (see MatrixResult) pointing at /products/[id] for single-SKU edits.
  */
 
 import { notFound } from 'next/navigation'
-import { getBackendUrl } from '@/lib/backend-url'
-import MatrixWorkspace from './MatrixWorkspace'
+import MatrixResult from './MatrixResult'
+import MatrixLoader from './MatrixLoader'
+import { loadMatrixData } from './matrix-data'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -31,53 +29,17 @@ interface PageProps {
 
 export default async function ProductMatrixPage({ params }: PageProps) {
   const { id } = await params
-  const backend = getBackendUrl()
 
-  // EH.3 — Parallel fetch. The common path is product.isParent=true,
-  // so eagerly fetching children alongside the product saves the
-  // ~100 ms children waterfall. For the rare non-parent case we
-  // discard the children response (one small DB query wasted) — a
-  // good trade for the parent path being noticeably faster.
-  const [productRes, childrenRes] = await Promise.all([
-    fetch(`${backend}/api/inventory/${id}`, { cache: 'no-store' }),
-    fetch(`${backend}/api/products/${id}/children`, { cache: 'no-store' }),
-  ])
+  const result = await loadMatrixData(id)
 
-  if (productRes.status === 404) notFound()
-  if (!productRes.ok) {
-    throw new Error(`Failed to load product: HTTP ${productRes.status}`)
-  }
-  const product = await productRes.json()
-
-  if (!product.isParent) {
-    return (
-      <div className="max-w-2xl mx-auto py-16 px-6 text-center space-y-3">
-        <h1 className="text-2xl font-semibold text-slate-900">
-          No matrix for this product
-        </h1>
-        <p className="text-md text-slate-600">
-          The matrix view is for parent SKUs that have variations across
-          colour / size / etc. <span className="font-mono">{product.sku}</span>{' '}
-          is a standalone — open it directly to edit master fields.
-        </p>
-        <a
-          href={`/products/${id}/edit`}
-          className="inline-block h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800"
-        >
-          Open product
-        </a>
-      </div>
-    )
-  }
-
-  const childrenJson = childrenRes.ok
-    ? await childrenRes.json()
-    : { children: [] }
+  if (result.kind === 'notfound') notFound()
+  if (result.kind !== 'ok') return <MatrixLoader id={id} />
 
   return (
-    <MatrixWorkspace
-      product={product}
-      initialChildren={childrenJson.children ?? []}
+    <MatrixResult
+      id={id}
+      product={result.data.product}
+      initialChildren={result.data.children}
     />
   )
 }
