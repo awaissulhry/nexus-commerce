@@ -1,0 +1,252 @@
+{
+  "note": "DS-conformance ratchet — waves lower these, pushes may never raise them",
+  "updatedAt": "2026-07-04",
+  "sections": {
+    "403": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "_auth": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "_shared": {
+      "select": 0,
+      "date": 4,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "accept-invite": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "admin": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "analytics": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "audit-log": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "bulk-operations": {
+      "select": 0,
+      "date": 2,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "catalog": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "command-matrix": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "customers": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "dashboard": {
+      "select": 1,
+      "date": 3,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "design": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "design-system": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "error.tsx": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "forgot-password": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "fulfillment": {
+      "select": 31,
+      "date": 12,
+      "fontSize": 2,
+      "hex": 2
+    },
+    "inbox": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "insights": {
+      "select": 0,
+      "date": 1,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "inventory": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "layout.tsx": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "listings": {
+      "select": 2,
+      "date": 5,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "loading.tsx": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "login": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "marketing": {
+      "select": 8,
+      "date": 2,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "not-found.tsx": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "orders": {
+      "select": 4,
+      "date": 2,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "outbound": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "page.tsx": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "performance": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "po": {
+      "select": 0,
+      "date": 1,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "pricing": {
+      "select": 1,
+      "date": 4,
+      "fontSize": 4,
+      "hex": 0
+    },
+    "products": {
+      "select": 25,
+      "date": 5,
+      "fontSize": 5,
+      "hex": 1
+    },
+    "r": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 16,
+      "hex": 13
+    },
+    "reconciliation": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "reports": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "reset-password": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "settings": {
+      "select": 1,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "sync-logs": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "track": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    },
+    "unsubscribed": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0
+    }
+  }
+}

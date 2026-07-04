@@ -60,6 +60,15 @@ node scripts/p3-token-sweep.mjs --check || {
   exit 1
 }
 
+# Wave 1 (2026-07-04) — DS-conformance ratchet: no NEW native selects/date
+# inputs/inline fontSize/inline hexes anywhere; per-section baselines only
+# go down as waves land. Also: ebay.css colours ⊆ the Amazon ads palette.
+echo "→ Checking DS-conformance ratchet (Wave 1)..."
+node scripts/ds-conformance-guard.mjs --check || {
+  echo "❌ DS-conformance ratchet FAILED — see message above"
+  exit 1
+}
+
 echo "→ Building apps/web..."
 (cd apps/web && rm -rf .next && npx next build > /tmp/web-build.log 2>&1) || {
   echo "❌ apps/web build FAILED"
