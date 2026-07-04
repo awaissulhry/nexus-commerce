@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, ImageIcon, Loader2, ListOrdered, Plus, RefreshCw, RotateCcw, Search, Send, Unlink, Upload, X, Zap,
+  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, ImageIcon, Loader2, ListOrdered, Plus, RefreshCw, RotateCcw, Search, Send, Trash2, Unlink, Upload, X, Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -427,6 +427,120 @@ function computeRowCompleteness(
   return { filled, total, missing }
 }
 
+// ── P2.D2 — Delete intent derivation + confirm modal ──────────────────────
+
+type DeleteIntent = 'delete-product' | 'delete-family' | 'remove-listing'
+
+/** Determine the delete intent for a given row given the full sheet context. */
+function deriveDeleteIntent(row: EbayRow, allRows: EbayRow[]): DeleteIntent {
+  // Synthesized shared-membership rows always → remove-listing
+  if (row._shared === true) return 'remove-listing'
+
+  // Explicit parent OR legacy _isParent=true with children in sheet → delete-family
+  if (row._isParent === true || row.parentage === 'parent' || row.parentage === '') {
+    const ownSku = String(row.sku ?? '').trim()
+    const parentId = String(row._productId ?? row.platformProductId ?? '')
+    const hasChildren = allRows.some((r) => {
+      if (r._rowId === row._rowId) return false
+      if (r._isParent === false && parentId && String(r.platformProductId ?? '') === parentId) return true
+      if (r.parentage === 'child' && ownSku && String(r.parent_sku ?? '').trim() === ownSku) return true
+      return false
+    })
+    if (hasChildren) return 'delete-family'
+  }
+
+  return 'delete-product'
+}
+
+/** Count direct children in the sheet for a parent row. */
+function countFamilyChildren(row: EbayRow, allRows: EbayRow[]): number {
+  const ownSku = String(row.sku ?? '').trim()
+  const parentId = String(row._productId ?? row.platformProductId ?? '')
+  return allRows.filter((r) => {
+    if (r._rowId === row._rowId) return false
+    if (r._isParent === false && parentId && String(r.platformProductId ?? '') === parentId) return true
+    if (r.parentage === 'child' && ownSku && String(r.parent_sku ?? '').trim() === ownSku) return true
+    return false
+  }).length
+}
+
+/** Get the most relevant eBay item ID for the row given the active marketplace. */
+function getRowItemId(row: EbayRow, marketplace: string): string | undefined {
+  const mkt = marketplace.toLowerCase()
+  const mktId = (row as any)[`${mkt}_item_id`] as string | null | undefined
+  return (mktId ?? row.ebay_item_id) || undefined
+}
+
+function EbayDeleteConfirmModal({
+  rows,
+  allRows,
+  loading,
+  onConfirm,
+  onClose,
+}: {
+  rows: EbayRow[]
+  allRows: EbayRow[]
+  loading: boolean
+  onConfirm: () => void
+  onClose: () => void
+}) {
+  const isSingle = rows.length === 1
+  const intents = rows.map((r) => deriveDeleteIntent(r, allRows))
+  const familyCount  = intents.filter((i) => i === 'delete-family').length
+  const variantCount = intents.filter((i) => i === 'delete-product').length
+  const listingCount = intents.filter((i) => i === 'remove-listing').length
+
+  let mainText: string
+  let actionLabel: string
+
+  if (isSingle) {
+    const row = rows[0]
+    const sku    = String(row.sku ?? '')
+    const intent = intents[0]
+    if (intent === 'delete-family') {
+      const n = countFamilyChildren(row, allRows)
+      mainText    = `Delete family "${sku}" and its ${n} variant${n !== 1 ? 's' : ''}? This is recoverable (soft-delete).`
+      actionLabel = 'Delete Family'
+    } else if (intent === 'delete-product') {
+      mainText    = `Delete variant "${sku}"? Recoverable.`
+      actionLabel = 'Delete Variant'
+    } else {
+      mainText    = `Remove "${sku}" from this listing? It stays live on its other listings.`
+      actionLabel = 'Remove from Listing'
+    }
+  } else {
+    const parts: string[] = []
+    if (familyCount)  parts.push(`${familyCount} famil${familyCount  > 1 ? 'ies' : 'y'}`)
+    if (variantCount) parts.push(`${variantCount} variant${variantCount > 1 ? 's' : ''}`)
+    if (listingCount) parts.push(`${listingCount} shared listing${listingCount > 1 ? 's' : ''}`)
+    mainText    = `Delete ${parts.join(', ')}? Soft-delete — recoverable.`
+    actionLabel = `Delete ${rows.length} Items`
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Confirm delete"
+      size="sm"
+      footer={
+        <>
+          <Button size="sm" variant="ghost" onClick={onClose} disabled={loading}>Cancel</Button>
+          <Button size="sm" variant="danger" onClick={onConfirm} loading={loading}>
+            <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+            {actionLabel}
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-slate-700 dark:text-slate-300 mb-3">{mainText}</p>
+      <Banner variant="warning">
+        The listing is removed from Nexus; end it on eBay manually in Seller Hub (auto-delist pending).
+      </Banner>
+    </Modal>
+  )
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 
 export default function EbayFlatFileClient({ initialRows, initialMarketplace, familyId }: Props) {
@@ -437,6 +551,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── eBay-specific UI state ─────────────────────────────────────────────
   const [pushing, setPushing]                 = useState(false)
   const [quickUpdating, setQuickUpdating]     = useState(false)
+  // P2.D2 — delete confirm state
+  const [deleteConfirmRows, setDeleteConfirmRows] = useState<EbayRow[] | null>(null)
+  const [deleteLoading, setDeleteLoading]         = useState(false)
   const [feedStatus, setFeedStatus]           = useState<FeedStatus | null>(null)
   const [publishPanelOpen, setPublishPanelOpen] = useState(false)
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false)
@@ -763,6 +880,64 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     }
     return result
   }, [BACKEND])
+
+  // ── P2.D2 — API: delete rows ──────────────────────────────────────────
+
+  const handleExecuteDelete = useCallback(async () => {
+    if (!deleteConfirmRows || !deleteConfirmRows.length) return
+    const allRows = latestRowsRef.current as EbayRow[]
+    const targets = deleteConfirmRows.map((r) => ({
+      productId: r._productId ? String(r._productId) : undefined,
+      sku: String(r.sku ?? ''),
+      marketplace,
+      itemId: getRowItemId(r, marketplace),
+      parentSku: r.parent_sku ?? undefined,
+      intent: deriveDeleteIntent(r, allRows),
+    }))
+    setDeleteLoading(true)
+    try {
+      const res = await fetch(`${BACKEND}/api/ebay/flat-file/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targets }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json() as {
+        results: Array<{ sku: string; intent: string; softDeleted: string[]; membershipsRemoved: number; delisted: boolean; error?: string }>
+      }
+
+      // Collect every SKU that was successfully removed
+      const removedSkus = new Set<string>()
+      let warnCount = 0
+      for (const r of json.results) {
+        if (r.error) { warnCount++; continue }
+        if (r.intent === 'remove-listing' && r.membershipsRemoved === 0) { warnCount++; continue }
+        removedSkus.add(r.sku)
+        // For family deletes the backend soft-deletes all children too
+        for (const s of (r.softDeleted ?? [])) removedSkus.add(s)
+      }
+
+      // Remove deleted rows from grid and update SWR cache
+      const current = latestRowsRef.current as EbayRow[]
+      const next = current.filter((r) => !removedSkus.has(String(r.sku ?? '')))
+      _ebay_swr.set(ebayKey, { rows: next, fetchedAt: Date.now() })
+      latestSetRowsRef.current?.(next)
+
+      const deleted = json.results.filter((r) => !r.error).length
+      const label = deleted !== 1 ? 'items' : 'item'
+      const base = `Deleted ${deleted} ${label}; end the eBay listing${deleted !== 1 ? 's' : ''} manually in Seller Hub.`
+      if (warnCount > 0) {
+        toast({ title: base, description: `${warnCount} item${warnCount !== 1 ? 's' : ''} had warnings — check the grid.`, tone: 'info' })
+      } else {
+        toast.success(base)
+      }
+      setDeleteConfirmRows(null)
+    } catch (err) {
+      toast.error('Delete failed: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setDeleteLoading(false)
+    }
+  }, [deleteConfirmRows, marketplace, BACKEND, ebayKey, toast])
 
   // ── API: push to eBay ─────────────────────────────────────────────────
 
@@ -1667,6 +1842,26 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           </Modal>
         )}
 
+        {/* P2.D2 — Delete selected rows */}
+        {selectedRows.size > 0 && (() => {
+          const deletable = (rows as EbayRow[])
+            .filter((r) => selectedRows.has(r._rowId))
+            .filter((r) => !!r.sku && !(r._readonly === true && r._shared !== true))
+          if (!deletable.length) return null
+          return (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setDeleteConfirmRows(deletable)}
+              title="Delete selected rows from Nexus (soft-delete) — end the eBay listings manually in Seller Hub"
+              className="text-danger-600 hover:text-danger-700 border-danger-200 hover:border-danger-300 dark:text-danger-400 dark:border-danger-800"
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+              Delete selected ({deletable.length})
+            </Button>
+          )
+        })()}
+
         {/* Phase 3 — Pull from eBay (full data, undoable, diff preview) */}
         <div className="relative">
           <SharedTbBtn
@@ -2047,6 +2242,17 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           onSuccess={(n) => { if (n > 0) void onReload() }}
         />
       )}
+      {/* P2.D2 — Delete confirm modal */}
+      {deleteConfirmRows && (
+        <EbayDeleteConfirmModal
+          rows={deleteConfirmRows}
+          allRows={latestRowsRef.current as EbayRow[]}
+          loading={deleteLoading}
+          onConfirm={() => void handleExecuteDelete()}
+          onClose={() => setDeleteConfirmRows(null)}
+        />
+      )}
+
       {/* ColumnGroupModal — controlled by useFlatFileCore columnsOpen state */}
       <ColumnGroupModal
         open={columnsOpen}
@@ -2150,6 +2356,22 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
               <GitFork className="h-2.5 w-2.5" />↓
             </button>
           )}
+          {/* P2.D2 — Delete button (skip readonly non-shared rows and rows without SKU) */}
+          {(() => {
+            const er = row as EbayRow
+            if (!er.sku) return null
+            if (er._readonly === true && er._shared !== true) return null
+            return (
+              <button
+                onClick={(e) => { e.stopPropagation(); setDeleteConfirmRows([er]) }}
+                onPointerDown={(e) => e.stopPropagation()}
+                title="Delete this row from Nexus (soft-delete) — end the listing on eBay separately in Seller Hub"
+                className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] leading-none transition-colors text-red-500 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/40"
+              >
+                <Trash2 className="h-2.5 w-2.5" />
+              </button>
+            )
+          })()}
         </div>
       )}
     />
