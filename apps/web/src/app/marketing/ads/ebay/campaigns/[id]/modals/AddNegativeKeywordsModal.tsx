@@ -5,6 +5,7 @@
  * (verified — teardown §6 #5). Prefill support for Search Terms → negative.
  */
 import { useEffect, useState } from 'react'
+import { H10Select } from '../../../../campaigns/FilterDropdown'
 import { H10Modal, Err, ResultsList } from '../../../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner, type WriteItemOutcome } from '../../../_lib'
 
@@ -48,10 +49,10 @@ export function AddNegativeKeywordsModal(props: {
       <SandboxBanner mode={mode} />
       <div className="eb-form-row">
         <div style={{ flex: 1 }}><label>Ad group</label>
-          <select className="h10-cd-input" style={{ width: '100%' }} value={adGroupId} onChange={(e) => setAdGroupId(e.target.value)}>{props.adGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
+          <H10Select ariaLabel="Ad group" width="100%" value={adGroupId} onChange={setAdGroupId} options={props.adGroups.map((g) => ({ value: g.id, label: g.name }))} />
         </div>
         <div><label>Match</label>
-          <select className="h10-cd-input" value={matchType} onChange={(e) => setMatchType(e.target.value as 'EXACT' | 'PHRASE')}><option>EXACT</option><option>PHRASE</option></select>
+          <H10Select ariaLabel="Match type" width={130} value={matchType} onChange={(v) => setMatchType(v as 'EXACT' | 'PHRASE')} options={['EXACT', 'PHRASE'].map((m) => ({ value: m, label: m }))} />
         </div>
       </div>
       <div><label>Negatives — one per line</label><textarea className="eb-textarea" rows={4} value={text} onChange={(e) => setText(e.target.value)} /></div>

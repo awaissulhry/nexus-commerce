@@ -7,6 +7,7 @@
  * a named reason.
  */
 import { useEffect, useState } from 'react'
+import { H10Select } from '../../campaigns/FilterDropdown'
 import { getBackendUrl } from '@/lib/backend-url'
 import { H10Modal, Err, ResultsList } from '../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner, type WriteItemOutcome, type CampaignRow } from '../_lib'
@@ -81,9 +82,8 @@ export function PromoteModal(props: {
       <div className="eb-form-row">
         <div style={{ flex: 1 }}>
           <label>Target campaign (General, key-based)</label>
-          <select className="h10-cd-input" style={{ width: '100%' }} value={campaignId} onChange={(e) => setCampaignId(e.target.value)}>
-            {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name} — {c.status}{c.bidPercentage != null ? ` · default ${c.bidPercentage}%` : ''}</option>)}
-          </select>
+          <H10Select ariaLabel="Target campaign" width="100%" value={campaignId} onChange={setCampaignId}
+            options={campaigns.map((c) => ({ value: c.id, label: `${c.name} — ${c.status}${c.bidPercentage != null ? ` · default ${c.bidPercentage}%` : ''}` }))} />
         </div>
         <div>
           <label>Ad rate %</label>

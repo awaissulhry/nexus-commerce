@@ -5,6 +5,7 @@
  * file per modal) + prefill support for the Search Terms → keyword flow.
  */
 import { useEffect, useState } from 'react'
+import { H10Select } from '../../../../campaigns/FilterDropdown'
 import { H10Modal, Err, ResultsList } from '../../../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner, type WriteItemOutcome } from '../../../_lib'
 
@@ -50,10 +51,10 @@ export function AddKeywordsModal(props: {
       <SandboxBanner mode={mode} />
       <div className="eb-form-row">
         <div style={{ flex: 1 }}><label>Ad group</label>
-          <select className="h10-cd-input" style={{ width: '100%' }} value={adGroupId} onChange={(e) => setAdGroupId(e.target.value)}>{props.adGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
+          <H10Select ariaLabel="Ad group" width="100%" value={adGroupId} onChange={setAdGroupId} options={props.adGroups.map((g) => ({ value: g.id, label: g.name }))} />
         </div>
         <div><label>Match</label>
-          <select className="h10-cd-input" value={matchType} onChange={(e) => setMatchType(e.target.value)}><option>EXACT</option><option>PHRASE</option><option>BROAD</option></select>
+          <H10Select ariaLabel="Match type" width={130} value={matchType} onChange={setMatchType} options={['EXACT', 'PHRASE', 'BROAD'].map((m) => ({ value: m, label: m }))} />
         </div>
         <div><label>Bid (EUR)</label><input className="h10-cd-input" style={{ width: 90 }} type="number" min={0.02} max={100} step={0.01} value={bid} onChange={(e) => setBid(e.target.value)} /></div>
       </div>

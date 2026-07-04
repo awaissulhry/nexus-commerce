@@ -120,10 +120,10 @@ export function DetailsTab({ data, campaignId, strategy, onSaved, say }: {
                 {strategy === 'OFF' && <>Promoted Offsite — eBay manages placement and CPC on external networks. Budget is the only lever.</>}
               </p>
               <div className="eb-headstats" style={{ marginTop: 14 }}>
-                <div><span className="k">Marketplace</span><span className="v" style={{ fontSize: 13 }}>{c.marketplace}</span></div>
-                <div><span className="k">Campaign ID</span><span className="v" style={{ fontSize: 13 }}><a className="h10-am-link" href={`https://www.ebay.it/sh/mkt/marketing/campaigns`} target="_blank" rel="noreferrer" title="Open Seller Hub advertising">{c.externalCampaignId}</a></span></div>
-                <div><span className="k">Managed by</span><span className="v" style={{ fontSize: 13 }}>{c.nexusManaged ? 'Nexus' : 'Seller Hub'}</span></div>
-                <div><span className="k">Status</span><span className="v" style={{ fontSize: 13 }}>{c.status}</span></div>
+                <div><span className="k">Marketplace</span><span className="v txt">{c.marketplace}</span></div>
+                <div><span className="k">Campaign ID</span><span className="v txt"><a className="h10-am-link" href={`https://www.ebay.it/sh/mkt/marketing/campaigns`} target="_blank" rel="noreferrer" title="Open Seller Hub advertising">{c.externalCampaignId}</a></span></div>
+                <div><span className="k">Managed by</span><span className="v txt">{c.nexusManaged ? 'Nexus' : 'Seller Hub'}</span></div>
+                <div><span className="k">Status</span><span className="v txt">{c.status}</span></div>
               </div>
             </div>
           </section>
@@ -171,8 +171,8 @@ export function DetailsTab({ data, campaignId, strategy, onSaved, say }: {
               <h2>Rate strategy</h2>
               <div className="h10-cd-card pad">
                 <div className="eb-headstats">
-                  <div><span className="k">Strategy</span><span className="v" style={{ fontSize: 13 }}>{c.adRateStrategy ?? 'FIXED'}</span></div>
-                  {c.adRateStrategy !== 'DYNAMIC' && <div><span className="k">Rates</span><span className="v" style={{ fontSize: 13 }}>{c.isRulesBased ? (c.bidPercentage != null ? `${c.bidPercentage}% (campaign-level)` : '—') : 'per ad (Ads tab)'}</span></div>}
+                  <div><span className="k">Strategy</span><span className="v txt">{c.adRateStrategy ?? 'FIXED'}</span></div>
+                  {c.adRateStrategy !== 'DYNAMIC' && <div><span className="k">Rates</span><span className="v txt">{c.isRulesBased ? (c.bidPercentage != null ? `${c.bidPercentage}% (campaign-level)` : '—') : 'per ad (Ads tab)'}</span></div>}
                 </div>
                 {c.adRateStrategy === 'DYNAMIC' && (
                   <div className="eb-form-row" style={{ marginTop: 12 }}>

@@ -70,14 +70,14 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
       {/* Policy card */}
       <div className="h10-cd-card pad">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#475467' }}>POSTURE</span>
+          <span className="eb-cap">Posture</span>
           {POSTURES.map((m) => (
             <button key={m.id} type="button" className={`h10-am-btn ${p.posture === m.id ? 'on' : ''}`} title={m.tip} disabled={busy}
               onClick={() => void savePolicy({ posture: m.id }, `posture → ${m.id}`)}>{m.label}</button>
           ))}
           <span className="h10-pill arch" title="The global dial this campaign inherits from">global: {data.globalMode}{data.halted ? ' · HALTED' : ''}</span>
           <span className="grow" style={{ flex: 1 }} />
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#283441' }} title="Excluded from ALL automation — rules, coverage guard, discovery. Badged in the header and Ad Manager.">
+          <label className="eb-toggle-lbl" title="Excluded from ALL automation — rules, coverage guard, discovery. Badged in the header and Ad Manager.">
             <button type="button" role="switch" aria-checked={p.protected} className={`h10-bktoggle ${p.protected ? 'on' : ''}`} disabled={busy}
               onClick={() => void savePolicy({ protected: !p.protected }, p.protected ? 'protection removed' : 'campaign PROTECTED')}>
               <span />
@@ -101,31 +101,31 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
       </div>
 
       {/* Rules that apply here */}
-      <div className="h10-am-card" style={{ padding: '6px 0' }}>
-        <p style={{ fontSize: 12, color: '#5b6573', padding: '10px 18px 4px', margin: 0 }}>Rules that apply to this campaign — <Link className="h10-am-link" href="/marketing/ads/ebay/automation">manage in Rules &amp; Automation</Link></p>
+      <div className="h10-am-card eb-rowlist">
+        <p className="hd plain">Rules that apply to this campaign — <Link className="h10-am-link" href="/marketing/ads/ebay/automation">manage in Rules &amp; Automation</Link></p>
         {data.rules.length === 0 ? (
-          <div style={{ padding: '20px 18px', fontSize: 13, color: '#5b6573' }}>No rules apply here.</div>
+          <div className="empty">No rules apply here.</div>
         ) : data.rules.map((r) => (
-          <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', borderBottom: '1px solid #eef1f5', flexWrap: 'wrap', fontSize: 12.5 }}>
+          <div key={r.id} className="eb-row">
             <span className={`h10-pill ${r.enabled ? 'ok' : 'arch'}`}>{r.enabled ? 'on' : 'off'}</span>
-            <span style={{ fontWeight: 600 }}>{r.name}</span>
+            <span className="nm6">{r.name}</span>
             <span className="h10-pill arch">{r.mode}</span>
             <span className="h10-pill arch">{r.scoped ? 'bound to this campaign' : 'global'}</span>
             <span className="grow" style={{ flex: 1 }} />
-            <span style={{ color: '#8a93a1', fontSize: 11.5 }}>{r.lastEvaluatedAt ? `last run ${new Date(r.lastEvaluatedAt).toLocaleString('en-GB')}` : 'never run'}</span>
+            <span className="ts">{r.lastEvaluatedAt ? `last run ${new Date(r.lastEvaluatedAt).toLocaleString('en-GB')}` : 'never run'}</span>
           </div>
         ))}
       </div>
 
       {/* Pending proposals */}
-      <div className="h10-am-card" style={{ padding: '6px 0' }}>
-        <p style={{ fontSize: 12, color: '#5b6573', padding: '10px 18px 4px', margin: 0, fontWeight: 700 }}>Awaiting your decision ({data.proposals.length})</p>
+      <div className="h10-am-card eb-rowlist">
+        <p className="hd">Awaiting your decision ({data.proposals.length})</p>
         {data.proposals.length === 0 ? (
-          <div style={{ padding: '20px 18px', fontSize: 13, color: '#5b6573' }}>Nothing pending for this campaign.</div>
+          <div className="empty">Nothing pending for this campaign.</div>
         ) : data.proposals.map((pr) => (
-          <div key={pr.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', borderBottom: '1px solid #eef1f5', flexWrap: 'wrap', fontSize: 12.5 }}>
+          <div key={pr.id} className="eb-row">
             <span className="h10-pill ok">{pr.kind.replace(/_/g, ' ')}</span>
-            <span style={{ color: '#8a93a1' }}>{pr.entityRef.listingId ?? pr.entityRef.keywordText ?? ''}</span>
+            <span className="dim">{pr.entityRef.listingId ?? pr.entityRef.keywordText ?? ''}</span>
             <span>{String(pr.proposedAction.from ?? '')} → <b>{String(pr.proposedAction.to ?? '')}</b></span>
             {pr.reasoning?.clampNote && <span className="h10-pill warn">{pr.reasoning.clampNote}</span>}
             <span className="grow" style={{ flex: 1 }} />
@@ -136,16 +136,16 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
       </div>
 
       {/* Applied */}
-      <div className="h10-am-card" style={{ padding: '6px 0' }}>
-        <p style={{ fontSize: 12, color: '#5b6573', padding: '10px 18px 4px', margin: 0, fontWeight: 700 }}>Applied here (rollback available)</p>
+      <div className="h10-am-card eb-rowlist">
+        <p className="hd">Applied here (rollback available)</p>
         {data.applied.length === 0 ? (
-          <div style={{ padding: '20px 18px', fontSize: 13, color: '#5b6573' }}>Nothing applied yet.</div>
+          <div className="empty">Nothing applied yet.</div>
         ) : data.applied.map((pr) => (
-          <div key={pr.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', borderBottom: '1px solid #eef1f5', flexWrap: 'wrap', fontSize: 12.5 }}>
+          <div key={pr.id} className="eb-row">
             <span className="h10-pill ok">{pr.kind.replace(/_/g, ' ')}</span>
-            <span style={{ color: '#8a93a1' }}>{pr.entityRef.listingId ?? pr.entityRef.keywordText ?? ''}</span>
+            <span className="dim">{pr.entityRef.listingId ?? pr.entityRef.keywordText ?? ''}</span>
             <span>{String(pr.proposedAction.from ?? '')} → <b>{String(pr.proposedAction.to ?? '')}</b></span>
-            <span style={{ color: '#8a93a1', fontSize: 11.5 }}>{pr.decidedAt ? new Date(pr.decidedAt).toLocaleString('en-GB') : ''}</span>
+            <span className="ts">{pr.decidedAt ? new Date(pr.decidedAt).toLocaleString('en-GB') : ''}</span>
             <span className="grow" style={{ flex: 1 }} />
             <button type="button" className="h10-am-btn sm" disabled={busy} onClick={() => void rollback(pr.id)}>Rollback</button>
           </div>
@@ -158,7 +158,7 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
         return (
           <div className="h10-cd-card pad">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-              <b style={{ fontSize: 13.5 }}>Rate Discovery</b>
+              <b className="eb-strong">Rate Discovery</b>
               <span className={`h10-pill ${rd.status === 'ACTIVE' ? 'ok' : rd.status === 'COMPLETE' ? 'arch' : 'warn'}`}>{rd.status}</span>
               <span className="h10-pill arch">{rd.floorPct}% → {rd.capPct}% · {rd.stepPct}% steps · {rd.dwellDays}-day windows</span>
               {rd.currentPct != null && <span className="h10-pill ok">now at {rd.currentPct}%</span>}
@@ -185,16 +185,16 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
       })()}
 
       {/* Drift */}
-      <div className="h10-am-card" style={{ padding: '6px 0' }}>
-        <p style={{ fontSize: 12, color: '#5b6573', padding: '10px 18px 4px', margin: 0, fontWeight: 700 }}>Drift — values eBay changed under us</p>
+      <div className="h10-am-card eb-rowlist">
+        <p className="hd">Drift — values eBay changed under us</p>
         {campaignStatus === 'ENDED' ? (
-          <div style={{ padding: '20px 18px', fontSize: 13, color: '#5b6573' }}>Ended campaigns are not reconciled.</div>
+          <div className="empty">Ended campaigns are not reconciled.</div>
         ) : data.drifts.length === 0 ? (
-          <div style={{ padding: '20px 18px', fontSize: 13, color: '#5b6573' }}>No drift — everything matches what Nexus last set.</div>
+          <div className="empty">No drift — everything matches what Nexus last set.</div>
         ) : data.drifts.map((d) => (
-          <div key={`${d.kind}-${d.listingId ?? 'campaign'}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', borderBottom: '1px solid #eef1f5', flexWrap: 'wrap', fontSize: 12.5 }}>
+          <div key={`${d.kind}-${d.listingId ?? 'campaign'}`} className="eb-row">
             <span className={`h10-pill ${d.kind === 'ad_removed' ? 'warn' : 'arch'}`}>{d.kind.replace(/_/g, ' ')}</span>
-            <span style={{ color: '#8a93a1' }}>{d.listingId ?? ''}</span>
+            <span className="dim">{d.listingId ?? ''}</span>
             <span>Nexus set <b>{d.kind === 'budget' ? money(d.nexusValue) : `${d.nexusValue}%`}</b> · eBay now <b>{d.ebayValue == null ? 'removed' : d.kind === 'budget' ? money(d.ebayValue) : `${d.ebayValue}%`}</b></span>
             <span className="grow" style={{ flex: 1 }} />
             <button type="button" className="h10-am-btn sm primary" disabled={busy} onClick={() => void repairDrift(d, 'reapply')}>Re-apply</button>

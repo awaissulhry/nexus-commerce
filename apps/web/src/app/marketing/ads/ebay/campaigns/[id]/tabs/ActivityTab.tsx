@@ -1,11 +1,12 @@
 'use client'
 
 /**
- * ER1 — Activity: the immutable per-campaign event log (v1 preserved) +
- * action-type/mode filters and cursor pagination ("Load older"). Every write
- * Nexus made — drift repairs and accepted eBay-side changes included.
+ * EV4b — Activity on the shared row-list skin + H10Select filters (zero
+ * native controls): the immutable per-campaign event log (v1 semantics
+ * preserved) with action-type/mode filters and cursor pagination.
  */
 import { useCallback, useEffect, useState } from 'react'
+import { H10Select } from '../../../../campaigns/FilterDropdown'
 import { getEbayAds, actionSummary, type ActionRow } from '../../../_lib'
 
 export function ActivityTab({ externalCampaignId }: { externalCampaignId: string }) {
@@ -34,19 +35,16 @@ export function ActivityTab({ externalCampaignId }: { externalCampaignId: string
   })
 
   return (
-    <div className="h10-am-card" style={{ padding: '6px 0', maxWidth: 1080 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px 4px', flexWrap: 'wrap' }}>
-        <p style={{ fontSize: 12, color: '#5b6573', margin: 0, flex: 1 }}>Every write Nexus made to this campaign — immutable. Drift repairs and accepted eBay-side changes appear here too.</p>
-        <select className="h10-cd-input" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Action type">
-          <option value="all">All actions</option>
-          {types.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
-        </select>
-        <select className="h10-cd-input" value={modeFilter} onChange={(e) => setModeFilter(e.target.value)} aria-label="Mode">
-          <option value="all">All modes</option><option value="live">live</option><option value="sandbox">sandbox</option><option value="local">local</option>
-        </select>
+    <div className="h10-am-card eb-rowlist" style={{ maxWidth: 1080 }}>
+      <div className="eb-rowlist-bar">
+        <p>Every write Nexus made to this campaign — immutable. Drift repairs and accepted eBay-side changes appear here too.</p>
+        <H10Select ariaLabel="Action type" width={180} value={typeFilter} onChange={setTypeFilter}
+          options={[{ value: 'all', label: 'All actions' }, ...types.map((t) => ({ value: t, label: t.replace(/_/g, ' ') }))]} />
+        <H10Select ariaLabel="Mode" width={130} value={modeFilter} onChange={setModeFilter}
+          options={[{ value: 'all', label: 'All modes' }, { value: 'live', label: 'live' }, { value: 'sandbox', label: 'sandbox' }, { value: 'local', label: 'local' }]} />
       </div>
       {rows == null ? (
-        <div style={{ padding: '24px 18px', fontSize: 13, color: '#8a93a1' }}>Loading…</div>
+        <div className="h10-cd-skel" aria-busy="true"><div className="sk-line w40" /><div className="sk-block" /></div>
       ) : visible.length === 0 ? (
         <div className="h10-cd-empty"><h3>No Nexus writes yet</h3><p>This campaign has only been synced (Seller Hub-managed or read-only so far).</p></div>
       ) : (
@@ -54,17 +52,17 @@ export function ActivityTab({ externalCampaignId }: { externalCampaignId: string
           {visible.map((a) => {
             const mode = String((a.payloadAfter as { _mode?: string } | null)?._mode ?? '')
             return (
-              <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 18px', borderBottom: '1px solid #eef1f5', flexWrap: 'wrap', fontSize: 12.5 }}>
-                <span style={{ color: '#8a93a1', minWidth: 128 }}>{new Date(a.createdAt).toLocaleString('en-GB')}</span>
+              <div key={a.id} className="eb-row">
+                <span className="dim eb-ts-col">{new Date(a.createdAt).toLocaleString('en-GB')}</span>
                 <span className="h10-pill arch">{a.actionType.replace(/_/g, ' ')}</span>
                 {mode && <span className={`h10-pill ${mode === 'live' ? 'ok' : 'warn'}`}>{mode}</span>}
                 <span className={`h10-pill ${a.channelResponseStatus === 'SUCCESS' ? 'ok' : 'warn'}`}>{a.channelResponseStatus.toLowerCase()}</span>
-                <span style={{ color: '#283441' }}>{actionSummary(a)}</span>
+                <span>{actionSummary(a)}</span>
               </div>
             )
           })}
           {more && (
-            <div style={{ padding: '10px 18px' }}>
+            <div className="eb-rowlist-foot">
               <button type="button" className="h10-am-btn sm" disabled={busy} onClick={() => load(rows[rows.length - 1]?.createdAt)}>{busy ? 'Loading…' : 'Load older'}</button>
             </div>
           )}
