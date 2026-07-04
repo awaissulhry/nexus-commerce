@@ -11835,6 +11835,9 @@ model EbayAdsRule {
   action      Json // {type, params, caps}
   guardrails  Json? // margin floor, min/max rate, spend checks
 
+  // ER5 — current config version; bumps on config edits (not enabled/mode toggles)
+  version Int @default(1)
+
   cooldownHours   Int       @default(24)
   lastEvaluatedAt DateTime?
   cooldownUntil   DateTime?
@@ -11843,8 +11846,36 @@ model EbayAdsRule {
   updatedAt DateTime @updatedAt
 
   executions EbayAdsRuleExecution[]
+  versions   EbayAdsRuleVersion[]
 
   @@index([enabled, mode])
+}
+
+/// ER5 — immutable rule-config history: one row per saved config version
+/// (name/trigger/action/guardrails/scope/marketplace/cooldown). enabled/mode
+/// toggles are operational posture and do NOT version. Reverts append a new
+/// version carrying the old config — history is never rewritten.
+model EbayAdsRuleVersion {
+  id     String      @id @default(cuid())
+  rule   EbayAdsRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  ruleId String
+
+  version       Int
+  name          String
+  marketplace   String?
+  scope         Json?
+  trigger       Json
+  action        Json
+  guardrails    Json?
+  cooldownHours Int
+
+  changedBy String? // operator id or engine actor
+  note      String? // e.g. "revert to v2"
+
+  createdAt DateTime @default(now())
+
+  @@unique([ruleId, version])
+  @@index([ruleId, createdAt(sort: Desc)])
 }
 
 /// E5 schema — one evaluation run of one rule (observability).
@@ -11859,6 +11890,9 @@ model EbayAdsRuleExecution {
   proposed  Int    @default(0)
   applied   Int    @default(0)
   summary   Json?
+
+  // ER5 — which config version ran (null for pre-versioning executions)
+  ruleVersion Int?
 
   createdAt DateTime @default(now())
 

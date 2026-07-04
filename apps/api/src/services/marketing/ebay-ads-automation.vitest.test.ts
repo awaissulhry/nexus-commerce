@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  evalCondition, evalConditionDetailed, benchmarkValue, metricValue, windowBounds, validateRuleBody, estimateImpact,
+  evalCondition, evalConditionDetailed, benchmarkValue, metricValue, windowBounds, validateRuleBody, estimateImpact, ruleConfigChanged, ruleConfigOf,
   type Condition, type EntityFacts, type BenchFacts, type RuleBody,
 } from './ebay-ads-automation.service.js'
 
@@ -174,5 +174,22 @@ describe('ER4 E3 — estimateImpact (honest weekly extrapolation)', () => {
     expect(estimateImpact('reactivate_ad', f, 14)).toBeNull()
     expect(estimateImpact('alert', f, 14)).toBeNull()
     expect(estimateImpact('adjust_ad_rate', f, 14, { fromPct: 0, toPct: 8 })).toBeNull()
+  })
+})
+
+describe('ER5 — ruleConfigChanged (versioning diff)', () => {
+  const base = ruleConfigOf({ name: 'A', marketplace: 'EBAY_IT', scope: { campaignIds: ['c1'] }, trigger: { scope: 'CPS_AD', all: [{ metric: 'clicks', windowDays: 7, op: 'gt', threshold: 5 }] }, action: { type: 'pause_ad' }, guardrails: null, cooldownHours: 24 })
+  it('identical configs are unchanged regardless of key order', () => {
+    const reordered = ruleConfigOf({ cooldownHours: 24, guardrails: null, action: { type: 'pause_ad' }, trigger: { all: [{ threshold: 5, op: 'gt', windowDays: 7, metric: 'clicks' }], scope: 'CPS_AD' } as never, scope: { campaignIds: ['c1'] }, marketplace: 'EBAY_IT', name: 'A' })
+    expect(ruleConfigChanged(base, reordered)).toBe(false)
+  })
+  it('a threshold change is a change', () => {
+    const b = structuredClone(base) as typeof base
+    ;(b.trigger as { all: Array<{ threshold: number }> }).all[0].threshold = 6
+    expect(ruleConfigChanged(base, b)).toBe(true)
+  })
+  it('null vs missing guardrails are equal (normalised)', () => {
+    const b = { ...base, guardrails: null }
+    expect(ruleConfigChanged(base, b)).toBe(false)
   })
 })

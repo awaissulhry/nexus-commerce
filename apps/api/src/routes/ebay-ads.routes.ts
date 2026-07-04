@@ -727,12 +727,14 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     const auto = await import('../services/marketing/ebay-ads-automation.service.js')
     const errs = auto.validateRuleBody(req.body as Partial<import('../services/marketing/ebay-ads-automation.service.js').RuleBody>)
     if (errs.length) return reply.code(400).send({ error: errs.join(' · ') })
-    return prisma.ebayAdsRule.create({ data: {
+    const row = await prisma.ebayAdsRule.create({ data: {
       name: req.body.name.trim(), enabled: false, mode: 'PROPOSE',
       trigger: req.body.trigger as object, action: req.body.action as object,
       guardrails: (req.body.guardrails ?? undefined) as object | undefined, scope: (req.body.scope ?? undefined) as object | undefined,
       marketplace: req.body.marketplace ?? null, cooldownHours: req.body.cooldownHours ?? 24,
     } })
+    await auto.snapshotRuleVersion(row.id, 1, auto.ruleConfigOf(row), (req as { authUser?: { id?: string } }).authUser?.id ?? null) // ER5
+    return row
   })
   // ER3.2 — full edit: config fields validated against the merged rule; the
   // original enabled/mode toggles keep their exact semantics.
@@ -754,6 +756,20 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       }
       const errs = auto.validateRuleBody(merged)
       if (errs.length) return reply.code(400).send({ error: errs.join(' · ') })
+      // ER5 — version only REAL config changes (not no-op saves, not enabled/mode)
+      const mergedCfg = { name: merged.name, marketplace: merged.marketplace ?? null, scope: merged.scope ?? null, trigger: merged.trigger, action: merged.action, guardrails: merged.guardrails ?? null, cooldownHours: merged.cooldownHours }
+      if (auto.ruleConfigChanged(auto.ruleConfigOf(rule), mergedCfg)) {
+        const next = rule.version + 1
+        const updated = await prisma.ebayAdsRule.update({ where: { id: req.params.id }, data: {
+          ...(b.enabled !== undefined ? { enabled: b.enabled } : {}),
+          ...(b.mode ? { mode: b.mode } : {}),
+          name: merged.name.trim(), trigger: merged.trigger as object, action: merged.action as object,
+          guardrails: (merged.guardrails ?? undefined) as object | undefined, scope: (merged.scope ?? undefined) as object | undefined,
+          marketplace: merged.marketplace, cooldownHours: merged.cooldownHours, version: next,
+        } })
+        await auto.snapshotRuleVersion(rule.id, next, mergedCfg, (req as { authUser?: { id?: string } }).authUser?.id ?? null)
+        return updated
+      }
     }
     return prisma.ebayAdsRule.update({ where: { id: req.params.id }, data: {
       ...(b.enabled !== undefined ? { enabled: b.enabled } : {}),
@@ -766,6 +782,16 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       ...(b.marketplace !== undefined ? { marketplace: b.marketplace } : {}),
       ...(b.cooldownHours !== undefined ? { cooldownHours: b.cooldownHours } : {}),
     } })
+  })
+  // ER5 — immutable config history (full snapshots; sentences render client-side)
+  app.get<{ Params: { id: string } }>('/ebay-ads/automation/rules/:id/versions', async (req) => ({
+    versions: await prisma.ebayAdsRuleVersion.findMany({ where: { ruleId: req.params.id }, orderBy: { version: 'desc' }, take: 50 }),
+  }))
+  app.post<{ Params: { id: string }; Body: { toVersion: number } }>('/ebay-ads/automation/rules/:id/revert', async (req, reply) => {
+    const auto = await import('../services/marketing/ebay-ads-automation.service.js')
+    try {
+      return await auto.revertRuleToVersion((req as { authUser?: { id?: string } }).authUser?.id ?? null, req.params.id, req.body.toVersion)
+    } catch (e) { return reply.code(400).send({ error: (e as Error).message }) }
   })
   app.delete<{ Params: { id: string } }>('/ebay-ads/automation/rules/:id', async (req, reply) => {
     const rule = await prisma.ebayAdsRule.findUnique({ where: { id: req.params.id }, select: { id: true } })

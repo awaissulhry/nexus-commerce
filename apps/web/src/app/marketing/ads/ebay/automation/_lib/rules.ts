@@ -21,7 +21,16 @@ export interface AutomationRule {
   scope: { campaignIds?: string[] } | null
   trigger: RuleTrigger; action: RuleActionDef; guardrails: Record<string, unknown> | null
   cooldownHours: number; lastEvaluatedAt: string | null; updatedAt?: string
-  executions?: Array<{ id?: string; status: string; evaluated: number; matched: number; proposed: number; applied: number; createdAt: string }>
+  version?: number // ER5 — current config version
+  executions?: Array<{ id?: string; status: string; evaluated: number; matched: number; proposed: number; applied: number; createdAt: string; ruleVersion?: number | null }>
+}
+
+/** ER5 — one immutable config snapshot (GET /automation/rules/:id/versions) */
+export interface RuleVersionRow {
+  id: string; version: number; name: string; marketplace: string | null
+  scope: { campaignIds?: string[] } | null
+  trigger: RuleTrigger; action: RuleActionDef; guardrails: Record<string, unknown> | null
+  cooldownHours: number; changedBy: string | null; note: string | null; createdAt: string
 }
 export interface RuleTemplate { name: string; trigger: RuleTrigger; action: RuleActionDef; guardrails: object; cooldownHours: number }
 

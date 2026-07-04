@@ -305,7 +305,7 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
       const base = {
         entityRef: { campaignId: ad.campaign.id, externalCampaignId: ad.campaign.externalCampaignId, campaignName: ad.campaign.name, listingId: ad.listingId!, marketplace: ad.campaign.marketplace },
         reasoning: {
-          rule: rule.id, windowDays: maxWindowDays, facts: f, ratePct, breakEven: e?.be ?? null, conditions: trigger.all,
+          rule: rule.id, ruleVersion: (rule as { version?: number }).version ?? null, windowDays: maxWindowDays, facts: f, ratePct, breakEven: e?.be ?? null, conditions: trigger.all,
           conditionResults: trigger.all.map((c, i) => ({ ...c, value: detailed[i].value, cmp: detailed[i].cmp, pass: detailed[i].pass })),
         },
       }
@@ -382,7 +382,7 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
       const base = {
         entityRef: { campaignId: kw.campaign.id, externalCampaignId: kw.campaign.externalCampaignId, campaignName: kw.campaign.name, keywordId: kw.id, keywordText: kw.text, marketplace: kw.campaign.marketplace },
         reasoning: {
-          rule: rule.id, windowDays: maxWindowDays, facts: f, conditions: trigger.all,
+          rule: rule.id, ruleVersion: (rule as { version?: number }).version ?? null, windowDays: maxWindowDays, facts: f, conditions: trigger.all,
           conditionResults: trigger.all.map((c, i) => ({ ...c, value: detailed[i].value, cmp: detailed[i].cmp, pass: detailed[i].pass })),
         },
       }
@@ -482,11 +482,11 @@ export async function evaluateEbayAdsRules(onlyRuleId?: string): Promise<Evaluat
         data: { lastEvaluatedAt: new Date(), ...(applied > 0 ? { cooldownUntil: new Date(Date.now() + rule.cooldownHours * 3600_000) } : {}) },
       })
       await prisma.ebayAdsRuleExecution.create({
-        data: { ruleId: rule.id, status: 'SUCCESS', evaluated, matched, proposed, applied, summary: summary.slice(0, 50) as object },
+        data: { ruleId: rule.id, status: 'SUCCESS', evaluated, matched, proposed, applied, summary: summary.slice(0, 50) as object, ruleVersion: (rule as { version?: number }).version ?? null }, // ER5
       })
     } catch (e) {
       report.errors.push(`${rule.name}: ${(e as Error).message}`)
-      await prisma.ebayAdsRuleExecution.create({ data: { ruleId: rule.id, status: 'FAILED', evaluated, matched, proposed, applied, summary: [{ error: (e as Error).message }] as object } }).catch(() => {})
+      await prisma.ebayAdsRuleExecution.create({ data: { ruleId: rule.id, status: 'FAILED', evaluated, matched, proposed, applied, summary: [{ error: (e as Error).message }] as object, ruleVersion: (rule as { version?: number }).version ?? null } }).catch(() => {})
     }
     report.evaluated += evaluated; report.matched += matched; report.proposed += proposed; report.applied += applied
   }
@@ -1124,6 +1124,59 @@ export async function previewRule(body: RuleBody): Promise<{ evaluated: number; 
   }
 }
 
+// ── ER5 — rule-config versioning ─────────────────────────────────────────────
+// Config = name/trigger/action/guardrails/scope/marketplace/cooldown.
+// enabled/mode are operational posture and never version. Reverts APPEND a
+// new version carrying the old config — history is immutable.
+export interface RuleConfigSnapshot {
+  name: string; marketplace: string | null; scope: unknown; trigger: unknown; action: unknown
+  guardrails: unknown; cooldownHours: number
+}
+
+export function ruleConfigOf(r: { name: string; marketplace: string | null; scope: unknown; trigger: unknown; action: unknown; guardrails: unknown; cooldownHours: number }): RuleConfigSnapshot {
+  return { name: r.name, marketplace: r.marketplace ?? null, scope: r.scope ?? null, trigger: r.trigger, action: r.action, guardrails: r.guardrails ?? null, cooldownHours: r.cooldownHours }
+}
+
+/** Pure — order-stable structural equality for config snapshots. */
+export function ruleConfigChanged(a: RuleConfigSnapshot, b: RuleConfigSnapshot): boolean {
+  const norm = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(norm)
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([x], [y]) => x.localeCompare(y)).map(([k, val]) => [k, norm(val)]))
+    return v ?? null
+  }
+  return JSON.stringify(norm(a)) !== JSON.stringify(norm(b))
+}
+
+export async function snapshotRuleVersion(ruleId: string, version: number, cfg: RuleConfigSnapshot, changedBy: string | null, note?: string): Promise<void> {
+  await prisma.ebayAdsRuleVersion.create({ data: {
+    ruleId, version, name: cfg.name, marketplace: cfg.marketplace,
+    scope: (cfg.scope ?? undefined) as object | undefined, trigger: cfg.trigger as object, action: cfg.action as object,
+    guardrails: (cfg.guardrails ?? undefined) as object | undefined, cooldownHours: cfg.cooldownHours,
+    changedBy, note: note ?? null,
+  } })
+}
+
+/** ER5 — revert = validate the old config, write it as a NEW version. */
+export async function revertRuleToVersion(actorUserId: string | null, ruleId: string, toVersion: number): Promise<{ version: number }> {
+  const [rule, target] = await Promise.all([
+    prisma.ebayAdsRule.findUniqueOrThrow({ where: { id: ruleId } }),
+    prisma.ebayAdsRuleVersion.findUniqueOrThrow({ where: { ruleId_version: { ruleId, version: toVersion } } }),
+  ])
+  const cfg: RuleConfigSnapshot = ruleConfigOf(target)
+  // old snapshots must still satisfy today's DSL — never resurrect an invalid config
+  const errs = validateRuleBody({ name: cfg.name, trigger: cfg.trigger as RuleTrigger, action: cfg.action as RuleAction, guardrails: cfg.guardrails as Record<string, unknown> | null, scope: cfg.scope as { campaignIds?: string[] } | null, marketplace: cfg.marketplace, cooldownHours: cfg.cooldownHours })
+  if (errs.length) throw new Error(`version ${toVersion} no longer passes validation: ${errs.join(' · ')}`)
+  if (!ruleConfigChanged(ruleConfigOf(rule), cfg)) throw new Error(`rule already matches version ${toVersion}`)
+  const next = rule.version + 1
+  await prisma.ebayAdsRule.update({ where: { id: ruleId }, data: {
+    name: cfg.name, marketplace: cfg.marketplace, scope: (cfg.scope ?? undefined) as object | undefined,
+    trigger: cfg.trigger as object, action: cfg.action as object, guardrails: (cfg.guardrails ?? undefined) as object | undefined,
+    cooldownHours: cfg.cooldownHours, version: next,
+  } })
+  await snapshotRuleVersion(ruleId, next, cfg, actorUserId, `revert to v${toVersion}`)
+  return { version: next }
+}
+
 export const STARTER_RULES: Array<{ name: string; trigger: RuleTrigger; action: RuleAction; guardrails: object; cooldownHours: number }> = [
   {
     name: 'Fee % creep-down (CPS)',
@@ -1168,9 +1221,10 @@ export async function installStarterRules(): Promise<{ installed: number; skippe
   for (const r of STARTER_RULES) {
     const exists = await prisma.ebayAdsRule.findFirst({ where: { name: r.name } })
     if (exists) { skipped++; continue }
-    await prisma.ebayAdsRule.create({
+    const row = await prisma.ebayAdsRule.create({
       data: { name: r.name, enabled: false, mode: 'PROPOSE', trigger: r.trigger as object, action: r.action as object, guardrails: r.guardrails as object, cooldownHours: r.cooldownHours },
     })
+    await snapshotRuleVersion(row.id, 1, ruleConfigOf(row), 'starter-pack') // ER5
     installed++
   }
   return { installed, skipped }

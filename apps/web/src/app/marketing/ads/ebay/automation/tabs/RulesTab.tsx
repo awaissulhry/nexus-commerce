@@ -81,6 +81,7 @@ export function RulesTab({ busy, act, bump }: { busy: boolean; act: (fn: () => P
               </button>
               <span className="h10-pill arch" title={r.scope?.campaignIds?.length ? 'Evaluates only the campaigns bound to this rule' : 'Evaluates every eligible campaign on the marketplace'}>{scopeLabel(r)}</span>
               <span className="eb-chip">{r.trigger.scope === 'CPS_AD' ? 'CPS ads' : 'CPC keywords'}</span>
+              {r.version != null && <span className="eb-chip" title="Config version — every definition edit snapshots immutably; restore any prior version from the editor's History">v{r.version}</span>}
               <span style={{ flex: 1 }} />
               <RuleMenu rule={r} busy={busy}
                 onRun={() => void act(async () => {
@@ -93,7 +94,7 @@ export function RulesTab({ busy, act, bump }: { busy: boolean; act: (fn: () => P
               <b>When</b> {r.trigger.all.map(conditionSentence).join(' AND ')} → <b>{actionSentence(r.action)}</b> · cooldown {r.cooldownHours}h
             </p>
             <p className="eb-rule-last">
-              {last ? `last run: ${last.evaluated} evaluated · ${last.matched} matched · ${last.proposed} proposed · ${last.applied} applied` : 'never run'}
+              {last ? `last run: ${last.evaluated} evaluated · ${last.matched} matched · ${last.proposed} proposed · ${last.applied} applied${last.ruleVersion != null ? ` · ran v${last.ruleVersion}` : ''}` : 'never run'}
               {r.lastEvaluatedAt && ` · ${new Date(r.lastEvaluatedAt).toLocaleString('en-GB')}`}
             </p>
             {confirmDelete?.id === r.id && (

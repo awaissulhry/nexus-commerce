@@ -14,7 +14,7 @@ import { Plus, X } from 'lucide-react'
 import '../../ebay.css'
 import { getEbayAds, postEbayAds } from '../../_lib'
 import {
-  type AutomationRule, type RuleCondition, type RuleTrigger, type RuleActionDef, type RuleTemplate,
+  type AutomationRule, type RuleCondition, type RuleTrigger, type RuleActionDef, type RuleTemplate, type RuleVersionRow,
   METRIC_LABELS, OP_LABELS, BENCH_LABELS, ACTIONS_FOR_SCOPE, ACTION_LABELS, CENTS_METRICS, PCT_METRICS,
   type RuleMetric, type RuleOp, type RuleBenchmark, conditionSentence, actionSentence, conditionValueLabel,
 } from '../_lib/rules'
@@ -51,6 +51,10 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(!isEdit && !fromRuleId)
+  // ER5 — immutable config history (edit mode only; fetched on expand)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [history, setHistory] = useState<RuleVersionRow[] | null>(null)
+  const [currentVersion, setCurrentVersion] = useState<number | null>(null)
 
   const applyRule = useCallback((r: { name: string; marketplace?: string | null; scope?: { campaignIds?: string[] } | null; trigger: RuleTrigger; action: RuleActionDef; cooldownHours: number }, rename?: string) => {
     setName(rename ?? r.name)
@@ -72,7 +76,7 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
         setCampaigns(camps.campaigns)
         if (ruleId) {
           const r = await getEbayAds<AutomationRule>(`/automation/rules/${ruleId}`)
-          applyRule(r); setEnabled(r.enabled); setLoaded(true)
+          applyRule(r); setEnabled(r.enabled); setCurrentVersion(r.version ?? null); setLoaded(true)
         } else if (fromRuleId) {
           const r = await getEbayAds<AutomationRule>(`/automation/rules/${fromRuleId}`)
           applyRule(r, `${r.name} (copy)`); setLoaded(true)
@@ -113,6 +117,25 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
     setAction((a) => (ACTIONS_FOR_SCOPE[scope].includes(a.type) ? a : scope === 'CPS_AD' ? { type: 'adjust_ad_rate', deltaPct: -10, minRatePct: 2 } : { type: 'pause_keyword' }))
     setScopeIds([])
     setPreview(null)
+  }
+
+  const loadHistory = async () => {
+    setHistoryOpen((o) => !o)
+    if (history == null && ruleId) {
+      try { setHistory((await getEbayAds<{ versions: RuleVersionRow[] }>(`/automation/rules/${ruleId}/versions`)).versions) }
+      catch (e) { setError((e as Error).message) }
+    }
+  }
+  const restoreVersion = async (v: number) => {
+    if (!ruleId) return
+    setBusy(true); setError(null)
+    try {
+      await postEbayAds(`/automation/rules/${ruleId}/revert`, { toVersion: v })
+      const r = await getEbayAds<AutomationRule>(`/automation/rules/${ruleId}`)
+      applyRule(r); setEnabled(r.enabled); setCurrentVersion(r.version ?? null)
+      setHistory((await getEbayAds<{ versions: RuleVersionRow[] }>(`/automation/rules/${ruleId}/versions`)).versions)
+      setPreview(null)
+    } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
 
   const doPreview = async () => {
@@ -308,6 +331,38 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
           </label>
         </div>
       </section>
+
+      {isEdit && (
+        <section className="h10-cd-sec">
+          <h3>
+            <button type="button" className="h10-am-link" onClick={() => void loadHistory()}>
+              History{currentVersion != null ? ` — currently v${currentVersion}` : ''} {historyOpen ? '▾' : '▸'}
+            </button>
+          </h3>
+          {historyOpen && (
+            history == null ? <p className="eb-be-hint">Loading…</p> : (
+              <div className="eb-version-list">
+                {history.map((v) => (
+                  <div key={v.id} className="eb-version-row">
+                    <span className="eb-chip">v{v.version}</span>
+                    <div className="eb-version-body">
+                      <p className="eb-version-meta">
+                        {new Date(v.createdAt).toLocaleString('en-GB')} · {v.changedBy === 'starter-pack' || v.changedBy === 'backfill:er5' ? v.changedBy : v.changedBy ? 'operator' : '—'}{v.note ? ` · ${v.note}` : ''}
+                      </p>
+                      <p className="eb-version-sentence">
+                        <b>{v.name}</b> — When {v.trigger.all.map(conditionSentence).join(' AND ')} → {actionSentence(v.action)} · cooldown {v.cooldownHours}h
+                      </p>
+                    </div>
+                    {v.version === currentVersion
+                      ? <span className="h10-pill ok">current</span>
+                      : <button type="button" className="h10-am-btn sm" disabled={busy} title="Re-validates the old config and saves it as a NEW version — history is never rewritten" onClick={() => void restoreVersion(v.version)}>Restore</button>}
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+        </section>
+      )}
 
       {preview && (
         <section className="h10-cd-sec eb-preview-out" aria-live="polite">

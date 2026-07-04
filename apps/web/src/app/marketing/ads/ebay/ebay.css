@@ -205,3 +205,11 @@
 .eb-impact .good { color: #12855f; }
 .eb-impact .bad { color: #b42318; }
 .eb-impact .risk { color: #b87503; font-weight: 500; }
+
+/* ER5 — rule version history */
+.eb-version-list { display: flex; flex-direction: column; }
+.eb-version-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px dashed #eef1f5; }
+.eb-version-row:last-child { border-bottom: none; }
+.eb-version-body { flex: 1; min-width: 0; }
+.eb-version-meta { font-size: 11px; color: #8a93a1; margin: 0; }
+.eb-version-sentence { font-size: 12px; color: #3d4653; margin: 2px 0 0; line-height: 1.5; }
