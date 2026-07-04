@@ -196,3 +196,7 @@
 .eb-digest-plink { color: inherit; text-decoration: none; }
 .eb-digest-plink:hover { color: #1f6fde; text-decoration: underline; }
 .eb-hl-row td { background: #fdf6e3 !important; transition: background 1.2s ease; }
+
+/* ER4 E1 — greyed menu items (e.g. Run now on a disabled rule) */
+.eb-statusfix button:disabled { opacity: 0.45; cursor: not-allowed; }
+.eb-statusfix button:disabled:hover { background: none; color: #1c2530; }

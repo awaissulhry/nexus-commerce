@@ -28,7 +28,7 @@ function RuleMenu({ rule, busy, onRun, onDelete }: { rule: AutomationRule; busy:
         <span className="h10-statusmenu eb-statusfix">
           <button type="button" onClick={() => { setOpen(false); router.push(`/marketing/ads/ebay/automation/rules/${rule.id}`) }}>Edit…</button>
           <button type="button" onClick={() => { setOpen(false); router.push(`/marketing/ads/ebay/automation/rules/new?from=${rule.id}`) }}>Duplicate…</button>
-          <button type="button" disabled={busy} onClick={() => { setOpen(false); onRun() }}>Run now</button>
+          <button type="button" disabled={busy || !rule.enabled} title={rule.enabled ? undefined : "Enable the rule first — disabled rules don't evaluate"} onClick={() => { setOpen(false); onRun() }}>Run now</button>
           <button type="button" className="danger" disabled={busy} onClick={() => { setOpen(false); onDelete() }}>Delete…</button>
         </span>
       )}
