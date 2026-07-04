@@ -8,7 +8,7 @@
  * them with no continue-anyway (stricter than SPW — eBay launches spend
  * money; deviation recorded in the spec §11.3).
  */
-import { useState, type ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { H10Modal } from '../../../_lib/modal'
 
@@ -46,7 +46,7 @@ export function WizardShell(props: {
 
       <nav className="h10-spw-steps" aria-label="Steps">
         {props.steps.map((s, i) => (
-          <span key={s.key} style={{ display: 'inline-flex', alignItems: 'center' }}>
+          <Fragment key={s.key}>
             {i > 0 && <span className="h10-spw-conn" />}
             <button
               type="button"
@@ -57,18 +57,18 @@ export function WizardShell(props: {
               <span className="circ">{i + 1}</span>
               <span className="lbl">{s.label}</span>
             </button>
-          </span>
+          </Fragment>
         ))}
       </nav>
 
       <div style={{ marginTop: 18 }}>{props.children}</div>
 
       <footer className="h10-spw-foot">
-        {idx > 0 ? <button type="button" className="h10-spw-back h10-am-btn" onClick={props.onBack}>Back</button> : <span />}
+        {idx > 0 ? <button type="button" className="h10-spw-back" onClick={props.onBack}>Back</button> : <span />}
         <span className="grow" style={{ flex: 1 }} />
-        {props.blockers.length > 0 && <span className="h10-spw-err" style={{ color: '#b87503', fontSize: 12.5 }}>{props.blockers.length} item(s) need attention</span>}
+        {props.blockers.length > 0 && <span className="h10-spw-err">{props.blockers.length} item{props.blockers.length === 1 ? '' : 's'} need attention</span>}
         {props.footerNote}
-        <button type="button" className="h10-spw-next h10-am-btn primary" disabled={props.nextBusy} onClick={tryNext}>{props.nextBusy ? '…' : props.nextLabel}</button>
+        <button type="button" className="h10-spw-next" disabled={props.nextBusy} onClick={tryNext}>{props.nextBusy ? '…' : props.nextLabel}</button>
       </footer>
 
       <H10Modal open={showBlockers} onClose={() => setShowBlockers(false)} title="Before you continue"

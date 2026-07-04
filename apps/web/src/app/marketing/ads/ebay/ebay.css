@@ -70,15 +70,13 @@
 .h10-ds-chart-legend .sw { display: inline-flex; align-items: center; gap: 6px; }
 .h10-ds-chart-legend .ln { width: 18px; height: 2px; border-radius: 2px; }
 
-/* E7 — goal cards */
-.eb-goalgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
-.eb-goalcard { text-align: left; background: #fff; border: 1px solid #d6dbe2; border-radius: 12px; padding: 16px 18px; cursor: pointer; display: flex; flex-direction: column; gap: 8px; transition: border-color 120ms, box-shadow 120ms; }
-.eb-goalcard:hover:not(:disabled) { border-color: #1f6fde; box-shadow: 0 4px 16px rgba(31,111,222,0.10); }
-.eb-goalcard:disabled { opacity: 0.55; cursor: not-allowed; }
-.eb-goalcard .ic { color: #1f6fde; }
-.eb-goalcard b { font-size: 14px; color: #1c2530; }
-.eb-goalcard p { font-size: 12px; color: #5b6573; line-height: 1.5; margin: 0; }
-.eb-goalcard .chips { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 2px; }
+/* EV1 — eb-goalcard retired (D6): mode cards ride the shared .h10-cb-card.
+   eBay-scoped modifiers below (ebay.css loads on eBay pages only). */
+.eb-cb-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.h10-cb-card:disabled { opacity: 0.55; cursor: not-allowed; }
+.h10-cb-card:disabled:hover { border-color: #e6e9ee; background: #fff; box-shadow: none; }
+.h10-cb-card.eb-cb-on { border-color: #1f6fde; background: #f6faff; box-shadow: 0 0 0 3px rgba(31, 111, 222, 0.12); }
+.h10-cb-card .h10-cb-ic svg { color: #1f6fde; }
 
 /* ER3.2 — Rules & Automation hub: posture band (delta 8) */
 .eb-posture-band { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-bottom: 14px; }

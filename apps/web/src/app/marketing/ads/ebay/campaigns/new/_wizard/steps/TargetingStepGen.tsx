@@ -7,6 +7,7 @@
  * live matching preview via the shared criterion-preview endpoint.
  */
 import { useEffect, useState } from 'react'
+import { ListChecks, Wand2 } from 'lucide-react'
 import { money } from '../../../../../campaigns/_grid/format'
 import { postEbayAds } from '../../../../_lib'
 import type { CampaignPlan, SelectionRule } from '../plan'
@@ -42,14 +43,16 @@ export function TargetingStepGen({ plan, set }: { plan: CampaignPlan; set: (patc
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 900 }}>
-      <div className="eb-goalgrid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <button type="button" className="eb-goalcard" style={plan.targetingMode === 'key' ? { borderColor: '#1f6fde', boxShadow: '0 0 0 2px rgba(31,111,222,.12)' } : undefined} onClick={() => set({ targetingMode: 'key' })}>
-          <b>Key-based — pick the listings</b>
-          <p>You choose exactly which listings to promote (next step). Rates live per ad and stay fully editable.</p>
+      <div className="h10-cb-cards eb-cb-two">
+        <button type="button" className={`h10-cb-card ${plan.targetingMode === 'key' ? 'eb-cb-on' : ''}`} onClick={() => set({ targetingMode: 'key' })}>
+          <span className="h10-cb-ic"><ListChecks size={40} strokeWidth={1.6} /></span>
+          <span className="h10-cb-ttl">Key-based — pick the listings</span>
+          <span className="h10-cb-desc">You choose exactly which listings to promote (next step). Rates live per ad and stay fully editable.</span>
         </button>
-        <button type="button" className="eb-goalcard" style={plan.targetingMode === 'rules' ? { borderColor: '#1f6fde', boxShadow: '0 0 0 2px rgba(31,111,222,.12)' } : undefined} onClick={() => set({ targetingMode: 'rules' })}>
-          <b>Rules-based — describe the inventory</b>
-          <p>eBay re-evaluates your rules daily; with auto-select ON, new matching listings enroll by themselves — the true catch-all. Selection rules are immutable after launch (clone to change).</p>
+        <button type="button" className={`h10-cb-card ${plan.targetingMode === 'rules' ? 'eb-cb-on' : ''}`} onClick={() => set({ targetingMode: 'rules' })}>
+          <span className="h10-cb-ic"><Wand2 size={40} strokeWidth={1.6} /></span>
+          <span className="h10-cb-ttl">Rules-based — describe the inventory</span>
+          <span className="h10-cb-desc">eBay re-evaluates your rules daily; with auto-select ON, new matching listings enroll by themselves — the true catch-all. Selection rules are immutable after launch (clone to change).</span>
         </button>
       </div>
 
