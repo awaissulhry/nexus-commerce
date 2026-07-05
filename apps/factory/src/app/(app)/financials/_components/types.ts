@@ -24,3 +24,7 @@ export type OrderFin = {
 
 export type Tiles = { outstandingCents?: number; depositsDueCents?: number; monthInvoicedCents?: number; monthPaidCents?: number };
 export type FinancialsResponse = { monthKey: string; tiles: Tiles; orders: OrderFin[] };
+
+export type InvoiceRow = { id: string; number: string; amountCents?: number; sentAt: string | null; paidAt: string | null };
+export type PaymentRow = { id: string; kind: string; amountCents?: number; method: string | null; receivedAt: string; notes: string | null };
+export type FinancialDetail = { order: { id: string; number: string; partyName: string }; rollup: OrderFin; invoices: InvoiceRow[]; payments: PaymentRow[] };

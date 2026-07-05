@@ -8,6 +8,7 @@ import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { PAGES } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 import { orderFinancials, tiles, type FinOrder } from "@/lib/financials/rollup";
+import { actualCostByOrder } from "@/lib/financials/actual-cost";
 
 export const permission = PAGES.financials;
 
@@ -48,25 +49,3 @@ export const GET = guarded(PAGES.financials, async (req, { resolved }) => {
   const monthKey = new Date().toISOString().slice(0, 7);
   return jsonStripped({ monthKey, tiles: tiles(fins, monthKey), orders: fins }, resolved);
 });
-
-/** Shared helper (also used by the by-party/by-month routes): Σ OUT × material cost per order. */
-export async function actualCostByOrder(orders: { id: string; woIds: string[] }[]): Promise<Map<string, number>> {
-  const woToOrder = new Map<string, string>();
-  for (const o of orders) for (const w of o.woIds) woToOrder.set(w, o.id);
-  const woIds = [...woToOrder.keys()];
-  const out = new Map<string, number>();
-  if (woIds.length === 0) return out;
-
-  const moves = await prisma.movementLedger.findMany({ where: { refType: "WorkOrder", refId: { in: woIds }, type: "OUT" }, select: { refId: true, materialId: true, qty: true } });
-  if (moves.length === 0) return out;
-  const costs = Object.fromEntries(
-    (await prisma.material.findMany({ where: { id: { in: [...new Set(moves.map((m) => m.materialId))] } }, select: { id: true, costCents: true } })).map((m) => [m.id, m.costCents]),
-  );
-  for (const m of moves) {
-    const orderId = m.refId ? woToOrder.get(m.refId) : undefined;
-    if (!orderId) continue;
-    out.set(orderId, (out.get(orderId) ?? 0) + m.qty * (costs[m.materialId] ?? 0));
-  }
-  for (const [k, v] of out) out.set(k, Math.round(v));
-  return out;
-}
