@@ -34,6 +34,7 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
   const [result, setResult] = useState<ComposeResult | null>(null);
   const [sending, setSending] = useState(false);
   const [floorPct, setFloorPct] = useState(20);
+  const [similar, setSimilar] = useState<{ id: string; number: string; partyName: string; state: string; netCents: number; marginPct: number }[]>([]);
 
   const load = useCallback(async () => {
     const [d, t, s] = await Promise.all([
@@ -58,6 +59,15 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
 
   const activeLine = quote?.lines.find((l) => l.id === activeLineId) ?? null;
   const isDraft = quote?.state === "DRAFT";
+
+  useEffect(() => {
+    if (!quote) return;
+    const tid = quote.lines.find((l) => l.templateId)?.templateId;
+    const usp = new URLSearchParams({ partyId: quote.party.id, excludeId: quote.id });
+    if (tid) usp.set("templateId", tid);
+    apiJson<{ quotes: typeof similar }>(`/api/quotes/similar?${usp}`).then((d) => setSimilar(d.quotes)).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quote?.id, quote?.lines.length]);
 
   // compose the active line for the rail (read-only preview so it works on sent quotes too)
   const refreshRail = useCallback(async (templateId: string | null, selections: string[], adjustmentCents: number) => {
@@ -238,6 +248,18 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
                 <div key={v.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
                   <span>v{v.version}</span>
                   <span style={{ color: "var(--h10-text-3)" }}>{new Date(v.sentAt).toLocaleDateString()}{v.pdfRef ? <a href={`/api/quotes/${quoteId}/pdf?version=${v.version}`} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 6, color: "var(--h10-text-link)" }}>PDF</a> : null}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {similar.length > 0 && (
+            <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--h10-text-3)", marginBottom: 6 }}>Similar past quotes</div>
+              {similar.map((s) => (
+                <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 12, padding: "2px 0" }}>
+                  <span style={{ display: "inline-flex", gap: 5, alignItems: "baseline" }}>{s.number}<Pill tone={s.state === "ACCEPTED" ? "success" : "danger"}>{s.state === "ACCEPTED" ? "won" : "lost"}</Pill></span>
+                  <span style={{ color: "var(--h10-text-2)", fontFamily: "var(--font-mono)" }}>{eur(s.netCents)}</span>
                 </div>
               ))}
             </div>

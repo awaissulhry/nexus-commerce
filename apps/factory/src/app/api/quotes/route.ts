@@ -61,6 +61,10 @@ export const POST = guarded(FEATURES.quotesCreate, async (req, { actor, resolved
   const party = await prisma.party.findUnique({ where: { id: parsed.data.partyId }, select: { id: true, depositDefaultPct: true } });
   if (!party) return NextResponse.json({ error: "Party not found" }, { status: 404 });
 
+  // estimated lead time (honest v1 — real capable-to-promise from floor load lands in FP6)
+  const leadRow = await prisma.appSetting.findUnique({ where: { key: "production.leadTimeDays" } });
+  const leadDays = ((leadRow?.value as { days?: number })?.days) ?? 21;
+
   const number = await nextNumber("quote");
   const quote = await prisma.quote.create({
     data: {
@@ -69,6 +73,7 @@ export const POST = guarded(FEATURES.quotesCreate, async (req, { actor, resolved
       conversationId: parsed.data.conversationId ?? null,
       depositPct: party.depositDefaultPct ?? null,
       validUntilAt: new Date(Date.now() + 30 * 86400000), // 30-day default validity
+      promiseDateAt: new Date(Date.now() + leadDays * 86400000),
     },
   });
   void audit({ actorId: actor!.id, entityType: "quote", entityId: quote.id, action: "created", after: { number } });

@@ -28,7 +28,7 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
-const PUBLIC_PREFIXES = ["/login"];
+const PUBLIC_PREFIXES = ["/login", "/q"]; // /q = public customer quote-accept pages (token-authed, no session)
 const isPublicPath = (p: string) => PUBLIC_PREFIXES.some((pre) => p === pre || p.startsWith(pre + "/"));
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

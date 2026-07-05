@@ -92,7 +92,8 @@ function PipelineInner() {
         <Counter label="Drafts" value={data?.counters.drafts ?? 0} tone="var(--h10-text)" />
         <Counter label="Awaiting approval" value={data?.counters.awaiting ?? 0} tone="var(--h10-primary)" />
         <Counter label="Overdue" value={data?.counters.overdue ?? 0} tone={data && data.counters.overdue > 0 ? "var(--h10-danger)" : "var(--h10-text-3)"} />
-        <div style={{ marginLeft: "auto", alignSelf: "center" }}>
+        <div style={{ marginLeft: "auto", alignSelf: "center", display: "flex", gap: 12, alignItems: "center" }}>
+          <a href="/api/exports/quotes" style={{ fontSize: 12, color: "var(--h10-text-link)" }}>Export CSV</a>
           {canCreate && <Button variant="primary" onClick={startCreate}><Plus size={13} /> New quote</Button>}
         </div>
       </div>
