@@ -49,8 +49,9 @@ A **local-first platform that runs a small Italian leather/motorcycle-apparel fa
 | Gate fixes: changeable Gmail label scope, dev-build isolation (`.next-dev`) | ✅ shipped | `9df4ccf0` |
 | FP1 Inbox spec | ✅ approved by Owner ("Approved. Please proceed.") | `d267b058` |
 | FP1 Inbox build | ✅ **SHIPPED + verified** (backend core / API surface / three-pane UI / fixes) — gate report `FP1-REPORT.md`; ⏳ awaiting Owner click-through (live reply send is the Owner's step) | FP1.1–FP1.4, ends `c39ee15f` |
-| FP2 Products & Pricing | **NEXT on FP1 approval** — spec first (§11 FP2 is the seed) | — |
-| FP3…FP11 | Not started; spec-first, in the §11 order | — |
+| FP2 Products & Pricing | ✅ **SHIPPED + verified** (engine/templates/materials/certs/price-lists/preview/imports) — gate report `FP2-REPORT.md`; ⏳ awaiting Owner click-through | FP2.1–FP2.5, ends `5a0a9923` |
+| FP3 Quotes | **NEXT on FP2 approval** — spec first; mounts the FP2.1 engine behind a Gmail-thread-born quote (§11 FP3 seed) | — |
+| FP4…FP11 | Not started; spec-first, in the §11 order | — |
 
 **Owner's live instance state:** Google connected (`xaviaracing.it@gmail.com`), scope = whole `INBOX` (Owner defers a dedicated "Factory" label — re-scope any time via the Change button in Settings › Integrations), ~50 conversations / 86 messages synced incl. real orders ("AWA ORDER 652/2026 BARTOCCETTI"), worker healthy, **Drive folder created ✓**, Sendcloud NOT connected yet (Owner defers; blocks nothing until FP8), **0 parties imported** (so all senders show unmatched — FP1's party-create flow and/or a contacts import will light this up). Owner password was rotated by the Owner (never in `.env`; sessions server-side).
 
