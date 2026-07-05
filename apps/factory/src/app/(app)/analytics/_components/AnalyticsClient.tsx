@@ -10,12 +10,14 @@ import { useCallback, useEffect, useState } from "react";
 import { BarChart3, Inbox, FileText, Clock, AlertTriangle } from "lucide-react";
 import { useToast } from "@/design-system/components";
 import { apiJson } from "@/lib/api-client";
+import { usePermission } from "@/lib/auth/client";
 import { useFactoryEvents } from "@/lib/use-factory-events";
-import { Panel, ThroughputChart, LeadTimeChart } from "./charts";
+import { Panel, ThroughputChart, LeadTimeChart, MarginBars, WinLossPanel } from "./charts";
 import { type AnalyticsResponse, type Counters } from "./types";
 
 export function AnalyticsClient() {
   const { toast } = useToast();
+  const canMargin = usePermission("financials.margins.view");
   const [counters, setCounters] = useState<Counters | null>(null);
   const [data, setData] = useState<AnalyticsResponse | null>(null);
 
@@ -55,6 +57,18 @@ export function AnalyticsClient() {
               <AlertTriangle size={13} /> Bottleneck: <b>{data.bottleneckStage.toLowerCase()}</b> — the slowest stage on the floor.
             </div>
           )}
+        </Panel>
+        <Panel title="Margin by customer (actual)" href="/financials">
+          <MarginBars blind={!canMargin} data={(data?.marginByParty ?? []).map((p) => ({ label: p.partyName, cents: p.actualMarginCents }))} />
+        </Panel>
+        <Panel title="Margin by month (actual)" href="/financials">
+          <MarginBars blind={!canMargin} data={(data?.marginByMonth ?? []).map((m) => ({ label: m.monthKey, cents: m.actualMarginCents }))} />
+        </Panel>
+        <Panel title="Margin by product (estimate)" href="/products">
+          <MarginBars blind={!canMargin} data={(data?.marginByProduct ?? []).map((p) => ({ label: p.product, cents: p.estMarginCents }))} />
+        </Panel>
+        <Panel title="Quote win / loss" href="/quotes">
+          {data ? <WinLossPanel w={data.winLoss} /> : null}
         </Panel>
       </div>
     </div>
