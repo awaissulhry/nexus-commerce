@@ -1283,3 +1283,242 @@ describe('planEbayFamilyCreates', () => {
     expect(autoWarn?.reason).toContain('"GHOST-PARENT"')
   })
 })
+
+// ── P3: child-as-parent guard (FIX A) + synthetic-parent theme inference (FIX B) ──
+
+describe('P3 — child-as-parent guard (FIX A)', () => {
+  // ── FIX A: A↔B new-row cycle ─────────────────────────────────────────
+  it('P3-guard/cycle: A↔B new-row cycle (both children cross-referencing) → 2 errors, no synthetics, no childCreates', () => {
+    // A.parent_sku=B, B.parent_sku=A — both are new child rows; each other's sku is a batch child.
+    const rowA = { sku: 'A', _rowId: 'ra', parentage: 'child', parent_sku: 'B', aspect_Colore: 'Nero' }
+    const rowB = { sku: 'B', _rowId: 'rb', parentage: 'child', parent_sku: 'A', aspect_Colore: 'Rosso' }
+
+    const result = planEbayFamilyCreates({
+      rows: [rowA, rowB],
+      existingBySku: new Map(),
+      existingParentById: new Map(),
+    })
+
+    // Both rows must error — each other's parent_sku is a child in the batch
+    expect(result.errors).toHaveLength(2)
+    expect(result.errors.every(e => /refers to a variant row/.test(e.reason))).toBe(true)
+    // No synthetic parents at all
+    expect(result.parentCreates).toHaveLength(0)
+    expect(result.parentCreates.some(p => p.tempRowId.startsWith('__synth__'))).toBe(false)
+    // No child creates or reparents
+    expect(result.childCreates).toHaveLength(0)
+    expect(result.reparents).toHaveLength(0)
+  })
+
+  // ── FIX A: one-directional new-child → batch-child reference ─────────
+  it('P3-guard/one-way: new child with parent_sku = another new child\'s sku → error for A, no synthetic, C still resolves', () => {
+    // REAL-PARENT is a legitimate parent; C is a child; A erroneously references C as parent.
+    const realParent = { sku: 'REAL-PARENT', _rowId: 'rp', parentage: 'parent', variation_theme: 'Colore' }
+    const childC = { sku: 'C', _rowId: 'rc', parentage: 'child', parent_sku: 'REAL-PARENT', aspect_Colore: 'Nero' }
+    const childA = { sku: 'A', _rowId: 'ra', parentage: 'child', parent_sku: 'C' } // references a child
+
+    const result = planEbayFamilyCreates({
+      rows: [realParent, childC, childA],
+      existingBySku: new Map(),
+      existingParentById: new Map(),
+    })
+
+    // A errors; message matches
+    const errorsForA = result.errors.filter(e => e.sku === 'A')
+    expect(errorsForA).toHaveLength(1)
+    expect(errorsForA[0].reason).toMatch(/refers to a variant row/)
+    // C resolves normally under REAL-PARENT
+    const cCreates = result.childCreates.filter(c => c.sku === 'C')
+    expect(cCreates).toHaveLength(1)
+    expect(cCreates[0].parentRef).toEqual({ kind: 'temp', tempRowId: 'rp' })
+    // No synthetic parent for 'C' (it was caught by the guard)
+    expect(result.parentCreates.some(p => p.sku === 'C')).toBe(false)
+  })
+
+  // ── FIX A: existing child reparent → batch child → error, no synthetic ─
+  it('P3-guard/reparent: existing child with parent_sku = batch child → error, no synthetic, no reparent', () => {
+    // EXISTING-CHILD (in DB) wants to reparent to NEW-CHILD, which is a new child in this batch.
+    const existingChildRow = {
+      sku: 'EXISTING-CHILD',
+      _productId: 'idEC',
+      parentage: 'child',
+      parent_sku: 'NEW-CHILD',  // points to a batch child
+    }
+    const newChildRow = {
+      sku: 'NEW-CHILD',
+      _rowId: 'nc',
+      parentage: 'child',
+      parent_sku: 'SOME-VALID-PARENT',  // NEW-CHILD itself is a child
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [existingChildRow, newChildRow],
+      existingBySku: new Map([
+        ['EXISTING-CHILD', { id: 'idEC', parentId: 'old-parent', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    // EXISTING-CHILD must error
+    const ecError = result.errors.find(e => e.sku === 'EXISTING-CHILD')
+    expect(ecError).toBeDefined()
+    expect(ecError!.reason).toMatch(/refers to a variant row/)
+    // No reparent for EXISTING-CHILD
+    expect(result.reparents.filter(r => r.sku === 'EXISTING-CHILD')).toHaveLength(0)
+    // No synthetic created for 'NEW-CHILD' (would be a junk parent)
+    expect(result.parentCreates.some(p => p.sku === 'NEW-CHILD')).toBe(false)
+  })
+
+  // ── FIX A: guard must NOT false-positive on a legitimate batch parent ──
+  it('P3-guard/legit: new child + parent_sku = new PARENT row in batch → resolves normally (no false positive)', () => {
+    const parentRow = {
+      sku: 'LEGIT-PARENT',
+      _rowId: 'lp',
+      parentage: 'parent',
+      variation_theme: 'Colore',
+    }
+    const childRow = {
+      sku: 'LEGIT-CHILD',
+      _rowId: 'lc',
+      parentage: 'child',
+      parent_sku: 'LEGIT-PARENT',
+      aspect_Colore: 'Blu',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [parentRow, childRow],
+      existingBySku: new Map(),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.parentCreates).toHaveLength(1)
+    expect(result.parentCreates[0].sku).toBe('LEGIT-PARENT')
+    expect(result.childCreates).toHaveLength(1)
+    expect(result.childCreates[0].sku).toBe('LEGIT-CHILD')
+    expect(result.childCreates[0].parentRef).toEqual({ kind: 'temp', tempRowId: 'lp' })
+  })
+})
+
+describe('P3 — synthetic-parent theme inference (FIX B)', () => {
+  // ── FIX B: infer theme from aspect_* when variation_theme absent ──────
+  it('P3-theme/new-child: synthetic parent gets inferred theme from aspect_* when variation_theme is absent', () => {
+    const child = {
+      sku: 'THEME-CHILD',
+      _rowId: 'tc',
+      parentage: 'child',
+      parent_sku: 'INFERRED-PARENT',
+      aspect_Colore: 'Rosso',
+      // no variation_theme
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [child],
+      existingBySku: new Map(),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.parentCreates).toHaveLength(1)
+    expect(result.parentCreates[0].sku).toBe('INFERRED-PARENT')
+    // Theme inferred from aspect_Colore → 'Colore'
+    expect(result.parentCreates[0].variationTheme).toBe('Colore')
+    // Auto-create warning still present
+    expect(result.warnings.some(w => w.reason.includes('auto-created parent'))).toBe(true)
+    // Child still created
+    expect(result.childCreates).toHaveLength(1)
+    expect(result.childCreates[0].sku).toBe('THEME-CHILD')
+  })
+
+  it('P3-theme/reparent: synthetic parent from reparent path also gets inferred theme', () => {
+    // Existing child reparented to a missing parent — synthetic created in reparent path.
+    const row = {
+      sku: 'EXIST-CHILD',
+      _productId: 'idEC',
+      parentage: 'child',
+      parent_sku: 'INFERRED-REPARENT-PARENT',
+      aspect_Taglia: 'L',
+      // no variation_theme
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['EXIST-CHILD', { id: 'idEC', parentId: 'old-parent-id', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.parentCreates).toHaveLength(1)
+    expect(result.parentCreates[0].sku).toBe('INFERRED-REPARENT-PARENT')
+    // Theme inferred from aspect_Taglia → 'Taglia'
+    expect(result.parentCreates[0].variationTheme).toBe('Taglia')
+    // Reparent still emitted
+    expect(result.reparents).toHaveLength(1)
+    expect(result.reparents[0].sku).toBe('EXIST-CHILD')
+  })
+
+  it('P3-theme/explicit-wins: explicit variation_theme takes precedence over axis inference', () => {
+    const child = {
+      sku: 'THEME-CHILD-2',
+      _rowId: 'tc2',
+      parentage: 'child',
+      parent_sku: 'EXPLICIT-PARENT',
+      variation_theme: 'Colore,Taglia',  // explicit
+      aspect_Colore: 'Rosso',            // inference alone would give only 'Colore'
+      aspect_Taglia: 'M',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [child],
+      existingBySku: new Map(),
+      existingParentById: new Map(),
+    })
+
+    expect(result.parentCreates).toHaveLength(1)
+    // Must use the explicit theme, not just the inferred axes
+    expect(result.parentCreates[0].variationTheme).toBe('Colore,Taglia')
+  })
+
+  it('P3-theme/no-axes: synthetic parent gets null theme when child has no aspect_* values', () => {
+    const child = {
+      sku: 'NO-AXES-CHILD',
+      _rowId: 'nac',
+      parentage: 'child',
+      parent_sku: 'NULL-THEME-PARENT',
+      // no aspect_* keys, no variation_theme
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [child],
+      existingBySku: new Map(),
+      existingParentById: new Map(),
+    })
+
+    expect(result.parentCreates).toHaveLength(1)
+    // No axes → theme stays null (acceptable per spec)
+    expect(result.parentCreates[0].variationTheme).toBeNull()
+  })
+
+  it('P3-theme/dedup: aspect_Colore + aspect_colore on same row → single axis in inferred theme', () => {
+    const child = {
+      sku: 'DEDUP-CHILD',
+      _rowId: 'dc',
+      parentage: 'child',
+      parent_sku: 'DEDUP-PARENT',
+      aspect_Colore: 'Rosso',
+      aspect_colore: 'Rosso',  // lowercase duplicate — same axis
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [child],
+      existingBySku: new Map(),
+      existingParentById: new Map(),
+    })
+
+    expect(result.parentCreates).toHaveLength(1)
+    // Deduped → 'Colore' only (not 'Colore,colore')
+    expect(result.parentCreates[0].variationTheme).toBe('Colore')
+  })
+})

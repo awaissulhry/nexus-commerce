@@ -168,6 +168,34 @@ function parsePriceFields(row: EbayRow): number {
   return 0
 }
 
+/**
+ * FIX B (P3) — Derive variation_theme from aspect_* keys when the row has no
+ * explicit variation_theme. Used when auto-creating a synthetic parent.
+ *
+ * Mirrors the comma-joined axis list buildFlatRow writes
+ * (ebay-variation-push.service.ts:1506): `variationAxisNames.join(',')`.
+ *
+ * Collects all `aspect_X` keys with non-empty values, strips the `aspect_`
+ * prefix, deduplicates case-insensitively (aspect_Colore + aspect_colore
+ * both map to the same axis), then joins with ','.
+ * Returns null when no axis values are present.
+ */
+function inferVariationThemeFromRow(row: EbayRow): string | null {
+  const seenLower = new Set<string>()
+  const axisNames: string[] = []
+  for (const key of Object.keys(row)) {
+    if (!key.startsWith('aspect_')) continue
+    const suffix = key.slice('aspect_'.length) // e.g. 'Colore', 'colore', 'Taglia'
+    const lower = suffix.toLowerCase()
+    if (seenLower.has(lower)) continue          // dedup: aspect_Colore + aspect_colore → one entry
+    const val = String(row[key] ?? '').trim()
+    if (!val) continue                           // key present but empty → skip
+    seenLower.add(lower)
+    axisNames.push(suffix)
+  }
+  return axisNames.length > 0 ? axisNames.join(',') : null
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Exported functions
 // ──────────────────────────────────────────────────────────────────────
@@ -340,6 +368,16 @@ export function planEbayFamilyCreates(input: {
     return true
   })
 
+  // FIX A (P3): Build set of all child skus in the incoming rows for the child-as-parent guard.
+  // A parent_sku that points to any of these skus is an error (cycle / typo), not a synthetic-parent trigger.
+  // Uses `rows` (not validRows) per spec — duped rows still contribute to the safety set.
+  const batchChildSkus = new Set(
+    rows
+      .filter(r => classifyRow(r).isChild)
+      .map(r => String(r.sku ?? '').trim())
+      .filter(Boolean),
+  )
+
   // ── Step 2 + 4: First pass — collect parentCreates ──────────────────
   // Must be fully built before processing children so temp-id lookups work.
   for (const row of validRows) {
@@ -428,6 +466,10 @@ export function planEbayFamilyCreates(input: {
                 variationTheme: existingParentBySku.variationTheme,
               })
             }
+          } else if (batchChildSkus.has(parentSku)) {
+            // FIX A (P3): parent_sku points to a child row in this batch — cycle or typo.
+            // Error immediately; do NOT create a synthetic parent or a child create.
+            errors.push({ sku, reason: `parent_sku "${parentSku}" refers to a variant row in this sheet, not a parent` })
           } else {
             // P2: auto-create a synthetic parent so the whole family persists in one save.
             // Deduped: if another child in this batch already referenced the same missing
@@ -445,7 +487,11 @@ export function planEbayFamilyCreates(input: {
               })
             } else {
               const synthTempRowId = `__synth__${parentSku}`
-              const synthVariationTheme = row.variation_theme ? String(row.variation_theme) : null
+              // FIX B (P3): fall back to axis inference when no explicit variation_theme.
+              // Separator matches buildFlatRow (ebay-variation-push.service.ts:1506): join(',').
+              const synthVariationTheme = row.variation_theme
+                ? String(row.variation_theme)
+                : inferVariationThemeFromRow(row)
               parentCreates.push({
                 tempRowId: synthTempRowId,
                 sku: parentSku,
@@ -545,6 +591,10 @@ export function planEbayFamilyCreates(input: {
               const existingSynthId = syntheticParentsBySku.get(parentSku)
               if (existingSynthId) {
                 resolvedTempRowId = existingSynthId
+              } else if (batchChildSkus.has(parentSku)) {
+                // FIX A (P3): parent_sku points to a child row in this batch — error, no synthetic.
+                // resolvedParentId stays '' + needsSynthetic stays false → no reparent emitted.
+                errors.push({ sku, reason: `parent_sku "${parentSku}" refers to a variant row in this sheet, not a parent` })
               } else {
                 // Not found anywhere — defer synthetic creation until after guard evaluation.
                 needsSynthetic = true
@@ -567,7 +617,11 @@ export function planEbayFamilyCreates(input: {
             // FIX 1: reparent will be emitted — only NOW create synthetic if needed.
             if (needsSynthetic) {
               const synthTempRowId = `__synth__${parentSku!}`
-              const synthVariationTheme = row.variation_theme ? String(row.variation_theme) : null
+              // FIX B (P3): fall back to axis inference when no explicit variation_theme.
+              // Separator matches buildFlatRow (ebay-variation-push.service.ts:1506): join(',').
+              const synthVariationTheme = row.variation_theme
+                ? String(row.variation_theme)
+                : inferVariationThemeFromRow(row)
               parentCreates.push({
                 tempRowId: synthTempRowId,
                 sku: parentSku!,
