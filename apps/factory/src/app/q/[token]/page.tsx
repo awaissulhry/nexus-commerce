@@ -6,6 +6,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 type SnapshotLine = { description: string; options: string[]; qty: number; unitNetCents: number; lineTotalCents: number };
 type PublicQuote = {
@@ -42,7 +43,9 @@ export default function PublicQuotePage({ params }: { params: Promise<{ token: s
   const act = async (kind: "accept" | "reject") => {
     setBusy(true);
     try {
-      const res = await fetch(`/api/q/${token}/${kind}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(kind === "reject" ? { note } : {}) });
+      // same CSRF handshake as the app (apiFetch fetches a token first) — the
+      // unguessable link token is the auth; CSRF double-submit stays uniform.
+      const res = await apiFetch(`/api/q/${token}/${kind}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(kind === "reject" ? { note } : {}) });
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? "error"); }
       setOutcome(kind === "accept" ? "accepted" : "rejected");
       setStatus("done");
