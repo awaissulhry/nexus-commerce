@@ -879,7 +879,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── API: save ─────────────────────────────────────────────────────────
 
-  const onSave = useCallback(async (dirty: BaseRow[]): Promise<{ saved: number }> => {
+  const onSave = useCallback(async (dirty: BaseRow[]): Promise<{ saved: number; createResult?: { errors?: unknown[] } }> => {
     const res = await fetch(`${BACKEND}/api/ebay/flat-file/rows`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -937,7 +937,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           })
           setRowsFn(next)
         }
-        // Show combined info toast (visible after the grid's generic success toast)
+        // Show combined info toast (grid's generic toast is suppressed when errors are present).
         toastFn({
           title: `Saved ${savedCount} · ${errorCount} couldn't save`,
           description: `${firstReason}${moreStr}`,
@@ -946,7 +946,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       }, 0)
     }
 
-    return { saved: result.saved }
+    return { saved: result.saved, createResult: result.createResult }
   }, [BACKEND, toast])
 
   // ── P2.D2 — API: delete rows ──────────────────────────────────────────

@@ -1901,10 +1901,12 @@ export default function FlatFileGrid({
     if (!dirty.length) { toast({ title: 'Nothing to save', tone: 'info' }); return }
     setSaving(true)
     try {
-      const { saved } = await onSave(dirty)
+      const result = await onSave(dirty)
       setRows((prev) => prev.map((r) => ({ ...r, _dirty: false })))
       setSaveFlash(true); setTimeout(() => setSaveFlash(false), 2000)
-      toast.success(`Saved ${saved} rows`)
+      // Only show the generic toast when there are no errors — if the caller
+      // (e.g. eBay) returned createResult.errors, it owns the combined toast.
+      if (!result.createResult?.errors?.length) toast.success(`Saved ${result.saved} rows`)
     } catch (err) {
       toast.error('Save failed: ' + (err instanceof Error ? err.message : String(err)))
     } finally { setSaving(false) }

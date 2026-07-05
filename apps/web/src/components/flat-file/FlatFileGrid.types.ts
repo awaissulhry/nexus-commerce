@@ -168,7 +168,7 @@ export interface FlatFileGridProps {
 
   validate?: (rows: BaseRow[]) => ValidationIssue[]
 
-  onSave: (dirty: BaseRow[]) => Promise<{ saved: number }>
+  onSave: (dirty: BaseRow[]) => Promise<{ saved: number; createResult?: { errors?: unknown[] } }>
   onReload: () => Promise<BaseRow[]>
   onCellChange?: (rowId: string, colId: string, value: unknown) => void
 
