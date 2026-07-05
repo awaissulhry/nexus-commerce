@@ -11,6 +11,8 @@ import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { PAGES, FEATURES } from "@/lib/auth/permissions";
+import { quoteTotals } from "@/lib/quotes/compose-line";
+import { orderTotals } from "@/lib/orders/money";
 
 export const permission = { GET: PAGES.contacts, PATCH: FEATURES.contactsManage, DELETE: FEATURES.contactsManage };
 
@@ -26,7 +28,22 @@ async function detail(id: string) {
   });
   if (!contact) return null;
   const { _count, ...rest } = contact;
-  return { contact: rest, counts: _count };
+
+  // FP5.3 — aggregated relationship history (money folds grain-stripped downstream)
+  const [conversations, quotes, orders, reviews] = await Promise.all([
+    prisma.conversation.findMany({ where: { partyId: id }, orderBy: { updatedAt: "desc" }, take: 25, select: { id: true, subject: true, state: true, updatedAt: true } }),
+    prisma.quote.findMany({ where: { partyId: id }, orderBy: { updatedAt: "desc" }, take: 25, include: { lines: { select: { netPriceCents: true, costCents: true, qty: true } } } }),
+    prisma.order.findMany({ where: { partyId: id }, orderBy: { updatedAt: "desc" }, take: 25, include: { lines: { select: { netPriceCents: true, costCents: true, qty: true } } } }),
+    prisma.review.findMany({ where: { partyId: id }, orderBy: { createdAt: "desc" }, take: 25, select: { id: true, rating: true, notes: true, orderId: true, createdAt: true } }),
+  ]);
+  const history = {
+    conversations: conversations.map((c) => ({ id: c.id, subject: c.subject, state: c.state, updatedAt: c.updatedAt })),
+    quotes: quotes.map((q) => ({ id: q.id, number: q.number, state: q.state, netCents: quoteTotals(q.lines).netCents, updatedAt: q.updatedAt })),
+    orders: orders.map((o) => ({ id: o.id, number: o.number, state: o.state, netCents: orderTotals(o.lines).netCents, promiseDateAt: o.promiseDateAt })),
+    reviews: reviews.map((r) => ({ id: r.id, rating: r.rating, notes: r.notes, orderId: r.orderId, createdAt: r.createdAt })),
+  };
+
+  return { contact: rest, counts: _count, history };
 }
 
 export const GET = guarded(PAGES.contacts, async (_req, { params, resolved }) => {

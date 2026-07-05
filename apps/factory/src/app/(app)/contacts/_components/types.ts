@@ -52,13 +52,14 @@ export type ContactDetailResponse = {
     archivedAt: string | null;
   };
   counts: { quotes: number; orders: number; conversations: number; reviews: number };
-  // FP5.3 fills these
-  history?: {
-    conversations: { id: string; subject: string | null; state: string; updatedAt: string }[];
-    quotes: { id: string; number: string; state: string; netCents?: number; updatedAt: string }[];
-    orders: { id: string; number: string; state: string; netCents?: number; promiseDateAt: string | null }[];
-    reviews: { id: string; rating: number | null; createdAt: string }[];
-  };
+  history?: ContactHistoryData;
+};
+
+export type ContactHistoryData = {
+  conversations: { id: string; subject: string | null; state: string; updatedAt: string }[];
+  quotes: { id: string; number: string; state: string; netCents?: number; updatedAt: string }[];
+  orders: { id: string; number: string; state: string; netCents?: number; promiseDateAt: string | null }[];
+  reviews: { id: string; rating: number; notes: string | null; orderId: string | null; createdAt: string }[];
 };
 
 export const KIND_LABEL: Record<PartyKind, string> = { CUSTOMER: "Customer", SUPPLIER: "Supplier", BRAND: "Brand" };

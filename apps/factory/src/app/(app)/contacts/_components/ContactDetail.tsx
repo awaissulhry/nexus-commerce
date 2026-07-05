@@ -134,7 +134,7 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
             </>
           )}
           {tab === "measurements" && <ContactMeasurements contactId={contactId} measurements={c.measurements} canManage={canManage} onChanged={load} />}
-          {tab === "history" && <ContactHistory contactId={contactId} />}
+          {tab === "history" && <ContactHistory history={d.history} />}
         </div>
 
         <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
