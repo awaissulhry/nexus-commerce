@@ -54,7 +54,19 @@ export const GET = guarded(PAGES.inbox, async (_req, { params, resolved }) => {
     }),
   ]);
 
-  return jsonStripped({ conversation, messages, comments, events }, resolved);
+  // FP3: quotes born from this thread (the ContextRail "Linked" slot)
+  const quoteRows = await prisma.quote.findMany({
+    where: { conversationId: id },
+    orderBy: { updatedAt: "desc" },
+    include: { lines: { select: { netPriceCents: true, costCents: true, qty: true } } },
+  });
+  const quotes = quoteRows.map((q) => {
+    const net = q.lines.reduce((s, l) => s + l.netPriceCents * l.qty, 0);
+    const cost = q.lines.reduce((s, l) => s + l.costCents * l.qty, 0);
+    return { id: q.id, number: q.number, state: q.state, netCents: net, marginCents: net - cost, convertedOrderId: q.convertedOrderId };
+  });
+
+  return jsonStripped({ conversation, messages, comments, events, quotes }, resolved);
 });
 
 const Patch = z.object({

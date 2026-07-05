@@ -16,6 +16,9 @@ const nextConfig = {
     "@prisma/client",
     "@prisma/adapter-better-sqlite3",
     "better-sqlite3",
+    // pdfkit reads its .afm font-metric files from node_modules at runtime;
+    // bundling it breaks that path (FP3 quote PDF). Keep it external.
+    "pdfkit",
   ],
 };
 

@@ -73,11 +73,21 @@ export type ThreadConversation = {
   assignee: { id: string; displayName: string } | null;
 };
 
+export type LinkedQuote = {
+  id: string;
+  number: string;
+  state: "DRAFT" | "SENT" | "ACCEPTED" | "REJECTED" | "EXPIRED";
+  netCents: number;
+  marginCents: number;
+  convertedOrderId: string | null;
+};
+
 export type ThreadResponse = {
   conversation: ThreadConversation;
   messages: ThreadMessage[];
   comments: ThreadComment[];
   events: ThreadEvent[];
+  quotes: LinkedQuote[];
 };
 
 export type UserLite = { id: string; displayName: string; email: string };
