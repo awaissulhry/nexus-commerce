@@ -1,6 +1,6 @@
-/** F1 — designed empty state; the real page lands in its FP cycle (src/lib/nav.ts). */
-import { ComingSoon } from "@/components/ComingSoon";
+/** FP5 — Contacts is LIVE: the relationship workspace (spec: docs/factory/FP5-SPEC.md). */
+import { ContactsClient } from "./_components/ContactsClient";
 
-export default function Page() {
-  return <ComingSoon pageId="contacts" />;
+export default function ContactsPage() {
+  return <ContactsClient />;
 }
