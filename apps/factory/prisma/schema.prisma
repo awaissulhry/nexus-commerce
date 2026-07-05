@@ -338,6 +338,10 @@ model Quote {
   state               QuoteState     @default(DRAFT)
   depositPct          Float?
   promiseDateAt       DateTime?
+  validUntilAt        DateTime? // FP3: quote validity window
+  sentAt              DateTime? // FP3: first-send timestamp (versions carry each send)
+  acceptTokenHash     String?        @unique // FP3: sha256 of the public accept-link token
+  convertedOrderId    String? // FP3: set when an accepted quote becomes an Order
   marginFloorBreached Boolean        @default(false)
   lostReason          String?
   lines               QuoteLine[]
