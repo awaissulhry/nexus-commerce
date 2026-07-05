@@ -108,8 +108,30 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       // P1a — fill parent_sku for each child row (buildFlatRow leaves it '').
       // products and rows are parallel arrays (same index); build a sku lookup
       // from the loaded set, then write row.parent_sku where parentId is set.
+      // P3 — also resolve parents that fall outside the family-scoped result
+      // set (e.g. re-parented or shared children whose parent wasn't loaded).
       {
         const skuById = new Map(products.map((p) => [p.id, p.sku]));
+
+        // Collect any parentId references not already covered by the loaded set.
+        const missingParentIds = [
+          ...new Set(
+            products
+              .filter((p) => p.parentId && !skuById.has(p.parentId))
+              .map((p) => p.parentId as string)
+          ),
+        ];
+
+        if (missingParentIds.length > 0) {
+          const extraParents = await prisma.product.findMany({
+            where: { id: { in: missingParentIds }, deletedAt: null },
+            select: { id: true, sku: true },
+          });
+          for (const ep of extraParents) {
+            skuById.set(ep.id, ep.sku);
+          }
+        }
+
         for (let i = 0; i < rows.length; i++) {
           const p = products[i];
           if (p.parentId) {
