@@ -1,5 +1,5 @@
 import type { Cell } from 'exceljs'
-import type { FieldDefinition } from '../registry/types'
+import type { FieldDefinition } from './registry/types'
 
 export function isoDate(d: Date | string | null): string {
   if (!d) return ''
@@ -9,7 +9,7 @@ export function isoDate(d: Date | string | null): string {
 
 export function joinArray(a: unknown, delim: string): string {
   return Array.isArray(a)
-    ? a.map(x => String(x).replaceAll(delim.trim(), '/')).join(delim)
+    ? a.map(x => String(x).split(delim.trim()).join('/')).join(delim)
     : a == null
       ? ''
       : String(a)
