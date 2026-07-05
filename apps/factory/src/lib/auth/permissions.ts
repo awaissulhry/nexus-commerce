@@ -47,6 +47,7 @@ export const FEATURES = {
   exportsRun: "exports.run",
   commentsCreate: "comments.create",
   searchRun: "search.run",
+  settingsManage: "settings.manage", // FP11: stage pipeline / pricing defaults / VAT (config writes). OWNER.
   integrationsManage: "settings.integrations.manage",
   usersManage: "users.manage",
   rolesManage: "roles.manage",

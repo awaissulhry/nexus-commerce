@@ -30,6 +30,12 @@ const SECTIONS = [
     body: "Invite users, assign OWNER/WORKER, edit custom roles with the permission matrix. The last owner is protected; system roles are locked.",
     live: true,
   },
+  {
+    href: "/settings/config",
+    title: "Configuration",
+    body: "The stage pipeline, pricing defaults (margin floor, deposit), the VAT display rate, and nightly backup snapshots.",
+    live: true,
+  },
 ] as const;
 
 export default function SettingsPage() {
