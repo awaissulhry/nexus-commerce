@@ -65,7 +65,7 @@ export default function ChannelDetailPage() {
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="h-24 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse"
+              className="h-24 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse"
             />
           ))}
         </div>

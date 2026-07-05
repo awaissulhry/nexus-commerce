@@ -58,7 +58,7 @@ export default function WebhooksPage() {
           {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="h-20 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse"
+              className="h-20 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse"
             />
           ))}
         </div>

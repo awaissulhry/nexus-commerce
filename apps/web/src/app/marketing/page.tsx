@@ -110,11 +110,11 @@ export default function MarketingDashboardPage() {
           {Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
-              className="h-24 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse"
+              className="h-24 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse"
             />
           ))}
         </div>
-        <div className="h-40 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+        <div className="h-40 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
       </div>
     )
   }
