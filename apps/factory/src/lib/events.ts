@@ -10,6 +10,7 @@ export type FactoryEventType =
   | "notification.created"
   | "comment.created"
   | "conversation.synced"
+  | "conversation.updated"
   | "integration.changed"
   | "import.finished"
   | "audit.written"
@@ -56,6 +57,26 @@ export function publishEvent(type: FactoryEventType, payload?: Record<string, un
 export function subscribeEvents(listener: Listener): () => void {
   bus.listeners.add(listener);
   return () => bus.listeners.delete(listener);
+}
+
+/**
+ * FP1.1 — durable publish: the in-process bus AND the FactoryEventOutbox
+ * table. REQUIRED for anything emitted from the WORKER (separate process —
+ * its bus never reaches web SSE clients; each SSE connection polls the
+ * outbox forward every ~3s). Web-side emitters may also use it; the client
+ * hooks debounce, so the double delivery collapses harmlessly.
+ */
+export async function publishEventDurable(
+  type: FactoryEventType,
+  payload?: Record<string, unknown>,
+): Promise<void> {
+  publishEvent(type, payload);
+  try {
+    const { prisma } = await import("@/lib/db");
+    await prisma.factoryEventOutbox.create({ data: { type, payload: payload as object | undefined } });
+  } catch (err) {
+    console.error("[events] durable publish failed", type, (err as Error).message);
+  }
 }
 
 export const replaySince = (since: number): FactoryEvent[] => bus.buffer.filter((e) => e.ts > since);

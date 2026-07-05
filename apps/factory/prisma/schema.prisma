@@ -50,11 +50,12 @@ model Party {
 }
 
 model PartyEmail {
-  id      String  @id @default(cuid())
-  partyId String
-  party   Party   @relation(fields: [partyId], references: [id], onDelete: Cascade)
-  email   String  @unique
-  label   String?
+  id          String  @id @default(cuid())
+  partyId     String
+  party       Party   @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  email       String  @unique
+  label       String?
+  matchDomain Boolean @default(false) // FP1: match ANY sender @ this email's domain (B2B: orders@, sales@, humans@brand.it = one party)
 
   @@index([partyId])
 }
@@ -262,6 +263,7 @@ model Conversation {
   assignee      User?               @relation(fields: [assigneeId], references: [id])
   state         ConversationState   @default(OPEN)
   snoozeUntil   DateTime?
+  followUpAt    DateTime? // FP1: quote-chasing reminder; auto-cancelled by any inbound reply
   lastMessageAt DateTime?
   messages      Message[]
   quotes        Quote[]
@@ -287,7 +289,10 @@ model Message {
   fromAddress    String
   toAddresses    Json?
   snippet        String?
-  bodyRef        String? // lazy-fetched full body (FP1); F1 stores headers+snippet
+  bodyRef        String? // F1 leftover, unused (kept: dropping a column breaks the Owner's running client)
+  bodyHtml       String? // FP1: sanitized at WRITE time (src/lib/sanitize-email.ts); render-safe
+  bodyText       String? // FP1: plain-text part (or null when only HTML exists)
+  rfcMessageId   String? // FP1: RFC 2822 Message-ID header — reply threading needs it
   labels         Json?
   sentAt         DateTime
   attachments    Attachment[]
@@ -304,6 +309,7 @@ model Attachment {
   filename    String
   mimeType    String?
   sizeBytes   Int?
+  gmailAttachmentId String? // FP1: volatile Gmail part id — download route refreshes it on 404
   localPath   String?
   driveFileId String?
   webViewLink String?
@@ -752,6 +758,19 @@ model AppSetting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+// FP1: durable event outbox — the worker is a separate process, so its
+// in-memory bus never reaches web SSE clients. Worker (and belt-and-braces
+// web) writes here; each SSE connection polls forward from its last-seen id
+// (~3s); worker prunes rows older than ~10 minutes.
+model FactoryEventOutbox {
+  id        Int      @id @default(autoincrement())
+  type      String
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 // ── Integrations state ───────────────────────────────────────────

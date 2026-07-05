@@ -5,8 +5,9 @@
  * endpoints, so SSE cannot leak financial fields — F0-FINDINGS §8).
  */
 import { NextRequest } from "next/server";
+import { prisma } from "@/lib/db";
 import { guarded } from "@/lib/auth/guard";
-import { replaySince, subscribeEvents, type FactoryEvent } from "@/lib/events";
+import { replaySince, subscribeEvents, type FactoryEvent, type FactoryEventType } from "@/lib/events";
 import { PAGES } from "@/lib/auth/permissions";
 
 export const permission = PAGES.production; // every role holds at least one page; see note below
@@ -39,8 +40,35 @@ export const GET = guarded(PAGES.production, async (req: NextRequest) => {
         HEARTBEAT_MS,
       );
 
+      // FP1.1 — outbox bridge: forward WORKER-process events (Gmail sync,
+      // reminders) that the in-memory bus can't carry across processes.
+      // Each connection polls forward from its own last-seen id (~3s; cheap).
+      let lastOutboxId = 0;
+      void prisma.factoryEventOutbox
+        .findFirst({ orderBy: { id: "desc" }, select: { id: true } })
+        .then((row) => {
+          lastOutboxId = row?.id ?? 0;
+        })
+        .catch(() => {});
+      const outboxPoll = setInterval(() => {
+        void prisma.factoryEventOutbox
+          .findMany({ where: { id: { gt: lastOutboxId } }, orderBy: { id: "asc" }, take: 100 })
+          .then((rows) => {
+            for (const row of rows) {
+              lastOutboxId = row.id;
+              send({
+                type: row.type as FactoryEventType,
+                ts: row.createdAt.getTime(),
+                payload: (row.payload as Record<string, unknown>) ?? undefined,
+              });
+            }
+          })
+          .catch(() => {});
+      }, 3000);
+
       const close = () => {
         clearInterval(heartbeat);
+        clearInterval(outboxPoll);
         unsubscribe();
         try {
           controller.close();

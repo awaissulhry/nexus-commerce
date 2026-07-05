@@ -2,12 +2,20 @@
  * F1 — Gmail ingestion (label-scoped, FD3): bounded backfill on label pick,
  * then history.list incremental polling from the worker (10s cadence ≈ 0.02%
  * of daily quota — the F0 math). historyId expiry (HTTP 404) triggers a full
- * resync automatically. F1 stores headers + snippet (bodies lazy-load in
- * FP1's Inbox). Sender → PartyEmail matching links conversations to parties.
+ * resync automatically. Sender → party matching links conversations.
+ * FP1.1 additions: domain matching (PartyEmail.matchDomain), work semantics
+ * on inbound (CLOSED → reopen to assignee, un-snooze, cancel follow-up —
+ * the Missive ADOPT verdicts), assignee notifications, and DURABLE event
+ * publishing (this file runs in the WORKER process; the in-memory bus never
+ * reaches web SSE clients — FactoryEventOutbox does).
  */
 import { google, type gmail_v1 } from "googleapis";
 import { prisma } from "@/lib/db";
-import { publishEvent } from "@/lib/events";
+import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
+import { notify } from "@/lib/notifications";
+import { TtlCache } from "@/lib/ttl-cache";
+import { matchPartyId, type EmailRow } from "./match";
 import { getAuthedClient } from "./oauth";
 
 const BACKFILL_THREADS = 50;
@@ -21,10 +29,22 @@ const parseAddress = (raw: string): string => {
   return (m ? m[1] : raw).trim().toLowerCase();
 };
 
-async function upsertMessage(
-  ownEmail: string,
-  msg: gmail_v1.Schema$Message,
-): Promise<void> {
+const emailRowCache = new TtlCache<EmailRow[]>(30_000, 4);
+
+async function partyEmailRows(): Promise<EmailRow[]> {
+  const hit = emailRowCache.get("rows");
+  if (hit) return hit;
+  const rows = await prisma.partyEmail.findMany({
+    select: { email: true, partyId: true, matchDomain: true },
+  });
+  emailRowCache.set("rows", rows);
+  return rows;
+}
+
+/** Exported for the link-party route: re-match a party's other conversations. */
+export const clearPartyEmailCache = () => emailRowCache.clear();
+
+async function upsertMessage(ownEmail: string, msg: gmail_v1.Schema$Message): Promise<void> {
   const threadId = msg.threadId!;
   const gmailMessageId = msg.id!;
   const from = parseAddress(header(msg, "From"));
@@ -32,9 +52,26 @@ async function upsertMessage(
   const sentAt = msg.internalDate ? new Date(Number(msg.internalDate)) : new Date();
   const direction = from === ownEmail.toLowerCase() ? "OUTBOUND" : "INBOUND";
 
-  // sender → party match (the golden flow's first hop)
-  const partyEmail =
-    direction === "INBOUND" ? await prisma.partyEmail.findUnique({ where: { email: from } }) : null;
+  // already ingested → refresh labels only, no work semantics
+  const existingMessage = await prisma.message.findUnique({
+    where: { gmailMessageId },
+    select: { id: true },
+  });
+  if (existingMessage) {
+    await prisma.message.update({
+      where: { id: existingMessage.id },
+      data: { labels: msg.labelIds ?? [] },
+    });
+    return;
+  }
+
+  const partyId =
+    direction === "INBOUND" ? matchPartyId(from, await partyEmailRows()) : null;
+
+  const existingConversation = await prisma.conversation.findUnique({
+    where: { gmailThreadId: threadId },
+    select: { id: true, state: true, assigneeId: true, snoozeUntil: true, followUpAt: true, partyId: true },
+  });
 
   const conversation = await prisma.conversation.upsert({
     where: { gmailThreadId: threadId },
@@ -42,19 +79,18 @@ async function upsertMessage(
       channel: "GMAIL",
       gmailThreadId: threadId,
       subject: subject || null,
-      partyId: partyEmail?.partyId ?? null,
+      partyId,
       lastMessageAt: sentAt,
     },
     update: {
       subject: subject || undefined,
       lastMessageAt: sentAt,
-      ...(partyEmail ? { partyId: partyEmail.partyId } : {}),
+      ...(partyId && !existingConversation?.partyId ? { partyId } : {}),
     },
   });
 
-  await prisma.message.upsert({
-    where: { gmailMessageId },
-    create: {
+  await prisma.message.create({
+    data: {
       conversationId: conversation.id,
       gmailMessageId,
       direction,
@@ -67,8 +103,46 @@ async function upsertMessage(
       labels: msg.labelIds ?? [],
       sentAt,
     },
-    update: { labels: msg.labelIds ?? [] },
   });
+
+  // Work semantics on a NEW inbound message (FP1: Missive-verdict state machine)
+  if (direction === "INBOUND" && existingConversation) {
+    const patch: Record<string, unknown> = {};
+    const auditActions: string[] = [];
+    if (existingConversation.state === "CLOSED") {
+      patch.state = "OPEN";
+      auditActions.push("reopened");
+    }
+    if (existingConversation.state === "SNOOZED" || existingConversation.snoozeUntil) {
+      patch.state = "OPEN";
+      patch.snoozeUntil = null;
+      auditActions.push("unsnoozed");
+    }
+    if (existingConversation.followUpAt) {
+      patch.followUpAt = null;
+      auditActions.push("followup.autocancelled");
+    }
+    if (Object.keys(patch).length) {
+      await prisma.conversation.update({ where: { id: conversation.id }, data: patch });
+      for (const action of auditActions) {
+        void audit({ entityType: "conversation", entityId: conversation.id, action, after: { via: "inbound reply" } });
+      }
+    }
+    if (existingConversation.assigneeId) {
+      await notify({
+        userId: existingConversation.assigneeId,
+        kind: "STATE_CHANGE",
+        title:
+          existingConversation.state === "CLOSED"
+            ? `Reopened by a reply: ${subject || "(no subject)"}`
+            : `New reply: ${subject || "(no subject)"}`,
+        body: msg.snippet ?? undefined,
+        entityType: "conversation",
+        entityId: conversation.id,
+        href: `/inbox?focus=${conversation.id}`,
+      });
+    }
+  }
 }
 
 export async function listGmailLabels() {
@@ -115,7 +189,7 @@ export async function backfillLabel(labelId: string): Promise<{ threads: number;
       lastError: null,
     },
   });
-  publishEvent("conversation.synced", { backfill: true });
+  await publishEventDurable("conversation.synced", { backfill: true });
   return { threads: threadList.data.threads?.length ?? 0, messages };
 }
 
@@ -166,7 +240,7 @@ export async function incrementalSync(): Promise<{ synced: number } | { resynced
       where: { id: connection.id },
       data: { historyId: newest, lastSyncAt: new Date(), lastError: null },
     });
-    if (synced > 0) publishEvent("conversation.synced", { synced });
+    if (synced > 0) await publishEventDurable("conversation.synced", { synced });
     return { synced };
   } catch (err) {
     const status = (err as { status?: number; code?: number }).status ?? (err as { code?: number }).code;

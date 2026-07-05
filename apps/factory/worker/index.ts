@@ -12,9 +12,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { prisma, factoryDbUrl } from "../src/lib/db";
 import { incrementalSync } from "../src/lib/google/gmail-sync";
+import { notify } from "../src/lib/notifications";
 
 const HEARTBEAT_MS = 30_000;
 const GMAIL_POLL_MS = 10_000;
+const INBOX_TICK_MS = 60_000;
+const OUTBOX_TTL_MS = 10 * 60 * 1000;
 const SNAPSHOT_HOUR = 3;
 const SNAPSHOT_KEEP = 14;
 
@@ -47,6 +50,77 @@ async function gmailPoll() {
     console.error("[worker] gmail poll error:", (err as Error).message);
   } finally {
     gmailBusy = false;
+  }
+}
+
+/**
+ * FP1.1 — inbox minute tick: wake snoozed threads, fire follow-up reminders
+ * (auto-cancel on reply lives in the sync path), prune the event outbox.
+ * All notifications go durable (notify() writes the outbox) so web SSE
+ * clients hear them from this separate process.
+ */
+async function inboxTick() {
+  const now = new Date();
+  try {
+    const woken = await prisma.conversation.findMany({
+      where: { state: "SNOOZED", snoozeUntil: { lte: now } },
+      select: { id: true, subject: true, assigneeId: true },
+    });
+    for (const c of woken) {
+      await prisma.conversation.update({
+        where: { id: c.id },
+        data: { state: "OPEN", snoozeUntil: null },
+      });
+      if (c.assigneeId) {
+        await notify({
+          userId: c.assigneeId,
+          kind: "REMINDER",
+          title: `Back from snooze: ${c.subject ?? "(no subject)"}`,
+          entityType: "conversation",
+          entityId: c.id,
+          href: `/inbox?focus=${c.id}`,
+        });
+      }
+    }
+
+    const due = await prisma.conversation.findMany({
+      where: { followUpAt: { lte: now } },
+      select: { id: true, subject: true, assigneeId: true },
+    });
+    let fallbackOwnerId: string | null | undefined;
+    for (const c of due) {
+      await prisma.conversation.update({ where: { id: c.id }, data: { followUpAt: null } });
+      let target = c.assigneeId;
+      if (!target) {
+        if (fallbackOwnerId === undefined) {
+          fallbackOwnerId =
+            (
+              await prisma.user.findFirst({
+                where: { status: "active", roleAssignments: { some: { role: { key: "OWNER" } } } },
+                select: { id: true },
+              })
+            )?.id ?? null;
+        }
+        target = fallbackOwnerId ?? null;
+      }
+      if (target) {
+        await notify({
+          userId: target,
+          kind: "REMINDER",
+          title: `Follow up: ${c.subject ?? "(no subject)"}`,
+          body: "No reply arrived — the reminder you set is due.",
+          entityType: "conversation",
+          entityId: c.id,
+          href: `/inbox?focus=${c.id}`,
+        });
+      }
+    }
+
+    await prisma.factoryEventOutbox.deleteMany({
+      where: { createdAt: { lt: new Date(Date.now() - OUTBOX_TTL_MS) } },
+    });
+  } catch (err) {
+    console.error("[worker] inbox tick error:", (err as Error).message);
   }
 }
 
@@ -84,6 +158,7 @@ async function main() {
   const timers = [
     setInterval(() => void heartbeat(), HEARTBEAT_MS),
     setInterval(() => void gmailPoll(), GMAIL_POLL_MS),
+    setInterval(() => void inboxTick(), INBOX_TICK_MS),
     setInterval(() => void nightlySnapshot(), 60_000),
   ];
   const stop = async (signal: string) => {

@@ -4,7 +4,7 @@
  * but never delivered) — every mention/assignment lands here.
  */
 import { prisma } from "@/lib/db";
-import { publishEvent } from "@/lib/events";
+import { publishEventDurable } from "@/lib/events";
 
 export async function notify(input: {
   userId: string;
@@ -16,5 +16,7 @@ export async function notify(input: {
   href?: string;
 }): Promise<void> {
   await prisma.notification.create({ data: input });
-  publishEvent("notification.created", { userId: input.userId });
+  // durable: notify() is called from the WORKER too (sync path, reminders) —
+  // the outbox is the only road to web SSE clients from there (FP1.1)
+  await publishEventDurable("notification.created", { userId: input.userId });
 }
