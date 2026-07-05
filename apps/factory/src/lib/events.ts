@@ -15,6 +15,7 @@ export type FactoryEventType =
   | "order.updated"
   | "workorder.created"
   | "workorder.updated"
+  | "shipment.updated"
   | "payment.recorded"
   | "integration.changed"
   | "import.finished"

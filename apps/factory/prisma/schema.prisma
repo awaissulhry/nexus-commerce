@@ -32,6 +32,7 @@ model Party {
   paymentTerms      String?
   depositDefaultPct Float?
   notes             String?
+  addressJson       Json? // FP8 — remembered ship-to (name/street/city/postal/country/phone); prefill source
   priceListId       String?
   priceList         PriceList?           @relation(fields: [priceListId], references: [id])
   emails            PartyEmail[]
@@ -603,6 +604,9 @@ model Shipment {
   trackingNumber   String?
   trackingUrl      String?
   labelRef         String?
+  labelFormat      String? // FP8 — PDF_A6 / PDF_A4 / ZPL
+  shipToJson       Json? // FP8 — destination snapshot at purchase (a later address edit never rewrites a bought label)
+  parcelJson       Json? // FP8 — weight (g) + dims used for this label
   costCents        Int?
   state            ShipmentState   @default(CREATED)
   events           TrackingEvent[]
