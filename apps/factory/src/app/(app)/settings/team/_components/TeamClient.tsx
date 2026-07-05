@@ -7,11 +7,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { UserPlus, Copy, X } from "lucide-react";
-import { DataGrid, Listbox, useToast } from "@/design-system/components";
+import { UserPlus, Copy, X, Shield, Plus, Pencil, Trash2, Lock } from "lucide-react";
+import { DataGrid, Listbox, Modal, useToast } from "@/design-system/components";
 import { Button, Input, Pill } from "@/design-system/primitives";
 import { apiJson } from "@/lib/api-client";
-import { type Invitation, type Member, type MembersResponse, type RoleLite } from "./types";
+import { type Invitation, type Member, type MembersResponse, type PermGroup, type RoleFull, type RoleLite, type RolesResponse } from "./types";
 
 const dmy = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString() : "never");
 
@@ -24,6 +24,9 @@ export function TeamClient() {
   const [inviteRole, setInviteRole] = useState("");
   const [joinUrl, setJoinUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [rolesFull, setRolesFull] = useState<RoleFull[]>([]);
+  const [catalog, setCatalog] = useState<PermGroup[]>([]);
+  const [editing, setEditing] = useState<RoleFull | "new" | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -31,9 +34,16 @@ export function TeamClient() {
       setMembers(m.members); setRoles(m.roles);
       if (!inviteRole) setInviteRole(m.roles.find((r) => r.key === "WORKER")?.id ?? m.roles[0]?.id ?? "");
       setInvites((await apiJson<{ invitations: Invitation[] }>("/api/team/invitations")).invitations);
+      const rr = await apiJson<RolesResponse>("/api/team/roles");
+      setRolesFull(rr.roles); setCatalog(rr.catalog);
     } catch (e) { toast((e as Error).message, "danger"); }
   }, [toast, inviteRole]);
   useEffect(() => { void load(); }, [load]);
+
+  const deleteRole = async (id: string) => {
+    try { await apiJson(`/api/team/roles?id=${id}`, { method: "DELETE" }); toast("Role deleted", "success"); void load(); }
+    catch (e) { toast((e as Error).message, "danger"); }
+  };
 
   const reassign = async (userId: string, roleId: string) => {
     try { await apiJson("/api/team/members", { method: "PATCH", body: JSON.stringify({ userId, roleId }) }); toast("Role updated", "success"); void load(); }
@@ -111,9 +121,88 @@ export function TeamClient() {
           </div>
         )}
       </section>
+
+      <section style={{ marginTop: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <SectionHead title="Roles" count={rolesFull.length} />
+          <Button onClick={() => setEditing("new")} style={{ marginLeft: "auto" }}><Plus size={13} /> New role</Button>
+        </div>
+        <div style={{ display: "grid", gap: 6 }}>
+          {rolesFull.map((r) => (
+            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", border: "1px solid var(--h10-border-subtle)", borderRadius: 8, fontSize: 12.5 }}>
+              <Shield size={14} style={{ color: "var(--h10-text-3)" }} />
+              <span style={{ fontWeight: 700 }}>{r.name}</span>
+              {r.isSystem ? <Pill tone="neutral"><Lock size={10} style={{ marginRight: 3 }} />system</Pill> : <Pill tone="info">custom</Pill>}
+              <span style={{ color: "var(--h10-text-3)" }}>{r.isSystem && r.key === "OWNER" ? "all permissions" : `${r.permissions.length} permission${r.permissions.length === 1 ? "" : "s"}`} · {r.memberCount} member{r.memberCount === 1 ? "" : "s"}</span>
+              {!r.isSystem && (
+                <span style={{ marginLeft: "auto", display: "inline-flex", gap: 6 }}>
+                  <button type="button" onClick={() => setEditing(r)} aria-label="Edit role" style={iconBtn}><Pencil size={13} /></button>
+                  <button type="button" onClick={() => void deleteRole(r.id)} aria-label="Delete role" style={iconBtn}><Trash2 size={13} /></button>
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <RoleMatrixModal role={editing} catalog={catalog} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void load(); }} />
     </div>
   );
 }
+
+function RoleMatrixModal({ role, catalog, onClose, onSaved }: { role: RoleFull | "new" | null; catalog: PermGroup[]; onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
+  const editing = role && role !== "new" ? role : null;
+  const [name, setName] = useState("");
+  const [perms, setPerms] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!role) return;
+    setName(editing?.name ?? "");
+    setPerms(new Set(editing?.permissions ?? []));
+  }, [role, editing]);
+
+  const toggle = (key: string) => setPerms((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  const toggleGroup = (g: PermGroup, on: boolean) => setPerms((s) => { const n = new Set(s); for (const it of g.items) on ? n.add(it.key) : n.delete(it.key); return n; });
+  const save = async () => {
+    if (!name.trim()) { toast("Name the role", "danger"); return; }
+    setBusy(true);
+    try {
+      if (editing) await apiJson(`/api/team/roles`, { method: "PATCH", body: JSON.stringify({ roleId: editing.id, name: name.trim(), permissions: [...perms] }) });
+      else await apiJson(`/api/team/roles`, { method: "POST", body: JSON.stringify({ name: name.trim(), permissions: [...perms] }) });
+      toast(editing ? "Role updated" : "Role created", "success"); onSaved();
+    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
+  };
+
+  return (
+    <Modal open={!!role} onClose={onClose} title={editing ? `Edit role — ${editing.name}` : "New role"} size="md" footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={save} disabled={busy}>{editing ? "Save" : "Create role"}</Button></>}>
+      <div style={{ display: "grid", gap: 14 }}>
+        <div><div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 3 }}>Role name</div><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Shipper" /></div>
+        {catalog.map((g) => {
+          const on = g.items.filter((it) => perms.has(it.key)).length;
+          return (
+            <div key={g.module}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                <span style={{ fontSize: 12, fontWeight: 700 }}>{g.label}</span>
+                <button type="button" onClick={() => toggleGroup(g, on < g.items.length)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "var(--h10-text-link)" }}>{on < g.items.length ? "select all" : "clear"}</button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 4 }}>
+                {g.items.map((it) => (
+                  <label key={it.key} style={{ display: "flex", gap: 7, alignItems: "center", fontSize: 12, padding: "3px 4px", cursor: "pointer" }}>
+                    <input type="checkbox" checked={perms.has(it.key)} onChange={() => toggle(it.key)} style={{ accentColor: "var(--h10-primary)" }} />
+                    <span style={{ color: "var(--h10-text-2)" }}>{it.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Modal>
+  );
+}
+
+const iconBtn: React.CSSProperties = { background: "none", border: "1px solid var(--h10-border)", borderRadius: 6, cursor: "pointer", color: "var(--h10-text-3)", padding: 4, display: "grid", placeItems: "center" };
 
 function SectionHead({ title, count }: { title: string; count: number }) {
   return <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8, fontSize: 13, fontWeight: 700 }}><span>{title}</span><span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--h10-text-3)", background: "var(--h10-surface-2)", borderRadius: 20, padding: "1px 8px" }}>{count}</span></div>;

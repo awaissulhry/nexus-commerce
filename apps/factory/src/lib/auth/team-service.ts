@@ -9,7 +9,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "../db";
 import { hashPassword } from "./password";
 import { OWNER_ROLE_KEY } from "./permissions";
-import { assertOwnerGrant, assertNotLastOwner, GuardrailError } from "./guardrails";
+import { assertOwnerGrant, assertNotLastOwner, assertNotSystemRole, assertRoleUnused, assertKnownPermissions, GuardrailError } from "./guardrails";
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -87,4 +87,32 @@ export async function acceptInvite(token: string, displayName: string, password:
     return u;
   });
   return { userId: user.id };
+}
+
+// ── custom roles (FP11.2) ────────────────────────────────────────
+const slug = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || "role";
+
+export async function createRole(name: string, permissions: string[]): Promise<{ id: string }> {
+  assertKnownPermissions(permissions);
+  const key = `${slug(name)}-${randomBytes(2).toString("hex")}`; // stable, unique, never a system key
+  const role = await prisma.role.create({ data: { key, name: name.trim(), permissions, isSystem: false }, select: { id: true } });
+  return role;
+}
+
+export async function editRole(roleId: string, patch: { name?: string; permissions?: string[] }): Promise<void> {
+  const role = await prisma.role.findUnique({ where: { id: roleId }, select: { isSystem: true } });
+  if (!role) throw new GuardrailError("unknown_permission", "Role not found");
+  assertNotSystemRole(role.isSystem);
+  if (patch.permissions) assertKnownPermissions(patch.permissions);
+  await prisma.role.update({ where: { id: roleId }, data: { ...(patch.name ? { name: patch.name.trim() } : {}), ...(patch.permissions ? { permissions: patch.permissions } : {}) } });
+  // members of this role must re-resolve their grants
+  await prisma.user.updateMany({ where: { roleAssignments: { some: { roleId } } }, data: { permissionsVersion: { increment: 1 } } });
+}
+
+export async function deleteRole(roleId: string): Promise<void> {
+  const role = await prisma.role.findUnique({ where: { id: roleId }, select: { isSystem: true, _count: { select: { assignments: true } } } });
+  if (!role) throw new GuardrailError("unknown_permission", "Role not found");
+  assertNotSystemRole(role.isSystem);
+  assertRoleUnused(role._count.assignments);
+  await prisma.role.delete({ where: { id: roleId } });
 }
