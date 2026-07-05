@@ -18,6 +18,7 @@ import { usePermission } from "@/lib/auth/client";
 import { legalTargets, ORDER_STATE_LABEL, canTransition } from "@/lib/orders/transitions";
 import { parseSizeRun } from "@/lib/orders/production";
 import { Timeline } from "./Timeline";
+import { OrderItems } from "./OrderItems";
 import { STATE_TONE, type OrderDetailResponse, type OrderState } from "./types";
 
 const isoDate = (s: string | null | undefined) => (s ? new Date(s).toISOString().slice(0, 10) : "");
@@ -133,10 +134,13 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 340px", gap: 16 }}>
-        <Card padded>
-          <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Timeline</div>
-          <Timeline events={d.timeline} />
-        </Card>
+        <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
+          <Card padded>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Timeline</div>
+            <Timeline events={d.timeline} />
+          </Card>
+          <OrderItems orderId={o.id} state={o.state} lines={o.lines} canEdit={canEdit} onChanged={load} />
+        </div>
 
         <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
           {(m.netCents != null || m.marginCents != null) && (
