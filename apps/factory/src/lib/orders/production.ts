@@ -5,8 +5,8 @@
  */
 export const DEFAULT_STAGES = ["CUTTING", "STITCHING", "ASSEMBLY", "QC", "PACKING"];
 
-export type PlanLine = { description: string; qty: number; costCents: number; sizeRun?: unknown };
-export type PlannedWO = { number: string; label: string | null; estCostCents: number; state: "READY" | "BLOCKED"; blockedReason: string | null };
+export type PlanLine = { lineId: string; description: string; qty: number; costCents: number; sizeRun?: unknown };
+export type PlannedWO = { number: string; orderLineId: string; label: string | null; estCostCents: number; state: "READY" | "BLOCKED"; blockedReason: string | null };
 
 /** A size-run is a `{ [size]: qty }` object with ≥1 positive entry. */
 export function parseSizeRun(sizeRun: unknown): { size: string; qty: number }[] {
@@ -30,11 +30,11 @@ export function planWorkOrders(orderNumber: string, lines: PlanLine[], depositMe
     if (sizes.length > 0) {
       for (const s of sizes) {
         k += 1;
-        wos.push({ number: `${orderNumber}/${k}`, label: `${line.description} · Size ${s.size} · ×${s.qty}`, estCostCents: (line.costCents ?? 0) * s.qty, ...gate() });
+        wos.push({ number: `${orderNumber}/${k}`, orderLineId: line.lineId, label: `${line.description} · Size ${s.size} · ×${s.qty}`, estCostCents: (line.costCents ?? 0) * s.qty, ...gate() });
       }
     } else {
       k += 1;
-      wos.push({ number: `${orderNumber}/${k}`, label: line.qty > 1 ? `${line.description} · ×${line.qty}` : line.description, estCostCents: (line.costCents ?? 0) * (line.qty ?? 1), ...gate() });
+      wos.push({ number: `${orderNumber}/${k}`, orderLineId: line.lineId, label: line.qty > 1 ? `${line.description} · ×${line.qty}` : line.description, estCostCents: (line.costCents ?? 0) * (line.qty ?? 1), ...gate() });
     }
   }
   return wos;

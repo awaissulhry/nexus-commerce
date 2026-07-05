@@ -451,6 +451,7 @@ model WorkOrder {
   number          String           @unique // "ORD-214/1" — shared identity with the order
   orderId         String
   order           Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderLineId     String? // FP6: which order line this WO produces (BOM demand for reservations)
   priority        Int              @default(0)
   state           WorkOrderState   @default(READY)
   blockedReason   String? // e.g. "awaiting deposit" (FD13)
@@ -473,7 +474,8 @@ model WorkOrderStage {
   assigneeId        String?
   assignee          User?     @relation(fields: [assigneeId], references: [id])
   startedAt         DateTime?
-  pausedMs          Int       @default(0)
+  pausedMs          Int       @default(0) // total paused ms (accumulated on resume)
+  pausedAt          DateTime? // FP6: set while paused; resume folds (now − pausedAt) into pausedMs
   finishedAt        DateTime?
   checklist         Json? // [{item, checkedByUserId, checkedAt}]
   photos            Json?

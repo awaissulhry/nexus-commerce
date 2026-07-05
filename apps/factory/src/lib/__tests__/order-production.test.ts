@@ -18,13 +18,14 @@ describe("parseSizeRun", () => {
 
 describe("planWorkOrders", () => {
   const lines = [
-    { description: "Cowhide Suit", qty: 1, costCents: 29000 },
-    { description: "Gloves", qty: 2, costCents: 3000 },
+    { lineId: "L1", description: "Cowhide Suit", qty: 1, costCents: 29000 },
+    { lineId: "L2", description: "Gloves", qty: 2, costCents: 3000 },
   ];
 
-  it("makes one WO per line when the deposit is met (READY)", () => {
+  it("makes one WO per line when the deposit is met (READY), carrying the line link", () => {
     const wos = planWorkOrders("ORD-5", lines, true);
     expect(wos.map((w) => w.number)).toEqual(["ORD-5/1", "ORD-5/2"]);
+    expect(wos.map((w) => w.orderLineId)).toEqual(["L1", "L2"]);
     expect(wos.every((w) => w.state === "READY" && w.blockedReason === null)).toBe(true);
     expect(wos[0].estCostCents).toBe(29000); // 29000 × 1
     expect(wos[1].estCostCents).toBe(6000); // 3000 × 2
@@ -38,10 +39,11 @@ describe("planWorkOrders", () => {
 
   it("explodes a size-run into one WO per size, numbered continuously", () => {
     const wos = planWorkOrders("ORD-9", [
-      { description: "Team jacket", qty: 5, costCents: 10000, sizeRun: { M: 2, L: 3 } },
-      { description: "Cap", qty: 1, costCents: 1500 },
+      { lineId: "L1", description: "Team jacket", qty: 5, costCents: 10000, sizeRun: { M: 2, L: 3 } },
+      { lineId: "L2", description: "Cap", qty: 1, costCents: 1500 },
     ], true);
     expect(wos.map((w) => w.number)).toEqual(["ORD-9/1", "ORD-9/2", "ORD-9/3"]);
+    expect(wos.map((w) => w.orderLineId)).toEqual(["L1", "L1", "L2"]); // both jacket sizes trace to L1
     expect(wos[0].label).toBe("Team jacket · Size M · ×2");
     expect(wos[0].estCostCents).toBe(20000); // 10000 × 2
     expect(wos[1].label).toBe("Team jacket · Size L · ×3");

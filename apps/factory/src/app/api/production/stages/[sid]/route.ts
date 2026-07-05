@@ -1,0 +1,66 @@
+/**
+ * FP6 — run a stage: POST { action: start|pause|resume|finish } drives the pure
+ * stage-timer; PATCH { assigneeId } assigns it. Forward-only floor: a stage can
+ * only start once every earlier stage is finished. Finishing the last stage
+ * completes the Work Order. (The QC→Packing cert gate lands in FP6.4.)
+ */
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { prisma } from "@/lib/db";
+import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
+import { guarded } from "@/lib/auth/guard";
+import { FEATURES } from "@/lib/auth/permissions";
+import { start, pause, resume, finish, canStart, woComplete, type StageRow } from "@/lib/production/stage-timer";
+
+export const permission = { POST: FEATURES.workordersAdvance, PATCH: FEATURES.workordersAssign };
+
+const Act = z.object({ action: z.enum(["start", "pause", "resume", "finish"]) });
+const TRANSITION = { start, pause, resume, finish } as const;
+
+export const POST = guarded(FEATURES.workordersAdvance, async (req, { params, actor }) => {
+  const { sid } = await params;
+  const parsed = Act.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: "action required" }, { status: 400 });
+
+  const stage = await prisma.workOrderStage.findUnique({ where: { id: sid }, include: { workOrder: { include: { stages: true } } } });
+  if (!stage) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const siblings = stage.workOrder.stages as unknown as StageRow[];
+
+  if (parsed.data.action === "start" && !canStart(siblings, sid)) {
+    return NextResponse.json({ error: "Finish the earlier stages first" }, { status: 400 });
+  }
+
+  const now = Date.now();
+  const patch = TRANSITION[parsed.data.action](stage, now);
+  if (!patch) return NextResponse.json({ error: `Can't ${parsed.data.action} this stage now` }, { status: 400 });
+
+  await prisma.workOrderStage.update({ where: { id: sid }, data: patch });
+
+  // finishing the last stage completes the WO
+  let woDone = false;
+  if (parsed.data.action === "finish") {
+    const after = siblings.map((s) => (s.id === sid ? { ...s, finishedAt: new Date(now) } : s));
+    if (woComplete(after)) {
+      await prisma.workOrder.update({ where: { id: stage.workOrderId }, data: { state: "DONE" } });
+      woDone = true;
+    }
+  }
+
+  void audit({ actorId: actor!.id, entityType: "workorder", entityId: stage.workOrderId, action: `stage.${parsed.data.action}`, after: { stage: stage.stage, woDone } });
+  await publishEventDurable("workorder.updated", { workOrderId: stage.workOrderId, stage: stage.stage, action: parsed.data.action, woDone });
+  return NextResponse.json({ ok: true, woDone });
+});
+
+const Assign = z.object({ assigneeId: z.string().nullable() });
+
+export const PATCH = guarded(FEATURES.workordersAssign, async (req, { params, actor }) => {
+  const { sid } = await params;
+  const parsed = Assign.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+  const stage = await prisma.workOrderStage.findUnique({ where: { id: sid }, select: { id: true, workOrderId: true } });
+  if (!stage) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  await prisma.workOrderStage.update({ where: { id: sid }, data: { assigneeId: parsed.data.assigneeId } });
+  void audit({ actorId: actor!.id, entityType: "workorder", entityId: stage.workOrderId, action: "stage.assign", after: { stageId: sid, assigneeId: parsed.data.assigneeId } });
+  return NextResponse.json({ ok: true });
+});

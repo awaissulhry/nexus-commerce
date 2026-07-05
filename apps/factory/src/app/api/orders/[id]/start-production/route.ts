@@ -41,13 +41,14 @@ export const POST = guarded(FEATURES.ordersEdit, async (_req, { params, actor })
   const paid = depositPaidCents(order.payments);
   const depositMet = isDepositMet(required, paid);
 
-  const planned = planWorkOrders(order.number, order.lines.map((l) => ({ description: l.description, qty: l.qty, costCents: l.costCents, sizeRun: l.sizeRun })), depositMet);
+  const planned = planWorkOrders(order.number, order.lines.map((l) => ({ lineId: l.id, description: l.description, qty: l.qty, costCents: l.costCents, sizeRun: l.sizeRun })), depositMet);
 
   await prisma.$transaction(async (tx) => {
     for (const w of planned) {
       await tx.workOrder.create({
         data: {
           orderId: id,
+          orderLineId: w.orderLineId,
           number: w.number,
           label: w.label,
           state: w.state,
