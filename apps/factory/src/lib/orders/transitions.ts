@@ -8,9 +8,10 @@
  * only through Start production (which CREATES the work orders), so the generic
  * PATCH route refuses it and points the caller at that action.
  *
- * Two edges are honest v1 STOPGAPS until the floor (FP6) and shipments (FP8)
- * drive them for real: IN_PRODUCTION→READY (real = all WOs DONE) and
- * READY→SHIPPED (real = a shipment exists). Flagged so the UI can say so.
+ * The once-stopgap edges now all have real drivers: IN_PRODUCTION→READY (FP6,
+ * every WO DONE), READY→SHIPPED (FP8, a label is bought), SHIPPED→DELIVERED
+ * (FP8, tracking says delivered). They stay legal as manual overrides (shipped
+ * outside the system), but none is a placeholder anymore.
  */
 export type OrderState =
   | "CONFIRMED"
@@ -52,8 +53,8 @@ export function requiresReason(to: OrderState): boolean {
   return to === "CANCELLED";
 }
 
-/** Manual stopgaps until FP6 (floor) / FP8 (shipments) drive them automatically. */
-const STOPGAP = new Set(["IN_PRODUCTION>READY", "READY>SHIPPED", "SHIPPED>DELIVERED"]);
+/** Empty now that FP6 + FP8 drive every lifecycle edge for real (kept for the audit-trail shape). */
+const STOPGAP = new Set<string>();
 export function isStopgap(from: OrderState, to: OrderState): boolean {
   return STOPGAP.has(`${from}>${to}`);
 }

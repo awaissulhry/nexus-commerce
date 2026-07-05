@@ -8,7 +8,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, Hammer } from "lucide-react";
+import { ArrowUpRight, Hammer, Truck } from "lucide-react";
 import { DetailHeader } from "@/design-system/patterns";
 import { Card, DateField, Listbox, Menu, Modal, useToast } from "@/design-system/components";
 import { Button, Pill } from "@/design-system/primitives";
@@ -39,6 +39,7 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
   const canCancel = usePermission("orders.cancel");
   const canMargin = usePermission("financials.margins.view");
   const canPay = usePermission("payments.record");
+  const canBuyLabel = usePermission("labels.purchase");
   const [d, setD] = useState<OrderDetailResponse | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState("");
@@ -119,6 +120,7 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
         actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {canEdit && o.state === "CONFIRMED" && <Button variant="primary" onClick={() => setStarting(true)}><Hammer size={13} /> Start production</Button>}
+            {canBuyLabel && o.state === "READY" && <Button variant="primary" onClick={() => { window.location.href = `/shipping?buy=${o.id}`; }}><Truck size={13} /> Buy label</Button>}
             {canEdit && menuItems.length > 0 && <Menu align="right" label="Change status" items={menuItems} triggerProps={{ className: "h10-ds-btn" }} />}
           </div>
         }

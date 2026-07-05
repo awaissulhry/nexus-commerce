@@ -73,9 +73,11 @@ describe("guards & helpers", () => {
     expect(requiresReason("SHIPPED")).toBe(false);
   });
 
-  it("flags the FP6/FP8 stopgap edges", () => {
-    expect(isStopgap("IN_PRODUCTION", "READY")).toBe(true);
-    expect(isStopgap("READY", "SHIPPED")).toBe(true);
+  it("no longer flags any edge as a stopgap — FP6 + FP8 drive them all for real", () => {
+    // once-stopgaps, now driven: FP6 (all WOs done), FP8 (buy a label / tracking delivered)
+    expect(isStopgap("IN_PRODUCTION", "READY")).toBe(false);
+    expect(isStopgap("READY", "SHIPPED")).toBe(false);
+    expect(isStopgap("SHIPPED", "DELIVERED")).toBe(false);
     expect(isStopgap("CONFIRMED", "CANCELLED")).toBe(false);
   });
 

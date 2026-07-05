@@ -37,7 +37,7 @@ export type TimelineOrder = {
   bornFromQuote?: { id: string; number: string; createdAt: DateLike; sentAt: DateLike | null } | null;
   payments: { kind: string; amountCents: number; receivedAt: DateLike }[];
   workOrders: { number: string; createdAt: DateLike; state: string; blockedReason: string | null }[];
-  shipments?: { id: string; trackingCode?: string | null; createdAt: DateLike }[];
+  shipments?: { id: string; trackingNumber?: string | null; service?: string | null; costCents?: number | null; createdAt: DateLike }[];
   reviews?: { id: string; createdAt: DateLike }[];
 };
 
@@ -69,7 +69,8 @@ export function buildTimeline(order: TimelineOrder, audits: AuditRow[] = []): Ti
     ev.push({ kind: "workorder", at: iso(wo.createdAt), label: `Work order ${wo.number} created${blocked}` });
   }
   for (const s of order.shipments ?? []) {
-    ev.push({ kind: "shipment", at: iso(s.createdAt), label: `Shipment${s.trackingCode ? ` ${s.trackingCode}` : ""}` });
+    const via = s.service ? ` · ${s.service}` : "";
+    ev.push({ kind: "shipment", at: iso(s.createdAt), label: `Label bought${s.trackingNumber ? ` — ${s.trackingNumber}` : ""}${via}`, amountCents: s.costCents ?? undefined });
   }
   for (const r of order.reviews ?? []) {
     ev.push({ kind: "review", at: iso(r.createdAt), label: "Review received" });
