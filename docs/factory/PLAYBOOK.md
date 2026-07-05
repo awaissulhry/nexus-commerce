@@ -1,6 +1,6 @@
 # NEXUS FACTORY OS — THE PLAYBOOK (canonical handoff & operating manual)
 
-Last updated 2026-07-05 (after: F0 approved · F1 shipped + gate-fixed · FP1 spec approved, build barely started). **This file is the single entry point for ANY model session working on Factory OS.** Read it top to bottom before touching anything. It tells you what this product is, what exists, what is approved, how to build every remaining page, the design law, and every trap already paid for. Deeper canon lives in the sibling docs — this file tells you when to open which.
+Last updated 2026-07-05 (after: F0 approved · F1 shipped + gate-fixed · FP1 Inbox shipped · FP2 Products & Pricing shipped · FP3 Quotes shipped — golden flow's first half closed; FP4 Orders next on approval). **This file is the single entry point for ANY model session working on Factory OS.** Read it top to bottom before touching anything. It tells you what this product is, what exists, what is approved, how to build every remaining page, the design law, and every trap already paid for. Deeper canon lives in the sibling docs — this file tells you when to open which.
 
 **The document set (all in `docs/factory/`):**
 
@@ -50,8 +50,9 @@ A **local-first platform that runs a small Italian leather/motorcycle-apparel fa
 | FP1 Inbox spec | ✅ approved by Owner ("Approved. Please proceed.") | `d267b058` |
 | FP1 Inbox build | ✅ **SHIPPED + verified** (backend core / API surface / three-pane UI / fixes) — gate report `FP1-REPORT.md`; ⏳ awaiting Owner click-through (live reply send is the Owner's step) | FP1.1–FP1.4, ends `c39ee15f` |
 | FP2 Products & Pricing | ✅ **SHIPPED + verified** (engine/templates/materials/certs/price-lists/preview/imports) — gate report `FP2-REPORT.md`; ⏳ awaiting Owner click-through | FP2.1–FP2.5, ends `5a0a9923` |
-| FP3 Quotes | **NEXT on FP2 approval** — spec first; mounts the FP2.1 engine behind a Gmail-thread-born quote (§11 FP3 seed) | — |
-| FP4…FP11 | Not started; spec-first, in the §11 order | — |
+| FP3 Quotes | ✅ **SHIPPED + verified** (CRUD-on-engine / pipeline+configurator / PDF+send+Inbox wiring / public-accept+convert+recall+export / golden-flow verify) — binding spec `FP3-SPEC.md`, gate report `FP3-REPORT.md`; ⏳ awaiting Owner click-through (live send is the Owner's step). Golden flow's first half closed: Inbox → quote → send → accept → **ORD-1**. Built on Opus 4.8. | FP3.1–FP3.5, ends `86276d87` |
+| FP4 Orders | **NEXT on FP3 approval** — spec first; the ORD-n home (board + one-timeline + lifecycle + Start-production→WO seed + payments/deposit gate + size-run) (§11 FP4 seed) | — |
+| FP5…FP11 | Not started; spec-first, in the §11 order | — |
 
 **Owner's live instance state:** Google connected (`xaviaracing.it@gmail.com`), scope = whole `INBOX` (Owner defers a dedicated "Factory" label — re-scope any time via the Change button in Settings › Integrations), ~50 conversations / 86 messages synced incl. real orders ("AWA ORDER 652/2026 BARTOCCETTI"), worker healthy, **Drive folder created ✓**, Sendcloud NOT connected yet (Owner defers; blocks nothing until FP8), **0 parties imported** (so all senders show unmatched — FP1's party-create flow and/or a contacts import will light this up). Owner password was rotated by the Owner (never in `.env`; sessions server-side).
 
@@ -189,7 +190,9 @@ Everything below was the settled design and matches what shipped; two verified a
 - **Verdicts to apply:** CPQ bundle→groups→options ADOPT; ONE constraint table (BEAT Salesforce's two engines); Craftybase cost-roll-up + reprice ripple (material `costCents` edit → flag affected templates/quotes count); SAP "Price Source" line (every price shows WHY: base/list/override); tech-pack-lite = render, don't author.
 - **RBAC:** `pages.products`, `products.manage`, `pricelists.manage`; ALL cost fields behind grains. **Bulk/import:** options + price-list entries CSV with dry-run (reuse the framework); template export.
 
-### FP3 — Quotes `/quotes` (the golden flow's first half closes here)
+### FP3 — Quotes `/quotes` (the golden flow's first half closes here) — ✅ SHIPPED (FP3.1–FP3.5, ends `86276d87`; report `FP3-REPORT.md`)
+
+> Built to this seed. Delivered: quote/line CRUD on the engine, `/quotes` pipeline (3 counters + tabs + search + grid), `QuoteEditor` configurator with live waterfall + constraint banners + adjustment(+reason) + deposit + validity, Italian PDF (cost-free by construction, unit-proven), send-into-thread with QuoteVersion freeze + margin-floor speed bump, PUBLIC tokenized accept/reject link (`/q/[token]`, CSRF-handshake fix), manual accept/reject in `ConvertBar`, convert→Order (ORD-n), similar-quote recall, lead-time promise date, CSV export, and Inbox context-rail New-quote wiring. **Verified 96/96 tests, golden flow end to end on :3199 (no live email).** Deviation flagged: public accept link needs the app reachable (manual accept covers localhost). Goal-seek two-way field deferred (engine has `goalSeekByNet`/`goalSeekByMargin`; not yet wired to a UI control). Below is the original seed for reference.
 
 - **Purpose:** configurator + RFQ pipeline; born from an Inbox thread ("Reply with quote" button appears in FP1's thread pane WHEN this ships) or standalone.
 - **Entities/API:** Quote/QuoteLine CRUD on the FP2 engine; `QuoteVersion` snapshot-on-send (freeze options+costs+prices+rendered PDF); quote PDF (server-rendered, bilingual-ready EN/IT layout, NO cost/margin columns ever in customer output — call stripFinancials with a customer-shaped resolved); send via the FP1 reply pipeline into the SAME thread (attachment + inline summary); accept/reject: v1 = Owner marks manually from the thread + a tokenized public accept link (`PUBLIC` route with signed token, like Nexus `/api/po/ack/:token`) is stretch — spec it explicitly either way; won/lost with reason; convert → Order (+ deposit request per FD13); goal-seek field (target price ⇄ margin, two-way); similar-quote recall panel (this party + this template, won/lost + prices); capable-to-promise date = naive v1 (open WO count × configurable per-stage days from AppSetting — label it an estimate; honest until FP6 gives real load).
