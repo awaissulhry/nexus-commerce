@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Plus, Trash2, Save, ChevronUp, ChevronDown, Star, Copy } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 import type { TemplateConfig, TemplateRow, SavedTemplate } from './types'
 
 const VALUE_SOURCES: { value: TemplateRow['valueSource']; label: string }[] = [
@@ -134,20 +135,22 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
 
         {/* ── Saved templates ─────────────────────── */}
         <Section title="Saved templates">
-          <select
+          <Listbox
             value={activeTemplateId ?? ''}
-            onChange={e => { const t = savedTemplates.find(t => t.id === e.target.value); if (t) onLoad(t) }}
-            className="w-full h-7 px-2 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
-          >
-            <option value="">(unsaved)</option>
-            {savedTemplates.map(t => {
-              const prefix = t.isDefault ? '★ ' : ''
-              const sizeHint = t.config?.labelSize
-                ? ` (${t.config.labelSize.widthMm}×${t.config.labelSize.heightMm}mm)`
-                : ''
-              return <option key={t.id} value={t.id}>{prefix}{t.name}{sizeHint}</option>
-            })}
-          </select>
+            onChange={v => { const t = savedTemplates.find(t => t.id === v); if (t) onLoad(t) }}
+            ariaLabel="Saved templates"
+            className="w-full"
+            options={[
+              { value: '', label: '(unsaved)' },
+              ...savedTemplates.map(t => {
+                const prefix = t.isDefault ? '★ ' : ''
+                const sizeHint = t.config?.labelSize
+                  ? ` (${t.config.labelSize.widthMm}×${t.config.labelSize.heightMm}mm)`
+                  : ''
+                return { value: t.id, label: `${prefix}${t.name}${sizeHint}` }
+              }),
+            ]}
+          />
           <div className="flex gap-1.5 mt-2">
             {activeTemplateId && (
               <button onClick={() => onUpdate({ config: template })}
@@ -259,11 +262,11 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
         {/* ── Typography ──────────────────────────── */}
         <Section title="Typography">
           <label className="text-xs text-tertiary block mb-0.5">Font family</label>
-          <select value={template.fontFamily ?? 'Arial'}
-            onChange={e => patch({ fontFamily: e.target.value })}
-            className="w-full h-7 px-2 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 mb-2">
-            {FONT_FAMILIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-          </select>
+          <Listbox value={template.fontFamily ?? 'Arial'}
+            onChange={v => patch({ fontFamily: v })}
+            ariaLabel="Font family"
+            className="w-full mb-2"
+            options={FONT_FAMILIES} />
           <SliderRow label="Badge size" value={template.badgeFontScale ?? 1} min={0.5} max={2.0} step={0.05} unit="×"
             onChange={v => patch({ badgeFontScale: v })} />
           <SliderRow label="Value size" value={template.valueFontScale ?? 1} min={0.5} max={2.0} step={0.05} unit="×"
@@ -294,11 +297,11 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
                     <XIcon size={12} />
                   </button>
                 </div>
-                <select value={row.valueSource}
-                  onChange={e => patchRow(row.id, { valueSource: e.target.value as TemplateRow['valueSource'] })}
-                  className="w-full h-6 px-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 mb-1">
-                  {VALUE_SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
+                <Listbox value={row.valueSource}
+                  onChange={v => patchRow(row.id, { valueSource: v as TemplateRow['valueSource'] })}
+                  ariaLabel="Value source"
+                  className="w-full mb-1"
+                  options={VALUE_SOURCES} />
                 {row.valueSource === 'custom' && (
                   <input value={row.customValue} onChange={e => patchRow(row.id, { customValue: e.target.value })}
                     placeholder="Custom value…"
@@ -357,11 +360,11 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
             <div className="flex items-center gap-2">
               <Checkbox label="Show listing title" checked={template.showListingTitle} onChange={v => patch({ showListingTitle: v })} />
               {template.showListingTitle && (
-                <select value={template.listingTitleLines ?? 2}
-                  onChange={e => patch({ listingTitleLines: parseInt(e.target.value) })}
-                  className="ml-auto h-5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
-                  {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n} line{n > 1 ? 's' : ''}</option>)}
-                </select>
+                <Listbox value={String(template.listingTitleLines ?? 2)}
+                  onChange={v => patch({ listingTitleLines: parseInt(v) })}
+                  ariaLabel="Listing title lines"
+                  className="ml-auto w-24 shrink-0"
+                  options={[1, 2, 3, 4].map(n => ({ value: String(n), label: `${n} line${n > 1 ? 's' : ''}` }))} />
               )}
             </div>
             {!template.showListingTitle && (
@@ -373,12 +376,14 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
                   onChange={v => patch({ listingTitleScale: v })} />
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-500 shrink-0 w-28">Truncation</span>
-                  <select value={template.titleTruncationMode ?? 'lines'}
-                    onChange={e => patch({ titleTruncationMode: e.target.value as 'lines' | 'smart' })}
-                    className="flex-1 h-6 px-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
-                    <option value="lines">Line clamp</option>
-                    <option value="smart">First + last words</option>
-                  </select>
+                  <Listbox value={template.titleTruncationMode ?? 'lines'}
+                    onChange={v => patch({ titleTruncationMode: v as 'lines' | 'smart' })}
+                    ariaLabel="Truncation"
+                    className="flex-1"
+                    options={[
+                      { value: 'lines', label: 'Line clamp' },
+                      { value: 'smart', label: 'First + last words' },
+                    ]} />
                 </div>
                 {(template.titleTruncationMode ?? 'lines') === 'smart' && (
                   <div className="flex items-center gap-2">
@@ -410,18 +415,21 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
             const isStandard = FBA_CONDITIONS.includes(template.condition)
             return (
               <div className="mt-1.5 flex items-center gap-1.5">
-                <select
-                  value={isStandard ? template.condition : '__custom__'}
-                  onChange={e => {
-                    if (e.target.value === '__custom__') patch({ condition: template.condition || '' })
-                    else patch({ condition: e.target.value })
-                  }}
-                  className="flex-1 h-6 px-2 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500"
-                  title="Amazon FBA accepted condition strings — must match exactly per Amazon spec"
-                >
-                  {FBA_CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                  <option value="__custom__">Custom…</option>
-                </select>
+                <div className="flex-1" title="Amazon FBA accepted condition strings — must match exactly per Amazon spec">
+                  <Listbox
+                    value={isStandard ? template.condition : '__custom__'}
+                    onChange={v => {
+                      if (v === '__custom__') patch({ condition: template.condition || '' })
+                      else patch({ condition: v })
+                    }}
+                    ariaLabel="Condition"
+                    className="w-full"
+                    options={[
+                      ...FBA_CONDITIONS.map(c => ({ value: c, label: c })),
+                      { value: '__custom__', label: 'Custom…' },
+                    ]}
+                  />
+                </div>
                 {!isStandard && (
                   <input
                     value={template.condition}

@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
+import { DateField } from '@/design-system/components/DateField'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 /**
  * RX.S1 — shared timeframe picker (presets + custom from/to).
@@ -109,24 +112,22 @@ export function TimeframePicker({
               Custom range
             </div>
             <div className="flex items-center gap-1">
-              <input
-                type="date"
-                defaultValue={value.from}
-                onChange={(e) =>
-                  onChange({ preset: '', from: e.target.value || undefined, to: value.to })
+              <DateField
+                value={value.from ?? ''}
+                onChange={(v) =>
+                  onChange({ preset: '', from: v || undefined, to: value.to })
                 }
-                className="h-7 flex-1 rounded border border-default bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
-                aria-label="Start date"
+                className="flex-1"
+                ariaLabel="Start date"
               />
               <span className="text-tertiary">→</span>
-              <input
-                type="date"
-                defaultValue={value.to}
-                onChange={(e) =>
-                  onChange({ preset: '', from: value.from, to: e.target.value || undefined })
+              <DateField
+                value={value.to ?? ''}
+                onChange={(v) =>
+                  onChange({ preset: '', from: value.from, to: v || undefined })
                 }
-                className="h-7 flex-1 rounded border border-default bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
-                aria-label="End date"
+                className="flex-1"
+                ariaLabel="End date"
               />
             </div>
           </div>

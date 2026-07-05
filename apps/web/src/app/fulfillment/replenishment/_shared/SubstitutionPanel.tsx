@@ -12,6 +12,9 @@
  */
 
 import { useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { DetailResponse } from './types'
 
@@ -165,16 +168,8 @@ export function SubstitutionPanel({
       {adding && (
         <div className="mb-3 rounded border border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-2 text-xs">
           <div className="mb-2 grid grid-cols-3 gap-2">
-            <select
-              value={newRole}
-              onChange={(e) =>
-                setNewRole(e.target.value as 'PRIMARY' | 'SUBSTITUTE')
-              }
-              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-1 py-0.5"
-            >
-              <option value="PRIMARY">Primary is…</option>
-              <option value="SUBSTITUTE">Substitute is…</option>
-            </select>
+            <Listbox value={newRole} onChange={(v) => setNewRole(v as 'PRIMARY' | 'SUBSTITUTE')} ariaLabel="Substitution role"
+              options={[{ value: 'PRIMARY', label: 'Primary is…' }, { value: 'SUBSTITUTE', label: 'Substitute is…' }]} />
             <input
               type="text"
               placeholder="other SKU"

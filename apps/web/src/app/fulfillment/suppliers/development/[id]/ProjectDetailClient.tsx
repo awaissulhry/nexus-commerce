@@ -16,6 +16,12 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { Listbox } from '@/design-system/components/Listbox'
+import { DateField } from '@/design-system/components/DateField'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '@/design-system/styles/patterns.css'
 import { getBackendUrl } from '@/lib/backend-url'
 import { STATUSES, eur, type Project } from '../DevelopmentClient'
 
@@ -175,11 +181,10 @@ function PackTab({ p }: { p: ProjectDetail }) {
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
       <Card title="Factory pack" description="Cover + brief + size chart + materials + colorways + images + tech-pack appendix, in one PDF.">
         <div className="space-y-3">
-          <label className="block"><span className={labelCls}>Language</span>
-            <select value={locale} onChange={(e) => setLocale(e.target.value as 'en' | 'it' | 'zh')} className={`${inputCls} mt-1`}>
-              <option value="en">English</option><option value="it">Italiano</option><option value="zh">中文 (Chinese)</option>
-            </select>
-          </label>
+          <div className="block"><span className={labelCls}>Language</span>
+            <Listbox value={locale} onChange={(v) => setLocale(v as 'en' | 'it' | 'zh')} ariaLabel="Language" className="mt-1 w-full"
+              options={[{ value: 'en', label: 'English' }, { value: 'it', label: 'Italiano' }, { value: 'zh', label: '中文 (Chinese)' }]} />
+          </div>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Rev {p.revision} · {includedCount} file{includedCount === 1 ? '' : 's'} included{p.sizeChart?.rows?.length ? ` · size chart (${p.sizeChart.rows.length} sizes)` : ''}{p.materials?.length ? ` · ${p.materials.length} materials` : ''}.
           </p>
@@ -225,12 +230,11 @@ function OverviewTab({ p, onPatch, onReload }: { p: ProjectDetail; onPatch: (b: 
       </div>
       <Card title="Details">
         <div className="space-y-3">
-          <label className="block">
+          <div className="block">
             <span className={labelCls}>Status</span>
-            <select defaultValue={p.status} onChange={(e) => onPatch({ status: e.target.value })} className={`${inputCls} mt-1`}>
-              {STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-            </select>
-          </label>
+            <Listbox value={p.status} onChange={(v) => onPatch({ status: v })} ariaLabel="Status" className="mt-1 w-full"
+              options={STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))} />
+          </div>
           <label className="block">
             <span className={labelCls}>Product type</span>
             <input defaultValue={p.productType ?? ''} onBlur={(e) => onPatch({ productType: e.target.value })} className={`${inputCls} mt-1`} />
@@ -239,10 +243,10 @@ function OverviewTab({ p, onPatch, onReload }: { p: ProjectDetail; onPatch: (b: 
             <span className={labelCls}>Target cost (€)</span>
             <input type="number" step="0.01" defaultValue={p.targetCostCents != null ? (p.targetCostCents / 100).toFixed(2) : ''} onBlur={(e) => onPatch({ targetCostEur: e.target.value })} className={`${inputCls} mt-1`} />
           </label>
-          <label className="block">
+          <div className="block">
             <span className={labelCls}>Target launch</span>
-            <input type="date" defaultValue={p.targetLaunchDate ? p.targetLaunchDate.slice(0, 10) : ''} onBlur={(e) => onPatch({ targetLaunchDate: e.target.value })} className={`${inputCls} mt-1`} />
-          </label>
+            <DateField value={p.targetLaunchDate ? p.targetLaunchDate.slice(0, 10) : ''} onChange={(v) => onPatch({ targetLaunchDate: v })} ariaLabel="Target launch" className="mt-1 w-full" />
+          </div>
         </div>
       </Card>
     </div>
@@ -280,10 +284,11 @@ function SourcingTab({ p, suppliers, onReload, onPatchCandidate }: { p: ProjectD
   return (
     <Card title="Candidate suppliers" action={
       <div className="flex items-center gap-2">
-        <select value={addId} onChange={(e) => setAddId(e.target.value)} className={`${inputCls} w-48`}>
-          <option value="">+ add supplier…</option>
-          {suppliers.filter((s) => !p.candidates.some((c) => c.supplierId === s.id)).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        <Listbox value={addId} onChange={setAddId} ariaLabel="Add supplier" className="w-48"
+          options={[
+            { value: '', label: '+ add supplier…' },
+            ...suppliers.filter((s) => !p.candidates.some((c) => c.supplierId === s.id)).map((s) => ({ value: s.id, label: s.name })),
+          ]} />
         <Button variant="secondary" size="sm" onClick={addCandidate} disabled={!addId}>Add</Button>
       </div>
     }>
@@ -306,10 +311,11 @@ function SourcingTab({ p, suppliers, onReload, onPatchCandidate }: { p: ProjectD
                 <span className="ml-auto inline-flex items-center gap-1.5 text-sm text-slate-500">quote €
                   <input type="number" step="0.01" defaultValue={c.quotedCostCents != null ? (c.quotedCostCents / 100).toFixed(2) : ''} onBlur={(e) => onPatchCandidate(c.id, { quotedCostEur: e.target.value })} className="h-8 w-20 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-right text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
                 </span>
-                <select defaultValue={c.sampleStatus ?? ''} onChange={(e) => onPatchCandidate(c.id, { sampleStatus: e.target.value })} className="h-8 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none">
-                  <option value="">sample…</option>
-                  {['REQUESTED', 'RECEIVED', 'APPROVED', 'REJECTED'].map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
+                <Listbox value={c.sampleStatus ?? ''} onChange={(v) => onPatchCandidate(c.id, { sampleStatus: v })} ariaLabel="Sample status" className="w-36"
+                  options={[
+                    { value: '', label: 'sample…' },
+                    ...['REQUESTED', 'RECEIVED', 'APPROVED', 'REJECTED'].map((s) => ({ value: s, label: s })),
+                  ]} />
                 <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${p.id}/candidates/${c.id}`, { method: 'DELETE' }); onReload() }} className="text-tertiary hover:text-rose-500"><Trash2 size={14} /></button>
               </div>
             )
@@ -372,9 +378,8 @@ function FilesTab({ p, onReload }: { p: ProjectDetail; onReload: () => void }) {
                 )}
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-center gap-2">
-                    <select defaultValue={a.kind} onChange={(e) => patchAtt(a.id, { kind: e.target.value })} className="h-7 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none">
-                      {ATT_KINDS.map((k) => <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>)}
-                    </select>
+                    <Listbox value={a.kind} onChange={(v) => patchAtt(a.id, { kind: v })} ariaLabel="File kind" className="w-40"
+                      options={ATT_KINDS.map((k) => ({ value: k, label: k.replace(/_/g, ' ') }))} />
                     <a href={a.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate text-base text-blue-700 hover:underline dark:text-blue-300">{a.filename ?? 'file'}</a>
                     <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400">
                       <input type="checkbox" defaultChecked={a.includeInPack !== false} onChange={(e) => patchAtt(a.id, { includeInPack: e.target.checked })} /> in pack
@@ -525,10 +530,11 @@ function ComplianceTab({ p, onReload }: { p: ProjectDetail; onReload: () => void
   const patchCert = async (cid: string, b: Record<string, unknown>) => { await fetch(`${API}/api/fulfillment/development/projects/${p.id}/certifications/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); onReload() }
   return (
     <Card title="Compliance / certifications" description="Required certifications gate launch (CE / ECE 22.06 / EN 13594 / EN 1621 / GPSR)." action={
-      <select defaultValue="" onChange={async (e) => { const t = e.target.value; if (!t) return; e.target.value = ''; await fetch(`${API}/api/fulfillment/development/projects/${p.id}/certifications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: t }) }); onReload() }} className={`${inputCls} w-44`}>
-        <option value="">+ add cert…</option>
-        {CERT_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
-      </select>
+      <Listbox value="" onChange={async (t) => { if (!t) return; await fetch(`${API}/api/fulfillment/development/projects/${p.id}/certifications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: t }) }); onReload() }} ariaLabel="Add certification" className="w-44"
+        options={[
+          { value: '', label: '+ add cert…' },
+          ...CERT_TYPES.map((t) => ({ value: t, label: t.replace(/_/g, ' ') })),
+        ]} />
     }>
       {p.certifications.length === 0 ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">No certifications tracked yet.</p>
@@ -538,12 +544,11 @@ function ComplianceTab({ p, onReload }: { p: ProjectDetail; onReload: () => void
             <div key={cert.id} className="flex flex-wrap items-center gap-2 rounded-md border border-default dark:border-slate-800 px-3 py-2">
               <span className="font-medium text-slate-900 dark:text-slate-100">{cert.type.replace(/_/g, ' ')}</span>
               {cert.required && <Badge variant="default" size="sm">required</Badge>}
-              <select defaultValue={cert.status} onChange={(e) => patchCert(cert.id, { status: e.target.value })} className="h-8 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none">
-                {['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED'].map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-              </select>
+              <Listbox value={cert.status} onChange={(v) => patchCert(cert.id, { status: v })} ariaLabel="Certification status" className="w-36"
+                options={['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED'].map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))} />
               <Badge variant={CERT_VARIANT[cert.status] ?? 'default'} size="sm">{cert.status.replace(/_/g, ' ')}</Badge>
               <input defaultValue={cert.certNumber ?? ''} onBlur={(e) => patchCert(cert.id, { certNumber: e.target.value })} placeholder="cert #" className="h-8 w-28 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-              <input type="date" defaultValue={cert.expiresAt ? cert.expiresAt.slice(0, 10) : ''} onBlur={(e) => patchCert(cert.id, { expiresAt: e.target.value })} className="h-8 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+              <DateField value={cert.expiresAt ? cert.expiresAt.slice(0, 10) : ''} onChange={(v) => patchCert(cert.id, { expiresAt: v })} ariaLabel="Expiry date" className="w-36" />
               <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${p.id}/certifications/${cert.id}`, { method: 'DELETE' }); onReload() }} className="ml-auto text-tertiary hover:text-rose-500"><Trash2 size={14} /></button>
             </div>
           ))}

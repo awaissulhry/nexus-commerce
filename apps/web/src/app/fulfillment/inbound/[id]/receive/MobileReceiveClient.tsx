@@ -27,6 +27,11 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { DateField } from '@/design-system/components/DateField'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '@/design-system/styles/patterns.css'
 
 type Item = {
   id: string
@@ -599,15 +604,14 @@ function ItemReceiveDetail({
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label htmlFor={`lot-expires-${item.id}`} className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">
                   Expires (optional)
                 </label>
-                <input
-                  id={`lot-expires-${item.id}`}
-                  type="date"
+                <DateField
                   value={lotExpiresAt}
-                  onChange={(e) => setLotExpiresAt(e.target.value)}
-                  className="w-full h-12 px-3 text-md border-2 border-default dark:border-slate-700 rounded"
+                  onChange={(v) => setLotExpiresAt(v)}
+                  ariaLabel="Expires (optional)"
+                  className="w-full h-12"
                 />
               </div>
               <div>

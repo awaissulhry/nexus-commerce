@@ -1,6 +1,9 @@
 'use client'
 
 import { useEffect } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 export type AutoRefreshInterval = 0 | 5 | 15
 
@@ -40,16 +43,12 @@ export function AutoRefreshSelect({ value, onChange, onTick, className }: AutoRe
   }, [value, onTick])
 
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value) as AutoRefreshInterval)}
-      className={`h-8 px-2 text-sm border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 ${className ?? ''}`}
-      title="Auto-refresh interval (paused when tab is hidden)"
-      aria-label="Auto-refresh interval"
-    >
-      {OPTIONS.map((v) => (
-        <option key={v} value={v}>{label(v)}</option>
-      ))}
-    </select>
+    <Listbox
+      options={OPTIONS.map((v) => ({ value: String(v), label: label(v) }))}
+      value={String(value)}
+      onChange={(v) => onChange(Number(v) as AutoRefreshInterval)}
+      ariaLabel="Auto-refresh interval"
+      className={`w-44${className ? ` ${className}` : ''}`}
+    />
   )
 }

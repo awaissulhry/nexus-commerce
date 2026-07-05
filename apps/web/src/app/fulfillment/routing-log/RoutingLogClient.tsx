@@ -1,6 +1,9 @@
 'use client'
 
 import { useCallback, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { useRouter } from 'next/navigation'
 import { Loader2, Play } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -134,15 +137,8 @@ export function RoutingLogClient({ initialDecisions }: { initialDecisions: Routi
         </h2>
         <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md p-4 space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <select
-              value={simChannel}
-              onChange={(e) => setSimChannel(e.target.value)}
-              className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-400"
-            >
-              <option value="AMAZON">Amazon</option>
-              <option value="EBAY">eBay</option>
-              <option value="SHOPIFY">Shopify</option>
-            </select>
+            <Listbox value={simChannel} onChange={setSimChannel} ariaLabel="Simulation channel" className="w-36"
+              options={[{ value: 'AMAZON', label: 'Amazon' }, { value: 'EBAY', label: 'eBay' }, { value: 'SHOPIFY', label: 'Shopify' }]} />
             <input
               type="text"
               placeholder="Marketplace (IT, DE…)"

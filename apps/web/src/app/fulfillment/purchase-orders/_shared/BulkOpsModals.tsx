@@ -9,6 +9,9 @@
 // invalidates the list and clears selection.
 
 import { useEffect, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import {
   AlertCircle,
   ArrowRight,
@@ -135,19 +138,8 @@ export function BulkReassignSupplierModal({
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">
               Target supplier
             </label>
-            <select
-              value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
-              disabled={submitting}
-              className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-            >
-              <option value="">— Clear supplier —</option>
-              {suppliers?.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            <Listbox value={supplierId} onChange={setSupplierId} disabled={submitting} ariaLabel="Target supplier"
+              options={[{ value: '', label: '— Clear supplier —' }, ...(suppliers ?? []).map((s) => ({ value: s.id, label: s.name }))]} />
             <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               Currency and lead-time defaults from the new supplier are
               NOT auto-applied. Edit each PO afterward if those defaults

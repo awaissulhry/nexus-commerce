@@ -5,6 +5,7 @@
 // bulk-create-shipments. First-match-wins, walked priority ASC.
 
 import { useCallback, useEffect, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
 import {
   DndContext,
   closestCenter,
@@ -483,20 +484,19 @@ function RuleEditModal({
               </Field>
             </div>
             <Field label="Amazon Prime">
-              <select value={isPrime} onChange={(e) => setIsPrime(e.target.value as any)} className="px-3 h-9 text-md border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900">
-                <option value="any">any</option>
-                <option value="yes">Prime only</option>
-                <option value="no">non-Prime only</option>
-              </select>
+              <Listbox value={isPrime} onChange={(v) => setIsPrime(v as any)} ariaLabel="Amazon Prime"
+                options={[
+                  { value: 'any', label: 'any' },
+                  { value: 'yes', label: 'Prime only' },
+                  { value: 'no', label: 'non-Prime only' },
+                ]} />
             </Field>
           </Section>
 
           <Section title="Then (actions)">
             <Field label="Prefer carrier">
-              <select value={carrier} onChange={(e) => setCarrier(e.target.value)} className="px-3 h-9 text-md border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 w-full">
-                <option value="">— no override —</option>
-                {CARRIER_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <Listbox value={carrier} onChange={setCarrier} ariaLabel="Prefer carrier" className="w-full"
+                options={[{ value: '', label: '— no override —' }, ...CARRIER_OPTIONS.map((c) => ({ value: c, label: c }))]} />
             </Field>
             <Field label="Prefer service code (optional)">
               <input value={service} onChange={(e) => setService(e.target.value)} placeholder="e.g. STANDARD or BRT_BUSINESS" className="px-3 h-9 text-md border border-slate-300 dark:border-slate-600 rounded outline-none focus:border-blue-500 w-full font-mono" />
@@ -691,11 +691,12 @@ function SimulatorModal({ onClose }: { onClose: () => void }) {
           <Section title={t('rules.simulator.contextSection')}>
             <div className="grid grid-cols-2 gap-3">
               <Field label={t('rules.field.channel')}>
-                <select value={channel} onChange={(e) => setChannel(e.target.value)} className="px-3 h-9 text-md border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900">
-                  <option value="AMAZON">AMAZON</option>
-                  <option value="EBAY">EBAY</option>
-                  <option value="SHOPIFY">SHOPIFY</option>
-                </select>
+                <Listbox value={channel} onChange={setChannel} ariaLabel={t('rules.field.channel')}
+                  options={[
+                    { value: 'AMAZON', label: 'AMAZON' },
+                    { value: 'EBAY', label: 'EBAY' },
+                    { value: 'SHOPIFY', label: 'SHOPIFY' },
+                  ]} />
               </Field>
               <Field label={t('rules.field.country')}>
                 <input value={destinationCountry} onChange={(e) => setDestinationCountry(e.target.value.toUpperCase())} maxLength={2} className="px-3 h-9 text-md border border-slate-300 dark:border-slate-600 rounded font-mono" />
@@ -710,11 +711,12 @@ function SimulatorModal({ onClose }: { onClose: () => void }) {
                 <input type="number" min="1" value={itemCount} onChange={(e) => setItemCount(e.target.value)} className="px-3 h-9 text-md tabular-nums border border-slate-300 dark:border-slate-600 rounded" />
               </Field>
               <Field label={t('rules.field.prime')}>
-                <select value={isPrime} onChange={(e) => setIsPrime(e.target.value as any)} className="px-3 h-9 text-md border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900">
-                  <option value="any">{t('rules.field.primeAny')}</option>
-                  <option value="yes">{t('rules.field.primeYes')}</option>
-                  <option value="no">{t('rules.field.primeNo')}</option>
-                </select>
+                <Listbox value={isPrime} onChange={(v) => setIsPrime(v as any)} ariaLabel={t('rules.field.prime')}
+                  options={[
+                    { value: 'any', label: t('rules.field.primeAny') },
+                    { value: 'yes', label: t('rules.field.primeYes') },
+                    { value: 'no', label: t('rules.field.primeNo') },
+                  ]} />
               </Field>
             </div>
           </Section>

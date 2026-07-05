@@ -4,6 +4,7 @@
 // Manual refund default (per user choice — they recheck before restock); auto-refund opt-in via toggle.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Undo2, Plus, X, CheckCircle2, Package, Search, Download,
@@ -821,16 +822,13 @@ export default function ReturnsWorkspace() {
               )}
             </div>
             <div className="flex items-center gap-1">
-              <select
-                value={pageSize}
-                onChange={(e) => setFilters({ pageSize: e.target.value, page: '1' })}
-                className="h-7 px-1.5 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
-                title="Rows per page"
-              >
-                {[25, 50, 100, 200].map((n) => (
-                  <option key={n} value={n}>{n} / page</option>
-                ))}
-              </select>
+              <Listbox
+                value={String(pageSize)}
+                onChange={(v) => setFilters({ pageSize: v, page: '1' })}
+                ariaLabel="Rows per page"
+                className="w-32"
+                options={[25, 50, 100, 200].map((n) => ({ value: String(n), label: `${n} / page` }))}
+              />
               <button
                 onClick={() => setFilters({ page: '1' })}
                 disabled={page === 1}
@@ -1439,13 +1437,14 @@ function CreateReturnModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">Channel</div>
-              <select value={channel} onChange={(e) => setChannel(e.target.value)} className="h-8 w-full px-2 text-md border border-default dark:border-slate-700 rounded">
-                <option value="AMAZON">Amazon</option>
-                <option value="EBAY">eBay</option>
-                <option value="SHOPIFY">Shopify</option>
-                <option value="WOOCOMMERCE">WooCommerce</option>
-                <option value="ETSY">Etsy</option>
-              </select>
+              <Listbox value={channel} onChange={setChannel} ariaLabel="Channel" className="w-full"
+                options={[
+                  { value: 'AMAZON', label: 'Amazon' },
+                  { value: 'EBAY', label: 'eBay' },
+                  { value: 'SHOPIFY', label: 'Shopify' },
+                  { value: 'WOOCOMMERCE', label: 'WooCommerce' },
+                  { value: 'ETSY', label: 'Etsy' },
+                ]} />
             </div>
             <div>
               <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">Order ID (optional)</div>
@@ -1933,19 +1932,20 @@ function ReturnItemCard({
             </span>
           )}
           {isInspecting && !isFba ? (
-            <select
+            <Listbox
               value={stagedGrade ?? item.conditionGrade ?? ''}
-              onChange={(e) => onStageGrade(e.target.value)}
-              className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded"
-              aria-label={`Condition grade for ${item.sku}`}
-            >
-              <option value="">Grade…</option>
-              <option value="NEW">NEW</option>
-              <option value="LIKE_NEW">Like new</option>
-              <option value="GOOD">Good</option>
-              <option value="DAMAGED">Damaged</option>
-              <option value="UNUSABLE">Unusable</option>
-            </select>
+              onChange={onStageGrade}
+              className="w-32"
+              ariaLabel={`Condition grade for ${item.sku}`}
+              options={[
+                { value: '', label: 'Grade…' },
+                { value: 'NEW', label: 'NEW' },
+                { value: 'LIKE_NEW', label: 'Like new' },
+                { value: 'GOOD', label: 'Good' },
+                { value: 'DAMAGED', label: 'Damaged' },
+                { value: 'UNUSABLE', label: 'Unusable' },
+              ]}
+            />
           ) : (
             <span className="text-sm text-slate-600 dark:text-slate-400">{item.conditionGrade ?? '—'}</span>
           )}
@@ -2691,17 +2691,13 @@ function ReturnLabelPanel({
               <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                 Carrier
               </label>
-              <select
+              <Listbox
                 value={carrier}
-                onChange={(e) => setCarrier(e.target.value)}
-                className="mt-1 w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
-              >
-                {CARRIER_OPTIONS.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
+                onChange={setCarrier}
+                ariaLabel="Carrier"
+                className="mt-1 w-full"
+                options={CARRIER_OPTIONS}
+              />
             </div>
             <div>
               <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">

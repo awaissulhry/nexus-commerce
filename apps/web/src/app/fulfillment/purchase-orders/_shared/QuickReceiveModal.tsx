@@ -11,7 +11,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   AlertCircle,
-  Calendar,
   CheckCircle2,
   Loader2,
   PackageCheck,
@@ -19,6 +18,7 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { DateField } from '@/design-system/components/DateField'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from './po-lens'
@@ -204,19 +204,13 @@ export function QuickReceiveModal({
               {/* Shipment-level fields */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Field label="Arrived">
-                  <div className="relative">
-                    <Calendar
-                      size={12}
-                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500 pointer-events-none"
-                    />
-                    <input
-                      type="date"
-                      value={arrivedAt}
-                      onChange={(e) => setArrivedAt(e.target.value)}
-                      disabled={submitting}
-                      className="w-full h-9 pl-7 pr-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-                    />
-                  </div>
+                  <DateField
+                    value={arrivedAt}
+                    onChange={(v) => setArrivedAt(v)}
+                    disabled={submitting}
+                    ariaLabel="Arrived"
+                    className="w-full"
+                  />
                 </Field>
                 <Field label="Reference">
                   <input

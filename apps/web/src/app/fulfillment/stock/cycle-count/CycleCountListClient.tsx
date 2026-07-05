@@ -1,6 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import Link from 'next/link'
 import {
   AlertCircle,
@@ -395,22 +398,12 @@ export default function CycleCountListClient() {
             </div>
             <div className="p-5 space-y-3">
               <div>
-                <label htmlFor="cycle-count-location" className="text-sm font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                <label  className="text-sm font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                   {t('cycleCount.list.modal.locationLabel')} <span className="text-red-600">*</span>
                 </label>
-                <select
-                  id="cycle-count-location"
-                  value={newLocationId}
-                  onChange={(e) => setNewLocationId(e.target.value)}
-                  className="mt-1 w-full px-3 py-1.5 text-md border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                >
-                  <option value="">{t('cycleCount.list.modal.locationPlaceholder')}</option>
-                  {locations.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.code} — {l.name}
-                    </option>
-                  ))}
-                </select>
+                <Listbox value={newLocationId} onChange={setNewLocationId} ariaLabel={t('cycleCount.list.modal.locationLabel')} className="mt-1"
+                  placeholder={t('cycleCount.list.modal.locationPlaceholder')}
+                  options={[{ value: '', label: t('cycleCount.list.modal.locationPlaceholder') }, ...locations.map((l) => ({ value: l.id, label: `${l.code} — ${l.name}` }))]} />
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   {t('cycleCount.list.modal.locationHelp')}
                 </p>

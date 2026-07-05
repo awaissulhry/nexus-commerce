@@ -7,6 +7,9 @@
 // bulk-create-able. Drawer (per-order detail) lands in O.5.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Truck, Search, Crown, AlertTriangle, Clock, Package, X, Plus,
@@ -821,15 +824,12 @@ export default function PendingShipmentsClient() {
           </>
         }
         sort={
-          <select
-            value={sort}
-            onChange={(e) => setParam('sort', e.target.value === 'ship-by-asc' ? null : e.target.value)}
-            className="h-8 px-2 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
-          >
-            <option value="ship-by-asc">{t('outbound.pending.sort.shipBy')}</option>
-            <option value="value-desc">{t('outbound.pending.sort.value')}</option>
-            <option value="age-desc">{t('outbound.pending.sort.age')}</option>
-          </select>
+          <Listbox value={sort} onChange={(v) => setParam('sort', v === 'ship-by-asc' ? null : v)} ariaLabel={t('outbound.pending.sort.shipBy')} className="w-44"
+            options={[
+              { value: 'ship-by-asc', label: t('outbound.pending.sort.shipBy') },
+              { value: 'value-desc', label: t('outbound.pending.sort.value') },
+              { value: 'age-desc', label: t('outbound.pending.sort.age') },
+            ]} />
         }
         density={<SharedDensityToggle density={density} onChange={setDensity} />}
         autoRefresh={
@@ -1864,16 +1864,8 @@ function AlertsModal({
             {t('outbound.alerts.addAnother')}
           </div>
           <div className="flex gap-1.5 items-center">
-            <select
-              value={comparison}
-              onChange={(e) => setComparison(e.target.value as typeof comparison)}
-              className="text-sm border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900"
-            >
-              <option value="GT">{t('outbound.alerts.comparison.GT')}</option>
-              <option value="LT">{t('outbound.alerts.comparison.LT')}</option>
-              <option value="CHANGE_ABS">{t('outbound.alerts.comparison.CHANGE_ABS')}</option>
-              <option value="CHANGE_PCT">{t('outbound.alerts.comparison.CHANGE_PCT')}</option>
-            </select>
+            <Listbox value={comparison} onChange={(v) => setComparison(v as typeof comparison)} ariaLabel="Comparison" className="w-40"
+              options={(['GT', 'LT', 'CHANGE_ABS', 'CHANGE_PCT'] as const).map((c) => ({ value: c, label: t(`outbound.alerts.comparison.${c}`) }))} />
             <input
               type="number"
               min={0}

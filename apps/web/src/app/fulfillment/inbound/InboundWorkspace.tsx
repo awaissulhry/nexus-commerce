@@ -32,6 +32,12 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Listbox } from '@/design-system/components/Listbox'
+import { DateField } from '@/design-system/components/DateField'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '@/design-system/styles/patterns.css'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -416,16 +422,16 @@ export default function InboundWorkspace() {
               />
             </div>
             <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold ml-1">{t('inbound.filter.status')}</span>
-            <select
+            <Listbox
               value={status}
-              onChange={(e) => updateUrl({ status: e.target.value || undefined, page: undefined })}
-              className="h-7 px-2 text-base border border-default dark:border-slate-700 rounded font-medium"
-            >
-              <option value="">{t('inbound.filter.all')}</option>
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
+              onChange={(v) => updateUrl({ status: v || undefined, page: undefined })}
+              options={[
+                { value: '', label: t('inbound.filter.all') },
+                ...STATUS_OPTIONS.map((s) => ({ value: s.value, label: s.label })),
+              ]}
+              ariaLabel={t('inbound.filter.status')}
+              className="w-36 font-medium"
+            />
             <button
               onClick={() => updateUrl({ delayed: delayed ? undefined : 'true', page: undefined })}
               className={`h-7 px-3 text-sm rounded-full font-medium border inline-flex items-center gap-1 ${
@@ -1620,16 +1626,18 @@ function ItemRow({
           className="h-7 w-20 px-2 text-right tabular-nums border border-default dark:border-slate-700 rounded text-base"
           title="Cumulative target. Server computes delta."
         />
-        <select
+        <Listbox
           value={qc}
-          onChange={(e) => onBufChange({ qty: target, qc: e.target.value, photoUrl })}
-          className="h-7 px-1.5 text-sm border border-default dark:border-slate-700 rounded"
-        >
-          <option value="">QC —</option>
-          <option value="PASS">PASS</option>
-          <option value="HOLD">HOLD</option>
-          <option value="FAIL">FAIL</option>
-        </select>
+          onChange={(v) => onBufChange({ qty: target, qc: v, photoUrl })}
+          options={[
+            { value: '', label: 'QC —' },
+            { value: 'PASS', label: 'PASS' },
+            { value: 'HOLD', label: 'HOLD' },
+            { value: 'FAIL', label: 'FAIL' },
+          ]}
+          ariaLabel="QC status"
+          className="w-24"
+        />
       </div>
 
       {expanded && (
@@ -1786,9 +1794,7 @@ function DiscrepancyComposer({
       <div className="grid grid-cols-2 gap-2">
         <div>
           <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Reason</div>
-          <select value={reasonCode} onChange={(e) => setReasonCode(e.target.value)} className="h-7 w-full px-1.5 text-sm border border-default dark:border-slate-700 rounded">
-            {DISCREPANCY_REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-          </select>
+          <Listbox value={reasonCode} onChange={(v) => setReasonCode(v)} options={DISCREPANCY_REASONS.map((r) => ({ value: r.value, label: r.label }))} ariaLabel="Reason" className="w-full" />
         </div>
         <div>
           <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Quantity impact (signed)</div>
@@ -1837,9 +1843,7 @@ function AttachmentComposer({
       <div className="grid grid-cols-2 gap-2">
         <div>
           <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Kind</div>
-          <select value={kind} onChange={(e) => setKind(e.target.value)} className="h-7 w-full px-1.5 text-sm border border-default dark:border-slate-700 rounded">
-            {ATTACHMENT_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
-          </select>
+          <Listbox value={kind} onChange={(v) => setKind(v)} options={ATTACHMENT_KINDS.map((k) => ({ value: k, label: k }))} ariaLabel="Kind" className="w-full" />
         </div>
         <div>
           <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Filename (optional)</div>
@@ -2146,11 +2150,11 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
             </div>
             <div>
               <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">Expected arrival</div>
-              <input
-                type="date"
+              <DateField
                 value={expectedAt}
-                onChange={(e) => setExpectedAt(e.target.value)}
-                className="h-8 w-full px-2 text-base border border-default dark:border-slate-700 rounded"
+                onChange={(v) => setExpectedAt(v)}
+                ariaLabel="Expected arrival"
+                className="w-full"
               />
             </div>
           </div>
@@ -2214,9 +2218,7 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
             <div className="grid grid-cols-3 gap-2">
               <div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Carrier</div>
-                <select value={carrierCode} onChange={(e) => setCarrierCode(e.target.value)} className="h-7 w-full px-1.5 text-base border border-default dark:border-slate-700 rounded">
-                  {carrierOptions.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                </select>
+                <Listbox value={carrierCode} onChange={(v) => setCarrierCode(v)} options={carrierOptions.map((c) => ({ value: c.value, label: c.label }))} ariaLabel="Carrier" className="w-full" />
               </div>
               <div className="col-span-2">
                 <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Tracking number</div>
@@ -2239,9 +2241,7 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Currency</div>
-                <select value={currencyCode} onChange={(e) => setCurrencyCode(e.target.value)} className="h-7 w-full px-1.5 text-base border border-default dark:border-slate-700 rounded">
-                  {CURRENCY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
+                <Listbox value={currencyCode} onChange={(v) => setCurrencyCode(v)} options={CURRENCY_OPTIONS.map((c) => ({ value: c, label: c }))} ariaLabel="Currency" className="w-full" />
               </div>
               <div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">FX rate to EUR (optional)</div>
@@ -3126,16 +3126,28 @@ function FbaLabelDownload({ shipmentId }: { shipmentId: string }) {
     <div className="space-y-1.5">
       <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Labels</div>
       <div className="flex items-center gap-2 flex-wrap">
-        <select value={labelType} onChange={(e) => setLabelType(e.target.value as any)} className="h-7 text-sm px-2 border border-default dark:border-slate-700 rounded">
-          <option value="BARCODE_2D">FNSKU (unit)</option>
-          <option value="UNIQUE">Carton</option>
-          <option value="PALLET">Pallet</option>
-        </select>
-        <select value={pageType} onChange={(e) => setPageType(e.target.value as any)} className="h-7 text-sm px-2 border border-default dark:border-slate-700 rounded">
-          <option value="PackageLabel_A4_4">A4 — 4 per sheet</option>
-          <option value="PackageLabel_Letter_4">Letter — 4 per sheet</option>
-          <option value="PackageLabel_Thermal">Thermal</option>
-        </select>
+        <Listbox
+          value={labelType}
+          onChange={(v) => setLabelType(v as any)}
+          options={[
+            { value: 'BARCODE_2D', label: 'FNSKU (unit)' },
+            { value: 'UNIQUE', label: 'Carton' },
+            { value: 'PALLET', label: 'Pallet' },
+          ]}
+          ariaLabel="Label type"
+          className="w-36"
+        />
+        <Listbox
+          value={pageType}
+          onChange={(v) => setPageType(v as any)}
+          options={[
+            { value: 'PackageLabel_A4_4', label: 'A4 — 4 per sheet' },
+            { value: 'PackageLabel_Letter_4', label: 'Letter — 4 per sheet' },
+            { value: 'PackageLabel_Thermal', label: 'Thermal' },
+          ]}
+          ariaLabel="Page type"
+          className="w-48"
+        />
         <button
           onClick={fetchLabels}
           disabled={busy}

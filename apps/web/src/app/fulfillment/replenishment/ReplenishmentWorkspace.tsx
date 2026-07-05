@@ -14,6 +14,7 @@
 //     supplier, grouped automatically)
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Download,
@@ -1450,29 +1451,16 @@ export default function ReplenishmentWorkspace() {
                 ),
               )}
             </div>
-            <select
-              value={channelFilter}
-              onChange={(e) => setChannelFilter(e.target.value)}
-              className="h-8 px-2 border border-default dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-            >
-              <option value="">All channels</option>
-              <option value="AMAZON">Amazon</option>
-              <option value="EBAY">eBay</option>
-              <option value="SHOPIFY">Shopify</option>
-              <option value="WOOCOMMERCE">WooCommerce</option>
-            </select>
-            <select
-              value={marketplaceFilter}
-              onChange={(e) => setMarketplaceFilter(e.target.value)}
-              className="h-8 px-2 border border-default dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-            >
-              <option value="">All marketplaces</option>
-              {marketplaceOptions.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
+            <Listbox value={channelFilter} onChange={setChannelFilter} ariaLabel="Channel filter" className="w-40"
+              options={[
+                { value: '', label: 'All channels' },
+                { value: 'AMAZON', label: 'Amazon' },
+                { value: 'EBAY', label: 'eBay' },
+                { value: 'SHOPIFY', label: 'Shopify' },
+                { value: 'WOOCOMMERCE', label: 'WooCommerce' },
+              ]} />
+            <Listbox value={marketplaceFilter} onChange={setMarketplaceFilter} ariaLabel="Marketplace filter" className="w-44"
+              options={[{ value: '', label: 'All marketplaces' }, ...marketplaceOptions.map((m) => ({ value: m, label: m }))]} />
             {/* RX.S1 — sales timeframe for the "Sales" column. */}
             <TimeframePicker value={salesTf} onChange={setSalesTf} labelPrefix="Sales" />
             {/* S4 — recommendation basis toggle + promo/event uplift. */}

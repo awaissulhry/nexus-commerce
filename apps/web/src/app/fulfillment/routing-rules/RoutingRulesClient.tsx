@@ -1,6 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import {
   AlertCircle,
   ArrowRight,
@@ -550,23 +553,12 @@ function RuleFormModal({
               />
             </div>
             <div>
-              <label htmlFor="rule-warehouse" className="text-sm font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+              <label  className="text-sm font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                 {t('routingRules.field.warehouse')}
               </label>
-              <select
-                id="rule-warehouse"
-                value={form.warehouseId}
-                onChange={(e) => setForm({ ...form, warehouseId: e.target.value })}
-                className="mt-1 w-full px-3 py-1.5 text-md border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                required
-              >
-                <option value="">{t('routingRules.field.warehouseSelect')}</option>
-                {warehouses.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.code} — {w.name}{w.isDefault ? ` ${t('routingRules.field.defaultMarker')}` : ''}
-                  </option>
-                ))}
-              </select>
+              <Listbox value={form.warehouseId} onChange={(v) => setForm({ ...form, warehouseId: v })} ariaLabel={t('routingRules.field.warehouse')} className="mt-1"
+                placeholder={t('routingRules.field.warehouseSelect')}
+                options={[{ value: '', label: t('routingRules.field.warehouseSelect') }, ...warehouses.map((w) => ({ value: w.id, label: `${w.code} — ${w.name}${w.isDefault ? ` ${t('routingRules.field.defaultMarker')}` : ''}` }))]} />
             </div>
           </div>
 

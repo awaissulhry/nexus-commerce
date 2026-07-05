@@ -34,7 +34,6 @@ import {
 } from 'react'
 import {
   AlertCircle,
-  Calendar,
   Check,
   Loader2,
   Package,
@@ -46,6 +45,8 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { DateField } from '@/design-system/components/DateField'
+import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -550,19 +551,17 @@ export function CreatePoModal({
               <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">
                 {t('po.create.supplier')}
               </label>
-              <select
+              <Listbox
                 value={supplierId}
-                onChange={(e) => setSupplierId(e.target.value)}
+                onChange={(v) => setSupplierId(v)}
                 disabled={submitting}
-                className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-              >
-                <option value="">{t('po.create.supplierNone')}</option>
-                {suppliers?.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+                ariaLabel={t('po.create.supplier')}
+                className="w-full"
+                options={[
+                  { value: '', label: t('po.create.supplierNone') },
+                  ...(suppliers ?? []).map((s) => ({ value: s.id, label: s.name })),
+                ]}
+              />
               {selectedSupplier && (
                 <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                   Lead time: {selectedSupplier.leadTimeDays}d · default{' '}
@@ -575,40 +574,33 @@ export function CreatePoModal({
               <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">
                 Warehouse
               </label>
-              <select
+              <Listbox
                 value={warehouseId}
-                onChange={(e) => setWarehouseId(e.target.value)}
+                onChange={(v) => setWarehouseId(v)}
                 disabled={submitting}
-                className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-              >
-                <option value="">— Default —</option>
-                {warehouses?.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.code}
-                    {w.name ? ` · ${w.name}` : ''}
-                    {w.isDefault ? ' (default)' : ''}
-                  </option>
-                ))}
-              </select>
+                ariaLabel="Warehouse"
+                className="w-full"
+                options={[
+                  { value: '', label: '— Default —' },
+                  ...(warehouses ?? []).map((w) => ({
+                    value: w.id,
+                    label: `${w.code}${w.name ? ` · ${w.name}` : ''}${w.isDefault ? ' (default)' : ''}`,
+                  })),
+                ]}
+              />
             </div>
 
             <div>
               <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">
                 {t('po.create.expectedDate')}
               </label>
-              <div className="relative">
-                <Calendar
-                  size={12}
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500 pointer-events-none"
-                />
-                <input
-                  type="date"
-                  value={expectedDate}
-                  onChange={(e) => setExpectedDate(e.target.value)}
-                  disabled={submitting}
-                  className="w-full h-9 pl-7 pr-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-                />
-              </div>
+              <DateField
+                value={expectedDate}
+                onChange={(v) => setExpectedDate(v)}
+                disabled={submitting}
+                ariaLabel={t('po.create.expectedDate')}
+                className="w-full"
+              />
               {selectedSupplier && expectedDate === todayPlusDays(selectedSupplier.leadTimeDays ?? 14) && (
                 <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                   Auto = today + {selectedSupplier.leadTimeDays}d
@@ -621,23 +613,20 @@ export function CreatePoModal({
                 Currency
               </label>
               <div className="flex items-center gap-1">
-                <select
+                <Listbox
                   value={CURRENCY_CHOICES.includes(currency) ? currency : '__other__'}
-                  onChange={(e) => {
-                    const v = e.target.value
+                  onChange={(v) => {
                     if (v === '__other__') return
                     setCurrency(v)
                   }}
                   disabled={submitting}
-                  className="flex-1 h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-                >
-                  {CURRENCY_CHOICES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                  <option value="__other__">Other…</option>
-                </select>
+                  ariaLabel="Currency"
+                  className="flex-1"
+                  options={[
+                    ...CURRENCY_CHOICES.map((c) => ({ value: c, label: c })),
+                    { value: '__other__', label: 'Other…' },
+                  ]}
+                />
                 {!CURRENCY_CHOICES.includes(currency) && (
                   <input
                     type="text"

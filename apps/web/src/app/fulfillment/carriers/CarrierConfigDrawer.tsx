@@ -23,6 +23,8 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { DateField } from '@/design-system/components/DateField'
+import { Listbox } from '@/design-system/components/Listbox'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -746,14 +748,16 @@ function AccountsSection({ carrierCode }: { carrierCode: string }) {
             </div>
             <div>
               <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Mode</label>
-              <select
+              <Listbox
                 value={draft.mode}
-                onChange={(e) => setDraft({ ...draft, mode: e.target.value as 'sandbox' | 'production' })}
-                className="h-9 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
-              >
-                <option value="sandbox">Sandbox</option>
-                <option value="production">Production</option>
-              </select>
+                onChange={(v) => setDraft({ ...draft, mode: v as 'sandbox' | 'production' })}
+                ariaLabel="Mode"
+                className="w-full"
+                options={[
+                  { value: 'sandbox', label: 'Sandbox' },
+                  { value: 'production', label: 'Production' },
+                ]}
+              />
             </div>
           </div>
           <div className="flex items-center gap-2 pt-1">
@@ -984,38 +988,39 @@ function ServicesTab({ carrierCode }: { carrierCode: string }) {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div>
               <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Channel</label>
-              <select
+              <Listbox
                 value={draft.channel}
-                onChange={(e) => setDraft({ ...draft, channel: e.target.value })}
-                className="h-9 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
-              >
-                {CHANNELS.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
+                onChange={(v) => setDraft({ ...draft, channel: v })}
+                ariaLabel="Channel"
+                className="w-full"
+                options={CHANNELS.map((c) => ({ value: c, label: c }))}
+              />
             </div>
             <div>
               <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Marketplace</label>
-              <select
+              <Listbox
                 value={draft.marketplace}
-                onChange={(e) => setDraft({ ...draft, marketplace: e.target.value })}
-                className="h-9 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
-              >
-                {COMMON_MARKETPLACES.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
+                onChange={(v) => setDraft({ ...draft, marketplace: v })}
+                ariaLabel="Marketplace"
+                className="w-full"
+                options={COMMON_MARKETPLACES.map((m) => ({ value: m, label: m }))}
+              />
             </div>
             <div>
               <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Service</label>
-              <select
+              <Listbox
                 value={draft.serviceExternalId}
-                onChange={(e) => setDraft({ ...draft, serviceExternalId: e.target.value })}
-                className="h-9 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
-              >
-                <option value="">— pick —</option>
-                {services.map((s) => (
-                  <option key={s.externalId} value={s.externalId}>
-                    {s.name} ({s.carrier}, €{s.basePriceEur})
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setDraft({ ...draft, serviceExternalId: v })}
+                ariaLabel="Service"
+                className="w-full"
+                options={[
+                  { value: '', label: '— pick —' },
+                  ...services.map((s) => ({
+                    value: s.externalId,
+                    label: `${s.name} (${s.carrier}, €${s.basePriceEur})`,
+                  })),
+                ]}
+              />
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1194,42 +1199,43 @@ function WarehousesTab({ carrierCode }: { carrierCode: string }) {
                     </div>
                   </td>
                   <td className="px-3 py-2">
-                    <select
-                      value={w.sendcloudSenderId ?? ''}
+                    <Listbox
+                      value={w.sendcloudSenderId != null ? String(w.sendcloudSenderId) : ''}
                       disabled={busyId === w.id || senders.length === 0}
-                      onChange={(e) =>
-                        setSender(w.id, e.target.value === '' ? null : Number(e.target.value))
+                      onChange={(v) =>
+                        setSender(w.id, v === '' ? null : Number(v))
                       }
-                      className="h-8 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
-                    >
-                      <option value="">— integration default —</option>
-                      {senders.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.contactName} · {s.city} {s.postalCode}
-                          {s.isDefault ? ' (default)' : ''}
-                        </option>
-                      ))}
-                    </select>
+                      ariaLabel={t('carriers.col.sendcloudSender')}
+                      className="w-full"
+                      options={[
+                        { value: '', label: '— integration default —' },
+                        ...senders.map((s) => ({
+                          value: String(s.id),
+                          label: `${s.contactName} · ${s.city} ${s.postalCode}${s.isDefault ? ' (default)' : ''}`,
+                        })),
+                      ]}
+                    />
                   </td>
                   <td className="px-3 py-2">
-                    <select
-                      value={w.defaultCarrierAccountId ?? ''}
-                      disabled={busyId === w.id}
-                      onChange={(e) =>
-                        setAccount(w.id, e.target.value === '' ? null : e.target.value)
-                      }
-                      className="h-8 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
-                      title={accounts.length === 0 ? 'Add a secondary account in Credentials tab to bind one' : undefined}
-                    >
-                      <option value="">— primary account —</option>
-                      {accounts.map((a) => (
-                        <option key={a.id} value={a.id} disabled={!a.hasCredentials || !a.isActive}>
-                          {a.accountLabel}
-                          {a.mode === 'sandbox' ? ' (sandbox)' : ''}
-                          {!a.hasCredentials ? ' — no creds' : !a.isActive ? ' — inactive' : ''}
-                        </option>
-                      ))}
-                    </select>
+                    <div title={accounts.length === 0 ? 'Add a secondary account in Credentials tab to bind one' : undefined}>
+                      <Listbox
+                        value={w.defaultCarrierAccountId ?? ''}
+                        disabled={busyId === w.id}
+                        onChange={(v) =>
+                          setAccount(w.id, v === '' ? null : v)
+                        }
+                        ariaLabel={t('carriers.col.defaultAccount')}
+                        className="w-full"
+                        options={[
+                          { value: '', label: '— primary account —' },
+                          ...accounts.map((a) => ({
+                            value: a.id,
+                            label: `${a.accountLabel}${a.mode === 'sandbox' ? ' (sandbox)' : ''}${!a.hasCredentials ? ' — no creds' : !a.isActive ? ' — inactive' : ''}`,
+                            disabled: !a.hasCredentials || !a.isActive,
+                          })),
+                        ]}
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1934,24 +1940,27 @@ function PickupsTab({ carrierCode }: { carrierCode: string }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Warehouse</label>
-              <select
+              <Listbox
                 value={draft.warehouseId}
-                onChange={(e) => setDraft({ ...draft, warehouseId: e.target.value })}
-                className="h-9 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
-              >
-                <option value="">— integration default —</option>
-                {warehouses.map((w) => (
-                  <option key={w.id} value={w.id}>{w.code} — {w.name}{w.isDefault ? ' (default)' : ''}</option>
-                ))}
-              </select>
+                onChange={(v) => setDraft({ ...draft, warehouseId: v })}
+                ariaLabel="Warehouse"
+                className="w-full"
+                options={[
+                  { value: '', label: '— integration default —' },
+                  ...warehouses.map((w) => ({
+                    value: w.id,
+                    label: `${w.code} — ${w.name}${w.isDefault ? ' (default)' : ''}`,
+                  })),
+                ]}
+              />
             </div>
             <div>
               <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Date</label>
-              <input
-                type="date"
+              <DateField
                 value={draft.scheduledFor}
-                onChange={(e) => setDraft({ ...draft, scheduledFor: e.target.value })}
-                className="h-9 w-full px-2 text-base border border-default dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+                onChange={(v) => setDraft({ ...draft, scheduledFor: v })}
+                ariaLabel="Date"
+                className="w-full"
               />
             </div>
           </div>

@@ -12,13 +12,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Calendar,
   ChevronDown,
   Filter,
   Loader2,
   Sparkles,
   X,
 } from 'lucide-react'
+import { DateField as DsDateField } from '@/design-system/components/DateField'
+import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -319,40 +320,38 @@ export function AdvancedFiltersButton({
                 <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Warehouse
                 </div>
-                <select
+                <Listbox
                   value={draft.warehouseId ?? ''}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, warehouseId: e.target.value || null }))
+                  onChange={(v) =>
+                    setDraft((d) => ({ ...d, warehouseId: v || null }))
                   }
-                  className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-                >
-                  <option value="">Any</option>
-                  {warehouses?.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.code}
-                      {w.name ? ` · ${w.name}` : ''}
-                    </option>
-                  ))}
-                </select>
+                  ariaLabel="Warehouse"
+                  className="w-full"
+                  options={[
+                    { value: '', label: 'Any' },
+                    ...(warehouses ?? []).map((w) => ({
+                      value: w.id,
+                      label: `${w.code}${w.name ? ` · ${w.name}` : ''}`,
+                    })),
+                  ]}
+                />
               </div>
               <div>
                 <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Currency
                 </div>
-                <select
+                <Listbox
                   value={draft.currencyCode ?? ''}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, currencyCode: e.target.value || null }))
+                  onChange={(v) =>
+                    setDraft((d) => ({ ...d, currencyCode: v || null }))
                   }
-                  className="w-full h-9 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-                >
-                  <option value="">Any</option>
-                  {CURRENCIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+                  ariaLabel="Currency"
+                  className="w-full"
+                  options={[
+                    { value: '', label: 'Any' },
+                    ...CURRENCIES.map((c) => ({ value: c, label: c })),
+                  ]}
+                />
               </div>
             </div>
 
@@ -508,18 +507,12 @@ function DateField({
   return (
     <div>
       <div className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">{label}</div>
-      <div className="relative">
-        <Calendar
-          size={12}
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500 pointer-events-none"
-        />
-        <input
-          type="date"
-          value={value ?? ''}
-          onChange={(e) => onChange(e.target.value || null)}
-          className="w-full h-9 pl-7 pr-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-        />
-      </div>
+      <DsDateField
+        value={value ?? ''}
+        onChange={(v) => onChange(v || null)}
+        ariaLabel={label}
+        className="w-full"
+      />
     </div>
   )
 }

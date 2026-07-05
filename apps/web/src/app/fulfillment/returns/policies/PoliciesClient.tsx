@@ -10,6 +10,8 @@
 // modal). Seeded baseline rows can be toggled inactive but not deleted.
 
 import { useCallback, useEffect, useState } from 'react'
+import { DateField } from '@/design-system/components/DateField'
+import { Listbox } from '@/design-system/components/Listbox'
 import {
   FileText, Plus, X, Trash2, Pencil, FlaskConical, ShieldCheck, AlertTriangle,
 } from 'lucide-react'
@@ -294,26 +296,25 @@ export default function PoliciesClient() {
               <div className="grid grid-cols-3 gap-3">
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Channel</span>
-                  <select
+                  <Listbox
                     value={form.channel}
-                    onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value }))}
+                    onChange={(v) => setForm((f) => ({ ...f, channel: v }))}
                     disabled={!!editing}
-                    className="mt-1 w-full h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 disabled:opacity-60"
-                  >
-                    {CHANNELS.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                    ariaLabel="Channel"
+                    className="mt-1 w-full"
+                    options={CHANNELS.map((c) => ({ value: c, label: c }))}
+                  />
                 </label>
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Marketplace</span>
-                  <select
+                  <Listbox
                     value={form.marketplace}
-                    onChange={(e) => setForm((f) => ({ ...f, marketplace: e.target.value }))}
+                    onChange={(v) => setForm((f) => ({ ...f, marketplace: v }))}
                     disabled={!!editing}
-                    className="mt-1 w-full h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 disabled:opacity-60"
-                  >
-                    <option value="">All</option>
-                    {MARKETPLACES.map((m) => <option key={m} value={m}>{m}</option>)}
-                  </select>
+                    ariaLabel="Marketplace"
+                    className="mt-1 w-full"
+                    options={[{ value: '', label: 'All' }, ...MARKETPLACES.map((m) => ({ value: m, label: m }))]}
+                  />
                 </label>
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Product type</span>
@@ -411,16 +412,13 @@ function ResolverTester() {
       <div className="flex flex-wrap items-end gap-3">
         <label className="block">
           <span className="text-xs text-slate-500 dark:text-slate-400">Channel</span>
-          <select value={channel} onChange={(e) => setChannel(e.target.value)} className="mt-1 block h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900">
-            {CHANNELS.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
+          <Listbox value={channel} onChange={setChannel} ariaLabel="Channel" className="mt-1 block w-32"
+            options={CHANNELS.map((c) => ({ value: c, label: c }))} />
         </label>
         <label className="block">
           <span className="text-xs text-slate-500 dark:text-slate-400">Marketplace</span>
-          <select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} className="mt-1 block h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900">
-            <option value="">All</option>
-            {MARKETPLACES.map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
+          <Listbox value={marketplace} onChange={setMarketplace} ariaLabel="Marketplace" className="mt-1 block w-28"
+            options={[{ value: '', label: 'All' }, ...MARKETPLACES.map((m) => ({ value: m, label: m }))]} />
         </label>
         <label className="block">
           <span className="text-xs text-slate-500 dark:text-slate-400">Product type</span>
@@ -428,7 +426,7 @@ function ResolverTester() {
         </label>
         <label className="block">
           <span className="text-xs text-slate-500 dark:text-slate-400">Delivered at</span>
-          <input type="date" value={deliveredAt} onChange={(e) => setDeliveredAt(e.target.value)} className="mt-1 block h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900" />
+          <DateField value={deliveredAt} onChange={setDeliveredAt} ariaLabel="Delivered at" className="mt-1 block w-36" />
         </label>
         <button onClick={run} disabled={busy} className="h-9 px-3 text-sm font-medium border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">
           {busy ? 'Resolving…' : 'Resolve'}

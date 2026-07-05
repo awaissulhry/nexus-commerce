@@ -19,6 +19,9 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import {
   Beaker,
   Loader2,
@@ -496,21 +499,12 @@ function ScenarioCreateModal({
           <label className="text-xs text-slate-500 dark:text-slate-400 font-medium block mb-1">
             {t('replenishment.scenarios.create.kindLabel')}
           </label>
-          <select
-            value={kind}
-            onChange={(e) => setKind(e.target.value as ScenarioKind)}
-            className="w-full text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="PROMOTIONAL_UPLIFT">
-              {t('replenishment.scenarios.kind.promotionalUplift')}
-            </option>
-            <option value="LEAD_TIME_DISRUPTION">
-              {t('replenishment.scenarios.kind.leadTimeDisruption')}
-            </option>
-            <option value="SUPPLIER_SWAP">
-              {t('replenishment.scenarios.kind.supplierSwap')}
-            </option>
-          </select>
+          <Listbox value={kind} onChange={(v) => setKind(v as ScenarioKind)} ariaLabel={t('replenishment.scenarios.create.kindLabel')}
+            options={[
+              { value: 'PROMOTIONAL_UPLIFT', label: t('replenishment.scenarios.kind.promotionalUplift') },
+              { value: 'LEAD_TIME_DISRUPTION', label: t('replenishment.scenarios.kind.leadTimeDisruption') },
+              { value: 'SUPPLIER_SWAP', label: t('replenishment.scenarios.kind.supplierSwap') },
+            ]} />
         </div>
         <div>
           <label className="text-xs text-slate-500 dark:text-slate-400 font-medium block mb-1">

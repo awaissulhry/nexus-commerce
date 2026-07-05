@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Search, Plus, Upload, Trash2, Star, Loader2, X, Check } from 'lucide-react'
+import { DateField } from '@/design-system/components/DateField'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '@/design-system/styles/patterns.css'
 
 interface Supplier {
   id: string
@@ -585,7 +590,7 @@ function SupplierFollowUpsSection({ supplierId }: { supplierId: string }) {
         <div className="flex flex-wrap items-center gap-1.5">
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Follow-up (e.g. chase sample)" className="w-44 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 placeholder:text-tertiary focus:border-blue-500 focus:outline-none" />
           <input value={nextAction} onChange={(e) => setNextAction(e.target.value)} placeholder="Next action" className="w-32 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 placeholder:text-tertiary focus:border-blue-500 focus:outline-none" />
-          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none" />
+          <DateField value={due} onChange={setDue} ariaLabel="Due date" className="w-36" />
           <button onClick={add} disabled={!title.trim() || !due} className="rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">Add</button>
         </div>
       </div>

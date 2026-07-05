@@ -18,6 +18,9 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Loader2, Plus, X, Search } from 'lucide-react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
@@ -215,24 +218,14 @@ export function NewPlanModal({ open, onClose, onCreated }: NewPlanModalProps) {
                 placeholder="Inbound 21/05/2026"
               />
             </Field>
-            <Field label="Destination marketplace" required>
-              <select
-                value={destinationCode}
-                onChange={(e) => setDestinationCode(e.target.value)}
-                disabled={submitting || marketplaces.length === 0}
-                className="h-9 w-full px-2 text-sm border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
-              >
-                {marketplaces.length === 0 ? (
-                  <option value="IT">Loading…</option>
-                ) : (
-                  marketplaces.map((m) => (
-                    <option key={m.code} value={m.code}>
-                      {m.code} — {m.currency}{!m.isParticipating ? ' (not participating)' : ''}
-                    </option>
-                  ))
-                )}
-              </select>
-            </Field>
+            <div className="space-y-1 block">
+              <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium">
+                Destination marketplace <span className="text-rose-600 dark:text-rose-400">*</span>
+              </span>
+              <Listbox value={destinationCode} onChange={setDestinationCode} disabled={submitting || marketplaces.length === 0}
+                ariaLabel="Destination marketplace"
+                options={marketplaces.length === 0 ? [{ value: 'IT', label: 'Loading…' }] : marketplaces.map((m) => ({ value: m.code, label: `${m.code} — ${m.currency}${!m.isParticipating ? ' (not participating)' : ''}` }))} />
+            </div>
           </div>
 
           {/* Items */}

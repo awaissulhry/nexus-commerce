@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2, X, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import {
   OP_LABELS,
   TONE_LABELS,
@@ -71,7 +74,7 @@ export function ConditionalFormatBar(props: ConditionalFormatBarProps) {
   useEffect(() => {
     if (open && pendingFocus) {
       const first = panelRef.current?.querySelector(
-        'input[type="text"], input[type="number"], select',
+        'input[type="text"], input[type="number"], select, .h10-ds-listbox-btn',
       ) as HTMLElement | null
       first?.focus()
       setPendingFocus(false)
@@ -149,31 +152,21 @@ export function ConditionalFormatBar(props: ConditionalFormatBarProps) {
                 aria-label="Enable rule"
               />
               {/* Column dropdown */}
-              <select
+              <Listbox
                 value={rule.columnId}
-                onChange={(e) => update(rule.id, { columnId: e.target.value })}
-                className="h-7 px-1.5 text-xs border border-default rounded bg-white max-w-[140px]"
-              >
-                {visibleColumns.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => update(rule.id, { columnId: v })}
+                options={visibleColumns.map((c) => ({ value: c.id, label: c.label }))}
+                ariaLabel="Column"
+                className="max-w-[140px]"
+              />
               {/* Op dropdown */}
-              <select
+              <Listbox
                 value={rule.op}
-                onChange={(e) =>
-                  update(rule.id, { op: e.target.value as RuleOp })
-                }
-                className="h-7 px-1.5 text-xs border border-default rounded bg-white"
-              >
-                {ALL_OPS.map((op) => (
-                  <option key={op} value={op}>
-                    {OP_LABELS[op]}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => update(rule.id, { op: v as RuleOp })}
+                options={ALL_OPS.map((op) => ({ value: op, label: OP_LABELS[op] }))}
+                ariaLabel="Operator"
+                className="w-32"
+              />
               {/* Value input — hidden for empty / notEmpty */}
               {showValueInput && (
                 <input

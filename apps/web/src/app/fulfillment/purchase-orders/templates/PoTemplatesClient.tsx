@@ -31,6 +31,8 @@ import PageHeader from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { DateField } from '@/design-system/components/DateField'
+import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { formatCurrency, relativeTime } from '../_shared/po-lens'
@@ -504,25 +506,27 @@ function SchedulesPanel({
                 />
               </SchedField>
               <SchedField label="Cadence">
-                <select
+                <Listbox
                   value={cadence}
-                  onChange={(e) => setCadence(e.target.value as Schedule['cadence'])}
+                  onChange={(v) => setCadence(v as Schedule['cadence'])}
                   disabled={busy}
-                  className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
-                >
-                  <option value="DAILY">day(s)</option>
-                  <option value="WEEKLY">week(s)</option>
-                  <option value="MONTHLY">month(s)</option>
-                  <option value="QUARTERLY">quarter(s)</option>
-                </select>
+                  ariaLabel="Cadence"
+                  className="w-full"
+                  options={[
+                    { value: 'DAILY', label: 'day(s)' },
+                    { value: 'WEEKLY', label: 'week(s)' },
+                    { value: 'MONTHLY', label: 'month(s)' },
+                    { value: 'QUARTERLY', label: 'quarter(s)' },
+                  ]}
+                />
               </SchedField>
               <SchedField label="Starts">
-                <input
-                  type="date"
+                <DateField
                   value={startsAt}
-                  onChange={(e) => setStartsAt(e.target.value)}
+                  onChange={(v) => setStartsAt(v)}
                   disabled={busy}
-                  className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  ariaLabel="Starts"
+                  className="w-full"
                 />
               </SchedField>
               <SchedField label="Lead days">

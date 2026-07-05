@@ -23,6 +23,9 @@
  */
 
 import { useMemo, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import {
   Loader2,
   CheckCircle2,
@@ -397,22 +400,12 @@ function SelectField({
   disabled?: boolean
 }) {
   return (
-    <label className="space-y-0.5 block">
+    <div className="space-y-0.5 block">
       <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium">
         {label}
       </span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        className="h-9 w-full px-2 text-sm border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-900 disabled:opacity-60"
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </label>
+      <Listbox value={value} onChange={onChange} disabled={disabled} ariaLabel={label}
+        options={options.map((o) => ({ value: o.value, label: o.label }))} />
+    </div>
   )
 }

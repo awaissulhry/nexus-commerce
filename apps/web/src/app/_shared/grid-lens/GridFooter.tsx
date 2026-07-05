@@ -9,6 +9,9 @@
  */
 
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 interface GridFooterProps {
   /** Number of rows currently visible in the grid. */
@@ -72,16 +75,13 @@ export function GridFooter({
         {pageSize != null && onPageSize != null && (
           <>
             <span className="text-slate-300 dark:text-slate-600">·</span>
-            <select
-              value={pageSize}
-              onChange={(e) => onPageSize(Number(e.target.value))}
-              aria-label="Rows per page"
-              className="h-6 px-1.5 text-xs border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 cursor-pointer"
-            >
-              {pageSizeOptions.map((n) => (
-                <option key={n} value={n}>{n}/page</option>
-              ))}
-            </select>
+            <Listbox
+              options={pageSizeOptions.map((n) => ({ value: String(n), label: `${n}/page` }))}
+              value={String(pageSize)}
+              onChange={(v) => onPageSize(Number(v))}
+              ariaLabel="Rows per page"
+              className="w-24"
+            />
           </>
         )}
       </div>

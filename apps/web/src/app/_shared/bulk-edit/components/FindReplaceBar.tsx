@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp, Search, X, Replace } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import {
   buildSearchRegex,
   findMatches,
@@ -323,29 +326,29 @@ export function FindReplaceBar(props: FindReplaceBarProps) {
         </button>
 
         <span className="ml-1 text-tertiary">in</span>
-        <select
+        <Listbox
           value={scope}
-          onChange={(e) => setScope(e.target.value as Scope)}
-          className="h-6 px-1.5 text-xs border border-default rounded bg-white"
-        >
-          <option value="all">All cells</option>
-          <option value="selection" disabled={!rangeBounds}>
-            Selection {rangeBounds ? '' : '(none)'}
-          </option>
-          <option value="column">Column…</option>
-        </select>
+          onChange={(v) => setScope(v as Scope)}
+          options={[
+            { value: 'all', label: 'All cells' },
+            {
+              value: 'selection',
+              label: rangeBounds ? 'Selection' : 'Selection (none)',
+              disabled: !rangeBounds,
+            },
+            { value: 'column', label: 'Column…' },
+          ]}
+          ariaLabel="Search scope"
+          className="w-40"
+        />
         {scope === 'column' && (
-          <select
+          <Listbox
             value={columnId}
-            onChange={(e) => setColumnId(e.target.value)}
-            className="h-6 px-1.5 text-xs border border-default rounded bg-white max-w-[140px]"
-          >
-            {visibleColumns.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+            onChange={setColumnId}
+            options={visibleColumns.map((c) => ({ value: c.id, label: c.label }))}
+            ariaLabel="Column"
+            className="max-w-[140px]"
+          />
         )}
 
         <button

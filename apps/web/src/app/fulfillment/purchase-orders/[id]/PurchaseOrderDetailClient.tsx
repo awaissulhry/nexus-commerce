@@ -15,6 +15,9 @@
 // to a shared `_shared/po-lens` module alongside the grid components.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -1693,18 +1696,8 @@ function AttachmentRow({
         )}
       </td>
       <td className="px-4 py-2">
-        <select
-          value={attachment.kind}
-          onChange={(e) => updateKind(e.target.value)}
-          disabled={saving}
-          className="h-7 px-1 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-        >
-          {ATTACHMENT_KIND_CHOICES.map((c) => (
-            <option key={c.key} value={c.key}>
-              {c.label}
-            </option>
-          ))}
-        </select>
+        <Listbox value={attachment.kind} onChange={updateKind} disabled={saving} ariaLabel="Attachment kind" className="w-36"
+          options={ATTACHMENT_KIND_CHOICES.map((c) => ({ value: c.key, label: c.label }))} />
       </td>
       <td className="px-4 py-2 tabular-nums text-sm text-slate-500 dark:text-slate-400">
         {formatBytes(attachment.sizeBytes)}

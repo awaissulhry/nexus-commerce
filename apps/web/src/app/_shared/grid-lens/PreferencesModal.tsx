@@ -25,6 +25,9 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { GripVertical } from 'lucide-react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
@@ -288,27 +291,25 @@ export function PreferencesModal({
                 {t('products.preferences.sortOrder')}
               </legend>
               <div className="flex gap-2">
-                <select
+                <Listbox
                   value={draft.sortBy}
-                  onChange={(e) => setDraft((d) => ({ ...d, sortBy: e.target.value }))}
-                  className="flex-1 h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
-                >
-                  {sortFieldOptions.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-                <select
+                  onChange={(v) => setDraft((d) => ({ ...d, sortBy: v }))}
+                  options={sortFieldOptions.map((o) => ({ value: o.value, label: o.label }))}
+                  ariaLabel={t('products.preferences.sortOrder')}
+                  className="flex-1"
+                />
+                <Listbox
                   value={draft.sortDir}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, sortDir: e.target.value as 'asc' | 'desc' }))
+                  onChange={(v) =>
+                    setDraft((d) => ({ ...d, sortDir: v as 'asc' | 'desc' }))
                   }
-                  className="h-9 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
-                >
-                  <option value="desc">↓ Descending</option>
-                  <option value="asc">↑ Ascending</option>
-                </select>
+                  options={[
+                    { value: 'desc', label: '↓ Descending' },
+                    { value: 'asc', label: '↑ Ascending' },
+                  ]}
+                  ariaLabel="Sort direction"
+                  className="w-36"
+                />
               </div>
             </fieldset>
           )}

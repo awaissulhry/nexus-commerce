@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Printer, FileDown, Loader2, Globe, AlertTriangle, Package, X as XIcon, Keyboard, Eye, Layers } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import { SkuPanel } from './SkuPanel'
 import { LabelPreview } from './LabelPreview'
@@ -678,18 +679,16 @@ export default function FnskuLabelDesigner() {
         <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
 
         {/* ── Zone 2: destination + status ── */}
-        <label className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 shrink-0" title="Destination Amazon marketplace — controls which listing title appears on the label">
+        <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 shrink-0" title="Destination Amazon marketplace — controls which listing title appears on the label">
           <Globe size={12} />
-          <select
+          <Listbox
             value={marketplace}
-            onChange={e => handleMarketplaceChange(e.target.value)}
-            className="h-7 px-1.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500"
-          >
-            {MARKETPLACES.map(m => (
-              <option key={m.code} value={m.code}>{m.label}</option>
-            ))}
-          </select>
-        </label>
+            onChange={v => handleMarketplaceChange(v)}
+            ariaLabel="Destination marketplace"
+            className="w-44"
+            options={MARKETPLACES.map(m => ({ value: m.code, label: m.label }))}
+          />
+        </span>
         {moduleWarn && (
           <span
             className="inline-flex items-center gap-1 h-6 px-1.5 rounded text-[11px] font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 whitespace-nowrap shrink-0"

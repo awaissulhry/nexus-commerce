@@ -25,7 +25,6 @@ import {
   type DragEvent,
 } from 'react'
 import {
-  Calendar,
   Check,
   GripVertical,
   Loader2,
@@ -34,6 +33,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
+import { DateField } from '@/design-system/components/DateField'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from './po-lens'
@@ -348,21 +348,15 @@ export function EditableSummaryPane({ po, onRefresh }: EditableSummaryPaneProps)
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">
               Expected delivery
             </label>
-            <div className="relative">
-              <Calendar
-                size={12}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary dark:text-slate-500 pointer-events-none"
-              />
-              <input
-                type="date"
-                value={expectedDate}
-                onChange={(e) => {
-                  setExpectedDate(e.target.value)
-                  scheduleSave()
-                }}
-                className="w-full h-9 pl-7 pr-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-              />
-            </div>
+            <DateField
+              value={expectedDate}
+              onChange={(v) => {
+                setExpectedDate(v)
+                scheduleSave()
+              }}
+              ariaLabel="Expected delivery"
+              className="w-full"
+            />
           </div>
           <div className="flex items-end">
             <div className="text-sm text-slate-500 dark:text-slate-400">
