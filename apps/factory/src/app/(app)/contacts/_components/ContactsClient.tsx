@@ -15,6 +15,7 @@ import { Button, Input, Pill } from "@/design-system/primitives";
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
 import { ContactDetail } from "./ContactDetail";
+import { ComparePricing } from "./ComparePricing";
 import { KIND_LABEL, KIND_TONE, type ContactRow, type ContactsResponse, type PartyKind } from "./types";
 
 const TABS: { id: string; label: string; kind?: PartyKind }[] = [
@@ -30,10 +31,12 @@ function PipelineInner() {
   const canManage = usePermission("contacts.manage");
   const canTerms = usePermission("financials.suppliers.view");
   const canDeposit = usePermission("financials.prices.view");
+  const canCompare = usePermission("financials.prices.view");
   const [data, setData] = useState<ContactsResponse | null>(null);
   const [tab, setTab] = useState("all");
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
+  const [comparing, setComparing] = useState(false);
   const [form, setForm] = useState<{ kind: PartyKind; name: string; email: string }>({ kind: "CUSTOMER", name: "", email: "" });
   const [busy, setBusy] = useState(false);
 
@@ -63,6 +66,7 @@ function PipelineInner() {
   };
 
   if (openId) return <ContactDetail contactId={openId} onBack={closeDetail} />;
+  if (comparing) return <ComparePricing onBack={() => setComparing(false)} />;
 
   return (
     <div className="factory-page factory-grid-grow-1">
@@ -78,6 +82,7 @@ function PipelineInner() {
           </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
             <a href="/api/exports/parties" style={{ fontSize: 12, color: "var(--h10-text-link)" }}>Export CSV</a>
+            {canCompare && <Button onClick={() => setComparing(true)}>Compare pricing</Button>}
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or email…" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "5px 9px", fontSize: 12.5, outline: "none", background: "var(--h10-surface)", color: "var(--h10-text)", minWidth: 220 }} />
             {canManage && <Button variant="primary" onClick={() => setCreating(true)}><Plus size={13} /> New contact</Button>}
           </div>
