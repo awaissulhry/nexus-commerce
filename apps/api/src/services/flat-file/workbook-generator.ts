@@ -402,6 +402,7 @@ function buildChannelSheet(
         if (f.followMaster) {
           const fmKey = f.id + '_follows_master@' + mkt
           row.getCell(fmKey).value = resolved.followsMaster ? 'true' : 'false'
+          rowObj[fmKey] = String(resolved.followsMaster)
         }
       }
     }
