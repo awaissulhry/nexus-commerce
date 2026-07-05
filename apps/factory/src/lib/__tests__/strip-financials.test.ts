@@ -52,4 +52,16 @@ describe("stripFinancials", () => {
     const out = stripFinancials(quote, null) as Record<string, unknown>;
     expect(out).not.toHaveProperty("netPriceCents");
   });
+
+  it("Dates survive as Dates (regression: FP1 'Invalid Date' — a Date is an object with no enumerable keys)", () => {
+    const when = new Date("2026-07-05T10:00:00Z");
+    const out = stripFinancials({ sentAt: when, nested: { at: when }, list: [{ at: when }] }, WORKER) as {
+      sentAt: Date;
+      nested: { at: Date };
+      list: { at: Date }[];
+    };
+    expect(out.sentAt).toBeInstanceOf(Date);
+    expect(out.nested.at.getTime()).toBe(when.getTime());
+    expect(out.list[0].at).toBeInstanceOf(Date);
+  });
 });

@@ -39,6 +39,9 @@ export function stripFinancials<T>(payload: T, resolved: Resolved | null): T {
     !!resolved && (resolved.isOwner || resolved.permissions.has(grain));
   const walk = (node: unknown, depth: number): unknown => {
     if (depth > MAX_DEPTH || node === null || typeof node !== "object") return node;
+    // leaf objects: a Date has no enumerable keys — walking it would flatten
+    // every timestamp to {} (caught live in FP1: "Invalid Date" everywhere)
+    if (node instanceof Date || Buffer.isBuffer(node)) return node;
     if (Array.isArray(node)) return node.map((v) => walk(v, depth + 1));
     const out: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(node as Record<string, unknown>)) {

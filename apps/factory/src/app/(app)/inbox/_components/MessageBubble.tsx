@@ -83,7 +83,6 @@ export function MessageBubble({
       >
         <b style={{ fontSize: 12.5 }}>{outbound ? "You" : message.fromAddress}</b>
         <span style={{ color: "var(--h10-text-3)" }}>
-          {outbound ? `to ${message.fromAddress === "" ? "" : ""}` : ""}
           {new Date(message.sentAt).toLocaleString()} · {ago(message.sentAt)} ago
         </span>
       </div>

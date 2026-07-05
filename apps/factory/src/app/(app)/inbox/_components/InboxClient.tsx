@@ -6,7 +6,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useToast } from "@/design-system/components";
 import { apiJson } from "@/lib/api-client";
 import { useFactoryEvents } from "@/lib/use-factory-events";
@@ -16,7 +16,6 @@ import { ThreadPane } from "./ThreadPane";
 import type { ListResponse, ThreadResponse } from "./types";
 
 function InboxInner() {
-  const router = useRouter();
   const params = useSearchParams();
   const { toast } = useToast();
 
@@ -101,12 +100,12 @@ function InboxInner() {
     debounceMs: 1500,
   });
 
-  const open = useCallback(
-    (id: string) => {
-      router.replace(`/inbox?focus=${id}`, { scroll: false });
-    },
-    [router],
-  );
+  // Shallow routing (documented Next interop: history.replaceState syncs with
+  // useSearchParams) — router.replace to the bare pathname silently no-ops on
+  // a fresh document load at ?focus=, and focus is pure UI state anyway.
+  const open = useCallback((id: string) => {
+    window.history.replaceState(null, "", `/inbox?focus=${id}`);
+  }, []);
 
   const bulk = async (action: "close" | "open") => {
     setBusyBulk(true);
@@ -143,7 +142,7 @@ function InboxInner() {
         e.preventDefault();
         open(items[cursorIdx].id);
       } else if (e.key === "Escape" && focusId) {
-        router.replace("/inbox", { scroll: false });
+        window.history.replaceState(null, "", "/inbox");
       } else if (e.key === "e" && focusId) {
         e.preventDefault();
         void apiJson(`/api/inbox/${focusId}`, { method: "PATCH", body: JSON.stringify({ state: thread?.conversation.state === "CLOSED" ? "OPEN" : "CLOSED" }) }).then(refresh);
@@ -164,7 +163,7 @@ function InboxInner() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [list, cursorIdx, focusId, open, refresh, router, thread?.conversation.state, toast]);
+  }, [list, cursorIdx, focusId, open, refresh, thread?.conversation.state, toast]);
 
   return (
     <div
