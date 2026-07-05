@@ -37,6 +37,11 @@ export const POST = guarded(FEATURES.workordersAdvance, async (req, { params, ac
 
   await prisma.workOrderStage.update({ where: { id: sid }, data: patch });
 
+  // starting any stage puts a READY work order into progress
+  if (parsed.data.action === "start" && stage.workOrder.state === "READY") {
+    await prisma.workOrder.update({ where: { id: stage.workOrderId }, data: { state: "IN_PROGRESS" } });
+  }
+
   // finishing the last stage completes the WO
   let woDone = false;
   if (parsed.data.action === "finish") {
