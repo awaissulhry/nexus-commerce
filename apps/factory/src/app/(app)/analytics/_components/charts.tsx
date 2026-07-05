@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { eur } from "@/design-system/lib/format";
-import type { StageLead, ThroughputPoint, WinLoss } from "./types";
+import type { OnTime, StageLead, ThroughputPoint, WinLoss } from "./types";
 
 const PRIMARY = "var(--h10-primary, #2f6fed)";
 const DANGER = "var(--h10-danger, #d64545)";
@@ -127,4 +127,20 @@ export function WinLossPanel({ w }: { w: WinLoss }) {
 function Tag({ tone, children }: { tone: "success" | "danger" | "neutral"; children: React.ReactNode }) {
   const c = tone === "success" ? "var(--h10-success-text, #1a7f37)" : tone === "danger" ? DANGER : "var(--h10-text-3)";
   return <span style={{ padding: "2px 9px", borderRadius: 20, border: `1px solid ${c}`, color: c, fontWeight: 600 }}>{children}</span>;
+}
+
+export function OnTimePanel({ o }: { o: OnTime }) {
+  const settled = o.onTime + o.late;
+  return (
+    <div style={{ display: "grid", gap: 14 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+        <div style={{ fontSize: 30, fontWeight: 700, color: "var(--h10-primary, #2f6fed)" }}>{settled > 0 ? `${o.rate.toFixed(0)}%` : "—"}</div>
+        <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>shipped on time</div>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 12 }}>
+        <Tag tone="success">{o.onTime} on time</Tag><Tag tone="danger">{o.late} late</Tag>{o.unknown > 0 && <Tag tone="neutral">{o.unknown} no promise date</Tag>}
+      </div>
+      {settled === 0 && <Note>No shipped orders with a promise date yet.</Note>}
+    </div>
+  );
 }

@@ -9,6 +9,8 @@ export type PeriodAgg = { monthKey: string; orders: number; netCents?: number; i
 export type ProductMargin = { product: string; orders: number; netCents?: number; estMarginCents?: number; estMarginPct?: number };
 export type WinLoss = { won: number; lost: number; open: number; rate: number; byReason: { reason: string; count: number }[] };
 
+export type SavedViewRow = { id: string; name: string; config: { from?: string; to?: string } };
+
 export type AnalyticsResponse = {
   throughput: ThroughputPoint[];
   leadTimes: StageLead[];

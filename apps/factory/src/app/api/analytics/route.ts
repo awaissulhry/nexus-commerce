@@ -29,13 +29,14 @@ export const GET = guarded(PAGES.analytics, async (req, { resolved }) => {
   const wos = await prisma.workOrder.findMany({
     select: { stages: { select: { stage: true, sort: true, startedAt: true, finishedAt: true, pausedMs: true, pausedAt: true } } },
   });
+  const inRange = (d: Date) => (!range?.gte || d >= range.gte) && (!range?.lte || d <= range.lte);
   const allStages: StageRow[] = [];
   const finishes: string[] = [];
   for (const wo of wos) {
-    for (const s of wo.stages) allStages.push({ stage: s.stage, startedAt: s.startedAt, finishedAt: s.finishedAt, pausedMs: s.pausedMs, pausedAt: s.pausedAt });
+    for (const s of wo.stages) if (!s.finishedAt || inRange(s.finishedAt)) allStages.push({ stage: s.stage, startedAt: s.startedAt, finishedAt: s.finishedAt, pausedMs: s.pausedMs, pausedAt: s.pausedAt });
     if (wo.stages.length > 0 && wo.stages.every((s) => s.finishedAt)) {
       const maxFin = wo.stages.reduce((mx, s) => Math.max(mx, s.finishedAt!.getTime()), 0);
-      finishes.push(new Date(maxFin).toISOString());
+      if (inRange(new Date(maxFin))) finishes.push(new Date(maxFin).toISOString());
     }
   }
   const leadTimes = stageLeadTimes(allStages, nowMs);
