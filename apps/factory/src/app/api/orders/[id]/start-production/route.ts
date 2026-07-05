@@ -14,6 +14,7 @@ import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 import { orderTotals, depositRequiredCents, depositPaidCents, isDepositMet } from "@/lib/orders/money";
 import { planWorkOrders, DEFAULT_STAGES } from "@/lib/orders/production";
+import { reserveWorkOrder } from "@/lib/production/reserve-service";
 
 export const permission = FEATURES.ordersEdit;
 
@@ -60,6 +61,10 @@ export const POST = guarded(FEATURES.ordersEdit, async (_req, { params, actor })
     }
     await tx.order.update({ where: { id }, data: { state: "IN_PRODUCTION" } });
   });
+
+  // FP6: reserve each WO's BOM material against the ledger (idempotent, per the line's selections)
+  const createdWos = await prisma.workOrder.findMany({ where: { orderId: id }, select: { id: true, orderLineId: true } });
+  for (const w of createdWos) await reserveWorkOrder(w.id, w.orderLineId, actor!.id).catch(() => {});
 
   void audit({ actorId: actor!.id, entityType: "order", entityId: id, action: "state-changed", before: { from: "CONFIRMED" }, after: { to: "IN_PRODUCTION", workOrders: planned.length, depositMet } });
   await publishEventDurable("order.updated", { orderId: id, from: "CONFIRMED", to: "IN_PRODUCTION" });

@@ -8,9 +8,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Play, Pause, Check, User } from "lucide-react";
+import { Play, Pause, Check, User, ChevronUp, ChevronDown } from "lucide-react";
 import { PageHeader } from "@/design-system/patterns";
-import { Drawer, Menu, useToast } from "@/design-system/components";
+import { Drawer, Menu, Modal, useToast } from "@/design-system/components";
 import { Button, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
@@ -19,6 +19,13 @@ import { StageTimer } from "./StageTimer";
 import { STAGE_LABEL, type ProductionResponse, type WOCard } from "./types";
 
 const STATUS_TONE = { running: "info", paused: "warning", not_started: "neutral", done: "success" } as const;
+const COVER = { OK: { c: "var(--h10-success)", t: "covered" }, PARTIAL: { c: "var(--h10-warning, #e9a100)", t: "partly short" }, SHORT: { c: "var(--h10-danger)", t: "short" } } as const;
+
+function CoverageDot({ w }: { w: WOCard }) {
+  if (!w.coverage) return null;
+  const cov = COVER[w.coverage];
+  return <span title={w.shortMaterials?.length ? `${cov.t}: ${w.shortMaterials.join(", ")}` : cov.t} style={{ width: 9, height: 9, borderRadius: 999, background: cov.c, display: "inline-block", flex: "0 0 auto" }} />;
+}
 
 export function ProductionClient() {
   const { toast } = useToast();
@@ -50,6 +57,40 @@ export function ProductionClient() {
   }, []);
   const open = (id: string) => { setOpenWo(id); setDetail(null); void loadDetail(id); };
 
+  const [material, setMaterial] = useState<WOCard | null>(null);
+  const [reserved, setReserved] = useState<{ materialId: string; name: string; unit: string; reservedQty: number }[]>([]);
+  const [useVals, setUseVals] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+
+  const openMaterial = async (w: WOCard) => {
+    if (!w.current) return;
+    try {
+      const r = await apiJson<{ reserved: typeof reserved }>(`/api/production/stages/${w.current.id}/materials`);
+      setReserved(r.reserved);
+      setUseVals(Object.fromEntries(r.reserved.map((m) => [m.materialId, String(m.reservedQty)])));
+      setMaterial(w);
+    } catch (e) { toast((e as Error).message, "danger"); }
+  };
+  const submitMaterial = async () => {
+    if (!material?.current) return;
+    setBusy(true);
+    try {
+      const use = Object.fromEntries(Object.entries(useVals).map(([k, v]) => [k, Number(v) || 0]));
+      await apiJson(`/api/production/stages/${material.current.id}/materials`, { method: "POST", body: JSON.stringify({ use }) });
+      await apiJson(`/api/production/stages/${material.current.id}`, { method: "POST", body: JSON.stringify({ action: "finish" }) });
+      setMaterial(null); void load(); toast("Cutting finished — material consumed", "success");
+    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
+  };
+  const onFinish = (w: WOCard) => {
+    if (!w.current) return;
+    if (w.current.stage === "CUTTING") void openMaterial(w);
+    else void act(w.current.id, "finish");
+  };
+  const bumpPriority = async (w: WOCard, delta: number) => {
+    try { await apiJson(`/api/production/wo/${w.id}/priority`, { method: "PATCH", body: JSON.stringify({ priority: w.priority + delta }) }); void load(); }
+    catch (e) { toast((e as Error).message, "danger"); }
+  };
+
   const columns = [...(data?.pipeline ?? []), "DONE"];
   const byCol = (col: string) => (data?.workOrders ?? []).filter((w) => w.column === col);
 
@@ -60,8 +101,8 @@ export function ProductionClient() {
     return (
       <div style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
         {c.status === "not_started" && <Button size="sm" variant="primary" onClick={() => void act(c.id, "start")}><Play size={12} /> Start</Button>}
-        {c.status === "running" && <><Button size="sm" onClick={() => void act(c.id, "pause")}><Pause size={12} /></Button><Button size="sm" variant="primary" onClick={() => void act(c.id, "finish")}><Check size={12} /> Finish</Button></>}
-        {c.status === "paused" && <><Button size="sm" onClick={() => void act(c.id, "resume")}><Play size={12} /> Resume</Button><Button size="sm" variant="primary" onClick={() => void act(c.id, "finish")}><Check size={12} /> Finish</Button></>}
+        {c.status === "running" && <><Button size="sm" onClick={() => void act(c.id, "pause")}><Pause size={12} /></Button><Button size="sm" variant="primary" onClick={() => onFinish(w)}><Check size={12} /> Finish</Button></>}
+        {c.status === "paused" && <><Button size="sm" onClick={() => void act(c.id, "resume")}><Play size={12} /> Resume</Button><Button size="sm" variant="primary" onClick={() => onFinish(w)}><Check size={12} /> Finish</Button></>}
       </div>
     );
   };
@@ -81,9 +122,20 @@ export function ProductionClient() {
               <div style={{ display: "grid", gap: 8, alignContent: "start", background: "var(--h10-bg-subtle, rgba(20,28,38,0.02))", borderRadius: 12, padding: 8, minHeight: 100 }}>
                 {cards.map((w) => (
                   <div key={w.id} onClick={() => open(w.id)} style={{ cursor: "pointer", border: "1px solid var(--h10-border-subtle)", borderRadius: 10, background: "var(--h10-surface)", padding: 10, boxShadow: "0 1px 2px rgb(20 28 38 / 0.04)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--h10-text-link)" }}>{w.number}</span>
-                      {w.estCostCents != null && <span style={{ fontSize: 11, color: "var(--h10-text-3)", fontFamily: "ui-monospace, monospace" }}>{eur(w.estCostCents)}</span>}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
+                      <span style={{ display: "inline-flex", gap: 6, alignItems: "center", minWidth: 0 }}>
+                        <CoverageDot w={w} />
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--h10-text-link)" }}>{w.number}</span>
+                      </span>
+                      <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
+                        {canAdvance && (
+                          <span style={{ display: "inline-flex" }}>
+                            <button type="button" title="raise priority" onClick={() => void bumpPriority(w, 1)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--h10-text-3)", lineHeight: 0 }}><ChevronUp size={13} /></button>
+                            <button type="button" title="lower priority" onClick={() => void bumpPriority(w, -1)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--h10-text-3)", lineHeight: 0 }}><ChevronDown size={13} /></button>
+                          </span>
+                        )}
+                        {w.estCostCents != null && <span style={{ fontSize: 11, color: "var(--h10-text-3)", fontFamily: "ui-monospace, monospace" }}>{eur(w.estCostCents)}</span>}
+                      </span>
                     </div>
                     <div style={{ fontSize: 12, color: "var(--h10-text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.party}{w.label ? ` · ${w.label}` : ""}</div>
                     <div style={{ fontSize: 11, color: "var(--h10-text-3)", marginTop: 2 }}>{w.orderNumber} · {w.doneCount}/{w.stageCount} stages{w.promiseDateAt ? ` · due ${new Date(w.promiseDateAt).toLocaleDateString()}` : ""}</div>
@@ -110,6 +162,20 @@ export function ProductionClient() {
         })}
       </div>
       {data && data.workOrders.length === 0 && <div style={{ fontSize: 13, color: "var(--h10-text-3)", marginTop: 20, textAlign: "center" }}>Nothing in production yet — Start production on a confirmed order.</div>}
+
+      <Modal open={!!material} onClose={() => setMaterial(null)} title="Cutting done — material used" size="sm"
+        footer={<><Button onClick={() => setMaterial(null)}>Cancel</Button><Button variant="primary" onClick={submitMaterial} disabled={busy}>Finish cutting</Button></>}>
+        <div style={{ display: "grid", gap: 8 }}>
+          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>Enter the real quantity used for <b>{material?.number}</b>. This consumes the material and frees the reservation; the diff vs the estimate is recorded.</div>
+          {reserved.length === 0 && <div style={{ fontSize: 12.5, color: "var(--h10-text-3)" }}>No material was reserved for this work order.</div>}
+          {reserved.map((m) => (
+            <div key={m.materialId} style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 8, alignItems: "center" }}>
+              <span style={{ fontSize: 12.5 }}>{m.name} <span style={{ color: "var(--h10-text-3)" }}>· est {m.reservedQty} {m.unit.toLowerCase()}</span></span>
+              <input type="number" min="0" step="0.01" value={useVals[m.materialId] ?? ""} onChange={(e) => setUseVals((v) => ({ ...v, [m.materialId]: e.target.value }))} style={{ border: "1px solid var(--h10-border)", borderRadius: 7, padding: "6px 8px", fontSize: 12.5, fontFamily: "ui-monospace, monospace", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+            </div>
+          ))}
+        </div>
+      </Modal>
 
       <Drawer open={!!openWo} onClose={() => setOpenWo(null)} title={detail?.wo.number ?? "Work order"}>
         {detail && (

@@ -11,6 +11,8 @@ import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { PAGES } from "@/lib/auth/permissions";
 import { DEFAULT_STAGES } from "@/lib/orders/production";
 import { currentStage, stageStatus, sortStages, type StageRow } from "@/lib/production/stage-timer";
+import { foldMovements } from "@/lib/ledger";
+import { allocateByPriority } from "@/lib/production/reserve";
 
 export const permission = PAGES.production;
 
@@ -29,6 +31,25 @@ export const GET = guarded(PAGES.production, async (req: NextRequest, { actor, r
       stages: { include: { assignee: { select: { id: true, displayName: true } } } },
     },
   });
+
+  // FP6 — material coverage: each WO's outstanding demand (RESERVE − RELEASE) vs
+  // physical stock, greedily allocated in priority order (wos already priority-sorted).
+  const woIds = wos.map((w) => w.id);
+  const woMoves = woIds.length ? await prisma.movementLedger.findMany({ where: { refType: "WorkOrder", refId: { in: woIds }, type: { in: ["RESERVE", "RELEASE"] } }, select: { refId: true, materialId: true, type: true, qty: true } }) : [];
+  const demandByWo: Record<string, Record<string, number>> = {};
+  for (const m of woMoves) { const d = (demandByWo[m.refId as string] ??= {}); d[m.materialId] = (d[m.materialId] ?? 0) + (m.type === "RESERVE" ? m.qty : -m.qty); }
+  const cleanDemand = (d: Record<string, number>) => Object.fromEntries(Object.entries(d).filter(([, q]) => q > 0.0001));
+  const matIds = [...new Set(woMoves.map((m) => m.materialId))];
+  const stockByMat: Record<string, number> = {};
+  if (matIds.length) {
+    const all = await prisma.movementLedger.findMany({ where: { materialId: { in: matIds } }, select: { materialId: true, type: true, qty: true } });
+    const grouped: Record<string, { type: string; qty: number }[]> = {};
+    for (const m of all) (grouped[m.materialId] ??= []).push({ type: m.type, qty: m.qty });
+    for (const [mat, ms] of Object.entries(grouped)) stockByMat[mat] = foldMovements(ms).inStock;
+  }
+  const coverage = allocateByPriority(stockByMat, wos.map((w) => ({ id: w.id, demand: cleanDemand(demandByWo[w.id] ?? {}) })));
+  // map short material ids → names for the UI
+  const matNames = matIds.length ? Object.fromEntries((await prisma.material.findMany({ where: { id: { in: matIds } }, select: { id: true, name: true } })).map((m) => [m.id, m.name])) : {};
 
   const now = Date.now();
   const cards = wos
@@ -50,6 +71,8 @@ export const GET = guarded(PAGES.production, async (req: NextRequest, { actor, r
         estCostCents: wo.estCostCents,
         stageCount: stages.length,
         doneCount,
+        coverage: coverage[wo.id]?.status ?? "OK",
+        shortMaterials: (coverage[wo.id]?.short ?? []).map((m) => matNames[m] ?? m),
         column: cur ? cur.stage : "DONE",
         current: cur
           ? { id: cur.id, stage: cur.stage, status: stageStatus(cur), startedAt: cur.startedAt, pausedMs: cur.pausedMs, pausedAt: cur.pausedAt, assignee: (cur as { assignee?: { id: string; displayName: string } | null }).assignee ?? null }
