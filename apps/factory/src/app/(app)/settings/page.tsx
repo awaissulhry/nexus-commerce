@@ -25,10 +25,10 @@ const SECTIONS = [
     live: true,
   },
   {
-    href: "/settings",
+    href: "/settings/team",
     title: "Team & roles",
-    body: "Invite users, assign OWNER/WORKER, edit custom roles with the permission matrix. Arrives in FP11 — the schema and guardrails are already live underneath.",
-    live: false,
+    body: "Invite users, assign OWNER/WORKER, edit custom roles with the permission matrix. The last owner is protected; system roles are locked.",
+    live: true,
   },
 ] as const;
 
