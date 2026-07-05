@@ -348,6 +348,12 @@ export function planEbayFamilyCreates(input: {
     }
   }
 
+  // P2: synthetic-parent dedup map — populated during the second pass when a new child's
+  // parent_sku resolves to neither a batch parent nor an existing product. Maps parentSku →
+  // the tempRowId of the already-created synthetic parentCreate entry so multiple children
+  // that share the same missing parent_sku reuse ONE synthetic parent (not N).
+  const syntheticParentsBySku = new Map<string, string>()
+
   // ── Step 3 + 5 + 6: Second pass — childCreates, reparents, warnings ─
   for (const row of validRows) {
     const sku = String(row.sku ?? '').trim()
@@ -401,10 +407,39 @@ export function planEbayFamilyCreates(input: {
               variationTheme: existingParentBySku.variationTheme,
             })
           } else {
-            errors.push({
-              sku,
-              reason: 'unresolved parent (parent_sku does not match any new or existing parent)',
-            })
+            // P2: auto-create a synthetic parent so the whole family persists in one save.
+            // Deduped: if another child in this batch already referenced the same missing
+            // parentSku, reuse that synthetic parent's tempRowId instead of creating a second.
+            const existingSynthId = syntheticParentsBySku.get(parentSku)
+            if (existingSynthId) {
+              const synthParent = parentCreates.find(p => p.tempRowId === existingSynthId)!
+              const tempRowId = String(row._rowId ?? row._productId ?? sku)
+              childCreates.push({
+                tempRowId,
+                sku,
+                row,
+                parentRef: { kind: 'temp', tempRowId: existingSynthId },
+                variationTheme: synthParent.variationTheme,
+              })
+            } else {
+              const synthTempRowId = `__synth__${parentSku}`
+              const synthVariationTheme = row.variation_theme ? String(row.variation_theme) : null
+              parentCreates.push({
+                tempRowId: synthTempRowId,
+                sku: parentSku,
+                row: { sku: parentSku, parentage: 'parent' },
+                variationTheme: synthVariationTheme,
+              })
+              syntheticParentsBySku.set(parentSku, synthTempRowId)
+              const tempRowId = String(row._rowId ?? row._productId ?? sku)
+              childCreates.push({
+                tempRowId,
+                sku,
+                row,
+                parentRef: { kind: 'temp', tempRowId: synthTempRowId },
+                variationTheme: synthVariationTheme,
+              })
+            }
           }
         }
       } else {

@@ -732,12 +732,14 @@ describe('planEbayFamilyCreates', () => {
     expect(result.reparents[0]).toEqual({ productId: 'idC1', sku: 'C1', newParentId: 'B' })
   })
 
-  it('P2.A — orphan: parent_sku matching no batch/existing parent → unresolved parent error', () => {
+  // (a) NEW-child + unresolved parent_sku → synthetic parent auto-created (P2 round-trip)
+  it('P2.A — orphan: new child parent_sku matching nothing → synthetic parent auto-created (no error)', () => {
     const childRow = {
       sku: 'ORPHAN-CHILD',
       _rowId: 'oc-temp',
       parentage: 'child',
       parent_sku: 'NONEXISTENT-PARENT',
+      variation_theme: 'Colore',
     }
 
     const result = planEbayFamilyCreates({
@@ -746,10 +748,100 @@ describe('planEbayFamilyCreates', () => {
       existingParentById: new Map(),
     })
 
+    expect(result.errors).toHaveLength(0)
+    expect(result.parentCreates).toHaveLength(1)
+    expect(result.parentCreates[0].sku).toBe('NONEXISTENT-PARENT')
+    expect(result.parentCreates[0].variationTheme).toBe('Colore')
+    expect(result.childCreates).toHaveLength(1)
+    expect(result.childCreates[0].sku).toBe('ORPHAN-CHILD')
+    expect(result.childCreates[0].parentRef).toEqual({ kind: 'temp', tempRowId: result.parentCreates[0].tempRowId })
+  })
+
+  // ── P2: synthetic parent dedupe + boundary cases ───────────────────────
+
+  // (b) Two new children sharing the same missing parent_sku → exactly ONE synthetic parent
+  it('P2: two new children sharing the same missing parent_sku → exactly ONE synthetic parent', () => {
+    const child1 = {
+      sku: 'CHILD-A',
+      _rowId: 'ca-temp',
+      parentage: 'child',
+      parent_sku: 'MISSING-PARENT',
+      aspect_Colore: 'Nero',
+    }
+    const child2 = {
+      sku: 'CHILD-B',
+      _rowId: 'cb-temp',
+      parentage: 'child',
+      parent_sku: 'MISSING-PARENT',
+      aspect_Colore: 'Rosso',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [child1, child2],
+      existingBySku: new Map(),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.parentCreates).toHaveLength(1)
+    expect(result.parentCreates[0].sku).toBe('MISSING-PARENT')
+    expect(result.childCreates).toHaveLength(2)
+    const synthTempRowId = result.parentCreates[0].tempRowId
+    expect(result.childCreates[0].parentRef).toEqual({ kind: 'temp', tempRowId: synthTempRowId })
+    expect(result.childCreates[1].parentRef).toEqual({ kind: 'temp', tempRowId: synthTempRowId })
+  })
+
+  // (c) Resolved child (parent present in batch) still resolves normally — no synthetic parent
+  it('P2: new child whose parent_sku matches a batch parent resolves normally (no synthetic parent)', () => {
+    const parentRow = {
+      sku: 'REAL-PARENT',
+      _rowId: 'rp-temp',
+      parentage: 'parent',
+      variation_theme: 'Colore',
+    }
+    const child = {
+      sku: 'REAL-CHILD',
+      _rowId: 'rc-temp',
+      parentage: 'child',
+      parent_sku: 'REAL-PARENT',
+      aspect_Colore: 'Nero',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [parentRow, child],
+      existingBySku: new Map(),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.parentCreates).toHaveLength(1)
+    expect(result.parentCreates[0].sku).toBe('REAL-PARENT')
+    expect(result.childCreates).toHaveLength(1)
+    expect(result.childCreates[0].parentRef).toEqual({ kind: 'temp', tempRowId: 'rp-temp' })
+  })
+
+  // (d) Existing-row reparent to a missing parent_sku STILL errors — no auto-create for existing rows
+  it('P2: existing row reparent to missing parent_sku still errors (no auto-create for existing rows)', () => {
+    const row = {
+      sku: 'EXISTING-CHILD',
+      _productId: 'idEC',
+      parentage: 'child',
+      parent_sku: 'MISSING-PARENT',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['EXISTING-CHILD', { id: 'idEC', parentId: 'old-parent-id', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
     expect(result.errors).toHaveLength(1)
-    expect(result.errors[0].sku).toBe('ORPHAN-CHILD')
+    expect(result.errors[0].sku).toBe('EXISTING-CHILD')
     expect(result.errors[0].reason).toMatch(/unresolved parent/)
-    expect(result.childCreates).toHaveLength(0)
     expect(result.parentCreates).toHaveLength(0)
+    expect(result.childCreates).toHaveLength(0)
+    expect(result.reparents).toHaveLength(0)
   })
 })
