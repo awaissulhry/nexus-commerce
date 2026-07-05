@@ -1,6 +1,6 @@
-/** F1 — designed empty state; the real page lands in its FP cycle (src/lib/nav.ts). */
-import { ComingSoon } from "@/components/ComingSoon";
+/** FP3 — Quotes is LIVE (spec: docs/factory/FP3-SPEC.md). */
+import { QuotesClient } from "./_components/QuotesClient";
 
-export default function Page() {
-  return <ComingSoon pageId="quotes" />;
+export default function QuotesPage() {
+  return <QuotesClient />;
 }
