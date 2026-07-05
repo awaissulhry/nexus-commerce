@@ -51,6 +51,13 @@ describe("system roles (FD9)", () => {
     expect(worker.has(PAGES.production)).toBe(true);
     expect(worker.has(PAGES.materials)).toBe(true);
   });
+  it("WORKER may consume materials but never manage the catalog (FP2 distinction)", () => {
+    const worker = new Set(SYSTEM_ROLES.WORKER.permissions);
+    expect(worker.has("materials.consume")).toBe(true);
+    expect(worker.has("materials.manage")).toBe(false);
+    expect(worker.has("products.manage")).toBe(false);
+    expect(worker.has("pricelists.manage")).toBe(false);
+  });
   it("every role permission exists in the registry", () => {
     for (const role of Object.values(SYSTEM_ROLES)) {
       for (const p of role.permissions) expect(isValidPermission(p)).toBe(true);

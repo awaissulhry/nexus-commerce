@@ -36,6 +36,7 @@ export const FEATURES = {
   materialsReceive: "materials.receive",
   materialsConsume: "materials.consume",
   productsManage: "products.manage",
+  materialsManage: "materials.manage", // FP2: catalog CRUD — distinct from materials.adjust (stock, FP7). WORKER gets neither.
   contactsManage: "contacts.manage",
   pricelistsManage: "pricelists.manage",
   labelsPurchase: "labels.purchase",
