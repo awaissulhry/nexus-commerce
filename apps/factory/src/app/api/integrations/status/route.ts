@@ -51,6 +51,7 @@ export const GET = guarded(FEATURES.integrationsManage, async () => {
   return NextResponse.json({
     google: {
       configSaved: !!config,
+      clientId: config?.clientId ?? null, // public identifier by definition; shown so a wrong paste is visible + replaceable
       status: connection?.status ?? "not_connected",
       email: connection?.email ?? null,
       labelName: connection?.labelName ?? null,

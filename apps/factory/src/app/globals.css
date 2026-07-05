@@ -37,6 +37,39 @@ a {
   overflow: hidden;
 }
 
+/**
+ * F1 — H10 rail parity overrides (Owner gate finding, 2026-07-05).
+ * The DS AppShell pattern drifts from the measured ads-console rail spec that
+ * F0-DESIGN-BRIDGE sets as the acceptance bar (66→344px, 46px rows, 15px/600
+ * labels, badge 29/6, 17px chevron balance, 60px sub indent) — it even
+ * ignores the DS's own --h10-rail-expanded token (hardcodes 248px). The DS
+ * copy stays byte-identical (PROVENANCE rule 2); parity is restored here.
+ * Upstream fix belongs to the Nexus DS (apps/web — untouchable from F-series).
+ */
+.factory-frame .h10-ds-rail:hover {
+  width: var(--h10-rail-expanded, 344px);
+}
+.factory-frame .h10-ds-navitem {
+  height: var(--h10-row-nav, 46px);
+  font-size: 15px;
+}
+.factory-frame .h10-ds-brand {
+  height: 66px;
+  padding-left: 19px;
+}
+.factory-frame .h10-ds-brand .name {
+  font-size: 18px;
+}
+.factory-frame .h10-ds-navbadge {
+  left: 29px;
+}
+.factory-frame .h10-ds-navitem .chev {
+  margin-right: 17px; /* balance rule: 8px item margin + 17px = 25px from the right edge, mirroring the 25px glyph centre */
+}
+.factory-frame .h10-ds-sub {
+  margin-left: 60px;
+}
+
 /* F1 — designed empty-state panel for pages awaiting their FP cycle. */
 .factory-coming {
   max-width: 860px;

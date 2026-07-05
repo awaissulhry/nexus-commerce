@@ -20,6 +20,7 @@ import { useFactoryEvents } from "@/lib/use-factory-events";
 type Status = {
   google: {
     configSaved: boolean;
+    clientId: string | null;
     status: string;
     email: string | null;
     labelName: string | null;
@@ -46,9 +47,9 @@ const ago = (iso: string | null): string => {
   return `${Math.floor(s / 86400)}d ago`;
 };
 
-function GoogleSetupChecklist() {
+function GoogleSetupChecklist({ open }: { open: boolean }) {
   return (
-    <details style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginTop: 10 }}>
+    <details open={open} style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginBottom: 12 }}>
       <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--h10-text)" }}>
         One-time Google Cloud setup (5 steps, free)
       </summary>
@@ -67,7 +68,10 @@ function GoogleSetupChecklist() {
         <li>
           Credentials → Create credentials → OAuth client ID → Application type <b>Desktop app</b>.
         </li>
-        <li>Copy the Client ID and Client secret into the form here and save.</li>
+        <li>
+          Copy the <b>Client ID</b> (ends in <code>.apps.googleusercontent.com</code>) and the{" "}
+          <b>Client secret</b> into the form below and save.
+        </li>
         <li>Click Connect Google — approve both scopes (Gmail + Drive file access).</li>
       </ol>
     </details>
@@ -82,6 +86,7 @@ function IntegrationsInner() {
   const [clientSecret, setClientSecret] = useState("");
   const [labels, setLabels] = useState<{ id: string; name: string }[]>([]);
   const [chosenLabel, setChosenLabel] = useState<string>("");
+  const [editClient, setEditClient] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [scPublic, setScPublic] = useState("");
   const [scSecret, setScSecret] = useState("");
@@ -108,6 +113,7 @@ function IntegrationsInner() {
 
   const g = status?.google;
   const connected = g?.status === "connected";
+  const clientIdLooksValid = !!g?.clientId && /\.apps\.googleusercontent\.com$/.test(g.clientId);
 
   const saveConfig = async () => {
     setBusy("config");
@@ -116,7 +122,9 @@ function IntegrationsInner() {
         method: "POST",
         body: JSON.stringify({ clientId, clientSecret }),
       });
+      setClientId("");
       setClientSecret("");
+      setEditClient(false);
       toast("OAuth client saved", "success");
       await load();
     } catch (e) {
@@ -217,33 +225,70 @@ function IntegrationsInner() {
         <Card padded header="Gmail — the front door">
           {!connected && (
             <>
-              {!g?.configSaved && (
+              <GoogleSetupChecklist open={!g?.configSaved || editClient} />
+              {g?.configSaved && !editClient && (
+                <div style={{ display: "grid", gap: 10 }}>
+                  <div style={{ fontSize: 12.5, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    {clientIdLooksValid ? (
+                      <Pill tone="success">Client on file</Pill>
+                    ) : (
+                      <Pill tone="danger">Wrong value saved</Pill>
+                    )}
+                    <code style={{ fontSize: 11.5, wordBreak: "break-all" }}>{g.clientId}</code>
+                    <button
+                      type="button"
+                      onClick={() => setEditClient(true)}
+                      style={{ background: "none", border: "none", color: "var(--h10-text-link)", cursor: "pointer", fontSize: 12.5, padding: 0 }}
+                    >
+                      Replace
+                    </button>
+                  </div>
+                  {!clientIdLooksValid && (
+                    <Banner tone="danger" title="This is not a Google Client ID">
+                      A real Client ID ends in <code>.apps.googleusercontent.com</code> (Google Cloud
+                      console → Credentials → your Desktop app). Click <b>Replace</b> and paste the
+                      correct pair — the saved value above was accepted by an earlier version of this
+                      form without validation.
+                    </Banner>
+                  )}
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <Button
+                      variant="primary"
+                      onClick={() => void connect()}
+                      disabled={busy === "connect" || !clientIdLooksValid}
+                      title={!clientIdLooksValid ? "Replace the client ID first" : undefined}
+                    >
+                      {busy === "connect" ? "Opening Google…" : "Connect Google"}
+                    </Button>
+                    <span style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>
+                      Approve Gmail + Drive file access; you'll land back here.
+                    </span>
+                  </div>
+                </div>
+              )}
+              {(!g?.configSaved || editClient) && (
                 <div style={{ display: "grid", gap: 10, maxWidth: 480 }}>
-                  <Input placeholder="Google OAuth Client ID" value={clientId} onChange={(e) => setClientId(e.target.value)} />
                   <Input
-                    placeholder="Google OAuth Client secret"
+                    placeholder="Client ID — ends in .apps.googleusercontent.com"
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                  />
+                  <Input
+                    placeholder="Client secret (starts with GOCSPX- on new clients)"
                     type="password"
                     value={clientSecret}
                     onChange={(e) => setClientSecret(e.target.value)}
                   />
-                  <div>
+                  <div style={{ display: "flex", gap: 8 }}>
                     <Button variant="primary" onClick={() => void saveConfig()} disabled={busy === "config" || !clientId || !clientSecret}>
                       {busy === "config" ? "Saving…" : "Save OAuth client"}
                     </Button>
+                    {editClient && (
+                      <Button onClick={() => setEditClient(false)}>Cancel</Button>
+                    )}
                   </div>
                 </div>
               )}
-              {g?.configSaved && (
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <Button variant="primary" onClick={() => void connect()} disabled={busy === "connect"}>
-                    {busy === "connect" ? "Opening Google…" : "Connect Google"}
-                  </Button>
-                  <span style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>
-                    Approve Gmail + Drive file access; you'll land back here.
-                  </span>
-                </div>
-              )}
-              <GoogleSetupChecklist />
             </>
           )}
           {connected && g && (
