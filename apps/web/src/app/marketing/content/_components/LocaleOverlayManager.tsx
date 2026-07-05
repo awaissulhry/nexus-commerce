@@ -9,6 +9,8 @@
 // at delivery time per the request locale.
 
 import { useEffect, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Globe, Plus, Trash2, Save } from 'lucide-react'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { useToast } from '@/components/ui/Toast'

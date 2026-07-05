@@ -10,6 +10,8 @@
 // Review-gated — nothing is written until Apply.
 
 import { useCallback, useEffect, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { X, Loader2, Sparkles, Wand2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/layout/PageHeader';

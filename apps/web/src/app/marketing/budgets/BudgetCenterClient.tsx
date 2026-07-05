@@ -10,6 +10,8 @@
  */
 
 import { useCallback, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Plus, Wallet, Scale, X, ArrowRight, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'

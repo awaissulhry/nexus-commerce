@@ -26,6 +26,8 @@
 // requires the header Save All (DSP discipline).
 
 import { useMemo, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import {
   Wand2,
   ArrowDownToLine,

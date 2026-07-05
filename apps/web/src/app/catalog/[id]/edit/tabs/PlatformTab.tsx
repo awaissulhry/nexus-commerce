@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useCallback, memo } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { logger } from '@/lib/logger'
 import OfferCard from './OfferCard'
 import ChannelListingImageUploader from '@/components/catalog/ChannelListingImageUploader'

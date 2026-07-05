@@ -16,6 +16,8 @@
 // stays partially visible behind it for context.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Copy, Check, Lock, AlertCircle, ExternalLink, Plus, Trash2 } from 'lucide-react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { Tabs, type Tab } from '@/components/ui/Tabs'

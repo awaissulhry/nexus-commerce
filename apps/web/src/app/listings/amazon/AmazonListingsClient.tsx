@@ -14,6 +14,8 @@
 // ListingsWorkspace).
 
 import { useMemo, useState, useEffect } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import Link from 'next/link'
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import ListingsWorkspace from '../ListingsWorkspace'

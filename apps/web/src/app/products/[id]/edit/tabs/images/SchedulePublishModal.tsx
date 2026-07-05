@@ -12,6 +12,8 @@
 // picks up due rows on its 60s tick.
 
 import { useCallback, useEffect, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { AlertTriangle, Calendar, CheckCircle2, Clock, Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'

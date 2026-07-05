@@ -26,6 +26,8 @@
  */
 
 import dynamic from 'next/dynamic'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import {
   useCallback,
   useEffect,

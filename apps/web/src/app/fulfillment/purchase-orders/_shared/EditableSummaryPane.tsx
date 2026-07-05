@@ -1,4 +1,6 @@
 'use client'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 // PO.6 — Edit-in-place line grid for DRAFT/REVIEW POs.
 //

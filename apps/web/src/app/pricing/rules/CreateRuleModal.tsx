@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { AlertCircle } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { getBackendUrl } from '@/lib/backend-url';

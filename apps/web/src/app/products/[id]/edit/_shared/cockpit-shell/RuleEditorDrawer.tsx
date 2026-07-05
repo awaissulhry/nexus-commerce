@@ -10,6 +10,8 @@
 // mapping-suggest; every save is auto-versioned (MappingRevision).
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { X, Loader2, Trash2, Sparkles, Layers } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import TransformsEditor, { type TransformOp } from '@/app/settings/mappings/_shared/TransformsEditor'

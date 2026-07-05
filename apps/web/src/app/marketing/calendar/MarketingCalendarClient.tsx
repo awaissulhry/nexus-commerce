@@ -10,6 +10,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { ChevronLeft, ChevronRight, Plus, X, CalendarDays, Sparkles } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'

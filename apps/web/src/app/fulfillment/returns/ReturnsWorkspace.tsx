@@ -4,6 +4,8 @@
 // Manual refund default (per user choice — they recheck before restock); auto-refund opt-in via toggle.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Listbox } from '@/design-system/components/Listbox'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {

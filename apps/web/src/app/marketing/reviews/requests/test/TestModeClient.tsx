@@ -14,6 +14,8 @@
  */
 
 import { Beaker, Mail, Eye, Activity } from 'lucide-react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Listbox } from '@/design-system/components/Listbox'

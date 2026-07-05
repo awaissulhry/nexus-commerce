@@ -12,6 +12,8 @@
 // time without per-feature wiring here.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Folder, ImageIcon, Loader2, Search, Tag as TagIcon, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'

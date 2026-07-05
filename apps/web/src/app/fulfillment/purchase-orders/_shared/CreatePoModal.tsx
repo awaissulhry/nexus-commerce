@@ -1,4 +1,6 @@
 'use client'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 // PO.5 — Smart Create PO modal.
 //

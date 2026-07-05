@@ -23,6 +23,8 @@
  */
 
 import { useEffect, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Folder, Loader2 } from 'lucide-react'
 import { Listbox } from '@/design-system/components/Listbox'
 import { Button } from '@/components/ui/Button'

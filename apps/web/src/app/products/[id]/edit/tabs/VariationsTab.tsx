@@ -1,3 +1,5 @@
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 // WW — full variant CRUD on the product edit page.
 //
 // Replaces the dead read-only table with a real management surface:

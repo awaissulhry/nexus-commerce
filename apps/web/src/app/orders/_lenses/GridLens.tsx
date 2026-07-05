@@ -17,6 +17,8 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { ChevronDown, ChevronRight, ExternalLink, Settings2, ShoppingCart } from 'lucide-react'

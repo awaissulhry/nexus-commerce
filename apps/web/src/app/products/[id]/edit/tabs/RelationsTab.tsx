@@ -1,4 +1,6 @@
 'use client'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 /**
  * W2.4 — Relations tab on /products/[id]/edit.

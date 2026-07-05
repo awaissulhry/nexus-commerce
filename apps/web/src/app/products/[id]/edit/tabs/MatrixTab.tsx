@@ -18,6 +18,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   AlertCircle, ArrowRight, ArrowUpDown, Check, ChevronDown, Copy, GripVertical,

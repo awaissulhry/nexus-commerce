@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { CircleDot, Download, RefreshCw, Settings2 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'

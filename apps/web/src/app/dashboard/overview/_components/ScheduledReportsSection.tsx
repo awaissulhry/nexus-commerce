@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Check, Mail, Pencil, Send, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Listbox } from '@/design-system/components/Listbox'

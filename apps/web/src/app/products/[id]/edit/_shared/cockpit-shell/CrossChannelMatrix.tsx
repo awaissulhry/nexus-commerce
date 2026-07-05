@@ -14,6 +14,8 @@
 // Complements the per-channel tabs — never merges them.
 
 import { useEffect, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Loader2, ArrowRight, AlertTriangle, Languages, Check } from 'lucide-react'
 import CockpitDrawer from './CockpitDrawer'
 import {

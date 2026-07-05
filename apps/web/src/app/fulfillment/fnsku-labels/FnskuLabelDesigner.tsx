@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { ArrowLeft, Printer, FileDown, Loader2, Globe, AlertTriangle, Package, X as XIcon, Keyboard, Eye, Layers } from 'lucide-react'
 import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'

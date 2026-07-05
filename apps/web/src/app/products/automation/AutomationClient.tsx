@@ -10,6 +10,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import {
   AlertTriangle, CheckCircle2, History as HistoryIcon, Loader2,
   Pause, Play, Plus, Save, TestTube, Trash2, X,

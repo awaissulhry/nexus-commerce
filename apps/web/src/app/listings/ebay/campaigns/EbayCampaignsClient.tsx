@@ -11,6 +11,8 @@
 // automatically.
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Plus, Play, Pause, Square, Trash2, AlertCircle } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { COUNTRY_NAMES } from '@/lib/country-names'

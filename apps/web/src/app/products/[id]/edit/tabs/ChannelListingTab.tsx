@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Sparkles, ArrowDownToLine, AlertTriangle, Copy, DollarSign, Send, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button } from '@/components/ui/Button'

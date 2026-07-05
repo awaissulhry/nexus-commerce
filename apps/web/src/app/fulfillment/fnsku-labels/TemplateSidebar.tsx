@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Plus, Trash2, Save, ChevronUp, ChevronDown, Star, Copy } from 'lucide-react'
 import { Listbox } from '@/design-system/components/Listbox'
 import type { TemplateConfig, TemplateRow, SavedTemplate } from './types'

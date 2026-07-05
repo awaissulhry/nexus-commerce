@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import {
   BrainCircuit, ChevronDown, CheckSquare, Square, Loader2,
   X, CheckCircle2, AlertCircle, Sparkles,

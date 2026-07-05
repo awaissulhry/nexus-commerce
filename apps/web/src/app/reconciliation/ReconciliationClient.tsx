@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useCallback, useTransition, useEffect, useRef } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { useRouter } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Listbox } from '@/design-system/components/Listbox'

@@ -9,6 +9,8 @@
 // breakdown lives in Commit 4.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Listbox } from '@/design-system/components/Listbox'
 import {
   VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit,

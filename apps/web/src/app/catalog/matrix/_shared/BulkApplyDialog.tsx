@@ -14,6 +14,8 @@
  */
 
 import { useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { X, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Listbox } from '@/design-system/components/Listbox'

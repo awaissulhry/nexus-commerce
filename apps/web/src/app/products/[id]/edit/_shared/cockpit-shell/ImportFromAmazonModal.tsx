@@ -8,6 +8,8 @@
 // first, then pull their values into the master.
 
 import { useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { X, Loader2, DownloadCloud, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'

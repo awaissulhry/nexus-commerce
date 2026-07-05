@@ -3,6 +3,8 @@
 // PO.9 — Supplier ack client. Token-gated, no auth, minimal chrome.
 
 import { useCallback, useEffect, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { AlertCircle, CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { DateField } from '@/design-system/components/DateField'

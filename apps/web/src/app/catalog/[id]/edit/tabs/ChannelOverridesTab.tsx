@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { ChannelListing } from '@prisma/client'
 import ChannelOverrideToggle from '@/components/catalog/ChannelOverrideToggle'
 import TabValidationIcon from '@/components/catalog/TabValidationIcon'

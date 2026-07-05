@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { X, Plus, Trash2, Loader2, Users } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Listbox } from '@/design-system/components/Listbox'

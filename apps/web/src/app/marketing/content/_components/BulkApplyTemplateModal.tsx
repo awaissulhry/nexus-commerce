@@ -11,6 +11,8 @@
 // "Generate with AI" button in the modal stubs to a toast.
 
 import { useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import Image from 'next/image'
 import {
   Sparkles,

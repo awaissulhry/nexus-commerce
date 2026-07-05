@@ -8,6 +8,8 @@
 // operator's mental model carries between the two surfaces.
 
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'

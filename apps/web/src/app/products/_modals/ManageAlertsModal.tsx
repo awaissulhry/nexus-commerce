@@ -13,6 +13,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Bell, X, Plus, Trash2, RefreshCw } from 'lucide-react'
 import { Listbox } from '@/design-system/components/Listbox'
 import { IconButton } from '@/components/ui/IconButton'

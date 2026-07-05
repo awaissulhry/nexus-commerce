@@ -8,6 +8,8 @@
 // keys stay editable via the embedded TechAttrsEditor escape hatch.
 
 import { useEffect, useMemo, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Loader2, Search, Sparkles } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Input } from '@/components/ui/Input'

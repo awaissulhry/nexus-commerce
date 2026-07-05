@@ -29,6 +29,8 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Sparkles, X, Loader2, AlertCircle } from 'lucide-react'
 import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'

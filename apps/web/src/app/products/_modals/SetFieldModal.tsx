@@ -18,6 +18,8 @@
  */
 
 import { useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Loader2, Pencil } from 'lucide-react'
 import { Listbox } from '@/design-system/components/Listbox'
 import { Button } from '@/components/ui/Button'

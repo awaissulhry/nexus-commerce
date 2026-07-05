@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useTransition, useCallback } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { getBackendUrl } from '@/lib/backend-url'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import PageHeader from '@/components/layout/PageHeader'

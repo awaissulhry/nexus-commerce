@@ -13,6 +13,8 @@
 // unchanged; the new pivots are opt-in tabs.
 
 import { useState, type ReactNode } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Link2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'

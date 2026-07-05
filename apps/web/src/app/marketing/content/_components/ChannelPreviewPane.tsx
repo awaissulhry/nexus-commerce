@@ -14,6 +14,8 @@
 // market.
 
 import { useEffect, useMemo, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import Image from 'next/image'
 import { Eye } from 'lucide-react'
 import { useTranslations } from '@/lib/i18n/use-translations'

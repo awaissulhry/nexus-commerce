@@ -10,6 +10,8 @@
 // modal). Seeded baseline rows can be toggled inactive but not deleted.
 
 import { useCallback, useEffect, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { DateField } from '@/design-system/components/DateField'
 import { Listbox } from '@/design-system/components/Listbox'
 import {

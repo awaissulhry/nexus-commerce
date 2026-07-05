@@ -14,6 +14,8 @@
 //     supplier, grouped automatically)
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Listbox } from '@/design-system/components/Listbox'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {

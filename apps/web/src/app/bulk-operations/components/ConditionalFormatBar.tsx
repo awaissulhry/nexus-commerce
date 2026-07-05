@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Plus, Trash2, X, Sparkles } from 'lucide-react'
 import { Listbox } from '@/design-system/components/Listbox'
 import { cn } from '@/lib/utils'

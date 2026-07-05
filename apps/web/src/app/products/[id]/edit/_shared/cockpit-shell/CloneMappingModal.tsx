@@ -6,6 +6,8 @@
 // POST /api/pim/mappings/clone (BM.4); each target is FM.13-versioned.
 
 import { useEffect, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { X, Loader2, Copy, Check } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'

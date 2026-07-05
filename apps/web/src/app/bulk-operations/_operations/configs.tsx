@@ -19,6 +19,8 @@
  */
 
 import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import type { OperationConfig } from './types'
 import { Field, OverrideNumber, BoolField, inputCls } from './_helpers'
 

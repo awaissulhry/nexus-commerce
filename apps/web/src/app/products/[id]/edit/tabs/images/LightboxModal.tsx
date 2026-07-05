@@ -14,6 +14,8 @@
 //   - inline alt + type edit (IR.3.5 — master only)
 
 import { useEffect, useState } from 'react'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { ChevronLeft, ChevronRight, Crop as CropIcon, FolderUp, Library, Loader2, Pencil, Sparkles, Wand2, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
