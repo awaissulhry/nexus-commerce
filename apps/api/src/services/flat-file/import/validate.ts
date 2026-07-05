@@ -63,6 +63,9 @@ const READONLY_CLS = new Set<string>(['READONLY_SYNCED', 'DERIVED', 'SYSTEM'])
 /** Valid values for the Action control column. */
 const VALID_ACTIONS = new Set<string>(['', 'ADD', 'DELETE', 'IGNORE'])
 
+/** Module-level TextEncoder — hoisted to avoid per-cell allocation. */
+const TEXT_ENCODER = new TextEncoder()
+
 /**
  * Case-insensitive accepted values for boolean fields.
  * Empty string is included so blank passes (blank = no-change sentinel).
@@ -219,7 +222,7 @@ export function validateWorkbook(wb: ParsedWorkbook): ValidationIssue[] {
         // Accented / CJK characters are multi-byte in UTF-8. This check catches
         // strings that pass the character-count limit but blow the byte limit.
         if (field.maxUtf8ByteLength !== undefined) {
-          const byteLen = new TextEncoder().encode(value).length
+          const byteLen = TEXT_ENCODER.encode(value).length
           if (byteLen > field.maxUtf8ByteLength) {
             issues.push({
               sheet: sheetName,

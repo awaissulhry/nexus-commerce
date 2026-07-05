@@ -314,6 +314,20 @@ describe('validateWorkbook — clean row', () => {
   })
 })
 
+// ── Suite 10.5: Boolean field validation ─────────────────────────────────────
+
+describe('validateWorkbook — boolean field', () => {
+  it('EDITABLE boolean field sync_from_master@IT = "maybe" → warn (not error)', () => {
+    const wb = makeWorkbook('Amazon', [{ Action: '', sku: 'X', 'sync_from_master@IT': 'maybe' }])
+    const issues = validateWorkbook(wb)
+    const warn = issues.find(i => i.column === 'sync_from_master@IT' && i.level === 'warn')
+    expect(warn).toBeDefined()
+    expect(warn!.message).toContain('boolean')
+    // Must NOT produce an error for this column
+    expect(issues.find(i => i.column === 'sync_from_master@IT' && i.level === 'error')).toBeUndefined()
+  })
+})
+
 // ── Suite 10: Multi-sheet workbooks ──────────────────────────────────────────
 
 describe('validateWorkbook — multi-sheet', () => {

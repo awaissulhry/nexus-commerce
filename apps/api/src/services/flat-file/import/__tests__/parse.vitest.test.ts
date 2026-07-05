@@ -166,20 +166,26 @@ describe('parseWorkbook — normalizeCell mutation cases', () => {
   })
 
   it('blank (null) cell → value === ""', async () => {
-    // We set the header but do NOT set cell(2,1) — it remains null
+    // Use two columns: 'sku' has a value (anchors the row in xlsx), 'blankField' is null.
+    // A row with ALL null cells is often stripped during serialisation; the anchor ensures
+    // the row survives the xlsx round-trip so we can assert the blank-cell behaviour.
     const wb = new ExcelJS.Workbook()
     const ws = wb.addWorksheet('Products')
-    ws.getRow(1).getCell(1).value = 'blankField'
-    // row 2 cell 1 intentionally not set → null
-    ws.getRow(2).getCell(1) // access so the row exists
+    ws.getRow(1).getCell(1).value = 'sku'
+    ws.getRow(1).getCell(2).value = 'blankField'
+    ws.getRow(2).getCell(1).value = 'P1'  // anchor — ensures row 2 survives
+    // Cell (2,2) intentionally not set → null
     const bytes = new Uint8Array(await wb.xlsx.writeBuffer())
 
     const parsed = await parseWorkbook(bytes)
     const row = parsed.sheets['Products']?.rows[0]
-    const cell = row?.cells['blankField']
-    // blank cell → value ''
-    expect(cell?.value ?? '').toBe('')
-    expect(cell?.warning).toBeUndefined()
+    expect(row).toBeDefined()
+    const cells = row!.cells
+    // The cells map MUST contain the key for 'blankField' (header was defined in row 1)
+    expect('blankField' in cells).toBe(true)
+    const cell = cells['blankField']
+    expect(cell!.value).toBe('')
+    expect(cell!.warning).toBeUndefined()
   })
 
   it('string with trailing spaces → trimmed value', async () => {
@@ -198,5 +204,49 @@ describe('parseWorkbook — normalizeCell mutation cases', () => {
     const row = parsed.sheets['Products']!.rows[0]!
     expect(row.cells['active']!.value).toBe('true')
     expect(row.cells['inactive']!.value).toBe('false')
+  })
+
+  it('BOM-prefixed string → BOM stripped', async () => {
+    const bytes = await buildHandCraftedWorkbook(['title'], ['﻿hello'])
+    const parsed = await parseWorkbook(bytes)
+
+    const cell = parsed.sheets['Products']!.rows[0]!.cells['title']!
+    expect(cell.value).toBe('hello')
+    expect(cell.warning).toBeUndefined()
+  })
+
+  it('curly-quote string → normalised to straight quotes', async () => {
+    const bytes = await buildHandCraftedWorkbook(['title'], ['‘hello’'])
+    const parsed = await parseWorkbook(bytes)
+
+    const cell = parsed.sheets['Products']!.rows[0]!.cells['title']!
+    expect(cell.value).toBe("'hello'")
+    expect(cell.warning).toBeUndefined()
+  })
+
+  it('leading apostrophe is preserved (not stripped)', async () => {
+    const bytes = await buildHandCraftedWorkbook(['title'], ["'O sole mio"])
+    const parsed = await parseWorkbook(bytes)
+
+    const cell = parsed.sheets['Products']!.rows[0]!.cells['title']!
+    expect(cell.value).toBe("'O sole mio")
+    expect(cell.warning).toBeUndefined()
+  })
+
+  it('formula cell → value is string result + warning contains "formula"', async () => {
+    const bytes = await buildHandCraftedWorkbook(['calc'], [{ formula: '=1+1', result: 2 }])
+    const parsed = await parseWorkbook(bytes)
+
+    const cell = parsed.sheets['Products']!.rows[0]!.cells['calc']!
+    expect(cell.value).toBe('2')
+    expect(cell.warning).toContain('formula')
+  })
+
+  it('rich-text cell → joined plain text value', async () => {
+    const bytes = await buildHandCraftedWorkbook(['desc'], [{ richText: [{ text: 'Hel' }, { text: 'lo' }] }])
+    const parsed = await parseWorkbook(bytes)
+
+    const cell = parsed.sheets['Products']!.rows[0]!.cells['desc']!
+    expect(cell.value).toBe('Hello')
   })
 })

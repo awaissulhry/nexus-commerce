@@ -28,7 +28,7 @@ export interface ParsedWorkbook {
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 /** Sheet names that carry metadata, not product/listing data. */
-const NON_DATA_SHEETS = new Set(['_meta', 'README'])
+const NON_DATA_SHEETS = new Set(['README'])
 
 // ── normalizeCell ─────────────────────────────────────────────────────────────
 
@@ -57,8 +57,9 @@ const NON_DATA_SHEETS = new Set(['_meta', 'README'])
  *
  * 5. boolean → 'true' or 'false'.
  *
- * 6. string → strip BOM + leading apostrophe + curly quotes + trim trailing
- *    whitespace. Safe transformations: no warning needed.
+ * 6. string → strip BOM + curly quotes + trim trailing whitespace.
+ *    Leading apostrophe is preserved (a real ' prefix, e.g. Italian 'O sole mio).
+ *    Safe transformations: no warning needed.
  *
  * 7. Fallback → String(raw) (covers ExcelJS rich-text objects, etc.)
  *
@@ -73,14 +74,18 @@ export function normalizeCell(raw: unknown): { value: string; warning?: string }
   if (raw === '__CLEAR__') return { value: '__CLEAR__' }
 
   // Rule 3 — Excel date (exceljs returns JS Date for date-formatted cells)
+  // Use LOCAL date parts to avoid UTC off-by-one for late-night dates in non-UTC TZs.
   if (raw instanceof Date) {
-    return { value: raw.toISOString().slice(0, 10), warning: 'date coercion' }
+    const y = raw.getFullYear()
+    const m = String(raw.getMonth() + 1).padStart(2, '0')
+    const d = String(raw.getDate()).padStart(2, '0')
+    return { value: `${y}-${m}-${d}`, warning: 'date coercion' }
   }
 
   // Rule 4 — number
   if (typeof raw === 'number') {
     const s = String(raw)
-    if (s.indexOf('e') !== -1 || s.indexOf('E') !== -1 || raw > 1e11) {
+    if (s.indexOf('e') !== -1 || s.indexOf('E') !== -1 || Math.abs(raw) > 1e11) {
       return { value: s, warning: 'numeric coercion — verify identifier' }
     }
     return { value: s }
@@ -96,9 +101,8 @@ export function normalizeCell(raw: unknown): { value: string; warning?: string }
     let s = raw
     // Strip BOM (U+FEFF) — Excel sometimes emits it in UTF-8 encoded cells
     if (s.charCodeAt(0) === 0xfeff) s = s.slice(1)
-    // Strip leading apostrophe — Excel prefixes ' to force a cell to text mode;
-    // exceljs exposes the raw stored value including that prefix.
-    if (s.charCodeAt(0) === 0x0027) s = s.slice(1) // 0x27 = '
+    // NOTE: leading apostrophe (0x27) is intentionally NOT stripped here.
+    // A real leading ' value (e.g. Italian 'O sole mio) would be corrupted.
     // Replace curly quotes with straight equivalents (no String.replaceAll)
     s = s.split('‘').join("'")  // LEFT  SINGLE QUOTATION MARK
     s = s.split('’').join("'")  // RIGHT SINGLE QUOTATION MARK
@@ -109,8 +113,20 @@ export function normalizeCell(raw: unknown): { value: string; warning?: string }
     return { value: s }
   }
 
-  // Rule 7 — fallback (rich-text, formula result objects, etc.)
-  return { value: String(raw) }
+  // Rule 7 — ExcelJS compound cell (formula result, rich-text, other objects)
+  // By this point raw is not null, not a Date, not a number, not a boolean, not a string —
+  // it must be a plain object (formula or rich-text cell from exceljs).
+  const obj = raw as any
+  if ('result' in obj) {
+    // Formula cell: { formula: '=1+1', result: 2 }. Use the evaluated result.
+    return { ...normalizeCell(obj.result), warning: 'formula cell — result used' }
+  }
+  if (Array.isArray(obj.richText)) {
+    // Rich-text cell: { richText: [{ text: 'Hel', font: {...} }, { text: 'lo' }] }
+    const text = (obj.richText as Array<{ text?: string }>).map(r => r.text ?? '').join('')
+    return normalizeCell(text)
+  }
+  return { value: String(raw), warning: 'unrecognised cell type' }
 }
 
 // ── parseWorkbook ─────────────────────────────────────────────────────────────
@@ -198,7 +214,10 @@ export async function parseWorkbook(bytes: Uint8Array): Promise<ParsedWorkbook> 
         const raw = cell.value
         const normalized = normalizeCell(raw)
         const parsed: ParsedCell = { raw, value: normalized.value }
-        if (normalized.warning) parsed.warning = normalized.warning
+        if (normalized.warning) {
+          parsed.warning = normalized.warning
+          parseWarnings.push(`${name}!R${rowNumber} ${headerText}: ${normalized.warning}`)
+        }
         cells[headerText] = parsed
       }
 
