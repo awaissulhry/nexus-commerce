@@ -454,6 +454,7 @@ model WorkOrder {
   priority        Int              @default(0)
   state           WorkOrderState   @default(READY)
   blockedReason   String? // e.g. "awaiting deposit" (FD13)
+  label           String? // FP4: per-size / per-line human tag ("Size 50 · ×3")
   estCostCents    Int              @default(0)
   actualCostCents Int              @default(0)
   stages          WorkOrderStage[]
