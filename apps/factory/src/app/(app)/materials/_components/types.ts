@@ -28,3 +28,10 @@ export type MaterialDetail = {
 };
 
 export const MOVE_TONE: Record<Movement["type"], "success" | "danger" | "warning" | "info" | "neutral"> = { IN: "success", OUT: "danger", ADJUST: "warning", RESERVE: "info", RELEASE: "neutral" };
+
+export type PoState = "DRAFT" | "SENT" | "PARTIAL" | "RECEIVED" | "CANCELLED";
+export type PORow = { id: string; number: string; supplier: string; state: PoState; lineCount: number; totalCents?: number; expectedAt: string | null; createdAt: string };
+export type POResponse = { purchaseOrders: PORow[]; counts: Record<string, number> };
+export type POLine = { materialId: string; materialName: string; qty: number; unit: string; unitCostCents?: number; received: number; lineTotalCents?: number };
+export type PODetail = { purchaseOrder: { id: string; number: string; state: PoState; supplier: { id: string; name: string }; expectedAt: string | null; lines: POLine[]; totalCents?: number } };
+export const PO_TONE: Record<PoState, "neutral" | "info" | "warning" | "success" | "danger"> = { DRAFT: "neutral", SENT: "info", PARTIAL: "warning", RECEIVED: "success", CANCELLED: "danger" };

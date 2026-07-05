@@ -5,9 +5,9 @@
  */
 import { prisma } from "@/lib/db";
 
-const PREFIX: Record<string, string> = { quote: "Q-", order: "ORD-" };
+const PREFIX: Record<string, string> = { quote: "Q-", order: "ORD-", po: "PO-" };
 
-export async function nextNumber(kind: "quote" | "order"): Promise<string> {
+export async function nextNumber(kind: "quote" | "order" | "po"): Promise<string> {
   const key = `counter.${kind}`;
   const n = await prisma.$transaction(async (tx) => {
     const row = await tx.appSetting.findUnique({ where: { key } });

@@ -15,6 +15,7 @@ import { Button, Input, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
+import { PurchaseOrders } from "./PurchaseOrders";
 import { MOVE_TONE, type MaterialDetail, type MaterialRow, type MaterialsResponse } from "./types";
 
 const num = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
@@ -25,6 +26,8 @@ export function MaterialsClient() {
   const canManage = usePermission("materials.manage");
   const canCost = usePermission("financials.suppliers.view");
   const [data, setData] = useState<MaterialsResponse | null>(null);
+  const [view, setView] = useState<"materials" | "po">("materials");
+  const [buyPrefill, setBuyPrefill] = useState<{ materialId: string; qty: number } | null>(null);
   const [q, setQ] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -74,6 +77,15 @@ export function MaterialsClient() {
     <div className="factory-page factory-grid-grow-1">
       <PageHeader eyebrow="Factory OS" title="Materials" subtitle="The ledger's face: In stock · Committed · Expected · Available — every number a derived truth with a paper trail." />
       <Card padded>
+        <div style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: "1px solid var(--h10-border-subtle)" }}>
+          {(["materials", "po"] as const).map((v) => (
+            <button key={v} type="button" onClick={() => setView(v)} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: "8px 12px", color: view === v ? "var(--h10-primary)" : "var(--h10-text-2)", borderBottom: view === v ? "2px solid var(--h10-primary)" : "2px solid transparent", marginBottom: -1 }}>{v === "materials" ? "Materials" : "Purchase orders"}</button>
+          ))}
+        </div>
+        {view === "po" ? (
+          <PurchaseOrders materials={(data?.materials ?? []).map((m) => ({ id: m.id, name: m.name, unit: m.unit }))} prefill={buyPrefill} onConsumed={() => { setBuyPrefill(null); void load(); }} />
+        ) : (
+        <>
         <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center", flexWrap: "wrap" }}>
           <button type="button" onClick={() => setLowOnly((v) => !v)} style={{ display: "inline-flex", gap: 5, alignItems: "center", border: "1px solid var(--h10-border)", borderRadius: 8, padding: "5px 10px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", background: lowOnly ? "var(--h10-primary)" : "var(--h10-surface)", color: lowOnly ? "#fff" : "var(--h10-text-2)" }}><SlidersHorizontal size={12} /> Low / short</button>
           <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
@@ -97,6 +109,8 @@ export function MaterialsClient() {
           rowKey={(m: MaterialRow) => m.id}
           emptyState="No materials yet — add one, or import opening stock."
         />
+        </>
+        )}
       </Card>
 
       <Modal open={creating} onClose={() => setCreating(false)} title="New material" size="sm" footer={<><Button onClick={() => setCreating(false)}>Cancel</Button><Button variant="primary" onClick={create} disabled={!form.name.trim() || busy}>Create</Button></>}>
