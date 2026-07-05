@@ -10,6 +10,7 @@ import ChannelGroupsManager, {
   type ChannelGroup,
 } from '../components/ChannelGroupsManager'
 import ValidationSummary, { type UnsatisfiedEntry } from '../components/ValidationSummary'
+import { Listbox } from '@/design-system/components/Listbox'
 import {
   AI_FIELD_MAP,
   AI_SUPPORTED_FIELDS,
@@ -852,21 +853,15 @@ export default function Step4Attributes({
               configured provider is available; with a single provider
               the picker would be a no-op clutter. */}
           {providers.filter((p) => p.configured).length > 1 && (
-            <select
+            <Listbox
               value={provider}
-              onChange={(e) => setProvider(e.target.value)}
-              aria-label="AI provider"
-              className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:border-blue-300"
-              title="Choose which AI provider runs the next generation"
-            >
-              {providers
+              onChange={(v) => setProvider(v)}
+              ariaLabel="AI provider"
+              className="w-32"
+              options={providers
                 .filter((p) => p.configured)
-                .map((p) => (
-                  <option key={p.name} value={p.name}>
-                    {p.name}
-                  </option>
-                ))}
-            </select>
+                .map((p) => ({ value: p.name, label: p.name }))}
+            />
           )}
           {manifest && manifest.optionalFieldCount > 0 && (
             <button

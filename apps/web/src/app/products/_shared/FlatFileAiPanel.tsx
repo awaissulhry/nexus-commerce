@@ -5,6 +5,7 @@ import {
   BrainCircuit, ChevronDown, CheckSquare, Square, Loader2,
   X, CheckCircle2, AlertCircle, Sparkles,
 } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
@@ -138,16 +139,14 @@ export function FlatFileAiPanel({ rows, columns, marketplace, onApplyChanges, ch
         <div className="flex-1" />
         <div className="flex items-center gap-1.5">
           <ChevronDown className="w-3 h-3 text-slate-400" />
-          <select
+          <Listbox
+            options={MODELS.map((m) => ({ value: m.value, label: m.label }))}
             value={model}
-            onChange={(e) => setModel(e.target.value)}
+            onChange={setModel}
             disabled={state === 'running'}
-            className="text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-0.5 px-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500"
-          >
-            {MODELS.map((m) => (
-              <option key={m.value} value={m.value}>{m.label}</option>
-            ))}
-          </select>
+            ariaLabel="AI model"
+            className="w-40"
+          />
         </div>
       </div>
 

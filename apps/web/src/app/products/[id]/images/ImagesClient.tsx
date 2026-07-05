@@ -49,6 +49,7 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { Tooltip } from '@/components/ui/Tooltip'
 import PageHeader from '@/components/layout/PageHeader'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox } from '@/design-system/components/Listbox'
 
 type Scope = 'GLOBAL' | 'PLATFORM' | 'MARKETPLACE'
 type Role =
@@ -579,20 +580,13 @@ function BucketCard({
                 )}
               </div>
             </div>
-            <select
+            <Listbox
               value={row.role}
-              onChange={(e) =>
-                onPatchRow(row, { role: e.target.value as Role })
-              }
-              aria-label="Image role"
-              className="h-7 px-1.5 text-sm border border-default rounded dark:border-slate-700 dark:bg-slate-800"
-            >
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => onPatchRow(row, { role: v as Role })}
+              ariaLabel="Image role"
+              className="w-28"
+              options={ROLES.map((r) => ({ value: r, label: r }))}
+            />
             {bucket.scope !== 'GLOBAL' && (
               <Tooltip content="Edit platform/marketplace via the resolution cascade — open product edit for full control">
                 <span className="text-xs font-mono text-slate-500 dark:text-slate-500 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800">

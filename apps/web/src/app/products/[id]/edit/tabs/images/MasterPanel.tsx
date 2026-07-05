@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import ScopeUploadModal, { type ScopeChoice } from './ScopeUploadModal'
 import BulkApplyModal from './BulkApplyModal'
+import { Listbox } from '@/design-system/components/Listbox'
 import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from './types'
 
 const IMAGE_TYPES = ['MAIN', 'ALT', 'LIFESTYLE', 'SWATCH', 'DIAGRAM'] as const
@@ -143,6 +144,7 @@ export default function MasterPanel({
   })
   const dragIndexRef = useRef<number | null>(null)
   const newTypeRef = useRef<ImageType>('ALT')
+  const [newType, setNewType] = useState<ImageType>('ALT')
 
   const selectedCount = selectedIds.size
   const allSelected = images.length > 0 && selectedCount === images.length
@@ -763,13 +765,13 @@ export default function MasterPanel({
             </button>
           )}
           <div className="ml-auto flex items-center gap-2">
-            <select
-              className="text-xs border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none"
-              onChange={(e) => { newTypeRef.current = e.target.value as ImageType }}
-              defaultValue="ALT"
-            >
-              {IMAGE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <Listbox
+              ariaLabel="New image type"
+              className="w-32"
+              value={newType}
+              onChange={(v) => { const it = v as ImageType; setNewType(it); newTypeRef.current = it }}
+              options={IMAGE_TYPES.map((it) => ({ value: it, label: it }))}
+            />
             <Button
               size="sm"
               variant="ghost"
@@ -1120,13 +1122,13 @@ export default function MasterPanel({
                   <div className="px-2 py-2 space-y-1.5">
                     {editingId === img.id ? (
                       <div className="space-y-1.5">
-                        <select
+                        <Listbox
                           value={editType}
-                          onChange={(e) => setEditType(e.target.value as ImageType)}
-                          className="w-full text-xs border border-default dark:border-slate-700 rounded px-1.5 py-1 bg-white dark:bg-slate-900 focus:outline-none"
-                        >
-                          {IMAGE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                        </select>
+                          onChange={(v) => setEditType(v as ImageType)}
+                          ariaLabel="Image type"
+                          className="w-full"
+                          options={IMAGE_TYPES.map((it) => ({ value: it, label: it }))}
+                        />
                         <input
                           value={editAlt}
                           onChange={(e) => setEditAlt(e.target.value)}

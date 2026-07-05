@@ -37,6 +37,7 @@ import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -541,16 +542,16 @@ export default function SeoTab({ product, discardSignal, onDirtyChange }: SeoTab
         {/* Add locale inline */}
         {showAddLocale && (
           <div className="px-5 py-3 border-b border-subtle dark:border-slate-800 flex items-center gap-2 bg-slate-50 dark:bg-slate-800/40">
-            <select
+            <Listbox
               value={newLocale}
-              onChange={(e) => setNewLocale(e.target.value)}
-              className="text-sm border border-default dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 focus:outline-none"
-            >
-              <option value="">{t('products.edit.seo.selectLocale')}</option>
-              {KNOWN_LOCALES.filter((l) => l.code !== 'default' && !seoRows.find((r) => r.locale === l.code)).map((l) => (
-                <option key={l.code} value={l.code}>{l.label}</option>
-              ))}
-            </select>
+              onChange={(v) => setNewLocale(v)}
+              ariaLabel={t('products.edit.seo.selectLocale')}
+              className="w-40"
+              options={[
+                { value: '', label: t('products.edit.seo.selectLocale') },
+                ...KNOWN_LOCALES.filter((l) => l.code !== 'default' && !seoRows.find((r) => r.locale === l.code)).map((l) => ({ value: l.code, label: l.label })),
+              ]}
+            />
             <input
               value={newLocale}
               onChange={(e) => setNewLocale(e.target.value.toLowerCase())}

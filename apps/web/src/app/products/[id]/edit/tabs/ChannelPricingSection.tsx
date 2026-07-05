@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -322,10 +323,9 @@ export default function ChannelPricingSection({ productId, isParent, channel = '
             <span className="text-slate-600 dark:text-slate-300 text-xs font-medium">
               {bulkMode === 'price' ? 'Set price' : 'Adjust by %'} for all variants in
             </span>
-            <select value={bulkMarket} onChange={(e) => setBulkMarket(e.target.value)}
-              className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800">
-              {allMarkets.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
+            <Listbox value={bulkMarket} onChange={(v) => setBulkMarket(v)}
+              ariaLabel="Market" className="w-28"
+              options={allMarkets.map((m) => ({ value: m, label: m }))} />
             <div className="flex items-center gap-1">
               {bulkMode === 'price' && <span className="text-xs text-tertiary">€</span>}
               <input type="number" step={bulkMode === 'price' ? '0.01' : '1'} value={bulkValue}
@@ -337,15 +337,13 @@ export default function ChannelPricingSection({ productId, isParent, channel = '
           </>)}
           {bulkMode === 'copy' && (<>
             <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Copy</span>
-            <select value={bulkSrcMarket} onChange={(e) => setBulkSrcMarket(e.target.value)}
-              className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800">
-              {allMarkets.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
+            <Listbox value={bulkSrcMarket} onChange={(v) => setBulkSrcMarket(v)}
+              ariaLabel="Copy from market" className="w-28"
+              options={allMarkets.map((m) => ({ value: m, label: m }))} />
             <span className="text-xs text-tertiary">→</span>
-            <select value={bulkDstMarket} onChange={(e) => setBulkDstMarket(e.target.value)}
-              className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800">
-              {allMarkets.filter((m) => m !== bulkSrcMarket).map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
+            <Listbox value={bulkDstMarket} onChange={(v) => setBulkDstMarket(v)}
+              ariaLabel="Copy to market" className="w-28"
+              options={allMarkets.filter((m) => m !== bulkSrcMarket).map((m) => ({ value: m, label: m }))} />
           </>)}
           <Button size="sm" loading={bulkApplying} onClick={applyBulk}>Apply</Button>
           <button type="button" onClick={() => { setBulkMode('none'); setBulkValue('') }}

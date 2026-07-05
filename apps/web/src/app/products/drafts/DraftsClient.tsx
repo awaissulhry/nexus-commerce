@@ -22,6 +22,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { cn } from '@/lib/utils'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
@@ -1882,31 +1883,21 @@ export default function DraftsClient() {
           </button>
         </Tooltip>
 
-        <select
+        <Listbox
+          options={SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
           value={source}
-          onChange={(e) => setSource(e.target.value as SourceFilter)}
-          aria-label="Filter by source"
-          className="h-8 px-2 text-base border border-default rounded-md bg-white focus:outline-none focus:border-blue-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500"
-        >
-          {SOURCE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => setSource(v as SourceFilter)}
+          ariaLabel="Filter by source"
+          className="w-48"
+        />
 
-        <select
+        <Listbox
+          options={SORT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
           value={sort}
-          onChange={(e) => setSort(e.target.value as SortOption)}
-          aria-label="Sort drafts"
-          className="h-8 px-2 text-base border border-default rounded-md bg-white focus:outline-none focus:border-blue-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500"
-        >
-          {SORT_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => setSort(v as SortOption)}
+          ariaLabel="Sort drafts"
+          className="w-44"
+        />
       </div>
 
       {/* Bulk-action toolbar — appears only with active selection. */}

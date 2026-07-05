@@ -7,6 +7,7 @@ import {
   Loader2,
   Sparkles,
 } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
@@ -952,18 +953,13 @@ export function FieldInput({
           )}
         />
         {field.unitOptions && field.unitOptions.length > 0 ? (
-          <select
+          <Listbox
+            options={field.unitOptions.map((u) => ({ value: u, label: u }))}
             value={unitVal}
-            onChange={(e) => emit(numVal, e.target.value)}
-            className={cn(
-              'px-2 text-md border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900',
-              compact ? 'h-7' : 'h-8',
-            )}
-          >
-            {field.unitOptions.map((u) => (
-              <option key={u} value={u}>{u}</option>
-            ))}
-          </select>
+            onChange={(v) => emit(numVal, v)}
+            ariaLabel="Unit"
+            className="w-28"
+          />
         ) : (
           <input
             type="text"
@@ -1005,21 +1001,16 @@ export function FieldInput({
   if (field.kind === 'enum') {
     const v = (value ?? '') as string
     return (
-      <select
+      <Listbox
+        options={[
+          { value: '', label: '— Select —' },
+          ...(field.options ?? []).map((opt) => ({ value: opt.value, label: opt.label })),
+        ]}
         value={v}
-        onChange={(e) => onChange(e.target.value)}
-        className={cn(
-          'w-full px-2 text-md border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900',
-          compact ? 'h-7' : 'h-8',
-        )}
-      >
-        <option value="">— Select —</option>
-        {(field.options ?? []).map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+        onChange={onChange}
+        ariaLabel={field.label}
+        className="w-full"
+      />
     )
   }
 

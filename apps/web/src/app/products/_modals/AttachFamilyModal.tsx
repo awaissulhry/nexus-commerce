@@ -24,6 +24,7 @@
 
 import { useEffect, useState } from 'react'
 import { Folder, Loader2 } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { Button } from '@/components/ui/Button'
 import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
@@ -157,18 +158,13 @@ export default function AttachFamilyModal({
             <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
               Family
             </label>
-            <select
+            <Listbox
+              options={families.map((f) => ({ value: f.id, label: `${f.label} (${f.code})` }))}
               value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              autoFocus
-              className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
-            >
-              {families.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.label} ({f.code})
-                </option>
-              ))}
-            </select>
+              onChange={setTarget}
+              ariaLabel="Family"
+              className="w-full"
+            />
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Soft-deleted products in the selection are silently skipped.
               Per-product AuditLog row written for each change.

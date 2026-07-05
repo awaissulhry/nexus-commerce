@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { X, Loader2, Sparkles, Wand2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface Suggestion {
   fieldKey: string
@@ -213,20 +214,16 @@ export default function AutoMapModal({ coordinates, productType, open, onClose, 
 
         {/* toolbar */}
         <div className="flex flex-wrap items-center gap-2 border-b border-subtle px-4 py-2 text-xs dark:border-slate-800">
-          <select
+          <Listbox
             value={coord ? `${coord.channel}:${coord.marketplace}` : ''}
-            onChange={(e) => {
-              const [channel, marketplace] = e.target.value.split(':')
+            onChange={(v) => {
+              const [channel, marketplace] = v.split(':')
               setCoord({ channel, marketplace })
             }}
-            className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"
-          >
-            {coordinates.map((c) => (
-              <option key={`${c.channel}:${c.marketplace}`} value={`${c.channel}:${c.marketplace}`}>
-                {c.channel} · {c.marketplace}
-              </option>
-            ))}
-          </select>
+            ariaLabel="Coordinate"
+            className="w-44"
+            options={coordinates.map((c) => ({ value: `${c.channel}:${c.marketplace}`, label: `${c.channel} · ${c.marketplace}` }))}
+          />
           <button
             type="button"
             onClick={enhanceAI}
@@ -248,15 +245,16 @@ export default function AutoMapModal({ coordinates, productType, open, onClose, 
           {productType && (
             <>
               <span className="mx-1 h-4 w-px bg-slate-200 dark:bg-slate-700" />
-              <select
+              <Listbox
                 value={scope}
-                onChange={(e) => setScope(e.target.value as 'productType' | 'channel')}
-                title="Where to write the accepted rules"
-                className="rounded border border-slate-300 bg-white px-1.5 py-1 dark:border-slate-700 dark:bg-slate-900"
-              >
-                <option value="productType">Apply to: {productType}</option>
-                <option value="channel">Apply to: all product types (channel-wide)</option>
-              </select>
+                onChange={(v) => setScope(v as 'productType' | 'channel')}
+                ariaLabel="Where to write the accepted rules"
+                className="w-56"
+                options={[
+                  { value: 'productType', label: `Apply to: ${productType}` },
+                  { value: 'channel', label: 'Apply to: all product types (channel-wide)' },
+                ]}
+              />
             </>
           )}
           <label className="ml-auto inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400">

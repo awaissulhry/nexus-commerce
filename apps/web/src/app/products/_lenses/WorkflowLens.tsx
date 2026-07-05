@@ -26,6 +26,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { AlertCircle, GitBranch } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -139,17 +140,13 @@ export function WorkflowLens() {
           <span className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
             {t('products.lens.workflow.picker.label')}
           </span>
-          <select
+          <Listbox
+            options={workflows.map((w) => ({ value: w.id, label: w.label }))}
             value={selectedId}
-            onChange={(e) => setSelectedId(e.target.value)}
-            className="h-8 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
-          >
-            {workflows.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.label}
-              </option>
-            ))}
-          </select>
+            onChange={setSelectedId}
+            ariaLabel={t('products.lens.workflow.picker.label')}
+            className="w-48"
+          />
           <Link
             // W5.45 — /settings/pim/workflows/[id] page doesn't exist;
             // the workflow editor lives on the list page (operator

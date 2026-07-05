@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { X, Loader2, Copy, Check } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface Coordinate {
   channel: string
@@ -123,24 +124,20 @@ export default function CloneMappingModal({ coordinates, productType, open, onCl
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-3">
           <div>
             <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">Copy rules from</div>
-            <select
+            <Listbox
               value={from}
-              onChange={(e) => {
-                setFrom(e.target.value)
+              onChange={(v) => {
+                setFrom(v)
                 setTargets((prev) => {
                   const n = new Set(prev)
-                  n.delete(e.target.value)
+                  n.delete(v)
                   return n
                 })
               }}
-              className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900"
-            >
-              {coordinates.map((c) => (
-                <option key={ckey(c)} value={ckey(c)}>
-                  {c.channel} · {c.marketplace}
-                </option>
-              ))}
-            </select>
+              ariaLabel="Copy rules from"
+              className="w-full"
+              options={coordinates.map((c) => ({ value: ckey(c), label: `${c.channel} · ${c.marketplace}` }))}
+            />
           </div>
 
           <div>

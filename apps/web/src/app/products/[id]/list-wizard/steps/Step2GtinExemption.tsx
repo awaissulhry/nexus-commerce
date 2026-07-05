@@ -16,6 +16,9 @@ import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
 import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
+import { DateField } from '@/design-system/components/DateField'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 interface ImageItem {
   url: string
@@ -428,13 +431,17 @@ function ApplyFlow({
               placeholder="e.g. EU, IT, US"
               disabled={isTerminal}
             />
-            <Input
-              label="Registration date"
-              value={trademarkDate}
-              onChange={setTrademarkDate}
-              type="date"
-              disabled={isTerminal}
-            />
+            <div>
+              <label className="block text-sm text-slate-500 dark:text-slate-400 mb-0.5">
+                Registration date
+              </label>
+              <DateField
+                value={trademarkDate}
+                onChange={setTrademarkDate}
+                ariaLabel="Registration date"
+                disabled={isTerminal}
+              />
+            </div>
           </div>
         )}
         {(regType === 'BRAND_STAND_IN' || regType === 'WEBSITE_ONLY') && (

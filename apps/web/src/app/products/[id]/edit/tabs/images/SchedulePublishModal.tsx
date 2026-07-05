@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
 import { cn } from '@/lib/utils'
 import { beFetch } from './api'
+import { Listbox } from '@/design-system/components/Listbox'
 
 type ChannelKey = 'AMAZON' | 'EBAY' | 'SHOPIFY'
 type AmazonMarketplace = 'IT' | 'DE' | 'FR' | 'ES' | 'UK' | 'ALL'
@@ -183,29 +184,29 @@ export default function SchedulePublishModal({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <label className="block">
                 <span className="text-xs text-slate-600 dark:text-slate-400">Channel</span>
-                <select
+                <Listbox
                   value={channel}
-                  onChange={(e) => setChannel(e.target.value as ChannelKey)}
-                  className="mt-1 w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
-                >
-                  <option value="AMAZON">Amazon</option>
-                  <option value="EBAY">eBay</option>
-                  <option value="SHOPIFY">Shopify</option>
-                </select>
+                  onChange={(v) => setChannel(v as ChannelKey)}
+                  ariaLabel="Channel"
+                  className="mt-1 w-full"
+                  options={[
+                    { value: 'AMAZON', label: 'Amazon' },
+                    { value: 'EBAY', label: 'eBay' },
+                    { value: 'SHOPIFY', label: 'Shopify' },
+                  ]}
+                />
               </label>
 
               {channel === 'AMAZON' && (
                 <label className="block">
                   <span className="text-xs text-slate-600 dark:text-slate-400">Marketplace</span>
-                  <select
+                  <Listbox
                     value={marketplace}
-                    onChange={(e) => setMarketplace(e.target.value as AmazonMarketplace)}
-                    className="mt-1 w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
-                  >
-                    {AMAZON_MARKETS.map((m) => (
-                      <option key={m} value={m}>{m === 'ALL' ? 'All markets' : m}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => setMarketplace(v as AmazonMarketplace)}
+                    ariaLabel="Marketplace"
+                    className="mt-1 w-full"
+                    options={AMAZON_MARKETS.map((m) => ({ value: m, label: m === 'ALL' ? 'All markets' : m }))}
+                  />
                 </label>
               )}
 

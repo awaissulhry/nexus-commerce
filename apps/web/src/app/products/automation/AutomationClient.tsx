@@ -14,6 +14,7 @@ import {
   AlertTriangle, CheckCircle2, History as HistoryIcon, Loader2,
   Pause, Play, Plus, Save, TestTube, Trash2, X,
 } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
@@ -277,9 +278,13 @@ export default function AutomationClient() {
             {/* Trigger */}
             <label className="block">
               <span className="text-xs text-slate-500 dark:text-slate-400">When (trigger)</span>
-              <select value={draft.trigger} onChange={(e) => setDraft({ ...draft, trigger: e.target.value })} className="mt-1 w-full rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm">
-                {TRIGGERS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-              </select>
+              <Listbox
+                options={TRIGGERS.map((tr) => ({ value: tr.id, label: tr.label }))}
+                value={draft.trigger}
+                onChange={(v) => setDraft({ ...draft, trigger: v })}
+                ariaLabel="When (trigger)"
+                className="mt-1 w-full"
+              />
               <span className="mt-1 block text-[11px] text-tertiary">{trig(draft.trigger)?.help}</span>
             </label>
 
@@ -294,9 +299,13 @@ export default function AutomationClient() {
                 {draft.conditions.map((c, i) => (
                   <div key={i} className="flex items-center gap-1.5">
                     <input value={c.field} onChange={(e) => { const n = [...draft.conditions]; n[i] = { ...c, field: e.target.value }; setDraft({ ...draft, conditions: n }) }} placeholder="price.spreadPct" className="flex-1 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs font-mono" />
-                    <select value={c.op} onChange={(e) => { const n = [...draft.conditions]; n[i] = { ...c, op: e.target.value }; setDraft({ ...draft, conditions: n }) }} className="rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1 py-1 text-xs">
-                      {OPS.map((o) => <option key={o} value={o}>{o}</option>)}
-                    </select>
+                    <Listbox
+                      options={OPS.map((o) => ({ value: o, label: o }))}
+                      value={c.op}
+                      onChange={(v) => { const n = [...draft.conditions]; n[i] = { ...c, op: v }; setDraft({ ...draft, conditions: n }) }}
+                      ariaLabel="Condition operator"
+                      className="w-24"
+                    />
                     {c.op !== 'exists' && <input value={c.value ?? ''} onChange={(e) => { const n = [...draft.conditions]; n[i] = { ...c, value: e.target.value }; setDraft({ ...draft, conditions: n }) }} placeholder="10" className="w-20 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs" />}
                     <button type="button" onClick={() => setDraft({ ...draft, conditions: draft.conditions.filter((_, j) => j !== i) })} className="text-tertiary hover:text-rose-500"><X className="w-3.5 h-3.5" /></button>
                   </div>
@@ -316,17 +325,29 @@ export default function AutomationClient() {
                   return (
                     <div key={i} className="rounded border border-default dark:border-slate-700 p-2 space-y-1.5">
                       <div className="flex items-center gap-1.5">
-                        <select value={a.type} onChange={(e) => set({ type: e.target.value })} className="flex-1 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs">
-                          {ACTION_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-                        </select>
+                        <Listbox
+                          options={ACTION_TYPES.map((at) => ({ value: at.id, label: at.label }))}
+                          value={a.type}
+                          onChange={(v) => set({ type: v })}
+                          ariaLabel="Action type"
+                          className="flex-1"
+                        />
                         <button type="button" onClick={() => setDraft({ ...draft, actions: draft.actions.filter((_, j) => j !== i) })} className="text-tertiary hover:text-rose-500"><X className="w-3.5 h-3.5" /></button>
                       </div>
                       {a.type === 'sync_price_to_marketplaces' && (
                         <div className="grid grid-cols-2 gap-1.5 text-xs">
                           <label className="flex flex-col">Reference price
-                            <select value={a.referencePrice ?? 'master'} onChange={(e) => set({ referencePrice: e.target.value })} className="mt-0.5 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-1 py-1">
-                              <option value="master">Master (basePrice)</option><option value="min">Lowest market</option><option value="max">Highest market</option>
-                            </select>
+                            <Listbox
+                              options={[
+                                { value: 'master', label: 'Master (basePrice)' },
+                                { value: 'min', label: 'Lowest market' },
+                                { value: 'max', label: 'Highest market' },
+                              ]}
+                              value={a.referencePrice ?? 'master'}
+                              onChange={(v) => set({ referencePrice: v })}
+                              ariaLabel="Reference price"
+                              className="mt-0.5"
+                            />
                           </label>
                           <label className="flex items-center gap-1.5 mt-4"><input type="checkbox" checked={a.onlySameCurrency !== false} onChange={(e) => set({ onlySameCurrency: e.target.checked })} /> Same currency only</label>
                           <input value={a.channels ?? ''} onChange={(e) => set({ channels: e.target.value })} placeholder="channels (AMAZON,EBAY)" className="rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />

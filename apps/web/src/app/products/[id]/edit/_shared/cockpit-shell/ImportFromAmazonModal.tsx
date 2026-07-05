@@ -11,6 +11,7 @@ import { useState } from 'react'
 import { X, Loader2, DownloadCloud, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface Proposal {
   masterPath: string
@@ -181,21 +182,17 @@ export default function ImportFromAmazonModal({ productId, amazonMarkets, open, 
               Amazon rules
             </button>
           </div>
-          <label className="text-slate-500">Source market</label>
-          <select
+          <span className="text-slate-500">Source market</span>
+          <Listbox
             value={market}
-            onChange={(e) => {
-              setMarket(e.target.value)
+            onChange={(v) => {
+              setMarket(v)
               setProposals(null)
             }}
-            className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"
-          >
-            {markets.map((m) => (
-              <option key={m} value={m}>
-                AMAZON · {m}
-              </option>
-            ))}
-          </select>
+            ariaLabel="Source market"
+            className="w-40"
+            options={markets.map((m) => ({ value: m, label: `AMAZON · ${m}` }))}
+          />
           <button
             type="button"
             onClick={runPreview}

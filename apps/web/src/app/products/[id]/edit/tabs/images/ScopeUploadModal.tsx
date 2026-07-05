@@ -23,6 +23,7 @@ import { X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { Listbox } from '@/design-system/components/Listbox'
 import type { VariantSummary } from './types'
 
 const IMAGE_TYPES = ['MAIN', 'ALT', 'LIFESTYLE', 'SWATCH', 'DIAGRAM'] as const
@@ -210,30 +211,28 @@ export default function ScopeUploadModal({
                   <span className="text-xs text-slate-500 dark:text-slate-400">
                     {t('products.edit.images.scopeUpload.axisLabel')}
                   </span>
-                  <select
+                  <Listbox
                     value={axis}
-                    onChange={(e) => setAxis(e.target.value)}
-                    className="mt-1 w-full text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5"
-                  >
-                    {availableAxes.map((a) => (
-                      <option key={a} value={a}>{a}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => setAxis(v)}
+                    ariaLabel={t('products.edit.images.scopeUpload.axisLabel')}
+                    className="mt-1 w-full"
+                    options={availableAxes.map((a) => ({ value: a, label: a }))}
+                  />
                 </label>
                 <label className="block">
                   <span className="text-xs text-slate-500 dark:text-slate-400">
                     {t('products.edit.images.scopeUpload.valueLabel')}
                   </span>
-                  <select
+                  <Listbox
                     value={value}
-                    onChange={(e) => setValue(e.target.value)}
-                    className="mt-1 w-full text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5"
-                  >
-                    <option value="">—</option>
-                    {axisValues.map((v) => (
-                      <option key={v} value={v}>{v}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => setValue(v)}
+                    ariaLabel={t('products.edit.images.scopeUpload.valueLabel')}
+                    className="mt-1 w-full"
+                    options={[
+                      { value: '', label: '—' },
+                      ...axisValues.map((av) => ({ value: av, label: av })),
+                    ]}
+                  />
                 </label>
               </div>
 
@@ -261,15 +260,13 @@ export default function ScopeUploadModal({
             <span className="text-xs text-slate-500 dark:text-slate-400">
               {t('products.edit.images.scopeUpload.typeLabel')}
             </span>
-            <select
+            <Listbox
               value={type}
-              onChange={(e) => setType(e.target.value as ImageType)}
-              className="mt-1 w-full max-w-xs text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5"
-            >
-              {IMAGE_TYPES.map((tt) => (
-                <option key={tt} value={tt}>{tt}</option>
-              ))}
-            </select>
+              onChange={(v) => setType(v as ImageType)}
+              ariaLabel={t('products.edit.images.scopeUpload.typeLabel')}
+              className="mt-1 w-full max-w-xs"
+              options={IMAGE_TYPES.map((tt) => ({ value: tt, label: tt }))}
+            />
           </label>
         </div>
 

@@ -30,6 +30,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Sparkles, X, Loader2, AlertCircle } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { Button } from '@/components/ui/Button'
@@ -339,24 +340,24 @@ export default function AiBulkGenerateModal({
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider block mb-1">
                   AI provider
                 </label>
-                <select
+                <Listbox
+                  options={[
+                    { value: '', label: 'Auto (server default)' },
+                    ...providers
+                      .filter((p) => p.configured)
+                      .map((p) => ({
+                        value: p.name,
+                        label: `${p.name === 'gemini' ? 'Gemini' : p.name === 'anthropic' ? 'Claude' : p.name} (${p.defaultModel})`,
+                      })),
+                  ]}
                   value={provider}
-                  onChange={(e) => {
-                    setProvider(e.target.value)
+                  onChange={(v) => {
+                    setProvider(v)
                     setModel('') // reset model when switching providers
                   }}
-                  className="w-44 h-8 px-2 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 focus:outline-none focus:border-blue-300"
-                >
-                  <option value="">Auto (server default)</option>
-                  {providers
-                    .filter((p) => p.configured)
-                    .map((p) => (
-                      <option key={p.name} value={p.name}>
-                        {p.name === 'gemini' ? 'Gemini' : p.name === 'anthropic' ? 'Claude' : p.name}{' '}
-                        ({p.defaultModel})
-                      </option>
-                    ))}
-                </select>
+                  ariaLabel="AI provider"
+                  className="w-44"
+                />
               </div>
             )}
 
@@ -369,15 +370,17 @@ export default function AiBulkGenerateModal({
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider block mb-1">
                   Claude model
                 </label>
-                <select
+                <Listbox
+                  options={[
+                    { value: '', label: 'Haiku 4.5 — fast, cheap (default)' },
+                    { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5 — fast, cheap' },
+                    { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6 — higher quality, slower' },
+                  ]}
                   value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  className="w-64 h-8 px-2 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 focus:outline-none focus:border-blue-300"
-                >
-                  <option value="">Haiku 4.5 — fast, cheap (default)</option>
-                  <option value="claude-haiku-4-5-20251001">Haiku 4.5 — fast, cheap</option>
-                  <option value="claude-sonnet-4-6">Sonnet 4.6 — higher quality, slower</option>
-                </select>
+                  onChange={setModel}
+                  ariaLabel="Claude model"
+                  className="w-64"
+                />
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                   Sonnet produces better copy but costs ~5× more per token.
                 </p>

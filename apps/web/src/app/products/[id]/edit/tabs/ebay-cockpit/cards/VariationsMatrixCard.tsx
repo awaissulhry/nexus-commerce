@@ -34,6 +34,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { Listbox } from '@/design-system/components/Listbox'
 
 const EBAY_VARIANT_CAP = 250
 
@@ -527,16 +528,16 @@ function AxisSelector({
   return (
     <label className="inline-flex items-center gap-1.5 text-xs">
       <span className="text-slate-500 dark:text-slate-400">{label}:</span>
-      <select
+      <Listbox
         value={value ?? ''}
-        onChange={(e) => onChange(e.target.value || null)}
-        className="text-sm border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-      >
-        <option value="">{t('products.edit.cockpit.ebay.variations.none')}</option>
-        {available.map((a) => (
-          <option key={a} value={a}>{a}</option>
-        ))}
-      </select>
+        onChange={(v) => onChange(v || null)}
+        ariaLabel={label}
+        className="w-32"
+        options={[
+          { value: '', label: t('products.edit.cockpit.ebay.variations.none') },
+          ...available.map((a) => ({ value: a, label: a })),
+        ]}
+      />
     </label>
   )
 }

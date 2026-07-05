@@ -17,6 +17,7 @@ import { Link2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { Listbox } from '@/design-system/components/Listbox'
 import {
   useVariantCube,
   useFieldLinks,
@@ -725,28 +726,31 @@ function ByVariantTable({
           <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
             {t('products.edit.cockpit.amazon.cube.nSelected', { count: selected.size })}
           </span>
-          <select
+          <Listbox
             value={bulkField}
-            onChange={(e) => {
-              const f = e.target.value as 'basePrice' | 'totalStock'
+            onChange={(v) => {
+              const f = v as 'basePrice' | 'totalStock'
               setBulkField(f)
               if (f !== 'basePrice') setBulkMode('set') // %-adjust is price-only
             }}
-            className="h-7 rounded border border-default px-1 text-xs dark:border-slate-700 dark:bg-slate-900"
-          >
-            <option value="basePrice">{t('products.edit.cockpit.amazon.cube.basePrice')}</option>
-            <option value="totalStock">{t('products.edit.cockpit.amazon.cube.stock')}</option>
-          </select>
+            ariaLabel="Bulk field"
+            className="w-32"
+            options={[
+              { value: 'basePrice', label: t('products.edit.cockpit.amazon.cube.basePrice') },
+              { value: 'totalStock', label: t('products.edit.cockpit.amazon.cube.stock') },
+            ]}
+          />
           {bulkField === 'basePrice' && (
-            <select
+            <Listbox
               value={bulkMode}
-              onChange={(e) => setBulkMode(e.target.value as 'set' | 'pct')}
-              className="h-7 rounded border border-default px-1 text-xs dark:border-slate-700 dark:bg-slate-900"
-              title={t('products.edit.cockpit.amazon.cube.bulkModeTitle')}
-            >
-              <option value="set">{t('products.edit.cockpit.amazon.cube.modeSet')}</option>
-              <option value="pct">{t('products.edit.cockpit.amazon.cube.modePct')}</option>
-            </select>
+              onChange={(v) => setBulkMode(v as 'set' | 'pct')}
+              ariaLabel={t('products.edit.cockpit.amazon.cube.bulkModeTitle')}
+              className="w-28"
+              options={[
+                { value: 'set', label: t('products.edit.cockpit.amazon.cube.modeSet') },
+                { value: 'pct', label: t('products.edit.cockpit.amazon.cube.modePct') },
+              ]}
+            />
           )}
           <input
             type="number"

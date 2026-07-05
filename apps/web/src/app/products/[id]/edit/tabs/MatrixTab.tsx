@@ -35,6 +35,7 @@ import {
   clearDraft,
 } from '../_shared/draft-bus/useProductDraftBus'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
 import ChannelPricingSection from './ChannelPricingSection'
 import ChannelInventorySection from './ChannelInventorySection'
 import VariantDivergencePanel from './_shared/VariantDivergencePanel'
@@ -1284,13 +1285,11 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
           </>)}
           {bulkMode === 'copy' && (<>
             <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Copy prices from</span>
-            <select value={bulkSrc} onChange={(e) => setBulkSrc(e.target.value)} className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800">
-              {ALL_MARKETS.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
+            <Listbox value={bulkSrc} onChange={(v) => setBulkSrc(v)} ariaLabel="Copy prices from market" className="w-28"
+              options={ALL_MARKETS.map((m) => ({ value: m, label: m }))} />
             <span className="text-xs text-tertiary">→</span>
-            <select value={bulkDst} onChange={(e) => setBulkDst(e.target.value)} className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800">
-              {ALL_MARKETS.filter((m) => m !== bulkSrc).map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
+            <Listbox value={bulkDst} onChange={(v) => setBulkDst(v)} ariaLabel="Copy prices to market" className="w-28"
+              options={ALL_MARKETS.filter((m) => m !== bulkSrc).map((m) => ({ value: m, label: m }))} />
           </>)}
           <Button size="sm" loading={bulkApplying} onClick={applyBulk}>Apply</Button>
           <button type="button" onClick={() => { setBulkMode('none'); setBulkValue('') }} className="text-xs text-tertiary hover:text-slate-600">Cancel</button>
@@ -1530,15 +1529,13 @@ function VariantFormModal({
                 Dismiss
               </button>
             </div>
-            <select
+            <Listbox
               value={copyFromId ?? ''}
-              onChange={(e) => setCopyFromId(e.target.value || null)}
-              className="w-full text-sm border border-blue-200 dark:border-blue-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-            >
-              {candidateSiblings.map((s) => (
-                <option key={s.id} value={s.id}>{s.sku}{(s as any).name ? ` — ${(s as any).name}` : ''}</option>
-              ))}
-            </select>
+              onChange={(v) => setCopyFromId(v || null)}
+              ariaLabel="Copy from existing variant"
+              className="w-full"
+              options={candidateSiblings.map((s) => ({ value: s.id, label: `${s.sku}${(s as any).name ? ` — ${(s as any).name}` : ''}` }))}
+            />
             <div className="space-y-1.5">
               {COPY_GROUPS.map(({ key, label, desc }) => (
                 <label key={key} className="flex items-start gap-2 cursor-pointer">

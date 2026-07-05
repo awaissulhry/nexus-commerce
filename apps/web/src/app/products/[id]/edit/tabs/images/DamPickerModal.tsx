@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { beFetch } from './api'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { Listbox } from '@/design-system/components/Listbox'
 import type { ProductImage } from './types'
 
 interface LibraryItem {
@@ -276,19 +277,17 @@ export default function DamPickerModal({
           {/* Folder */}
           <div className="flex items-center gap-1.5">
             <Folder className="w-3.5 h-3.5 text-tertiary" />
-            <select
+            <Listbox
               value={folderId}
-              onChange={(e) => setFolderId(e.target.value)}
-              className="text-xs border border-default dark:border-slate-700 rounded px-1.5 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 max-w-[180px]"
-            >
-              <option value="">{t('products.edit.images.dam.anyFolder')}</option>
-              <option value="unfiled">{t('products.edit.images.dam.unfiled')}</option>
-              {folders.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name} ({f._count?.assets ?? 0})
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setFolderId(v)}
+              ariaLabel="Folder"
+              className="max-w-[180px]"
+              options={[
+                { value: '', label: t('products.edit.images.dam.anyFolder') },
+                { value: 'unfiled', label: t('products.edit.images.dam.unfiled') },
+                ...folders.map((f) => ({ value: f.id, label: `${f.name} (${f._count?.assets ?? 0})` })),
+              ]}
+            />
           </div>
 
           {/* Tags */}

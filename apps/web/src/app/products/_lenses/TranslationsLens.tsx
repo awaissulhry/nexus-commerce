@@ -24,6 +24,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { AlertCircle, Globe, Sparkles } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -263,18 +264,17 @@ export function TranslationsLens({
           <Sparkles className="w-3.5 h-3.5" />
           {t('products.lens.translations.toolbar.label')}
         </span>
-        <select
+        <Listbox
+          options={LOCALES.filter((l) => !l.primary).map((loc) => ({
+            value: loc.code,
+            label: t(`products.lens.translations.locale.${loc.code}`),
+          }))}
           value={translateLocale}
-          onChange={(e) => setTranslateLocale(e.target.value)}
-          className="h-7 px-1.5 text-sm border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+          onChange={setTranslateLocale}
           disabled={translating}
-        >
-          {LOCALES.filter((l) => !l.primary).map((loc) => (
-            <option key={loc.code} value={loc.code}>
-              {t(`products.lens.translations.locale.${loc.code}`)}
-            </option>
-          ))}
-        </select>
+          ariaLabel={t('products.lens.translations.toolbar.label')}
+          className="w-40"
+        />
         <Button
           variant="primary"
           size="sm"

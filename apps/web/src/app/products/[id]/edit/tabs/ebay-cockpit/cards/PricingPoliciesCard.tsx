@@ -30,6 +30,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
 import FieldSourceRow from '../field-source/FieldSourceRow'
+import { Listbox } from '@/design-system/components/Listbox'
 
 type PricingRule = 'FIXED' | 'MATCH_AMAZON' | 'PERCENT_OF_MASTER'
 
@@ -277,15 +278,17 @@ export default function PricingPoliciesCard(props: Props) {
 
             <div className="space-y-1.5">
               <label className="text-[11px] font-medium text-slate-700 dark:text-slate-300">{t('products.edit.cockpit.ebay.pricingPolicies.pricingRule')}</label>
-              <select
+              <Listbox
                 value={rule}
-                onChange={(e) => setRule(e.target.value as PricingRule)}
-                className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-              >
-                <option value="FIXED">{t('products.edit.cockpit.ebay.pricingPolicies.ruleFixed')}</option>
-                <option value="MATCH_AMAZON">{t('products.edit.cockpit.ebay.pricingPolicies.ruleMatchAmazon')}</option>
-                <option value="PERCENT_OF_MASTER">{t('products.edit.cockpit.ebay.pricingPolicies.rulePercentOfMaster')}</option>
-              </select>
+                onChange={(v) => setRule(v as PricingRule)}
+                ariaLabel={t('products.edit.cockpit.ebay.pricingPolicies.pricingRule')}
+                className="w-full"
+                options={[
+                  { value: 'FIXED', label: t('products.edit.cockpit.ebay.pricingPolicies.ruleFixed') },
+                  { value: 'MATCH_AMAZON', label: t('products.edit.cockpit.ebay.pricingPolicies.ruleMatchAmazon') },
+                  { value: 'PERCENT_OF_MASTER', label: t('products.edit.cockpit.ebay.pricingPolicies.rulePercentOfMaster') },
+                ]}
+              />
               {rule === 'PERCENT_OF_MASTER' && (
                 <div className="pt-1">
                   <label className="text-[11px] font-medium text-slate-700 dark:text-slate-300">{t('products.edit.cockpit.ebay.pricingPolicies.adjustmentPercent')}</label>
@@ -458,16 +461,16 @@ function PolicySelect({
         {label}
         <span className="text-[10px] text-tertiary font-normal">{hint}</span>
       </label>
-      <select
+      <Listbox
         value={value ?? ''}
-        onChange={(e) => onChange(e.target.value || null)}
-        className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-      >
-        <option value="">{t('products.edit.cockpit.ebay.pricingPolicies.pickPolicy')}</option>
-        {options.map((o) => (
-          <option key={o.id} value={o.id}>{o.name}</option>
-        ))}
-      </select>
+        onChange={(v) => onChange(v || null)}
+        ariaLabel={label}
+        className="w-full"
+        options={[
+          { value: '', label: t('products.edit.cockpit.ebay.pricingPolicies.pickPolicy') },
+          ...options.map((o) => ({ value: o.id, label: o.name })),
+        ]}
+      />
     </div>
   )
 }

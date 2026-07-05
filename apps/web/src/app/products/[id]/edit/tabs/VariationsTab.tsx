@@ -51,6 +51,7 @@ import { Button } from '@/components/ui/Button'
 import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 
 interface VariantRow {
@@ -871,29 +872,27 @@ function VariantFormModal({
                   return (
                     <FormField key={axis} label={axis} required>
                       <div className="space-y-1">
-                        <select
+                        <Listbox
                           value={isCustom ? '__custom__' : value}
-                          onChange={(e) => {
-                            if (e.target.value === '__custom__') {
+                          onChange={(next) => {
+                            if (next === '__custom__') {
                               setAxisValues((s) => ({ ...s, [axis]: '' }))
                             } else {
                               setAxisValues((s) => ({
                                 ...s,
-                                [axis]: e.target.value,
+                                [axis]: next,
                               }))
                             }
                           }}
-                          className={inputCls}
+                          className="w-full"
+                          ariaLabel={axis}
                           disabled={submitting}
-                        >
-                          <option value="">— Select —</option>
-                          {known.map((v) => (
-                            <option key={v} value={v}>
-                              {v}
-                            </option>
-                          ))}
-                          <option value="__custom__">+ New value…</option>
-                        </select>
+                          options={[
+                            { value: '', label: '— Select —' },
+                            ...known.map((v) => ({ value: v, label: v })),
+                            { value: '__custom__', label: '+ New value…' },
+                          ]}
+                        />
                         {(isCustom || (value === '' && known.length === 0)) && (
                           <input
                             type="text"

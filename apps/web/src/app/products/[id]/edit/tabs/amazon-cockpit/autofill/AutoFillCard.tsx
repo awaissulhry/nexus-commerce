@@ -43,6 +43,7 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import { setDraftField } from '../../../_shared/draft-bus/useProductDraftBus'
 import { announce } from '../../../_shared/announce/useAnnounce'
 import { postCockpitEvent } from '../../../_shared/telemetry/cockpit-telemetry'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface ListingLite {
   marketplace: string
@@ -444,18 +445,14 @@ export default function AutoFillCard({
 
         {eligibleSiblings.length > 0 && (
           <>
-            <select
+            <Listbox
               value={siblingChoice}
-              onChange={(e) => setSiblingChoice(e.target.value)}
-              className="h-7 px-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-[11.5px] text-slate-800 dark:text-slate-200"
+              onChange={(v) => setSiblingChoice(v)}
+              ariaLabel="Copy from marketplace"
+              className="w-28"
               disabled={busy !== null}
-            >
-              {eligibleSiblings.map((s) => (
-                <option key={s.marketplace} value={s.marketplace}>
-                  {s.marketplace}
-                </option>
-              ))}
-            </select>
+              options={eligibleSiblings.map((s) => ({ value: s.marketplace, label: s.marketplace }))}
+            />
             <Button
               size="sm"
               variant="secondary"

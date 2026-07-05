@@ -26,6 +26,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import MatrixVariantBuilder from './_MatrixVariantBuilder'
+import { Listbox } from '@/design-system/components/Listbox'
 
 // Mirrors backend types from variations.service.ts.
 interface ThemeOption {
@@ -720,25 +721,21 @@ export default function Step5Variations({
                 ) : null}
               </div>
             )}
-            <select
+            <Listbox
               value={commonTheme ?? ''}
-              onChange={(e) => setCommonTheme(e.target.value || null)}
-              className="w-full h-8 px-2 text-md border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+              onChange={(v) => setCommonTheme(v || null)}
+              ariaLabel="Common theme"
+              className="w-full"
               disabled={effectivePayload.commonThemes.length === 0}
-            >
-              {effectivePayload.commonThemes.length === 0 ? (
-                <option value="">— No common themes —</option>
-              ) : (
-                <>
-                  <option value="">— Select common theme —</option>
-                  {effectivePayload.commonThemes.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.label} ({t.id})
-                    </option>
-                  ))}
-                </>
-              )}
-            </select>
+              options={
+                effectivePayload.commonThemes.length === 0
+                  ? [{ value: '', label: '— No common themes —' }]
+                  : [
+                      { value: '', label: '— Select common theme —' },
+                      ...effectivePayload.commonThemes.map((ct) => ({ value: ct.id, label: `${ct.label} (${ct.id})` })),
+                    ]
+              }
+            />
             {commonTheme && (
               <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
                 Required per variation:{' '}

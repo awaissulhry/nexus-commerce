@@ -54,6 +54,7 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { Listbox } from '@/design-system/components/Listbox'
 
 const RELATION_TYPES = [
   'CROSS_SELL',
@@ -446,17 +447,13 @@ export default function RelationsTab({
             <label className="text-base font-medium text-slate-700 dark:text-slate-300">
               {t('products.edit.relations.typeLabel')}
             </label>
-            <select
+            <Listbox
               value={addType}
-              onChange={(e) => setAddType(e.target.value as RelationType)}
-              className="w-full h-8 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3"
-            >
-              {RELATION_TYPES.map((typ) => (
-                <option key={typ} value={typ}>
-                  {typeLabel(typ, t)}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setAddType(v as RelationType)}
+              ariaLabel={t('products.edit.relations.typeLabel')}
+              className="w-full"
+              options={RELATION_TYPES.map((typ) => ({ value: typ, label: typeLabel(typ, t) }))}
+            />
           </div>
           <div className="space-y-1 relative">
             <label className="text-base font-medium text-slate-700 dark:text-slate-300">

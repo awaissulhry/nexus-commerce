@@ -22,6 +22,7 @@ import {
   Search, BarChart2,
   CheckCircle2, FileText, PackageCheck, PackageX, Keyboard,
 } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -2366,13 +2367,13 @@ function GridLens(props: any) {
           <span className="text-sm text-slate-500 dark:text-slate-400">
             <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{total}</span> products · page {page} of {totalPages}
           </span>
-          <select
-            value={pageSize}
-            onChange={(e) => onPageSize(Number(e.target.value))}
-            className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-          >
-            {[50, 100, 200, 500].map((n) => <option key={n} value={n}>{n}/page</option>)}
-          </select>
+          <Listbox
+            options={[50, 100, 200, 500].map((n) => ({ value: String(n), label: `${n}/page` }))}
+            value={String(pageSize)}
+            onChange={(v) => onPageSize(Number(v))}
+            ariaLabel="Rows per page"
+            className="w-24"
+          />
         </div>
         {/* F7 — density picker. Three-segment toggle adjacent to the
             columns picker. Persisted per-user via localStorage. */}

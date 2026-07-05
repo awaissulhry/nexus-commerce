@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Search, Sparkles } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Input } from '@/components/ui/Input'
+import { Listbox } from '@/design-system/components/Listbox'
 import TechAttrsEditor from './TechAttrsEditor'
 
 interface MasterAttribute {
@@ -268,8 +269,6 @@ export default function MasterAttributesEditor({ productId, value, onChange, onR
 
 function AttrField({ attr, value, onChange }: { attr: MasterAttribute; value: unknown; onChange: (v: unknown) => void }) {
   const v = value == null ? '' : String(value)
-  const selectCls =
-    'h-8 rounded border border-zinc-300 bg-white px-2 text-sm dark:border-zinc-700 dark:bg-zinc-900'
   return (
     <div className="flex flex-col gap-1">
       <label className="flex items-center gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-400" title={attr.helpText}>
@@ -282,24 +281,28 @@ function AttrField({ attr, value, onChange }: { attr: MasterAttribute; value: un
         )}
       </label>
       {attr.type === 'select' && attr.allowedValues ? (
-        <select value={v} onChange={(e) => onChange(e.target.value)} className={selectCls}>
-          <option value="">—</option>
-          {attr.allowedValues.map((o) => (
-            <option key={o} value={o}>
-              {attr.optionLabels?.[o] ?? o}
-            </option>
-          ))}
-        </select>
-      ) : attr.type === 'boolean' ? (
-        <select
+        <Listbox
           value={v}
-          onChange={(e) => onChange(e.target.value === '' ? '' : e.target.value === 'true')}
-          className={selectCls}
-        >
-          <option value="">—</option>
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </select>
+          onChange={(next) => onChange(next)}
+          ariaLabel={attr.label}
+          className="w-full"
+          options={[
+            { value: '', label: '—' },
+            ...attr.allowedValues.map((o) => ({ value: o, label: attr.optionLabels?.[o] ?? o })),
+          ]}
+        />
+      ) : attr.type === 'boolean' ? (
+        <Listbox
+          value={v}
+          onChange={(next) => onChange(next === '' ? '' : next === 'true')}
+          ariaLabel={attr.label}
+          className="w-full"
+          options={[
+            { value: '', label: '—' },
+            { value: 'true', label: 'Yes' },
+            { value: 'false', label: 'No' },
+          ]}
+        />
       ) : (
         <Input
           type={attr.type === 'number' ? 'number' : 'text'}

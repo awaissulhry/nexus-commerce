@@ -54,6 +54,7 @@ import {
   GitBranch,
   Send,
 } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -2021,23 +2022,22 @@ function WorkflowTab({ productId }: { productId: string }) {
             {t('products.drawer.workflow.moveTo')}
           </div>
           <div className="flex items-center gap-2">
-            <select
+            <Listbox
+              options={[
+                { value: '', label: t('products.drawer.workflow.movePicker') },
+                ...otherStages
+                  .slice()
+                  .sort((a, b) => a.sortOrder - b.sortOrder)
+                  .map((s) => ({
+                    value: s.id,
+                    label: `${s.label}${s.isTerminal ? t('products.drawer.workflow.moveSuffix.terminal') : ''}${s.isPublishable ? t('products.drawer.workflow.moveSuffix.publishable') : ''}`,
+                  })),
+              ]}
               value={moveTo}
-              onChange={(e) => setMoveTo(e.target.value)}
-              className="flex-1 h-8 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
-            >
-              <option value="">{t('products.drawer.workflow.movePicker')}</option>
-              {otherStages
-                .slice()
-                .sort((a, b) => a.sortOrder - b.sortOrder)
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                    {s.isTerminal ? t('products.drawer.workflow.moveSuffix.terminal') : ''}
-                    {s.isPublishable ? t('products.drawer.workflow.moveSuffix.publishable') : ''}
-                  </option>
-                ))}
-            </select>
+              onChange={setMoveTo}
+              ariaLabel={t('products.drawer.workflow.moveTo')}
+              className="flex-1"
+            />
             <Button
               variant="primary"
               size="sm"
@@ -3046,18 +3046,16 @@ function TierPricingSection({
             placeholder={t('products.drawer.tier.preview.qtyPlaceholder')}
             className="w-20 h-7 px-1.5 text-sm border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
           />
-          <select
+          <Listbox
+            options={[
+              { value: '', label: t('products.drawer.tier.preview.noGroup') },
+              ...groups.map((g) => ({ value: g.id, label: g.label })),
+            ]}
             value={previewGroupId}
-            onChange={(e) => setPreviewGroupId(e.target.value)}
-            className="h-7 px-1.5 text-sm border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
-          >
-            <option value="">{t('products.drawer.tier.preview.noGroup')}</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.label}
-              </option>
-            ))}
-          </select>
+            onChange={setPreviewGroupId}
+            ariaLabel={t('products.drawer.tier.preview.title')}
+            className="w-44"
+          />
           <Button
             variant="secondary"
             size="sm"
@@ -3193,18 +3191,16 @@ function AddTierForm({
           <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
             {t('products.drawer.tier.form.customerGroup')}
           </label>
-          <select
+          <Listbox
+            options={[
+              { value: '', label: t('products.drawer.tier.form.everyoneOption') },
+              ...groups.map((g) => ({ value: g.id, label: g.label })),
+            ]}
             value={groupId}
-            onChange={(e) => setGroupId(e.target.value)}
-            className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
-          >
-            <option value="">{t('products.drawer.tier.form.everyoneOption')}</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.label}
-              </option>
-            ))}
-          </select>
+            onChange={setGroupId}
+            ariaLabel={t('products.drawer.tier.form.customerGroup')}
+            className="w-full"
+          />
           <p className="text-xs text-slate-500 dark:text-slate-400">
             {t('products.drawer.tier.form.help')}
           </p>
@@ -3590,35 +3586,32 @@ function AddRepricingRuleForm({
           <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
             {t('products.drawer.repricing.form.channelMp')}
           </label>
-          <select
+          <Listbox
+            options={channelOpts.map((o) => ({
+              value: o.key,
+              label: `${o.channel}${o.marketplace ? ` · ${o.marketplace}` : ` · ${t('products.drawer.repricing.form.allMarketplaces')}`}`,
+            }))}
             value={channelKey}
-            onChange={(e) => setChannelKey(e.target.value)}
-            className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
-          >
-            {channelOpts.map((o) => (
-              <option key={o.key} value={o.key}>
-                {o.channel}
-                {o.marketplace ? ` · ${o.marketplace}` : ` · ${t('products.drawer.repricing.form.allMarketplaces')}`}
-              </option>
-            ))}
-          </select>
+            onChange={setChannelKey}
+            ariaLabel={t('products.drawer.repricing.form.channelMp')}
+            className="w-full"
+          />
         </div>
 
         <div className="space-y-1">
           <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
             {t('products.drawer.repricing.form.strategy')}
           </label>
-          <select
+          <Listbox
+            options={STRATEGY_CODES.map((code) => ({
+              value: code,
+              label: t(`products.drawer.repricing.strategy.${code}`),
+            }))}
             value={strategy}
-            onChange={(e) => setStrategy(e.target.value)}
-            className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
-          >
-            {STRATEGY_CODES.map((code) => (
-              <option key={code} value={code}>
-                {t(`products.drawer.repricing.strategy.${code}`)}
-              </option>
-            ))}
-          </select>
+            onChange={setStrategy}
+            ariaLabel={t('products.drawer.repricing.form.strategy')}
+            className="w-full"
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -4420,21 +4413,20 @@ function TranslationsTab({
             {t('products.drawer.translations.addSection')}
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <select
-              value={newLang}
-              onChange={(e) => setNewLang(e.target.value)}
-              className="h-8 px-2 text-base border border-default rounded bg-white"
-            >
-              {KNOWN_LANGUAGES.filter(
+            <Listbox
+              options={KNOWN_LANGUAGES.filter(
                 (l) =>
                   l.code !== primaryLanguage &&
                   !rows.some((r) => r.language === l.code),
-              ).map((l) => (
-                <option key={l.code} value={l.code}>
-                  {t(`products.lens.translations.locale.${l.code}`)}
-                </option>
-              ))}
-            </select>
+              ).map((l) => ({
+                value: l.code,
+                label: t(`products.lens.translations.locale.${l.code}`),
+              }))}
+              value={newLang}
+              onChange={setNewLang}
+              ariaLabel={t('products.drawer.translations.addSection')}
+              className="w-full"
+            />
             <input
               type="text"
               value={newLangCustom}
@@ -5017,17 +5009,16 @@ function RelatedTab({
             <label className="text-xs uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
               {t('products.drawer.related.type')}
             </label>
-            <select
+            <Listbox
+              options={RELATION_TYPES.map((rt) => ({
+                value: rt.code,
+                label: `${t(`products.drawer.related.kind.${rt.code}.label`)} — ${t(`products.drawer.related.kind.${rt.code}.hint`)}`,
+              }))}
               value={pickedType}
-              onChange={(e) => setPickedType(e.target.value)}
-              className="w-full h-8 px-2 text-base border border-default rounded bg-white"
-            >
-              {RELATION_TYPES.map((rt) => (
-                <option key={rt.code} value={rt.code}>
-                  {t(`products.drawer.related.kind.${rt.code}.label`)} — {t(`products.drawer.related.kind.${rt.code}.hint`)}
-                </option>
-              ))}
-            </select>
+              onChange={setPickedType}
+              ariaLabel={t('products.drawer.related.type')}
+              className="w-full"
+            />
           </div>
           <div>
             <label className="text-xs uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">

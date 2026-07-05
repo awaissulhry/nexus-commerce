@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/Button'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { DateField } from '@/design-system/components/DateField'
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -364,16 +365,16 @@ export function SnapshotModal({ productId, productVersion, onClose, onRestored }
             <div className="flex items-end gap-2 flex-wrap">
               <div className="space-y-1">
                 <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Date</label>
-                <input
-                  type="date"
+                <DateField
                   value={selectedDate}
                   max={today}
-                  onChange={(e) => {
-                    setSelectedDate(e.target.value)
+                  onChange={(v) => {
+                    setSelectedDate(v)
                     setSnapshot(null)
                     setError(null)
                   }}
-                  className="block rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  ariaLabel="Date"
+                  className="w-40"
                 />
               </div>
               <div className="space-y-1">

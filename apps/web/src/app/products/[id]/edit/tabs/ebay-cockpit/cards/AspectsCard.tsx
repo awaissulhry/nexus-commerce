@@ -34,6 +34,7 @@ import FieldSourceRow from '../field-source/FieldSourceRow'
 import type { FieldSource } from '../field-source/types'
 import { resolveMasterValue } from './aspect-master-map'
 import AiImproveModal from '../ai/AiImproveModal'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface SchemaAspect {
   id: string
@@ -508,16 +509,16 @@ function AspectInput({
   const { t } = useTranslations()
   if (aspect.kind === 'enum' && aspect.options && aspect.options.length > 0) {
     return (
-      <select
+      <Listbox
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-      >
-        <option value="">{t('products.edit.cockpit.ebay.aspects.pickOption')}</option>
-        {aspect.options.map((opt) => (
-          <option key={opt} value={opt}>{opt}</option>
-        ))}
-      </select>
+        onChange={(v) => onChange(v)}
+        ariaLabel={aspect.label}
+        className="w-full"
+        options={[
+          { value: '', label: t('products.edit.cockpit.ebay.aspects.pickOption') },
+          ...aspect.options.map((opt) => ({ value: opt, label: opt })),
+        ]}
+      />
     )
   }
   if (aspect.kind === 'number') {

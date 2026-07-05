@@ -39,6 +39,7 @@ import {
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface ThemeOption {
   id: string
@@ -416,27 +417,23 @@ export default function MatrixVariantBuilder({
               {liveLoading ? 'Refreshing…' : 'Refresh'}
             </button>
           </div>
-          <select
+          <Listbox
             value={selectedThemeId ?? ''}
-            onChange={(e) => {
-              setSelectedThemeId(e.target.value || null)
+            onChange={(v) => {
+              setSelectedThemeId(v || null)
               // Clear axis values when theme changes — old axes may
               // not match the new theme's requiredAttributes.
               setAxisValues({})
               setAxisDrafts({})
               setOverrides({})
             }}
-            className="w-full h-9 px-3 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
-          >
-            {allThemes.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-                {t.requiredAttributes.length > 0
-                  ? ` — ${t.requiredAttributes.join(' × ')}`
-                  : ''}
-              </option>
-            ))}
-          </select>
+            ariaLabel="Variation theme"
+            className="w-full"
+            options={allThemes.map((th) => ({
+              value: th.id,
+              label: `${th.label}${th.requiredAttributes.length > 0 ? ` — ${th.requiredAttributes.join(' × ')}` : ''}`,
+            }))}
+          />
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             {liveLoading ? (
               <span className="inline-flex items-center gap-1">

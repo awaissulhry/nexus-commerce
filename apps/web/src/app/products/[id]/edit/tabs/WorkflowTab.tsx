@@ -41,6 +41,8 @@ import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
+import { DateField } from '@/design-system/components/DateField'
 
 interface WorkflowStageRow {
   id: string
@@ -266,15 +268,21 @@ function AssignmentsCard({ productId, discardSignal }: { productId: string; disc
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Role</label>
-              <select value={role} onChange={(e) => setRole(e.target.value)} className={inputCls}>
-                <option value="REVIEWER">Reviewer</option>
-                <option value="APPROVER">Approver</option>
-                <option value="OWNER">Owner</option>
-              </select>
+              <Listbox
+                value={role}
+                onChange={(v) => setRole(v)}
+                ariaLabel="Role"
+                className="w-full"
+                options={[
+                  { value: 'REVIEWER', label: 'Reviewer' },
+                  { value: 'APPROVER', label: 'Approver' },
+                  { value: 'OWNER', label: 'Owner' },
+                ]}
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Due date</label>
-              <input type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} className={inputCls} />
+              <DateField value={dueAt} onChange={(v) => setDueAt(v)} ariaLabel="Due date" className="w-full" />
             </div>
           </div>
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)" className={inputCls} />
@@ -600,20 +608,16 @@ export default function WorkflowTab({
             </div>
           ) : (
             <div className="flex items-center justify-center gap-2 max-w-md mx-auto">
-              <select
+              <Listbox
                 value={attachPicker}
-                onChange={(e) => setAttachPicker(e.target.value)}
-                className="flex-1 h-8 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3"
-              >
-                <option value="">
-                  {t('products.edit.workflow.attachPicker')}
-                </option>
-                {workflowOptions.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setAttachPicker(v)}
+                ariaLabel={t('products.edit.workflow.attachPicker')}
+                className="flex-1"
+                options={[
+                  { value: '', label: t('products.edit.workflow.attachPicker') },
+                  ...workflowOptions.map((w) => ({ value: w.id, label: w.label })),
+                ]}
+              />
               <Button
                 variant="primary"
                 size="sm"
@@ -709,20 +713,18 @@ export default function WorkflowTab({
         >
           <div className="space-y-2">
             <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
-              <select
+              <Listbox
                 value={moveTo}
-                onChange={(e) => setMoveTo(e.target.value)}
-                className="w-full h-8 rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3"
-              >
-                <option value="">
-                  {t('products.edit.workflow.movePicker')}
-                </option>
-                {otherStages
-                  .slice()
-                  .sort((a, b) => a.sortOrder - b.sortOrder)
-                  .map((s) => {
-                    const suffix =
-                      [
+                onChange={(v) => setMoveTo(v)}
+                ariaLabel={t('products.edit.workflow.movePicker')}
+                className="w-full"
+                options={[
+                  { value: '', label: t('products.edit.workflow.movePicker') },
+                  ...otherStages
+                    .slice()
+                    .sort((a, b) => a.sortOrder - b.sortOrder)
+                    .map((s) => {
+                      const suffix = [
                         s.isTerminal
                           ? t('products.edit.workflow.moveSuffix.terminal')
                           : '',
@@ -732,14 +734,10 @@ export default function WorkflowTab({
                       ]
                         .filter(Boolean)
                         .join('')
-                    return (
-                      <option key={s.id} value={s.id}>
-                        {s.label}
-                        {suffix}
-                      </option>
-                    )
-                  })}
-              </select>
+                      return { value: s.id, label: `${s.label}${suffix}` }
+                    }),
+                ]}
+              />
               <Button
                 variant="primary"
                 size="sm"

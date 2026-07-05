@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, CheckCircle2, Copy, Loader2, RefreshCw, Search } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { cn } from '@/lib/utils'
@@ -2350,16 +2351,16 @@ function ListingSetupCard({
           </label>
 
           {isAmazon && schemaThemes.length > 0 ? (
-            <select
+            <Listbox
+              options={[
+                { value: '', label: '— none / single variant —' },
+                ...schemaThemes.map((th) => ({ value: th, label: th })),
+              ]}
               value={variationTheme}
-              onChange={(e) => onChange('variationTheme', e.target.value)}
-              className="w-full h-8 px-2 text-md font-mono border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-            >
-              <option value="">— none / single variant —</option>
-              {schemaThemes.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
+              onChange={(v) => onChange('variationTheme', v)}
+              ariaLabel="Variation theme"
+              className="w-full font-mono"
+            />
           ) : (
             <input
               type="text"

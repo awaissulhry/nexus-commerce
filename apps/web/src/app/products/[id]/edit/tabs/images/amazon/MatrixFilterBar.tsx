@@ -17,6 +17,7 @@
 import { useEffect, useState } from 'react'
 import { Bookmark, Filter, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
 
 export type CellStatus = 'all' | 'empty' | 'inherited' | 'override'
 
@@ -175,16 +176,13 @@ export default function MatrixFilterBar({
       <span className="text-[11px] uppercase tracking-wide text-tertiary font-medium">
         Status
       </span>
-      <select
+      <Listbox
         value={cellStatus}
-        onChange={(e) => onCellStatusChange(e.target.value as CellStatus)}
-        className="text-[11px] border border-default dark:border-slate-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
-        title={STATUS_OPTIONS.find((o) => o.value === cellStatus)?.description}
-      >
-        {STATUS_OPTIONS.map((o) => (
-          <option key={o.value} value={o.value} title={o.description}>{o.label}</option>
-        ))}
-      </select>
+        onChange={(v) => onCellStatusChange(v as CellStatus)}
+        ariaLabel="Status"
+        className="w-32"
+        options={STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+      />
 
       {hasFilter && (
         <button

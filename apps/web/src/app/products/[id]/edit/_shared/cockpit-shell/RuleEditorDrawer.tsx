@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { X, Loader2, Trash2, Sparkles, Layers } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import TransformsEditor, { type TransformOp } from '@/app/settings/mappings/_shared/TransformsEditor'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface FieldRow {
   fieldKey: string
@@ -287,38 +288,34 @@ export default function RuleEditorDrawer({
           {!editMode && (
             <>
               <Labeled label="Coordinate">
-                <select
+                <Listbox
                   value={coord ? `${coord.channel}:${coord.marketplace}` : ''}
-                  onChange={(e) => {
-                    const [channel, marketplace] = e.target.value.split(':')
+                  onChange={(v) => {
+                    const [channel, marketplace] = v.split(':')
                     setCoord({ channel, marketplace })
                     setFieldKey('')
                   }}
-                  className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900"
-                >
-                  {coordinates.map((c) => (
-                    <option key={`${c.channel}:${c.marketplace}`} value={`${c.channel}:${c.marketplace}`}>
-                      {c.channel} · {c.marketplace}
-                    </option>
-                  ))}
-                </select>
+                  ariaLabel="Coordinate"
+                  className="w-full"
+                  options={coordinates.map((c) => ({ value: `${c.channel}:${c.marketplace}`, label: `${c.channel} · ${c.marketplace}` }))}
+                />
               </Labeled>
               <Labeled label="Field (unmapped)">
-                <select
+                <Listbox
                   value={fieldKey}
-                  onChange={(e) => setFieldKey(e.target.value)}
-                  className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900"
-                >
-                  <option value="">Select a field…</option>
-                  {unmappedFields.map((f) => (
-                    <option key={f.fieldKey} value={f.fieldKey}>
-                      {/* Operators read English — show the English fieldKey (matches
-                          the matrix), not the marketplace-localized label. */}
-                      {f.fieldKey}
-                      {suggestFor(f.fieldKey) ? ` → ${suggestFor(f.fieldKey)}` : ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setFieldKey(v)}
+                  ariaLabel="Field (unmapped)"
+                  className="w-full"
+                  options={[
+                    { value: '', label: 'Select a field…' },
+                    // Operators read English — show the English fieldKey (matches
+                    // the matrix), not the marketplace-localized label.
+                    ...unmappedFields.map((f) => ({
+                      value: f.fieldKey,
+                      label: `${f.fieldKey}${suggestFor(f.fieldKey) ? ` → ${suggestFor(f.fieldKey)}` : ''}`,
+                    })),
+                  ]}
+                />
               </Labeled>
               {!loading && coord && fields.length === 0 && (
                 <div className="rounded border border-dashed border-slate-300 p-3 text-center text-xs text-slate-500 dark:border-slate-700">

@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
 import ChannelFieldEditor from '../../../_shared/ChannelFieldEditor'
 import InheritancePanel from './_shared/InheritancePanel'
 import DiffVsMasterPanel from './_shared/DiffVsMasterPanel'
@@ -656,15 +657,17 @@ function PricingPanel({
               <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
                 Pricing rule
               </label>
-              <select
+              <Listbox
                 value={rule}
-                onChange={(e) => setRule(e.target.value)}
-                className="w-full text-sm border border-default dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-              >
-                <option value="FIXED">Fixed price</option>
-                <option value="MATCH_AMAZON">Match Amazon</option>
-                <option value="PERCENT_OF_MASTER">% of master price</option>
-              </select>
+                onChange={(v) => setRule(v)}
+                ariaLabel="Pricing rule"
+                className="w-full"
+                options={[
+                  { value: 'FIXED', label: 'Fixed price' },
+                  { value: 'MATCH_AMAZON', label: 'Match Amazon' },
+                  { value: 'PERCENT_OF_MASTER', label: '% of master price' },
+                ]}
+              />
             </div>
 
             {/* Price override (FIXED / MATCH_AMAZON) */}

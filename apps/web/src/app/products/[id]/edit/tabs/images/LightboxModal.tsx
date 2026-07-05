@@ -21,6 +21,7 @@ import { beFetch } from './api'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import type { LightboxState } from './useLightbox'
 import type { ListingImage, ProductImage } from './types'
+import { Listbox } from '@/design-system/components/Listbox'
 
 const MASTER_TYPES = ['MAIN', 'ALT', 'LIFESTYLE', 'SWATCH', 'DIAGRAM'] as const
 type MasterType = typeof MASTER_TYPES[number]
@@ -382,14 +383,14 @@ export default function LightboxModal({
               <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Master attributes</h4>
               <label className="block">
                 <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">Type</span>
-                <select
+                <Listbox
                   value={editType}
-                  onChange={(e) => setEditType(e.target.value as MasterType)}
+                  onChange={(v) => setEditType(v as MasterType)}
+                  ariaLabel="Type"
+                  className="mt-1 w-full"
                   disabled={savingEdit}
-                  className="mt-1 w-full text-xs border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                >
-                  {MASTER_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
+                  options={MASTER_TYPES.map((mt) => ({ value: mt, label: mt }))}
+                />
               </label>
               <label className="block">
                 <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">Alt text</span>

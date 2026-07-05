@@ -36,6 +36,8 @@ import { IconButton } from '@/components/ui/IconButton'
 import { Badge } from '@/components/ui/Badge'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
+import { DateField } from '@/design-system/components/DateField'
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -242,11 +244,13 @@ function AddCertForm({ productId, onCreated, onCancel }: AddCertFormProps) {
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
             Certificate type *
           </label>
-          <select value={certType} onChange={(e) => setCertType(e.target.value)} className={inputCls} required>
-            {CERT_TYPES.map((ct) => (
-              <option key={ct.value} value={ct.value}>{ct.label}</option>
-            ))}
-          </select>
+          <Listbox
+            value={certType}
+            onChange={(v) => setCertType(v)}
+            ariaLabel="Certificate type"
+            className="w-full"
+            options={CERT_TYPES.map((ct) => ({ value: ct.value, label: ct.label }))}
+          />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
@@ -270,13 +274,13 @@ function AddCertForm({ productId, onCreated, onCancel }: AddCertFormProps) {
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
             Issued date
           </label>
-          <input type="date" value={issuedAt} onChange={(e) => setIssuedAt(e.target.value)} className={inputCls} />
+          <DateField value={issuedAt} onChange={(v) => setIssuedAt(v)} ariaLabel="Issued date" className="w-full" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
             Expiry date
           </label>
-          <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className={inputCls} />
+          <DateField value={expiresAt} onChange={(v) => setExpiresAt(v)} ariaLabel="Expiry date" className="w-full" />
         </div>
         <div className="col-span-2">
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
@@ -591,10 +595,16 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Garment class (EN 17092)</label>
-              <select value={garmentClass} onChange={(e) => setGarmentClass(e.target.value)} className={fieldCls}>
-                <option value="">— none —</option>
-                {GARMENT_CLASSES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-              </select>
+              <Listbox
+                value={garmentClass}
+                onChange={(v) => setGarmentClass(v)}
+                ariaLabel="Garment class (EN 17092)"
+                className="w-full"
+                options={[
+                  { value: '', label: '— none —' },
+                  ...GARMENT_CLASSES.map((g) => ({ value: g.value, label: g.label })),
+                ]}
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Declaration of Conformity URL</label>
@@ -623,18 +633,12 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
               <div className="space-y-2">
                 {protectors.map((p, i) => (
                   <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-center">
-                    <select value={p.zone} onChange={(e) => updateProtector(i, 'zone', e.target.value)} className={fieldCls} aria-label="Protector zone">
-                      <option value="">zone…</option>
-                      {PROTECTOR_ZONES.map((z) => <option key={z} value={z}>{z}</option>)}
-                    </select>
-                    <select value={p.standard} onChange={(e) => updateProtector(i, 'standard', e.target.value)} className={fieldCls} aria-label="Protector standard">
-                      <option value="">standard…</option>
-                      {PROTECTOR_STANDARDS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                    </select>
-                    <select value={p.level} onChange={(e) => updateProtector(i, 'level', e.target.value)} className={cn(fieldCls, 'w-24')} aria-label="Protector level">
-                      <option value="">lvl</option>
-                      {PROTECTOR_LEVELS.map((l) => <option key={l} value={l}>Level {l}</option>)}
-                    </select>
+                    <Listbox value={p.zone} onChange={(v) => updateProtector(i, 'zone', v)} className="w-full" ariaLabel="Protector zone"
+                      options={[{ value: '', label: 'zone…' }, ...PROTECTOR_ZONES.map((z) => ({ value: z, label: z }))]} />
+                    <Listbox value={p.standard} onChange={(v) => updateProtector(i, 'standard', v)} className="w-full" ariaLabel="Protector standard"
+                      options={[{ value: '', label: 'standard…' }, ...PROTECTOR_STANDARDS.map((s) => ({ value: s.value, label: s.label }))]} />
+                    <Listbox value={p.level} onChange={(v) => updateProtector(i, 'level', v)} className="w-24" ariaLabel="Protector level"
+                      options={[{ value: '', label: 'lvl' }, ...PROTECTOR_LEVELS.map((l) => ({ value: l, label: `Level ${l}` }))]} />
                     <IconButton onClick={() => removeProtector(i)} size="sm" aria-label="Remove protector" className="text-tertiary hover:text-red-500">
                       <Trash2 className="w-3.5 h-3.5" />
                     </IconButton>

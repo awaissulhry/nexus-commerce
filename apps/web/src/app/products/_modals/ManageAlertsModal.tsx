@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Bell, X, Plus, Trash2, RefreshCw } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { IconButton } from '@/components/ui/IconButton'
 import { Modal } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
@@ -405,25 +406,15 @@ export default function ManageAlertsModal({
                 <label className="text-sm text-slate-700 dark:text-slate-300 block mb-1">
                   Condition
                 </label>
-                <select
+                <Listbox
+                  options={Object.entries(COMPARISON_LABELS).map(([k, v]) => ({ value: k, label: v }))}
                   value={draftComparison}
-                  onChange={(e) =>
-                    setDraftComparison(
-                      e.target.value as
-                        | 'GT'
-                        | 'LT'
-                        | 'CHANGE_ABS'
-                        | 'CHANGE_PCT',
-                    )
+                  onChange={(v) =>
+                    setDraftComparison(v as 'GT' | 'LT' | 'CHANGE_ABS' | 'CHANGE_PCT')
                   }
-                  className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
-                >
-                  {Object.entries(COMPARISON_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
-                    </option>
-                  ))}
-                </select>
+                  ariaLabel="Condition"
+                  className="w-full"
+                />
                 <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   {COMPARISON_HINT[draftComparison]}
                 </div>

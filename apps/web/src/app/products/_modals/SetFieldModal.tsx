@@ -19,6 +19,7 @@
 
 import { useState } from 'react'
 import { Loader2, Pencil } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { Button } from '@/components/ui/Button'
 import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
@@ -214,26 +215,20 @@ export default function SetFieldModal({
         <div className="p-5 space-y-4 overflow-y-auto">
           <div className="space-y-2">
             <label
-              htmlFor="set-field-field"
               className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block"
             >
               Field
             </label>
-            <select
-              id="set-field-field"
+            <Listbox
+              options={FIELDS.map((f) => ({ value: f.field, label: f.label }))}
               value={field}
-              onChange={(e) => {
-                setField(e.target.value)
+              onChange={(v) => {
+                setField(v)
                 setValue('')
               }}
-              className="h-8 px-2 text-base border border-default dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 rounded w-full"
-            >
-              {FIELDS.map((f) => (
-                <option key={f.field} value={f.field}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
+              ariaLabel="Field"
+              className="w-full"
+            />
           </div>
 
           <div className="space-y-2">
@@ -249,19 +244,16 @@ export default function SetFieldModal({
               )}
             </label>
             {def.kind === 'select' ? (
-              <select
-                id="set-field-value"
+              <Listbox
+                options={[
+                  { value: '', label: '— pick —' },
+                  ...(def.options?.map((o) => ({ value: o.value, label: o.label })) ?? []),
+                ]}
                 value={value}
-                onChange={(e) => setValue(e.target.value)}
-                className="h-8 px-2 text-base border border-default dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 rounded w-full"
-              >
-                <option value="">— pick —</option>
-                {def.options?.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+                onChange={setValue}
+                ariaLabel={def.label}
+                className="w-full"
+              />
             ) : def.kind === 'textarea' ? (
               <textarea
                 id="set-field-value"

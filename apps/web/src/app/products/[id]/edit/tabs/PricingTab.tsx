@@ -51,6 +51,7 @@ import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
 import ChannelPricingSection from './ChannelPricingSection'
 
 const ScheduleChangeModal = dynamic(
@@ -605,20 +606,16 @@ function AddTierForm({
           <label className="text-base font-medium text-slate-700 dark:text-slate-300">
             {t('products.edit.pricing.colGroup')}
           </label>
-          <select
+          <Listbox
             value={groupId}
-            onChange={(e) => setGroupId(e.target.value)}
-            className="w-full h-8 rounded-md border border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-          >
-            <option value="">
-              {t('products.edit.pricing.allCustomers')}
-            </option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.label}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setGroupId(v)}
+            ariaLabel={t('products.edit.pricing.colGroup')}
+            className="w-full"
+            options={[
+              { value: '', label: t('products.edit.pricing.allCustomers') },
+              ...groups.map((g) => ({ value: g.id, label: g.label })),
+            ]}
+          />
         </div>
       </div>
       {error && (

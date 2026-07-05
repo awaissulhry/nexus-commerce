@@ -39,6 +39,7 @@ import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
 import MasterGlobalSections from './_shared/MasterGlobalSections'
 import ImportFromAmazonModal from '../_shared/cockpit-shell/ImportFromAmazonModal'
 
@@ -897,13 +898,13 @@ function SelectField({ label, value, onChange, options }: {
   return (
     <div className="space-y-1">
       <label className="text-base font-medium text-slate-700 dark:text-slate-300">{label}</label>
-      <select
+      <Listbox
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full h-8 rounded-md border border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-      >
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
+        onChange={onChange}
+        ariaLabel={label}
+        className="w-full"
+        options={options}
+      />
     </div>
   )
 }

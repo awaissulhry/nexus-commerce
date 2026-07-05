@@ -24,6 +24,7 @@ import {
 } from './useFieldLinks'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface ListingRow {
   channel: string
@@ -217,39 +218,31 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
             <div className="flex flex-wrap items-end gap-2 rounded-lg border border-default dark:border-slate-800 p-3">
               <label className="text-xs text-slate-500 dark:text-slate-400">
                 {t('products.edit.cockpit.xchannel.fieldLabel')}
-                <select
+                <Listbox
                   value={field}
-                  onChange={(e) => {
-                    setField(e.target.value as FieldChoice)
+                  onChange={(v) => {
+                    setField(v as FieldChoice)
                     setPreview(null)
                     setApplyResult(null)
                   }}
-                  className="mt-1 block rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm text-slate-900 dark:text-slate-100"
-                >
-                  {fieldOptions.map((o) => (
-                    <option key={o.v} value={o.v}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                  ariaLabel={t('products.edit.cockpit.xchannel.fieldLabel')}
+                  className="mt-1 w-48"
+                  options={fieldOptions.map((o) => ({ value: o.v, label: o.label }))}
+                />
               </label>
               <label className="text-xs text-slate-500 dark:text-slate-400">
                 {t('products.edit.cockpit.xchannel.sourceLabel')}
-                <select
+                <Listbox
                   value={source}
-                  onChange={(e) => {
-                    setSource(e.target.value)
+                  onChange={(v) => {
+                    setSource(v)
                     setPreview(null)
                     setApplyResult(null)
                   }}
-                  className="mt-1 block rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm text-slate-900 dark:text-slate-100"
-                >
-                  {rows.map((r) => (
-                    <option key={coordKey(r.channel, r.marketplace)} value={coordKey(r.channel, r.marketplace)}>
-                      {r.channel} {r.marketplace}
-                    </option>
-                  ))}
-                </select>
+                  ariaLabel={t('products.edit.cockpit.xchannel.sourceLabel')}
+                  className="mt-1 w-40"
+                  options={rows.map((r) => ({ value: coordKey(r.channel, r.marketplace), label: `${r.channel} ${r.marketplace}` }))}
+                />
               </label>
               <button
                 type="button"
