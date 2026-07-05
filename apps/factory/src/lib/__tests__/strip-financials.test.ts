@@ -53,6 +53,30 @@ describe("stripFinancials", () => {
     expect(out).not.toHaveProperty("netPriceCents");
   });
 
+  it("a preview payload loses ALL money for a no-grains caller but keeps structure (FP2.4)", () => {
+    const preview = {
+      resolvedBaseCents: 40000,
+      listPriceCents: 52000,
+      costCents: 29000,
+      netPriceCents: 52000,
+      marginCents: 23000,
+      marginPct: 44.2,
+      lines: [{ label: "Base", priceCents: 40000, costCents: 21000, source: "template-base" }],
+      materials: [{ materialId: "m1", name: "Kangaroo hide", qty: 2.5, unit: "SQM" }],
+      violations: [{ kind: "EXCLUDES", severity: "BLOCK", message: "x" }],
+    };
+    const out = stripFinancials(preview, WORKER) as Record<string, unknown>;
+    for (const k of ["resolvedBaseCents", "listPriceCents", "costCents", "netPriceCents", "marginCents", "marginPct"]) {
+      expect(out).not.toHaveProperty(k);
+    }
+    const line = (out.lines as Record<string, unknown>[])[0];
+    expect(line).not.toHaveProperty("priceCents");
+    expect(line).not.toHaveProperty("costCents");
+    expect(line.source).toBe("template-base"); // structure survives
+    expect((out.materials as { name: string }[])[0].name).toBe("Kangaroo hide"); // no money → kept
+    expect((out.violations as { message: string }[])[0].message).toBe("x");
+  });
+
   it("Dates survive as Dates (regression: FP1 'Invalid Date' — a Date is an object with no enumerable keys)", () => {
     const when = new Date("2026-07-05T10:00:00Z");
     const out = stripFinancials({ sentAt: when, nested: { at: when }, list: [{ at: when }] }, WORKER) as {
