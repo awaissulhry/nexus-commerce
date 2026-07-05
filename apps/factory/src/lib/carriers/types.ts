@@ -74,7 +74,6 @@ export type LabelResult = {
   currency: string;
   labelFormat: LabelFormat;
   labelBase64: string; // the PDF/ZPL bytes, base64 — stored locally by the buy route
-  carrierRef?: string; // the carrier's own shipment id (for cancel/track)
 };
 
 export type TrackingUpdate = {
@@ -92,8 +91,8 @@ export interface CarrierAdapter {
   getRates(input: ShipInput): Promise<Rate[]>;
   /** Buy a label. Returns tracking + the label bytes (stored locally, never a public URL). */
   createShipment(input: ShipInput, rate: Rate): Promise<LabelResult>;
-  /** Void before dispatch (best-effort; resolves even if already gone). */
-  cancelShipment(carrierRef: string): Promise<void>;
+  /** Void before dispatch by tracking number (adapters resolve their own id); best-effort. */
+  cancelShipment(trackingNumber: string): Promise<void>;
   /** Batched, read-only tracking poll for in-flight shipments. */
   pollTracking(trackingNumbers: string[]): Promise<TrackingUpdate[]>;
 }

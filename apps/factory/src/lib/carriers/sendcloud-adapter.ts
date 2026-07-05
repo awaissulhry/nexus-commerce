@@ -84,12 +84,20 @@ export function sendcloudAdapter(publicKey: string, secretKey: string): CarrierA
         currency: rate.currency,
         labelFormat: "PDF_A6",
         labelBase64,
-        carrierRef: String(parcel.id),
       };
     },
 
-    async cancelShipment(carrierRef): Promise<void> {
-      await call(`/parcels/${carrierRef}/cancel`, { method: "POST" }).catch(() => undefined);
+    async cancelShipment(trackingNumber): Promise<void> {
+      // resolve the parcel id from the tracking number, then cancel (best-effort)
+      try {
+        const res = await call(`/parcels?tracking_number=${encodeURIComponent(trackingNumber)}`);
+        if (!res.ok) return;
+        const parcels = ((await res.json()) as { parcels?: ScParcel[] }).parcels ?? [];
+        const id = parcels[0]?.id;
+        if (id) await call(`/parcels/${id}/cancel`, { method: "POST" }).catch(() => undefined);
+      } catch {
+        // never throw from a best-effort void
+      }
     },
 
     async pollTracking(trackingNumbers): Promise<TrackingUpdate[]> {

@@ -53,13 +53,12 @@ export const fakeCarrierAdapter: CarrierAdapter = {
       currency: rate.currency,
       labelFormat: "PDF_A6",
       labelBase64: pdf.toString("base64"),
-      carrierRef: trackingNumber,
     };
     return result;
   },
 
-  async cancelShipment(carrierRef) {
-    polls.delete(carrierRef);
+  async cancelShipment(trackingNumber) {
+    polls.delete(trackingNumber);
   },
 
   async pollTracking(trackingNumbers) {
