@@ -1,6 +1,6 @@
-/** F1 — designed empty state; the real page lands in its FP cycle (src/lib/nav.ts). */
-import { ComingSoon } from "@/components/ComingSoon";
+/** FP2 — Products & Pricing is LIVE (spec: docs/factory/FP2-SPEC.md). */
+import { ProductsClient } from "./_components/ProductsClient";
 
-export default function Page() {
-  return <ComingSoon pageId="products" />;
+export default function ProductsPage() {
+  return <ProductsClient />;
 }

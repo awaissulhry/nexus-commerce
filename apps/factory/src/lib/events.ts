@@ -11,6 +11,7 @@ export type FactoryEventType =
   | "comment.created"
   | "conversation.synced"
   | "conversation.updated"
+  | "pricing.updated"
   | "integration.changed"
   | "import.finished"
   | "audit.written"
