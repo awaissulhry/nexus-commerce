@@ -10,10 +10,43 @@ import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { publishEventDurable } from "@/lib/events";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
-import { FEATURES } from "@/lib/auth/permissions";
+import { FEATURES, PAGES } from "@/lib/auth/permissions";
 import { materialUsage } from "@/lib/products/material-usage";
+import { materialStock, isLow } from "@/lib/materials/stock";
 
-export const permission = { PATCH: FEATURES.materialsManage, DELETE: FEATURES.materialsManage };
+export const permission = { GET: PAGES.materials, PATCH: FEATURES.materialsManage, DELETE: FEATURES.materialsManage };
+
+export const GET = guarded(PAGES.materials, async (_req, { params, resolved }) => {
+  const { id } = await params;
+  const material = await prisma.material.findUnique({ where: { id } });
+  if (!material) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const [moves, lots, openPos] = await Promise.all([
+    prisma.movementLedger.findMany({ where: { materialId: id }, orderBy: { createdAt: "desc" }, take: 200, include: { actor: { select: { displayName: true } }, lot: { select: { lotCode: true } } } }),
+    prisma.materialLot.findMany({ where: { materialId: id }, orderBy: { receivedAt: "desc" }, include: { supplier: { select: { name: true } } } }),
+    prisma.purchaseOrder.findMany({ where: { state: { in: ["SENT", "PARTIAL"] } }, select: { id: true, lines: true } }),
+  ]);
+
+  // expected for this material
+  let expected = 0;
+  const poIns = moves.filter((m) => m.type === "IN" && m.refType === "PO");
+  const recByPo: Record<string, number> = {};
+  for (const m of poIns) recByPo[m.refId as string] = (recByPo[m.refId as string] ?? 0) + m.qty;
+  for (const po of openPos) for (const l of (po.lines as { materialId: string; qty: number }[]) ?? []) if (l.materialId === id) expected += Math.max(0, l.qty - (recByPo[po.id] ?? 0));
+
+  const s = materialStock(moves.map((m) => ({ type: m.type, qty: m.qty })), expected);
+  // on-hand per lot = Σ IN(lot) − Σ OUT(lot)
+  const lotOnHand: Record<string, number> = {};
+  for (const m of moves) if (m.lotId) lotOnHand[m.lotId] = (lotOnHand[m.lotId] ?? 0) + (m.type === "IN" ? m.qty : m.type === "OUT" ? -m.qty : 0);
+
+  return jsonStripped({
+    material: { id: material.id, name: material.name, unit: material.unit, costCents: material.costCents, reorderLevel: material.reorderLevel, notes: material.notes, archivedAt: material.archivedAt },
+    stock: { ...s, low: isLow(s.available, material.reorderLevel), short: s.committed > s.inStock },
+    movements: moves.map((m) => ({ id: m.id, type: m.type, qty: m.qty, reason: m.reason, refType: m.refType, refId: m.refId, lot: m.lot?.lotCode ?? null, actor: m.actor?.displayName ?? null, at: m.createdAt })),
+    lots: lots.map((l) => ({ id: l.id, lotCode: l.lotCode, supplier: l.supplier?.name ?? null, receivedAt: l.receivedAt, onHand: lotOnHand[l.id] ?? 0 })),
+    usedByTemplates: (await materialUsage(id)).length,
+  }, resolved);
+});
 
 const Patch = z.object({
   name: z.string().trim().min(1).max(160).optional(),

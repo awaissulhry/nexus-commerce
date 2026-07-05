@@ -1,6 +1,6 @@
-/** F1 — designed empty state; the real page lands in its FP cycle (src/lib/nav.ts). */
-import { ComingSoon } from "@/components/ComingSoon";
+/** FP7 — Materials is LIVE: the ledger's face (spec: docs/factory/FP7-SPEC.md). */
+import { MaterialsClient } from "./_components/MaterialsClient";
 
-export default function Page() {
-  return <ComingSoon pageId="materials" />;
+export default function MaterialsPage() {
+  return <MaterialsClient />;
 }
