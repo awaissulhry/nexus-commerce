@@ -71,7 +71,11 @@ export type CreatePlan = {
   reparents: Array<{
     productId: string
     sku: string
+    /** null when newParentTempRowId is set (temp-parent reparent) or when detaching */
     newParentId: string | null
+    /** Set when reparenting to a parent being created in this same save (batch or synthetic).
+     *  The service resolves this tempRowId → real productId via tempToRealId before updating. */
+    newParentTempRowId?: string
   }>
   errors: Array<{ sku?: string; tempRowId?: string; reason: string }>
   warnings: Array<{ sku?: string; reason: string }>
@@ -478,26 +482,59 @@ export function planEbayFamilyCreates(input: {
       const existing = existingBySku.get(sku)!
 
       if (isChild) {
-        // P2.A: resolve effective parent id — prefer parent_sku → existingBySku,
+        // P2.A: resolve effective parent id — prefer parent_sku → existingBySku → batch parent
+        //        → syntheticParentsBySku → auto-create synthetic;
         //        fall back to ppid when parent_sku absent (back-compat).
         let resolvedParentId = ''
-        let parentUnresolved = false
+        // tempRowId of a parent being created in this same save (batch or synthetic).
+        // When set, newParentId in the reparent entry is null and the service resolves it.
+        let resolvedTempRowId: string | undefined = undefined
+
         if (parentSku) {
           const resolvedParent = existingBySku.get(parentSku)
-          if (!resolvedParent) {
-            errors.push({
-              sku,
-              reason: 'unresolved parent (parent_sku does not match any existing parent)',
-            })
-            parentUnresolved = true
-          } else {
+          if (resolvedParent) {
+            // Existing parent resolved by SKU
             resolvedParentId = resolvedParent.id
+          } else {
+            // RP1-fix: escalate — batch parent → synthetic (already created) → auto-create synthetic
+            const batchParent = parentCreates.find(p => p.sku === parentSku)
+            if (batchParent) {
+              resolvedTempRowId = batchParent.tempRowId
+            } else {
+              const existingSynthId = syntheticParentsBySku.get(parentSku)
+              if (existingSynthId) {
+                resolvedTempRowId = existingSynthId
+              } else {
+                // Auto-create a synthetic parent — SHARED map so a new-child and an existing
+                // reparent referencing the same missing parentSku produce ONE synthetic parent.
+                const synthTempRowId = `__synth__${parentSku}`
+                const synthVariationTheme = row.variation_theme ? String(row.variation_theme) : null
+                parentCreates.push({
+                  tempRowId: synthTempRowId,
+                  sku: parentSku,
+                  row: { sku: parentSku, parentage: 'parent' },
+                  variationTheme: synthVariationTheme,
+                })
+                syntheticParentsBySku.set(parentSku, synthTempRowId)
+                resolvedTempRowId = synthTempRowId
+              }
+            }
           }
         } else {
           resolvedParentId = ppid  // ppid fallback (isChild=true implies ppid !== '' here)
         }
 
-        if (!parentUnresolved && resolvedParentId) {
+        if (resolvedTempRowId) {
+          // Reparent to a parent being created in this same save (batch or synthetic).
+          // Self-parent is impossible here (temp IDs can never equal an existing product's DB id).
+          // No-op is impossible (new parent can't be the current parentId — it doesn't exist yet).
+          // Only check shared-family suppression based on the existing (current) parentId.
+          if (sharedFamilyKeys.has(String(existing.parentId ?? ''))) {
+            warnings.push({ sku, reason: 'reparent suppressed: shared family (membership-managed)' })
+          } else {
+            reparents.push({ productId: existing.id, sku, newParentId: null, newParentTempRowId: resolvedTempRowId })
+          }
+        } else if (resolvedParentId) {
           if (resolvedParentId === existing.id) {
             // Self-parent guard
             errors.push({ sku, reason: 'self-parent: platformProductId points to the product itself' })

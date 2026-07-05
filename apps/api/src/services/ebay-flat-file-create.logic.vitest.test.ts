@@ -820,13 +820,16 @@ describe('planEbayFamilyCreates', () => {
     expect(result.childCreates[0].parentRef).toEqual({ kind: 'temp', tempRowId: 'rp-temp' })
   })
 
-  // (d) Existing-row reparent to a missing parent_sku STILL errors — no auto-create for existing rows
-  it('P2: existing row reparent to missing parent_sku still errors (no auto-create for existing rows)', () => {
+  // ── RP-series: reparent-fix P1 — existing-row reparent auto-creates / resolves same-save parent ──
+
+  // RP1: existing child + parent_sku=X, X does NOT exist → synthetic parent auto-created + reparent
+  it('RP1: existing child + parent_sku missing → synthetic parent auto-created, reparent carries newParentTempRowId', () => {
     const row = {
       sku: 'EXISTING-CHILD',
       _productId: 'idEC',
       parentage: 'child',
       parent_sku: 'MISSING-PARENT',
+      variation_theme: 'Colore',
     }
 
     const result = planEbayFamilyCreates({
@@ -837,11 +840,128 @@ describe('planEbayFamilyCreates', () => {
       existingParentById: new Map(),
     })
 
-    expect(result.errors).toHaveLength(1)
-    expect(result.errors[0].sku).toBe('EXISTING-CHILD')
-    expect(result.errors[0].reason).toMatch(/unresolved parent/)
-    expect(result.parentCreates).toHaveLength(0)
+    expect(result.errors).toHaveLength(0)
+    // Synthetic parent auto-created for the missing parent_sku
+    expect(result.parentCreates).toHaveLength(1)
+    expect(result.parentCreates[0].sku).toBe('MISSING-PARENT')
+    expect(result.parentCreates[0].tempRowId).toBe('__synth__MISSING-PARENT')
+    expect(result.parentCreates[0].variationTheme).toBe('Colore')
+    // No new child create (existing row — not a new product)
     expect(result.childCreates).toHaveLength(0)
+    // Reparent entry carries newParentTempRowId (not a real id yet)
+    expect(result.reparents).toHaveLength(1)
+    expect(result.reparents[0].productId).toBe('idEC')
+    expect(result.reparents[0].sku).toBe('EXISTING-CHILD')
+    expect(result.reparents[0].newParentId).toBeNull()
+    expect(result.reparents[0].newParentTempRowId).toBe('__synth__MISSING-PARENT')
+  })
+
+  // RP2: existing child + parent_sku=X, X is a NEW parent row in the SAME batch → batch tempRowId
+  it('RP2: existing child + parent_sku matches batch parent → reparent carries batch tempRowId (no extra parent created)', () => {
+    const batchParent = {
+      sku: 'NEW-PARENT',
+      _rowId: 'np-temp',
+      parentage: 'parent',
+      variation_theme: 'Taglia',
+    }
+    const existingChild = {
+      sku: 'EXIST-CHILD',
+      _productId: 'idExC',
+      parentage: 'child',
+      parent_sku: 'NEW-PARENT',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [batchParent, existingChild],
+      existingBySku: new Map([
+        ['EXIST-CHILD', { id: 'idExC', parentId: 'old-parent-id', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    // Only the real batch parent — no synthetic parent created
+    expect(result.parentCreates).toHaveLength(1)
+    expect(result.parentCreates[0].sku).toBe('NEW-PARENT')
+    expect(result.parentCreates[0].tempRowId).toBe('np-temp')
+    // No new child (existing row)
+    expect(result.childCreates).toHaveLength(0)
+    // Reparent with the batch parent's tempRowId
+    expect(result.reparents).toHaveLength(1)
+    expect(result.reparents[0].productId).toBe('idExC')
+    expect(result.reparents[0].sku).toBe('EXIST-CHILD')
+    expect(result.reparents[0].newParentId).toBeNull()
+    expect(result.reparents[0].newParentTempRowId).toBe('np-temp')
+  })
+
+  // RP4: new child AND existing child both reference same missing parent_sku → exactly ONE synthetic parent
+  it('RP4: new child + existing child both reference same missing parent_sku → exactly ONE synthetic parent', () => {
+    const newChild = {
+      sku: 'NEW-CHILD',
+      _rowId: 'nc-temp',
+      parentage: 'child',
+      parent_sku: 'SHARED-MISSING',
+      aspect_Colore: 'Nero',
+    }
+    const existingChild = {
+      sku: 'EXIST-CHILD',
+      _productId: 'idExC',
+      parentage: 'child',
+      parent_sku: 'SHARED-MISSING',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [newChild, existingChild],
+      existingBySku: new Map([
+        ['EXIST-CHILD', { id: 'idExC', parentId: 'old-id', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    // Exactly ONE synthetic parent (not two)
+    expect(result.parentCreates).toHaveLength(1)
+    expect(result.parentCreates[0].sku).toBe('SHARED-MISSING')
+    const synthTempId = result.parentCreates[0].tempRowId
+
+    // New child create points to the synthetic parent
+    expect(result.childCreates).toHaveLength(1)
+    expect(result.childCreates[0].sku).toBe('NEW-CHILD')
+    expect(result.childCreates[0].parentRef).toEqual({ kind: 'temp', tempRowId: synthTempId })
+
+    // Existing child reparent also points to the SAME synthetic parent
+    expect(result.reparents).toHaveLength(1)
+    expect(result.reparents[0].sku).toBe('EXIST-CHILD')
+    expect(result.reparents[0].newParentTempRowId).toBe(synthTempId)
+  })
+
+  // RP-shared: existing child reparent to temp parent suppressed when CURRENT parent is a sharedFamilyKey
+  it('RP-shared: existing child reparent to batch parent suppressed when current parentId is a sharedFamilyKey', () => {
+    const batchParent = {
+      sku: 'NEW-PARENT',
+      _rowId: 'np-temp',
+      parentage: 'parent',
+    }
+    const existingChild = {
+      sku: 'EXIST-CHILD',
+      _productId: 'idExC',
+      parentage: 'child',
+      parent_sku: 'NEW-PARENT',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [batchParent, existingChild],
+      existingBySku: new Map([
+        ['EXIST-CHILD', { id: 'idExC', parentId: 'old-shared-id', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+      sharedFamilyKeys: new Set(['old-shared-id']),
+    })
+
     expect(result.reparents).toHaveLength(0)
+    expect(result.warnings).toHaveLength(1)
+    expect(result.warnings[0].sku).toBe('EXIST-CHILD')
+    expect(result.warnings[0].reason).toMatch(/reparent suppressed.*shared family/)
+    expect(result.errors).toHaveLength(0)
   })
 })

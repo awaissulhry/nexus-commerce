@@ -365,3 +365,48 @@ describe('invalid reparent target — skipped not thrown', () => {
     expect(calls.create).toHaveLength(0)
   })
 })
+
+// ──────────────────────────────────────────────────────────────────────
+// Test: RP1 — existing child reparented to batch-created parent (newParentTempRowId)
+// ──────────────────────────────────────────────────────────────────────
+describe('RP1 temp-parent reparent — newParentTempRowId resolved via tempToRealId', () => {
+  it('reparents existing child to batch-created parent when newParentTempRowId is set', async () => {
+    const { prisma, calls } = makeMock({
+      // Existing child under old-parent; new parent is NOT yet in DB
+      existingBySku: [{ id: 'child-existing-id', sku: 'EXIST-CHILD', parentId: 'old-parent', variationTheme: null, isParent: false }],
+      existingParentById: [],
+    })
+
+    const rows = [
+      // New parent being created in this same batch
+      { sku: 'NEW-PARENT', title: 'New Parent', _rowId: 'np-temp', parentage: 'parent', variation_theme: 'Colore' },
+      // Existing child that needs to be reparented under the new parent
+      { sku: 'EXIST-CHILD', _productId: 'child-existing-id', parentage: 'child', parent_sku: 'NEW-PARENT' },
+    ]
+
+    const result = await runEbayFlatFileCreates(prisma, rows)
+
+    expect(result.errors).toHaveLength(0)
+
+    // Parent was created (new product) — idMap must contain it
+    const parentEntry = result.idMap.find(e => e.sku === 'NEW-PARENT')
+    expect(parentEntry).toBeDefined()
+    const newParentRealId = parentEntry!.productId
+
+    // product.update was called to reparent the existing child
+    expect(calls.update).toHaveLength(1)
+    const [updateCall] = calls.update as any[]
+    expect(updateCall).toEqual({
+      where: { id: 'child-existing-id' },
+      data: { parentId: newParentRealId },
+    })
+
+    // reparented result contains the entry with the real parent id
+    expect(result.reparented).toHaveLength(1)
+    expect(result.reparented[0]).toMatchObject({
+      sku: 'EXIST-CHILD',
+      productId: 'child-existing-id',
+      newParentId: newParentRealId,
+    })
+  })
+})

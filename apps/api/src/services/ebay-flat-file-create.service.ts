@@ -293,6 +293,36 @@ export async function runEbayFlatFileCreates(
 
   // ── Step 5: Reparents ────────────────────────────────────────────────
   for (const reparentEntry of plan.reparents) {
+    // Temp-reparent: parent was created in this same save (batch or synthetic parent).
+    // tempToRealId is fully populated by now (all parentCreates ran above in Step 4a).
+    if (reparentEntry.newParentTempRowId) {
+      const realParentId = tempToRealId.get(reparentEntry.newParentTempRowId)
+      if (!realParentId) {
+        errors.push({
+          sku: reparentEntry.sku,
+          reason: `Reparent skipped: temp parent ${reparentEntry.newParentTempRowId} could not be resolved to a real id`,
+        })
+        continue
+      }
+      try {
+        await p.product.update({
+          where: { id: reparentEntry.productId },
+          data: { parentId: realParentId },
+        })
+        reparented.push({
+          sku: reparentEntry.sku,
+          productId: reparentEntry.productId,
+          newParentId: realParentId,
+        })
+      } catch (err: unknown) {
+        errors.push({
+          sku: reparentEntry.sku,
+          reason: `Reparent failed: ${err instanceof Error ? err.message : String(err)}`,
+        })
+      }
+      continue
+    }
+
     // Null-reparent: detach from parent → standalone (no parent validation needed).
     if (reparentEntry.newParentId === null) {
       try {
