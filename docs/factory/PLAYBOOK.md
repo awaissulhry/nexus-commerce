@@ -47,9 +47,10 @@ A **local-first platform that runs a small Italian leather/motorcycle-apparel fa
 | F1 foundation (workspace, schema 43 models, RBAC, shell, primitives, Gmail/Drive/Sendcloud integrations, worker) | ✅ shipped + Owner click-through in progress | `817747dd` |
 | Gate fixes: rail parity overrides (344px spec), OAuth form UX + validation | ✅ shipped | `b3498681` |
 | Gate fixes: changeable Gmail label scope, dev-build isolation (`.next-dev`) | ✅ shipped | `9df4ccf0` |
-| FP1 Inbox spec | ✅ **approved by Owner** ("Approved. Please proceed.") | `d267b058` |
-| FP1 Inbox build | ⏳ **NEXT — barely started**: only `sanitize-html` + `@types/sanitize-html` installed; zero FP1 code written | — |
-| FP2…FP11 | Not started; spec-first, in the §11 order | — |
+| FP1 Inbox spec | ✅ approved by Owner ("Approved. Please proceed.") | `d267b058` |
+| FP1 Inbox build | ✅ **SHIPPED + verified** (backend core / API surface / three-pane UI / fixes) — gate report `FP1-REPORT.md`; ⏳ awaiting Owner click-through (live reply send is the Owner's step) | FP1.1–FP1.4, ends `c39ee15f` |
+| FP2 Products & Pricing | **NEXT on FP1 approval** — spec first (§11 FP2 is the seed) | — |
+| FP3…FP11 | Not started; spec-first, in the §11 order | — |
 
 **Owner's live instance state:** Google connected (`xaviaracing.it@gmail.com`), scope = whole `INBOX` (Owner defers a dedicated "Factory" label — re-scope any time via the Change button in Settings › Integrations), ~50 conversations / 86 messages synced incl. real orders ("AWA ORDER 652/2026 BARTOCCETTI"), worker healthy, **Drive folder created ✓**, Sendcloud NOT connected yet (Owner defers; blocks nothing until FP8), **0 parties imported** (so all senders show unmatched — FP1's party-create flow and/or a contacts import will light this up). Owner password was rotated by the Owner (never in `.env`; sessions server-side).
 
@@ -163,11 +164,11 @@ Schema: `apps/factory/prisma/schema.prisma` — read it; it is the ERD from `F0-
 
 > Protocol per cycle: write `FPn-SPEC.md` (template: Purpose · Scope IN/OUT · Layout sketch · Component reuse table · Data & API (schema deltas + route table with permissions) · Interactions · States · RBAC · Bulk/import-export · Teardown verdicts applied (cite `F0-TEARDOWN.md` rows) · Acceptance targets · Build plan) → **Owner approval** → build in committed sub-phases → verify (§10) → gate message (eng trans, files, click-through, findings, rollback) → **Owner approval** → next cycle. `F0-IA.md` per-page sections are the seed for every spec — do not contradict them without a re-gate.
 
-### FP1 — Inbox `/inbox` — **SPEC APPROVED (`FP1-SPEC.md` is binding). BUILD IT FIRST.**
+### FP1 — Inbox `/inbox` — **BUILT (see `FP1-REPORT.md`). The notes below are now as-built documentation.**
 
-Everything below is settled design — a takeover session implements, it does not re-decide:
+Everything below was the settled design and matches what shipped; two verified additions: `stripFinancials` treats `Date`/`Buffer` as leaf values (the Invalid-Date regression, tested), and focus-param URL state uses shallow `history.replaceState` (Next interop) because `router.replace` to a bare pathname no-ops on fresh document loads.
 
-- **State so far:** `sanitize-html` + types installed. NOTHING else written.
+- **State:** shipped FP1.1–FP1.4 (`c39ee15f`); awaiting Owner click-through.
 - **Migration `fp1_inbox`:** `Message.bodyHtml String?`, `Message.bodyText String?`, `Message.rfcMessageId String?`, `PartyEmail.matchDomain Boolean @default(false)`, `Conversation.followUpAt DateTime?`, `Attachment.gmailAttachmentId String?`, **new model `FactoryEventOutbox`** (§5). Additive only (Owner's server runs).
 - **Sanitizer (`src/lib/sanitize-email.ts`):** sanitize-html at INGEST (stored sanitized): allow formatting/links/images/tables/blockquotes; strip script/iframe/form/on*; links transformed to `target="_blank" rel="noopener noreferrer"`; inline `style` allowed with a safe property allowlist (color, background-color, font-*, text-*, margin*, padding*, border*, width, height, line-height, display, vertical-align) — NO url() values. Unit-test: script/onerror/javascript: URLs stripped, formatting survives.
 - **Rendering (`MessageBubble`):** sanitized HTML into `<iframe srcdoc sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox">` (no `allow-scripts` — same-origin is safe because nothing can execute) + `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src <'none' | https: data:>">` — images blocked by default, per-conversation "Load images" toggle swaps the CSP. Parent measures `contentDocument.body.scrollHeight` to size the frame. `cid:` inline images may render broken — acceptable, attachments list sits below (note in gate findings).
