@@ -13,6 +13,9 @@ import { useCallback, useState } from 'react'
 import { Plus, Play, FlaskConical, Zap, Power, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 export interface MarketingRule {
   id: string
@@ -167,10 +170,22 @@ export function AutomationStudioClient({ initialRules }: { initialRules: Marketi
             <div className="space-y-3">
               <input autoFocus placeholder="Rule name (e.g. Pause high-ACOS DE)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
               <label className="block text-xs text-slate-500">When (trigger)
-                <select value={form.trigger} onChange={(e) => setForm({ ...form, trigger: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">{TRIGGERS.map((t) => <option key={t}>{t}</option>)}</select>
+                <Listbox
+                  options={TRIGGERS.map((t) => ({ value: t, label: t }))}
+                  value={form.trigger}
+                  onChange={(v) => setForm({ ...form, trigger: v })}
+                  ariaLabel="Trigger"
+                  className="w-full mt-0.5"
+                />
               </label>
               <label className="block text-xs text-slate-500">Do (action)
-                <select value={form.action} onChange={(e) => setForm({ ...form, action: e.target.value, actionParam: '' })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">{ACTIONS.map((a) => <option key={a.type} value={a.type}>{a.label}</option>)}</select>
+                <Listbox
+                  options={ACTIONS.map((a) => ({ value: a.type, label: a.label }))}
+                  value={form.action}
+                  onChange={(v) => setForm({ ...form, action: v, actionParam: '' })}
+                  ariaLabel="Action"
+                  className="w-full mt-0.5"
+                />
               </label>
               {ACTIONS.find((a) => a.type === form.action)?.param && (
                 <input placeholder={ACTIONS.find((a) => a.type === form.action)?.param === 'deltaPct' ? 'e.g. -20 (cut 20%)' : 'e.g. 25.00 (€/day)'} value={form.actionParam} onChange={(e) => setForm({ ...form, actionParam: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />

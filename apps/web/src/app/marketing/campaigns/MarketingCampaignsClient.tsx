@@ -31,6 +31,7 @@ import {
 import { KpiStrip, SharedLensTabs, type KpiTileSpec, type LensTab } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
+import { Listbox } from '@/design-system/components/Listbox'
 
 export interface RosterCampaign {
   id: string
@@ -301,16 +302,16 @@ export function MarketingCampaignsClient({
             className="pl-7 pr-2 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 w-56"
           />
         </div>
-        <select
+        <Listbox
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="py-1.5 px-2 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900"
-        >
-          <option value="">All statuses</option>
-          {['ACTIVE', 'PAUSED', 'DRAFT', 'SCHEDULED', 'ENDED', 'SUSPENDED', 'FAILED'].map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
+          onChange={setStatusFilter}
+          ariaLabel="Filter by status"
+          className="w-40"
+          options={[
+            { value: '', label: 'All statuses' },
+            ...['ACTIVE', 'PAUSED', 'DRAFT', 'SCHEDULED', 'ENDED', 'SUSPENDED', 'FAILED'].map((s) => ({ value: s, label: s })),
+          ]}
+        />
         <button
           onClick={() => void refetch()}
           className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
@@ -429,20 +430,16 @@ export function MarketingCampaignsClient({
               <input autoFocus placeholder="Campaign name" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
               <div className="flex gap-2">
                 <label className="flex-1 text-xs text-slate-500">Channel
-                  <select value={createForm.channel} onChange={(e) => setCreateForm({ ...createForm, channel: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">
-                    {['INTERNAL', 'AMAZON', 'EBAY', 'SHOPIFY', 'GOOGLE', 'META', 'TIKTOK'].map((c) => <option key={c}>{c}</option>)}
-                  </select>
+                  <Listbox value={createForm.channel} onChange={(v) => setCreateForm({ ...createForm, channel: v })} ariaLabel="Channel" className="w-full mt-0.5" options={['INTERNAL', 'AMAZON', 'EBAY', 'SHOPIFY', 'GOOGLE', 'META', 'TIKTOK'].map((c) => ({ value: c, label: c }))} />
                 </label>
                 <label className="flex-1 text-xs text-slate-500">Surface
-                  <select value={createForm.surface} onChange={(e) => setCreateForm({ ...createForm, surface: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">
-                    {['CONTENT_PUSH', 'EMAIL_OUTREACH', 'REVIEW_OUTREACH', 'SP', 'SB', 'SD', 'PROMOTED_LISTINGS', 'DISCOUNT', 'MARKDOWN', 'DEAL', 'SHOPPING_FEED'].map((s) => <option key={s}>{s}</option>)}
-                  </select>
+                  <Listbox value={createForm.surface} onChange={(v) => setCreateForm({ ...createForm, surface: v })} ariaLabel="Surface" className="w-full mt-0.5" options={['CONTENT_PUSH', 'EMAIL_OUTREACH', 'REVIEW_OUTREACH', 'SP', 'SB', 'SD', 'PROMOTED_LISTINGS', 'DISCOUNT', 'MARKDOWN', 'DEAL', 'SHOPPING_FEED'].map((s) => ({ value: s, label: s }))} />
                 </label>
               </div>
               <input placeholder="Markets (comma-sep, e.g. IT,DE)" value={createForm.marketplaces} onChange={(e) => setCreateForm({ ...createForm, marketplaces: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
               {createForm.surface === 'CONTENT_PUSH' && (
                 <div className="flex gap-2">
-                  <select value={createForm.contentType} onChange={(e) => setCreateForm({ ...createForm, contentType: e.target.value })} className="px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">{['LISTING_COPY', 'APLUS', 'BRAND_STORY'].map((t) => <option key={t}>{t}</option>)}</select>
+                  <Listbox value={createForm.contentType} onChange={(v) => setCreateForm({ ...createForm, contentType: v })} ariaLabel="Content type" className="w-44" options={['LISTING_COPY', 'APLUS', 'BRAND_STORY'].map((ct) => ({ value: ct, label: ct }))} />
                   <input placeholder="Target ASINs/SKUs (comma-sep)" value={createForm.targetRefs} onChange={(e) => setCreateForm({ ...createForm, targetRefs: e.target.value })} className="flex-1 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
                 </div>
               )}

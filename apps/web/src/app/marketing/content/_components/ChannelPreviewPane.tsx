@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { Eye } from 'lucide-react'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface PreviewVariant {
   id: string
@@ -111,18 +112,13 @@ export default function ChannelPreviewPane({ assetId, apiBase }: Props) {
           <Eye className="w-3.5 h-3.5" />
           {t('marketingContent.preview.title')}
         </h3>
-        <select
+        <Listbox
           value={locale}
-          onChange={(e) => setLocale(e.target.value)}
-          aria-label={t('marketingContent.preview.localeLabel')}
-          className="rounded border border-default bg-white px-1.5 py-0.5 text-[11px] font-mono dark:border-slate-700 dark:bg-slate-900"
-        >
-          {PREVIEW_LOCALES.map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-        </select>
+          onChange={setLocale}
+          options={PREVIEW_LOCALES.map((l) => ({ value: l, label: l }))}
+          ariaLabel={t('marketingContent.preview.localeLabel')}
+          className="w-28"
+        />
       </header>
 
       {data?.activeOverlay && (

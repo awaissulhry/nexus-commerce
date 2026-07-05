@@ -23,6 +23,7 @@ import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { Listbox } from '@/design-system/components/Listbox'
 import {
   IMAGE_TEMPLATES,
   applyImageTemplate,
@@ -141,17 +142,16 @@ export default function BulkApplyTemplateModal({
             <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
               {t('bulkTemplate.templateLabel')}
             </span>
-            <select
+            <Listbox
               value={templateId}
-              onChange={(e) => setTemplateId(e.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-            >
-              {IMAGE_TEMPLATES.map((tpl) => (
-                <option key={tpl.id} value={tpl.id}>
-                  {tpl.name} — {tpl.description}
-                </option>
-              ))}
-            </select>
+              onChange={setTemplateId}
+              options={IMAGE_TEMPLATES.map((tpl) => ({
+                value: tpl.id,
+                label: `${tpl.name} — ${tpl.description}`,
+              }))}
+              ariaLabel={t('bulkTemplate.templateLabel')}
+              className="mt-1 w-full"
+            />
             {template && (
               <p className="mt-1 text-[11px] italic text-slate-500 dark:text-slate-400">
                 {template.bestFor}

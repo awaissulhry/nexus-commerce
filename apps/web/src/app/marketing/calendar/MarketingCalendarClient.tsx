@@ -13,6 +13,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Plus, X, CalendarDays, Sparkles } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
+import { Listbox } from '@/design-system/components/Listbox'
+import { DateField } from '@/design-system/components/DateField'
 
 interface CalEntry {
   id: string; kind: string; title: string; channel: string | null
@@ -229,14 +231,12 @@ export function MarketingCalendarClient({ initial }: { initial: CalendarData }) 
                 className="w-full px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950"
               />
               <div className="flex gap-2">
-                <select value={editing.kind ?? 'NOTE'} onChange={(e) => setEditing({ ...editing, kind: e.target.value })} className="flex-1 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">
-                  {KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
-                </select>
+                <Listbox value={editing.kind ?? 'NOTE'} onChange={(v) => setEditing({ ...editing, kind: v })} ariaLabel="Entry kind" className="flex-1" options={KINDS.map((k) => ({ value: k, label: k }))} />
                 <input type="color" value={editing.color ?? '#3b82f6'} onChange={(e) => setEditing({ ...editing, color: e.target.value })} className="w-10 h-9 rounded border border-default dark:border-slate-700" title="Band color" />
               </div>
               <div className="flex gap-2">
-                <label className="flex-1 text-xs text-slate-500">Starts<input type="date" value={(editing.startsAt ?? '').slice(0, 10)} onChange={(e) => setEditing({ ...editing, startsAt: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
-                <label className="flex-1 text-xs text-slate-500">Ends (optional)<input type="date" value={(editing.endsAt ?? '').slice(0, 10)} onChange={(e) => setEditing({ ...editing, endsAt: e.target.value || null })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+                <label className="flex-1 text-xs text-slate-500">Starts<DateField value={(editing.startsAt ?? '').slice(0, 10)} onChange={(v) => setEditing({ ...editing, startsAt: v })} ariaLabel="Starts" className="w-full mt-0.5" /></label>
+                <label className="flex-1 text-xs text-slate-500">Ends (optional)<DateField value={(editing.endsAt ?? '').slice(0, 10)} onChange={(v) => setEditing({ ...editing, endsAt: v || null })} ariaLabel="Ends (optional)" className="w-full mt-0.5" /></label>
               </div>
               <textarea value={editing.notes ?? ''} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} placeholder="Notes" rows={2} className="w-full px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
             </div>

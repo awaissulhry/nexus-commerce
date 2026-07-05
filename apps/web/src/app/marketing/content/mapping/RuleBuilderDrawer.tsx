@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { X, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface SchemaField {
   id: string
@@ -223,30 +224,28 @@ export function RuleBuilderDrawer({
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Channel <span className="text-rose-500">*</span>
               </label>
-              <select
+              <Listbox
                 value={channel}
-                onChange={(e) => { setChannel(e.target.value); setField('') }}
-                className="w-full text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 focus:outline-none focus:ring-1 focus:ring-violet-400"
-              >
-                {CHANNELS.map((c) => (
-                  <option key={c} value={c}>{c === 'ALL' ? 'All channels' : c}</option>
-                ))}
-              </select>
+                onChange={(value) => { setChannel(value); setField('') }}
+                options={CHANNELS.map((c) => ({ value: c, label: c === 'ALL' ? 'All channels' : c }))}
+                ariaLabel="Channel"
+                className="w-full"
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Marketplace
               </label>
-              <select
+              <Listbox
                 value={marketplace}
-                onChange={(e) => setMarketplace(e.target.value)}
-                className="w-full text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 focus:outline-none focus:ring-1 focus:ring-violet-400"
-              >
-                <option value="">All markets</option>
-                {MARKETPLACES.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
+                onChange={setMarketplace}
+                options={[
+                  { value: '', label: 'All markets' },
+                  ...MARKETPLACES.map((m) => ({ value: m, label: m })),
+                ]}
+                ariaLabel="Marketplace"
+                className="w-full"
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -269,18 +268,19 @@ export function RuleBuilderDrawer({
               Target field <span className="text-rose-500">*</span>
             </label>
             {targetFields.length > 0 ? (
-              <select
+              <Listbox
                 value={field}
-                onChange={(e) => setField(e.target.value)}
-                className="w-full text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 focus:outline-none focus:ring-1 focus:ring-violet-400"
-              >
-                <option value="">— select field —</option>
-                {targetFields.map((f) => (
-                  <option key={f.fieldKey} value={f.fieldKey}>
-                    {f.label} ({f.fieldKey}){f.required ? ' *' : ''}{f.maxLength ? ` ≤${f.maxLength}` : ''}
-                  </option>
-                ))}
-              </select>
+                onChange={setField}
+                options={[
+                  { value: '', label: '— select field —' },
+                  ...targetFields.map((f) => ({
+                    value: f.fieldKey,
+                    label: `${f.label} (${f.fieldKey})${f.required ? ' *' : ''}${f.maxLength ? ` ≤${f.maxLength}` : ''}`,
+                  })),
+                ]}
+                ariaLabel="Target field"
+                className="w-full"
+              />
             ) : (
               <div className="space-y-1">
                 <input
@@ -320,27 +320,23 @@ export function RuleBuilderDrawer({
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Field</label>
-                  <select
+                  <Listbox
                     value={condField}
-                    onChange={(e) => setCondField(e.target.value)}
-                    className="w-full text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-400"
-                  >
-                    {PRODUCT_FIELDS.map((f) => (
-                      <option key={f.value} value={f.value}>{f.label}</option>
-                    ))}
-                  </select>
+                    onChange={setCondField}
+                    options={PRODUCT_FIELDS}
+                    ariaLabel="Field"
+                    className="w-full"
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Operator</label>
-                  <select
+                  <Listbox
                     value={condOp}
-                    onChange={(e) => setCondOp(e.target.value)}
-                    className="w-full text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-400"
-                  >
-                    {OPS.map((op) => (
-                      <option key={op.value} value={op.value}>{op.label}</option>
-                    ))}
-                  </select>
+                    onChange={setCondOp}
+                    options={OPS}
+                    ariaLabel="Operator"
+                    className="w-full"
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Value</label>

@@ -11,6 +11,7 @@ import {
   FileUp,
   ArrowRight,
 } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 
 type CanonicalField =
   | 'externalReviewId'
@@ -217,15 +218,17 @@ export function ImportClient() {
             <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Channel
             </span>
-            <select
+            <Listbox
               value={channel}
-              onChange={(e) => setChannel(e.target.value)}
-              className="mt-1 w-full text-sm rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5"
-            >
-              <option value="AMAZON">Amazon</option>
-              <option value="EBAY">eBay</option>
-              <option value="SHOPIFY">Shopify</option>
-            </select>
+              onChange={setChannel}
+              options={[
+                { value: 'AMAZON', label: 'Amazon' },
+                { value: 'EBAY', label: 'eBay' },
+                { value: 'SHOPIFY', label: 'Shopify' },
+              ]}
+              ariaLabel="Channel"
+              className="mt-1 w-full"
+            />
           </label>
           <label className="block">
             <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -242,15 +245,17 @@ export function ImportClient() {
             <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Paste format
             </span>
-            <select
+            <Listbox
               value={formatHint}
-              onChange={(e) => setFormatHint(e.target.value as 'csv' | 'json')}
+              onChange={(value) => setFormatHint(value as 'csv' | 'json')}
+              options={[
+                { value: 'csv', label: 'CSV' },
+                { value: 'json', label: 'JSON' },
+              ]}
               disabled={bytesBase64 != null}
-              className="mt-1 w-full text-sm rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 disabled:opacity-50"
-            >
-              <option value="csv">CSV</option>
-              <option value="json">JSON</option>
-            </select>
+              ariaLabel="Paste format"
+              className="mt-1 w-full"
+            />
           </label>
         </div>
 
@@ -390,22 +395,16 @@ export function ImportClient() {
                     {f.label}
                     {f.required && <span className="text-rose-500"> *</span>}
                   </span>
-                  <select
+                  <Listbox
                     value={mapping[f.key] ?? ''}
-                    onChange={(e) => onMappingChange(f.key, e.target.value)}
-                    className={`mt-0.5 w-full text-xs rounded border px-1.5 py-1 bg-white dark:bg-slate-900 ${
-                      f.required && !mapping[f.key]
-                        ? 'border-rose-300 dark:border-rose-800'
-                        : 'border-slate-300 dark:border-slate-700'
-                    }`}
-                  >
-                    <option value="">— none —</option>
-                    {preview.headers.map((h) => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => onMappingChange(f.key, value)}
+                    options={[
+                      { value: '', label: '— none —' },
+                      ...preview.headers.map((h) => ({ value: h, label: h })),
+                    ]}
+                    ariaLabel={f.label}
+                    className="mt-0.5 w-full"
+                  />
                 </label>
               ))}
             </div>

@@ -32,6 +32,7 @@ import {
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { Listbox } from '@/design-system/components/Listbox'
 import {
   BRAND_STORY_MODULE_SPECS,
   getBrandStoryModuleSpec,
@@ -459,19 +460,14 @@ export default function BrandStoryBuilderClient({ initial, apiBase }: Props) {
             )}
             {t('brandStory.builder.submit')}
           </Button>
-          <select
+          <Listbox
             value={status}
-            onChange={(e) => void updateStatus(e.target.value as BrandStoryStatus)}
+            onChange={(v) => void updateStatus(v as BrandStoryStatus)}
             disabled={busy !== null}
-            aria-label={t('brandStory.builder.statusLabel')}
-            className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-          >
-            {BRAND_STORY_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+            ariaLabel={t('brandStory.builder.statusLabel')}
+            className="w-36"
+            options={BRAND_STORY_STATUSES.map((s) => ({ value: s, label: s }))}
+          />
           {busy && <Loader2 className="w-4 h-4 animate-spin text-tertiary" />}
         </div>
       </div>

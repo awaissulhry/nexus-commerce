@@ -11,6 +11,7 @@ import {
   Wrench,
   AlertTriangle,
 } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface SpotlightContent {
   sentiment: {
@@ -86,15 +87,17 @@ export function SpotlightClient({ initial }: { initial: Spotlight | null }) {
       <div className="flex items-center gap-2 flex-wrap">
         <label className="text-xs text-slate-500 dark:text-slate-400">
           Window
-          <select
-            value={windowDays}
-            onChange={(e) => setWindowDays(Number(e.target.value))}
-            className="ml-1.5 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
-          >
-            <option value={7}>7 days</option>
-            <option value={30}>30 days</option>
-            <option value={90}>90 days</option>
-          </select>
+          <Listbox
+            value={String(windowDays)}
+            onChange={(value) => setWindowDays(Number(value))}
+            options={[
+              { value: '7', label: '7 days' },
+              { value: '30', label: '30 days' },
+              { value: '90', label: '90 days' },
+            ]}
+            ariaLabel="Window"
+            className="ml-1.5 w-28"
+          />
         </label>
         <button
           type="button"

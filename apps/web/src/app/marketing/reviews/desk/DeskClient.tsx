@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useReviewEventsRefresh } from '@/hooks/use-review-events-refresh'
+import { Listbox } from '@/design-system/components/Listbox'
 import {
   Sparkles,
   Loader2,
@@ -406,28 +407,32 @@ function ReviewDeskCard({
             )}
           </div>
           <div className="flex items-center gap-1.5 mb-2">
-            <select
-              value={locale} aria-label="Reply language"
-              onChange={(e) => setLocale(e.target.value)}
-              className="text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1"
-            >
-              <option value="">auto-lang</option>
-              <option value="it">IT</option>
-              <option value="de">DE</option>
-              <option value="fr">FR</option>
-              <option value="es">ES</option>
-              <option value="en">EN</option>
-            </select>
-            <select
-              value={tone} aria-label="Reply tone"
-              onChange={(e) => setTone(e.target.value)}
-              className="text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1"
-            >
-              <option value="auto">auto-tone</option>
-              <option value="apologetic">apologetic</option>
-              <option value="appreciative">appreciative</option>
-              <option value="neutral">neutral</option>
-            </select>
+            <Listbox
+              value={locale}
+              onChange={setLocale}
+              options={[
+                { value: '', label: 'auto-lang' },
+                { value: 'it', label: 'IT' },
+                { value: 'de', label: 'DE' },
+                { value: 'fr', label: 'FR' },
+                { value: 'es', label: 'ES' },
+                { value: 'en', label: 'EN' },
+              ]}
+              ariaLabel="Reply language"
+              className="w-32"
+            />
+            <Listbox
+              value={tone}
+              onChange={setTone}
+              options={[
+                { value: 'auto', label: 'auto-tone' },
+                { value: 'apologetic', label: 'apologetic' },
+                { value: 'appreciative', label: 'appreciative' },
+                { value: 'neutral', label: 'neutral' },
+              ]}
+              ariaLabel="Reply tone"
+              className="w-36"
+            />
             <button
               type="button"
               onClick={draft}

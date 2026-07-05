@@ -31,6 +31,9 @@ import {
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import ModulePalette from './ModulePalette'
 import ModuleCanvas from './ModuleCanvas'
 import ModuleEditor from './ModuleEditor'
@@ -485,19 +488,13 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
             )}
             {t('aplus.builder.submit')}
           </Button>
-          <select
+          <Listbox
+            options={APLUS_STATUSES.map((s) => ({ value: s, label: s }))}
             value={status}
-            onChange={(e) => void updateStatus(e.target.value as AplusStatus)}
+            onChange={(v) => void updateStatus(v as AplusStatus)}
             disabled={busy !== null}
-            aria-label={t('aplus.builder.statusLabel')}
-            className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-          >
-            {APLUS_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+            ariaLabel={t('aplus.builder.statusLabel')}
+          />
           {busy && (
             <Loader2 className="w-4 h-4 animate-spin text-tertiary" />
           )}

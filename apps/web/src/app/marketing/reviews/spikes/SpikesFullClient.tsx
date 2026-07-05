@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Loader2, Wrench } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { CATEGORY_LABEL } from '../_shared/ReviewsNav'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface SpikeRow {
   id: string
@@ -98,28 +99,28 @@ export function SpikesFullClient({ initial }: { initial: SpikeRow[] }) {
   return (
     <div>
       <div className="flex items-center gap-2 flex-wrap mb-3">
-        <select
+        <Listbox
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
-        >
-          <option value="">All statuses</option>
-          <option value="OPEN">Open</option>
-          <option value="ACKNOWLEDGED">Acknowledged</option>
-          <option value="RESOLVED">Resolved</option>
-        </select>
-        <select
+          onChange={setStatusFilter}
+          options={[
+            { value: '', label: 'All statuses' },
+            { value: 'OPEN', label: 'Open' },
+            { value: 'ACKNOWLEDGED', label: 'Acknowledged' },
+            { value: 'RESOLVED', label: 'Resolved' },
+          ]}
+          ariaLabel="Filter by status"
+          className="w-40"
+        />
+        <Listbox
           value={marketplaceFilter}
-          onChange={(e) => setMarketplaceFilter(e.target.value)}
-          className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
-        >
-          <option value="">All marketplaces</option>
-          {marketplaces.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
+          onChange={setMarketplaceFilter}
+          options={[
+            { value: '', label: 'All marketplaces' },
+            ...marketplaces.map((m) => ({ value: m, label: m })),
+          ]}
+          ariaLabel="Filter by marketplace"
+          className="w-44"
+        />
         <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
           {visible.length} of {items.length}
         </span>

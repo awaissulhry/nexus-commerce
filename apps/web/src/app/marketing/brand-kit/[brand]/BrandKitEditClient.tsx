@@ -24,6 +24,7 @@ import {
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { Listbox } from '@/design-system/components/Listbox'
 import {
   COLOR_ROLES,
   FONT_ROLES,
@@ -212,21 +213,17 @@ export default function BrandKitEditClient({
                 placeholder={t('brandKit.field.colorNamePlaceholder')}
                 className="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
-              <select
+              <Listbox
                 value={color.role}
-                onChange={(e) => {
+                onChange={(v) => {
                   const copy = [...colors]
-                  copy[idx] = { ...color, role: e.target.value as ColorRole }
+                  copy[idx] = { ...color, role: v as ColorRole }
                   setColors(copy)
                 }}
-                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-              >
-                {COLOR_ROLES.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
+                ariaLabel="Color role"
+                className="w-32"
+                options={COLOR_ROLES.map((r) => ({ value: r.value, label: r.label }))}
+              />
               <button
                 type="button"
                 onClick={() =>
@@ -302,21 +299,17 @@ export default function BrandKitEditClient({
                 placeholder="400"
                 className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
-              <select
+              <Listbox
                 value={font.role}
-                onChange={(e) => {
+                onChange={(v) => {
                   const copy = [...fonts]
-                  copy[idx] = { ...font, role: e.target.value as FontRole }
+                  copy[idx] = { ...font, role: v as FontRole }
                   setFonts(copy)
                 }}
-                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-              >
-                {FONT_ROLES.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
+                ariaLabel="Font role"
+                className="w-full"
+                options={FONT_ROLES.map((r) => ({ value: r.value, label: r.label }))}
+              />
               <button
                 type="button"
                 onClick={() =>
@@ -394,21 +387,17 @@ export default function BrandKitEditClient({
                 placeholder={t('brandKit.field.logoUrlPlaceholder')}
                 className="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 font-mono text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
-              <select
+              <Listbox
                 value={logo.role}
-                onChange={(e) => {
+                onChange={(v) => {
                   const copy = [...logos]
-                  copy[idx] = { ...logo, role: e.target.value as LogoRole }
+                  copy[idx] = { ...logo, role: v as LogoRole }
                   setLogos(copy)
                 }}
-                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-              >
-                {LOGO_ROLES.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
+                ariaLabel="Logo role"
+                className="w-44"
+                options={LOGO_ROLES.map((r) => ({ value: r.value, label: r.label }))}
+              />
               <button
                 type="button"
                 onClick={() =>

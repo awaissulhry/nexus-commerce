@@ -16,6 +16,7 @@
 import { Beaker, Mail, Eye, Activity } from 'lucide-react'
 import { useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox } from '@/design-system/components/Listbox'
 
 type Locale = 'it' | 'de' | 'fr' | 'es' | 'en'
 
@@ -99,17 +100,19 @@ export function TestModeClient() {
               <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">
                 Locale
               </label>
-              <select
+              <Listbox
                 value={locale}
-                onChange={(e) => setLocale(e.target.value as Locale)}
-                className="w-full text-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded px-2 py-1"
-              >
-                <option value="it">Italiano (IT)</option>
-                <option value="de">Deutsch (DE/AT)</option>
-                <option value="fr">Français (FR/BE)</option>
-                <option value="es">Español (ES)</option>
-                <option value="en">English (UK/IE/fallback)</option>
-              </select>
+                onChange={(value) => setLocale(value as Locale)}
+                options={[
+                  { value: 'it', label: 'Italiano (IT)' },
+                  { value: 'de', label: 'Deutsch (DE/AT)' },
+                  { value: 'fr', label: 'Français (FR/BE)' },
+                  { value: 'es', label: 'Español (ES)' },
+                  { value: 'en', label: 'English (UK/IE/fallback)' },
+                ]}
+                ariaLabel="Locale"
+                className="w-full"
+              />
             </div>
             <div>
               <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">

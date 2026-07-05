@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { Listbox } from '@/design-system/components/Listbox'
 import { COMMON_MARKETPLACES } from '../../aplus/_lib/types'
 import {
   type BrandStoryDetail,
@@ -256,24 +257,23 @@ function CreateLocalizationDialog({
             <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
               {t('brandStory.localizations.marketplaceLabel')}
             </span>
-            <select
+            <Listbox
               value={marketplace}
-              onChange={(e) => setMarketplace(e.target.value)}
+              onChange={setMarketplace}
               disabled={busy}
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-            >
-              {COMMON_MARKETPLACES.filter(
+              ariaLabel={t('brandStory.localizations.marketplaceLabel')}
+              className="mt-1 w-full"
+              options={COMMON_MARKETPLACES.filter(
                 (m) => m.value !== sourceMarketplace,
               ).map((m) => {
                 const exists = existingLocales.includes(m.defaultLocale)
-                return (
-                  <option key={m.value} value={m.value} disabled={exists}>
-                    {m.label} ({m.defaultLocale})
-                    {exists ? ' — already exists' : ''}
-                  </option>
-                )
+                return {
+                  value: m.value,
+                  label: `${m.label} (${m.defaultLocale})${exists ? ' — already exists' : ''}`,
+                  disabled: exists,
+                }
               })}
-            </select>
+            />
           </label>
           {conflict && (
             <p className="text-xs text-amber-700 dark:text-amber-400">

@@ -27,6 +27,7 @@ import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { Listbox } from '@/design-system/components/Listbox'
 import { COMMON_MARKETPLACES } from '../aplus/_lib/types'
 import {
   BRAND_STORY_STATUSES,
@@ -138,30 +139,26 @@ export default function BrandStoryListClient({
           placeholder={t('brandStory.searchPlaceholder')}
           className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
         />
-        <select
+        <Listbox
           value={marketplace}
-          onChange={(e) => setMarketplace(e.target.value)}
-          className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-        >
-          <option value="">{t('brandStory.allMarketplaces')}</option>
-          {COMMON_MARKETPLACES.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-        <select
+          onChange={setMarketplace}
+          ariaLabel={t('brandStory.col.marketplace')}
+          className="w-44"
+          options={[
+            { value: '', label: t('brandStory.allMarketplaces') },
+            ...COMMON_MARKETPLACES.map((m) => ({ value: m.value, label: m.label })),
+          ]}
+        />
+        <Listbox
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-        >
-          <option value="">{t('brandStory.allStatuses')}</option>
-          {BRAND_STORY_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+          onChange={setStatus}
+          ariaLabel={t('brandStory.col.status')}
+          className="w-40"
+          options={[
+            { value: '', label: t('brandStory.allStatuses') },
+            ...BRAND_STORY_STATUSES.map((s) => ({ value: s, label: s })),
+          ]}
+        />
       </div>
 
       {visible.length === 0 ? (
@@ -418,17 +415,16 @@ function CreateBrandStoryDialog({
             <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
               {t('brandStory.create.marketplaceLabel')}
             </span>
-            <select
+            <Listbox
               value={marketplace}
-              onChange={(e) => setMarketplace(e.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-            >
-              {COMMON_MARKETPLACES.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label} ({m.defaultLocale})
-                </option>
-              ))}
-            </select>
+              onChange={setMarketplace}
+              ariaLabel={t('brandStory.create.marketplaceLabel')}
+              className="mt-1 w-full"
+              options={COMMON_MARKETPLACES.map((m) => ({
+                value: m.value,
+                label: `${m.label} (${m.defaultLocale})`,
+              }))}
+            />
           </label>
         </div>
       </ModalBody>

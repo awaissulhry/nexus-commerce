@@ -6,6 +6,7 @@ import { CheckCircle2, MinusCircle, AlertCircle, Star } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useReviewEventsRefresh } from '@/hooks/use-review-events-refresh'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface ReviewRow {
   id: string
@@ -87,28 +88,28 @@ export function ReviewsList({ initial }: { initial: ReviewRow[] }) {
     <div>
       {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap mb-3">
-        <select
+        <Listbox
           value={labelFilter}
-          onChange={(e) => setLabelFilter(e.target.value)}
-          className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
-        >
-          <option value="">All sentiments</option>
-          <option value="POSITIVE">Positive</option>
-          <option value="NEUTRAL">Neutral</option>
-          <option value="NEGATIVE">Negative</option>
-        </select>
-        <select
+          onChange={setLabelFilter}
+          options={[
+            { value: '', label: 'All sentiments' },
+            { value: 'POSITIVE', label: 'Positive' },
+            { value: 'NEUTRAL', label: 'Neutral' },
+            { value: 'NEGATIVE', label: 'Negative' },
+          ]}
+          ariaLabel="Filter by sentiment"
+          className="w-40"
+        />
+        <Listbox
           value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
-        >
-          <option value="">All categories</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {CATEGORY_LABEL[c] ?? c}
-            </option>
-          ))}
-        </select>
+          onChange={setCategoryFilter}
+          options={[
+            { value: '', label: 'All categories' },
+            ...categories.map((c) => ({ value: c, label: CATEGORY_LABEL[c] ?? c })),
+          ]}
+          ariaLabel="Filter by category"
+          className="w-44"
+        />
         <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
           {items.length} reviews
         </span>

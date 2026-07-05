@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { CATEGORY_LABEL } from '../_shared/ReviewsNav'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface ProductBucket {
   productId: string
@@ -56,28 +57,28 @@ export function ByProductClient({ initial }: { initial: ProductBucket[] }) {
   return (
     <div>
       <div className="flex items-center gap-2 flex-wrap mb-3">
-        <select
+        <Listbox
           value={sortKey}
-          onChange={(e) => setSortKey(e.target.value as SortKey)}
-          className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
-        >
-          <option value="negativePct">Sort: % negative ↓</option>
-          <option value="total">Sort: volume ↓</option>
-          <option value="lastReview">Sort: last review ↓</option>
-          <option value="sku">Sort: SKU A→Z</option>
-        </select>
-        <select
+          onChange={(value) => setSortKey(value as SortKey)}
+          options={[
+            { value: 'negativePct', label: 'Sort: % negative ↓' },
+            { value: 'total', label: 'Sort: volume ↓' },
+            { value: 'lastReview', label: 'Sort: last review ↓' },
+            { value: 'sku', label: 'Sort: SKU A→Z' },
+          ]}
+          ariaLabel="Sort products"
+          className="w-52"
+        />
+        <Listbox
           value={marketplaceFilter}
-          onChange={(e) => setMarketplaceFilter(e.target.value)}
-          className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
-        >
-          <option value="">All marketplaces</option>
-          {marketplaces.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
+          onChange={setMarketplaceFilter}
+          options={[
+            { value: '', label: 'All marketplaces' },
+            ...marketplaces.map((m) => ({ value: m, label: m })),
+          ]}
+          ariaLabel="Filter by marketplace"
+          className="w-44"
+        />
         <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
           {items.length} products
         </span>

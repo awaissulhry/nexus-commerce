@@ -13,6 +13,7 @@ import { useCallback, useState } from 'react'
 import { Plus, Wallet, Scale, X, ArrowRight, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface Alloc {
   id: string; campaignId: string; channel: string; marketplace: string | null
@@ -81,7 +82,7 @@ export function BudgetCenterClient({ initialPools }: { initialPools: BudgetPool[
             <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-slate-50 dark:bg-slate-900/60 border-b border-default dark:border-slate-800">
               <span className="font-medium text-slate-800 dark:text-slate-100">{p.name}</span>
               <span className="text-sm text-slate-500">{eur(p.totalDailyCents, p.currency)}/day</span>
-              <select value={p.strategy} onChange={(e) => patchPool(p.id, { strategy: e.target.value })} className="text-xs px-1.5 py-0.5 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">{STRATEGIES.map((s) => <option key={s}>{s}</option>)}</select>
+              <Listbox value={p.strategy} onChange={(v) => patchPool(p.id, { strategy: v })} ariaLabel="Strategy" className="w-44" options={STRATEGIES.map((s) => ({ value: s, label: s }))} />
               <span className="text-xs text-tertiary">max-shift {p.maxShiftPerRebalancePct}% · cooldown {p.coolDownMinutes}m</span>
               <button onClick={() => patchPool(p.id, { dryRun: !p.dryRun })} className={`px-1.5 py-0.5 rounded text-xs font-medium ${p.dryRun ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'}`}>{p.dryRun ? 'dry-run' : 'LIVE'}</button>
               <div className="ml-auto flex gap-2">
@@ -149,7 +150,7 @@ export function BudgetCenterClient({ initialPools }: { initialPools: BudgetPool[
               <input autoFocus placeholder="Pool name (e.g. EU Helmets Q4)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" />
               <div className="flex gap-2">
                 <label className="flex-1 text-xs text-slate-500">Daily total €<input value={form.totalEur} onChange={(e) => setForm({ ...form, totalEur: e.target.value })} placeholder="500.00" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
-                <label className="flex-1 text-xs text-slate-500">Strategy<select value={form.strategy} onChange={(e) => setForm({ ...form, strategy: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950">{STRATEGIES.map((s) => <option key={s}>{s}</option>)}</select></label>
+                <label className="flex-1 text-xs text-slate-500">Strategy<Listbox value={form.strategy} onChange={(v) => setForm({ ...form, strategy: v })} ariaLabel="Strategy" className="w-full mt-0.5" options={STRATEGIES.map((s) => ({ value: s, label: s }))} /></label>
               </div>
               <div className="flex gap-2">
                 <label className="flex-1 text-xs text-slate-500">Max-shift %<input value={form.maxShift} onChange={(e) => setForm({ ...form, maxShift: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-950" /></label>

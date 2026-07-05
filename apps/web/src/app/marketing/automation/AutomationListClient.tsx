@@ -31,6 +31,9 @@ import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import {
   ACTIONS,
@@ -536,20 +539,19 @@ function RuleEditor({ apiBase, rule, onClose, onSaved }: EditorProps) {
             icon={<Power className="w-3.5 h-3.5 text-tertiary" />}
             title={t('automation.section.trigger')}
           >
-            <select
+            <Listbox
+              options={TRIGGERS.map((spec) => ({
+                value: spec.id,
+                label: `${spec.label} — ${spec.description}`,
+              }))}
               value={trigger}
-              onChange={(e) => {
-                setTrigger(e.target.value)
+              onChange={(v) => {
+                setTrigger(v)
                 setTriggerConfig({})
               }}
-              className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-            >
-              {TRIGGERS.map((spec) => (
-                <option key={spec.id} value={spec.id}>
-                  {spec.label} — {spec.description}
-                </option>
-              ))}
-            </select>
+              ariaLabel={t('automation.section.trigger')}
+              className="w-full"
+            />
             {triggerSpec && triggerSpec.fields.length > 0 && (
               <div className="mt-2 space-y-2 rounded-md border border-default bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/50">
                 {triggerSpec.fields.map((field) => (
@@ -570,21 +572,19 @@ function RuleEditor({ apiBase, rule, onClose, onSaved }: EditorProps) {
             icon={<Zap className="w-3.5 h-3.5 text-tertiary" />}
             title={t('automation.section.action')}
           >
-            <select
+            <Listbox
+              options={ACTIONS.map((spec) => ({
+                value: spec.id,
+                label: `${spec.requiresAi ? '[AI] ' : ''}${spec.label}`,
+              }))}
               value={action}
-              onChange={(e) => {
-                setAction(e.target.value)
+              onChange={(v) => {
+                setAction(v)
                 setActionConfig({})
               }}
-              className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-            >
-              {ACTIONS.map((spec) => (
-                <option key={spec.id} value={spec.id}>
-                  {spec.requiresAi ? '[AI] ' : ''}
-                  {spec.label}
-                </option>
-              ))}
-            </select>
+              ariaLabel={t('automation.section.action')}
+              className="w-full"
+            />
             {actionSpec && (
               <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
                 {actionSpec.description}
@@ -752,19 +752,16 @@ function FieldEditor({
     return (
       <div>
         <Label />
-        <select
-          value={
-            (value as string) ?? (field.defaultValue as string) ?? ''
-          }
-          onChange={(e) => onChange(e.target.value)}
-          className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-        >
-          {(field.options ?? []).map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        <Listbox
+          options={(field.options ?? []).map((opt) => ({
+            value: opt.value,
+            label: opt.label,
+          }))}
+          value={(value as string) ?? (field.defaultValue as string) ?? ''}
+          onChange={(v) => onChange(v)}
+          ariaLabel={field.label}
+          className="mt-1 w-full"
+        />
       </div>
     )
   }

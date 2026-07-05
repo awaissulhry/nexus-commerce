@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { Listbox } from '@/design-system/components/Listbox'
 import {
   WATERMARK_SPECS,
   applyWatermarkToUrl,
@@ -361,17 +362,16 @@ function WatermarkEditor({
             <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
               {t('brandKit.watermarks.field.type')}
             </span>
-            <select
+            <Listbox
               value={type}
-              onChange={(e) => setType(e.target.value as WatermarkType)}
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-            >
-              {WATERMARK_SPECS.map((spec) => (
-                <option key={spec.id} value={spec.id}>
-                  {spec.label} — {spec.description}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setType(v as WatermarkType)}
+              ariaLabel={t('brandKit.watermarks.field.type')}
+              className="mt-1 w-full"
+              options={WATERMARK_SPECS.map((spec) => ({
+                value: spec.id,
+                label: `${spec.label} — ${spec.description}`,
+              }))}
+            />
           </label>
 
           {(type === 'corner_logo' || type === 'badge') && (
@@ -387,18 +387,18 @@ function WatermarkEditor({
               </Field>
               {type === 'corner_logo' && (
                 <Field label={t('brandKit.watermarks.field.position')}>
-                  <select
+                  <Listbox
                     value={(config.position as string) ?? 'SE'}
-                    onChange={(e) =>
-                      setConfigField('position', e.target.value)
-                    }
-                    className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                  >
-                    <option value="NW">North-west</option>
-                    <option value="NE">North-east</option>
-                    <option value="SW">South-west</option>
-                    <option value="SE">South-east (default)</option>
-                  </select>
+                    onChange={(v) => setConfigField('position', v)}
+                    ariaLabel={t('brandKit.watermarks.field.position')}
+                    className="w-full"
+                    options={[
+                      { value: 'NW', label: 'North-west' },
+                      { value: 'NE', label: 'North-east' },
+                      { value: 'SW', label: 'South-west' },
+                      { value: 'SE', label: 'South-east (default)' },
+                    ]}
+                  />
                 </Field>
               )}
               <NumberField
@@ -472,16 +472,16 @@ function WatermarkEditor({
               />
               {type === 'overlay_band' && (
                 <Field label={t('brandKit.watermarks.field.position')}>
-                  <select
+                  <Listbox
                     value={(config.position as string) ?? 'bottom'}
-                    onChange={(e) =>
-                      setConfigField('position', e.target.value)
-                    }
-                    className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                  >
-                    <option value="top">Top</option>
-                    <option value="bottom">Bottom (default)</option>
-                  </select>
+                    onChange={(v) => setConfigField('position', v)}
+                    ariaLabel={t('brandKit.watermarks.field.position')}
+                    className="w-full"
+                    options={[
+                      { value: 'top', label: 'Top' },
+                      { value: 'bottom', label: 'Bottom (default)' },
+                    ]}
+                  />
                 </Field>
               )}
               {type === 'diagonal_text' && (

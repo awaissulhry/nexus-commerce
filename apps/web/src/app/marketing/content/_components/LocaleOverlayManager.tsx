@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 import { Globe, Plus, Trash2, Save } from 'lucide-react'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { useToast } from '@/components/ui/Toast'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface OverlayRow {
   id: string
@@ -204,19 +205,15 @@ export default function LocaleOverlayManager({ assetId, apiBase }: Props) {
                 </button>
               </div>
               <div className="mt-1.5 flex items-center gap-1.5">
-                <select
-                  className="rounded border border-default bg-white px-1.5 py-0.5 text-[11px] dark:border-slate-700 dark:bg-slate-800"
-                  defaultValue={row.position}
-                  onChange={(e) =>
-                    void upsert({ ...row, position: e.target.value })
+                <Listbox
+                  className="w-36"
+                  value={row.position}
+                  onChange={(value) =>
+                    void upsert({ ...row, position: value })
                   }
-                >
-                  {POSITIONS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
+                  options={POSITIONS.map((p) => ({ value: p, label: p }))}
+                  ariaLabel="Overlay position"
+                />
                 <label className="ml-auto inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
                   <input
                     type="checkbox"
@@ -240,17 +237,13 @@ export default function LocaleOverlayManager({ assetId, apiBase }: Props) {
 
       {adding && (
         <div className="flex items-center gap-1.5 rounded border border-default bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800">
-          <select
-            className="rounded border border-default bg-white px-1.5 py-1 text-[11px] dark:border-slate-700 dark:bg-slate-900"
+          <Listbox
+            className="w-28"
             value={draftLocale}
-            onChange={(e) => setDraftLocale(e.target.value)}
-          >
-            {STARTER_LOCALES.map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
+            onChange={setDraftLocale}
+            options={STARTER_LOCALES.map((l) => ({ value: l, label: l }))}
+            ariaLabel="Overlay locale"
+          />
           <input
             placeholder={t('marketingContent.overlays.placeholder')}
             value={draftText}

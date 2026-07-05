@@ -15,6 +15,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox } from '@/design-system/components/Listbox'
 import { RuleBuilderDrawer } from './RuleBuilderDrawer'
 
 interface TransformRule {
@@ -429,15 +430,17 @@ export function MappingCanvasClient({
               onKeyDown={(e) => e.key === 'Enter' && runPreview()}
               className="flex-1 min-w-48 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-400 font-mono"
             />
-            <select
+            <Listbox
               value={previewChannel}
-              onChange={(e) => setPreviewChannel(e.target.value)}
-              className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-400"
-            >
-              <option value="AMAZON">Amazon</option>
-              <option value="EBAY">eBay</option>
-              <option value="SHOPIFY">Shopify</option>
-            </select>
+              onChange={setPreviewChannel}
+              options={[
+                { value: 'AMAZON', label: 'Amazon' },
+                { value: 'EBAY', label: 'eBay' },
+                { value: 'SHOPIFY', label: 'Shopify' },
+              ]}
+              ariaLabel="Preview channel"
+              className="w-32"
+            />
             <button
               type="button"
               onClick={runPreview}
