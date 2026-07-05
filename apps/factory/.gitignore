@@ -1,4 +1,5 @@
 # F1 — factory-local artifacts (root .gitignore already covers .env*, .next/, dist/)
+.next-dev/
 data/
 *.db
 *.db-wal

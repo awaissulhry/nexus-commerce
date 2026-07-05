@@ -87,6 +87,7 @@ function IntegrationsInner() {
   const [labels, setLabels] = useState<{ id: string; name: string }[]>([]);
   const [chosenLabel, setChosenLabel] = useState<string>("");
   const [editClient, setEditClient] = useState(false);
+  const [changingLabel, setChangingLabel] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [scPublic, setScPublic] = useState("");
   const [scSecret, setScSecret] = useState("");
@@ -170,6 +171,7 @@ function IntegrationsInner() {
         body: JSON.stringify({ labelId: label.id, labelName: label.name }),
       });
       toast(`Scoped to "${label.name}" — backfilled ${res.threads} threads / ${res.messages} messages`, "success");
+      setChangingLabel(false);
       await load();
     } catch (e) {
       toast((e as Error).message, "danger");
@@ -301,11 +303,14 @@ function IntegrationsInner() {
                 </span>
               </div>
               {g.lastError && <Banner tone="danger" title="Last sync error">{g.lastError}</Banner>}
-              {!g.labelName && (
+              {(!g.labelName || changingLabel) && (
                 <div style={{ display: "grid", gap: 8, maxWidth: 480 }}>
                   <Banner tone="info" title="Pick the factory label (FD3)">
                     Ingestion is scoped to ONE Gmail label you control (e.g. “Factory”, filled by Gmail
-                    filters). Personal mail never enters the local database.
+                    filters). Personal mail never enters the local database. Scoping to the whole INBOX
+                    works but pulls everything this address receives — on a shared business address,
+                    prefer a dedicated label. Already-synced conversations stay; new mail follows the
+                    new scope.
                   </Banner>
                   <div style={{ display: "flex", gap: 8 }}>
                     <Button onClick={() => void loadLabels()} disabled={busy === "labels"}>
@@ -328,9 +333,26 @@ function IntegrationsInner() {
                   </div>
                 </div>
               )}
-              {g.labelName && (
-                <div style={{ fontSize: 12.5 }}>
-                  Scope: label <b>{g.labelName}</b> · polled every 10s by the worker
+              {g.labelName && !changingLabel && (
+                <div style={{ fontSize: 12.5, display: "flex", gap: 8, alignItems: "center" }}>
+                  <span>
+                    Scope: label <b>{g.labelName}</b> · polled every 10s by the worker
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChangingLabel(true);
+                      void loadLabels();
+                    }}
+                    style={{ background: "none", border: "none", color: "var(--h10-text-link)", cursor: "pointer", fontSize: 12.5, padding: 0 }}
+                  >
+                    Change
+                  </button>
+                </div>
+              )}
+              {changingLabel && (
+                <div>
+                  <Button onClick={() => setChangingLabel(false)}>Cancel label change</Button>
                 </div>
               )}
               {status!.sync.recent.length > 0 && (

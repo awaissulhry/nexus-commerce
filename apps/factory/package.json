@@ -7,8 +7,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "concurrently -n WEB,WORKER -c blue,green \"next dev -p 3100\" \"tsx watch worker/index.ts\" --kill-others-on-fail",
-    "dev:web": "next dev -p 3100",
+    "dev": "concurrently -n WEB,WORKER -c blue,green \"FACTORY_BUILD_DIR=.next-dev next dev -p 3100\" \"tsx watch worker/index.ts\" --kill-others-on-fail",
+    "dev:web": "FACTORY_BUILD_DIR=.next-dev next dev -p 3100",
     "dev:worker": "tsx watch worker/index.ts",
     "build": "next build",
     "start": "concurrently -n WEB,WORKER -c blue,green \"next start -p 3100\" \"tsx worker/index.ts\"",
