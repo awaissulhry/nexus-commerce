@@ -147,55 +147,6 @@ export const CHANNEL_MARKET_FIELDS: FieldDefinition[] = [
     width: 34,
   },
 
-  // ─── Follow-flag columns (operator toggles; EDITABLE booleans) ─────────────
-  // These appear in the workbook as `title_follows_master@MKT` etc.
-
-  {
-    id: 'title_follows_master',
-    label: 'Title Follows Master',
-    kind: 'boolean',
-    cls: 'EDITABLE',
-    scope: 'MARKET_SCOPED',
-    source: { model: 'ChannelListing', column: 'followMasterTitle' },
-    width: 20,
-  },
-  {
-    id: 'desc_follows_master',
-    label: 'Description Follows Master',
-    kind: 'boolean',
-    cls: 'EDITABLE',
-    scope: 'MARKET_SCOPED',
-    source: { model: 'ChannelListing', column: 'followMasterDescription' },
-    width: 24,
-  },
-  {
-    id: 'price_follows_master',
-    label: 'Price Follows Master',
-    kind: 'boolean',
-    cls: 'EDITABLE',
-    scope: 'MARKET_SCOPED',
-    source: { model: 'ChannelListing', column: 'followMasterPrice' },
-    width: 20,
-  },
-  {
-    id: 'qty_follows_master',
-    label: 'Qty Follows Master',
-    kind: 'boolean',
-    cls: 'EDITABLE',
-    scope: 'MARKET_SCOPED',
-    source: { model: 'ChannelListing', column: 'followMasterQuantity' },
-    width: 18,
-  },
-  {
-    id: 'bullets_follows_master',
-    label: 'Bullets Follow Master',
-    kind: 'boolean',
-    cls: 'EDITABLE',
-    scope: 'MARKET_SCOPED',
-    source: { model: 'ChannelListing', column: 'followMasterBulletPoints' },
-    width: 22,
-  },
-
   // ─── Master cache columns (DERIVED; greyed readonly in workbook) ───────────
 
   {

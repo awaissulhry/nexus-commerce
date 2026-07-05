@@ -62,7 +62,7 @@ const TAB: Record<string, string> = {
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 function isReadonly(f: FieldDefinition): boolean {
-  return f.cls === 'READONLY_SYNCED' || f.cls === 'DERIVED'
+  return f.cls === 'READONLY_SYNCED' || f.cls === 'DERIVED' || f.cls === 'SYSTEM'
 }
 
 function mktHdrColor(mkt: string): string {
@@ -158,6 +158,9 @@ function addDropdown(ws: ExcelJS.Worksheet, key: string, opts: string[], strict 
  */
 function readSource(row: Record<string, unknown>, field: FieldDefinition): unknown {
   if (field.id === 'parent_sku') return row['parent_sku'] ?? ''
+  if (field.id === 'hierarchy_level') {
+    return row['parent_sku'] ? 'CHILD' : (row['isParent'] ? 'PARENT' : 'STANDALONE')
+  }
   const col = field.source.column
   if (col.includes('.')) {
     return col.split('.').reduce<unknown>((o, k) => {
@@ -197,7 +200,7 @@ function buildReadme(
   }
   sheetNames.push('(Images — deferred to FF2)', '_meta')
 
-  rl('NEXUS FLAT FILE v2', 'snapshotId: ' + meta.snapshotId + '  exportedAt: ' + meta.exportedAt, true)
+  rl('NEXUS FLAT FILE v2', 'Nexus Flat-File export (schema: ff-v2.0). Snapshot metadata is on the hidden _meta sheet.', true)
   rl('', '')
   rl('SHEETS', sheetNames.join(' \xB7 '), true) // middle dot separator
   rl('Products', 'One row per SKU. Master/shared data from the Product model (parent + child rows).')

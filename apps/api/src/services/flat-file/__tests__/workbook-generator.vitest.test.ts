@@ -162,6 +162,29 @@ describe('generateWorkbook', () => {
   })
 })
 
+describe('no duplicate column keys in channel sheet header', () => {
+  it('Amazon header has no duplicate column keys when using governed fields across 2+ markets', async () => {
+    // Uses the existing fixture model which has AMAZON markets [IT, DE] and a governed price field.
+    // buildChannelSheet auto-emits price_follows_master@IT and price_follows_master@DE;
+    // C1 fix ensures those are NOT also emitted from explicit registry entries.
+    const bytes = await generateWorkbook(model, data, META)
+    const wb = new ExcelJS.Workbook()
+    await wb.xlsx.load(Buffer.from(bytes))
+
+    const A = wb.getWorksheet('Amazon')!
+    const headers: string[] = []
+    A.getRow(1).eachCell((cell) => {
+      if (cell.value != null && cell.value !== '') {
+        headers.push(String(cell.value))
+      }
+    })
+
+    // Every header value must be unique — no duplicate column keys
+    expect(headers.length).toBeGreaterThan(0)
+    expect(new Set(headers).size).toBe(headers.length)
+  })
+})
+
 describe('rowFingerprint', () => {
   it('is stable regardless of key insertion order', () => {
     expect(rowFingerprint('S', 'MASTER', { a: 1, b: 2 }))

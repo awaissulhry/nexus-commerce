@@ -76,6 +76,10 @@ export class ExportWizardService {
         throw new Error('columns is required (non-empty)')
       }
     }
+    // workbook format and catalog entity must always go together
+    if ((input.format === 'workbook') !== (input.targetEntity === 'catalog')) {
+      throw new Error('workbook format requires targetEntity=catalog (and vice versa)')
+    }
     const job = await this.prisma.exportJob.create({
       data: {
         jobName: input.jobName.trim(),
@@ -197,7 +201,7 @@ export class ExportWizardService {
         })
         const stored = await this.storeArtifact(
           bytes,
-          job.jobName,
+          `${job.id}.xlsx`,
           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
         return this.prisma.exportJob.update({
@@ -239,7 +243,7 @@ export class ExportWizardService {
               : job.format === 'json'
                 ? 'application/json'
                 : 'application/pdf'
-      const stored = await this.storeArtifact(bytes, job.jobName, mime)
+      const stored = await this.storeArtifact(bytes, `${job.id}`, mime)
       return this.prisma.exportJob.update({
         where: { id: jobId },
         data: {
