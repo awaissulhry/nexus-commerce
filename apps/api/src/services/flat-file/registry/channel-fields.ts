@@ -77,6 +77,7 @@ export const CHANNEL_MARKET_FIELDS: FieldDefinition[] = [
     cls: 'EDITABLE',
     scope: 'MARKET_SCOPED',
     source: { model: 'ChannelListing', column: 'title' },
+    maxUtf8ByteLength: 200,  // Amazon listing title limit (200 bytes)
     followMaster: {
       followColumn: 'followMasterTitle',
       overrideColumn: 'titleOverride',
