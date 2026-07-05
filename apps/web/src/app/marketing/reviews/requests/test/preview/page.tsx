@@ -52,14 +52,14 @@ function PreviewInner() {
   }, [l, productName])
 
   if (html === null) {
-    return <p style={{ fontFamily: 'monospace', color: '#64748b', padding: 16 }}>Loading preview…</p>
+    return <p className="p-4 font-mono text-sm text-slate-500">Loading preview…</p>
   }
   return <div dangerouslySetInnerHTML={{ __html: html }} />
 }
 
 export default function PreviewPage() {
   return (
-    <Suspense fallback={<p style={{ fontFamily: 'monospace', color: '#64748b', padding: 16 }}>Loading preview…</p>}>
+    <Suspense fallback={<p className="p-4 font-mono text-sm text-slate-500">Loading preview…</p>}>
       <PreviewInner />
     </Suspense>
   )
