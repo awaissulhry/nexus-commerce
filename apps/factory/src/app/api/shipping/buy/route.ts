@@ -21,12 +21,13 @@ import { canTransition } from "@/lib/orders/transitions";
 
 export const permission = FEATURES.labelsPurchase;
 
-const Body = z.object({ orderId: z.string().min(1), to: AddressZ, parcel: ParcelZ, rateCode: z.string().min(1) });
+const Body = z.object({ orderId: z.string().min(1), to: AddressZ, parcel: ParcelZ, rateCode: z.string().min(1), count: z.number().int().min(1).max(20).optional() });
 
 export const POST = guarded(FEATURES.labelsPurchase, async (req, { actor, resolved }) => {
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid request" }, { status: 400 });
   const { orderId, to, parcel, rateCode } = parsed.data;
+  const count = parsed.data.count ?? 1; // bulk-buy: one parcel/shipment per box (size-runs)
 
   const order = await prisma.order.findUnique({ where: { id: orderId }, select: { id: true, number: true, state: true, party: { select: { id: true, currency: true } } } });
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -34,48 +35,49 @@ export const POST = guarded(FEATURES.labelsPurchase, async (req, { actor, resolv
   if (!canTransition("READY", "SHIPPED").ok) return NextResponse.json({ error: "Order can't move to shipped" }, { status: 400 });
 
   const carrier = await resolveCarrier();
-  const ship = await prisma.shipment.create({
-    data: {
-      orderId: order.id,
-      carrierAccountId: carrier.account?.id ?? null,
-      state: "CREATED",
-      shipToJson: to as Prisma.InputJsonValue,
-      parcelJson: parcel as Prisma.InputJsonValue,
-    },
-    select: { id: true },
-  });
 
-  const input = { shipmentId: ship.id, orderNumber: order.number, to, parcel, currency: order.party.currency ?? "EUR" };
-  let label;
+  // validate the rate once (cost is authoritative from the carrier, not the client)
+  const preview = { shipmentId: "rate-preview", orderNumber: order.number, to, parcel, currency: order.party.currency ?? "EUR" };
+  let rate;
   try {
-    const rates = await carrier.adapter.getRates(input);
-    const rate = rates.find((r) => r.code === rateCode);
-    if (!rate) {
-      await prisma.shipment.delete({ where: { id: ship.id } }).catch(() => {});
-      return NextResponse.json({ error: "That rate is no longer available — refresh rates" }, { status: 409 });
-    }
-    label = await carrier.adapter.createShipment(input, rate);
+    rate = (await carrier.adapter.getRates(preview)).find((r) => r.code === rateCode);
   } catch (err) {
-    await prisma.shipment.delete({ where: { id: ship.id } }).catch(() => {});
-    return NextResponse.json({ error: `Label purchase failed: ${(err as Error).message}` }, { status: 502 });
+    return NextResponse.json({ error: `Could not fetch rates: ${(err as Error).message}` }, { status: 502 });
+  }
+  if (!rate) return NextResponse.json({ error: "That rate is no longer available — refresh rates" }, { status: 409 });
+
+  // buy `count` labels — each its own Shipment (true multicollo is out; N boxes = N shipments)
+  const bought: { shipmentId: string; trackingNumber: string; labelUrl: string }[] = [];
+  for (let i = 0; i < count; i++) {
+    const ship = await prisma.shipment.create({
+      data: { orderId: order.id, carrierAccountId: carrier.account?.id ?? null, state: "CREATED", shipToJson: to as Prisma.InputJsonValue, parcelJson: parcel as Prisma.InputJsonValue },
+      select: { id: true },
+    });
+    let label;
+    try {
+      label = await carrier.adapter.createShipment({ ...preview, shipmentId: ship.id }, rate);
+    } catch (err) {
+      await prisma.shipment.delete({ where: { id: ship.id } }).catch(() => {});
+      if (bought.length === 0) return NextResponse.json({ error: `Label purchase failed: ${(err as Error).message}` }, { status: 502 });
+      break; // some labels succeeded — keep them, stop here
+    }
+    const labelRef = saveLabel(ship.id, label.labelBase64, label.labelFormat);
+    await prisma.shipment.update({
+      where: { id: ship.id },
+      data: { state: "LABEL_PURCHASED", trackingNumber: label.trackingNumber, trackingUrl: label.trackingUrl, service: `${label.carrier} · ${label.service}`, costCents: label.costCents, labelRef, labelFormat: label.labelFormat },
+    });
+    void audit({ actorId: actor!.id, entityType: "shipment", entityId: ship.id, action: "label.purchased", after: { orderId: order.id, carrier: label.carrier, service: label.service, trackingNumber: label.trackingNumber, live: carrier.live } });
+    await publishEventDurable("shipment.updated", { shipmentId: ship.id, orderId: order.id, state: "LABEL_PURCHASED" });
+    bought.push({ shipmentId: ship.id, trackingNumber: label.trackingNumber, labelUrl: `/api/shipping/${ship.id}/label` });
   }
 
-  const labelRef = saveLabel(ship.id, label.labelBase64, label.labelFormat);
-  const service = `${label.carrier} · ${label.service}`;
-
   await prisma.$transaction([
-    prisma.shipment.update({
-      where: { id: ship.id },
-      data: { state: "LABEL_PURCHASED", trackingNumber: label.trackingNumber, trackingUrl: label.trackingUrl, service, costCents: label.costCents, labelRef, labelFormat: label.labelFormat },
-    }),
     prisma.order.update({ where: { id: order.id }, data: { state: "SHIPPED" } }),
     prisma.party.update({ where: { id: order.party.id }, data: { addressJson: to as Prisma.InputJsonValue } }),
   ]);
-
-  void audit({ actorId: actor!.id, entityType: "shipment", entityId: ship.id, action: "label.purchased", after: { orderId: order.id, carrier: label.carrier, service: label.service, trackingNumber: label.trackingNumber, live: carrier.live } });
-  void audit({ actorId: actor!.id, entityType: "order", entityId: order.id, action: "state-changed", before: { from: "READY" }, after: { to: "SHIPPED", shipmentId: ship.id } });
-  await publishEventDurable("shipment.updated", { shipmentId: ship.id, orderId: order.id, state: "LABEL_PURCHASED" });
+  void audit({ actorId: actor!.id, entityType: "order", entityId: order.id, action: "state-changed", before: { from: "READY" }, after: { to: "SHIPPED", shipments: bought.length } });
   await publishEventDurable("order.updated", { orderId: order.id, from: "READY", to: "SHIPPED" });
 
-  return jsonStripped({ ok: true, shipmentId: ship.id, trackingNumber: label.trackingNumber, labelUrl: `/api/shipping/${ship.id}/label`, costCents: label.costCents, live: carrier.live }, resolved);
+  const first = bought[0];
+  return jsonStripped({ ok: true, count: bought.length, shipmentId: first.shipmentId, trackingNumber: first.trackingNumber, labelUrl: first.labelUrl, labels: bought, live: carrier.live }, resolved);
 });

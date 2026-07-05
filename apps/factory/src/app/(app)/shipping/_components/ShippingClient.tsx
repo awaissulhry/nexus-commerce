@@ -9,8 +9,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Truck, Package, ExternalLink, Printer, Send, Ban, MapPin } from "lucide-react";
-import { DataGrid, Drawer, useToast } from "@/design-system/components";
+import { Truck, Package, ExternalLink, Printer, Send, Ban, MapPin, ClipboardList, Download } from "lucide-react";
+import { DataGrid, Drawer, Modal, useToast } from "@/design-system/components";
 import { Button, Pill, RadioCard } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
@@ -32,6 +32,7 @@ export function ShippingClient() {
   const [buyOrder, setBuyOrder] = useState<ReadyRow | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ShipmentDetail | null>(null);
+  const [daySheet, setDaySheet] = useState(false);
 
   const load = useCallback(async () => {
     try { setData(await apiJson<ShippingResponse>("/api/shipping")); }
@@ -60,10 +61,12 @@ export function ShippingClient() {
           <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}><Truck size={18} /> Shipping</h1>
           <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginTop: 2 }}>Buy a label, share the tracking, and let the order move to delivered.</div>
         </div>
-        <div style={{ marginLeft: "auto" }}>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
           {data && (data.carrier.connected
             ? <Pill tone="success">Connected · {data.carrier.label ?? data.carrier.name}</Pill>
             : <Pill tone="warning">No carrier connected · test mode</Pill>)}
+          <Button onClick={() => setDaySheet(true)}><ClipboardList size={13} /> Day-sheet</Button>
+          <a href="/api/exports/shipments" className="h10-ds-btn" style={{ textDecoration: "none", display: "inline-flex", gap: 6, alignItems: "center" }}><Download size={13} /> Export</a>
         </div>
       </div>
 
@@ -103,7 +106,42 @@ export function ShippingClient() {
 
       <BuyPanel order={buyOrder} presets={data?.presets ?? []} canCost={canCost} onClose={() => setBuyOrder(null)} onBought={() => { setBuyOrder(null); void load(); }} />
       <ShipmentDrawer id={detailId} detail={detail} canVoid={canVoid} onClose={() => setDetailId(null)} onChanged={() => { void load(); if (detailId) void loadDetail(detailId); }} />
+      <DaySheet open={daySheet} carrierConnected={data?.carrier.connected ?? false} canBook={canBuy} onClose={() => setDaySheet(false)} />
     </div>
+  );
+}
+
+function DaySheet({ open, carrierConnected, canBook, onClose }: { open: boolean; carrierConnected: boolean; canBook: boolean; onClose: () => void }) {
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const recordPickup = async () => {
+    setBusy(true);
+    try {
+      const r = await apiJson<{ status: string; parcels: number }>("/api/shipping/pickup", { method: "POST", body: "{}" });
+      toast(r.status === "requested" ? `Pickup requested for ${r.parcels} parcel(s)` : "Pickup recorded (outside the system)", "success");
+    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
+  };
+  return (
+    <Modal open={open} onClose={onClose} title="Day-sheet" size="sm" footer={<Button onClick={onClose}>Close</Button>}>
+      <div style={{ display: "grid", gap: 14 }}>
+        <div>
+          <div style={lbl}>Today's manifest</div>
+          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginBottom: 8 }}>A printable list of every parcel shipped today, for the driver handover.</div>
+          <a href="/api/shipping/manifest" target="_blank" rel="noreferrer" className="h10-ds-btn" style={{ textDecoration: "none", display: "inline-flex", gap: 6, alignItems: "center" }}><Printer size={13} /> Print day-sheet</a>
+        </div>
+        <div style={{ borderTop: "1px solid var(--h10-border-subtle)", paddingTop: 12 }}>
+          <div style={lbl}>Pickup</div>
+          {carrierConnected ? (
+            <>
+              <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginBottom: 8 }}>Record a pickup for today's parcels (booked with your carrier where supported, otherwise noted as arranged directly).</div>
+              {canBook && <Button variant="primary" onClick={recordPickup} disabled={busy}><Truck size={13} /> Record pickup</Button>}
+            </>
+          ) : (
+            <div style={{ fontSize: 12.5, color: "var(--h10-text-3)" }}>Connect a carrier in Settings › Integrations to record a pickup.</div>
+          )}
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -189,6 +227,7 @@ function BuyPanel({ order, presets, canCost, onClose, onBought }: { order: Ready
   const { toast } = useToast();
   const [presetKey, setPresetKey] = useState("");
   const [custom, setCustom] = useState({ weightGrams: "", lengthCm: "", widthCm: "", heightCm: "" });
+  const [boxes, setBoxes] = useState("1");
   const [to, setTo] = useState<Address>(emptyAddr());
   const [rates, setRates] = useState<Rate[] | null>(null);
   const [rateCode, setRateCode] = useState("");
@@ -200,7 +239,7 @@ function BuyPanel({ order, presets, canCost, onClose, onBought }: { order: Ready
     setTo(order.address ? { ...emptyAddr(), ...order.address } : { ...emptyAddr(), name: order.partyName });
     setPresetKey(presets.find((p) => p.key === "M") ? "M" : (presets[0]?.key ?? "custom"));
     setCustom({ weightGrams: "", lengthCm: "", widthCm: "", heightCm: "" });
-    setRates(null); setRateCode(""); setBusy(null);
+    setBoxes("1"); setRates(null); setRateCode(""); setBusy(null);
   }, [order, presets]);
 
   const parcel = useMemo(() => {
@@ -228,13 +267,14 @@ function BuyPanel({ order, presets, canCost, onClose, onBought }: { order: Ready
     } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(null); }
   };
 
+  const count = Math.min(20, Math.max(1, parseInt(boxes, 10) || 1));
   const buy = async () => {
     if (!order || !parcel || !rateCode) return;
     setBusy("buy");
     try {
-      const r = await apiJson<{ labelUrl: string; trackingNumber: string }>("/api/shipping/buy", { method: "POST", body: JSON.stringify({ orderId: order.id, to, parcel, rateCode }) });
+      const r = await apiJson<{ labelUrl: string; trackingNumber: string; count: number }>("/api/shipping/buy", { method: "POST", body: JSON.stringify({ orderId: order.id, to, parcel, rateCode, count }) });
       if (typeof window !== "undefined") window.open(r.labelUrl, "_blank");
-      toast(`Label bought — ${r.trackingNumber}`, "success");
+      toast(r.count > 1 ? `${r.count} labels bought` : `Label bought — ${r.trackingNumber}`, "success");
       onBought();
     } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(null); }
   };
@@ -267,6 +307,11 @@ function BuyPanel({ order, presets, canCost, onClose, onBought }: { order: Ready
                 <NumIn label="H (cm)" v={custom.heightCm} on={(v) => setCustom((c) => ({ ...c, heightCm: v }))} />
               </div>
             )}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+              <span style={{ fontSize: 12, color: "var(--h10-text-2)" }}>Boxes</span>
+              <input type="number" min="1" max="20" value={boxes} onChange={(e) => setBoxes(e.target.value)} style={{ ...inp, width: 68 }} />
+              {count > 1 && <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>{count} labels — one per box (size-run)</span>}
+            </div>
           </div>
 
           <div>
