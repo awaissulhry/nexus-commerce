@@ -37,7 +37,7 @@
 /* key/value stat rows (detail Settings card, dashboard Status card) */
 .eb-headstats { display: flex; gap: 26px; flex-wrap: wrap; }
 .eb-headstats .k { display: block; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #8a93a1; margin-bottom: 2px; }
-.eb-headstats .v { display: block; font-size: 15px; font-weight: 650; color: #1c2530; }
+.eb-headstats .v { display: block; font-size: 15px; font-weight: 700; color: #1c2530; }
 
 /* CSV dry-run diff table (inside the import modal) */
 .eb-difftable { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -133,7 +133,7 @@
 .eb-recs { display: flex; flex-direction: column; }
 .eb-rec { display: flex; align-items: flex-start; gap: 12px; padding: 10px 2px; border-bottom: 1px solid #eef1f5; }
 .eb-rec:last-child { border-bottom: none; }
-.eb-rec-count { min-width: 34px; height: 24px; border-radius: 999px; background: #eaf2fe; color: #0a4ba8; font-size: 12.5px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; padding: 0 8px; margin-top: 1px; }
+.eb-rec-count { min-width: 34px; height: 24px; border-radius: 999px; background: #eaf2fe; color: #0a4ba8; font-size: 12.5px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; padding: 0 8px; margin-top: 1px; }
 .eb-rec-body { flex: 1; min-width: 0; }
 .eb-rec-body b { font-size: 13px; color: #1c2530; }
 .eb-rec-criteria { font-size: 11.5px; color: #5b6573; line-height: 1.45; margin: 2px 0 0; }
@@ -320,3 +320,16 @@
 .eb-root .h10-am-grid th.sorted .hl, .eb-root .h10-am-grid th.sorted .sortable { color: #475467; }
 .eb-root .h10-am-grid tr.h10-am-total td { font-size: 12.5px; }
 .eb-root .h10-am-grid tr.h10-am-total b { font-weight: 700; }
+
+/* EV4h.2 — dashboard type-register parity with the Amazon console (measured
+   on prod 2026-07-04): the eBay dashboard consumes Amazon's dashboard.css
+   (outside this tree, never edited), whose 9px/800 · 19px/800 · 12px/800 ·
+   10.5px/800 registers exist nowhere in ads.css. Re-pin the four classes to
+   the nearest registers ads.css actually carries — caps 11/700 #8a93a1
+   (.h10-cd-products li.hd), value 19/700 (.h10-aiad-ov .kpi .vl), card head
+   12/700 (.h10-am-grid tr.h10-am-grp .gl), delta 10.5/700 (.h10-neg-mtag).
+   .eb-root-scoped so Amazon's own dashboard is unaffected. */
+.eb-root .dash-kpi-k { font-size: 11px; font-weight: 700; letter-spacing: 0.03em; }
+.eb-root .dash-kpi-v { font-weight: 700; }
+.eb-root .dash-card-h { font-weight: 700; }
+.eb-root .dd { font-weight: 700; }

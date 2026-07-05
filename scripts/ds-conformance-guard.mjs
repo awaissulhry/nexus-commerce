@@ -30,7 +30,10 @@ const BASELINE = join(process.cwd(), 'scripts/ds-conformance-baseline.json')
 // Never-enforced prefixes (relative to app/). Legacy consoles await Wave 0;
 // the Amazon ads tree is the deliberate H10 pixel-match world. NOTE:
 // marketing/ads/ebay is carved back IN below — it must stay at zero.
-const ALLOW = ['marketing/ads-console/', 'marketing/advertising/', 'marketing/ads/']
+const ALLOW = ['marketing/ads-console/', 'marketing/advertising/', 'marketing/ads/',
+  // /r = the RV.6 public review-funnel (customer-facing, email-linked, server-rendered
+  // without app CSS — its inline styles are load-bearing, not chrome). Investigated 2026-07-04.
+  'r/']
 const ENFORCE_ANYWAY = ['marketing/ads/ebay/']
 
 const METRICS = {

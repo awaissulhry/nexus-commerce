@@ -1,6 +1,6 @@
 {
   "note": "DS-conformance ratchet — waves lower these, pushes may never raise them",
-  "updatedAt": "2026-07-04",
+  "updatedAt": "2026-07-05",
   "sections": {
     "403": {
       "select": 0,
@@ -15,8 +15,8 @@
       "hex": 0
     },
     "_shared": {
-      "select": 10,
-      "date": 4,
+      "select": 2,
+      "date": 2,
       "fontSize": 0,
       "hex": 0
     },
@@ -45,13 +45,13 @@
       "hex": 0
     },
     "bulk-operations": {
-      "select": 28,
+      "select": 1,
       "date": 2,
       "fontSize": 0,
       "hex": 0
     },
     "catalog": {
-      "select": 11,
+      "select": 1,
       "date": 0,
       "fontSize": 0,
       "hex": 0
@@ -63,14 +63,14 @@
       "hex": 0
     },
     "customers": {
-      "select": 4,
+      "select": 0,
       "date": 0,
       "fontSize": 0,
       "hex": 0
     },
     "dashboard": {
-      "select": 5,
-      "date": 3,
+      "select": 0,
+      "date": 0,
       "fontSize": 0,
       "hex": 0
     },
@@ -99,8 +99,8 @@
       "hex": 0
     },
     "fulfillment": {
-      "select": 60,
-      "date": 12,
+      "select": 0,
+      "date": 0,
       "fontSize": 2,
       "hex": 2
     },
@@ -112,7 +112,7 @@
     },
     "insights": {
       "select": 0,
-      "date": 1,
+      "date": 0,
       "fontSize": 0,
       "hex": 0
     },
@@ -129,8 +129,8 @@
       "hex": 0
     },
     "listings": {
-      "select": 11,
-      "date": 5,
+      "select": 0,
+      "date": 0,
       "fontSize": 0,
       "hex": 0
     },
@@ -147,8 +147,8 @@
       "hex": 0
     },
     "marketing": {
-      "select": 51,
-      "date": 2,
+      "select": 0,
+      "date": 0,
       "fontSize": 0,
       "hex": 0
     },
@@ -159,8 +159,8 @@
       "hex": 0
     },
     "orders": {
-      "select": 6,
-      "date": 2,
+      "select": 0,
+      "date": 0,
       "fontSize": 0,
       "hex": 0
     },
@@ -184,30 +184,24 @@
     },
     "po": {
       "select": 0,
-      "date": 1,
+      "date": 0,
       "fontSize": 0,
       "hex": 0
     },
     "pricing": {
-      "select": 6,
-      "date": 4,
-      "fontSize": 4,
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
       "hex": 0
     },
     "products": {
-      "select": 92,
-      "date": 5,
+      "select": 15,
+      "date": 0,
       "fontSize": 5,
       "hex": 1
     },
-    "r": {
-      "select": 0,
-      "date": 0,
-      "fontSize": 16,
-      "hex": 13
-    },
     "reconciliation": {
-      "select": 1,
+      "select": 0,
       "date": 0,
       "fontSize": 0,
       "hex": 0
@@ -225,13 +219,13 @@
       "hex": 0
     },
     "settings": {
-      "select": 26,
+      "select": 3,
       "date": 0,
       "fontSize": 0,
       "hex": 0
     },
     "sync-logs": {
-      "select": 2,
+      "select": 0,
       "date": 0,
       "fontSize": 0,
       "hex": 0
