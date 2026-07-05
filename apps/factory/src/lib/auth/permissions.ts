@@ -41,6 +41,7 @@ export const FEATURES = {
   pricelistsManage: "pricelists.manage",
   labelsPurchase: "labels.purchase",
   labelsVoid: "labels.void",
+  invoicesManage: "invoices.manage", // FP9: create/send/mark-paid invoices. OWNER only; the whole page is worker-invisible (FD13).
   paymentsRecord: "payments.record",
   importsRun: "imports.run",
   exportsRun: "exports.run",

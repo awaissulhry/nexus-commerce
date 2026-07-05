@@ -1,6 +1,6 @@
-/** F1 — designed empty state; the real page lands in its FP cycle (src/lib/nav.ts). */
-import { ComingSoon } from "@/components/ComingSoon";
+/** FP9 — Financials is LIVE: order-level money truth (spec: docs/factory/FP9-SPEC.md). */
+import { FinancialsClient } from "./_components/FinancialsClient";
 
-export default function Page() {
-  return <ComingSoon pageId="financials" />;
+export default function FinancialsPage() {
+  return <FinancialsClient />;
 }
