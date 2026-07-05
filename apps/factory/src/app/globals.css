@@ -1,0 +1,140 @@
+/**
+ * F1 — factory globals. The five DS stylesheets load globally in layout.tsx
+ * (greenfield app — no alias collision, unlike apps/web). Shell text renders
+ * with -webkit-font-smoothing: auto (heavier) — the documented H10 design
+ * choice (F0-DESIGN-BRIDGE §Fonts).
+ */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-weight: 450;
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+  text-rendering: optimizeLegibility;
+  background: var(--h10-bg);
+  color: var(--h10-text);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* F1 — full-height frame for the DS AppShell (it fills its parent). */
+.factory-frame {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* F1 — designed empty-state panel for pages awaiting their FP cycle. */
+.factory-coming {
+  max-width: 860px;
+}
+.factory-coming .fp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--h10-primary);
+  background: var(--h10-primary-soft);
+  border: 1px solid var(--h10-primary-ghost-border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  margin-bottom: 14px;
+}
+.factory-coming ul {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--h10-text-2);
+}
+.factory-coming .golden {
+  margin-top: 16px;
+  font-size: 12.5px;
+  color: var(--h10-text-3);
+  border-top: 1px solid var(--h10-border-subtle);
+  padding-top: 12px;
+}
+
+/* F1 — login card (standalone page outside the shell). */
+.factory-login {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  background: var(--h10-bg);
+}
+.factory-login .card {
+  width: 360px;
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border);
+  border-radius: var(--h10-radius-2xl);
+  box-shadow: var(--h10-shadow-card);
+  padding: 28px;
+  display: grid;
+  gap: 14px;
+}
+.factory-login .brandrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.factory-login .mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--h10-primary);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.factory-login .word {
+  font-size: 18px;
+  font-weight: 700;
+}
+.factory-login .word b {
+  color: var(--h10-primary);
+  font-weight: 800;
+}
+.factory-login .err {
+  font-size: 12.5px;
+  color: var(--h10-danger);
+}
+
+/* F1 — rail footer chip (user + sign out). */
+.factory-railuser {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.factory-railuser .who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.factory-railuser button {
+  background: none;
+  border: none;
+  color: var(--h10-text-link);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}

@@ -1,0 +1,782 @@
+/**
+ * DS pattern (organism) styles — tokenized, `.h10-ds-*` namespace (see
+ * ../docs/NAMING.md). Depends only on tokens.css. Phase 5.
+ */
+
+/* ── AppShell ────────────────────────────────────────────────────── */
+.h10-ds-shell {
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+  padding-left: 66px;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+}
+.h10-ds-rail {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 66px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--h10-rail-bg);
+  border-right: 1px solid var(--h10-rail-border);
+  transition: width 0.18s ease, box-shadow 0.18s ease;
+}
+.h10-ds-rail:hover {
+  width: 248px;
+  overflow-y: auto;
+  box-shadow: var(--h10-shadow-rail);
+}
+.h10-ds-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+  padding-left: 17px;
+  flex-shrink: 0;
+}
+.h10-ds-brand .mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--color-primary);
+  color: var(--h10-text-inverse);
+  font-weight: 800;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+.h10-ds-brand .name {
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+.h10-ds-rail:hover .h10-ds-brand .name {
+  opacity: 1;
+}
+.h10-ds-nav {
+  flex: 1;
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.h10-ds-navitem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  margin: 1px 8px;
+  border: none;
+  background: none;
+  border-radius: var(--h10-radius-xl);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: none;
+  cursor: pointer;
+  overflow: hidden;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.h10-ds-navitem .ico {
+  flex: 0 0 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+}
+.h10-ds-navitem .lbl {
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+.h10-ds-rail:hover .h10-ds-navitem .lbl {
+  opacity: 1;
+}
+.h10-ds-navitem:hover {
+  background: var(--border-subtle);
+  color: var(--text-primary);
+}
+.h10-ds-navitem:hover .ico {
+  color: var(--text-secondary);
+}
+.h10-ds-navitem.on {
+  background: var(--color-primary);
+  color: var(--h10-text-inverse);
+}
+.h10-ds-navitem.on .ico {
+  color: var(--h10-text-inverse);
+}
+.h10-ds-navbadge {
+  position: absolute;
+  left: 31px;
+  top: 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--status-danger-line);
+  color: var(--h10-text-inverse);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--h10-rail-bg);
+}
+.h10-ds-group {
+  display: flex;
+  flex-direction: column;
+}
+.h10-ds-navitem .chev {
+  margin-left: auto;
+  margin-right: 16px;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition: opacity 0.14s ease, transform 0.18s ease;
+}
+.h10-ds-rail:hover .h10-ds-navitem .chev {
+  opacity: 1;
+}
+.h10-ds-navitem .chev.open {
+  transform: rotate(180deg);
+}
+.h10-ds-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 2px 0 4px 58px;
+  padding-right: 8px;
+}
+.h10-ds-rail:not(:hover) .h10-ds-sub {
+  display: none;
+}
+.h10-ds-subitem {
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: var(--h10-radius-sm);
+  cursor: pointer;
+}
+.h10-ds-subitem:hover {
+  background: var(--h10-surface-hover);
+  color: var(--text-primary);
+}
+.h10-ds-subitem.on {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.h10-ds-railft {
+  white-space: nowrap;
+  padding: 12px 16px;
+  font-size: 10px;
+  color: var(--text-disabled);
+  opacity: 0;
+  transition: opacity 0.14s ease;
+  flex-shrink: 0;
+}
+.h10-ds-rail:hover .h10-ds-railft {
+  opacity: 1;
+}
+.h10-ds-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 26px 30px;
+  overflow-y: auto;
+}
+
+/* ── PageHeader ──────────────────────────────────────────────────── */
+.h10-ds-pagehdr {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.h10-ds-pagehdr .eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  margin-bottom: 2px;
+}
+.h10-ds-pagehdr h1 {
+  margin: 0;
+  font-size: 27px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+.h10-ds-pagehdr .sub {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+.h10-ds-pagehdr-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── DetailHeader ────────────────────────────────────────────────── */
+.h10-ds-detailhdr {
+  margin-bottom: 18px;
+}
+.h10-ds-detailhdr .back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+.h10-ds-detailhdr-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.h10-ds-detailhdr-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.h10-ds-detailhdr-title h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+/* ── FilterPanel ─────────────────────────────────────────────────── */
+.h10-ds-fpanel {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--h10-radius-2xl);
+  padding: 14px 18px 16px;
+}
+.h10-ds-fpanel.collapsed {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+.h10-ds-fpanel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+/* balance: when collapsed the header is the only child — drop the orphan margin */
+.h10-ds-fpanel.collapsed .h10-ds-fpanel-head {
+  margin-bottom: 0;
+}
+.h10-ds-fpanel-head h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+.h10-ds-fpanel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.h10-ds-fpanel-toggle svg {
+  transition: transform 0.15s ease;
+}
+.h10-ds-fpanel-toggle.open svg {
+  transform: rotate(180deg);
+}
+.h10-ds-fpanel-presets {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.h10-ds-fpanel-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 11px 14px;
+}
+.h10-ds-fpanel-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.h10-ds-fpanel-field.wide {
+  grid-column: span 2;
+}
+.h10-ds-fpanel-field > .flbl {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--h10-text-strong);
+}
+/* make DS controls fill their field cell */
+.h10-ds-fpanel-field > .h10-ds-ms,
+.h10-ds-fpanel-field > .h10-ds-combo,
+.h10-ds-fpanel-field > .h10-ds-select,
+.h10-ds-fpanel-field > .h10-ds-field {
+  display: flex;
+  width: 100%;
+}
+.h10-ds-fpanel-field .h10-ds-ms-btn,
+.h10-ds-fpanel-field .h10-ds-combo-in,
+.h10-ds-fpanel-field .h10-ds-select select {
+  width: 100%;
+  min-width: 0;
+}
+.h10-ds-fpanel-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.h10-ds-fpanel-foot .grow {
+  flex: 1;
+}
+@media (max-width: 1320px) {
+  .h10-ds-fpanel-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .h10-ds-fpanel-field.wide {
+    grid-column: span 1;
+  }
+}
+@media (max-width: 760px) {
+  .h10-ds-fpanel-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ── FilterBar range field (min/max with optional €/% addon) ─────── */
+.h10-ds-range {
+  display: flex;
+  gap: 8px;
+}
+.h10-ds-range-in {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--h10-radius-lg);
+  background: var(--surface-card);
+  overflow: hidden;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-range-in:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: var(--h10-focus-ring);
+}
+.h10-ds-range-in input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  border: none;
+  outline: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  padding: 7px 10px;
+  background: transparent;
+}
+.h10-ds-range-in input::placeholder {
+  color: var(--text-disabled);
+}
+.h10-ds-range-in .ad {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0 9px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--h10-surface-hover);
+}
+.h10-ds-range-in.cur .ad {
+  border-right: 1px solid var(--border-subtle);
+}
+.h10-ds-range-in.pct .ad {
+  border-left: 1px solid var(--border-subtle);
+}
+.h10-ds-toggle-field {
+  align-items: center;
+  min-height: 32px;
+}
+
+/* ── GridToolbar + grid card (Ad-Manager `.h10-am-toolbar` / `.h10-am-card`) ── */
+.h10-ds-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.h10-ds-toolbar .cnt {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.h10-ds-toolbar .cnt b {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.h10-ds-toolbar .grow {
+  flex: 1;
+}
+/* One card wrapping the toolbar + grid (+ pager): the toolbar sits inside the
+   grid rectangle with a divider, and the inner DataGrid drops its own border. */
+.h10-ds-gridcard {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--h10-radius-2xl);
+  overflow: hidden;
+}
+.h10-ds-gridcard .h10-ds-toolbar {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.h10-ds-gridcard .h10-ds-grid-wrap {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* ── PreferencesModal (two-panel "Customise") ────────────────────── */
+.h10-ds-prefs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+}
+@media (max-width: 720px) {
+  .h10-ds-prefs {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+}
+.h10-ds-prefs-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.h10-ds-prefs-set {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+.h10-ds-prefs-set legend,
+.h10-ds-prefs-set > legend {
+  padding: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+.h10-ds-prefs-help {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin: 0 0 8px;
+}
+.h10-ds-prefs-radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+.h10-ds-prefs-radios label,
+.h10-ds-prefs-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.h10-ds-prefs-check {
+  display: flex;
+  margin-top: 6px;
+}
+.h10-ds-prefs-radios input,
+.h10-ds-prefs-check input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--color-primary);
+}
+.h10-ds-prefs-sort {
+  display: flex;
+  gap: 8px;
+}
+.h10-ds-prefs-sort .h10-ds-select {
+  flex: 1;
+  min-width: 0;
+}
+.h10-ds-prefs-cols {
+  border: 1px solid var(--border-default);
+  border-radius: var(--h10-radius-lg);
+  overflow: hidden auto;
+  max-height: 360px;
+}
+.h10-ds-prefs-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.h10-ds-prefs-row:last-child {
+  border-bottom: none;
+}
+.h10-ds-prefs-row.draggable {
+  cursor: grab;
+}
+.h10-ds-prefs-row.draggable:hover {
+  background: var(--h10-surface-hover);
+}
+.h10-ds-prefs-row.dragging {
+  opacity: 0.4;
+}
+.h10-ds-prefs-row.locked {
+  background: var(--surface-sunken);
+}
+.h10-ds-prefs-grip {
+  flex: none;
+  color: var(--text-disabled);
+}
+.h10-ds-prefs-row:not(.draggable) .h10-ds-prefs-grip {
+  visibility: hidden;
+}
+.h10-ds-prefs-lbl {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.h10-ds-prefs-locked {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+.h10-ds-modal-f .grow {
+  flex: 1;
+}
+.h10-ds-prefs-reset {
+  color: var(--text-tertiary);
+}
+
+/* ── Sticky action bar (BulkActionBar / EditModeBar) ─────────────── */
+.h10-ds-actionbar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--h10-radius-xl);
+  padding: 11px 16px;
+  box-shadow: var(--h10-shadow-card);
+}
+.h10-ds-actionbar .lbl {
+  font-size: 13px;
+  color: var(--h10-text-strong);
+}
+.h10-ds-actionbar .lbl b {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.h10-ds-actionbar .grow {
+  flex: 1;
+}
+.h10-ds-actionbar .acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.h10-ds-actionbar-clear {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: var(--h10-radius-md);
+}
+.h10-ds-actionbar-clear:hover {
+  background: var(--h10-surface-hover);
+  color: var(--text-primary);
+}
+
+/* ── Builder (full-screen wizard + scroll-spy) ───────────────────── */
+.h10-ds-builder {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+}
+.h10-ds-builder-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 56px;
+  padding: 0 18px;
+  flex-shrink: 0;
+  background: var(--surface-card);
+  border-bottom: 1px solid var(--border-default);
+}
+.h10-ds-builder-top .x {
+  display: inline-flex;
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--h10-radius-sm);
+}
+.h10-ds-builder-top .x:hover {
+  background: var(--h10-surface-hover);
+  color: var(--text-primary);
+}
+.h10-ds-builder-top .ttl {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.h10-ds-builder-top .grow {
+  flex: 1;
+}
+.h10-ds-builder-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.h10-ds-builder-nav {
+  width: 220px;
+  flex-shrink: 0;
+  padding: 20px 12px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.h10-ds-builder-navitem {
+  text-align: left;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 9px 12px;
+  border-radius: var(--h10-radius-md);
+  cursor: pointer;
+}
+.h10-ds-builder-navitem:hover {
+  background: var(--h10-surface-hover);
+  color: var(--text-primary);
+}
+.h10-ds-builder-navitem.on {
+  background: var(--h10-wash-primary);
+  color: var(--color-primary);
+}
+.h10-ds-builder-content {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 24px 32px 120px;
+}
+.h10-ds-builder-section {
+  max-width: 720px;
+  margin-bottom: 40px;
+}
+.h10-ds-builder-section h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+/* ── ColumnCustomizer (rows inside a Modal) ──────────────────────── */
+.h10-ds-colcust {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.h10-ds-colcust-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  border-radius: var(--h10-radius-md);
+}
+.h10-ds-colcust-row:hover {
+  background: var(--h10-surface-hover);
+}
+.h10-ds-colcust-row .grip {
+  display: inline-flex;
+  flex-direction: column;
+}
+.h10-ds-colcust-row .grip button {
+  display: inline-flex;
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.h10-ds-colcust-row .grip button:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+.h10-ds-colcust-row .grip button:disabled {
+  color: var(--text-disabled);
+  cursor: default;
+}

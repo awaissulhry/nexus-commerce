@@ -1,0 +1,605 @@
+/**
+ * DS primitive component styles — tokenized, self-contained (depends only on
+ * tokens.css). Sub-namespaced `.h10-ds-*` so it never collides with the
+ * route-scoped `.h10-*` utility classes in ads.css. See ../docs/NAMING.md.
+ *
+ * Values match the H10 spec sampled from ads.css (button = .h10-am-btn,
+ * pill = .h10-pill, program badge = .pb[data-p], targeting = .tg[data-t]).
+ */
+
+/* ── Button ──────────────────────────────────────────────────────── */
+.h10-ds-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--h10-text-strong);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--h10-radius-lg);
+  padding: 7px 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-btn:hover {
+  background: var(--h10-surface-hover);
+}
+.h10-ds-btn:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--h10-focus-ring);
+}
+.h10-ds-btn:disabled {
+  color: var(--text-disabled);
+  background: var(--surface-card);
+  border-color: var(--border-subtle);
+  cursor: default;
+}
+.h10-ds-btn svg {
+  flex-shrink: 0;
+}
+
+.h10-ds-btn.primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--h10-text-inverse);
+}
+.h10-ds-btn.primary:hover {
+  background: var(--h10-primary-hover);
+  border-color: var(--h10-primary-hover);
+}
+.h10-ds-btn.primary:disabled {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  opacity: 0.5;
+}
+
+.h10-ds-btn.ghost {
+  background: var(--surface-card);
+  border-color: var(--h10-primary-ghost-border);
+  color: var(--color-primary);
+}
+.h10-ds-btn.ghost:hover {
+  background: var(--h10-wash-primary);
+}
+
+.h10-ds-btn.sm {
+  padding: 6px 11px;
+  font-size: 12.5px;
+}
+
+/* ── Status pill (.h10-pill parity) ──────────────────────────────── */
+.h10-ds-pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: var(--h10-radius-pill);
+  padding: 3px 9px;
+  white-space: nowrap;
+}
+.h10-ds-pill.success {
+  color: var(--h10-pill-success-fg);
+  background: var(--h10-pill-success-bg);
+}
+.h10-ds-pill.warning {
+  color: var(--h10-pill-warning-fg);
+  background: var(--h10-pill-warning-bg);
+}
+.h10-ds-pill.neutral {
+  color: var(--h10-pill-neutral-fg);
+  background: var(--h10-pill-neutral-bg);
+}
+.h10-ds-pill.danger {
+  color: var(--h10-pill-danger-fg);
+  background: var(--h10-pill-danger-bg);
+}
+.h10-ds-pill.info {
+  color: var(--status-info-strong);
+  background: var(--status-info-soft);
+}
+
+/* ── Program / targeting badge ───────────────────────────────────── */
+.h10-ds-badge {
+  display: inline-block;
+  font-weight: 800;
+  border-radius: var(--h10-radius-pill);
+  padding: 2px 5px;
+  white-space: nowrap;
+}
+.h10-ds-badge.sp {
+  font-size: 9px;
+  color: var(--h10-badge-sp-fg);
+  background: var(--h10-badge-sp-bg);
+}
+.h10-ds-badge.sd {
+  font-size: 9px;
+  color: var(--h10-badge-sd-fg);
+  background: var(--h10-badge-sd-bg);
+}
+.h10-ds-badge.sb {
+  font-size: 9px;
+  color: var(--h10-badge-sb-fg);
+  background: var(--h10-badge-sb-bg);
+}
+.h10-ds-badge.auto {
+  font-size: 10px;
+  color: var(--h10-text-inverse);
+  background: var(--h10-targeting-auto);
+}
+.h10-ds-badge.manual {
+  font-size: 10px;
+  color: var(--h10-text-inverse);
+  background: var(--h10-targeting-manual);
+}
+
+/* ── Tag (neutral / semantic metadata chip) ──────────────────────── */
+.h10-ds-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  border-radius: var(--h10-radius-pill);
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.h10-ds-tag.neutral { color: var(--h10-text-strong); background: var(--surface-sunken); }
+.h10-ds-tag.info { color: var(--status-info-strong); background: var(--status-info-soft); }
+.h10-ds-tag.success { color: var(--status-success-strong); background: var(--status-success-soft); }
+.h10-ds-tag.warning { color: var(--h10-amber-text); background: var(--status-warning-soft); }
+.h10-ds-tag.danger { color: var(--status-danger-strong); background: var(--status-danger-soft); }
+
+/* ── TagInput (tag-based free entry + suggestion menu) ───────────── */
+.h10-ds-taginput { position: relative; }
+.h10-ds-taginput-field {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  min-height: 36px; padding: 6px 8px; cursor: text;
+  background: var(--surface-card); border: 1px solid var(--border-strong);
+  border-radius: var(--h10-radius-lg);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-taginput-field:focus-within { border-color: var(--color-primary); box-shadow: var(--h10-focus-ring); }
+.h10-ds-taginput.disabled .h10-ds-taginput-field { opacity: .6; pointer-events: none; }
+.h10-ds-taginput-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px;
+  font-size: 12px; font-weight: 550; border-radius: var(--h10-radius-md);
+  color: var(--text-link); background: var(--color-primary-soft);
+}
+.h10-ds-taginput-chip button { color: var(--text-link); display: inline-flex; border: none; background: none; padding: 0; cursor: pointer; }
+.h10-ds-taginput-chip button:hover { color: var(--h10-primary-hover); }
+.h10-ds-taginput-field > input {
+  flex: 1; min-width: 80px; border: 0; outline: none; background: transparent;
+  font: inherit; font-size: 12px; color: var(--text-primary);
+}
+.h10-ds-taginput-field > input::placeholder { color: var(--text-tertiary); }
+.h10-ds-taginput-menu {
+  position: absolute; z-index: 50; left: 0; right: 0; top: 100%; margin-top: 4px;
+  max-height: 160px; overflow-y: auto; padding: 4px 0; margin: 4px 0 0; list-style: none;
+  background: var(--surface-card); border: 1px solid var(--border-default);
+  border-radius: var(--h10-radius-lg); box-shadow: var(--h10-shadow-menu);
+}
+.h10-ds-taginput-menu button {
+  display: block; width: 100%; text-align: left; padding: 6px 12px; border: none;
+  font: inherit; font-size: 12px; color: var(--text-secondary); background: transparent; cursor: pointer;
+}
+.h10-ds-taginput-menu button:hover { background: var(--surface-sunken); }
+
+/* ── Text field (Input: plain / search / € / %) ──────────────────── */
+.h10-ds-field {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border-default);
+  border-radius: var(--h10-radius-lg);
+  background: var(--surface-card);
+  overflow: hidden;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-field:hover {
+  border-color: var(--border-strong);
+}
+.h10-ds-field:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: var(--h10-focus-ring);
+}
+.h10-ds-field.disabled {
+  background: var(--surface-sunken);
+}
+.h10-ds-field > input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  padding: 7px 11px;
+}
+.h10-ds-field > input::placeholder {
+  color: var(--text-disabled);
+}
+
+/* Textarea primitive — the multi-line sibling of .h10-ds-field, for paste-style inputs */
+.h10-ds-textarea {
+  display: block;
+  width: 100%;
+  min-height: 168px;
+  resize: vertical;
+  border: 1px solid var(--border-default);
+  border-radius: var(--h10-radius-lg);
+  background: var(--surface-card);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-textarea:hover {
+  border-color: var(--border-strong);
+}
+.h10-ds-textarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: var(--h10-focus-ring);
+}
+.h10-ds-textarea::placeholder {
+  color: var(--text-disabled);
+}
+.h10-ds-textarea:disabled {
+  background: var(--surface-sunken);
+}
+.h10-ds-field .lead {
+  display: inline-flex;
+  align-items: center;
+  padding-left: 11px;
+  color: var(--text-tertiary);
+}
+.h10-ds-field .lead + input {
+  padding-left: 6px;
+}
+/* shaded unit adornment (€ prefix / % suffix) */
+.h10-ds-field .ad {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.h10-ds-field .ad.pre {
+  border-right: 1px solid var(--border-subtle);
+}
+.h10-ds-field .ad.suf {
+  border-left: 1px solid var(--border-subtle);
+}
+
+/* ── Select (native, styled) ─────────────────────────────────────── */
+.h10-ds-select {
+  position: relative;
+  display: inline-flex;
+}
+.h10-ds-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  border: 1px solid var(--border-default);
+  border-radius: var(--h10-radius-lg);
+  padding: 7px 30px 7px 11px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--surface-card);
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-select select:hover {
+  border-color: var(--border-strong);
+}
+.h10-ds-select select:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--h10-focus-ring);
+}
+.h10-ds-select .chev {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+  pointer-events: none;
+  display: inline-flex;
+}
+
+/* ── Checkbox (native, accent-tinted) ────────────────────────────── */
+.h10-ds-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--h10-text-strong);
+  cursor: pointer;
+}
+.h10-ds-check input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+.h10-ds-check.disabled {
+  color: var(--text-disabled);
+  cursor: default;
+}
+
+/* ── Toggle (switch) ─────────────────────────────────────────────── */
+.h10-ds-toggle {
+  display: inline-block;
+  position: relative;
+  width: 30px;
+  height: 17px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  vertical-align: middle;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+.h10-ds-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: var(--h10-white);
+  box-shadow: 0 1px 2px rgb(var(--h10-shadow-rgb) / 0.2);
+  transition: transform 0.15s ease;
+}
+.h10-ds-toggle.on {
+  background: var(--color-primary);
+}
+.h10-ds-toggle.on::after {
+  transform: translateX(13px);
+}
+.h10-ds-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--h10-focus-ring);
+}
+.h10-ds-toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── Radio + RadioCard ───────────────────────────────────────────── */
+.h10-ds-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--h10-text-strong);
+  cursor: pointer;
+}
+.h10-ds-radio input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+.h10-ds-radio.disabled {
+  color: var(--text-disabled);
+  cursor: default;
+}
+
+.h10-ds-radiocard {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--h10-radius-xl);
+  padding: 12px 14px;
+  background: var(--surface-card);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-radiocard:hover {
+  border-color: var(--border-strong);
+}
+.h10-ds-radiocard.on {
+  border-color: var(--color-primary);
+  background: var(--h10-wash-primary);
+}
+.h10-ds-radiocard input {
+  margin-top: 1px;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--color-primary);
+}
+.h10-ds-radiocard .rc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.h10-ds-radiocard .rc-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.h10-ds-radiocard .rc-desc {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* ── Tooltip (CSS hover/focus) ───────────────────────────────────── */
+.h10-ds-tooltip {
+  position: relative;
+  display: inline-flex;
+}
+.h10-ds-tooltip > .tip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  width: max-content;
+  max-width: 260px;
+  background: var(--text-primary);
+  color: var(--h10-text-inverse);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  padding: 8px 11px;
+  border-radius: var(--h10-radius-lg);
+  box-shadow: var(--h10-shadow-tip);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.h10-ds-tooltip > .tip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--text-primary);
+}
+.h10-ds-tooltip:hover > .tip,
+.h10-ds-tooltip:focus-within > .tip {
+  opacity: 1;
+}
+
+/* Light variant: always-white bubble with dark text (theme-invariant) */
+.h10-ds-tooltip--light > .tip {
+  background: #ffffff;
+  color: #1e293b;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+.h10-ds-tooltip--light > .tip::after {
+  border-top-color: #e2e8f0;
+}
+
+/* ── Spinner ─────────────────────────────────────────────────────── */
+.h10-ds-spinner {
+  display: inline-block;
+  border-radius: 999px;
+  border: 2px solid var(--border-default);
+  border-top-color: var(--color-primary);
+  animation: h10-ds-spin 0.7s linear infinite;
+}
+@keyframes h10-ds-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Skeleton (shimmer) ──────────────────────────────────────────── */
+.h10-ds-skeleton {
+  display: block;
+  border-radius: var(--h10-radius-sm);
+  background: linear-gradient(90deg, var(--surface-sunken) 25%, var(--border-subtle) 37%, var(--surface-sunken) 63%);
+  background-size: 400% 100%;
+  animation: h10-ds-shimmer 1.3s ease infinite;
+}
+@keyframes h10-ds-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+/* ── Kbd ─────────────────────────────────────────────────────────── */
+.h10-ds-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: var(--h10-radius-sm);
+}
+
+/* ── Divider ─────────────────────────────────────────────────────── */
+.h10-ds-divider {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: 0;
+}
+.h10-ds-divider.vertical {
+  border-top: none;
+  border-left: 1px solid var(--border-subtle);
+  align-self: stretch;
+  width: 0;
+  height: auto;
+}
+
+/* ── SegmentedControl (single-select view toggle) ────────────────────── */
+.h10-ds-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--h10-radius-lg);
+}
+.h10-ds-seg.disabled {
+  opacity: 0.55;
+}
+.h10-ds-seg-opt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--h10-radius-md);
+  padding: 6px 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+}
+.h10-ds-seg-opt:hover:not(.on):not(:disabled) {
+  color: var(--text-primary);
+}
+.h10-ds-seg-opt.on {
+  color: var(--text-primary);
+  background: var(--surface-card);
+  box-shadow: 0 1px 2px rgb(var(--h10-shadow-rgb) / 0.14);
+}
+.h10-ds-seg-opt:focus-visible {
+  outline: none;
+  box-shadow: var(--h10-focus-ring);
+}
+.h10-ds-seg-opt:disabled {
+  cursor: not-allowed;
+}
+.h10-ds-seg-icon {
+  display: inline-flex;
+  align-items: center;
+}
+.h10-ds-seg.sm .h10-ds-seg-opt {
+  font-size: 12px;
+  padding: 4px 10px;
+}

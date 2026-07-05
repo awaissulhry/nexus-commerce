@@ -1,0 +1,853 @@
+// F1 — Nexus Factory OS schema (SQLite, Prisma 7). Formalizes the ERD in
+// docs/factory/F0-ARCHITECTURE.md. Conventions that are load-bearing:
+//   · money is Int CENTS with *Cents suffix; percentages are Float with *Pct
+//     suffix — the RBAC field filter strips by these names (F0 §RBAC)
+//   · MovementLedger is APPEND-ONLY (FD8): stock is derived, corrections are
+//     compensating movements, rows are never updated or deleted
+//   · SQLite enforces enums at Prisma-runtime only — writes outside Prisma
+//     must be validated (weekly integrity sweep in the worker)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ── Parties & customer intelligence ──────────────────────────────
+
+enum PartyKind {
+  BRAND
+  CUSTOMER
+  SUPPLIER
+}
+
+model Party {
+  id                String               @id @default(cuid())
+  kind              PartyKind
+  name              String
+  currency          String               @default("EUR")
+  paymentTerms      String?
+  depositDefaultPct Float?
+  notes             String?
+  priceListId       String?
+  priceList         PriceList?           @relation(fields: [priceListId], references: [id])
+  emails            PartyEmail[]
+  measurements      MeasurementProfile[]
+  reviews           Review[]
+  conversations     Conversation[]
+  quotes            Quote[]
+  orders            Order[]
+  materialLots      MaterialLot[]        @relation("SupplierLots")
+  purchaseOrders    PurchaseOrder[]      @relation("SupplierPOs")
+  archivedAt        DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([kind, name])
+}
+
+model PartyEmail {
+  id      String  @id @default(cuid())
+  partyId String
+  party   Party   @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  email   String  @unique
+  label   String?
+
+  @@index([partyId])
+}
+
+model MeasurementProfile {
+  id           String               @id @default(cuid())
+  partyId      String
+  party        Party                @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  name         String
+  garmentType  String
+  fields       Json
+  fitNotes     String?
+  photos       Json?
+  version      Int                  @default(1)
+  supersedesId String?
+  supersedes   MeasurementProfile?  @relation("ProfileVersions", fields: [supersedesId], references: [id])
+  supersededBy MeasurementProfile[] @relation("ProfileVersions")
+  createdAt    DateTime             @default(now())
+  quoteLines   QuoteLine[]
+
+  @@index([partyId, garmentType])
+}
+
+model Review {
+  id           String   @id @default(cuid())
+  partyId      String
+  party        Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  orderId      String?
+  order        Order?   @relation(fields: [orderId], references: [id])
+  rating       Int
+  notes        String?
+  followUpFlag Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([partyId])
+}
+
+// ── Products & CPQ model ─────────────────────────────────────────
+
+model ProductTemplate {
+  id             String                @id @default(cuid())
+  name           String
+  description    String?
+  baseCostCents  Int                   @default(0)
+  basePriceCents Int                   @default(0)
+  optionGroups   OptionGroup[]
+  constraints    OptionConstraint[]
+  bomLines       BomLine[]
+  certCoverage   CertificateCoverage[]
+  priceEntries   PriceListEntry[]
+  quoteLines     QuoteLine[]
+  archivedAt     DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+}
+
+model OptionGroup {
+  id         String          @id @default(cuid())
+  templateId String
+  template   ProductTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  name       String
+  minSelect  Int             @default(0)
+  maxSelect  Int             @default(1)
+  sort       Int             @default(0)
+  options    Option[]
+
+  @@index([templateId, sort])
+}
+
+enum DeltaMode {
+  ABSOLUTE
+  PERCENT
+}
+
+model Option {
+  id             String           @id @default(cuid())
+  groupId        String
+  group          OptionGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name           String
+  costDeltaMode  DeltaMode        @default(ABSOLUTE)
+  costDelta      Int              @default(0) // cents when ABSOLUTE, basis points when PERCENT
+  priceDeltaMode DeltaMode        @default(ABSOLUTE)
+  priceDelta     Int              @default(0)
+  materialDraws  Json? // [{materialId, qty, unit}] — per-option BOM contribution
+  sort           Int              @default(0)
+  priceEntries   PriceListEntry[]
+
+  @@index([groupId, sort])
+}
+
+enum ConstraintType {
+  REQUIRES
+  EXCLUDES
+}
+
+enum ConstraintSeverity {
+  BLOCK
+  WARN
+}
+
+model OptionConstraint {
+  id           String             @id @default(cuid())
+  templateId   String
+  template     ProductTemplate    @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  type         ConstraintType
+  severity     ConstraintSeverity @default(BLOCK)
+  ifOptionId   String
+  thenOptionId String
+  message      String
+
+  @@index([templateId])
+}
+
+model BomLine {
+  id         String          @id @default(cuid())
+  templateId String
+  template   ProductTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  materialId String
+  material   Material        @relation(fields: [materialId], references: [id])
+  qty        Float
+  unit       String
+  perOption  Boolean         @default(false)
+
+  @@index([templateId])
+}
+
+model Certificate {
+  id           String                @id @default(cuid())
+  standard     String                @default("EN 17092")
+  class        String // AAA | AA | A | B | C
+  certNumber   String
+  notifiedBody String?
+  issuedAt     DateTime?
+  expiresAt    DateTime?
+  fileRef      String?
+  coverage     CertificateCoverage[]
+  createdAt    DateTime              @default(now())
+}
+
+model CertificateCoverage {
+  id            String          @id @default(cuid())
+  certificateId String
+  certificate   Certificate     @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+  templateId    String
+  template      ProductTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  coveredSizes  Json? // null = all sizes
+
+  @@unique([certificateId, templateId])
+}
+
+// ── Price lists (FD7: sparse per-list deltas over a default list) ─
+
+enum PriceListKind {
+  DEFAULT
+  PARTY_TIER
+}
+
+model PriceList {
+  id        String           @id @default(cuid())
+  kind      PriceListKind    @default(PARTY_TIER)
+  name      String
+  notes     String?
+  entries   PriceListEntry[]
+  parties   Party[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model PriceListEntry {
+  id             String           @id @default(cuid())
+  priceListId    String
+  priceList      PriceList        @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  templateId     String?
+  template       ProductTemplate? @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  optionId       String?
+  option         Option?          @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  basePriceCents Int? // overrides template base when set
+  priceDeltaMode DeltaMode?
+  priceDelta     Int? // overrides option delta when set
+
+  @@index([priceListId])
+}
+
+// ── Conversations (channel-pluggable; Gmail in v1) ───────────────
+
+enum ConversationChannel {
+  GMAIL
+  WHATSAPP
+}
+
+enum ConversationState {
+  OPEN
+  SNOOZED
+  CLOSED
+}
+
+model Conversation {
+  id            String              @id @default(cuid())
+  channel       ConversationChannel @default(GMAIL)
+  gmailThreadId String?             @unique
+  subject       String?
+  partyId       String?
+  party         Party?              @relation(fields: [partyId], references: [id])
+  assigneeId    String?
+  assignee      User?               @relation(fields: [assigneeId], references: [id])
+  state         ConversationState   @default(OPEN)
+  snoozeUntil   DateTime?
+  lastMessageAt DateTime?
+  messages      Message[]
+  quotes        Quote[]
+  orders        Order[]
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([state, lastMessageAt])
+  @@index([partyId])
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+model Message {
+  id             String           @id @default(cuid())
+  conversationId String
+  conversation   Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  gmailMessageId String?          @unique
+  direction      MessageDirection
+  fromAddress    String
+  toAddresses    Json?
+  snippet        String?
+  bodyRef        String? // lazy-fetched full body (FP1); F1 stores headers+snippet
+  labels         Json?
+  sentAt         DateTime
+  attachments    Attachment[]
+
+  @@index([conversationId, sentAt])
+}
+
+model Attachment {
+  id          String   @id @default(cuid())
+  messageId   String?
+  message     Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  entityType  String? // generic attachment host (order, quote, …) for later cycles
+  entityId    String?
+  filename    String
+  mimeType    String?
+  sizeBytes   Int?
+  localPath   String?
+  driveFileId String?
+  webViewLink String?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
+
+// ── Quotes ───────────────────────────────────────────────────────
+
+enum QuoteState {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+model Quote {
+  id                  String         @id @default(cuid())
+  number              String         @unique
+  partyId             String
+  party               Party          @relation(fields: [partyId], references: [id])
+  conversationId      String?
+  conversation        Conversation?  @relation(fields: [conversationId], references: [id])
+  state               QuoteState     @default(DRAFT)
+  depositPct          Float?
+  promiseDateAt       DateTime?
+  marginFloorBreached Boolean        @default(false)
+  lostReason          String?
+  lines               QuoteLine[]
+  versions            QuoteVersion[]
+  orders              Order[]
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@index([partyId, state])
+}
+
+model QuoteLine {
+  id                   String              @id @default(cuid())
+  quoteId              String
+  quote                Quote               @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  templateId           String?
+  template             ProductTemplate?    @relation(fields: [templateId], references: [id])
+  description          String?
+  selections           Json? // chosen option ids + free params
+  measurementProfileId String?
+  measurementProfile   MeasurementProfile? @relation(fields: [measurementProfileId], references: [id])
+  qty                  Int                 @default(1)
+  listPriceCents       Int                 @default(0)
+  adjustmentCents      Int                 @default(0)
+  adjustmentReason     String?
+  netPriceCents        Int                 @default(0)
+  costCents            Int                 @default(0)
+  marginCents          Int                 @default(0)
+  marginPct            Float               @default(0)
+
+  @@index([quoteId])
+}
+
+model QuoteVersion {
+  id           String   @id @default(cuid())
+  quoteId      String
+  quote        Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  version      Int
+  sentSnapshot Json // frozen options, costs, prices at send
+  pdfRef       String?
+  sentAt       DateTime @default(now())
+
+  @@unique([quoteId, version])
+}
+
+// ── Orders & production ──────────────────────────────────────────
+
+enum OrderState {
+  CONFIRMED
+  IN_PRODUCTION
+  READY
+  SHIPPED
+  DELIVERED
+  CLOSED
+  CANCELLED
+}
+
+model Order {
+  id              String        @id @default(cuid())
+  number          String        @unique // "ORD-214"
+  partyId         String
+  party           Party         @relation(fields: [partyId], references: [id])
+  bornFromQuoteId String?
+  bornFromQuote   Quote?        @relation(fields: [bornFromQuoteId], references: [id])
+  conversationId  String?
+  conversation    Conversation? @relation(fields: [conversationId], references: [id])
+  state           OrderState    @default(CONFIRMED)
+  promiseDateAt   DateTime?
+  cancelReason    String?
+  lines           OrderLine[]
+  workOrders      WorkOrder[]
+  shipments       Shipment[]
+  invoices        Invoice[]
+  payments        Payment[]
+  reviews         Review[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([state, promiseDateAt])
+  @@index([partyId])
+}
+
+model OrderLine {
+  id            String @id @default(cuid())
+  orderId       String
+  order         Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  description   String
+  selections    Json?
+  sizeRun       Json? // B2B matrix rows {size: qty}
+  qty           Int    @default(1)
+  netPriceCents Int    @default(0)
+  costCents     Int    @default(0)
+
+  @@index([orderId])
+}
+
+enum WorkOrderState {
+  BLOCKED
+  READY
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+model WorkOrder {
+  id              String           @id @default(cuid())
+  number          String           @unique // "ORD-214/1" — shared identity with the order
+  orderId         String
+  order           Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  priority        Int              @default(0)
+  state           WorkOrderState   @default(READY)
+  blockedReason   String? // e.g. "awaiting deposit" (FD13)
+  estCostCents    Int              @default(0)
+  actualCostCents Int              @default(0)
+  stages          WorkOrderStage[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([state, priority])
+}
+
+model WorkOrderStage {
+  id                String    @id @default(cuid())
+  workOrderId       String
+  workOrder         WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  stage             String // key into the Settings-defined pipeline (default CUTTING…PACKING)
+  sort              Int       @default(0)
+  assigneeId        String?
+  assignee          User?     @relation(fields: [assigneeId], references: [id])
+  startedAt         DateTime?
+  pausedMs          Int       @default(0)
+  finishedAt        DateTime?
+  checklist         Json? // [{item, checkedByUserId, checkedAt}]
+  photos            Json?
+  scrapNotes        String?
+  actualMaterialUse Json? // prompted at CUTTING finish; diffed vs estimate
+  certCheckPassed   Boolean? // QC gate (FD14)
+
+  @@index([workOrderId, sort])
+  @@index([assigneeId, finishedAt])
+}
+
+// ── Materials & the movement ledger (FD8) ────────────────────────
+
+model Material {
+  id           String           @id @default(cuid())
+  name         String
+  unit         String // HIDE | SQM | PIECE | M
+  costCents    Int              @default(0) // current supplier cost; edits ripple-flag quotes
+  reorderLevel Float?
+  notes        String?
+  lots         MaterialLot[]
+  movements    MovementLedger[]
+  bomLines     BomLine[]
+  archivedAt   DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+}
+
+model MaterialLot {
+  id         String           @id @default(cuid())
+  materialId String
+  material   Material         @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  lotCode    String
+  supplierId String?
+  supplier   Party?           @relation("SupplierLots", fields: [supplierId], references: [id])
+  receivedAt DateTime?
+  notes      String?
+  movements  MovementLedger[]
+
+  @@index([materialId])
+}
+
+enum MovementType {
+  IN
+  OUT
+  ADJUST
+  RESERVE
+  RELEASE
+}
+
+// APPEND-ONLY. Never update or delete a row; corrections are compensating
+// movements. Stock/committed/expected are derived (src/lib/ledger.ts).
+model MovementLedger {
+  id         String       @id @default(cuid())
+  materialId String
+  material   Material     @relation(fields: [materialId], references: [id])
+  lotId      String?
+  lot        MaterialLot? @relation(fields: [lotId], references: [id])
+  type       MovementType
+  qty        Float // positive magnitude; type carries the direction
+  reason     String?
+  refType    String? // PO | WorkOrder | Order | Import
+  refId      String?
+  actorId    String?
+  actor      User?        @relation(fields: [actorId], references: [id])
+  createdAt  DateTime     @default(now())
+
+  @@index([materialId, createdAt])
+  @@index([refType, refId])
+}
+
+enum PurchaseOrderState {
+  DRAFT
+  SENT
+  PARTIAL
+  RECEIVED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id         String             @id @default(cuid())
+  number     String             @unique
+  supplierId String
+  supplier   Party              @relation("SupplierPOs", fields: [supplierId], references: [id])
+  state      PurchaseOrderState @default(DRAFT)
+  lines      Json // [{materialId, qty, unit, unitCostCents}]
+  expectedAt DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  @@index([supplierId, state])
+}
+
+// ── Shipping ─────────────────────────────────────────────────────
+
+model CarrierAccount {
+  id                   String     @id @default(cuid())
+  adapterId            String // "sendcloud"
+  label                String
+  credentialsEncrypted String // Vault-encrypted JSON
+  caps                 Json? // capability probe result
+  status               String     @default("connected")
+  shipments            Shipment[]
+  pickups              Pickup[]
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+}
+
+enum ShipmentState {
+  CREATED
+  LABEL_PURCHASED
+  IN_TRANSIT
+  DELIVERED
+  EXCEPTION
+  CANCELLED
+}
+
+model Shipment {
+  id               String          @id @default(cuid())
+  orderId          String
+  order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  carrierAccountId String?
+  carrierAccount   CarrierAccount? @relation(fields: [carrierAccountId], references: [id])
+  service          String?
+  trackingNumber   String?
+  trackingUrl      String?
+  labelRef         String?
+  costCents        Int?
+  state            ShipmentState   @default(CREATED)
+  events           TrackingEvent[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([orderId])
+  @@index([state])
+}
+
+model TrackingEvent {
+  id         String   @id @default(cuid())
+  shipmentId String
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  status     String
+  message    String?
+  occurredAt DateTime
+  raw        Json?
+
+  @@index([shipmentId, occurredAt])
+}
+
+model Pickup {
+  id               String         @id @default(cuid())
+  carrierAccountId String
+  carrierAccount   CarrierAccount @relation(fields: [carrierAccountId], references: [id])
+  date             DateTime
+  windowStart      String?
+  windowEnd        String?
+  parcelIds        Json?
+  status           String         @default("requested")
+  createdAt        DateTime       @default(now())
+}
+
+// ── Financial documents (order-level; no general ledger) ─────────
+
+model Invoice {
+  id          String    @id @default(cuid())
+  orderId     String
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  number      String    @unique
+  amountCents Int
+  pdfRef      String?
+  sentAt      DateTime?
+  paidAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([orderId])
+}
+
+enum PaymentKind {
+  DEPOSIT
+  BALANCE
+  OTHER
+}
+
+model Payment {
+  id          String      @id @default(cuid())
+  orderId     String
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  kind        PaymentKind @default(OTHER)
+  amountCents Int
+  method      String?
+  receivedAt  DateTime    @default(now())
+  notes       String?
+
+  @@index([orderId])
+}
+
+// ── Platform primitives ──────────────────────────────────────────
+
+model Comment {
+  id         String    @id @default(cuid())
+  entityType String // conversation | quote | order | workorder | material | party | …
+  entityId   String
+  authorId   String?
+  author     User?     @relation(fields: [authorId], references: [id])
+  body       String
+  mentions   Json? // resolved user ids
+  createdAt  DateTime  @default(now())
+  editedAt   DateTime?
+
+  @@index([entityType, entityId, createdAt])
+}
+
+enum NotificationKind {
+  MENTION
+  ASSIGNMENT
+  STATE_CHANGE
+  REMINDER
+  SYSTEM
+}
+
+model Notification {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind       NotificationKind
+  entityType String?
+  entityId   String?
+  title      String
+  body       String?
+  href       String?
+  readAt     DateTime?
+  createdAt  DateTime         @default(now())
+
+  @@index([userId, readAt, createdAt])
+}
+
+// Append-only. Every write path stamps it (src/lib/audit.ts).
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  entityType String
+  entityId   String
+  action     String // created | updated | state_changed | …
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([createdAt])
+}
+
+enum ImportMode {
+  DRY_RUN
+  APPLY
+}
+
+model ImportJob {
+  id        String     @id @default(cuid())
+  entity    String // party | material | …
+  mode      ImportMode
+  rowsTotal Int        @default(0)
+  rowsOk    Int        @default(0)
+  rowsError Int        @default(0)
+  diff      Json?
+  result    Json?
+  actorId   String?
+  actor     User?      @relation(fields: [actorId], references: [id])
+  createdAt DateTime   @default(now())
+
+  @@index([entity, createdAt])
+}
+
+model SavedView {
+  id        String   @id @default(cuid())
+  page      String
+  name      String
+  config    Json
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([page, userId])
+}
+
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// ── Integrations state ───────────────────────────────────────────
+
+model GoogleConnection {
+  id                    String    @id @default(cuid())
+  email                 String    @unique
+  scopes                Json
+  refreshTokenEncrypted String
+  historyId             String?
+  labelId               String?
+  labelName             String?
+  driveRootFolderId     String?
+  status                String    @default("connected") // connected | error | disconnected
+  lastSyncAt            DateTime?
+  lastError             String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+// ── Auth (S-series replica, SQLite-adapted) ──────────────────────
+
+model User {
+  id                 String           @id @default(cuid())
+  email              String           @unique
+  displayName        String
+  passwordHash       String
+  status             String           @default("active") // active | deactivated
+  failedLoginCount   Int              @default(0)
+  lockedUntil        DateTime?
+  lastLoginAt        DateTime?
+  permissionsVersion Int              @default(0)
+  roleAssignments    UserRole[]
+  sessions           Session[]
+  invitationsSent    Invitation[]     @relation("Inviter")
+  notifications      Notification[]
+  comments           Comment[]
+  auditEntries       AuditLog[]
+  importJobs         ImportJob[]
+  savedViews         SavedView[]
+  ledgerEntries      MovementLedger[]
+  stageAssignments   WorkOrderStage[]
+  conversations      Conversation[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+}
+
+model Role {
+  id          String       @id @default(cuid())
+  key         String       @unique // OWNER | WORKER | custom slug
+  name        String
+  description String?
+  permissions Json // string[] — validated against the registry
+  isSystem    Boolean      @default(false)
+  assignments UserRole[]
+  invitations Invitation[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model UserRole {
+  id              String  @id @default(cuid())
+  userId          String
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId          String
+  role            Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  grantedByUserId String?
+
+  @@unique([userId, roleId])
+}
+
+model Session {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash      String    @unique // sha256 of the opaque cookie token; raw never stored
+  idleExpiry     DateTime
+  absoluteExpiry DateTime
+  revokedAt      DateTime?
+  userAgent      String?
+  ip             String?
+  createdAt      DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Invitation {
+  id              String    @id @default(cuid())
+  email           String
+  roleId          String
+  role            Role      @relation(fields: [roleId], references: [id])
+  tokenHash       String    @unique
+  invitedByUserId String?
+  invitedBy       User?     @relation("Inviter", fields: [invitedByUserId], references: [id])
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+}

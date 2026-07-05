@@ -1,0 +1,26 @@
+/**
+ * Accessibility globals for the design system. Import alongside tokens.css.
+ * Component-level ARIA/keyboard lives in the components; this is the
+ * cross-cutting motion + focus baseline.
+ */
+
+/* Honor reduced-motion: neutralize DS animations + transitions. */
+@media (prefers-reduced-motion: reduce) {
+  [class*='h10-ds-'],
+  [class*='h10-ds-'] * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Visible keyboard focus for interactive patterns that don't already ring. */
+.h10-ds-navitem:focus-visible,
+.h10-ds-tab:focus-visible,
+.h10-ds-pgbtn:focus-visible,
+.h10-ds-fpanel-toggle:focus-visible,
+.h10-ds-builder-navitem:focus-visible {
+  outline: none;
+  box-shadow: var(--h10-focus-ring);
+}

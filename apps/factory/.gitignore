@@ -1,0 +1,8 @@
+# F1 — factory-local artifacts (root .gitignore already covers .env*, .next/, dist/)
+data/
+*.db
+*.db-wal
+*.db-shm
+src/generated/
+next-env.d.ts
+.snapshots/
