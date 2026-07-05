@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * SR.4 — Post-purchase review request workspace.
  *
@@ -10,6 +12,7 @@
  * 4h under NEXUS_ENABLE_REVIEW_INGEST=1.
  */
 
+import { useEffect, useState } from 'react'
 import { Mail, AlertCircle, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -46,8 +49,6 @@ async function fetchAnalytics(): Promise<Analytics | null> {
     return null
   }
 }
-
-export const dynamic = 'force-dynamic'
 
 interface Stats {
   scheduled: number
@@ -99,8 +100,35 @@ async function fetchStats(): Promise<Stats> {
 }
 
 // Optimal delay reference (mirrored from review-scheduler.service.ts for display)
-export default async function ReviewRequestsPage() {
-  const [stats, analytics] = await Promise.all([fetchStats(), fetchAnalytics()])
+export default function ReviewRequestsPage() {
+  // The API session cookie lives on the API origin (cross-site setup) — the
+  // Next server can never present it, so data MUST load client-side where the
+  // S3 fetch patch adds credentials. Server-side this page 401'd into zeros.
+  const [data, setData] = useState<{ stats: Stats; analytics: Analytics | null } | null>(null)
+  useEffect(() => {
+    let alive = true
+    Promise.all([fetchStats(), fetchAnalytics()]).then(([stats, analytics]) => {
+      if (alive) setData({ stats, analytics })
+    })
+    return () => { alive = false }
+  }, [])
+
+  if (!data) {
+    return (
+      <div className="px-4 py-4" aria-busy="true">
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <Mail className="h-5 w-5 text-blue-500" />
+          Review Requests
+        </h1>
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-6 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-16 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+  const { stats, analytics } = data
 
   return (
     <div className="px-4 py-4">
