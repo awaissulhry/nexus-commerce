@@ -1806,6 +1806,11 @@ export default function FlatFileGrid({
           const row = displayRowsRef.current[anchor.ri]; const col = allColumnsRef.current[anchor.ci]
           if (row && col && onBeforeEditCellRef.current?.(col, row)) return
         }
+        // preventDefault so the browser doesn't ALSO type the char into the freshly-
+        // focused input — the char becomes the input's defaultValue via editInitialChar.
+        // Mirrors the Amazon grid fix; without this the first letter was entered twice
+        // (single-click → type "T" → "TT"; double-click was fine, editInitialChar=null).
+        e.preventDefault()
         setIsEditing(true); setEditInitialChar(e.key)
       }
     }
