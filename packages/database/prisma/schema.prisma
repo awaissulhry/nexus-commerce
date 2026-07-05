@@ -5958,11 +5958,11 @@ model ExportJob {
   description String?
 
   /**
-   * csv | xlsx | json | pdf
+   * csv | xlsx | json | pdf | workbook
    */
   format       String
   /**
-   * product | channelListing | inventory
+   * product | channelListing | inventory | catalog
    */
   targetEntity String
 
@@ -5985,6 +5985,14 @@ model ExportJob {
    */
   artifactBase64 String?
   artifactUrl    String?
+
+  /**
+   * FF1: workbook snapshot id (also embedded in the hidden _meta sheet) and
+   * the channel→market list resolved at export time. Consumed by FF2 import
+   * staleness/conflict detection. Nullable; only set for workbook exports.
+   */
+  snapshotId String?
+  marketList Json?
 
   errorMessage String?
 
