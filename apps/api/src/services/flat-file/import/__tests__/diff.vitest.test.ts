@@ -442,7 +442,7 @@ describe('computeDiff — add cases', () => {
 describe('computeDiff — delete cases', () => {
   it('Action=DELETE records the row in the deletes bucket (one entry per row)', () => {
     const result = diff([amazonRow('GALE-M', 'DELETE', {})])
-    expect(result.deletes).toContainEqual({ sku: 'GALE-M', sheet: 'Amazon' })
+    expect(result.deletes).toContainEqual({ sku: 'GALE-M', sheet: 'Amazon', channel: 'AMAZON' })
     expect(result.deletes).toHaveLength(1)
     expect(result.stats.deletes).toBe(1)
   })
@@ -453,15 +453,15 @@ describe('computeDiff — delete cases', () => {
     expect(result.changes).toHaveLength(0)
     expect(result.masterChanges).toHaveLength(0)
     // The row is only surfaced via the deletes bucket.
-    expect(result.deletes).toContainEqual({ sku: 'GALE-M', sheet: 'Amazon' })
+    expect(result.deletes).toContainEqual({ sku: 'GALE-M', sheet: 'Amazon', channel: 'AMAZON' })
     expect(findChange(result, 'price@IT')).toBeUndefined()
   })
 
-  it('delete record carries sku + sheet only', () => {
+  it('delete record carries sku + sheet + channel', () => {
     const result = diff([amazonRow('GALE-M', 'DELETE', {})])
     const entry = result.deletes.find(d => d.sku === 'GALE-M')
     expect(entry).toBeDefined()
-    expect(entry).toEqual({ sku: 'GALE-M', sheet: 'Amazon' })
+    expect(entry).toEqual({ sku: 'GALE-M', sheet: 'Amazon', channel: 'AMAZON' })
   })
 
   it('__CLEAR__ on non-empty field → delete CellChange (distinct from Action=DELETE)', () => {
@@ -528,7 +528,7 @@ describe('computeDiff — stats', () => {
       amazonRow('GALE-L', 'DELETE', {}),                     // row-level delete
     ])
     expect(result.stats.deletes).toBe(2)
-    expect(result.deletes).toContainEqual({ sku: 'GALE-L', sheet: 'Amazon' })
+    expect(result.deletes).toContainEqual({ sku: 'GALE-L', sheet: 'Amazon', channel: 'AMAZON' })
   })
 })
 
@@ -662,5 +662,63 @@ describe('computeDiff — IGNORE action', () => {
       amazonRow('GALE-M', 'IGNORE', { 'price@DE': '155.0' }),
     ])
     expect(result.stats.outOfScope).toBe(0)
+  })
+})
+
+// ── Suite 12: C1 round-trip — array element containing delimiter char ──────────
+//
+// Contract §2 violation caught by C1: any bullet/keyword element whose text
+// contains the ' | ' delimiter char caused a FALSE kind:'update' on round-trip
+// because toStr did a raw .join(delim) while the generator's joinArray escapes
+// the inner delimiter.  This test MUST fail before the C1 fix and pass after.
+
+describe('computeDiff — C1 round-trip: pipe-containing array element', () => {
+  // Products-only model — no channel sheets needed for this case.
+  const PIPE_MODEL: WorkbookModel = {
+    markets: { AMAZON: [], EBAY: [], SHOPIFY: [] },
+    sheets: [
+      { name: 'Products', sharedFields: MASTER_FIELDS, marketFields: [] },
+    ],
+  }
+
+  // A product whose bullet_points array has an element containing the '|' char.
+  const PIPE_CURRENT: WorkbookData = {
+    products: [
+      {
+        sku: 'PIPE-SKU',
+        parent_sku: '',
+        isParent: false,
+        bulletPoints: ['Resistente | impermeabile', 'CE Level 2'],
+        brand: 'Xavia',
+        status: 'ACTIVE',
+      },
+    ],
+    listings: { AMAZON: [], EBAY: [], SHOPIFY: [] },
+  }
+
+  it('bullet_points with pipe-containing element round-trips as no-change (C1 fix)', async () => {
+    // 1. Export — the real generator's joinArray escapes the inner '|' → '/'.
+    const bytes = await generateWorkbook(PIPE_MODEL, PIPE_CURRENT, {
+      snapshotId: 'c1-rt',
+      exportedAt: '2026-07-06',
+    })
+    // 2. Parse the xlsx bytes back through the real parser.
+    const parsed = await parseWorkbook(bytes)
+    // 3. Classify with includeMaster=true so the Products sheet is in-scope.
+    const scoped = classifyColumns(parsed, {
+      channel: 'AMAZON',
+      markets: [] as string[],
+      includeMaster: true,
+    })
+    // 4. Diff against the identical catalog state used for generation.
+    const result = computeDiff(parsed, scoped, PIPE_CURRENT, {})
+
+    // Key assertion: no false update on bullet_points (round-trip identity).
+    const bulletChange = result.masterChanges.find(c => c.column === 'bullet_points')
+    expect(bulletChange).toBeUndefined()
+    // Whole diff must be clean.
+    expect(result.stats.updates).toBe(0)
+    expect(result.stats.adds).toBe(0)
+    expect(result.stats).toMatchObject({ adds: 0, updates: 0, conflicts: 0 })
   })
 })

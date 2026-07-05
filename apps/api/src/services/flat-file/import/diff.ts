@@ -100,10 +100,18 @@ export interface ImportDiff {
   /** Products-sheet CellChanges (master data, separate bucket). */
   masterChanges: CellChange[]
   /** Rows flagged for deletion via Action=DELETE (one entry per row). */
-  deletes: { sku: string; sheet: string }[]
+  deletes: { sku: string; sheet: string; channel?: Channel }[]
   stats: {
     adds: number
     updates: number
+    /**
+     * Counts BOTH row-level Action=DELETE rows (in the `deletes[]` bucket) AND
+     * cell-level `__CLEAR__` deletes (which are `kind:'delete'` CellChanges in
+     * `changes`/`masterChanges`). Therefore `adds+updates+deletes+conflicts+outOfScope`
+     * is NOT equal to `changes.length + masterChanges.length` when Action=DELETE rows
+     * are present. The apply stage must process `deletes[]` and `kind:'delete'`
+     * CellChanges separately.
+     */
     deletes: number
     conflicts: number
     outOfScope: number
@@ -128,7 +136,8 @@ function toStr(v: unknown, field?: FieldDefinition): string {
   if (typeof v === 'number') return String(v)
   if (Array.isArray(v)) {
     const delim = field?.arrayDelimiter ?? ' | '
-    return (v as unknown[]).join(delim)
+    const inner = delim.trim()
+    return (v as unknown[]).map((x) => String(x).split(inner).join('/')).join(delim)
   }
   return String(v)
 }
@@ -249,7 +258,7 @@ export function computeDiff(
 
   const changes: CellChange[] = []
   const masterChanges: CellChange[] = []
-  const deletes: { sku: string; sheet: string }[] = []
+  const deletes: { sku: string; sheet: string; channel?: Channel }[] = []
 
   // ── Process each sheet ────────────────────────────────────────────────────
 
@@ -295,7 +304,8 @@ export function computeDiff(
       // DELETE rows → record the row deletion and skip cell diffing entirely.
       // Deletion is never implicit; only an explicit Action=DELETE reaches here.
       if (action === 'DELETE') {
-        deletes.push({ sku, sheet: sheetName })
+        // market-scoping of DELETE is resolved at apply time per the import scope
+        deletes.push({ sku, sheet: sheetName, channel })
         continue
       }
 
@@ -306,7 +316,7 @@ export function computeDiff(
       let conflictChecked = false
       let rowIsConflict = false
 
-      function checkRowConflict(): boolean {
+      const checkRowConflict = (): boolean => {
         if (conflictChecked) return rowIsConflict
         conflictChecked = true
 
@@ -415,7 +425,8 @@ export function computeDiff(
           // (blank = nothing to report; matching = nothing to warn about)
           if (fileValue !== '' && fileValue !== fromStr) {
             const toValue = fileValue === '__CLEAR__' ? '' : fileValue
-            emit(sku, sc, fromValue, toValue, 'out-of-scope')
+            const note = fileValue === '__CLEAR__' ? '__CLEAR__' : undefined
+            emit(sku, sc, fromValue, toValue, 'out-of-scope', note)
           }
           continue
         }
