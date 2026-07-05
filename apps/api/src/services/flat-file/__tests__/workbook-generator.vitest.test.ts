@@ -119,10 +119,10 @@ describe('generateWorkbook', () => {
 
     const P = wb.getWorksheet('Products')!
 
-    // Find EAN column number from header row
+    // Find EAN column number from header row (header is now the field id 'ean', not the label)
     let eanColNo = -1
     P.getRow(1).eachCell((cell, colNo) => {
-      if (String(cell.value) === 'EAN') eanColNo = colNo
+      if (String(cell.value) === 'ean') eanColNo = colNo
     })
     expect(eanColNo).toBeGreaterThan(0)
 

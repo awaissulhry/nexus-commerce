@@ -254,12 +254,13 @@ function buildProductsSheet(
 
   // Build column definitions
   const greyCols = new Set<string>()
+  const colNotes: Record<string, string> = {}
   const colDefs: Array<{ header: string; key: string; width: number }> = [
     { header: 'Action', key: 'action', width: 9 },
   ]
   for (const f of sheet.sharedFields) {
-    const label = isReadonly(f) ? '🔒 ' + f.label : f.label
-    colDefs.push({ header: label, key: f.id, width: f.width ?? 16 })
+    colDefs.push({ header: f.id, key: f.id, width: f.width ?? 16 })
+    colNotes[f.id] = isReadonly(f) ? '🔒 (read-only) ' + f.label : f.label
     if (isReadonly(f)) greyCols.add(f.id)
   }
   ws.columns = colDefs as any
@@ -306,6 +307,13 @@ function buildProductsSheet(
 
   // Style header row last (reads cell keys via eachCell)
   styleHeader(ws, greyCols, {})
+
+  // Set human-readable labels as cell notes on header cells
+  ws.getRow(1).eachCell((cell, colNo) => {
+    const key = ws.getColumn(colNo).key ?? ''
+    const note = colNotes[key]
+    if (note) cell.note = note
+  })
 }
 
 // ── Channel sheet ─────────────────────────────────────────────────────────────
@@ -326,6 +334,7 @@ function buildChannelSheet(
   // Build column definitions
   const greyCols = new Set<string>()
   const bandCols: Record<string, Set<string>> = {}
+  const colNotes: Record<string, string> = {}
 
   const colDefs: Array<{ header: string; key: string; width: number }> = [
     { header: 'Action', key: 'action', width: 9 },
@@ -334,8 +343,8 @@ function buildChannelSheet(
 
   // Shared channel fields (currently empty per registry; included for future-proofing)
   for (const f of sheet.sharedFields) {
-    const label = isReadonly(f) ? '🔒 ' + f.label : f.label
-    colDefs.push({ header: label, key: f.id, width: f.width ?? 16 })
+    colDefs.push({ header: f.id, key: f.id, width: f.width ?? 16 })
+    colNotes[f.id] = isReadonly(f) ? '🔒 (read-only) ' + f.label : f.label
     if (isReadonly(f)) greyCols.add(f.id)
   }
 
@@ -345,8 +354,8 @@ function buildChannelSheet(
     bandCols[mkt] = new Set<string>()
     for (const f of sheet.marketFields) {
       const colKey = f.id + '@' + mkt
-      const label = isReadonly(f) ? '🔒 ' + f.id + '@' + mkt : f.id + '@' + mkt
-      colDefs.push({ header: label, key: colKey, width: f.width ?? 16 })
+      colDefs.push({ header: colKey, key: colKey, width: f.width ?? 16 })
+      colNotes[colKey] = isReadonly(f) ? '🔒 (read-only) ' + f.label : f.label
       if (isReadonly(f)) {
         greyCols.add(colKey)
       } else {
@@ -446,6 +455,13 @@ function buildChannelSheet(
 
   // Style header row last
   styleHeader(ws, greyCols, bandCols)
+
+  // Set human-readable labels as cell notes on header cells
+  ws.getRow(1).eachCell((cell, colNo) => {
+    const key = ws.getColumn(colNo).key ?? ''
+    const note = colNotes[key]
+    if (note) cell.note = note
+  })
 }
 
 // ── Meta sheet ────────────────────────────────────────────────────────────────

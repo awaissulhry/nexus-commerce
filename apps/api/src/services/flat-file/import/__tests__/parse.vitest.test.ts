@@ -111,10 +111,10 @@ describe('parseWorkbook — structural (FF1 round-trip)', () => {
     expect(productsSheet).toBeDefined()
     expect(productsSheet!.rows.length).toBeGreaterThan(0)
 
-    // The P1 product is the only product row; EAN column header = 'EAN' (cls:IDENTITY, no 🔒 prefix)
-    const row = productsSheet!.rows.find(r => r.cells['EAN'] != null || r.cells['SKU'] != null)
+    // The P1 product is the only product row; EAN column header = 'ean' (field id, not label)
+    const row = productsSheet!.rows.find(r => r.cells['ean'] != null || r.cells['sku'] != null)
     expect(row).toBeDefined()
-    const eanCell = row!.cells['EAN']
+    const eanCell = row!.cells['ean']
     expect(eanCell).toBeDefined()
     expect(eanCell!.value).toBe('08054323310123')
     expect(eanCell!.warning).toBeUndefined()
