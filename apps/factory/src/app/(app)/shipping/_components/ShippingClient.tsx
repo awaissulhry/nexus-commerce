@@ -9,13 +9,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Truck, Package, ExternalLink, Printer } from "lucide-react";
+import { Truck, Package, ExternalLink, Printer, Send, Ban, MapPin } from "lucide-react";
 import { DataGrid, Drawer, useToast } from "@/design-system/components";
 import { Button, Pill, RadioCard } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
-import { type Address, type InflightRow, type ParcelPreset, type Rate, type RatesResponse, type ReadyRow, type ShippingResponse, SHIP_LABEL, SHIP_TONE } from "./types";
+import { type Address, type InflightRow, type ParcelPreset, type Rate, type RatesResponse, type ReadyRow, type ShipmentDetail, type ShipmentDetailResponse, type ShippingResponse, SHIP_LABEL, SHIP_TONE } from "./types";
 
 const inp: React.CSSProperties = { width: "100%", border: "1px solid var(--h10-border)", borderRadius: 7, padding: "6px 8px", fontSize: 12.5, background: "var(--h10-surface)", color: "var(--h10-text)" };
 const lbl: React.CSSProperties = { fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 3 };
@@ -27,14 +27,23 @@ export function ShippingClient() {
   const params = useSearchParams();
   const canCost = usePermission("financials.costs.view");
   const canBuy = usePermission("labels.purchase");
+  const canVoid = usePermission("labels.void");
   const [data, setData] = useState<ShippingResponse | null>(null);
   const [buyOrder, setBuyOrder] = useState<ReadyRow | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<ShipmentDetail | null>(null);
 
   const load = useCallback(async () => {
     try { setData(await apiJson<ShippingResponse>("/api/shipping")); }
     catch (e) { toast((e as Error).message, "danger"); }
   }, [toast]);
   useEffect(() => { void load(); }, [load]);
+
+  const loadDetail = useCallback(async (id: string) => {
+    try { setDetail((await apiJson<ShipmentDetailResponse>(`/api/shipping/${id}`)).shipment); }
+    catch (e) { toast((e as Error).message, "danger"); }
+  }, [toast]);
+  const openDetail = (id: string) => { setDetailId(id); setDetail(null); void loadDetail(id); };
 
   // deep-link ?buy=<orderId> opens the panel once the queue is loaded
   const buyParam = params.get("buy");
@@ -78,7 +87,7 @@ export function ShippingClient() {
         <SectionHeading icon={<Truck size={14} />} title="In flight" count={data?.inflight.length} />
         <DataGrid
           columns={[
-            { key: "order", label: "Order", render: (r: InflightRow) => <b>{r.orderNumber}</b> },
+            { key: "order", label: "Order", render: (r: InflightRow) => <button type="button" onClick={() => openDetail(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.orderNumber}</button> },
             { key: "party", label: "Customer", render: (r: InflightRow) => r.partyName },
             { key: "carrier", label: "Carrier", render: (r: InflightRow) => r.service ?? "—" },
             { key: "tracking", label: "Tracking", render: (r: InflightRow) => (r.trackingUrl ? <a href={r.trackingUrl} target="_blank" rel="noreferrer" style={{ color: "var(--h10-text-link)", display: "inline-flex", gap: 4, alignItems: "center" }}>{r.trackingNumber} <ExternalLink size={11} /></a> : (r.trackingNumber ?? "—")) },
@@ -93,7 +102,78 @@ export function ShippingClient() {
       </section>
 
       <BuyPanel order={buyOrder} presets={data?.presets ?? []} canCost={canCost} onClose={() => setBuyOrder(null)} onBought={() => { setBuyOrder(null); void load(); }} />
+      <ShipmentDrawer id={detailId} detail={detail} canVoid={canVoid} onClose={() => setDetailId(null)} onChanged={() => { void load(); if (detailId) void loadDetail(detailId); }} />
     </div>
+  );
+}
+
+function ShipmentDrawer({ id, detail, canVoid, onClose, onChanged }: { id: string | null; detail: ShipmentDetail | null; canVoid: boolean; onClose: () => void; onChanged: () => void }) {
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+
+  const share = async () => {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      const r = await apiJson<{ dryRun?: boolean; sentTo?: string }>(`/api/shipping/${detail.id}/share-tracking`, { method: "POST", body: "{}" });
+      toast(r.dryRun ? "Tracking composed (test mode — not sent)" : `Tracking sent to ${r.sentTo}`, "success");
+      onChanged();
+    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
+  };
+  const voidLabel = async () => {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      await apiJson(`/api/shipping/${detail.id}/void`, { method: "POST", body: "{}" });
+      toast("Label voided — order returned to Ready", "success");
+      onChanged(); onClose();
+    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
+  };
+
+  const d = detail;
+  return (
+    <Drawer open={!!id} onClose={onClose} title={d ? `Shipment · ${d.orderNumber}` : "Shipment"} footer={d ? (
+      <div style={{ display: "flex", gap: 8, width: "100%", alignItems: "center" }}>
+        {d.hasLabel && <a href={d.labelUrl ?? "#"} target="_blank" rel="noreferrer" className="h10-ds-btn" style={{ textDecoration: "none", display: "inline-flex", gap: 6, alignItems: "center" }}><Printer size={13} /> Label</a>}
+        {d.hasThread && <Button variant="primary" onClick={share} disabled={busy}><Send size={13} /> Share tracking</Button>}
+        {canVoid && d.voidable && <Button onClick={voidLabel} disabled={busy} style={{ marginLeft: "auto", color: "var(--h10-danger)", borderColor: "var(--h10-danger)" }}><Ban size={13} /> Void</Button>}
+      </div>
+    ) : undefined}>
+      {d && (
+        <div style={{ display: "grid", gap: 14 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: 12.5 }}>
+            <Pill tone={SHIP_TONE[d.state]}>{SHIP_LABEL[d.state]}</Pill>
+            {d.service && <span style={{ color: "var(--h10-text-2)" }}>{d.service}</span>}
+            {d.trackingUrl && d.trackingNumber && <a href={d.trackingUrl} target="_blank" rel="noreferrer" style={{ color: "var(--h10-text-link)", display: "inline-flex", gap: 4, alignItems: "center" }}>{d.trackingNumber} <ExternalLink size={11} /></a>}
+          </div>
+
+          {d.shipToJson && (
+            <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", display: "flex", gap: 6 }}>
+              <MapPin size={14} style={{ marginTop: 1, flexShrink: 0 }} />
+              <span>{[d.shipToJson.name, d.shipToJson.street, `${d.shipToJson.postalCode} ${d.shipToJson.city}`, d.shipToJson.country].filter(Boolean).join(", ")}</span>
+            </div>
+          )}
+          {!d.hasThread && <div style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>No linked email thread — copy the tracking to the customer manually.</div>}
+
+          <div>
+            <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 6 }}>Tracking</div>
+            {d.events.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: "var(--h10-text-3)" }}>No tracking events yet — they arrive as the carrier scans the parcel.</div>
+            ) : (
+              <div style={{ display: "grid", gap: 0 }}>
+                {d.events.map((e) => (
+                  <div key={e.id} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "7px 0", borderBottom: "1px solid var(--h10-border-subtle)" }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 8, background: "var(--h10-primary)", flexShrink: 0, transform: "translateY(3px)" }} />
+                    <span style={{ fontSize: 12.5, flex: 1 }}>{e.message ?? e.status}</span>
+                    <span style={{ fontSize: 11, color: "var(--h10-text-3)", fontVariantNumeric: "tabular-nums" }}>{new Date(e.occurredAt).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </Drawer>
   );
 }
 

@@ -4,6 +4,7 @@
  * inside Next, vercel/next.js#51450, can't happen). Jobs:
  *   · heartbeat        every 30s → AppSetting worker.heartbeat (Health panel)
  *   · Gmail poll       every 10s → history.list incremental (≈0.02%/day quota)
+ *   · tracking tick    every 15m → poll in-flight shipments, drive → delivered
  *   · nightly snapshot 03:xx     → VACUUM INTO .snapshots/ (rotate 14)
  * Shares the SQLite file with the web process under WAL.
  */
@@ -13,16 +14,19 @@ import path from "node:path";
 import { prisma, factoryDbUrl } from "../src/lib/db";
 import { incrementalSync } from "../src/lib/google/gmail-sync";
 import { notify } from "../src/lib/notifications";
+import { pollInflightShipments } from "../src/lib/shipping/poll-tracking";
 
 const HEARTBEAT_MS = 30_000;
 const GMAIL_POLL_MS = 10_000;
 const INBOX_TICK_MS = 60_000;
+const TRACKING_TICK_MS = 15 * 60 * 1000; // FP8 — poll in-flight shipments (read-only)
 const OUTBOX_TTL_MS = 10 * 60 * 1000;
 const SNAPSHOT_HOUR = 3;
 const SNAPSHOT_KEEP = 14;
 
 let stopping = false;
 let gmailBusy = false;
+let trackingBusy = false;
 let lastSnapshotDay = "";
 
 async function heartbeat() {
@@ -124,6 +128,24 @@ async function inboxTick() {
   }
 }
 
+/**
+ * FP8 — tracking tick: ask the carrier where each in-flight parcel is, append
+ * new events, and let a delivery flip its order. Read-only against the carrier;
+ * no-ops cleanly when no carrier is connected (the FakeCarrier stands in).
+ */
+async function trackingTick() {
+  if (trackingBusy || stopping) return;
+  trackingBusy = true;
+  try {
+    const r = await pollInflightShipments();
+    if (r.advanced > 0) console.log(`[worker] tracking: ${r.advanced} advanced, ${r.delivered} delivered (${r.polled} in flight)`);
+  } catch (err) {
+    console.error("[worker] tracking tick error:", (err as Error).message);
+  } finally {
+    trackingBusy = false;
+  }
+}
+
 async function nightlySnapshot() {
   const now = new Date();
   const day = now.toISOString().slice(0, 10);
@@ -159,6 +181,7 @@ async function main() {
     setInterval(() => void heartbeat(), HEARTBEAT_MS),
     setInterval(() => void gmailPoll(), GMAIL_POLL_MS),
     setInterval(() => void inboxTick(), INBOX_TICK_MS),
+    setInterval(() => void trackingTick(), TRACKING_TICK_MS),
     setInterval(() => void nightlySnapshot(), 60_000),
   ];
   const stop = async (signal: string) => {

@@ -31,6 +31,29 @@ export type ShippingResponse = {
 export type Rate = { code: string; carrier: string; service: string; costCents?: number; currency: string; estDays?: number };
 export type RatesResponse = { rates: Rate[]; cheapestCode: string | null; live: boolean };
 
+export type TrackingEventRow = { id: string; status: string; message: string | null; occurredAt: string };
+export type ShipmentDetail = {
+  id: string;
+  state: ShipmentState;
+  service: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  costCents?: number;
+  labelFormat: string | null;
+  shipToJson: Address | null;
+  createdAt: string;
+  updatedAt: string;
+  events: TrackingEventRow[];
+  orderId: string;
+  orderNumber: string;
+  partyName: string;
+  hasThread: boolean;
+  hasLabel: boolean;
+  labelUrl: string | null;
+  voidable: boolean;
+};
+export type ShipmentDetailResponse = { shipment: ShipmentDetail };
+
 export const SHIP_TONE: Record<ShipmentState, "neutral" | "info" | "warning" | "success" | "danger"> = {
   CREATED: "neutral",
   LABEL_PURCHASED: "info",
