@@ -560,6 +560,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // historyRefreshKey still incremented after each push (harmless; HistoryModal fetches live on open)
   const [, setHistoryRefreshKey] = useState(0)
   const [imageModalOpen, setImageModalOpen] = useState(false)
+  // P1-surface: rows that failed to persist on save — re-injected after reload so they don't vanish
+  const [savedErrorRows, setSavedErrorRows] = useState<EbayRow[]>([])
   // Refs so fileMenuItems callbacks can access latest FlatFileGrid ctx without stale closures
   const latestRowsRef = useRef<BaseRow[]>([])
   const latestSelectedRowsRef = useRef<Set<string>>(new Set())
@@ -859,10 +861,21 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     const res = await fetch(`${BACKEND}/api/ebay/flat-file/rows?${qs}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const json = await res.json() as { rows: EbayRow[] }
-    const rows = json.rows ?? []
+    const serverRows = json.rows ?? []
+
+    // P1-surface: re-inject rows that failed to persist on save and are still missing from the DB
+    let rows = serverRows
+    if (savedErrorRows.length > 0) {
+      const serverSkus = new Set(serverRows.map((r) => r.sku))
+      const stillMissing = savedErrorRows.filter((fr) => !serverSkus.has(fr.sku))
+      if (stillMissing.length > 0) {
+        rows = [...serverRows, ...stillMissing]
+      }
+    }
+
     _ebay_swr.set(ebayKey, { rows, fetchedAt: Date.now() })
     return rows
-  }, [familyId, BACKEND, ebayKey])
+  }, [familyId, BACKEND, ebayKey, savedErrorRows])
 
   // ── API: save ─────────────────────────────────────────────────────────
 
@@ -873,13 +886,68 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       body: JSON.stringify({ rows: dirty }),
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const result = await res.json() as { saved: number }
+    // P1-surface: read the full response including createResult to detect rows that failed to persist
+    const result = await res.json() as {
+      saved: number
+      createResult?: {
+        idMap: Array<{ tempRowId?: string; sku: string; productId: string }>
+        errors: Array<{ sku?: string; tempRowId?: string; reason: string }>
+        warnings: Array<{ sku?: string; reason: string }>
+        collapsedSkus?: string[]
+      }
+    }
     if (result.saved > 0) {
       emitInvalidation({ type: 'product.updated', meta: { source: 'ebay-flat-file' } })
       emitInvalidation({ type: 'stock.adjusted', meta: { source: 'ebay-flat-file' } })
     }
-    return result
-  }, [BACKEND])
+
+    const errors = result.createResult?.errors ?? []
+    if (errors.length > 0) {
+      // Map each failed dirty row to its error entry (by SKU or tempRowId)
+      const failedRows: EbayRow[] = dirty.flatMap((r) => {
+        const sku = String((r as EbayRow).sku ?? '')
+        const errEntry = errors.find(
+          (e) => (e.sku && e.sku === sku) || (e.tempRowId && e.tempRowId === r._rowId),
+        )
+        if (!errEntry) return []
+        return [{ ...(r as EbayRow), _dirty: true, _status: 'error' as const, _feedMessage: errEntry.reason }]
+      })
+
+      // Store failed rows so onReload can re-inject them if user reloads the grid
+      if (failedRows.length > 0) setSavedErrorRows(failedRows)
+
+      // Re-mark failed rows in the grid AFTER the grid's own setRows(_dirty:false) call.
+      // setTimeout(0) ensures we fire after saveDraft's synchronous state update.
+      const failedRowIds = new Set(failedRows.map((fr) => fr._rowId))
+      const toastFn = toast
+      const savedCount = result.saved
+      const errorCount = errors.length
+      const firstReason = errors[0]?.reason ?? 'Save error'
+      const moreStr = errors.length > 1 ? ` (+${errors.length - 1} more)` : ''
+      setTimeout(() => {
+        // Re-apply error state to failed rows (grid cleared _dirty above).
+        // latestSetRowsRef takes a concrete array; use latestRowsRef for current state.
+        const setRowsFn = latestSetRowsRef.current
+        if (setRowsFn && failedRowIds.size > 0) {
+          const current = latestRowsRef.current
+          const next = current.map((r) => {
+            if (!failedRowIds.has(r._rowId)) return r
+            const fr = failedRows.find((f) => f._rowId === r._rowId)
+            return { ...r, _dirty: true, _status: 'error' as const, _feedMessage: fr?._feedMessage }
+          })
+          setRowsFn(next)
+        }
+        // Show combined info toast (visible after the grid's generic success toast)
+        toastFn({
+          title: `Saved ${savedCount} · ${errorCount} couldn't save`,
+          description: `${firstReason}${moreStr}`,
+          tone: 'info',
+        })
+      }, 0)
+    }
+
+    return { saved: result.saved }
+  }, [BACKEND, toast])
 
   // ── P2.D2 — API: delete rows ──────────────────────────────────────────
 
