@@ -1290,6 +1290,71 @@ export function toChannelMarket(mp: Market): string {
   return `EBAY_${mp}`;
 }
 
+// ── P4 — Snapshot overlay (mirrors Amazon applySnapshotOverlay) ─────────
+
+/**
+ * Fields that ALWAYS come from the live DB-derived row, never from the snapshot.
+ * Mirrors Amazon's SNAPSHOT_LIVE_OVERLAY: prices/quantities may be updated by the
+ * repricer or stock system after the user saved; eBay item IDs are set after push;
+ * sync_status and system fields are owned by the backend; identity fields (sku, ean)
+ * and grouping flags (_isParent, platformProductId) are always DB-authoritative.
+ */
+export const EBAY_SNAPSHOT_LIVE_FIELDS = new Set([
+  // Identity — product-level, not user-entered in the flat file
+  'sku', 'ean',
+  // Live eBay system fields
+  'ebay_item_id', 'listing_status', 'sync_status', 'last_pushed_at',
+  // Per-market live fields (may be updated by repricer / stock system)
+  ...MARKETS.flatMap((mp) => {
+    const p = mp.toLowerCase();
+    return [`${p}_price`, `${p}_qty`, `${p}_item_id`, `${p}_status`, `${p}_listing_id`];
+  }),
+  // Grouping / family structure — derived from Product.parentId, not user intent
+  'platformProductId', '_isParent',
+]);
+
+/**
+ * P4 — eBay flat-file snapshot overlay.
+ *
+ * After buildFlatRow derives a row from live DB state and P1a/P3 fills parent_sku,
+ * this function overlays the ChannelListing.flatFileSnapshot so the user-entered
+ * version of the file is what gets returned on reload.
+ *
+ * Merge strategy (same as Amazon's applySnapshotOverlay):
+ *   1. derivedRow — base layer; fields absent from the snapshot fall through here
+ *      (handles schema additions after the snapshot was written).
+ *   2. snapshot   — user-entered content wins: parentage, parent_sku, title,
+ *      description, category_id, condition, aspect_*, images, policies, package
+ *      dims, variation_theme, etc.
+ *   3. live       — EBAY_SNAPSHOT_LIVE_FIELDS + all _-prefixed internal fields
+ *      always come from derivedRow (repricer/stock changes show, system state
+ *      is authoritative).
+ *
+ * Only call this when snapshot is non-empty (the route guards with
+ * `Object.keys(snapshot).length > 0`).
+ *
+ * Divergence risk: if snapshot.parentage/parent_sku disagrees with DB-derived
+ * platformProductId / _isParent, the display shows the user's saved intent but
+ * grouping uses the DB parentId. Flag this in the report; it is expected.
+ */
+export function applyEbayFlatFileSnapshot(
+  derivedRow: Record<string, unknown>,
+  snapshot: Record<string, unknown>,
+): Record<string, unknown> {
+  // Collect live-field overrides: EBAY_SNAPSHOT_LIVE_FIELDS + all _ internal keys.
+  const live: Record<string, unknown> = {};
+  for (const k of Object.keys(derivedRow)) {
+    if (k.startsWith('_') || EBAY_SNAPSHOT_LIVE_FIELDS.has(k)) {
+      live[k] = derivedRow[k];
+    }
+  }
+  return {
+    ...derivedRow,  // base: derived fields as fallback for fields missing from snapshot
+    ...snapshot,    // user-entered content overrides derived
+    ...live,        // live/system fields always win (override snapshot)
+  };
+}
+
 /**
  * Build a flat multi-market row from a Product + its eBay ChannelListings.
  */

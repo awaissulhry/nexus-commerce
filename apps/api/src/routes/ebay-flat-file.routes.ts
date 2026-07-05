@@ -38,7 +38,7 @@ import {
 } from '../services/ebay-flat-file-pull-preview.service.js';
 import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, toListingLanguage, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
 import { pushSharedListings, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
-import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields } from '../services/ebay-variation-push.service.js';
+import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot } from '../services/ebay-variation-push.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
 import { renderExport } from '../services/export/renderers.js';
 import { parseCsv, parseFile, sniffDelimiter, detectFileKind, type ParsedFile } from '../services/import/parsers.js';
@@ -156,6 +156,21 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           const fk = String(row.platformProductId ?? row._productId ?? '')
           const inherited = familyItemId.get(fk)
           if (inherited) row.ebay_item_id = inherited
+        }
+      }
+
+      // P4 — snapshot overlay: user-entered values survive reload verbatim.
+      // Runs AFTER P1a/P3 parent_sku fill + ebay_item_id propagation so the
+      // snapshot is the final authority on user-entered content (parentage,
+      // parent_sku, title, description, category, aspects, images, policies …)
+      // while live/system fields (per-market price/qty/item_id/status, sku,
+      // sync_status, platformProductId, _isParent) keep their DB-derived values.
+      for (let i = 0; i < rows.length; i++) {
+        const firstListing = (products[i] as any)?.channelListings?.[0];
+        if (!firstListing) continue;
+        const snapshot = (firstListing as any).flatFileSnapshot as Record<string, unknown> | null | undefined;
+        if (snapshot && typeof snapshot === 'object' && Object.keys(snapshot).length > 0) {
+          rows[i] = applyEbayFlatFileSnapshot(rows[i] as Record<string, unknown>, snapshot as Record<string, unknown>);
         }
       }
 
@@ -362,6 +377,13 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
         const sharedPacked = packSharedFields(row);
 
+        // P4 — build snapshot payload once per row: persist the full entered row
+        // (minus internal _ fields) so the saved version survives reload verbatim.
+        // Mirrors Amazon's flatFileSnapshot: Object.fromEntries(entries.filter no _).
+        const flatFileSnapshot = Object.fromEntries(
+          Object.entries(row).filter(([k]) => !k.startsWith('_')),
+        );
+
         // Process each market
         for (const mp of MARKETS) {
           const prefix = mp.toLowerCase() as Lowercase<Market>;
@@ -398,6 +420,11 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             // listing (per channel×marketplace), not on the shared product.
             fulfillmentMethod: 'FBM' as const,
             updatedAt: new Date(),
+            // P4 — persist entered row verbatim for lossless round-trip so
+            // parentage/parent_sku and all user-entered fields survive reload
+            // even if DB derivation or backend state changes.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            flatFileSnapshot: flatFileSnapshot as any,
           };
 
           let listingId: string;
