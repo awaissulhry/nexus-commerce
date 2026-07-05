@@ -1,6 +1,6 @@
-/** F1 — designed empty state; the real page lands in its FP cycle (src/lib/nav.ts). */
-import { ComingSoon } from "@/components/ComingSoon";
+/** FP4 — Orders is LIVE: the operational board (spec: docs/factory/FP4-SPEC.md). */
+import { OrdersClient } from "./_components/OrdersClient";
 
-export default function Page() {
-  return <ComingSoon pageId="orders" />;
+export default function OrdersPage() {
+  return <OrdersClient />;
 }
