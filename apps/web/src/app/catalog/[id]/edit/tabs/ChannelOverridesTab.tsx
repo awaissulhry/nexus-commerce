@@ -6,6 +6,7 @@ import ChannelOverrideToggle from '@/components/catalog/ChannelOverrideToggle'
 import TabValidationIcon from '@/components/catalog/TabValidationIcon'
 import PayloadPreview from '@/components/catalog/PayloadPreview'
 import type { ChannelType } from '@/lib/taxonomy/channel-mapper'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface ChannelOverridesTabProps {
   product: any // Product with Decimal basePrice
@@ -153,15 +154,17 @@ export default function ChannelOverridesTab({ product }: ChannelOverridesTabProp
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Pricing Rule
               </label>
-              <select
+              <Listbox
                 value={overrides[activeChannel].pricingRule || 'FIXED'}
-                onChange={(e) => handleOverrideChange('pricingRule', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="FIXED">Fixed Price (Use Master Price)</option>
-                <option value="PERCENT_OF_MASTER">Percent of Master (Adjust by %)</option>
-                <option value="MATCH_AMAZON">Match Amazon Price</option>
-              </select>
+                onChange={(value) => handleOverrideChange('pricingRule', value)}
+                options={[
+                  { value: 'FIXED', label: 'Fixed Price (Use Master Price)' },
+                  { value: 'PERCENT_OF_MASTER', label: 'Percent of Master (Adjust by %)' },
+                  { value: 'MATCH_AMAZON', label: 'Match Amazon Price' },
+                ]}
+                ariaLabel="Pricing Rule"
+                className="w-full"
+              />
             </div>
 
             {/* Adjustment Percentage (Only for PERCENT_OF_MASTER) */}

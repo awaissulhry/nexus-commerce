@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { CircleDot, Download, RefreshCw, Settings2 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
+import { Listbox } from '@/design-system/components/Listbox'
+import { DateField } from '@/design-system/components/DateField'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import RelativeTimestamp from './RelativeTimestamp'
@@ -93,46 +95,31 @@ export default function Header({
             ))}
           </div>
           {/* DO.25 — custom range pair. Renders only when "Custom"
-              is the active window. Native <input type="date"> gives
-              free locale-aware date pickers (Italian operator gets
-              Italian month names automatically) without pulling in
+              is the active window. DateField gives a zero-native-chrome
+              calendar popover (Wave-1 conformance) without pulling in
               a date library. */}
           {currentWindow === 'custom' && (
             <div className="inline-flex items-center gap-1">
-              <input
-                type="date"
-                aria-label={t('overview.customRange.from')}
+              <DateField
+                ariaLabel={t('overview.customRange.from')}
                 value={customRange.from}
                 max={customRange.to}
-                onChange={(e) =>
-                  onCustomRangeChange({ ...customRange, from: e.target.value })
+                onChange={(v) =>
+                  onCustomRangeChange({ ...customRange, from: v })
                 }
-                className={cn(
-                  'h-7 px-2 text-sm rounded-md border tabular-nums',
-                  'border-default dark:border-slate-700',
-                  'bg-white dark:bg-slate-900',
-                  'text-slate-700 dark:text-slate-300',
-                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
-                )}
+                className="w-36 tabular-nums"
               />
               <span className="text-xs text-tertiary dark:text-slate-500">
                 →
               </span>
-              <input
-                type="date"
-                aria-label={t('overview.customRange.to')}
+              <DateField
+                ariaLabel={t('overview.customRange.to')}
                 value={customRange.to}
                 min={customRange.from}
-                onChange={(e) =>
-                  onCustomRangeChange({ ...customRange, to: e.target.value })
+                onChange={(v) =>
+                  onCustomRangeChange({ ...customRange, to: v })
                 }
-                className={cn(
-                  'h-7 px-2 text-sm rounded-md border tabular-nums',
-                  'border-default dark:border-slate-700',
-                  'bg-white dark:bg-slate-900',
-                  'text-slate-700 dark:text-slate-300',
-                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
-                )}
+                className="w-36 tabular-nums"
               />
             </div>
           )}
@@ -141,49 +128,34 @@ export default function Header({
               represents "no view active, layout is whatever the
               operator currently has set". */}
           {views.length > 0 && (
-            <select
-              aria-label={t('overview.views.aria')}
+            <Listbox
+              ariaLabel={t('overview.views.aria')}
               value={activeViewId ?? '__live__'}
-              onChange={(e) => onApplyView(e.target.value as string | '__live__')}
-              className={cn(
-                'h-7 pl-2 pr-7 text-sm rounded-md border bg-white dark:bg-slate-900',
-                'border-default dark:border-slate-700',
-                'text-slate-700 dark:text-slate-300',
-                'hover:bg-slate-50 dark:hover:bg-slate-800',
-                'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
-              )}
-            >
-              <option value="__live__">{t('overview.views.live')}</option>
-              {views.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                  {v.isDefault ? ' ★' : ''}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => onApplyView(v as string | '__live__')}
+              className="w-44"
+              options={[
+                { value: '__live__', label: t('overview.views.live') },
+                ...views.map((v) => ({
+                  value: v.id,
+                  label: `${v.name}${v.isDefault ? ' ★' : ''}`,
+                })),
+              ]}
+            />
           )}
-          {/* DO.11 — comparison-period dropdown. Native <select> is
-              the right primitive here: it wears the platform's
-              keyboard / screen-reader affordances for free, mobile
-              gives a wheel picker, and the option set is small. */}
-          <select
-            aria-label={t('overview.compare.aria')}
+          {/* DO.11 — comparison-period dropdown. Listbox is the
+              DS-conformant primitive here (Wave-1): keyboard /
+              screen-reader affordances, no native chrome, and the
+              option set is small. */}
+          <Listbox
+            ariaLabel={t('overview.compare.aria')}
             value={currentCompare}
-            onChange={(e) => onCompareChange(e.target.value as CompareKey)}
-            className={cn(
-              'h-7 pl-2 pr-7 text-sm rounded-md border bg-white dark:bg-slate-900',
-              'border-default dark:border-slate-700',
-              'text-slate-700 dark:text-slate-300',
-              'hover:bg-slate-50 dark:hover:bg-slate-800',
-              'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
-            )}
-          >
-            {COMPARES.map((c) => (
-              <option key={c.id} value={c.id}>
-                {t('overview.compare.prefix')} {t(`overview.compare.${c.id}`)}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => onCompareChange(v as CompareKey)}
+            className="w-44"
+            options={COMPARES.map((c) => ({
+              value: c.id,
+              label: `${t('overview.compare.prefix')} ${t(`overview.compare.${c.id}`)}`,
+            }))}
+          />
           {/* DO.16 — live-mode toggle. Stripe-pattern emerald dot
               when on; dim slate when off. role="switch" gives the
               right keyboard / screen-reader semantics for a binary

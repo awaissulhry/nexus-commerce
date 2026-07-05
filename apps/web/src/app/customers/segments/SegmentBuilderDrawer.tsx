@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { X, Plus, Trash2, Loader2, Users } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface Condition {
   field: string
@@ -245,35 +246,31 @@ export function SegmentBuilderDrawer({
                   const ops = getOpsForField(c.field)
                   return (
                     <div key={i} className="flex items-start gap-2 p-2 rounded-md bg-slate-50 dark:bg-slate-800/60">
-                      <select
+                      <Listbox
                         value={c.field}
-                        onChange={(e) => updateCondition(i, { field: e.target.value, op: getOpsForField(e.target.value)[0].value })}
-                        className="text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-400"
-                      >
-                        {FIELD_OPTIONS.map((f) => (
-                          <option key={f.value} value={f.value}>{f.label}</option>
-                        ))}
-                      </select>
+                        onChange={(value) => updateCondition(i, { field: value, op: getOpsForField(value)[0].value })}
+                        options={FIELD_OPTIONS.map((f) => ({ value: f.value, label: f.label }))}
+                        ariaLabel="Condition field"
+                        className="max-w-[140px]"
+                      />
 
-                      <select
+                      <Listbox
                         value={c.op}
-                        onChange={(e) => updateCondition(i, { op: e.target.value })}
-                        className="text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-400"
-                      >
-                        {ops.map((op) => (
-                          <option key={op.value} value={op.value}>{op.label}</option>
-                        ))}
-                      </select>
+                        onChange={(value) => updateCondition(i, { op: value })}
+                        options={ops.map((op) => ({ value: op.value, label: op.label }))}
+                        ariaLabel="Operator"
+                        className="w-32"
+                      />
 
                       {c.op !== 'exists' && (
                         fieldDef?.type === 'enum' ? (
-                          <select
+                          <Listbox
                             value={c.rawValue}
-                            onChange={(e) => updateCondition(i, { rawValue: e.target.value })}
-                            className="flex-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-400"
-                          >
-                            {fieldDef.values?.map((v) => <option key={v} value={v}>{v}</option>)}
-                          </select>
+                            onChange={(value) => updateCondition(i, { rawValue: value })}
+                            options={(fieldDef.values ?? []).map((v) => ({ value: v, label: v }))}
+                            ariaLabel="Value"
+                            className="flex-1"
+                          />
                         ) : (
                           <input
                             type="text"

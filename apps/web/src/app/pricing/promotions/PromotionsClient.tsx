@@ -34,6 +34,8 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
+import { DateField } from '@/design-system/components/DateField'
 
 interface PriceAction {
   id: string
@@ -661,24 +663,24 @@ function CreatePromotionModal({
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('pricing.promotions.form.start')}
               </label>
-              <input
-                type="date"
-                required
+              <DateField
                 value={form.startDate}
-                onChange={(e) => update('startDate', e.target.value)}
-                className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base"
+                onChange={(v) => update('startDate', v)}
+                clearable={false}
+                ariaLabel={t('pricing.promotions.form.start')}
+                className="w-full"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('pricing.promotions.form.end')}
               </label>
-              <input
-                type="date"
-                required
+              <DateField
                 value={form.endDate}
-                onChange={(e) => update('endDate', e.target.value)}
-                className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base"
+                onChange={(v) => update('endDate', v)}
+                clearable={false}
+                ariaLabel={t('pricing.promotions.form.end')}
+                className="w-full"
               />
             </div>
           </div>
@@ -687,38 +689,42 @@ function CreatePromotionModal({
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('pricing.promotions.form.channel')}
               </label>
-              <select
+              <Listbox
                 value={form.channel}
-                onChange={(e) => update('channel', e.target.value)}
-                className="w-full h-9 px-2 border border-slate-300 dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900"
-              >
-                <option value="">{t('pricing.filter.allChannels')}</option>
-                <option value="AMAZON">Amazon</option>
-                <option value="EBAY">eBay</option>
-                <option value="SHOPIFY">Shopify</option>
-              </select>
+                onChange={(v) => update('channel', v)}
+                ariaLabel={t('pricing.promotions.form.channel')}
+                className="w-full"
+                options={[
+                  { value: '', label: t('pricing.filter.allChannels') },
+                  { value: 'AMAZON', label: 'Amazon' },
+                  { value: 'EBAY', label: 'eBay' },
+                  { value: 'SHOPIFY', label: 'Shopify' },
+                ]}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('pricing.promotions.form.marketplace')}
               </label>
-              <select
+              <Listbox
                 value={form.marketplace}
-                onChange={(e) => update('marketplace', e.target.value)}
-                className="w-full h-9 px-2 border border-slate-300 dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900"
-              >
-                <option value="">{t('pricing.filter.allMarketplaces')}</option>
-                <option value="IT">IT</option>
-                <option value="DE">DE</option>
-                <option value="FR">FR</option>
-                <option value="ES">ES</option>
-                <option value="UK">UK</option>
-                <option value="NL">NL</option>
-                <option value="PL">PL</option>
-                <option value="SE">SE</option>
-                <option value="US">US</option>
-                <option value="GLOBAL">GLOBAL</option>
-              </select>
+                onChange={(v) => update('marketplace', v)}
+                ariaLabel={t('pricing.promotions.form.marketplace')}
+                className="w-full"
+                options={[
+                  { value: '', label: t('pricing.filter.allMarketplaces') },
+                  { value: 'IT', label: 'IT' },
+                  { value: 'DE', label: 'DE' },
+                  { value: 'FR', label: 'FR' },
+                  { value: 'ES', label: 'ES' },
+                  { value: 'UK', label: 'UK' },
+                  { value: 'NL', label: 'NL' },
+                  { value: 'PL', label: 'PL' },
+                  { value: 'SE', label: 'SE' },
+                  { value: 'US', label: 'US' },
+                  { value: 'GLOBAL', label: 'GLOBAL' },
+                ]}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -760,20 +766,16 @@ function CreatePromotionModal({
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {t('pricing.promotions.form.actionType')}
                   </label>
-                  <select
+                  <Listbox
                     value={form.actionType}
-                    onChange={(e) =>
-                      update('actionType', e.target.value as typeof form.actionType)
-                    }
-                    className="w-full h-9 px-2 border border-slate-300 dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900"
-                  >
-                    <option value="PERCENT_OFF">
-                      {t('pricing.promotions.form.percentOffOption')}
-                    </option>
-                    <option value="FIXED_PRICE">
-                      {t('pricing.promotions.form.fixedPriceOption')}
-                    </option>
-                  </select>
+                    onChange={(v) => update('actionType', v)}
+                    ariaLabel={t('pricing.promotions.form.actionType')}
+                    className="w-full"
+                    options={[
+                      { value: 'PERCENT_OFF', label: t('pricing.promotions.form.percentOffOption') },
+                      { value: 'FIXED_PRICE', label: t('pricing.promotions.form.fixedPriceOption') },
+                    ]}
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">

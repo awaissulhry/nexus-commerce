@@ -1,7 +1,10 @@
 'use client'
 
 import { useFormContext } from 'react-hook-form'
+import { Listbox } from '@/design-system/components/Listbox'
 import type { ProductEditorFormData } from '../schema'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 export default function OfferTab() {
   const {
@@ -14,6 +17,8 @@ export default function OfferTab() {
   const fulfillmentMethod = watch('fulfillmentMethod')
   const basePrice = watch('basePrice')
   const salePrice = watch('salePrice')
+  const weightUnit = watch('weightUnit')
+  const dimUnit = watch('dimUnit')
 
   return (
     <div className="space-y-6">
@@ -134,27 +139,33 @@ export default function OfferTab() {
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Unit</label>
-            <select
-              {...register('weightUnit')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-            >
-              <option value="">Select</option>
-              <option value="lb">lb</option>
-              <option value="kg">kg</option>
-              <option value="oz">oz</option>
-              <option value="g">g</option>
-            </select>
+            <Listbox
+              value={weightUnit ?? ''}
+              onChange={(v) => setValue('weightUnit', v, { shouldDirty: true })}
+              options={[
+                { value: '', label: 'Select' },
+                { value: 'lb', label: 'lb' },
+                { value: 'kg', label: 'kg' },
+                { value: 'oz', label: 'oz' },
+                { value: 'g', label: 'g' },
+              ]}
+              ariaLabel="Unit"
+              className="w-full"
+            />
           </div>
           <div className="col-span-2">
             <label className="block text-xs text-gray-500 mb-1">Dimension Unit</label>
-            <select
-              {...register('dimUnit')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-            >
-              <option value="">Select</option>
-              <option value="in">inches</option>
-              <option value="cm">cm</option>
-            </select>
+            <Listbox
+              value={dimUnit ?? ''}
+              onChange={(v) => setValue('dimUnit', v, { shouldDirty: true })}
+              options={[
+                { value: '', label: 'Select' },
+                { value: 'in', label: 'inches' },
+                { value: 'cm', label: 'cm' },
+              ]}
+              ariaLabel="Dimension Unit"
+              className="w-full"
+            />
           </div>
         </div>
         <div className="grid grid-cols-3 gap-4 mt-3">

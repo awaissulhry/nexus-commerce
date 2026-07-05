@@ -42,6 +42,7 @@ import {
   type SavedView,
 } from '../products/_components/SavedViewsButton'
 import { useToast } from '@/components/ui/Toast'
+import { DateField } from '@/design-system/components/DateField'
 
 type Lens = 'grid' | 'customer' | 'financials' | 'returns' | 'reviews'
 
@@ -895,20 +896,18 @@ function DateRangePicker({
           <div className="pt-2 border-t border-default dark:border-slate-700 space-y-1.5">
             <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold px-1">Custom</div>
             <div className="flex items-center gap-1">
-              <input
-                type="date"
-                defaultValue={dateFrom}
-                onChange={(e) => onChange({ dateFrom: e.target.value || undefined, dateRange: undefined })}
-                className="flex-1 h-7 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
-                aria-label="Start date"
+              <DateField
+                value={dateFrom}
+                onChange={(v) => onChange({ dateFrom: v || undefined, dateRange: undefined })}
+                className="flex-1"
+                ariaLabel="Start date"
               />
               <span className="text-tertiary">→</span>
-              <input
-                type="date"
-                defaultValue={dateTo}
-                onChange={(e) => onChange({ dateTo: e.target.value || undefined, dateRange: undefined })}
-                className="flex-1 h-7 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900"
-                aria-label="End date"
+              <DateField
+                value={dateTo}
+                onChange={(v) => onChange({ dateTo: v || undefined, dateRange: undefined })}
+                className="flex-1"
+                ariaLabel="End date"
               />
             </div>
           </div>

@@ -16,6 +16,7 @@
 import { useState } from 'react'
 import { X, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
 
 type FieldKey = 'brand' | 'basePrice' | 'totalStock' | 'status'
 
@@ -102,36 +103,26 @@ export default function BulkApplyDialog({ open, onClose, selectedCount, onApply 
         <div className="px-4 py-4 flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Field</label>
-            <select
+            <Listbox
               value={field}
-              onChange={(e) => {
-                setField(e.target.value as FieldKey)
+              onChange={(value) => {
+                setField(value as FieldKey)
                 setValueText('')
               }}
-              className="px-2 py-1.5 text-sm rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            >
-              {FIELDS.map((f) => (
-                <option key={f.key} value={f.key}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
+              options={FIELDS.map((f) => ({ value: f.key, label: f.label }))}
+              ariaLabel="Field"
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Value</label>
             {fieldDef.kind === 'select' ? (
-              <select
+              <Listbox
                 value={valueStatus}
-                onChange={(e) => setValueStatus(e.target.value)}
-                className="px-2 py-1.5 text-sm rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              >
-                {STATUS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setValueStatus(value)}
+                options={STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                ariaLabel="Value"
+              />
             ) : (
               <input
                 type={fieldDef.kind === 'number' ? 'number' : 'text'}

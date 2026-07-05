@@ -3,8 +3,9 @@
 // PO.9 — Supplier ack client. Token-gated, no auth, minimal chrome.
 
 import { useCallback, useEffect, useState } from 'react'
-import { AlertCircle, Calendar, CheckCircle2, Loader2, XCircle } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { DateField } from '@/design-system/components/DateField'
 
 interface PublicItem {
   sku: string
@@ -272,18 +273,12 @@ export default function PoAckClient({ token }: { token: string }) {
               <label className="text-sm font-medium text-slate-700 block mb-1">
                 Confirmed delivery date
               </label>
-              <div className="relative">
-                <Calendar
-                  size={14}
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary pointer-events-none"
-                />
-                <input
-                  type="date"
-                  value={proposedEta}
-                  onChange={(e) => setProposedEta(e.target.value)}
-                  className="h-9 pl-8 pr-2 text-base border border-default rounded bg-white text-slate-900 w-56"
-                />
-              </div>
+              <DateField
+                value={proposedEta}
+                onChange={setProposedEta}
+                ariaLabel="Confirmed delivery date"
+                className="w-56"
+              />
               <div className="text-sm text-slate-500 mt-1">
                 Leave as-is if you can meet the buyer's date. Adjust if you need more time.
               </div>

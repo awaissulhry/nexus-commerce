@@ -36,6 +36,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
 import EditableCell from './_shared/EditableCell'
 import { useMatrixMutation, type RowStatus } from './_shared/useMatrixMutation'
 import {
@@ -735,16 +736,18 @@ export default function MatrixClient() {
             </button>
           ))}
           {/* CC.1.2 — stock facet */}
-          <select
+          <Listbox
             value={stockFilter}
-            onChange={(e) => setStockFilter(e.target.value as typeof stockFilter)}
-            className="px-2 py-1 text-xs rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300"
-          >
-            <option value="all">All stock</option>
-            <option value="in">In stock</option>
-            <option value="low">Low (≤{LOW_STOCK})</option>
-            <option value="out">Out of stock</option>
-          </select>
+            onChange={(value) => setStockFilter(value as typeof stockFilter)}
+            options={[
+              { value: 'all', label: 'All stock' },
+              { value: 'in', label: 'In stock' },
+              { value: 'low', label: `Low (≤${LOW_STOCK})` },
+              { value: 'out', label: 'Out of stock' },
+            ]}
+            ariaLabel="Stock filter"
+            className="w-36"
+          />
           {filtersActive && (
             <button
               type="button"

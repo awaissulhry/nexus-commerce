@@ -4,6 +4,7 @@ import { useState, useCallback, memo } from 'react'
 import { logger } from '@/lib/logger'
 import OfferCard from './OfferCard'
 import ChannelListingImageUploader from '@/components/catalog/ChannelListingImageUploader'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface ChannelListing {
   id: string
@@ -452,19 +453,21 @@ function PlatformTabComponent({
                       {/* Variation Theme Dropdown */}
                       <div className="mb-6">
                         <label className="block text-sm font-medium text-gray-700 mb-2">How do your variations differ?</label>
-                        <select
+                        <Listbox
                           value={activeListing.variationTheme || ''}
-                          onChange={(e) => handleVariationThemeChange(e.target.value)}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="">-- Select how your products vary --</option>
-                          <option value="Size">By Size (S, M, L, XL, etc.)</option>
-                          <option value="Color">By Color (Red, Blue, Green, etc.)</option>
-                          <option value="SizeColor">By Size AND Color</option>
-                          <option value="Style">By Style (Classic, Modern, etc.)</option>
-                          <option value="Material">By Material (Cotton, Polyester, etc.)</option>
-                          <option value="SizeMaterial">By Size AND Material</option>
-                        </select>
+                          onChange={(value) => handleVariationThemeChange(value)}
+                          options={[
+                            { value: '', label: '-- Select how your products vary --' },
+                            { value: 'Size', label: 'By Size (S, M, L, XL, etc.)' },
+                            { value: 'Color', label: 'By Color (Red, Blue, Green, etc.)' },
+                            { value: 'SizeColor', label: 'By Size AND Color' },
+                            { value: 'Style', label: 'By Style (Classic, Modern, etc.)' },
+                            { value: 'Material', label: 'By Material (Cotton, Polyester, etc.)' },
+                            { value: 'SizeMaterial', label: 'By Size AND Material' },
+                          ]}
+                          ariaLabel="How do your variations differ?"
+                          className="w-full"
+                        />
                         <p className="text-xs text-gray-500 mt-1">
                           Choose the option that best describes how your child products differ from each other
                         </p>

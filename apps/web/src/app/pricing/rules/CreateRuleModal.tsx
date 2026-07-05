@@ -7,6 +7,7 @@ import { getBackendUrl } from '@/lib/backend-url';
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useTranslations } from '@/lib/i18n/use-translations';
+import { Listbox } from '@/design-system/components/Listbox';
 
 interface CreateRuleModalProps {
   onClose: () => void;
@@ -208,23 +209,22 @@ export default function CreateRuleModal({
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               {t('pricing.rules.modal.type')}
             </label>
-            <select
+            <Listbox
+              options={RULE_TYPES.map((tp) => ({
+                value: tp,
+                label: t(`pricing.rules.type.${tp}`),
+              }))}
               value={formData.type}
-              onChange={(e) => {
+              onChange={(v) => {
                 setFormData({
                   ...formData,
-                  type: e.target.value as (typeof RULE_TYPES)[number],
+                  type: v as (typeof RULE_TYPES)[number],
                 });
                 setSimulation(null);
               }}
-              className="w-full h-9 px-2 border border-slate-300 dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-            >
-              {RULE_TYPES.map((tp) => (
-                <option key={tp} value={tp}>
-                  {t(`pricing.rules.type.${tp}`)}
-                </option>
-              ))}
-            </select>
+              ariaLabel={t('pricing.rules.modal.type')}
+              className="w-full"
+            />
           </div>
 
           <div>

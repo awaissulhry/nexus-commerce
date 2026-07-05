@@ -58,6 +58,7 @@ import RepricerStatusBanner from './_components/RepricerStatusBanner'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
+import { Listbox } from '@/design-system/components/Listbox'
 
 // SnapshotRow is the unit of the drawer (per-channel pricing). It's the
 // shape returned by the legacy flat matrix endpoint plus the new
@@ -541,7 +542,7 @@ export default function PricingMatrixClient() {
   }, [])
 
   // P.E — shared FilterPopover dimensions. Matches /products by
-  // converting the bespoke MultiSelectChips + native <select> +
+  // converting the bespoke MultiSelectChips + native select +
   // checkbox into a single Filter chip with reorderable cards.
   const ACTIVE_CHANNELS = [
     { value: 'AMAZON',  label: 'Amazon' },
@@ -858,18 +859,17 @@ export default function PricingMatrixClient() {
           {/* Mode dropdown — proper visible border, white text on a
               lighter slate fill so the dropdown reads as an input
               control on the dark bar. */}
-          <select
+          <Listbox
+            options={[
+              { value: 'SET_FIXED', label: t('pricing.bulk.setFixed') },
+              { value: 'SET_PERCENT_DISCOUNT', label: t('pricing.bulk.percentDiscount') },
+              { value: 'CLEAR', label: t('pricing.bulk.clearOverride') },
+            ]}
             value={bulkMode}
-            onChange={(e) =>
-              setBulkMode(e.target.value as typeof bulkMode)
-            }
-            aria-label={t('pricing.bulk.setFixed')}
-            className="h-8 px-2.5 rounded-md border border-slate-500 bg-slate-700 text-white text-sm font-medium hover:bg-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-          >
-            <option value="SET_FIXED">{t('pricing.bulk.setFixed')}</option>
-            <option value="SET_PERCENT_DISCOUNT">{t('pricing.bulk.percentDiscount')}</option>
-            <option value="CLEAR">{t('pricing.bulk.clearOverride')}</option>
-          </select>
+            onChange={(v) => setBulkMode(v as typeof bulkMode)}
+            ariaLabel={t('pricing.bulk.setFixed')}
+            className="w-48"
+          />
 
           {bulkMode !== 'CLEAR' && (
             <input

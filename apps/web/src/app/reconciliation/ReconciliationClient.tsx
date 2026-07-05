@@ -3,6 +3,7 @@
 import { useState, useCallback, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox } from '@/design-system/components/Listbox'
 import {
   CheckCircle2,
   XCircle,
@@ -670,14 +671,13 @@ function useProductTypes(backend: string) {
 
 function ProductTypeSelect({ value, onChange, types }: { value: string; onChange: (v: string) => void; types: string[] }) {
   return types.length > 0 ? (
-    <select
+    <Listbox
       value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="px-2.5 py-1.5 text-sm border border-gray-300 rounded bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 w-40"
-    >
-      <option value="">Select type…</option>
-      {types.map((t) => <option key={t} value={t}>{t}</option>)}
-    </select>
+      onChange={onChange}
+      options={[{ value: '', label: 'Select type…' }, ...types.map((t) => ({ value: t, label: t }))]}
+      ariaLabel="Product type"
+      className="w-40"
+    />
   ) : (
     <input
       type="text"

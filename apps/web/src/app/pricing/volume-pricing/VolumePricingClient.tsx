@@ -39,6 +39,7 @@ import { EmptyState } from '@/design-system/components/EmptyState'
 import { Banner } from '@/design-system/components/Banner'
 import { Combobox, type ComboboxOption } from '@/design-system/components/Combobox'
 import { ToastProvider, useToast } from '@/design-system/components/Toast'
+import { DateField } from '@/design-system/components/DateField'
 import { Button } from '@/design-system/primitives/Button'
 import { Input } from '@/design-system/primitives/Input'
 import { Textarea } from '@/design-system/primitives/Textarea'
@@ -177,7 +178,8 @@ function fmtMoney(n: number): string {
 
 const label = (children: ReactNode): ReactNode => (
   <span
-    style={{ fontSize: 12, fontWeight: 600, color: 'var(--h10-text-2)', display: 'block', marginBottom: 6 }}
+    className="text-[12px]"
+    style={{ fontWeight: 600, color: 'var(--h10-text-2)', display: 'block', marginBottom: 6 }}
   >
     {children}
   </span>
@@ -477,7 +479,7 @@ function VolumePricingInner() {
           </>
         }
       >
-        <div style={{ color: 'var(--h10-text-2)', fontSize: 14 }}>
+        <div className="text-[14px]" style={{ color: 'var(--h10-text-2)' }}>
           Delete <strong style={{ color: 'var(--h10-text)' }}>{confirmDelete?.name}</strong>? This
           removes the promotion from Nexus. Tiers already pushed to eBay are not retracted by this
           action.
@@ -770,7 +772,7 @@ function PromotionEditor({ promotion, onClose, onSaved, onPushed }: EditorProps)
   // ── Render ───────────────────────────────────────────────────────────────────
 
   const sectionTitle = (text: string): ReactNode => (
-    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--h10-text)', marginBottom: 10 }}>
+    <div className="text-[13px]" style={{ fontWeight: 700, color: 'var(--h10-text)', marginBottom: 10 }}>
       {text}
     </div>
   )
@@ -821,11 +823,11 @@ function PromotionEditor({ promotion, onClose, onSaved, onPushed }: EditorProps)
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div>
             {label('Start date')}
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} fieldClassName="w-full" />
+            <DateField value={startDate} onChange={setStartDate} ariaLabel="Start date" className="w-full" />
           </div>
           <div>
             {label('End date')}
-            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} fieldClassName="w-full" />
+            <DateField value={endDate} onChange={setEndDate} ariaLabel="End date" className="w-full" />
           </div>
         </div>
 
@@ -1066,7 +1068,7 @@ function PromotionEditor({ promotion, onClose, onSaved, onPushed }: EditorProps)
                   {resolving ? <Spinner size={14} /> : <Search size={14} />} Find matching SKUs
                 </Button>
                 {resolved && (
-                  <span style={{ fontSize: 13, color: 'var(--h10-text-2)' }}>
+                  <span className="text-[13px]" style={{ color: 'var(--h10-text-2)' }}>
                     <strong style={{ color: 'var(--h10-text)' }}>{resolved.count}</strong> SKUs
                     {' '}
                     <span style={muted(12)}>

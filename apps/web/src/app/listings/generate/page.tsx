@@ -34,6 +34,9 @@ import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Input } from '@/components/ui/Input'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -396,29 +399,29 @@ export default function GeneratorPage() {
               <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
                 Channel
               </label>
-              <select
+              <Listbox
                 value={channel}
-                onChange={(e) => setChannel(e.target.value as Channel)}
-                className="w-full h-9 px-2 text-md border border-default dark:border-slate-700 rounded"
-              >
-                <option value="AMAZON">Amazon</option>
-                <option value="EBAY">eBay</option>
-                <option value="SHOPIFY">Shopify</option>
-              </select>
+                onChange={(v) => setChannel(v as Channel)}
+                ariaLabel="Channel"
+                className="w-full"
+                options={[
+                  { value: 'AMAZON', label: 'Amazon' },
+                  { value: 'EBAY', label: 'eBay' },
+                  { value: 'SHOPIFY', label: 'Shopify' },
+                ]}
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
                 Provider
               </label>
-              <select
+              <Listbox
                 value={provider}
-                onChange={(e) => setProvider(e.target.value)}
-                className="w-full h-9 px-2 text-md border border-default dark:border-slate-700 rounded"
-              >
-                {PROVIDER_OPTIONS.map((opt) => (
-                  <option key={opt.id} value={opt.id}>{opt.label}</option>
-                ))}
-              </select>
+                onChange={setProvider}
+                ariaLabel="Provider"
+                className="w-full"
+                options={PROVIDER_OPTIONS.map((opt) => ({ value: opt.id, label: opt.label }))}
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">

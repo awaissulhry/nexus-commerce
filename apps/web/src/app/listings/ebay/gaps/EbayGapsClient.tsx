@@ -13,6 +13,8 @@ import {
 } from 'lucide-react'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
+import { Listbox } from '@/design-system/components/Listbox'
+import { DateField } from '@/design-system/components/DateField'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -237,25 +239,27 @@ export default function EbayGapsClient({ marketplace: initMarketplace, initialGa
             <div className="flex gap-4 items-end flex-wrap">
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Daily limit</label>
-                <select
-                  value={dailyLimit}
-                  onChange={e => setDailyLimit(Number(e.target.value))}
-                  className="border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value={25}>25/day — conservative</option>
-                  <option value={50}>50/day — recommended</option>
-                  <option value={100}>100/day — week 2+</option>
-                  <option value={200}>200/day — month 2+</option>
-                </select>
+                <Listbox
+                  value={String(dailyLimit)}
+                  onChange={v => setDailyLimit(Number(v))}
+                  className="w-48"
+                  ariaLabel="Daily limit"
+                  options={[
+                    { value: '25', label: '25/day — conservative' },
+                    { value: '50', label: '50/day — recommended' },
+                    { value: '100', label: '100/day — week 2+' },
+                    { value: '200', label: '200/day — month 2+' },
+                  ]}
+                />
               </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Start date (optional)</label>
-                <input
-                  type="date"
+                <DateField
                   value={startDate}
-                  onChange={e => setStartDate(e.target.value)}
+                  onChange={setStartDate}
                   min={new Date().toISOString().slice(0, 10)}
-                  className="border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-40"
+                  ariaLabel="Start date (optional)"
                 />
               </div>
               <div className="flex gap-2">

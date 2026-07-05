@@ -59,6 +59,7 @@ import { Tabs } from '@/components/ui/Tabs'
 import { IconButton } from '@/components/ui/IconButton'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
+import { Listbox } from '@/design-system/components/Listbox'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
@@ -3371,29 +3372,23 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
         <div className="flex items-center gap-1.5">
           <Filter size={14} className="text-slate-500 dark:text-slate-400" />
           <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('listings.matrix.coverage')}</span>
-          <select
+          <Listbox
             value={coverage}
-            onChange={(e) => setCoverage(e.target.value as Coverage | '')}
-            className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
-            aria-label={t('listings.matrix.coverage')}
-          >
-            {COVERAGE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
-            ))}
-          </select>
+            onChange={(v) => setCoverage(v as Coverage | '')}
+            className="w-44"
+            ariaLabel={t('listings.matrix.coverage')}
+            options={COVERAGE_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) }))}
+          />
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('listings.matrix.sort')}</span>
-          <select
+          <Listbox
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as MatrixSort)}
-            className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
-            aria-label={t('listings.matrix.sort')}
-          >
-            {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
-            ))}
-          </select>
+            onChange={(v) => setSortBy(v as MatrixSort)}
+            className="w-48"
+            ariaLabel={t('listings.matrix.sort')}
+            options={SORT_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) }))}
+          />
         </div>
         <span className="text-sm text-slate-500 dark:text-slate-400 ml-auto">
           {data.totalMatched != null && data.totalMatched > data.count
@@ -5296,20 +5291,25 @@ function DetailTab({ listing, patch }: { listing: any; patch: (body: any) => Pro
         <div>
           <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5">Pricing rule</div>
           {editingRule ? (
-            <select
-              value={listing.pricingRule ?? 'FIXED'}
-              onChange={async (e) => {
-                await patch({ pricingRule: e.target.value })
-                setEditingRule(false)
+            <div
+              onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setEditingRule(false)
               }}
-              onBlur={() => setEditingRule(false)}
-              autoFocus
-              className="h-7 px-1 text-base border border-blue-400 rounded text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900"
             >
-              <option value="FIXED">FIXED</option>
-              <option value="MATCH_AMAZON">MATCH_AMAZON</option>
-              <option value="PERCENT_OF_MASTER">PERCENT_OF_MASTER</option>
-            </select>
+              <Listbox
+                value={listing.pricingRule ?? 'FIXED'}
+                onChange={async (v) => {
+                  await patch({ pricingRule: v })
+                  setEditingRule(false)
+                }}
+                ariaLabel="Pricing rule"
+                options={[
+                  { value: 'FIXED', label: 'FIXED' },
+                  { value: 'MATCH_AMAZON', label: 'MATCH_AMAZON' },
+                  { value: 'PERCENT_OF_MASTER', label: 'PERCENT_OF_MASTER' },
+                ]}
+              />
+            </div>
           ) : (
             <InlineEditTrigger label="pricing rule" onClick={() => setEditingRule(true)}>
               <span className="text-base text-slate-900 dark:text-slate-100">{listing.pricingRule ?? '—'}</span>

@@ -37,6 +37,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { IconButton } from '@/components/ui/IconButton'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 
@@ -1020,15 +1021,17 @@ function FiscalDataCard({
           <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-0.5">
             Tipo cliente
           </label>
-          <select
+          <Listbox
             value={fiscalKind}
-            onChange={(e) => setFiscalKind(e.target.value as '' | 'B2B' | 'B2C')}
-            className="w-full h-8 px-2 text-base border border-default dark:border-slate-700 rounded"
-          >
-            <option value="">— Non specificato</option>
-            <option value="B2B">B2B (azienda con P. IVA)</option>
-            <option value="B2C">B2C (privato)</option>
-          </select>
+            onChange={(value) => setFiscalKind(value as '' | 'B2B' | 'B2C')}
+            options={[
+              { value: '', label: '— Non specificato' },
+              { value: 'B2B', label: 'B2B (azienda con P. IVA)' },
+              { value: 'B2C', label: 'B2C (privato)' },
+            ]}
+            ariaLabel="Tipo cliente"
+            className="w-full"
+          />
         </div>
         <div>
           <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-0.5">

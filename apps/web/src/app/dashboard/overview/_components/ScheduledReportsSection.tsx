@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Check, Mail, Pencil, Send, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { Listbox } from '@/design-system/components/Listbox'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { T } from '../_lib/types'
@@ -235,18 +236,19 @@ export default function ScheduledReportsSection({ t }: { t: T }) {
                     aria-label={t('overview.reports.emailLabel')}
                     className={cn(inputClass, 'flex-1 min-w-0')}
                   />
-                  <select
+                  <Listbox
                     value={draftFreq}
-                    onChange={(e) =>
-                      setDraftFreq(e.target.value as ScheduledReport['frequency'])
+                    onChange={(v) =>
+                      setDraftFreq(v as ScheduledReport['frequency'])
                     }
-                    aria-label={t('overview.reports.frequencyAria')}
-                    className={inputClass}
-                  >
-                    <option value="daily">{t('overview.reports.frequency.daily')}</option>
-                    <option value="weekly">{t('overview.reports.frequency.weekly')}</option>
-                    <option value="monthly">{t('overview.reports.frequency.monthly')}</option>
-                  </select>
+                    ariaLabel={t('overview.reports.frequencyAria')}
+                    className="w-32"
+                    options={[
+                      { value: 'daily', label: t('overview.reports.frequency.daily') },
+                      { value: 'weekly', label: t('overview.reports.frequency.weekly') },
+                      { value: 'monthly', label: t('overview.reports.frequency.monthly') },
+                    ]}
+                  />
                   <input
                     type="number"
                     min={0}
@@ -329,16 +331,17 @@ export default function ScheduledReportsSection({ t }: { t: T }) {
           aria-label={t('overview.reports.emailLabel')}
           className={cn(inputClass, 'flex-1 min-w-0')}
         />
-        <select
+        <Listbox
           value={newFreq}
-          onChange={(e) => setNewFreq(e.target.value as ScheduledReport['frequency'])}
-          aria-label={t('overview.reports.frequencyAria')}
-          className={inputClass}
-        >
-          <option value="daily">{t('overview.reports.frequency.daily')}</option>
-          <option value="weekly">{t('overview.reports.frequency.weekly')}</option>
-          <option value="monthly">{t('overview.reports.frequency.monthly')}</option>
-        </select>
+          onChange={(v) => setNewFreq(v as ScheduledReport['frequency'])}
+          ariaLabel={t('overview.reports.frequencyAria')}
+          className="w-32"
+          options={[
+            { value: 'daily', label: t('overview.reports.frequency.daily') },
+            { value: 'weekly', label: t('overview.reports.frequency.weekly') },
+            { value: 'monthly', label: t('overview.reports.frequency.monthly') },
+          ]}
+        />
         <input
           type="number"
           value={newHour}

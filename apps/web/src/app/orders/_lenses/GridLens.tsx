@@ -24,6 +24,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { Listbox } from '@/design-system/components/Listbox'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { ALL_COLUMNS, DEFAULT_VISIBLE, type OrderColumn } from '../_lib/columns'
 import { deepLinkForOrder } from '../_lib/deep-links'
@@ -217,17 +218,16 @@ export function GridLens(props: GridLensProps) {
           <span className="text-sm text-slate-500 dark:text-slate-400">
             {t('orders.pagination.summary', { total, page, totalPages })}
           </span>
-          <select
-            value={pageSize}
-            onChange={(e) => onPageSize(Number(e.target.value))}
-            className="h-7 px-2 text-sm border border-default dark:border-slate-700 rounded"
-          >
-            {[25, 50, 100, 200, 500].map((n) => (
-              <option key={n} value={n}>
-                {t('orders.pagination.pageSize', { n })}
-              </option>
-            ))}
-          </select>
+          <Listbox
+            value={String(pageSize)}
+            onChange={(v) => onPageSize(Number(v))}
+            className="w-28"
+            ariaLabel="Rows per page"
+            options={[25, 50, 100, 200, 500].map((n) => ({
+              value: String(n),
+              label: t('orders.pagination.pageSize', { n }),
+            }))}
+          />
         </div>
         <div className="relative">
           <button

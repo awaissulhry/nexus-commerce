@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { Tabs } from '@/components/ui/Tabs'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
+import { Listbox } from '@/design-system/components/Listbox'
 import { useToast } from '@/components/ui/Toast'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -440,15 +441,17 @@ export function SuppressionLogModal({
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Severity</label>
-              <select
+              <Listbox
                 value={severity}
-                onChange={(e) => setSeverity(e.target.value as any)}
-                className="h-9 w-full px-2 text-base border border-default dark:border-slate-700 rounded text-slate-700 dark:text-slate-300"
-              >
-                <option value="ERROR">ERROR</option>
-                <option value="WARNING">WARNING</option>
-                <option value="INFO">INFO</option>
-              </select>
+                onChange={(v) => setSeverity(v as any)}
+                ariaLabel="Severity"
+                className="w-full"
+                options={[
+                  { value: 'ERROR', label: 'ERROR' },
+                  { value: 'WARNING', label: 'WARNING' },
+                  { value: 'INFO', label: 'INFO' },
+                ]}
+              />
             </div>
           </div>
           <div className="text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 rounded-md p-2.5">

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/layout/PageHeader';
+import { Listbox } from '@/design-system/components/Listbox';
 
 interface ProductTypeOption {
   value: string;
@@ -80,18 +81,16 @@ function FormField({ field, value, onChange, error, required }: FormFieldProps) 
       <p className="text-xs text-gray-500 mb-2">{field.description}</p>
 
       {field.dataType === 'ENUM' && field.enumValues ? (
-        <select
+        <Listbox
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className={`w-full px-3 py-2 border ${borderColor} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500`}
-        >
-          <option value="">Select {field.label}</option>
-          {field.enumValues.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => onChange(v)}
+          options={[
+            { value: '', label: `Select ${field.label}` },
+            ...field.enumValues.map((option) => ({ value: option, label: option })),
+          ]}
+          ariaLabel={field.label}
+          className="w-full"
+        />
       ) : field.dataType === 'INT' ? (
         <input
           type="number"

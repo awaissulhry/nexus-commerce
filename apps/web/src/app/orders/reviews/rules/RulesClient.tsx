@@ -10,6 +10,9 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { IconButton } from '@/components/ui/IconButton'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
@@ -561,17 +564,15 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Scope</label>
-              <select value={scope} onChange={(e) => setScope(e.target.value)} className="w-full h-8 px-2 text-md border border-default dark:border-slate-700 rounded mt-1">
-                {SCOPES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-              </select>
+              <Listbox value={scope} onChange={setScope} ariaLabel="Scope" className="w-full mt-1"
+                options={SCOPES.map((s) => ({ value: s.value, label: s.label }))} />
               {scopeHelp && <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{scopeHelp}</div>}
             </div>
             {scope === 'AMAZON_PER_MARKETPLACE' && (
               <div>
                 <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Marketplace</label>
-                <select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} className="w-full h-8 px-2 text-md border border-default dark:border-slate-700 rounded mt-1">
-                  {AMAZON_MARKETPLACES.map((m) => <option key={m} value={m}>{m} · {COUNTRY_NAMES[m] ?? ''}</option>)}
-                </select>
+                <Listbox value={marketplace} onChange={setMarketplace} ariaLabel="Marketplace" className="w-full mt-1"
+                  options={AMAZON_MARKETPLACES.map((m) => ({ value: m, label: `${m} · ${COUNTRY_NAMES[m] ?? ''}` }))} />
               </div>
             )}
           </div>
@@ -606,11 +607,12 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
 
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-slate-500 dark:text-slate-400 w-16 shrink-0">Anchor</span>
-              <select value={isAmazonScope ? 'DELIVERY' : anchor} disabled={isAmazonScope} onChange={(e) => setAnchor(e.target.value)} className="h-8 px-2 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 disabled:opacity-60">
-                <option value="DELIVERY">After delivery</option>
-                <option value="SHIP">After ship</option>
-                <option value="PURCHASE">After purchase</option>
-              </select>
+              <Listbox value={isAmazonScope ? 'DELIVERY' : anchor} disabled={isAmazonScope} onChange={setAnchor} className="w-40" ariaLabel="Anchor"
+                options={[
+                  { value: 'DELIVERY', label: 'After delivery' },
+                  { value: 'SHIP', label: 'After ship' },
+                  { value: 'PURCHASE', label: 'After purchase' },
+                ]} />
               {isAmazonScope && <span className="text-xs text-tertiary">Amazon Solicitations is delivery-based</span>}
             </div>
 
@@ -638,9 +640,8 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
               <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
                 <input type="checkbox" checked={sendHourLocal != null} onChange={(e) => setSendHourLocal(e.target.checked ? 11 : null)} /> Preferred hour
                 {sendHourLocal != null && (
-                  <select value={sendHourLocal} onChange={(e) => setSendHourLocal(Number(e.target.value))} className="h-7 px-1 text-sm border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900">
-                    {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>)}
-                  </select>
+                  <Listbox value={String(sendHourLocal)} onChange={(v) => setSendHourLocal(Number(v))} className="w-24" ariaLabel="Preferred hour"
+                    options={Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: `${String(h).padStart(2, '0')}:00` }))} />
                 )}
                 {sendHourLocal != null && preview?.tz && <span className="text-xs text-tertiary">{preview.tz}</span>}
               </label>

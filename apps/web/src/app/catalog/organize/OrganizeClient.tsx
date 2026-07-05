@@ -48,6 +48,7 @@ import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { Modal, ModalFooter } from '@/components/ui/Modal'
+import { Listbox } from '@/design-system/components/Listbox'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
@@ -760,16 +761,18 @@ export function StandaloneTab({
           </div>
         }
         quickFilterSlot={
-          <select
+          <Listbox
             value={coverage}
-            onChange={(e) => setCoverage(e.target.value as any)}
-            className="h-8 px-2 text-base border border-default dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
-          >
-            <option value="all">All</option>
-            <option value="unlisted">Unlisted only</option>
-            <option value="partial">Partial coverage</option>
-            <option value="complete">Fully listed</option>
-          </select>
+            onChange={(value) => setCoverage(value as any)}
+            options={[
+              { value: 'all', label: 'All' },
+              { value: 'unlisted', label: 'Unlisted only' },
+              { value: 'partial', label: 'Partial coverage' },
+              { value: 'complete', label: 'Fully listed' },
+            ]}
+            ariaLabel="Coverage filter"
+            className="w-44"
+          />
         }
         autoRefresh={
           <AutoRefreshSelect
@@ -1440,22 +1443,20 @@ function ProductAxisRow({
           return (
             <div key={axis}>
               <div className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">{axis}</div>
-              <select
+              <Listbox
                 value={isCustom ? '__custom__' : v}
-                onChange={(e) => {
-                  if (e.target.value === '__custom__') onChange(axis, '')
-                  else onChange(axis, e.target.value)
+                onChange={(value) => {
+                  if (value === '__custom__') onChange(axis, '')
+                  else onChange(axis, value)
                 }}
-                className="w-full h-7 px-2 text-base border border-default dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
-              >
-                <option value="">— Select —</option>
-                {known.map((k) => (
-                  <option key={k} value={k}>
-                    {k}
-                  </option>
-                ))}
-                <option value="__custom__">+ New value…</option>
-              </select>
+                options={[
+                  { value: '', label: '— Select —' },
+                  ...known.map((k) => ({ value: k, label: k })),
+                  { value: '__custom__', label: '+ New value…' },
+                ]}
+                ariaLabel={axis}
+                className="w-full"
+              />
               {(isCustom || (v === '' && known.length === 0)) && (
                 <input
                   type="text"

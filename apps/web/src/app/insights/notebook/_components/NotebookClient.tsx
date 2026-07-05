@@ -10,6 +10,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
+import { DateField } from '@/design-system/components/DateField'
 import { cn } from '@/lib/utils'
 
 interface Annotation {
@@ -123,11 +124,11 @@ export default function NotebookClient() {
 
       <Card title="New entry" className="mb-3">
         <div className="grid grid-cols-1 sm:grid-cols-[120px_1fr_180px] gap-2 mb-2">
-          <input
-            type="date"
+          <DateField
             value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="h-8 px-2 text-sm rounded-md border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+            onChange={setDate}
+            clearable={false}
+            ariaLabel="Entry date"
           />
           <input
             type="text"

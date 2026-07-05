@@ -14,6 +14,9 @@ import { Badge } from '@/components/ui/Badge'
 import { IconButton } from '@/components/ui/IconButton'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import { getBackendUrl } from '@/lib/backend-url'
 import { deepLinkForOrder } from '../_lib/deep-links'
 import { formatOrderTotal } from '../_lib/money'
@@ -2117,10 +2120,9 @@ function OrderContentsTable({ order, onItemChanged }: { order: any; onItemChange
                   </td>
                   {isIT && (
                     <td className="px-3 py-2.5 text-right">
-                      <select
+                      <Listbox
                         value={it.itVatRatePct == null ? '' : String(it.itVatRatePct)}
-                        onChange={async (e) => {
-                          const raw = e.target.value
+                        onChange={async (raw) => {
                           const rateNext = raw === '' ? null : Number(raw)
                           try {
                             const res = await fetch(
@@ -2144,15 +2146,16 @@ function OrderContentsTable({ order, onItemChanged }: { order: any; onItemChange
                             )
                           }
                         }}
-                        title="Italian VAT rate for this line"
-                        className="h-7 px-1.5 text-sm border border-default dark:border-slate-700 rounded tabular-nums bg-white dark:bg-slate-900"
-                      >
-                        <option value="">22% (default)</option>
-                        <option value="22">22%</option>
-                        <option value="10">10%</option>
-                        <option value="4">4%</option>
-                        <option value="0">0% (esente)</option>
-                      </select>
+                        ariaLabel="Italian VAT rate for this line"
+                        className="w-36 tabular-nums"
+                        options={[
+                          { value: '', label: '22% (default)' },
+                          { value: '22', label: '22%' },
+                          { value: '10', label: '10%' },
+                          { value: '4', label: '4%' },
+                          { value: '0', label: '0% (esente)' },
+                        ]}
+                      />
                     </td>
                   )}
                   <td className="px-3 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">

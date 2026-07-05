@@ -18,6 +18,8 @@ import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
+import { Listbox } from '@/design-system/components/Listbox'
+import { DateField } from '@/design-system/components/DateField'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -322,20 +324,21 @@ export default function EbayMarkdownsClient() {
       <GridToolbar
         quickFilterSlot={
           <>
-            <select
+            <Listbox
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-              className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
-              aria-label="Filter by status"
-            >
-              <option value="">All statuses</option>
-              <option value="DRAFT">Draft</option>
-              <option value="SCHEDULED">Scheduled</option>
-              <option value="ACTIVE">Active</option>
-              <option value="ENDED">Ended</option>
-              <option value="CANCELLED">Cancelled</option>
-              <option value="FAILED">Failed</option>
-            </select>
+              onChange={setStatusFilter}
+              className="w-36"
+              ariaLabel="Filter by status"
+              options={[
+                { value: '', label: 'All statuses' },
+                { value: 'DRAFT', label: 'Draft' },
+                { value: 'SCHEDULED', label: 'Scheduled' },
+                { value: 'ACTIVE', label: 'Active' },
+                { value: 'ENDED', label: 'Ended' },
+                { value: 'CANCELLED', label: 'Cancelled' },
+                { value: 'FAILED', label: 'Failed' },
+              ]}
+            />
             <span className="text-sm text-slate-500 dark:text-slate-400">
               {rows.length} markdown{rows.length === 1 ? '' : 's'}
             </span>
@@ -545,13 +548,13 @@ function CreateMarkdownModal({ onClose, onCreated }: { onClose: () => void; onCr
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Start date</label>
-              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+              <DateField value={startDate} onChange={setStartDate} ariaLabel="Start date" />
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 End date <span className="text-tertiary dark:text-slate-500 font-normal">(optional)</span>
               </label>
-              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+              <DateField value={endDate} onChange={setEndDate} ariaLabel="End date (optional)" />
             </div>
           </div>
         </div>
