@@ -125,7 +125,7 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
   const belowFloor = canMargin && totals != null && totals.netCents > 0 && totals.marginPct < floorPct;
 
   return (
-    <div style={{ maxWidth: 1180 }}>
+    <div className="factory-page--centered">
       <DetailHeader
         backLabel="All quotes"
         onBack={onBack}

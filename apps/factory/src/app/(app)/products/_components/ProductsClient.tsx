@@ -32,7 +32,7 @@ function ProductsInner() {
   }, []);
 
   return (
-    <div style={{ maxWidth: 1180 }}>
+    <div className="factory-page factory-grid-grow-1">
       <PageHeader
         eyebrow="Factory OS"
         title="Products & Pricing"

@@ -70,9 +70,41 @@ a {
   margin-left: 60px;
 }
 
-/* F1 — designed empty-state panel for pages awaiting their FP cycle. */
+/**
+ * Content-width convention (2026-07-05): list / board / workspace pages FILL
+ * the width (like the Inbox and the live Nexus app — zero wasted right-edge
+ * space); editor / detail and form / empty-state pages are CENTERED + contained
+ * (comfortable line lengths, symmetric margins). Applied per archetype via these
+ * classes so every new page inherits the rule and this never regresses.
+ */
+.factory-page {
+  width: 100%;
+}
+.factory-page--centered {
+  max-width: 1180px;
+  margin-inline: auto;
+}
+/**
+ * Full-width tables read best when the primary NAME column absorbs the slack, so
+ * a few-column grid becomes "name …………… tidy data cluster" instead of spreading
+ * with a hollow centre. Add the grow-N class to the page root, N = the 1-based
+ * index of that name column (Products → 1 = Template; Quotes → 2 = Party). NOTE:
+ * these are column-INDEX coupled — if a grid's columns are reordered, update N.
+ * DS Modal grids portal to <body>, so import-diff grids are never affected.
+ */
+.factory-grid-grow-1 .h10-ds-grid th:nth-child(1),
+.factory-grid-grow-1 .h10-ds-grid td:nth-child(1) {
+  width: 100%;
+}
+.factory-grid-grow-2 .h10-ds-grid th:nth-child(2),
+.factory-grid-grow-2 .h10-ds-grid td:nth-child(2) {
+  width: 100%;
+}
+
+/* F1 — designed empty-state / settings-form panel: contained + centered. */
 .factory-coming {
   max-width: 860px;
+  margin-inline: auto;
 }
 .factory-coming .fp-chip {
   display: inline-flex;

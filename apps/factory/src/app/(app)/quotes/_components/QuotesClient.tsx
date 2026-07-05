@@ -86,7 +86,7 @@ function PipelineInner() {
   if (openId) return <QuoteEditor quoteId={openId} onBack={closeEditor} />;
 
   return (
-    <div style={{ maxWidth: 1180 }}>
+    <div className="factory-page factory-grid-grow-2">
       <PageHeader eyebrow="Factory OS" title="Quotes" subtitle="The RFQ pipeline: configure, price with margin, send into the thread, track to won or lost." />
       <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
         <Counter label="Drafts" value={data?.counters.drafts ?? 0} tone="var(--h10-text)" />
