@@ -8,13 +8,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Euro, FilePlus, Send, ArrowUpRight, Printer } from "lucide-react";
-import { Card, DataGrid, Drawer, useToast } from "@/design-system/components";
+import { Euro, FilePlus, Send, ArrowUpRight, Printer, Upload, CreditCard } from "lucide-react";
+import { Card, DataGrid, Drawer, Modal, Listbox, useToast } from "@/design-system/components";
 import { Button, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
-import { type FinancialDetail, type FinancialsResponse, type InvoiceRow, type OrderFin, type PaymentRow } from "./types";
+import { type BankProposal, type DepositRow, type DepositsResponse, type FinancialDetail, type FinancialsResponse, type ImportResponse, type InvoiceRow, type OrderFin, type PaymentRow } from "./types";
+
+const inp: React.CSSProperties = { width: "100%", border: "1px solid var(--h10-border)", borderRadius: 7, padding: "6px 8px", fontSize: 12.5, background: "var(--h10-surface)", color: "var(--h10-text)" };
+const CONF_TONE: Record<string, "success" | "info" | "neutral"> = { high: "success", medium: "info", none: "neutral" };
 
 const money = (c?: number) => (c == null ? "—" : eur(c));
 
@@ -22,9 +25,15 @@ export function FinancialsClient() {
   const { toast } = useToast();
   const canMargin = usePermission("financials.margins.view");
   const canInvoice = usePermission("invoices.manage");
+  const canPay = usePermission("payments.record");
+  const canImport = usePermission("imports.run");
   const [data, setData] = useState<FinancialsResponse | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detail, setDetail] = useState<FinancialDetail | null>(null);
+  const [tab, setTab] = useState<"orders" | "deposits">("orders");
+  const [deposits, setDeposits] = useState<DepositRow[] | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [payFor, setPayFor] = useState<{ id: string; number: string } | null>(null);
 
   const load = useCallback(async () => {
     try { setData(await apiJson<FinancialsResponse>("/api/financials")); }
@@ -32,49 +41,86 @@ export function FinancialsClient() {
   }, [toast]);
   useEffect(() => { void load(); }, [load]);
 
+  const loadDeposits = useCallback(async () => {
+    try { setDeposits((await apiJson<DepositsResponse>("/api/financials/deposits")).deposits); }
+    catch (e) { toast((e as Error).message, "danger"); }
+  }, [toast]);
+  useEffect(() => { if (tab === "deposits" && deposits == null) void loadDeposits(); }, [tab, deposits, loadDeposits]);
+
   const loadDetail = useCallback(async (id: string) => {
     try { setDetail(await apiJson<FinancialDetail>(`/api/financials/order/${id}`)); }
     catch (e) { toast((e as Error).message, "danger"); }
   }, [toast]);
   const openDetail = (id: string) => { setDetailId(id); setDetail(null); void loadDetail(id); };
+  const refreshAll = () => { void load(); setDeposits(null); if (detailId) void loadDetail(detailId); };
 
   const t = data?.tiles;
   return (
     <div className="factory-page factory-grid-grow-1">
-      <div style={{ marginBottom: 14 }}>
-        <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}><Euro size={18} /> Financials</h1>
-        <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginTop: 2 }}>Order-level money truth — who owes what, and what each order really made. Not accounting.</div>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 14 }}>
+        <div>
+          <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}><Euro size={18} /> Financials</h1>
+          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginTop: 2 }}>Order-level money truth — who owes what, and what each order really made. Not accounting.</div>
+        </div>
+        {canImport && <div style={{ marginLeft: "auto" }}><Button onClick={() => setImportOpen(true)}><Upload size={13} /> Import bank CSV</Button></div>}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 18 }}>
         <Tile label="Outstanding balance" value={money(t?.outstandingCents)} tone="warning" />
         <Tile label="Deposits due" value={money(t?.depositsDueCents)} tone="danger" />
         <Tile label="Invoiced this month" value={money(t?.monthInvoicedCents)} />
         <Tile label="Paid this month" value={money(t?.monthPaidCents)} tone="success" />
       </div>
 
-      <DataGrid
-        columns={[
-          { key: "number", label: "Order", render: (r: OrderFin) => <button type="button" onClick={() => openDetail(r.orderId)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button> },
-          { key: "party", label: "Customer", render: (r: OrderFin) => r.partyName },
-          { key: "state", label: "State", render: (r: OrderFin) => <span style={{ fontSize: 12, color: "var(--h10-text-3)" }}>{r.state.replace("_", " ").toLowerCase()}</span> },
-          { key: "quoted", label: "Quoted", align: "right" as const, render: (r: OrderFin) => money(r.quotedNetCents) },
-          { key: "invoiced", label: "Invoiced", align: "right" as const, render: (r: OrderFin) => money(r.invoicedCents) },
-          { key: "paid", label: "Paid", align: "right" as const, render: (r: OrderFin) => money(r.paidCents) },
-          { key: "balance", label: "Balance", align: "right" as const, render: (r: OrderFin) => (r.balanceCents === 0 ? <Pill tone="success">paid</Pill> : <span style={{ color: (r.balanceCents ?? 0) > 0 ? "var(--h10-warning-text, var(--h10-text))" : "var(--h10-text)", fontWeight: 600 }}>{money(r.balanceCents)}</span>) },
-          ...(canMargin ? [{ key: "margin", label: "Margin", align: "right" as const, render: (r: OrderFin) => <MarginCell r={r} /> }] : []),
-        ]}
-        rows={data?.orders ?? []}
-        rowKey={(r: OrderFin) => r.orderId}
-        emptyState="No orders yet — money lands here as quotes convert."
-      />
+      <div style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: "1px solid var(--h10-border-subtle)" }}>
+        <TabBtn active={tab === "orders"} onClick={() => setTab("orders")}>By order</TabBtn>
+        <TabBtn active={tab === "deposits"} onClick={() => setTab("deposits")}>Deposits outstanding{deposits && deposits.length > 0 ? ` (${deposits.length})` : ""}</TabBtn>
+      </div>
 
-      <MoneyDrawer id={detailId} detail={detail} canInvoice={canInvoice} canMargin={canMargin} onClose={() => setDetailId(null)} onChanged={() => { void load(); if (detailId) void loadDetail(detailId); }} />
+      {tab === "orders" ? (
+        <DataGrid
+          columns={[
+            { key: "number", label: "Order", render: (r: OrderFin) => <button type="button" onClick={() => openDetail(r.orderId)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button> },
+            { key: "party", label: "Customer", render: (r: OrderFin) => r.partyName },
+            { key: "state", label: "State", render: (r: OrderFin) => <span style={{ fontSize: 12, color: "var(--h10-text-3)" }}>{r.state.replace("_", " ").toLowerCase()}</span> },
+            { key: "quoted", label: "Quoted", align: "right" as const, render: (r: OrderFin) => money(r.quotedNetCents) },
+            { key: "invoiced", label: "Invoiced", align: "right" as const, render: (r: OrderFin) => money(r.invoicedCents) },
+            { key: "paid", label: "Paid", align: "right" as const, render: (r: OrderFin) => money(r.paidCents) },
+            { key: "balance", label: "Balance", align: "right" as const, render: (r: OrderFin) => (r.balanceCents === 0 ? <Pill tone="success">paid</Pill> : <span style={{ color: (r.balanceCents ?? 0) > 0 ? "var(--h10-warning-text, var(--h10-text))" : "var(--h10-text)", fontWeight: 600 }}>{money(r.balanceCents)}</span>) },
+            ...(canMargin ? [{ key: "margin", label: "Margin", align: "right" as const, render: (r: OrderFin) => <MarginCell r={r} /> }] : []),
+          ]}
+          rows={data?.orders ?? []}
+          rowKey={(r: OrderFin) => r.orderId}
+          emptyState="No orders yet — money lands here as quotes convert."
+        />
+      ) : (
+        <DataGrid
+          columns={[
+            { key: "number", label: "Order", render: (r: DepositRow) => <button type="button" onClick={() => openDetail(r.orderId)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button> },
+            { key: "party", label: "Customer", render: (r: DepositRow) => r.partyName },
+            { key: "req", label: "Deposit required", align: "right" as const, render: (r: DepositRow) => money(r.depositRequiredCents) },
+            { key: "paid", label: "Paid", align: "right" as const, render: (r: DepositRow) => money(r.depositPaidCents) },
+            { key: "short", label: "Shortfall", align: "right" as const, render: (r: DepositRow) => <span style={{ color: "var(--h10-danger)", fontWeight: 600 }}>{money(r.shortfallCents)}</span> },
+            { key: "blocked", label: "Blocked WOs", align: "right" as const, render: (r: DepositRow) => (r.blockedWorkOrders > 0 ? <Pill tone="warning">{r.blockedWorkOrders} blocked</Pill> : "—") },
+          ]}
+          rows={deposits ?? []}
+          rowKey={(r: DepositRow) => r.orderId}
+          emptyState="No deposits outstanding — nothing on the floor is waiting on money."
+        />
+      )}
+
+      <MoneyDrawer id={detailId} detail={detail} canInvoice={canInvoice} canMargin={canMargin} canPay={canPay} onPay={(o) => setPayFor(o)} onClose={() => setDetailId(null)} onChanged={refreshAll} />
+      <PaymentModal target={payFor} onClose={() => setPayFor(null)} onDone={() => { setPayFor(null); refreshAll(); }} />
+      <ImportModal open={importOpen} canPay={canPay} onClose={() => setImportOpen(false)} onApplied={() => { setImportOpen(false); refreshAll(); }} />
     </div>
   );
 }
 
-function MoneyDrawer({ id, detail, canInvoice, canMargin, onClose, onChanged }: { id: string | null; detail: FinancialDetail | null; canInvoice: boolean; canMargin: boolean; onClose: () => void; onChanged: () => void }) {
+function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return <button type="button" onClick={onClick} style={{ background: "none", border: "none", borderBottom: `2px solid ${active ? "var(--h10-primary)" : "transparent"}`, padding: "7px 12px", cursor: "pointer", fontSize: 13, fontWeight: active ? 700 : 500, color: active ? "var(--h10-text)" : "var(--h10-text-3)", marginBottom: -1 }}>{children}</button>;
+}
+
+function MoneyDrawer({ id, detail, canInvoice, canMargin, canPay, onPay, onClose, onChanged }: { id: string | null; detail: FinancialDetail | null; canInvoice: boolean; canMargin: boolean; canPay: boolean; onPay: (o: { id: string; number: string }) => void; onClose: () => void; onChanged: () => void }) {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
 
@@ -102,6 +148,7 @@ function MoneyDrawer({ id, detail, canInvoice, canMargin, onClose, onChanged }: 
     <Drawer open={!!id} onClose={onClose} title={d ? `Money · ${d.order.number}` : "Money"} footer={d ? (
       <div style={{ display: "flex", gap: 8, width: "100%", alignItems: "center" }}>
         {canInvoice && <Button variant="primary" onClick={createInvoice} disabled={busy}><FilePlus size={13} /> New invoice</Button>}
+        {canPay && <Button onClick={() => onPay({ id: d.order.id, number: d.order.number })}><CreditCard size={13} /> Record payment</Button>}
         <a href={`/orders?o=${d.order.id}`} className="h10-ds-btn" style={{ marginLeft: "auto", textDecoration: "none", display: "inline-flex", gap: 6, alignItems: "center" }}>Open order <ArrowUpRight size={13} /></a>
       </div>
     ) : undefined}>
@@ -159,6 +206,96 @@ function Fig({ label, value, strong }: { label: string; value: string; strong?: 
   return <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 8, padding: "8px 10px" }}><div style={{ fontSize: 10.5, color: "var(--h10-text-3)", textTransform: "uppercase", letterSpacing: 0.3 }}>{label}</div><div style={{ fontSize: 15, fontWeight: strong ? 700 : 600, fontVariantNumeric: "tabular-nums" }}>{value}</div></div>;
 }
 function Empty({ children }: { children: React.ReactNode }) { return <div style={{ fontSize: 12, color: "var(--h10-text-3)", padding: "4px 0" }}>{children}</div>; }
+const lbl2: React.CSSProperties = { fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 3 };
+
+function PaymentModal({ target, onClose, onDone }: { target: { id: string; number: string } | null; onClose: () => void; onDone: () => void }) {
+  const { toast } = useToast();
+  const [kind, setKind] = useState("DEPOSIT");
+  const [amount, setAmount] = useState("");
+  const [method, setMethod] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (target) { setKind("DEPOSIT"); setAmount(""); setMethod(""); } }, [target]);
+
+  const submit = async () => {
+    if (!target) return;
+    const cents = Math.round(parseFloat(amount.replace(",", ".")) * 100);
+    if (!(cents > 0)) { toast("Enter an amount", "danger"); return; }
+    setBusy(true);
+    try {
+      const r = await apiJson<{ unblocked: number }>(`/api/orders/${target.id}/payments`, { method: "POST", body: JSON.stringify({ kind, amountCents: cents, method: method || undefined }) });
+      toast(r.unblocked > 0 ? `Payment recorded — ${r.unblocked} work order(s) unblocked` : "Payment recorded", "success");
+      onDone();
+    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
+  };
+  return (
+    <Modal open={!!target} onClose={onClose} title={target ? `Record payment — ${target.number}` : "Record payment"} size="sm" footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={submit} disabled={busy}>Record</Button></>}>
+      <div style={{ display: "grid", gap: 10 }}>
+        <div><div style={lbl2}>Kind</div><Listbox ariaLabel="Payment kind" options={[{ value: "DEPOSIT", label: "Deposit" }, { value: "BALANCE", label: "Balance" }, { value: "OTHER", label: "Other" }]} value={kind} onChange={setKind} /></div>
+        <div><div style={lbl2}>Amount (€)</div><input style={inp} type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" /></div>
+        <div><div style={lbl2}>Method (optional)</div><input style={inp} value={method} onChange={(e) => setMethod(e.target.value)} placeholder="bank transfer, card…" /></div>
+      </div>
+    </Modal>
+  );
+}
+
+function ImportModal({ open, canPay, onClose, onApplied }: { open: boolean; canPay: boolean; onClose: () => void; onApplied: () => void }) {
+  const { toast } = useToast();
+  const [csv, setCsv] = useState("");
+  const [proposals, setProposals] = useState<BankProposal[] | null>(null);
+  const [pick, setPick] = useState<Record<number, boolean>>({});
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (open) { setCsv(""); setProposals(null); setPick({}); } }, [open]);
+
+  const dryRun = async () => {
+    setBusy(true);
+    try {
+      const r = await apiJson<ImportResponse>("/api/imports/payments", { method: "POST", body: JSON.stringify({ rawCsv: csv }) });
+      setProposals(r.proposals);
+      const p: Record<number, boolean> = {};
+      r.proposals.forEach((x, i) => { if (x.orderId) p[i] = true; });
+      setPick(p);
+      if (r.proposals.length === 0) toast(r.note ?? "No rows parsed", "danger");
+    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
+  };
+  const apply = async () => {
+    if (!proposals) return;
+    const applyList = proposals.flatMap((p, i) => (pick[i] && p.orderId && p.amountCents ? [{ orderId: p.orderId, amountCents: p.amountCents, note: `Bank: ${p.row.description}`.slice(0, 200) }] : []));
+    if (applyList.length === 0) { toast("Select at least one matched row", "danger"); return; }
+    setBusy(true);
+    try {
+      const r = await apiJson<{ created: number }>("/api/imports/payments", { method: "POST", body: JSON.stringify({ apply: applyList }) });
+      toast(`${r.created} payment(s) recorded`, "success");
+      onApplied();
+    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Import bank CSV" size="md" footer={proposals ? (
+      <><Button onClick={() => setProposals(null)}>Back</Button>{canPay && <Button variant="primary" onClick={apply} disabled={busy}>Apply selected</Button>}</>
+    ) : (
+      <><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={dryRun} disabled={busy || !csv.trim()}>Match</Button></>
+    )}>
+      {!proposals ? (
+        <div style={{ display: "grid", gap: 8 }}>
+          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>Paste a statement with a header naming <b>date</b>, <b>amount</b>, <b>description</b> columns. We propose matches by reference or amount; nothing is recorded until you apply.</div>
+          <textarea value={csv} onChange={(e) => setCsv(e.target.value)} rows={8} placeholder={"date,amount,description\n2026-07-01,500.00,Bonifico ORD-1"} style={{ ...inp, fontFamily: "ui-monospace, monospace", resize: "vertical" }} />
+        </div>
+      ) : (
+        <div style={{ display: "grid", gap: 6 }}>
+          {proposals.length === 0 && <div style={{ fontSize: 12.5, color: "var(--h10-text-3)" }}>No rows parsed.</div>}
+          {proposals.map((p, i) => (
+            <label key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: "7px 8px", border: "1px solid var(--h10-border-subtle)", borderRadius: 8, fontSize: 12.5, opacity: p.orderId ? 1 : 0.6 }}>
+              <input type="checkbox" disabled={!p.orderId} checked={!!pick[i]} onChange={(e) => setPick((s) => ({ ...s, [i]: e.target.checked }))} style={{ accentColor: "var(--h10-primary)" }} />
+              <span style={{ flex: 1 }}>{p.row.description || "(no description)"} <span style={{ color: "var(--h10-text-3)" }}>· {eur(p.row.amountCents ?? 0)}</span></span>
+              {p.number ? <span style={{ color: "var(--h10-text-link)", fontWeight: 600 }}>{p.number}</span> : <span style={{ color: "var(--h10-text-3)" }}>{p.reason}</span>}
+              <Pill tone={CONF_TONE[p.confidence]}>{p.confidence === "none" ? "no match" : p.confidence}</Pill>
+            </label>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
 
 function Tile({ label, value, tone }: { label: string; value: string; tone?: "warning" | "danger" | "success" }) {
   const color = tone === "warning" ? "var(--h10-text)" : tone === "danger" ? "var(--h10-danger)" : tone === "success" ? "var(--h10-success-text, var(--h10-text))" : "var(--h10-text)";
