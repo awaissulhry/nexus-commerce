@@ -74,6 +74,7 @@ export function TemplatesTab() {
     <Card padded>
       <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
         <div style={{ fontSize: 15, fontWeight: 700, flex: 1 }}>Product templates</div>
+        {canPrice && <a href="/api/exports/pricing-model" style={{ fontSize: 12, color: "var(--h10-text-link)" }}>Export model CSV</a>}
         {canManage && (
           <>
             <Button onClick={starter} disabled={busy}><Sparkles size={13} /> Starter structure</Button>

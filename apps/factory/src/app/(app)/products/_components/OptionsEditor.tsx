@@ -8,12 +8,13 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, Trash2, Upload } from "lucide-react";
 import { useToast } from "@/design-system/components";
 import { Button, Pill } from "@/design-system/primitives";
 import { apiFetch, apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
 import { DeltaInput } from "./money";
+import { CsvImportModal } from "./CsvImportModal";
 import type { Group, Option, TemplateDetail } from "./types";
 
 function reorder<T>(arr: T[], from: number, to: number): T[] {
@@ -28,6 +29,7 @@ export function OptionsEditor({ template, baseCostCents, basePriceCents, onChang
   const { toast } = useToast();
   const canCost = usePermission("financials.costs.view");
   const [busy, setBusy] = useState(false);
+  const [importing, setImporting] = useState(false);
   const groups = template.optionGroups;
 
   const call = async (fn: () => Promise<unknown>) => {
@@ -140,9 +142,20 @@ export function OptionsEditor({ template, baseCostCents, basePriceCents, onChang
           </div>
         </div>
       ))}
-      <div>
+      <div style={{ display: "flex", gap: 8 }}>
         <Button onClick={addGroup} disabled={busy}><Plus size={13} /> Add group</Button>
+        <Button onClick={() => setImporting(true)} disabled={busy}><Upload size={13} /> Import options CSV</Button>
       </div>
+      <CsvImportModal
+        open={importing}
+        onClose={() => setImporting(false)}
+        title={`Import options into ${template.name}`}
+        endpoint="/api/imports/options"
+        templateUrl="/api/imports/options/template"
+        columnsHelp="group, min, max, option, price_delta, price_mode (ABSOLUTE|PERCENT), cost_delta, cost_mode"
+        extraBody={{ templateId: template.id }}
+        onApplied={onChanged}
+      />
     </div>
   );
 }

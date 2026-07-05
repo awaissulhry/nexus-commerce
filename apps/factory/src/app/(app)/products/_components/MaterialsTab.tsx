@@ -6,13 +6,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { Card, DataGrid, Listbox, Modal, useToast } from "@/design-system/components";
 import { Button, Input, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
-import { apiFetch, apiJson } from "@/lib/api-client";
+import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
 import { EuroInput } from "./money";
+import { CsvImportModal } from "./CsvImportModal";
 import type { MaterialRow } from "./types";
 
 const UNITS = [
@@ -32,6 +33,7 @@ export function MaterialsTab() {
   const [name, setName] = useState("");
   const [unit, setUnit] = useState("SQM");
   const [busy, setBusy] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -84,6 +86,7 @@ export function MaterialsTab() {
     <Card padded>
       <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
         <div style={{ fontSize: 15, fontWeight: 700, flex: 1 }}>Materials</div>
+        {canManage && <Button onClick={() => setImporting(true)}><Upload size={13} /> Import CSV</Button>}
         {canManage && <Button variant="primary" onClick={() => setCreating(true)}><Plus size={13} /> New material</Button>}
       </div>
       <div style={{ fontSize: 12, color: "var(--h10-text-3)", marginBottom: 10 }}>
@@ -115,6 +118,15 @@ export function MaterialsTab() {
           <Listbox ariaLabel="Unit" options={UNITS} value={unit} onChange={setUnit} />
         </div>
       </Modal>
+      <CsvImportModal
+        open={importing}
+        onClose={() => setImporting(false)}
+        title="Import materials"
+        endpoint="/api/imports/materials"
+        templateUrl="/api/imports/materials/template"
+        columnsHelp="name, unit (HIDE|SQM|PIECE|M), cost_eur, reorder_level"
+        onApplied={load}
+      />
     </Card>
   );
 }
