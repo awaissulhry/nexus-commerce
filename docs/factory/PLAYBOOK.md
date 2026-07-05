@@ -1,6 +1,6 @@
 # NEXUS FACTORY OS — THE PLAYBOOK (canonical handoff & operating manual)
 
-Last updated 2026-07-05 (after: F0 approved · F1 shipped + gate-fixed · FP1 Inbox shipped · FP2 Products & Pricing shipped · FP3 Quotes shipped — golden flow's first half closed; FP4 Orders next on approval). **This file is the single entry point for ANY model session working on Factory OS.** Read it top to bottom before touching anything. It tells you what this product is, what exists, what is approved, how to build every remaining page, the design law, and every trap already paid for. Deeper canon lives in the sibling docs — this file tells you when to open which.
+Last updated 2026-07-05 (after: F0 · F1 · FP1 Inbox · FP2 Products & Pricing · FP3 Quotes · FP4 Orders all shipped — the golden flow runs unbroken thread→quote→order→production→closed; a content-width pass shipped too; FP5 Contacts next on approval). **This file is the single entry point for ANY model session working on Factory OS.** Read it top to bottom before touching anything. It tells you what this product is, what exists, what is approved, how to build every remaining page, the design law, and every trap already paid for. Deeper canon lives in the sibling docs — this file tells you when to open which.
 
 **The document set (all in `docs/factory/`):**
 
@@ -51,8 +51,9 @@ A **local-first platform that runs a small Italian leather/motorcycle-apparel fa
 | FP1 Inbox build | ✅ **SHIPPED + verified** (backend core / API surface / three-pane UI / fixes) — gate report `FP1-REPORT.md`; ⏳ awaiting Owner click-through (live reply send is the Owner's step) | FP1.1–FP1.4, ends `c39ee15f` |
 | FP2 Products & Pricing | ✅ **SHIPPED + verified** (engine/templates/materials/certs/price-lists/preview/imports) — gate report `FP2-REPORT.md`; ⏳ awaiting Owner click-through | FP2.1–FP2.5, ends `5a0a9923` |
 | FP3 Quotes | ✅ **SHIPPED + verified** (CRUD-on-engine / pipeline+configurator / PDF+send+Inbox wiring / public-accept+convert+recall+export / golden-flow verify) — binding spec `FP3-SPEC.md`, gate report `FP3-REPORT.md`; ⏳ awaiting Owner click-through (live send is the Owner's step). Golden flow's first half closed: Inbox → quote → send → accept → **ORD-1**. Built on Opus 4.8. | FP3.1–FP3.5, ends `86276d87` |
-| FP4 Orders | **NEXT on FP3 approval** — spec first; the ORD-n home (board + one-timeline + lifecycle + Start-production→WO seed + payments/deposit gate + size-run) (§11 FP4 seed) | — |
-| FP5…FP11 | Not started; spec-first, in the §11 order | — |
+| FP4 Orders | ✅ **SHIPPED + verified** (lifecycle core / board + one-timeline / start-production + deposit gate + payments / kanban + size-run + export) — binding spec `FP4-SPEC.md`, gate report `FP4-REPORT.md`; ⏳ awaiting Owner click-through. Golden flow now unbroken: thread → quote → order → **start production → deposit gate → unblock** → lifecycle → CLOSED. Additive migration `WorkOrder.label`; @dnd-kit already present. Built on Opus 4.8. | FP4.1–FP4.4, ends `17c28e06` |
+| FP5 Contacts | **NEXT on FP4 approval** — spec first; the party workspace + measurement profiles + per-party configurator defaults (the CRM spine quotes/orders lean on) (§11 FP5 seed) | — |
+| FP6…FP11 | Not started; spec-first, in the §11 order | — |
 
 **Owner's live instance state:** Google connected (`xaviaracing.it@gmail.com`), scope = whole `INBOX` (Owner defers a dedicated "Factory" label — re-scope any time via the Change button in Settings › Integrations), ~50 conversations / 86 messages synced incl. real orders ("AWA ORDER 652/2026 BARTOCCETTI"), worker healthy, **Drive folder created ✓**, Sendcloud NOT connected yet (Owner defers; blocks nothing until FP8), **0 parties imported** (so all senders show unmatched — FP1's party-create flow and/or a contacts import will light this up). Owner password was rotated by the Owner (never in `.env`; sessions server-side).
 
@@ -201,7 +202,9 @@ Everything below was the settled design and matches what shipped; two verified a
 - **Verdicts:** 4-line waterfall ADAPT; margin-floor speed bump (AppSetting `pricing.defaults.marginFloorPct`, red badge + explicit confirm below it); quotes never reserve stock (Katana ADAPT); JobBOSS² similar-quote ADOPT; Fulcrum live cost breakdown ADOPT.
 - **RBAC:** `quotes.create/send/convert`; waterfall visible only with grains. **Import/export:** quotes CSV export; no import.
 
-### FP4 — Orders `/orders`
+### FP4 — Orders `/orders` — ✅ SHIPPED (FP4.1–FP4.4, ends `17c28e06`; report `FP4-REPORT.md`)
+
+> Built to this seed. Delivered: the board (grid + kanban with @dnd-kit validated-drag), three counters (In production · Awaiting deposit · Overdue), the `canTransition` state-machine authority, the signature ONE-TIMELINE, one-click Start production (WO-per-line + size-run explosion + stage rows from AppSetting `production.stages`), the FD13 deposit gate (WO BLOCKED→READY on deposit), payments recording, promise-date edit, cancel+reason with WO cascade, orders CSV export, and the size-run matrix editor. **Verified: the full golden flow FP3→FP4 end to end (convert→ORD→start→gate→pay→unblock→lifecycle→CLOSED), 119 tests, a REAL kanban drag.** Deviations flagged (see report): batch-select + historical CSV import deferred; IN_PRODUCTION→READY and →SHIPPED are manual stopgaps until FP6/FP8. Below is the original seed for reference.
 
 - **Purpose:** the operational board — every confirmed job's truth.
 - **Entities/API:** Order lifecycle (CONFIRMED→IN_PRODUCTION→READY→SHIPPED→DELIVERED→CLOSED / CANCELLED w/ reason + compensating events); one-click "Start production" → WO `ORD-n/1` (+ stage rows from AppSetting pipeline; BLOCKED if deposit gate active); payments/deposits recording (Payment rows; deposit paid ⇒ WO unblocks); promise-date edits audited; the ONE-TIMELINE view (email → quote vN → confirmed → payments → WO stages → shipment → review — pull from linked entities + AuditLog); size-run entry for B2B lines (matrix editor `sizeRun` Json) exploding to per-size WOs.
