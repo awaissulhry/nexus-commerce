@@ -6,7 +6,7 @@
  * in W9.2.
  */
 
-export type ExportFormat = 'csv' | 'tsv' | 'xlsx' | 'json' | 'pdf'
+export type ExportFormat = 'csv' | 'tsv' | 'xlsx' | 'json' | 'pdf' | 'workbook'
 
 export interface ColumnSpec {
   /** Field id on the row. Resolves dot-paths
@@ -221,6 +221,9 @@ export async function renderExport(input: RenderInput): Promise<RenderOutput> {
   }
   if (input.format === 'xlsx') return renderXlsx(input)
   if (input.format === 'pdf') return renderPdf(input)
+  if (input.format === 'workbook') {
+    throw new Error('workbook format is handled by export-wizard.run(), not renderExport')
+  }
   throw new Error(`Renderer for ${input.format} not yet implemented`)
 }
 

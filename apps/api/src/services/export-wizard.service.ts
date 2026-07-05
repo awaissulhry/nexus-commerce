@@ -15,11 +15,10 @@
  *   run()       Fetch rows from the catalog using the operator's
  *               filters + columns, hand to the renderer, store the
  *               result. Inline base64 for small payloads (<1 MB);
- *               artifactUrl for the rest (W9.4 wires S3 / object
- *               storage).
+ *               artifactUrl for the rest via ArtifactStore (F8 fix).
  *
- *   download()  Decode the inline payload (or fetch the URL) and
- *               return bytes. Used by both the W9.3 download path
+ *   download()  Decode the inline payload (or fetch via ArtifactStore)
+ *               and return bytes. Used by both the W9.3 download path
  *               and the W9.4 scheduled-export delivery hook.
  */
 
@@ -31,8 +30,10 @@ import type {
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { renderExport, type ColumnSpec, type ExportFormat } from './export/renderers.js'
+import { buildCatalogWorkbook } from './flat-file/workbook.service.js'
+import { getArtifactStore } from './flat-file/artifact-store.js'
 
-export type TargetEntity = 'product' | 'channelListing' | 'inventory'
+export type TargetEntity = 'product' | 'channelListing' | 'inventory' | 'catalog'
 
 const INLINE_PAYLOAD_LIMIT_BYTES = 1_000_000
 
@@ -63,14 +64,17 @@ export class ExportWizardService {
 
   async create(input: CreateExportInput): Promise<ExportJob> {
     if (!input.jobName?.trim()) throw new Error('jobName is required')
-    if (!['csv', 'xlsx', 'json', 'pdf'].includes(input.format)) {
+    if (!['csv', 'xlsx', 'json', 'pdf', 'workbook'].includes(input.format)) {
       throw new Error(`Unknown format: ${input.format}`)
     }
-    if (!['product', 'channelListing', 'inventory'].includes(input.targetEntity)) {
+    if (!['product', 'channelListing', 'inventory', 'catalog'].includes(input.targetEntity)) {
       throw new Error(`Unknown targetEntity: ${input.targetEntity}`)
     }
-    if (!Array.isArray(input.columns) || input.columns.length === 0) {
-      throw new Error('columns is required (non-empty)')
+    // columns are required for all formats EXCEPT 'workbook' (registry-driven)
+    if (input.format !== 'workbook') {
+      if (!Array.isArray(input.columns) || input.columns.length === 0) {
+        throw new Error('columns is required (non-empty)')
+      }
     }
     const job = await this.prisma.exportJob.create({
       data: {
@@ -107,6 +111,22 @@ export class ExportWizardService {
       orderBy: { createdAt: 'desc' },
       take: Math.min(Math.max(filters.limit ?? 100, 1), 500),
     })
+  }
+
+  /**
+   * F8 fix: route large artifacts through ArtifactStore rather than base64-in-Postgres.
+   * Small payloads (<1 MB) stay inline for zero-dep retrieval.
+   */
+  private async storeArtifact(
+    bytes: Uint8Array,
+    key: string,
+    contentType: string,
+  ): Promise<{ artifactBase64: string | null; artifactUrl: string | null }> {
+    if (bytes.byteLength <= INLINE_PAYLOAD_LIMIT_BYTES) {
+      return { artifactBase64: Buffer.from(bytes).toString('base64'), artifactUrl: null }
+    }
+    const handle = await getArtifactStore().put(key, bytes, contentType)
+    return { artifactBase64: null, artifactUrl: handle }
   }
 
   /** Fetch rows from the target entity per the saved filters. */
@@ -154,6 +174,48 @@ export class ExportWizardService {
       data: { status: 'RUNNING', startedAt: new Date() },
     })
     try {
+      // ── Workbook path (FF1.11) ────────────────────────────────────────────
+      // Handled before fetchRows because 'catalog' is not a generic entity
+      // and the workbook builder orchestrates its own DB queries.
+      if (job.format === 'workbook' || job.targetEntity === 'catalog') {
+        const filters = (job.filters as Record<string, unknown> | null) ?? {}
+        const channels = (
+          Array.isArray(filters.channels) ? filters.channels : ['AMAZON', 'EBAY', 'SHOPIFY']
+        ) as ('AMAZON' | 'EBAY' | 'SHOPIFY')[]
+        const exportedAt = new Date(job.createdAt).toISOString().slice(0, 10)
+        const { bytes, marketList } = await buildCatalogWorkbook(this.prisma, {
+          channels,
+          filters: {
+            status: filters.status as string | undefined,
+            brand: filters.brand as string | undefined,
+            productType: filters.productType as string | undefined,
+            skuIn: filters.skuIn as string[] | undefined,
+          },
+          snapshotId: job.id,
+          exportedAt,
+          blankTemplate: filters.blankTemplate === true,
+        })
+        const stored = await this.storeArtifact(
+          bytes,
+          job.jobName,
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        return this.prisma.exportJob.update({
+          where: { id: jobId },
+          data: {
+            status: 'COMPLETED',
+            rowCount: 0,
+            bytes: bytes.byteLength,
+            snapshotId: job.id,
+            marketList: marketList as never,
+            artifactBase64: stored.artifactBase64,
+            artifactUrl: stored.artifactUrl,
+            completedAt: new Date(),
+          },
+        })
+      }
+
+      // ── Generic path (csv / xlsx / json / pdf) ────────────────────────────
       const rows = await this.fetchRows(
         job.targetEntity as TargetEntity,
         (job.filters as Record<string, unknown> | null) ?? null,
@@ -166,15 +228,26 @@ export class ExportWizardService {
         filename: job.jobName,
       })
       const bytes = rendered.bytes
-      const inline = bytes.byteLength <= INLINE_PAYLOAD_LIMIT_BYTES
+      // Determine MIME for ArtifactStore (mirrors download() logic)
+      const mime =
+        job.format === 'csv'
+          ? 'text/csv'
+          : job.format === 'tsv'
+            ? 'text/tab-separated-values'
+            : job.format === 'xlsx'
+              ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+              : job.format === 'json'
+                ? 'application/json'
+                : 'application/pdf'
+      const stored = await this.storeArtifact(bytes, job.jobName, mime)
       return this.prisma.exportJob.update({
         where: { id: jobId },
         data: {
           status: 'COMPLETED',
           rowCount: rows.length,
           bytes: bytes.byteLength,
-          artifactBase64: inline ? Buffer.from(bytes).toString('base64') : null,
-          artifactUrl: inline ? null : null, // S3 wired in W9.4 follow-up
+          artifactBase64: stored.artifactBase64,
+          artifactUrl: stored.artifactUrl,
           completedAt: new Date(),
         },
       })
@@ -199,22 +272,30 @@ export class ExportWizardService {
     if (job.artifactBase64) {
       bytes = Buffer.from(job.artifactBase64, 'base64')
     } else if (job.artifactUrl) {
-      const r = await fetch(job.artifactUrl)
-      if (!r.ok) throw new Error(`Fetching artifact failed: HTTP ${r.status}`)
-      bytes = Buffer.from(await r.arrayBuffer())
+      // ArtifactStore handles (local:... / S3 keys) are NOT http URLs — use the store.
+      const got = await getArtifactStore().get(job.artifactUrl)
+      if (!got) return null
+      bytes = Buffer.from(got)
     } else {
       return null
     }
+    const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     const contentType =
       job.format === 'csv'
         ? 'text/csv'
-        : job.format === 'xlsx'
-          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-          : job.format === 'json'
-            ? 'application/json'
-            : 'application/pdf'
+        : job.format === 'tsv'
+          ? 'text/tab-separated-values'
+          : job.format === 'xlsx' || job.format === 'workbook'
+            ? XLSX_MIME
+            : job.format === 'json'
+              ? 'application/json'
+              : 'application/pdf'
     const ext =
-      job.format === 'xlsx' ? 'xlsx' : job.format === 'pdf' ? 'pdf' : job.format
+      job.format === 'xlsx' || job.format === 'workbook'
+        ? 'xlsx'
+        : job.format === 'pdf'
+          ? 'pdf'
+          : job.format
     const safeName = job.jobName.replace(/[^a-z0-9_\-]+/gi, '_')
     return {
       filename: `${safeName}.${ext}`,
