@@ -32,6 +32,7 @@ export function MaterialsClient() {
   const [lowOnly, setLowOnly] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<MaterialDetail | null>(null);
+  const [ripple, setRipple] = useState<{ templates: number; quotes: number } | null>(null);
   const [tab, setTab] = useState<"movements" | "lots">("movements");
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", unit: "SQM", costCents: "", reorderLevel: "" });
@@ -47,7 +48,18 @@ export function MaterialsClient() {
   useEffect(() => { void load(); }, [load]);
 
   const loadDetail = useCallback(async (id: string) => { try { setDetail(await apiJson<MaterialDetail>(`/api/materials/${id}`)); } catch (e) { toast((e as Error).message, "danger"); } }, [toast]);
-  const open = (id: string) => { setOpenId(id); setDetail(null); setTab("movements"); void loadDetail(id); };
+  const open = (id: string) => { setOpenId(id); setDetail(null); setRipple(null); setTab("movements"); void loadDetail(id); };
+
+  const editCost = async (euros: string) => {
+    if (!detail) return;
+    const costCents = Math.round(parseFloat(euros) * 100);
+    if (!Number.isFinite(costCents) || costCents === detail.material.costCents) return;
+    try {
+      const r = await apiJson<{ ripple: { templates: number; quotes: number } | null }>(`/api/materials/${detail.material.id}`, { method: "PATCH", body: JSON.stringify({ costCents }) });
+      if (r.ripple && (r.ripple.templates || r.ripple.quotes)) setRipple(r.ripple); else setRipple(null);
+      void load(); void loadDetail(detail.material.id); toast("Cost updated", "success");
+    } catch (e) { toast((e as Error).message, "danger"); }
+  };
 
   const create = async () => {
     if (!form.name.trim()) return;
@@ -102,7 +114,11 @@ export function MaterialsClient() {
             { key: "committed", label: "Committed", align: "right" as const, render: (m: MaterialRow) => (m.committed ? num(m.committed) : "—") },
             { key: "expected", label: "Expected", align: "right" as const, render: (m: MaterialRow) => (m.expected ? <span style={{ color: "var(--h10-text-2)" }}>+{num(m.expected)}</span> : "—") },
             { key: "available", label: "Available", align: "right" as const, render: (m: MaterialRow) => <b style={{ color: m.short ? "var(--h10-danger)" : m.low ? "var(--h10-warning, #9a6700)" : "var(--h10-text)" }}>{num(m.available)}</b> },
-            { key: "reorder", label: "Reorder", render: (m: MaterialRow) => (m.short ? <Pill tone="danger">short</Pill> : m.low ? <Pill tone="warning">low</Pill> : m.reorderLevel != null ? <span style={{ color: "var(--h10-text-3)" }}>@{num(m.reorderLevel)}</span> : "—") },
+            { key: "reorder", label: "Reorder", render: (m: MaterialRow) => {
+              const chip = m.short ? <Pill tone="danger">short</Pill> : m.low ? <Pill tone="warning">low</Pill> : m.reorderLevel != null ? <span style={{ color: "var(--h10-text-3)" }}>@{num(m.reorderLevel)}</span> : "—";
+              const gap = m.short ? Math.max(1, Math.ceil(m.committed - m.inStock)) : m.reorderLevel != null ? Math.max(1, Math.ceil(m.reorderLevel - m.available)) : 1;
+              return <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>{chip}{(m.short || m.low) && canManage && <button type="button" onClick={() => { setBuyPrefill({ materialId: m.id, qty: gap }); setView("po"); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11.5, color: "var(--h10-text-link)", fontWeight: 600 }}>+ Buy</button>}</span>;
+            } },
             ...(canCost ? [{ key: "cost", label: "Cost", align: "right" as const, render: (m: MaterialRow) => (m.costCents != null ? `${eur(m.costCents)}/${m.unit.toLowerCase()}` : "—") }] : []),
           ]}
           rows={rows}
@@ -144,6 +160,14 @@ export function MaterialsClient() {
               ))}
             </div>
             {canAdjust && <Button onClick={() => { setAdjust({ id: detail.material.id, name: detail.material.name, unit: detail.material.unit } as MaterialRow); setAdjQty(""); setAdjReason(""); }}>Adjust stock</Button>}
+            {canCost && canManage && detail.material.costCents != null && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5 }}>
+                <span style={{ color: "var(--h10-text-3)" }}>Supplier cost / {detail.material.unit.toLowerCase()}</span>
+                <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>€<input type="number" step="0.01" defaultValue={(detail.material.costCents / 100).toFixed(2)} onBlur={(e) => void editCost(e.target.value)} style={{ ...inp, width: 90, textAlign: "right", fontFamily: "ui-monospace, monospace" }} /></span>
+              </div>
+            )}
+            {ripple && <div style={{ padding: 10, background: "var(--h10-wash-warning, #fdf3d3)", borderRadius: 8, fontSize: 12, color: "var(--h10-warning, #9a6700)" }}>Cost changed — <b>{ripple.templates} template{ripple.templates === 1 ? "" : "s"}</b>{ripple.quotes ? <> and <b>{ripple.quotes} open quote{ripple.quotes === 1 ? "" : "s"}</b></> : ""} reference this. Review their pricing.</div>}
+            {detail.whereUsed.length > 0 && <div style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>Used in: {detail.whereUsed.map((t) => t.name).join(" · ")}</div>}
             <div style={{ display: "flex", gap: 4 }}>
               {(["movements", "lots"] as const).map((t) => <button key={t} type="button" onClick={() => setTab(t)} style={{ border: "none", background: tab === t ? "var(--h10-primary)" : "transparent", color: tab === t ? "#fff" : "var(--h10-text-2)", borderRadius: 8, padding: "5px 10px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{t === "movements" ? "Movements" : `Lots (${detail.lots.length})`}</button>)}
             </div>

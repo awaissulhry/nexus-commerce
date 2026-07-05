@@ -24,7 +24,7 @@ export type MaterialDetail = {
   stock: { inStock: number; committed: number; expected: number; available: number; low: boolean; short: boolean };
   movements: Movement[];
   lots: Lot[];
-  usedByTemplates: number;
+  whereUsed: { id: string; name: string }[];
 };
 
 export const MOVE_TONE: Record<Movement["type"], "success" | "danger" | "warning" | "info" | "neutral"> = { IN: "success", OUT: "danger", ADJUST: "warning", RESERVE: "info", RELEASE: "neutral" };

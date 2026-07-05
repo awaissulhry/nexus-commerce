@@ -34,6 +34,9 @@ export const GET = guarded(PAGES.materials, async (_req, { params, resolved }) =
   for (const m of poIns) recByPo[m.refId as string] = (recByPo[m.refId as string] ?? 0) + m.qty;
   for (const po of openPos) for (const l of (po.lines as { materialId: string; qty: number }[]) ?? []) if (l.materialId === id) expected += Math.max(0, l.qty - (recByPo[po.id] ?? 0));
 
+  const usedTemplateIds = await materialUsage(id);
+  const whereUsed = usedTemplateIds.length ? await prisma.productTemplate.findMany({ where: { id: { in: usedTemplateIds } }, select: { id: true, name: true } }) : [];
+
   const s = materialStock(moves.map((m) => ({ type: m.type, qty: m.qty })), expected);
   // on-hand per lot = Σ IN(lot) − Σ OUT(lot)
   const lotOnHand: Record<string, number> = {};
@@ -44,7 +47,7 @@ export const GET = guarded(PAGES.materials, async (_req, { params, resolved }) =
     stock: { ...s, low: isLow(s.available, material.reorderLevel), short: s.committed > s.inStock },
     movements: moves.map((m) => ({ id: m.id, type: m.type, qty: m.qty, reason: m.reason, refType: m.refType, refId: m.refId, lot: m.lot?.lotCode ?? null, actor: m.actor?.displayName ?? null, at: m.createdAt })),
     lots: lots.map((l) => ({ id: l.id, lotCode: l.lotCode, supplier: l.supplier?.name ?? null, receivedAt: l.receivedAt, onHand: lotOnHand[l.id] ?? 0 })),
-    usedByTemplates: (await materialUsage(id)).length,
+    whereUsed,
   }, resolved);
 });
 
@@ -64,10 +67,12 @@ export const PATCH = guarded(FEATURES.materialsManage, async (req: NextRequest, 
   const material = await prisma.material.update({ where: { id }, data: parsed.data });
   void audit({ actorId: actor!.id, entityType: "material", entityId: id, action: "updated", before, after: parsed.data });
 
-  // reprice ripple: only when the cost actually moved
-  let ripple: { templates: number } | null = null;
+  // reprice ripple: only when the cost actually moved — templates + OPEN quotes referencing them
+  let ripple: { templates: number; quotes: number } | null = null;
   if (parsed.data.costCents !== undefined && before && parsed.data.costCents !== before.costCents) {
-    ripple = { templates: (await materialUsage(id)).length };
+    const templateIds = await materialUsage(id);
+    const quotes = templateIds.length ? await prisma.quote.count({ where: { state: { in: ["DRAFT", "SENT"] }, lines: { some: { templateId: { in: templateIds } } } } }) : 0;
+    ripple = { templates: templateIds.length, quotes };
     await publishEventDurable("pricing.updated", { materialId: id });
   }
   return jsonStripped({ material, ripple }, resolved);
