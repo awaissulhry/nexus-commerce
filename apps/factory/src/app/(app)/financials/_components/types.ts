@@ -34,3 +34,8 @@ export type DepositsResponse = { deposits: DepositRow[] };
 
 export type BankProposal = { row: { date: string; amountCents?: number; description: string }; orderId: string | null; number: string | null; partyName: string | null; amountCents?: number; confidence: "high" | "medium" | "none"; reason: string };
 export type ImportResponse = { proposals: BankProposal[]; note?: string };
+
+export type PartyAgg = { partyId: string; partyName: string; orders: number; netCents?: number; paidCents?: number; outstandingCents?: number; actualMarginCents?: number };
+export type PeriodAgg = { monthKey: string; orders: number; netCents?: number; invoicedCents?: number; paidCents?: number; outstandingCents?: number; actualMarginCents?: number };
+export type PartyResponse = { parties: PartyAgg[] };
+export type PeriodResponse = { months: PeriodAgg[] };

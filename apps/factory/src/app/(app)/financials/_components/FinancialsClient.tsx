@@ -8,13 +8,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Euro, FilePlus, Send, ArrowUpRight, Printer, Upload, CreditCard } from "lucide-react";
+import { Euro, FilePlus, Send, ArrowUpRight, Printer, Upload, CreditCard, Download } from "lucide-react";
 import { Card, DataGrid, Drawer, Modal, Listbox, useToast } from "@/design-system/components";
 import { Button, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
-import { type BankProposal, type DepositRow, type DepositsResponse, type FinancialDetail, type FinancialsResponse, type ImportResponse, type InvoiceRow, type OrderFin, type PaymentRow } from "./types";
+import { type BankProposal, type DepositRow, type DepositsResponse, type FinancialDetail, type FinancialsResponse, type ImportResponse, type InvoiceRow, type OrderFin, type PartyAgg, type PartyResponse, type PaymentRow, type PeriodAgg, type PeriodResponse } from "./types";
 
 const inp: React.CSSProperties = { width: "100%", border: "1px solid var(--h10-border)", borderRadius: 7, padding: "6px 8px", fontSize: 12.5, background: "var(--h10-surface)", color: "var(--h10-text)" };
 const CONF_TONE: Record<string, "success" | "info" | "neutral"> = { high: "success", medium: "info", none: "neutral" };
@@ -30,8 +30,10 @@ export function FinancialsClient() {
   const [data, setData] = useState<FinancialsResponse | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detail, setDetail] = useState<FinancialDetail | null>(null);
-  const [tab, setTab] = useState<"orders" | "deposits">("orders");
+  const [tab, setTab] = useState<"orders" | "deposits" | "party" | "month">("orders");
   const [deposits, setDeposits] = useState<DepositRow[] | null>(null);
+  const [parties, setParties] = useState<PartyAgg[] | null>(null);
+  const [months, setMonths] = useState<PeriodAgg[] | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [payFor, setPayFor] = useState<{ id: string; number: string } | null>(null);
 
@@ -45,14 +47,26 @@ export function FinancialsClient() {
     try { setDeposits((await apiJson<DepositsResponse>("/api/financials/deposits")).deposits); }
     catch (e) { toast((e as Error).message, "danger"); }
   }, [toast]);
-  useEffect(() => { if (tab === "deposits" && deposits == null) void loadDeposits(); }, [tab, deposits, loadDeposits]);
+  const loadParties = useCallback(async () => {
+    try { setParties((await apiJson<PartyResponse>("/api/financials/party")).parties); }
+    catch (e) { toast((e as Error).message, "danger"); }
+  }, [toast]);
+  const loadMonths = useCallback(async () => {
+    try { setMonths((await apiJson<PeriodResponse>("/api/financials/period")).months); }
+    catch (e) { toast((e as Error).message, "danger"); }
+  }, [toast]);
+  useEffect(() => {
+    if (tab === "deposits" && deposits == null) void loadDeposits();
+    if (tab === "party" && parties == null) void loadParties();
+    if (tab === "month" && months == null) void loadMonths();
+  }, [tab, deposits, parties, months, loadDeposits, loadParties, loadMonths]);
 
   const loadDetail = useCallback(async (id: string) => {
     try { setDetail(await apiJson<FinancialDetail>(`/api/financials/order/${id}`)); }
     catch (e) { toast((e as Error).message, "danger"); }
   }, [toast]);
   const openDetail = (id: string) => { setDetailId(id); setDetail(null); void loadDetail(id); };
-  const refreshAll = () => { void load(); setDeposits(null); if (detailId) void loadDetail(detailId); };
+  const refreshAll = () => { void load(); setDeposits(null); setParties(null); setMonths(null); if (detailId) void loadDetail(detailId); };
 
   const t = data?.tiles;
   return (
@@ -62,7 +76,10 @@ export function FinancialsClient() {
           <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}><Euro size={18} /> Financials</h1>
           <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginTop: 2 }}>Order-level money truth — who owes what, and what each order really made. Not accounting.</div>
         </div>
-        {canImport && <div style={{ marginLeft: "auto" }}><Button onClick={() => setImportOpen(true)}><Upload size={13} /> Import bank CSV</Button></div>}
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          {canImport && <Button onClick={() => setImportOpen(true)}><Upload size={13} /> Import bank CSV</Button>}
+          <a href="/api/exports/financials" className="h10-ds-btn" style={{ textDecoration: "none", display: "inline-flex", gap: 6, alignItems: "center" }}><Download size={13} /> Export period</a>
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 18 }}>
@@ -74,10 +91,41 @@ export function FinancialsClient() {
 
       <div style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: "1px solid var(--h10-border-subtle)" }}>
         <TabBtn active={tab === "orders"} onClick={() => setTab("orders")}>By order</TabBtn>
+        <TabBtn active={tab === "party"} onClick={() => setTab("party")}>By customer</TabBtn>
+        <TabBtn active={tab === "month"} onClick={() => setTab("month")}>By month</TabBtn>
         <TabBtn active={tab === "deposits"} onClick={() => setTab("deposits")}>Deposits outstanding{deposits && deposits.length > 0 ? ` (${deposits.length})` : ""}</TabBtn>
       </div>
 
-      {tab === "orders" ? (
+      {tab === "party" ? (
+        <DataGrid
+          columns={[
+            { key: "party", label: "Customer", render: (r: PartyAgg) => <b>{r.partyName}</b> },
+            { key: "orders", label: "Orders", align: "right" as const, render: (r: PartyAgg) => r.orders },
+            { key: "net", label: "Revenue", align: "right" as const, render: (r: PartyAgg) => money(r.netCents) },
+            { key: "paid", label: "Paid", align: "right" as const, render: (r: PartyAgg) => money(r.paidCents) },
+            { key: "out", label: "Outstanding", align: "right" as const, render: (r: PartyAgg) => money(r.outstandingCents) },
+            ...(canMargin ? [{ key: "margin", label: "Margin (actual)", align: "right" as const, render: (r: PartyAgg) => money(r.actualMarginCents) }] : []),
+          ]}
+          rows={parties ?? []}
+          rowKey={(r: PartyAgg) => r.partyId}
+          emptyState="No customers with orders yet."
+        />
+      ) : tab === "month" ? (
+        <DataGrid
+          columns={[
+            { key: "month", label: "Month", render: (r: PeriodAgg) => <b>{r.monthKey}</b> },
+            { key: "orders", label: "Orders", align: "right" as const, render: (r: PeriodAgg) => r.orders },
+            { key: "net", label: "Revenue", align: "right" as const, render: (r: PeriodAgg) => money(r.netCents) },
+            { key: "invoiced", label: "Invoiced", align: "right" as const, render: (r: PeriodAgg) => money(r.invoicedCents) },
+            { key: "paid", label: "Paid", align: "right" as const, render: (r: PeriodAgg) => money(r.paidCents) },
+            { key: "out", label: "Outstanding", align: "right" as const, render: (r: PeriodAgg) => money(r.outstandingCents) },
+            ...(canMargin ? [{ key: "margin", label: "Margin (actual)", align: "right" as const, render: (r: PeriodAgg) => money(r.actualMarginCents) }] : []),
+          ]}
+          rows={months ?? []}
+          rowKey={(r: PeriodAgg) => r.monthKey}
+          emptyState="No months with orders yet."
+        />
+      ) : tab === "orders" ? (
         <DataGrid
           columns={[
             { key: "number", label: "Order", render: (r: OrderFin) => <button type="button" onClick={() => openDetail(r.orderId)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button> },
