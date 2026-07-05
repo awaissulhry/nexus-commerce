@@ -12,6 +12,7 @@ import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 import { start, pause, resume, finish, canStart, woComplete, type StageRow } from "@/lib/production/stage-timer";
+import { certGateForWorkOrder, CERT_BLOCK_MESSAGE } from "@/lib/production/cert-gate";
 
 export const permission = { POST: FEATURES.workordersAdvance, PATCH: FEATURES.workordersAssign };
 
@@ -29,6 +30,12 @@ export const POST = guarded(FEATURES.workordersAdvance, async (req, { params, ac
 
   if (parsed.data.action === "start" && !canStart(siblings, sid)) {
     return NextResponse.json({ error: "Finish the earlier stages first" }, { status: 400 });
+  }
+
+  // FD14 — the EN 17092 cert gate: QC can't finish (into Packing) without a valid cert
+  if (parsed.data.action === "finish" && stage.stage === "QC") {
+    const cs = await certGateForWorkOrder(stage.workOrderId, Date.now());
+    if (cs === "missing" || cs === "expired") return NextResponse.json({ error: CERT_BLOCK_MESSAGE[cs], code: "cert_blocked" }, { status: 422 });
   }
 
   const now = Date.now();

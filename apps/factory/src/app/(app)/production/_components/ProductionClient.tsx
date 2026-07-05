@@ -16,6 +16,7 @@ import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
 import { StageTimer } from "./StageTimer";
+import { QCChecklist } from "./QCChecklist";
 import { STAGE_LABEL, type ProductionResponse, type WOCard } from "./types";
 
 const STATUS_TONE = { running: "info", paused: "warning", not_started: "neutral", done: "success" } as const;
@@ -31,6 +32,7 @@ export function ProductionClient() {
   const { toast } = useToast();
   const canAdvance = usePermission("workorders.advance");
   const canAssign = usePermission("workorders.assign");
+  const canMaterials = usePermission("materials.consume");
   const [data, setData] = useState<ProductionResponse | null>(null);
   const [openWo, setOpenWo] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ wo: WoDetail } | null>(null);
@@ -88,6 +90,14 @@ export function ProductionClient() {
   };
   const bumpPriority = async (w: WOCard, delta: number) => {
     try { await apiJson(`/api/production/wo/${w.id}/priority`, { method: "PATCH", body: JSON.stringify({ priority: w.priority + delta }) }); void load(); }
+    catch (e) { toast((e as Error).message, "danger"); }
+  };
+
+  const [scrap, setScrap] = useState<{ stageId: string } | null>(null);
+  const [scrapReason, setScrapReason] = useState("");
+  const submitScrap = async () => {
+    if (!scrap || !scrapReason.trim()) return;
+    try { await apiJson(`/api/production/stages/${scrap.stageId}/scrap`, { method: "POST", body: JSON.stringify({ reason: scrapReason.trim() }) }); setScrap(null); setScrapReason(""); if (openWo) void loadDetail(openWo); void load(); toast("Scrap recorded", "info"); }
     catch (e) { toast((e as Error).message, "danger"); }
   };
 
@@ -177,10 +187,24 @@ export function ProductionClient() {
         </div>
       </Modal>
 
+      <Modal open={!!scrap} onClose={() => setScrap(null)} title="Report scrap" size="sm"
+        footer={<><Button onClick={() => setScrap(null)}>Cancel</Button><Button variant="primary" onClick={submitScrap} disabled={!scrapReason.trim()}>Record scrap</Button></>}>
+        <div style={{ display: "grid", gap: 8 }}>
+          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>What went wrong? A material write-off can be recorded from Materials (FP7).</div>
+          <textarea value={scrapReason} onChange={(e) => setScrapReason(e.target.value)} rows={3} placeholder="e.g. hide flaw on the left front panel" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: 9, fontSize: 12.5, fontFamily: "inherit", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+        </div>
+      </Modal>
+
       <Drawer open={!!openWo} onClose={() => setOpenWo(null)} title={detail?.wo.number ?? "Work order"}>
         {detail && (
           <div style={{ display: "grid", gap: 12 }}>
             <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>{detail.wo.orderNumber} · {detail.wo.party}{detail.wo.label ? ` · ${detail.wo.label}` : ""}</div>
+            {detail.wo.estCostCents != null && (
+              <div style={{ display: "flex", gap: 18, fontSize: 12.5, padding: "8px 10px", background: "var(--h10-bg-subtle, rgba(20,28,38,0.03))", borderRadius: 8 }}>
+                <span style={{ color: "var(--h10-text-3)" }}>Est. cost <b style={{ color: "var(--h10-text)", fontFamily: "ui-monospace, monospace" }}>{eur(detail.wo.estCostCents)}</b></span>
+                <span style={{ color: "var(--h10-text-3)" }}>Actual material <b style={{ fontFamily: "ui-monospace, monospace", color: (detail.wo.actualMaterialCents ?? 0) > detail.wo.estCostCents ? "var(--h10-danger)" : "var(--h10-success)" }}>{eur(detail.wo.actualMaterialCents ?? 0)}</b></span>
+              </div>
+            )}
             <div style={{ display: "grid", gap: 8 }}>
               {detail.wo.stages.map((s) => (
                 <div key={s.id} style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 8, padding: 10, background: s.isCurrent ? "var(--h10-wash-primary, rgba(31,111,222,0.05))" : undefined }}>
@@ -192,7 +216,11 @@ export function ProductionClient() {
                     </span>
                   </div>
                   {s.assignee && <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginTop: 3 }}>{s.assignee.displayName}</div>}
-                  {s.scrapNotes && <div style={{ fontSize: 11.5, color: "var(--h10-danger)", marginTop: 3 }}>Scrap: {s.scrapNotes}</div>}
+                  {s.scrapNotes && <div style={{ fontSize: 11.5, color: "var(--h10-danger)", marginTop: 3, whiteSpace: "pre-line" }}>Scrap: {s.scrapNotes}</div>}
+                  {s.stage === "QC" && s.isCurrent && <QCChecklist stageId={s.id} canEdit={canAdvance} onChanged={() => detail && void loadDetail(detail.wo.id)} />}
+                  {canMaterials && s.isCurrent && (s.status === "running" || s.status === "paused") && (
+                    <button type="button" onClick={() => { setScrapReason(""); setScrap({ stageId: s.id }); }} style={{ marginTop: 6, background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11.5, color: "var(--h10-text-3)" }}>Report scrap</button>
+                  )}
                 </div>
               ))}
             </div>
@@ -204,6 +232,6 @@ export function ProductionClient() {
 }
 
 type WoDetail = {
-  id: string; number: string; label: string | null; orderNumber: string; party: string; priority: number; state: string; blockedReason: string | null; estCostCents?: number; actualCostCents?: number;
+  id: string; number: string; label: string | null; orderNumber: string; party: string; priority: number; state: string; blockedReason: string | null; estCostCents?: number; actualMaterialCents?: number;
   stages: { id: string; stage: string; sort: number; status: "not_started" | "running" | "paused" | "done"; isCurrent: boolean; startedAt: string | null; pausedMs: number; pausedAt: string | null; finishedAt: string | null; assignee: { id: string; displayName: string } | null; scrapNotes: string | null }[];
 };
