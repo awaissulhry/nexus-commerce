@@ -1,36 +1,42 @@
 /**
  * FF2.4 — Per-cell diff engine.
  *
- * Pure function — reads ONLY; writes nothing to DB or any external service.
+ * Pure function — reads ONLY; writes nothing to DB or any external service and
+ * never mutates its inputs.
  *
  * Compares each parsed workbook cell against the current DB state (WorkbookData)
  * and classifies it as one of:
  *
  *   add         — new SKU (not in DB) or Action=ADD row, non-blank file value
  *   update      — file value differs from current DB, DB row unchanged since snapshot
- *   delete      — Action=DELETE row (per in-scope cell), or __CLEAR__ on a non-empty field
+ *   delete      — __CLEAR__ on a non-empty field (explicit per-cell clear)
  *   no-change   — blank cell OR file value matches current DB value (never emitted)
  *   conflict    — file value differs from DB AND the row changed in DB since snapshot
  *                 (fingerprint mismatch); carries 'Row changed in DB since export' note
  *   out-of-scope— column outside the import scope; diffed + shown greyed but never applied
+ *
+ * Row-level Action semantics (evaluated BEFORE any per-cell diff):
+ *   IGNORE — skip the whole row (emit nothing).
+ *   DELETE — record { sku, sheet } in the `deletes` bucket, bump stats.deletes, and
+ *            skip cell diffing entirely (no per-cell CellChanges are emitted). A row
+ *            is never deleted implicitly — only ever via an explicit Action=DELETE.
  *
  * Resolver-aware: governed per-market fields (title, price, quantity, bullets,
  * description) compare against the EFFECTIVE value from resolveEffective(), matching
  * exactly what the operator saw in the exported workbook.
  *
  * Blank cells are the "no-change" sentinel and always produce no-change (never emitted).
- * __CLEAR__ = explicit clear — emits delete if the DB field is non-empty.
+ * __CLEAR__ as a CELL value is an explicit clear — emits a `delete` CellChange (to = '')
+ * if the DB field is non-empty. This is distinct from Action=DELETE (a whole-row op).
  *
  * follows_master control columns (e.g. price_follows_master@IT) are diffed as
  * string 'true'/'false' by reading the listing's follow-flag column directly.
  *
- * Master-sheet (Products) changes go to masterChanges.
- * Channel-sheet changes go to changes.
- * Action=IGNORE rows are skipped entirely.
+ * Products-sheet changes go to `masterChanges`; channel-sheet changes go to `changes`.
  */
 
 import type { ParsedWorkbook } from './parse.js'
-import type { ScopedColumn } from './scope.js'
+import type { ScopedColumn, Channel } from './scope.js'
 import type { WorkbookData } from '../fetch.js'
 import { MASTER_FIELDS } from '../registry/master-fields.js'
 import { CHANNEL_MARKET_FIELDS } from '../registry/channel-fields.js'
@@ -44,7 +50,7 @@ import { rowFingerprint } from '../fingerprint.js'
 const READONLY_CLS = new Set<string>(['READONLY_SYNCED', 'DERIVED', 'SYSTEM'])
 
 /** Map from sheet name → channel discriminant (mirrors scope.ts). */
-const SHEET_CHANNEL: Record<string, string> = {
+const SHEET_CHANNEL: Record<string, Channel> = {
   Amazon: 'AMAZON',
   eBay: 'EBAY',
   Shopify: 'SHOPIFY',
@@ -67,7 +73,7 @@ for (const f of CHANNEL_MARKET_FIELDS) {
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
-export type DiffKind =
+export type ChangeKind =
   | 'add'
   | 'update'
   | 'delete'
@@ -77,20 +83,24 @@ export type DiffKind =
 
 export interface CellChange {
   sku: string
-  channel?: string
+  sheet: string
+  channel?: Channel
   market?: string
   column: string
+  base: string
   from: unknown
   to: unknown
-  kind: DiffKind
+  kind: ChangeKind
   note?: string
 }
 
 export interface ImportDiff {
-  /** Channel-sheet CellChanges (in-scope + out-of-scope). */
+  /** Channel-sheet CellChanges (in-scope + out-of-scope, excluding no-change). */
   changes: CellChange[]
-  /** Products-sheet CellChanges (master data). */
+  /** Products-sheet CellChanges (master data, separate bucket). */
   masterChanges: CellChange[]
+  /** Rows flagged for deletion via Action=DELETE (one entry per row). */
+  deletes: { sku: string; sheet: string }[]
   stats: {
     adds: number
     updates: number
@@ -98,7 +108,6 @@ export interface ImportDiff {
     conflicts: number
     outOfScope: number
   }
-  actionRows: Array<{ sku: string; action: 'ADD' | 'DELETE' | 'IGNORE' | '' }>
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -194,15 +203,15 @@ function computeChannelFp(
  * @param wb       Parsed workbook (from parseWorkbook).
  * @param scoped   Scope-classified columns (from classifyColumns(wb, scope)).
  * @param current  Current DB data — products + channel listings (from fetchCatalog).
- * @param opts     Optional snapshot id + fingerprints for conflict detection.
+ * @param opts     Optional snapshot fingerprints for conflict detection.
  *                 fingerprints is keyed as 'Products|SKU' / 'Amazon|SKU' etc.
- * @returns        ImportDiff: changes, masterChanges, stats, actionRows.
+ * @returns        ImportDiff: changes, masterChanges, deletes, stats.
  */
 export function computeDiff(
   wb: ParsedWorkbook,
   scoped: ScopedColumn[],
   current: WorkbookData,
-  opts: { snapshotId?: string; fingerprints?: Record<string, string> },
+  opts?: { fingerprints?: Record<string, string> },
 ): ImportDiff {
   // ── Build lookup maps ─────────────────────────────────────────────────────
 
@@ -240,13 +249,37 @@ export function computeDiff(
 
   const changes: CellChange[] = []
   const masterChanges: CellChange[] = []
-  const actionRows: ImportDiff['actionRows'] = []
+  const deletes: { sku: string; sheet: string }[] = []
 
   // ── Process each sheet ────────────────────────────────────────────────────
 
   for (const [sheetName, sheet] of Object.entries(wb.sheets)) {
     const isProductsSheet = sheetName === 'Products'
-    const channel: string | undefined = SHEET_CHANNEL[sheetName]
+    const channel: Channel | undefined = SHEET_CHANNEL[sheetName]
+
+    // Emit a CellChange into the correct bucket, always stamping sheet + base.
+    const emit = (
+      sku: string,
+      sc: ScopedColumn,
+      from: unknown,
+      to: unknown,
+      kind: ChangeKind,
+      note?: string,
+    ): void => {
+      const ch: CellChange = {
+        sku,
+        sheet: sheetName,
+        channel,
+        market: sc.market,
+        column: sc.column,
+        base: sc.base,
+        from,
+        to,
+        kind,
+      }
+      if (note !== undefined) ch.note = note
+      ;(isProductsSheet ? masterChanges : changes).push(ch)
+    }
 
     for (const row of sheet.rows) {
       const sku = row.cells['sku']?.value ?? ''
@@ -255,10 +288,16 @@ export function computeDiff(
       const rawAction = row.cells['Action']?.value ?? ''
       const action = rawAction as 'ADD' | 'DELETE' | 'IGNORE' | ''
 
-      actionRows.push({ sku, action })
-
-      // IGNORE rows → skip all cells
+      // ── Row-level Action gates (before any per-cell diff) ──────────────
+      // IGNORE rows → skip entirely.
       if (action === 'IGNORE') continue
+
+      // DELETE rows → record the row deletion and skip cell diffing entirely.
+      // Deletion is never implicit; only an explicit Action=DELETE reaches here.
+      if (action === 'DELETE') {
+        deletes.push({ sku, sheet: sheetName })
+        continue
+      }
 
       // ── Lazy conflict check for this row ───────────────────────────────
       //
@@ -271,32 +310,32 @@ export function computeDiff(
         if (conflictChecked) return rowIsConflict
         conflictChecked = true
 
-        if (!opts.fingerprints) return (rowIsConflict = false)
+        const fingerprints = opts?.fingerprints
+        if (!fingerprints) return (rowIsConflict = false)
 
-        let fpKey: string
         let currentFp: string | undefined
 
         if (isProductsSheet) {
-          fpKey = `Products|${sku}`
+          const fpKey = `Products|${sku}`
           if (!fpCache.has(fpKey)) {
             const p = productMap.get(sku)
             if (p) fpCache.set(fpKey, computeProductFp(sku, p))
           }
           currentFp = fpCache.get(fpKey)
         } else if (channel) {
-          fpKey = `${sheetName}|${sku}`
+          const fpKey = `${sheetName}|${sku}`
           if (!fpCache.has(fpKey)) {
             const markets = metaMarkets[channel] ?? []
             if (markets.length > 0) {
               fpCache.set(fpKey, computeChannelFp(sku, channel, markets, listingMap))
             }
           }
-          currentFp = fpCache.get(`${sheetName}|${sku}`)
+          currentFp = fpCache.get(fpKey)
         } else {
           return (rowIsConflict = false)
         }
 
-        const snapshotFp = opts.fingerprints![
+        const snapshotFp = fingerprints[
           isProductsSheet ? `Products|${sku}` : `${sheetName}|${sku}`
         ]
         if (!snapshotFp || !currentFp) return (rowIsConflict = false)
@@ -376,62 +415,21 @@ export function computeDiff(
           // (blank = nothing to report; matching = nothing to warn about)
           if (fileValue !== '' && fileValue !== fromStr) {
             const toValue = fileValue === '__CLEAR__' ? '' : fileValue
-            const ch: CellChange = {
-              sku,
-              channel,
-              market: sc.market,
-              column: header,
-              from: fromValue,
-              to: toValue,
-              kind: 'out-of-scope',
-            }
-            if (sc.isMaster) masterChanges.push(ch)
-            else changes.push(ch)
+            emit(sku, sc, fromValue, toValue, 'out-of-scope')
           }
           continue
         }
 
         // ── In-scope processing ────────────────────────────────────────
 
-        // Action=DELETE: emit a per-cell delete for every populated DB field.
-        // Must come before the blank sentinel so DELETE rows aren't silently skipped
-        // (the operator intentionally leaves cells blank on DELETE rows).
-        if (action === 'DELETE') {
-          if (fromValue !== undefined && fromStr !== '') {
-            const ch: CellChange = {
-              sku,
-              channel,
-              market: sc.market,
-              column: header,
-              from: fromValue,
-              to: '',
-              kind: 'delete',
-            }
-            if (sc.isMaster) masterChanges.push(ch)
-            else changes.push(ch)
-          }
-          continue
-        }
-
-        // Blank = no-change sentinel; never emit (place after DELETE so blank cells
-        // on DELETE rows do not short-circuit the per-field delete logic above)
+        // Blank = no-change sentinel; never emit.
         if (fileValue === '') continue
 
-        // __CLEAR__: explicit clear → delete kind if DB has a value
+        // __CLEAR__ as a cell value: explicit clear → delete kind if DB has a value.
+        // (Distinct from Action=DELETE, which is handled at row level above.)
         if (fileValue === '__CLEAR__') {
           if (fromStr !== '') {
-            const ch: CellChange = {
-              sku,
-              channel,
-              market: sc.market,
-              column: header,
-              from: fromValue,
-              to: '',
-              kind: 'delete',
-              note: '__CLEAR__',
-            }
-            if (sc.isMaster) masterChanges.push(ch)
-            else changes.push(ch)
+            emit(sku, sc, fromValue, '', 'delete', '__CLEAR__')
           }
           // DB already empty → no-change; skip
           continue
@@ -442,7 +440,7 @@ export function computeDiff(
 
         // Values differ → classify kind
         const isNewSku = !productMap.has(sku)
-        let kind: DiffKind
+        let kind: ChangeKind
 
         if (action === 'ADD' || isNewSku) {
           kind = 'add'
@@ -452,21 +450,14 @@ export function computeDiff(
           kind = 'update'
         }
 
-        const ch: CellChange = {
+        emit(
           sku,
-          channel,
-          market: sc.market,
-          column: header,
-          from: fromValue,
-          to: fileValue,
+          sc,
+          fromValue,
+          fileValue,
           kind,
-        }
-        if (kind === 'conflict') {
-          ch.note = 'Row changed in DB since export'
-        }
-
-        if (sc.isMaster) masterChanges.push(ch)
-        else changes.push(ch)
+          kind === 'conflict' ? 'Row changed in DB since export' : undefined,
+        )
       }
     }
   }
@@ -483,6 +474,9 @@ export function computeDiff(
     else if (k === 'conflict') stats.conflicts++
     else if (k === 'out-of-scope') stats.outOfScope++
   }
+  // Row-level Action=DELETE deletions live in the `deletes` bucket, not in the
+  // CellChange arrays — fold their count into stats.deletes.
+  stats.deletes += deletes.length
 
-  return { changes, masterChanges, stats, actionRows }
+  return { changes, masterChanges, deletes, stats }
 }

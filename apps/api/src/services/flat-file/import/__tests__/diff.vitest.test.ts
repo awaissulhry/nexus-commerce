@@ -1,9 +1,10 @@
 /**
- * FF2.4 — computeDiff TDD tests.
+ * FF2.4 — computeDiff tests (conformed to the verbatim contract).
  *
- * Written in TDD style: all cases specified before implementation confirmed green.
- *
- * All fixtures are hand-built (no xlsx I/O) for speed and control.
+ * Contract shape under test:
+ *   ImportDiff = { changes, masterChanges, deletes, stats }
+ *   CellChange = { sku, sheet, channel?, market?, column, base, from, to, kind, note? }
+ *   ChangeKind = 'add'|'update'|'delete'|'no-change'|'conflict'|'out-of-scope'
  *
  * Fixture topology:
  *   Products sheet : Action | sku | brand | status
@@ -22,11 +23,11 @@
  *   3. Conflict cases (fingerprint mismatch + file change)
  *   4. Out-of-scope cases (wrong market, master-off)
  *   5. Add cases (action=ADD and new SKU)
- *   6. Delete cases (action=DELETE and __CLEAR__)
+ *   6. Delete cases (Action=DELETE → deletes bucket, no cell diffs; __CLEAR__ cell)
  *   7. Stats accuracy
  *   8. masterChanges bucket (Products sheet → masterChanges)
- *   9. actionRows collection
- *  10. Round-trip identity (all no-change — zero changes emitted)
+ *   9. Sheet + base stamping on every CellChange
+ *  10. Round-trip identity — REAL export→parse→diff (zero add/update, deletes empty)
  *  11. IGNORE action skips entire row
  */
 
@@ -36,6 +37,12 @@ import { classifyColumns, defaultScope } from '../scope.js'
 import type { ParsedWorkbook, ParsedRow, ParsedCell } from '../parse.js'
 import type { WorkbookData } from '../../fetch.js'
 import type { CellChange } from '../diff.js'
+// Real export→parse pipeline (for the round-trip identity contract test)
+import { generateWorkbook } from '../../workbook-generator.js'
+import { parseWorkbook } from '../parse.js'
+import { MASTER_FIELDS } from '../../registry/master-fields.js'
+import { CHANNEL_MARKET_FIELDS } from '../../registry/channel-fields.js'
+import type { WorkbookModel } from '../../registry/types.js'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -152,7 +159,7 @@ const CURRENT: WorkbookData = {
 function diff(
   amazonRows: ParsedRow[],
   productsRows: ParsedRow[] = [],
-  opts: { snapshotId?: string; fingerprints?: Record<string, string> } = {},
+  opts: { fingerprints?: Record<string, string> } = {},
 ) {
   const wb = makeWb(amazonRows, productsRows)
   const scope = defaultScope({ channel: 'AMAZON', market: 'IT' })
@@ -203,15 +210,11 @@ describe('computeDiff — no-change cases', () => {
   })
 
   it('__CLEAR__ on an already-empty DB field → no-change (not emitted)', () => {
-    // priceOverride is null (DB), so effective value is 189.9 (from masterPrice)
-    // But __CLEAR__ on price@IT where current effective is non-empty → delete
-    // (this tests that __CLEAR__ on an empty DB field is a no-op)
-    // We test a field that IS empty in DB: use a brand new SKU with no listing
+    // price@IT for NEW-SKU has no DB listing → fromValue=undefined → fromStr=''
+    // __CLEAR__ on empty → no-change
     const result = diff([
       amazonRow('NEW-SKU', 'ADD', { 'price@IT': '__CLEAR__' }),
     ])
-    // price@IT for NEW-SKU has no DB listing → fromValue=undefined → fromStr=''
-    // __CLEAR__ on empty → no-change
     const change = findChange(result, 'price@IT', 'NEW-SKU')
     expect(change).toBeUndefined()
   })
@@ -255,6 +258,8 @@ describe('computeDiff — update cases', () => {
     expect(change!.kind).toBe('update')
     expect(change!.from).toBe('true')
     expect(change!.to).toBe('false')
+    // base has the _follows_master suffix stripped
+    expect(change!.base).toBe('price')
   })
 
   it('changed fulfillment@IT → update', () => {
@@ -302,9 +307,7 @@ describe('computeDiff — conflict detection', () => {
   })
 
   it('file change + matching fingerprint → update (not conflict)', () => {
-    // If the fingerprint matches the current DB, no conflict
-    // We can't easily compute the real fingerprint in tests, but we can
-    // verify: when no fingerprints are provided, no conflict occurs
+    // When no fingerprints are provided, no conflict can occur.
     const result = diff(
       [amazonRow('GALE-M', '', { 'price@IT': '199.9' })],
       [],
@@ -437,26 +440,31 @@ describe('computeDiff — add cases', () => {
 // ── Suite 6: Delete cases ─────────────────────────────────────────────────────
 
 describe('computeDiff — delete cases', () => {
-  it('action=DELETE emits per-cell delete for each populated DB field', () => {
+  it('Action=DELETE records the row in the deletes bucket (one entry per row)', () => {
     const result = diff([amazonRow('GALE-M', 'DELETE', {})])
-    // price@IT has DB value (189.9 via master) → delete
-    const priceDelete = findChange(result, 'price@IT')
-    expect(priceDelete).toBeDefined()
-    expect(priceDelete!.kind).toBe('delete')
-    expect(String(priceDelete!.from)).toBe('189.9')
-    expect(priceDelete!.to).toBe('')
-    expect(result.stats.deletes).toBeGreaterThan(0)
+    expect(result.deletes).toContainEqual({ sku: 'GALE-M', sheet: 'Amazon' })
+    expect(result.deletes).toHaveLength(1)
+    expect(result.stats.deletes).toBe(1)
   })
 
-  it('action=DELETE carries sku, channel, market on each delete record', () => {
-    const result = diff([amazonRow('GALE-M', 'DELETE', {})])
-    const priceDelete = findChange(result, 'price@IT')
-    expect(priceDelete!.sku).toBe('GALE-M')
-    expect(priceDelete!.channel).toBe('AMAZON')
-    expect(priceDelete!.market).toBe('IT')
+  it('Action=DELETE emits NO per-cell CellChanges (cell diffing skipped)', () => {
+    // Even when cells carry values, a DELETE row produces zero cell changes.
+    const result = diff([amazonRow('GALE-M', 'DELETE', { 'price@IT': '199.9', 'title@IT': 'X' })])
+    expect(result.changes).toHaveLength(0)
+    expect(result.masterChanges).toHaveLength(0)
+    // The row is only surfaced via the deletes bucket.
+    expect(result.deletes).toContainEqual({ sku: 'GALE-M', sheet: 'Amazon' })
+    expect(findChange(result, 'price@IT')).toBeUndefined()
   })
 
-  it('__CLEAR__ on non-empty field → delete', () => {
+  it('delete record carries sku + sheet only', () => {
+    const result = diff([amazonRow('GALE-M', 'DELETE', {})])
+    const entry = result.deletes.find(d => d.sku === 'GALE-M')
+    expect(entry).toBeDefined()
+    expect(entry).toEqual({ sku: 'GALE-M', sheet: 'Amazon' })
+  })
+
+  it('__CLEAR__ on non-empty field → delete CellChange (distinct from Action=DELETE)', () => {
     const result = diff([amazonRow('GALE-M', '', { 'price@IT': '__CLEAR__' })])
     const change = findChange(result, 'price@IT')
     expect(change).toBeDefined()
@@ -464,6 +472,8 @@ describe('computeDiff — delete cases', () => {
     expect(change!.to).toBe('')
     expect(change!.note).toBe('__CLEAR__')
     expect(result.stats.deletes).toBe(1)
+    // __CLEAR__ is a cell op, not a row op → deletes bucket stays empty
+    expect(result.deletes).toHaveLength(0)
   })
 
   it('__CLEAR__ on already-empty DB field → no-change (not emitted)', () => {
@@ -491,7 +501,7 @@ describe('computeDiff — stats', () => {
     expect(result.stats.conflicts).toBe(0)
   })
 
-  it('adds, updates, deletes, conflicts, outOfScope sum correctly', () => {
+  it('adds, updates, deletes (cell-level), conflicts, outOfScope sum to CellChange count', () => {
     const result = diff(
       [amazonRow('GALE-M', '', { 'price@IT': '199.9', 'price@DE': '155.0' })],
       [],
@@ -499,6 +509,7 @@ describe('computeDiff — stats', () => {
     )
     // price@IT → conflict (stale fingerprint + file change)
     // price@DE → out-of-scope
+    // No Action=DELETE rows here, so every counted stat maps to a CellChange.
     expect(result.stats.conflicts).toBe(1)
     expect(result.stats.outOfScope).toBe(1)
     expect(result.stats.updates).toBe(0)
@@ -509,6 +520,15 @@ describe('computeDiff — stats', () => {
       result.stats.conflicts +
       result.stats.outOfScope
     expect(total).toBe([...result.changes, ...result.masterChanges].length)
+  })
+
+  it('stats.deletes counts both __CLEAR__ cells and Action=DELETE rows', () => {
+    const result = diff([
+      amazonRow('GALE-M', '', { 'price@IT': '__CLEAR__' }), // cell-level delete
+      amazonRow('GALE-L', 'DELETE', {}),                     // row-level delete
+    ])
+    expect(result.stats.deletes).toBe(2)
+    expect(result.deletes).toContainEqual({ sku: 'GALE-L', sheet: 'Amazon' })
   })
 })
 
@@ -523,6 +543,7 @@ describe('computeDiff — masterChanges bucket', () => {
     expect(result.masterChanges.length).toBeGreaterThan(0)
     const brandChange = result.masterChanges.find(c => c.column === 'brand')
     expect(brandChange).toBeDefined()
+    expect(brandChange!.sheet).toBe('Products')
     // Must NOT be in changes
     expect(result.changes.find(c => c.column === 'brand')).toBeUndefined()
   })
@@ -531,6 +552,7 @@ describe('computeDiff — masterChanges bucket', () => {
     const result = diff([amazonRow('GALE-M', '', { 'price@IT': '199.9' })])
     const priceChange = result.changes.find(c => c.column === 'price@IT')
     expect(priceChange).toBeDefined()
+    expect(priceChange!.sheet).toBe('Amazon')
     expect(result.masterChanges.find(c => c.column === 'price@IT')).toBeUndefined()
   })
 
@@ -547,63 +569,73 @@ describe('computeDiff — masterChanges bucket', () => {
   })
 })
 
-// ── Suite 9: actionRows ────────────────────────────────────────────────────────
+// ── Suite 9: sheet + base stamping ────────────────────────────────────────────
 
-describe('computeDiff — actionRows', () => {
-  it('records sku and action for each data row processed', () => {
-    const result = diff([
-      amazonRow('GALE-M', 'ADD', { 'price@IT': '199.9' }),
-    ])
-    const entry = result.actionRows.find(r => r.sku === 'GALE-M')
-    expect(entry).toBeDefined()
-    expect(entry!.action).toBe('ADD')
+describe('computeDiff — sheet + base fields on every CellChange', () => {
+  it('channel change carries sheet=Amazon and base=field id', () => {
+    const result = diff([amazonRow('GALE-M', '', { 'price@IT': '199.9' })])
+    const change = findChange(result, 'price@IT')
+    expect(change!.sheet).toBe('Amazon')
+    expect(change!.base).toBe('price')
+    expect(change!.column).toBe('price@IT')
   })
 
-  it('multiple rows → multiple actionRow entries', () => {
-    const result = diff([
-      amazonRow('GALE-M', '', { 'price@IT': '199.9' }),
-      amazonRow('GALE-L', 'ADD', { 'price@IT': '199.9' }),
-    ])
-    expect(result.actionRows.length).toBe(2)
-    expect(result.actionRows.map(r => r.sku)).toContain('GALE-M')
-    expect(result.actionRows.map(r => r.sku)).toContain('GALE-L')
+  it('out-of-scope change carries sheet + base', () => {
+    const result = diff([amazonRow('GALE-M', '', { 'price@DE': '155.0' })])
+    const change = findChange(result, 'price@DE')
+    expect(change!.sheet).toBe('Amazon')
+    expect(change!.base).toBe('price')
+    expect(change!.market).toBe('DE')
   })
 
-  it('IGNORE row is in actionRows but produces zero changes', () => {
-    const result = diff([amazonRow('GALE-M', 'IGNORE', { 'price@IT': '199.9' })])
-    const entry = result.actionRows.find(r => r.sku === 'GALE-M')
-    expect(entry!.action).toBe('IGNORE')
-    // No changes emitted for IGNORE rows
-    expect(result.changes).toHaveLength(0)
-    expect(result.stats.updates).toBe(0)
+  it('master change carries sheet=Products and base=column', () => {
+    const wb = makeWb([], [productsRow('GALE-M', '', { brand: 'NewBrand' })])
+    const scope = { channel: 'AMAZON' as const, markets: ['IT'] as string[], includeMaster: true }
+    const scoped = classifyColumns(wb, scope)
+    const result = computeDiff(wb, scoped, CURRENT, {})
+    const change = result.masterChanges.find(c => c.column === 'brand')
+    expect(change!.sheet).toBe('Products')
+    expect(change!.base).toBe('brand')
   })
 })
 
-// ── Suite 10: Round-trip identity ─────────────────────────────────────────────
+// ── Suite 10: Round-trip identity (REAL export→parse→diff) ────────────────────
 
-describe('computeDiff — round-trip identity (unit-level)', () => {
-  it('untouched file values matching DB → zero changes, zero stats', () => {
-    // All cells either blank or matching current effective DB values
-    // price@IT effective = '189.9'; title@IT effective = 'GALE Jacket Medium'
-    // follows_master@IT = 'true'; fulfillment@IT = 'FBA'
-    const result = diff([
-      amazonRow('GALE-M', '', {
-        'price@IT': '189.9',
-        'price_follows_master@IT': 'true',
-        'title@IT': 'GALE Jacket Medium',
-        'fulfillment@IT': 'FBA',
-        // price@DE left blank (out-of-scope + blank = skip)
-      }),
-    ])
-    expect(result.changes).toHaveLength(0)
-    expect(result.masterChanges).toHaveLength(0)
-    expect(result.stats).toEqual({ adds: 0, updates: 0, deletes: 0, conflicts: 0, outOfScope: 0 })
-  })
+describe('computeDiff — round-trip identity (real export→parse→diff)', () => {
+  // A real WorkbookModel: Products + Amazon (IT, DE) from the shared registry.
+  const RT_MODEL: WorkbookModel = {
+    markets: { AMAZON: ['IT', 'DE'], EBAY: [], SHOPIFY: [] },
+    sheets: [
+      { name: 'Products', sharedFields: MASTER_FIELDS, marketFields: [] },
+      { name: 'Amazon', channel: 'AMAZON', sharedFields: [], marketFields: CHANNEL_MARKET_FIELDS },
+    ],
+  }
 
-  it('round-trip with all blank row → zero changes', () => {
-    const result = diff([amazonRow('GALE-M', '', {})])
-    expect(result.changes).toHaveLength(0)
-    expect(result.masterChanges).toHaveLength(0)
+  it('an unedited exported workbook re-imports as pure no-ops', async () => {
+    // 1. Export the CURRENT catalog through the REAL byte-generator.
+    const bytes = await generateWorkbook(RT_MODEL, CURRENT, {
+      snapshotId: 'rt',
+      exportedAt: '2026-07-06',
+    })
+    // 2. Parse those xlsx bytes back through the REAL parser.
+    const parsed = await parseWorkbook(bytes)
+    // 3. Classify with the WIDEST scope so EVERY cell exercises the in-scope
+    //    no-change path (not the out-of-scope short-circuit).
+    const scoped = classifyColumns(parsed, {
+      channel: 'AMAZON',
+      markets: ['IT', 'DE'],
+      includeMaster: true,
+    })
+    // 4. Diff against the SAME catalog state the workbook was generated from.
+    const result = computeDiff(parsed, scoped, CURRENT, {})
+
+    // THE contract guarantee: an unedited export applies nothing.
+    expect(result.stats.adds).toBe(0)
+    expect(result.stats.updates).toBe(0)
+    expect(result.deletes).toEqual([])
+    // Stronger: the entire diff is empty — every cell resolves to no-change.
+    expect(result.changes).toEqual([])
+    expect(result.masterChanges).toEqual([])
     expect(result.stats).toEqual({ adds: 0, updates: 0, deletes: 0, conflicts: 0, outOfScope: 0 })
   })
 })
@@ -621,6 +653,7 @@ describe('computeDiff — IGNORE action', () => {
     ])
     expect(result.changes).toHaveLength(0)
     expect(result.masterChanges).toHaveLength(0)
+    expect(result.deletes).toHaveLength(0)
     expect(result.stats).toEqual({ adds: 0, updates: 0, deletes: 0, conflicts: 0, outOfScope: 0 })
   })
 
