@@ -1,10 +1,10 @@
 // FF1.5 — Registry entry point: assembles a WorkbookModel from the shared
 // field registry + discovered markets. Task 7's generator consumes this model.
-import type { WorkbookModel, SheetDefinition } from './types'
-import { MASTER_FIELDS } from './master-fields'
-import { CHANNEL_SHARED_FIELDS, CHANNEL_MARKET_FIELDS } from './channel-fields'
-import { EBAY_SHARED_FIELDS } from './ebay-provider'
-import { discoverMarkets } from '../market-discovery'
+import type { WorkbookModel, SheetDefinition } from './types.js'
+import { MASTER_FIELDS } from './master-fields.js'
+import { CHANNEL_SHARED_FIELDS, CHANNEL_MARKET_FIELDS } from './channel-fields.js'
+import { EBAY_SHARED_FIELDS } from './ebay-provider.js'
+import { discoverMarkets } from '../market-discovery.js'
 
 type Channel = 'AMAZON' | 'EBAY' | 'SHOPIFY'
 
@@ -43,4 +43,4 @@ export async function buildWorkbookModel(
   return { markets, sheets }
 }
 
-export { mapManifestToFields } from './amazon-provider'
+export { mapManifestToFields } from './amazon-provider.js'

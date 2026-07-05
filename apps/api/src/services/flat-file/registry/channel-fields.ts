@@ -19,7 +19,7 @@
 //   region             — F15: legacy; superseded by marketplace
 //   currentPrice       — VariantChannelListing (deprecated chain); never on ChannelListing
 
-import type { FieldDefinition } from './types'
+import type { FieldDefinition } from './types.js'
 
 // ─── CHANNEL_SHARED_FIELDS ────────────────────────────────────────────────────
 // All ChannelListing scalars are MARKET_SCOPED (one row per productId×channel×marketplace).

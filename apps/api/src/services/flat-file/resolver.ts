@@ -1,4 +1,4 @@
-import { FieldDefinition } from './registry/types'
+import { FieldDefinition } from './registry/types.js'
 
 export function resolveEffective(
   listing: Record<string, unknown>,

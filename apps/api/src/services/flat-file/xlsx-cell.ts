@@ -1,5 +1,5 @@
 import type { Cell } from 'exceljs'
-import type { FieldDefinition } from './registry/types'
+import type { FieldDefinition } from './registry/types.js'
 
 export function isoDate(d: Date | string | null): string {
   if (!d) return ''

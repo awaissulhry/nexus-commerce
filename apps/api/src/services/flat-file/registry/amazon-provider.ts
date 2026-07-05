@@ -2,7 +2,7 @@
 // Pure transformer: no DB access, no service imports.
 // Population (calling mapManifestToFields with a live manifest) is wired
 // during orchestration in a later task — NOT called by buildWorkbookModel in FF1.
-import type { FieldDefinition, FieldKind } from './types'
+import type { FieldDefinition, FieldKind } from './types.js'
 
 // The Amazon manifest column shape (subset we consume), matching the server
 // manifest in apps/api/src/services/amazon/flat-file.service.ts

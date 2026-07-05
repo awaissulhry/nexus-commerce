@@ -15,7 +15,7 @@
 //   impactProtectors   — JSON; excluded (§6)
 //   All image relations, tier prices, relation-only fields — §2.8
 
-import type { FieldDefinition } from './types'
+import type { FieldDefinition } from './types.js'
 
 export const MASTER_FIELDS: FieldDefinition[] = [
   // ─── §2.1 Identity & structure ───────────────────────────────────────────

@@ -11,9 +11,9 @@
  *   - Subset export (filters.skuIn = grid selection)
  *   - Blank template (no data rows — headers + README only)
  */
-import { buildWorkbookModel } from './registry/index'
-import { fetchCatalog, type Channel, type CatalogFilters, type WorkbookData } from './fetch'
-import { generateWorkbook } from './workbook-generator'
+import { buildWorkbookModel } from './registry/index.js'
+import { fetchCatalog, type Channel, type CatalogFilters, type WorkbookData } from './fetch.js'
+import { generateWorkbook } from './workbook-generator.js'
 
 export interface BuildCatalogWorkbookOpts {
   /** Which channel sheets to include (AMAZON / EBAY / SHOPIFY). */

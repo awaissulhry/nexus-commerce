@@ -19,11 +19,11 @@
  * it enforces correct numFmt, text-forcing, decimal precision, and ISO dates.
  */
 import ExcelJS from 'exceljs'
-import type { FieldDefinition, SheetDefinition, WorkbookModel } from './registry/types'
-import { writeCell } from './xlsx-cell'
-import { resolveEffective } from './resolver'
-import type { WorkbookData } from './fetch'
-import { rowFingerprint } from './fingerprint'
+import type { FieldDefinition, SheetDefinition, WorkbookModel } from './registry/types.js'
+import { writeCell } from './xlsx-cell.js'
+import { resolveEffective } from './resolver.js'
+import type { WorkbookData } from './fetch.js'
+import { rowFingerprint } from './fingerprint.js'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
