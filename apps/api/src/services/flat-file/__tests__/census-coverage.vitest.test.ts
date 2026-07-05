@@ -26,5 +26,6 @@ describe('census coverage', () => {
     expect(cols).not.toContain('parentAsin')       // dup of amazonAsin
     expect(cols).not.toContain('fulfillmentChannel')// dup of fulfillmentMethod
     expect(cols).not.toContain('currentPrice')      // VariantChannelListing dup (excluded chain)
+    expect(cols).not.toContain('channelPrice')      // VariantChannelListing dup (excluded chain)
   })
 })

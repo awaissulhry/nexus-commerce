@@ -127,6 +127,9 @@ export const CHANNEL_MARKET_FIELDS: FieldDefinition[] = [
     },
     width: 10,
   },
+  // bullets has no plain base column on ChannelListing: the resolver returns masterBulletPoints
+  // when following master, else bulletPointsOverride. source.column === followMaster.overrideColumn
+  // (both 'bulletPointsOverride') is intentional — there is no separate base 'bulletPoints' column.
   {
     // bulletPointsOverride[] is the per-market override; masterBulletPoints[] is the cache
     id: 'bullets',
