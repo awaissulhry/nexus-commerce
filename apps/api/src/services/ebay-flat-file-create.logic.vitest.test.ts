@@ -324,7 +324,10 @@ describe('planEbayFamilyCreates', () => {
 
   it('P2.1: self-parent via parent_sku on a standalone → error + NO promotion', () => {
     // Existing standalone C1 (parentId=null, isParent=false); row says child with parent_sku = its OWN sku.
-    // resolvedParentId === existing.id → self-parent error; the promotion must NOT be recorded.
+    // C1 is a batch child row (parentage:'child') so batchChildSkus.has('C1') is true — FIX 2b fires
+    // first and emits "refers to a variant row" before the self-parent path is reached. Both errors
+    // are equivalent here (pointing a row at itself is wrong either way). Key assertions: an error
+    // is emitted, no promotion is recorded, and no reparent is emitted.
     const row = { sku: 'C1', _rowId: 'temp_c1', parentage: 'child', parent_sku: 'C1' }
     const result = planEbayFamilyCreates({
       rows: [row],
@@ -333,7 +336,10 @@ describe('planEbayFamilyCreates', () => {
       ]),
       existingParentById: new Map(),
     })
-    expect(result.errors.some((e) => /self-parent/.test(e.reason))).toBe(true)
+    // FIX 2b fires first for this self-referential case: C1 is a batch child row, so
+    // batchChildSkus.has('C1') is true → "refers to a variant row" error is emitted.
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].reason).toMatch(/refers to a variant row/)
     expect(result.parentPromotions).toHaveLength(0)
     expect(result.reparents).toHaveLength(0)
   })
@@ -1520,5 +1526,134 @@ describe('P3 — synthetic-parent theme inference (FIX B)', () => {
     expect(result.parentCreates).toHaveLength(1)
     // Deduped → 'Colore' only (not 'Colore,colore')
     expect(result.parentCreates[0].variationTheme).toBe('Colore')
+  })
+})
+
+// ── reparent-final-fix: FIX 1 (subject-is-parent guard) + FIX 2 (batchChildSkus-before-existing) ──
+
+describe('reparent-final-fix guards', () => {
+  // FIX 1 — reparenting an existing PARENT (isParent:true) under another parent must error.
+  // Previously the guard only checked the TARGET for 3-level nesting; the SUBJECT was unchecked,
+  // allowing grandparent→parent→children silently.
+  it('FIX1-subject-parent: existing PARENT (isParent:true) submitted as child → error + no reparent + no promotion', () => {
+    // PARENT-SUBJECT has its own children (isParent:true). Operator submits it with
+    // parentage:'child' + parent_sku:'TARGET-PARENT' attempting to nest it under TARGET-PARENT.
+    const row = {
+      sku: 'PARENT-SUBJECT',
+      _productId: 'idPS',
+      parentage: 'child',
+      parent_sku: 'TARGET-PARENT',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['PARENT-SUBJECT', { id: 'idPS', parentId: null, variationTheme: 'Colore', isParent: true }],
+        ['TARGET-PARENT', { id: 'idTP', parentId: null, variationTheme: 'Colore', isParent: true }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].sku).toBe('PARENT-SUBJECT')
+    expect(result.errors[0].reason).toMatch(/cannot nest a parent/)
+    // No reparent, no promotion, no childCreate — guard fires before any resolution
+    expect(result.reparents).toHaveLength(0)
+    expect(result.parentPromotions).toHaveLength(0)
+    expect(result.childCreates).toHaveLength(0)
+  })
+
+  // FIX 1 regression — a normal existing CHILD (isParent:false) reparented must still work.
+  it('FIX1-regression/child-subject: existing child (isParent:false) reparented to another parent → normal reparent (guard is not hit)', () => {
+    const row = {
+      sku: 'CHILD-SUBJECT',
+      _productId: 'idCS',
+      parentage: 'child',
+      parent_sku: 'TARGET-PARENT',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['CHILD-SUBJECT', { id: 'idCS', parentId: 'old-parent-id', variationTheme: null, isParent: false }],
+        ['TARGET-PARENT', { id: 'idTP', parentId: null, variationTheme: 'Colore', isParent: true }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.reparents).toHaveLength(1)
+    expect(result.reparents[0]).toEqual({ productId: 'idCS', sku: 'CHILD-SUBJECT', newParentId: 'idTP' })
+    expect(result.parentPromotions).toHaveLength(0)
+  })
+
+  // FIX 2 — batchChildSkus must be checked BEFORE existingBySku in the new-child path.
+  // Scenario: X is BOTH an existing standalone product AND a batch child row (parentage:'child').
+  // Old code: existingBySku wins → X is promoted, CHILD-A attaches → 3-level when X itself reparents.
+  // New code: batchChildSkus wins first → CHILD-A errors, X is never promoted.
+  it('FIX2-batch-child-beats-existing/new-child: parent_sku=X where X is a batch child row → error + no promotion (batchChildSkus first)', () => {
+    // CHILD-A (new, not in DB) wants parent_sku=X.
+    // X is in this batch as a child row (parentage:'child') AND exists as a standalone in the DB.
+    const childA = {
+      sku: 'CHILD-A',
+      _rowId: 'ca-row',
+      parentage: 'child',
+      parent_sku: 'X',
+      variation_theme: 'Colore',
+    }
+    const xAsChild = {
+      sku: 'X',
+      _rowId: 'x-row',
+      parentage: 'child',
+      parent_sku: 'SOME-PARENT',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [childA, xAsChild],
+      existingBySku: new Map([
+        // X exists as a standalone — old code would promote it; FIX 2 prevents this
+        ['X', { id: 'x-id', parentId: null, variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    // CHILD-A must error because X is in batchChildSkus
+    const errA = result.errors.find(e => e.sku === 'CHILD-A')
+    expect(errA).toBeDefined()
+    expect(errA!.reason).toMatch(/refers to a variant row/)
+    // X must NOT be promoted (no residual parentPromotion)
+    expect(result.parentPromotions).toHaveLength(0)
+    // No create for CHILD-A
+    expect(result.childCreates.filter(c => c.sku === 'CHILD-A')).toHaveLength(0)
+  })
+
+  // FIX 2 regression — promote-standalone must still work when target is NOT a batch child.
+  it('FIX2-regression/promote-standalone: plain child targets standalone X (not in batchChildSkus) → promotion + childCreate unaffected', () => {
+    // CHILD-A wants parent_sku=X; X is an existing standalone.
+    // X does NOT appear as a batch child row → batchChildSkus.has('X') is false.
+    // Promotion + childCreate must still fire normally.
+    const childA = {
+      sku: 'CHILD-A',
+      _rowId: 'ca-row',
+      parentage: 'child',
+      parent_sku: 'X',
+      variation_theme: 'Colore',
+    }
+    // No row with sku:'X' in this batch → batchChildSkus does NOT include X
+
+    const result = planEbayFamilyCreates({
+      rows: [childA],
+      existingBySku: new Map([
+        ['X', { id: 'x-id', parentId: null, variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.parentPromotions).toHaveLength(1)
+    expect(result.parentPromotions[0]).toEqual({ productId: 'x-id', variationTheme: 'Colore' })
+    expect(result.childCreates).toHaveLength(1)
+    expect(result.childCreates[0].sku).toBe('CHILD-A')
+    expect(result.childCreates[0].parentRef).toEqual({ kind: 'existing', productId: 'x-id' })
   })
 })

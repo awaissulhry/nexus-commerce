@@ -441,6 +441,12 @@ export function planEbayFamilyCreates(input: {
             parentRef: { kind: 'temp', tempRowId: batchParent.tempRowId },
             variationTheme: batchParent.variationTheme,
           })
+        } else if (batchChildSkus.has(parentSku)) {
+          // FIX 2: batchChildSkus checked BEFORE existingBySku — batch-child status wins even
+          // when parentSku also resolves to an existing standalone product. Without this order,
+          // the standalone would be promoted and CHILD-A would attach while parentSku is
+          // simultaneously turned into a child elsewhere → 3-level hierarchy.
+          errors.push({ sku, reason: `parent_sku "${parentSku}" refers to a variant row in this sheet, not a parent` })
         } else {
           // Try an existing parent by SKU (ExistingProduct already carries variationTheme)
           const existingParentBySku = existingBySku.get(parentSku)
@@ -466,10 +472,6 @@ export function planEbayFamilyCreates(input: {
                 variationTheme: existingParentBySku.variationTheme,
               })
             }
-          } else if (batchChildSkus.has(parentSku)) {
-            // FIX A (P3): parent_sku points to a child row in this batch — cycle or typo.
-            // Error immediately; do NOT create a synthetic parent or a child create.
-            errors.push({ sku, reason: `parent_sku "${parentSku}" refers to a variant row in this sheet, not a parent` })
           } else {
             // P2: auto-create a synthetic parent so the whole family persists in one save.
             // Deduped: if another child in this batch already referenced the same missing
@@ -548,6 +550,14 @@ export function planEbayFamilyCreates(input: {
       const existing = existingBySku.get(sku)!
 
       if (isChild) {
+        // Subject-is-parent guard (FIX 1): a variation parent cannot be turned into a child
+        // of another parent — that would create grandparent→parent→children (3 levels).
+        // The operator must detach the subject's variants first. This check is FIRST so no
+        // resolution, promotion, synthetic creation, or reparent is attempted for this subject.
+        if (existing.isParent) {
+          errors.push({ sku, reason: 'cannot nest a parent (with variants) under another parent — detach its variants first' })
+          continue
+        }
         // FIX 1+2: resolve → guard → create order.
         // STEP 1: resolve target WITHOUT creating anything.
         // STEP 2: evaluate guards using the resolved target.
@@ -566,38 +576,44 @@ export function planEbayFamilyCreates(input: {
         let needsSynthetic = false
 
         if (parentSku) {
-          const resolvedParent = existingBySku.get(parentSku)
-          if (resolvedParent) {
-            // P2: 3-level hierarchy guard — reject if X is itself a child (parentId != null).
-            if (resolvedParent.parentId != null) {
-              errors.push({ sku, reason: `parent_sku "${parentSku}" is itself a variant of another product — cannot nest` })
-              // resolvedParentId stays '' → no reparent will be emitted below
-            } else {
-              // P2.1: DEFER promotion — only record it once we know the child lands under X
-              // (see the emit/no-op branches below). Recording here would wrongly promote on a
-              // self-parent error or a suppressed shared-family reparent.
-              if (!resolvedParent.isParent) {
-                resolvedStandaloneParent = resolvedParent
-              }
-              // Existing parent resolved by SKU
-              resolvedParentId = resolvedParent.id
-            }
+          // FIX 2: batchChildSkus checked BEFORE existingBySku — batch-child status wins even
+          // when parentSku also resolves to an existing standalone product, preventing 3-level
+          // hierarchy via promotion + simultaneous reparent of the same SKU to another parent.
+          if (batchChildSkus.has(parentSku)) {
+            // parent_sku points to a child row in this batch — error, no synthetic.
+            // resolvedParentId stays '' + needsSynthetic stays false → no reparent emitted.
+            errors.push({ sku, reason: `parent_sku "${parentSku}" refers to a variant row in this sheet, not a parent` })
           } else {
-            // Escalate: batch parent → already-registered synthetic → defer creation
-            const batchParent = parentCreates.find(p => p.sku === parentSku)
-            if (batchParent) {
-              resolvedTempRowId = batchParent.tempRowId
-            } else {
-              const existingSynthId = syntheticParentsBySku.get(parentSku)
-              if (existingSynthId) {
-                resolvedTempRowId = existingSynthId
-              } else if (batchChildSkus.has(parentSku)) {
-                // FIX A (P3): parent_sku points to a child row in this batch — error, no synthetic.
-                // resolvedParentId stays '' + needsSynthetic stays false → no reparent emitted.
-                errors.push({ sku, reason: `parent_sku "${parentSku}" refers to a variant row in this sheet, not a parent` })
+            const resolvedParent = existingBySku.get(parentSku)
+            if (resolvedParent) {
+              // P2: 3-level hierarchy guard — reject if X is itself a child (parentId != null).
+              if (resolvedParent.parentId != null) {
+                errors.push({ sku, reason: `parent_sku "${parentSku}" is itself a variant of another product — cannot nest` })
+                // resolvedParentId stays '' → no reparent will be emitted below
               } else {
-                // Not found anywhere — defer synthetic creation until after guard evaluation.
-                needsSynthetic = true
+                // P2.1: DEFER promotion — only record it once we know the child lands under X
+                // (see the emit/no-op branches below). Recording here would wrongly promote on a
+                // self-parent error or a suppressed shared-family reparent.
+                if (!resolvedParent.isParent) {
+                  resolvedStandaloneParent = resolvedParent
+                }
+                // Existing parent resolved by SKU
+                resolvedParentId = resolvedParent.id
+              }
+            } else {
+              // Escalate: batch parent → already-registered synthetic → defer creation
+              // (batchChildSkus already handled above — no batchChildSkus check needed here)
+              const batchParent = parentCreates.find(p => p.sku === parentSku)
+              if (batchParent) {
+                resolvedTempRowId = batchParent.tempRowId
+              } else {
+                const existingSynthId = syntheticParentsBySku.get(parentSku)
+                if (existingSynthId) {
+                  resolvedTempRowId = existingSynthId
+                } else {
+                  // Not found anywhere — defer synthetic creation until after guard evaluation.
+                  needsSynthetic = true
+                }
               }
             }
           }
