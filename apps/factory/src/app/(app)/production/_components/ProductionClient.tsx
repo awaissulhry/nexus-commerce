@@ -21,6 +21,7 @@ import { STAGE_LABEL, type ProductionResponse, type WOCard } from "./types";
 
 const STATUS_TONE = { running: "info", paused: "warning", not_started: "neutral", done: "success" } as const;
 const COVER = { OK: { c: "var(--h10-success)", t: "covered" }, PARTIAL: { c: "var(--h10-warning, #e9a100)", t: "partly short" }, SHORT: { c: "var(--h10-danger)", t: "short" } } as const;
+const kioskBtn = (primary: boolean): React.CSSProperties => ({ flex: 1, display: "inline-flex", gap: 8, alignItems: "center", justifyContent: "center", padding: "14px 20px", fontSize: 16, fontWeight: 700, borderRadius: 12, cursor: "pointer", border: primary ? "none" : "1px solid var(--h10-border)", background: primary ? "var(--h10-primary)" : "var(--h10-surface)", color: primary ? "#fff" : "var(--h10-text)" });
 
 function CoverageDot({ w }: { w: WOCard }) {
   if (!w.coverage) return null;
@@ -119,7 +120,32 @@ export function ProductionClient() {
 
   return (
     <div className="factory-page">
-      <PageHeader eyebrow="Factory OS" title="Production" subtitle="The five-stage floor: run each work order stage by stage, with live timers and material coverage." />
+      <PageHeader eyebrow="Factory OS" title="Production" subtitle={data?.worker ? "Your work queue — your next task is the top card." : "The five-stage floor: run each work order stage by stage, with live timers and material coverage."} />
+
+      {data?.worker ? (
+        <div style={{ maxWidth: 640, margin: "0 auto", display: "grid", gap: 14 }}>
+          {(data.workOrders ?? []).map((w, i) => (
+            <div key={w.id} style={{ border: i === 0 ? "2px solid var(--h10-primary)" : "1px solid var(--h10-border)", borderRadius: 16, padding: 18, background: "var(--h10-surface)", boxShadow: i === 0 ? "0 4px 16px rgb(31 111 222 / 0.12)" : "0 1px 2px rgb(20 28 38 / 0.05)" }}>
+              {i === 0 && <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: "var(--h10-primary)", marginBottom: 8 }}>YOUR NEXT TASK</div>}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 20, fontWeight: 800 }}>{w.number}</span>
+                <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}><CoverageDot w={w} />{w.current && <Pill tone={STATUS_TONE[w.current.status]}>{STAGE_LABEL(w.current.stage)}</Pill>}</span>
+              </div>
+              <div style={{ fontSize: 15, color: "var(--h10-text-2)", marginTop: 2 }}>{w.party}{w.label ? ` · ${w.label}` : ""}</div>
+              {w.current && <div style={{ fontSize: 13, color: "var(--h10-text-3)", marginTop: 4 }}>{w.doneCount}/{w.stageCount} stages · <StageTimer cur={w.current} /></div>}
+              {w.shortMaterials && w.shortMaterials.length > 0 && <div style={{ fontSize: 12.5, color: "var(--h10-danger)", marginTop: 4 }}>⚠ short: {w.shortMaterials.join(", ")}</div>}
+              {canAdvance && w.current && (
+                <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+                  {w.current.status === "not_started" && <button type="button" onClick={() => void act(w.current!.id, "start")} style={kioskBtn(true)}><Play size={18} /> Start</button>}
+                  {w.current.status === "running" && <><button type="button" onClick={() => void act(w.current!.id, "pause")} style={kioskBtn(false)}><Pause size={18} /> Pause</button><button type="button" onClick={() => onFinish(w)} style={kioskBtn(true)}><Check size={18} /> Finish</button></>}
+                  {w.current.status === "paused" && <><button type="button" onClick={() => void act(w.current!.id, "resume")} style={kioskBtn(false)}><Play size={18} /> Resume</button><button type="button" onClick={() => onFinish(w)} style={kioskBtn(true)}><Check size={18} /> Finish</button></>}
+                </div>
+              )}
+            </div>
+          ))}
+          {data.workOrders.length === 0 && <div style={{ fontSize: 15, color: "var(--h10-text-3)", textAlign: "center", padding: "40px 0" }}>No tasks — you&rsquo;re all caught up. 👍</div>}
+        </div>
+      ) : (<>
       <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
         {columns.map((col) => {
           const cards = byCol(col);
@@ -172,6 +198,8 @@ export function ProductionClient() {
         })}
       </div>
       {data && data.workOrders.length === 0 && <div style={{ fontSize: 13, color: "var(--h10-text-3)", marginTop: 20, textAlign: "center" }}>Nothing in production yet — Start production on a confirmed order.</div>}
+      </>
+      )}
 
       <Modal open={!!material} onClose={() => setMaterial(null)} title="Cutting done — material used" size="sm"
         footer={<><Button onClick={() => setMaterial(null)}>Cancel</Button><Button variant="primary" onClick={submitMaterial} disabled={busy}>Finish cutting</Button></>}>

@@ -49,19 +49,31 @@ export const POST = guarded(FEATURES.workordersAdvance, async (req, { params, ac
     await prisma.workOrder.update({ where: { id: stage.workOrderId }, data: { state: "IN_PROGRESS" } });
   }
 
-  // finishing the last stage completes the WO
+  // finishing the last stage completes the WO; all a WO done ⇒ the order is READY
   let woDone = false;
+  let orderReady = false;
   if (parsed.data.action === "finish") {
     const after = siblings.map((s) => (s.id === sid ? { ...s, finishedAt: new Date(now) } : s));
     if (woComplete(after)) {
       await prisma.workOrder.update({ where: { id: stage.workOrderId }, data: { state: "DONE" } });
       woDone = true;
+      const orderId = stage.workOrder.orderId;
+      const siblingsWo = await prisma.workOrder.findMany({ where: { orderId }, select: { state: true } });
+      if (siblingsWo.every((s) => s.state === "DONE")) {
+        const order = await prisma.order.findUnique({ where: { id: orderId }, select: { state: true } });
+        if (order?.state === "IN_PRODUCTION") {
+          await prisma.order.update({ where: { id: orderId }, data: { state: "READY" } });
+          orderReady = true;
+          void audit({ actorId: actor!.id, entityType: "order", entityId: orderId, action: "state-changed", before: { from: "IN_PRODUCTION" }, after: { to: "READY", via: "all-wos-done" } });
+          await publishEventDurable("order.updated", { orderId, from: "IN_PRODUCTION", to: "READY" });
+        }
+      }
     }
   }
 
   void audit({ actorId: actor!.id, entityType: "workorder", entityId: stage.workOrderId, action: `stage.${parsed.data.action}`, after: { stage: stage.stage, woDone } });
   await publishEventDurable("workorder.updated", { workOrderId: stage.workOrderId, stage: stage.stage, action: parsed.data.action, woDone });
-  return NextResponse.json({ ok: true, woDone });
+  return NextResponse.json({ ok: true, woDone, orderReady });
 });
 
 const Assign = z.object({ assigneeId: z.string().nullable() });
