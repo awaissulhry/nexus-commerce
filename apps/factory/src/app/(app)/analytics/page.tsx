@@ -1,6 +1,6 @@
-/** F1 — designed empty state; the real page lands in its FP cycle (src/lib/nav.ts). */
-import { ComingSoon } from "@/components/ComingSoon";
+/** FP10 — Analytics is LIVE: the factory's rhythm (spec: docs/factory/FP10-SPEC.md). */
+import { AnalyticsClient } from "./_components/AnalyticsClient";
 
-export default function Page() {
-  return <ComingSoon pageId="analytics" />;
+export default function AnalyticsPage() {
+  return <AnalyticsClient />;
 }
