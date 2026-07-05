@@ -509,6 +509,9 @@ export function planEbayFamilyCreates(input: {
         // This prevents a phantom synthetic parent being registered when the reparent is later
         // suppressed (e.g. shared family) — the phantom would squat the global unique-SKU slot.
         let resolvedParentId = ''
+        // P2.1 — a standalone parent resolved by parent_sku; promoted to isParent ONLY if the
+        // child actually lands under it (emit or no-op), never on self-parent/suppression.
+        let resolvedStandaloneParent: ExistingProduct | null = null
         // tempRowId of a parent being created in this same save (batch or synthetic).
         // When set, newParentId in the reparent entry is null and the service resolves it.
         let resolvedTempRowId: string | undefined = undefined
@@ -524,13 +527,11 @@ export function planEbayFamilyCreates(input: {
               errors.push({ sku, reason: `parent_sku "${parentSku}" is itself a variant of another product — cannot nest` })
               // resolvedParentId stays '' → no reparent will be emitted below
             } else {
-              // P2: promote standalone X to a real parent (dedup by productId).
-              // Prefer X's existing variationTheme; fall back to the child row's variation_theme.
+              // P2.1: DEFER promotion — only record it once we know the child lands under X
+              // (see the emit/no-op branches below). Recording here would wrongly promote on a
+              // self-parent error or a suppressed shared-family reparent.
               if (!resolvedParent.isParent) {
-                const theme = resolvedParent.variationTheme ?? (row.variation_theme ? String(row.variation_theme) : null)
-                if (!parentPromotions.some(p => p.productId === resolvedParent.id)) {
-                  parentPromotions.push({ productId: resolvedParent.id, variationTheme: theme })
-                }
+                resolvedStandaloneParent = resolvedParent
               }
               // Existing parent resolved by SKU
               resolvedParentId = resolvedParent.id
@@ -590,9 +591,20 @@ export function planEbayFamilyCreates(input: {
               warnings.push({ sku, reason: 'reparent suppressed: shared family (membership-managed)' })
             } else {
               reparents.push({ productId: existing.id, sku, newParentId: resolvedParentId })
+              // P2.1 — child now lands under X → promote X if it was a standalone.
+              const promo = resolvedStandaloneParent
+              if (promo && !parentPromotions.some(p => p.productId === promo.id)) {
+                parentPromotions.push({ productId: promo.id, variationTheme: promo.variationTheme ?? (row.variation_theme ? String(row.variation_theme) : null) })
+              }
+            }
+          } else {
+            // resolvedParentId === existing.parentId → no-op (already on the right parent).
+            // P2.1 — child already sits under X; if X is an un-flagged standalone, fix its isParent flag.
+            const promo = resolvedStandaloneParent
+            if (promo && !parentPromotions.some(p => p.productId === promo.id)) {
+              parentPromotions.push({ productId: promo.id, variationTheme: promo.variationTheme ?? (row.variation_theme ? String(row.variation_theme) : null) })
             }
           }
-          // else resolvedParentId === existing.parentId → no-op (already on the right parent)
         }
       } else {
         // !isChild: existing row now standalone/parent.

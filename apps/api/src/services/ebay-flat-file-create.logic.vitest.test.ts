@@ -322,6 +322,40 @@ describe('planEbayFamilyCreates', () => {
     expect(result.reparents).toHaveLength(0)
   })
 
+  it('P2.1: self-parent via parent_sku on a standalone → error + NO promotion', () => {
+    // Existing standalone C1 (parentId=null, isParent=false); row says child with parent_sku = its OWN sku.
+    // resolvedParentId === existing.id → self-parent error; the promotion must NOT be recorded.
+    const row = { sku: 'C1', _rowId: 'temp_c1', parentage: 'child', parent_sku: 'C1' }
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['C1', { id: 'idC1', parentId: null, variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+    expect(result.errors.some((e) => /self-parent/.test(e.reason))).toBe(true)
+    expect(result.parentPromotions).toHaveLength(0)
+    expect(result.reparents).toHaveLength(0)
+  })
+
+  it('P2.1: suppressed shared-family reparent to a standalone → NO promotion', () => {
+    // Existing child C1 currently under a SHARED parent; parent_sku targets standalone X.
+    // The reparent is suppressed (shared family) → X must NOT be promoted.
+    const row = { sku: 'C1', _rowId: 'temp_c1', parentage: 'child', parent_sku: 'X' }
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['C1', { id: 'idC1', parentId: 'SHARED_PARENT', variationTheme: null, isParent: false }],
+        ['X', { id: 'idX', parentId: null, variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+      sharedFamilyKeys: new Set(['SHARED_PARENT']),
+    })
+    expect(result.warnings.some((w) => /suppressed/.test(w.reason))).toBe(true)
+    expect(result.parentPromotions).toHaveLength(0)
+    expect(result.reparents).toHaveLength(0)
+  })
+
   it('case 8: standalone new row → parentCreate with variationTheme, no childCreates', () => {
     const row = {
       sku: 'STANDALONE-1',
