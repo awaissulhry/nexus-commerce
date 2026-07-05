@@ -964,4 +964,93 @@ describe('planEbayFamilyCreates', () => {
     expect(result.warnings[0].reason).toMatch(/reparent suppressed.*shared family/)
     expect(result.errors).toHaveLength(0)
   })
+
+  // ── FIX 1: phantom synthetic parent regression guard ──────────────────
+  // An existing child in a SHARED family with an unresolved parent_sku must NOT
+  // create a phantom synthetic parent — the suppression fires BEFORE any creation.
+  it('FIX1-RP-shared-phantom: existing child in shared family with unresolved parent_sku → suppression warning + NO synthetic + no reparent', () => {
+    const row = {
+      sku: 'EXIST-CHILD',
+      _productId: 'idEC',
+      parentage: 'child',
+      parent_sku: 'UNRESOLVED-PARENT',  // not in batch, not in existingBySku
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['EXIST-CHILD', { id: 'idEC', parentId: 'shared-parent-id', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+      sharedFamilyKeys: new Set(['shared-parent-id']),  // current parent is shared
+    })
+
+    // Must warn about suppression (not error)
+    expect(result.reparents).toHaveLength(0)
+    expect(result.errors).toHaveLength(0)
+    expect(result.warnings).toHaveLength(1)
+    expect(result.warnings[0].sku).toBe('EXIST-CHILD')
+    expect(result.warnings[0].reason).toMatch(/reparent suppressed.*shared family/)
+    // FIX 1 key assertion: NO phantom synthetic parent was created
+    expect(result.parentCreates).toHaveLength(0)
+    expect(result.parentCreates.some(p => p.tempRowId.startsWith('__synth__'))).toBe(false)
+  })
+
+  // ── FIX 2: auto-create warning emitted at both sites ─────────────────
+
+  // Site 1: new child with unresolved parent_sku → synthetic created + warning emitted
+  it('FIX2-new-child: auto-create of synthetic parent emits warning with parentSku', () => {
+    const child = {
+      sku: 'NEW-ORPHAN',
+      _rowId: 'no-temp',
+      parentage: 'child',
+      parent_sku: 'GHOST-PARENT',
+      variation_theme: 'Colore',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [child],
+      existingBySku: new Map(),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.parentCreates).toHaveLength(1)
+    expect(result.parentCreates[0].sku).toBe('GHOST-PARENT')
+    // Warning must carry the parentSku and a clear "auto-created" reason
+    const autoWarn = result.warnings.find(w => w.reason.includes('auto-created parent'))
+    expect(autoWarn).toBeDefined()
+    expect(autoWarn?.sku).toBe('GHOST-PARENT')
+    expect(autoWarn?.reason).toContain('"GHOST-PARENT"')
+  })
+
+  // Site 2: existing child reparented to unresolved parent_sku → synthetic created + warning emitted
+  it('FIX2-reparent: auto-create of synthetic parent during reparent emits warning with parentSku', () => {
+    const row = {
+      sku: 'EXIST-CHILD',
+      _productId: 'idEC',
+      parentage: 'child',
+      parent_sku: 'GHOST-PARENT',
+      variation_theme: 'Colore',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['EXIST-CHILD', { id: 'idEC', parentId: 'old-parent-id', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+      // no sharedFamilyKeys — reparent is emitted and synthetic IS created
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.parentCreates).toHaveLength(1)
+    expect(result.parentCreates[0].sku).toBe('GHOST-PARENT')
+    expect(result.reparents).toHaveLength(1)
+    // Warning must carry the parentSku and a clear "auto-created" reason
+    const autoWarn = result.warnings.find(w => w.reason.includes('auto-created parent'))
+    expect(autoWarn).toBeDefined()
+    expect(autoWarn?.sku).toBe('GHOST-PARENT')
+    expect(autoWarn?.reason).toContain('"GHOST-PARENT"')
+  })
 })

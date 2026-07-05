@@ -410,3 +410,55 @@ describe('RP1 temp-parent reparent — newParentTempRowId resolved via tempToRea
     })
   })
 })
+
+// ──────────────────────────────────────────────────────────────────────
+// FIX 3: out-of-payload parent_sku resolution
+// A child whose parent_sku references a real existing parent NOT present
+// as a row in the payload must resolve to that parent — not create a synthetic.
+// ──────────────────────────────────────────────────────────────────────
+describe('FIX3 — out-of-payload parent_sku resolves to real existing parent (no synthetic)', () => {
+  it('existing child with parent_sku pointing to real out-of-payload parent → reparented to real parent, no synthetic created', async () => {
+    const { prisma, calls } = makeMock({
+      // The mock returns BOTH the child and the out-of-payload parent when queried by sku.
+      // With FIX 3 the service includes parent_sku values in the sku query, so both appear.
+      existingBySku: [
+        { id: 'child-id', sku: 'EXIST-CHILD', parentId: 'old-parent-id', variationTheme: null, isParent: false },
+        { id: 'real-parent-id', sku: 'OUT-OF-PAYLOAD-PARENT', parentId: null, variationTheme: 'Colore', isParent: true },
+      ],
+      existingParentById: [],
+      // Fresh DB lookup (reparent validation) returns the real parent
+      findFirstResult: { id: 'real-parent-id' },
+    })
+
+    const rows = [
+      // OUT-OF-PAYLOAD-PARENT is NOT in the rows array
+      { sku: 'EXIST-CHILD', _productId: 'child-id', parentage: 'child', parent_sku: 'OUT-OF-PAYLOAD-PARENT' },
+    ]
+
+    const result = await runEbayFlatFileCreates(prisma, rows)
+
+    expect(result.errors).toHaveLength(0)
+
+    // FIX 3 key assertion: service queried for the out-of-payload parent's SKU
+    const skuQueryCall = (calls.findMany as any[]).find(
+      (c: any) => c.where?.sku?.in && c.select?.parentId !== undefined,
+    )
+    expect(skuQueryCall).toBeDefined()
+    expect(skuQueryCall.where.sku.in).toContain('OUT-OF-PAYLOAD-PARENT')
+
+    // Reparented to the real parent (not via a synthetic)
+    expect(result.reparented).toHaveLength(1)
+    expect(result.reparented[0]).toMatchObject({
+      sku: 'EXIST-CHILD',
+      productId: 'child-id',
+      newParentId: 'real-parent-id',
+    })
+
+    // No product creates (no synthetic parent was needed)
+    expect(calls.create).toHaveLength(0)
+    // No idMap entries for a parent (none was created)
+    expect(result.idMap.some(e => e.sku === 'OUT-OF-PAYLOAD-PARENT')).toBe(false)
+    // No auto-created warning
+    expect(result.warnings.some(w => w.reason.includes('auto-created parent'))).toBe(false)
+  })
+})

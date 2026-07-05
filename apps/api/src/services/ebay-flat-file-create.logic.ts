@@ -435,6 +435,8 @@ export function planEbayFamilyCreates(input: {
                 variationTheme: synthVariationTheme,
               })
               syntheticParentsBySku.set(parentSku, synthTempRowId)
+              // FIX 2: warn so operator sees "auto-created parent X" instead of silent junk.
+              warnings.push({ sku: parentSku, reason: `auto-created parent from parent_sku "${parentSku}"` })
               const tempRowId = String(row._rowId ?? row._productId ?? sku)
               childCreates.push({
                 tempRowId,
@@ -482,13 +484,19 @@ export function planEbayFamilyCreates(input: {
       const existing = existingBySku.get(sku)!
 
       if (isChild) {
-        // P2.A: resolve effective parent id — prefer parent_sku → existingBySku → batch parent
-        //        → syntheticParentsBySku → auto-create synthetic;
-        //        fall back to ppid when parent_sku absent (back-compat).
+        // FIX 1+2: resolve → guard → create order.
+        // STEP 1: resolve target WITHOUT creating anything.
+        // STEP 2: evaluate guards using the resolved target.
+        // STEP 3: ONLY IF the reparent will actually be emitted AND needsSynthetic → create now.
+        // This prevents a phantom synthetic parent being registered when the reparent is later
+        // suppressed (e.g. shared family) — the phantom would squat the global unique-SKU slot.
         let resolvedParentId = ''
         // tempRowId of a parent being created in this same save (batch or synthetic).
         // When set, newParentId in the reparent entry is null and the service resolves it.
         let resolvedTempRowId: string | undefined = undefined
+        // True when parent_sku is set but not resolved anywhere — synthetic creation is DEFERRED
+        // until after guards so a suppressed reparent never leaves a phantom synthetic parent.
+        let needsSynthetic = false
 
         if (parentSku) {
           const resolvedParent = existingBySku.get(parentSku)
@@ -496,7 +504,7 @@ export function planEbayFamilyCreates(input: {
             // Existing parent resolved by SKU
             resolvedParentId = resolvedParent.id
           } else {
-            // RP1-fix: escalate — batch parent → synthetic (already created) → auto-create synthetic
+            // Escalate: batch parent → already-registered synthetic → defer creation
             const batchParent = parentCreates.find(p => p.sku === parentSku)
             if (batchParent) {
               resolvedTempRowId = batchParent.tempRowId
@@ -505,18 +513,8 @@ export function planEbayFamilyCreates(input: {
               if (existingSynthId) {
                 resolvedTempRowId = existingSynthId
               } else {
-                // Auto-create a synthetic parent — SHARED map so a new-child and an existing
-                // reparent referencing the same missing parentSku produce ONE synthetic parent.
-                const synthTempRowId = `__synth__${parentSku}`
-                const synthVariationTheme = row.variation_theme ? String(row.variation_theme) : null
-                parentCreates.push({
-                  tempRowId: synthTempRowId,
-                  sku: parentSku,
-                  row: { sku: parentSku, parentage: 'parent' },
-                  variationTheme: synthVariationTheme,
-                })
-                syntheticParentsBySku.set(parentSku, synthTempRowId)
-                resolvedTempRowId = synthTempRowId
+                // Not found anywhere — defer synthetic creation until after guard evaluation.
+                needsSynthetic = true
               }
             }
           }
@@ -524,15 +522,31 @@ export function planEbayFamilyCreates(input: {
           resolvedParentId = ppid  // ppid fallback (isChild=true implies ppid !== '' here)
         }
 
-        if (resolvedTempRowId) {
-          // Reparent to a parent being created in this same save (batch or synthetic).
-          // Self-parent is impossible here (temp IDs can never equal an existing product's DB id).
-          // No-op is impossible (new parent can't be the current parentId — it doesn't exist yet).
-          // Only check shared-family suppression based on the existing (current) parentId.
+        if (resolvedTempRowId || needsSynthetic) {
+          // Temp-parent reparent path (batch parent or synthetic-to-be).
+          // Self-parent is impossible (temp IDs can never equal an existing product's DB id).
+          // No-op is impossible (new parent cannot already be the current parentId).
+          // Check shared-family suppression based on the existing (current) parentId.
           if (sharedFamilyKeys.has(String(existing.parentId ?? ''))) {
+            // FIX 1: reparent suppressed — do NOT create a phantom synthetic parent.
             warnings.push({ sku, reason: 'reparent suppressed: shared family (membership-managed)' })
           } else {
-            reparents.push({ productId: existing.id, sku, newParentId: null, newParentTempRowId: resolvedTempRowId })
+            // FIX 1: reparent will be emitted — only NOW create synthetic if needed.
+            if (needsSynthetic) {
+              const synthTempRowId = `__synth__${parentSku!}`
+              const synthVariationTheme = row.variation_theme ? String(row.variation_theme) : null
+              parentCreates.push({
+                tempRowId: synthTempRowId,
+                sku: parentSku!,
+                row: { sku: parentSku!, parentage: 'parent' },
+                variationTheme: synthVariationTheme,
+              })
+              syntheticParentsBySku.set(parentSku!, synthTempRowId)
+              // FIX 2: warn so operator sees "auto-created parent X" instead of silent junk.
+              warnings.push({ sku: parentSku!, reason: `auto-created parent from parent_sku "${parentSku!}"` })
+              resolvedTempRowId = synthTempRowId
+            }
+            reparents.push({ productId: existing.id, sku, newParentId: null, newParentTempRowId: resolvedTempRowId! })
           }
         } else if (resolvedParentId) {
           if (resolvedParentId === existing.id) {

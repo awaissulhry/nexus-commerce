@@ -85,9 +85,18 @@ export async function runEbayFlatFileCreates(
     ...new Set(rows.map(r => String(r.sku ?? '').trim()).filter(Boolean)),
   ]
 
-  const existingProductRows = skusInPayload.length
+  // FIX 3: also collect every non-empty parent_sku value from the rows — a parent_sku
+  // may reference a real existing parent that is NOT present as its own row in the payload.
+  // Including those SKUs in the query lets existingBySku resolve them directly without
+  // falling through to a phantom synthetic parent and a P2002 recovery path.
+  const referencedParentSkus = [
+    ...new Set(rows.map(r => String(r.parent_sku ?? '').trim()).filter(Boolean)),
+  ]
+  const allSkusToQuery = [...new Set([...skusInPayload, ...referencedParentSkus])]
+
+  const existingProductRows = allSkusToQuery.length
     ? (await p.product.findMany({
-        where: { sku: { in: skusInPayload }, deletedAt: null },
+        where: { sku: { in: allSkusToQuery }, deletedAt: null },
         select: { id: true, sku: true, parentId: true, variationTheme: true, isParent: true },
       })) as Array<{ id: string; sku: string; parentId: string | null; variationTheme: string | null; isParent: boolean }>
     : []
