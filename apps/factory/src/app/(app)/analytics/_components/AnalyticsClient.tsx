@@ -7,21 +7,27 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { BarChart3, Inbox, FileText, Clock } from "lucide-react";
+import { BarChart3, Inbox, FileText, Clock, AlertTriangle } from "lucide-react";
 import { useToast } from "@/design-system/components";
 import { apiJson } from "@/lib/api-client";
 import { useFactoryEvents } from "@/lib/use-factory-events";
-import { type Counters } from "./types";
+import { Panel, ThroughputChart, LeadTimeChart } from "./charts";
+import { type AnalyticsResponse, type Counters } from "./types";
 
 export function AnalyticsClient() {
   const { toast } = useToast();
   const [counters, setCounters] = useState<Counters | null>(null);
+  const [data, setData] = useState<AnalyticsResponse | null>(null);
 
   const loadCounters = useCallback(async () => {
     try { setCounters(await apiJson<Counters>("/api/analytics/counters")); }
     catch (e) { toast((e as Error).message, "danger"); }
   }, [toast]);
-  useEffect(() => { void loadCounters(); }, [loadCounters]);
+  const loadData = useCallback(async () => {
+    try { setData(await apiJson<AnalyticsResponse>("/api/analytics")); }
+    catch (e) { toast((e as Error).message, "danger"); }
+  }, [toast]);
+  useEffect(() => { void loadCounters(); void loadData(); }, [loadCounters, loadData]);
   // live: refresh when a thread, quote or order moves
   useFactoryEvents(["conversation.updated", "conversation.synced", "order.updated", "pricing.updated", "payment.recorded"], loadCounters);
 
@@ -36,6 +42,20 @@ export function AnalyticsClient() {
         <Counter href="/inbox" icon={<Inbox size={16} />} label="Unanswered threads" value={counters?.unansweredThreads} tone="warning" />
         <Counter href="/quotes" icon={<FileText size={16} />} label="Quotes awaiting approval" value={counters?.quotesAwaiting} tone="info" />
         <Counter href="/orders" icon={<Clock size={16} />} label="Overdue promises" value={counters?.overduePromises} tone="danger" />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 12, marginTop: 18 }}>
+        <Panel title="Throughput — work orders finished / week" href="/production">
+          <ThroughputChart data={data?.throughput ?? []} />
+        </Panel>
+        <Panel title="Stage lead time (median)" href="/production">
+          <LeadTimeChart data={data?.leadTimes ?? []} bottleneckStage={data?.bottleneckStage ?? null} />
+          {data?.bottleneckStage && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 12, color: "var(--h10-danger)" }}>
+              <AlertTriangle size={13} /> Bottleneck: <b>{data.bottleneckStage.toLowerCase()}</b> — the slowest stage on the floor.
+            </div>
+          )}
+        </Panel>
       </div>
     </div>
   );
