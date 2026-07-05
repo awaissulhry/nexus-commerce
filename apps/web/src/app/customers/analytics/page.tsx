@@ -1,15 +1,21 @@
+'use client'
+
 /**
  * CI.3 — Customer Analytics Dashboard.
  *
  * Cross-customer aggregate KPIs: total, B2B/B2C split, LTV percentiles,
  * repeat rate, RFM distribution heatmap, channel concentration.
+ *
+ * The API session cookie lives on the API origin (cross-site setup) — the
+ * Next server can never present it, so data MUST load client-side where the
+ * fetch patch adds credentials. Server-side this page 401'd into the
+ * "Failed to load" state for everyone.
  */
 
+import { useEffect, useState } from 'react'
 import { Users } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { CustomerAnalyticsClient } from './CustomerAnalyticsClient'
-
-export const dynamic = 'force-dynamic'
 
 interface Overview {
   totalCustomers: number
@@ -51,8 +57,48 @@ async function fetchRFM() {
   }
 }
 
-export default async function CustomerAnalyticsPage() {
-  const [overview] = await Promise.all([fetchOverview(), fetchRFM()])
+function PageHeader() {
+  return (
+    <div className="flex items-start gap-3 mb-5">
+      <Users className="h-6 w-6 text-violet-600 dark:text-violet-400 mt-0.5 shrink-0" />
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+          Customer Analytics
+        </h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+          Cross-customer intelligence: LTV distribution, RFM segmentation, repeat rate, and channel concentration.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+export default function CustomerAnalyticsPage() {
+  const [data, setData] = useState<{ overview: Overview | null } | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    Promise.all([fetchOverview(), fetchRFM()]).then(([overview]) => {
+      if (alive) setData({ overview })
+    })
+    return () => { alive = false }
+  }, [])
+
+  if (!data) {
+    return (
+      <div className="px-4 py-4 max-w-5xl" aria-busy="true">
+        <PageHeader />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-16 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+          ))}
+        </div>
+        <div className="h-64 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+      </div>
+    )
+  }
+
+  const { overview } = data
 
   if (!overview) {
     return (
@@ -68,17 +114,7 @@ export default async function CustomerAnalyticsPage() {
 
   return (
     <div className="px-4 py-4 max-w-5xl">
-      <div className="flex items-start gap-3 mb-5">
-        <Users className="h-6 w-6 text-violet-600 dark:text-violet-400 mt-0.5 shrink-0" />
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-            Customer Analytics
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Cross-customer intelligence: LTV distribution, RFM segmentation, repeat rate, and channel concentration.
-          </p>
-        </div>
-      </div>
+      <PageHeader />
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">

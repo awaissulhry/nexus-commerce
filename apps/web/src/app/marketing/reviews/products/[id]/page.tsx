@@ -1,20 +1,26 @@
+'use client'
+
 /**
  * SR.2 — Per-product sentiment drill-down.
  *
- * Server-rendered. Shows:
+ * Shows:
  *   - product header + SKU link
  *   - 90d daily-totals sparkline (positive/neutral/negative stacked)
  *   - 30d category breakdown (with negative tilt color)
  *   - last 30 review cards
+ *
+ * The API session cookie lives on the API origin (cross-site setup) — the
+ * Next server can never present it, so data MUST load client-side where the
+ * fetch patch adds credentials. Server-side this page 401'd into notFound()
+ * for every product.
  */
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, useParams } from 'next/navigation'
 import { ChevronLeft, Star } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsNav, CATEGORY_LABEL } from '../../_shared/ReviewsNav'
-
-export const dynamic = 'force-dynamic'
 
 interface TimelineDay {
   date: string
@@ -72,12 +78,48 @@ async function fetchPayload(id: string): Promise<TimelinePayload | null> {
   }
 }
 
-export default async function ProductReviewDrillDown({
-  params,
-}: {
-  params: { id: string }
-}) {
-  const data = await fetchPayload(params.id)
+export default function ProductReviewDrillDown() {
+  const params = useParams<{ id: string }>()
+  const id = params?.id
+  // undefined = still loading; null = fetch failed / not found
+  const [data, setData] = useState<TimelinePayload | null | undefined>(undefined)
+
+  useEffect(() => {
+    if (!id) return
+    let alive = true
+    fetchPayload(id).then((d) => {
+      if (alive) setData(d)
+    })
+    return () => { alive = false }
+  }, [id])
+
+  if (data === undefined) {
+    return (
+      <div className="px-4 py-4" aria-busy="true">
+        <div className="mb-2">
+          <Link
+            href="/marketing/reviews/by-product"
+            className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+          >
+            <ChevronLeft className="h-3 w-3" /> Per prodotto
+          </Link>
+        </div>
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <Star className="h-5 w-5 text-amber-500" />
+          Product reviews
+        </h1>
+        <div className="mt-3">
+          <ReviewsNav />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-16 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+          ))}
+        </div>
+        <div className="h-40 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+      </div>
+    )
+  }
   if (!data?.product) notFound()
   const p = data.product
 

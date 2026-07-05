@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * RX.2 — Review Response Desk.
  *
@@ -5,15 +7,19 @@
  * Resolved/Ignored) + assignee + tags + note, with AI-drafted localized
  * replies and channel-aware sending (real eBay RespondToFeedback;
  * Amazon/Shopify recorded as manual since they expose no reply API).
+ *
+ * The API session cookie lives on the API origin (cross-site setup) — the
+ * Next server can never present it, so data MUST load client-side where the
+ * fetch patch adds credentials. Server-side the stats fetch 401'd into
+ * all-zero counters for everyone.
  */
 
+import { useEffect, useState } from 'react'
 import { Inbox } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsNav } from '../_shared/ReviewsNav'
 import { ReviewLiveChip } from '../_shared/ReviewLiveChip'
 import { DeskClient, type DeskStats, type DeskReview } from './DeskClient'
-
-export const dynamic = 'force-dynamic'
 
 async function fetchJson<T>(url: string, fallback: T): Promise<T> {
   try {
@@ -25,19 +31,27 @@ async function fetchJson<T>(url: string, fallback: T): Promise<T> {
   }
 }
 
-export default async function ReviewDeskPage() {
-  const backend = getBackendUrl()
-  const [stats, initial] = await Promise.all([
-    fetchJson<DeskStats>(`${backend}/api/reviews/desk/stats`, {
-      counts: { NEW: 0, IN_PROGRESS: 0, RESPONDED: 0, RESOLVED: 0, IGNORED: 0 },
-      open: 0,
-      total: 0,
-    }),
-    fetchJson<{ items: DeskReview[] }>(
-      `${backend}/api/reviews?triageStatus=NEW&limit=100`,
-      { items: [] },
-    ),
-  ])
+export default function ReviewDeskPage() {
+  const [data, setData] = useState<{ stats: DeskStats; initial: { items: DeskReview[] } } | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    const backend = getBackendUrl()
+    Promise.all([
+      fetchJson<DeskStats>(`${backend}/api/reviews/desk/stats`, {
+        counts: { NEW: 0, IN_PROGRESS: 0, RESPONDED: 0, RESOLVED: 0, IGNORED: 0 },
+        open: 0,
+        total: 0,
+      }),
+      fetchJson<{ items: DeskReview[] }>(
+        `${backend}/api/reviews?triageStatus=NEW&limit=100`,
+        { items: [] },
+      ),
+    ]).then(([stats, initial]) => {
+      if (alive) setData({ stats, initial })
+    })
+    return () => { alive = false }
+  }, [])
 
   return (
     <div className="px-4 py-4">
@@ -56,7 +70,18 @@ export default async function ReviewDeskPage() {
       </div>
 
       <ReviewsNav />
-      <DeskClient initialStats={stats} initialReviews={initial.items} />
+      {data ? (
+        <DeskClient initialStats={data.stats} initialReviews={data.initial.items} />
+      ) : (
+        <div aria-busy="true" className="mt-4 space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-16 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            ))}
+          </div>
+          <div className="h-40 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+        </div>
+      )}
     </div>
   )
 }

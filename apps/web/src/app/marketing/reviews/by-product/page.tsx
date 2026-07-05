@@ -1,17 +1,23 @@
+'use client'
+
 /**
  * SR.2 — Per-product review aggregates with negative-rate ranking.
  *
  * Sortable table: SKU / total / % negative / top categories / last review.
  * Default sort = negativePct desc with totalReviews tiebreaker so the
  * worst-performing SKUs surface first.
+ *
+ * The API session cookie lives on the API origin (cross-site setup) — the
+ * Next server can never present it, so data MUST load client-side where the
+ * fetch patch adds credentials. Server-side this page 401'd into the "No
+ * reviews" empty state for everyone.
  */
 
+import { useEffect, useState } from 'react'
 import { Package } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsNav } from '../_shared/ReviewsNav'
 import { ByProductClient } from './ByProductClient'
-
-export const dynamic = 'force-dynamic'
 
 interface ProductBucket {
   productId: string
@@ -40,8 +46,17 @@ async function fetchByProduct(): Promise<ProductBucket[]> {
   }
 }
 
-export default async function ByProductPage() {
-  const items = await fetchByProduct()
+export default function ByProductPage() {
+  const [items, setItems] = useState<ProductBucket[] | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    fetchByProduct().then((rows) => {
+      if (alive) setItems(rows)
+    })
+    return () => { alive = false }
+  }, [])
+
   return (
     <div className="px-4 py-4">
       <div className="flex items-start gap-3 mb-3">
@@ -57,7 +72,9 @@ export default async function ByProductPage() {
         </div>
       </div>
       <ReviewsNav />
-      {items.length === 0 ? (
+      {items === null ? (
+        <div aria-busy="true" className="h-64 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+      ) : items.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
           No reviews linked to products in the last 30 days.
         </div>

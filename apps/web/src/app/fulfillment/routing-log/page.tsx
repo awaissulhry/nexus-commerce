@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * CE.4 — Smart Order Routing: Routing Decision Log.
  *
@@ -7,13 +9,17 @@
  *
  * Also provides a simulation panel: enter channel + shipping country to
  * preview which warehouse the engine would pick without creating a real order.
+ *
+ * The API session cookie lives on the API origin (cross-site setup) — the
+ * Next server can never present it, so the old server-side fetch 401'd and
+ * everyone saw zeroed KPIs + an empty log in prod. Data MUST load
+ * client-side where the patched window.fetch adds credentials.
  */
 
+import { useEffect, useState } from 'react'
 import { GitBranch } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RoutingLogClient } from './RoutingLogClient'
-
-export const dynamic = 'force-dynamic'
 
 interface RoutingDecision {
   id: string
@@ -45,8 +51,50 @@ async function fetchLog(): Promise<RoutingDecision[]> {
   }
 }
 
-export default async function RoutingLogPage() {
-  const decisions = await fetchLog()
+export default function RoutingLogPage() {
+  const [decisions, setDecisions] = useState<RoutingDecision[] | null>(null)
+  useEffect(() => {
+    let alive = true
+    fetchLog().then((d) => {
+      if (alive) setDecisions(d)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const header = (
+    <div className="flex items-start gap-3 mb-5">
+      <GitBranch className="h-6 w-6 text-violet-600 dark:text-violet-400 mt-0.5 shrink-0" />
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+          Routing Log
+        </h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+          Warehouse routing decisions — rule-match uses explicit{' '}
+          <a href="/fulfillment/routing-rules" className="underline">routing rules</a>;
+          scored uses proximity + stock scoring when no rule matches.
+        </p>
+      </div>
+    </div>
+  )
+
+  if (!decisions) {
+    return (
+      <div className="px-4 py-4 max-w-5xl" aria-busy="true">
+        {header}
+        <div className="grid grid-cols-4 gap-3 mb-5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-16 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse"
+            />
+          ))}
+        </div>
+        <div className="h-64 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+      </div>
+    )
+  }
 
   const byMethod = {
     rule: decisions.filter((d) => d.method === 'rule').length,
@@ -57,19 +105,7 @@ export default async function RoutingLogPage() {
 
   return (
     <div className="px-4 py-4 max-w-5xl">
-      <div className="flex items-start gap-3 mb-5">
-        <GitBranch className="h-6 w-6 text-violet-600 dark:text-violet-400 mt-0.5 shrink-0" />
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-            Routing Log
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Warehouse routing decisions — rule-match uses explicit{' '}
-            <a href="/fulfillment/routing-rules" className="underline">routing rules</a>;
-            scored uses proximity + stock scoring when no rule matches.
-          </p>
-        </div>
-      </div>
+      {header}
 
       {/* KPI strip */}
       <div className="grid grid-cols-4 gap-3 mb-5">

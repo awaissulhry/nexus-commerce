@@ -1,15 +1,21 @@
+'use client'
+
 // MC.11.3 — Cross-rule execution history.
 //
-// Server-rendered list of every AutomationRuleExecution row across
+// Client-rendered list of every AutomationRuleExecution row across
 // every marketing-content rule. Default 100 rows, filterable by
 // status. Links back to each rule's editor.
+//
+// The API session cookie lives on the API origin (cross-site setup) — the
+// Next server can never present it, so executions MUST load client-side
+// where the fetch patch adds credentials. Server-side this page 401'd into
+// an empty history + error banner for everyone.
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, History, AlertTriangle } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { getBackendUrl } from '@/lib/backend-url'
-
-export const dynamic = 'force-dynamic'
 
 interface ExecutionRow {
   id: string
@@ -63,8 +69,43 @@ async function fetchExecutions(): Promise<{
   }
 }
 
-export default async function ExecutionHistoryPage() {
-  const { executions, error } = await fetchExecutions()
+export default function ExecutionHistoryPage() {
+  const [result, setResult] = useState<{
+    executions: ExecutionRow[]
+    error: string | null
+  } | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    fetchExecutions().then((r) => {
+      if (alive) setResult(r)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  if (!result) {
+    return (
+      <div className="space-y-4" aria-busy="true">
+        <Link
+          href="/marketing/automation"
+          className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to Automation
+        </Link>
+        <PageHeader
+          title="Execution history"
+          description="Every rule firing across the marketing-content domain. Last 200."
+        />
+        <div className="h-64 animate-pulse rounded-lg border border-default bg-slate-100 dark:border-slate-800 dark:bg-slate-800" />
+      </div>
+    )
+  }
+
+  const { executions, error } = result
+
   return (
     <div className="space-y-4">
       <Link

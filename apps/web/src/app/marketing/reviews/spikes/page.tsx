@@ -1,17 +1,23 @@
+'use client'
+
 /**
  * SR.2 — Dedicated spike feed (broader than the homepage right rail).
  *
  * Filter by status (OPEN / ACKNOWLEDGED / RESOLVED) + marketplace.
  * Acknowledge / resolve actions are inline. SR.3 will wire spike
  * rows into the AutomationRule engine (REVIEW_SPIKE_DETECTED trigger).
+ *
+ * The API session cookie lives on the API origin (cross-site setup) — the
+ * Next server can never present it, so data MUST load client-side where the
+ * fetch patch adds credentials. Server-side this page 401'd into an empty
+ * feed with all-zero counters.
  */
 
+import { useEffect, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsNav } from '../_shared/ReviewsNav'
 import { SpikesFullClient } from './SpikesFullClient'
-
-export const dynamic = 'force-dynamic'
 
 interface SpikeRow {
   id: string
@@ -44,11 +50,20 @@ async function fetchSpikes(): Promise<SpikeRow[]> {
   }
 }
 
-export default async function SpikesPage() {
-  const items = await fetchSpikes()
-  const open = items.filter((s) => s.status === 'OPEN').length
-  const ack = items.filter((s) => s.status === 'ACKNOWLEDGED').length
-  const resolved = items.filter((s) => s.status === 'RESOLVED').length
+export default function SpikesPage() {
+  const [items, setItems] = useState<SpikeRow[] | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    fetchSpikes().then((rows) => {
+      if (alive) setItems(rows)
+    })
+    return () => { alive = false }
+  }, [])
+
+  const open = (items ?? []).filter((s) => s.status === 'OPEN').length
+  const ack = (items ?? []).filter((s) => s.status === 'ACKNOWLEDGED').length
+  const resolved = (items ?? []).filter((s) => s.status === 'RESOLVED').length
   return (
     <div className="px-4 py-4">
       <div className="flex items-start gap-3 mb-3">
@@ -65,12 +80,25 @@ export default async function SpikesPage() {
         </div>
       </div>
       <ReviewsNav />
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <Stat label="Open" value={open} tone={open > 0 ? 'rose' : null} />
-        <Stat label="Acknowledged" value={ack} tone="amber" />
-        <Stat label="Resolved" value={resolved} tone="emerald" />
-      </div>
-      <SpikesFullClient initial={items} />
+      {items === null ? (
+        <div aria-busy="true">
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-16 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            ))}
+          </div>
+          <div className="h-40 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <Stat label="Open" value={open} tone={open > 0 ? 'rose' : null} />
+            <Stat label="Acknowledged" value={ack} tone="amber" />
+            <Stat label="Resolved" value={resolved} tone="emerald" />
+          </div>
+          <SpikesFullClient initial={items} />
+        </>
+      )}
     </div>
   )
 }

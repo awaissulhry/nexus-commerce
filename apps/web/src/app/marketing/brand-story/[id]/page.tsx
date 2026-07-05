@@ -1,12 +1,12 @@
 // MC.9.2 — Brand Story builder page.
 //
-// Server-rendered fetch + hand-off to the client builder. Replaces
-// the MC.9.1 placeholder.
+// Hands off to the client builder via BrandStoryBuilderLoader — the
+// cross-site API session cookie means server fetches can never
+// authenticate, so the detail loads client-side. The page stays a server
+// component so the builder's router.refresh() calls mint a new
+// refreshToken and re-trigger the loader.
 
-import { notFound } from 'next/navigation'
-import { getBackendUrl } from '@/lib/backend-url'
-import BrandStoryBuilderClient from '../_components/BrandStoryBuilderClient'
-import type { BrandStoryDetail } from '../_lib/types'
+import BrandStoryBuilderLoader from './BrandStoryBuilderLoader'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,19 +16,5 @@ interface PageProps {
 
 export default async function BrandStoryBuilderPage({ params }: PageProps) {
   const { id } = await params
-  const backend = getBackendUrl()
-  const res = await fetch(
-    `${backend}/api/brand-stories/${encodeURIComponent(id)}`,
-    { cache: 'no-store' },
-  )
-  if (res.status === 404) notFound()
-  if (!res.ok) {
-    return (
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-        Failed to load Brand Story (status {res.status}).
-      </div>
-    )
-  }
-  const data = (await res.json()) as { story: BrandStoryDetail }
-  return <BrandStoryBuilderClient initial={data.story} apiBase={backend} />
+  return <BrandStoryBuilderLoader id={id} refreshToken={Date.now()} />
 }

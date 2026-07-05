@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * PA.4 — Portfolio Intelligence.
  *
@@ -7,13 +9,19 @@
  *
  * Inventory-to-ad-spend ROAS table shows SKUs where ad spend is close
  * to or exceeding revenue contribution.
+ *
+ * The API session cookie lives on the API origin (cross-site setup) — the
+ * Next server can never present it, so data MUST load client-side where the
+ * fetch patch adds credentials. Server-side this page 401'd into zeros for
+ * everyone. The AL.3 `?source=` toggle still works: PortfolioClient pushes
+ * the new query and the fetch effect below is keyed on it.
  */
 
+import { Suspense, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { BarChart2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { PortfolioClient } from './PortfolioClient'
-
-export const dynamic = 'force-dynamic'
 
 interface PortfolioRow {
   id: string
@@ -62,16 +70,46 @@ async function fetchPortfolio(source: string): Promise<PortfolioPayload> {
   }
 }
 
-export default async function PortfolioPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ source?: string }>
-}) {
+function PortfolioPageInner() {
   // AL.3 — `?source=live|official|auto` (default auto: prefer official
   // T+1 Amazon report, fall back to live Order/OrderItem if empty).
-  const params = (await searchParams) ?? {}
-  const source = params.source === 'live' || params.source === 'official' ? params.source : 'auto'
-  const data = await fetchPortfolio(source)
+  const searchParams = useSearchParams()
+  const sourceParam = searchParams?.get('source')
+  const source = sourceParam === 'live' || sourceParam === 'official' ? sourceParam : 'auto'
+  const [data, setData] = useState<PortfolioPayload | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    fetchPortfolio(source).then((d) => {
+      if (alive) setData(d)
+    })
+    return () => { alive = false }
+  }, [source])
+
+  if (!data) {
+    return (
+      <div className="px-4 py-4 max-w-6xl" aria-busy="true">
+        <div className="flex items-start gap-3 mb-5">
+          <BarChart2 className="h-6 w-6 text-violet-600 dark:text-violet-400 mt-0.5 shrink-0" />
+          <div>
+            <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+              Portfolio Intelligence
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              All active SKUs ranked by composite health score (quality × sales × stock).
+              Products below 60 need attention. Sorted worst-first.
+            </p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-16 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+          ))}
+        </div>
+        <div className="h-64 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+      </div>
+    )
+  }
 
   const needsAttention = data.products.filter((p) => p.healthScore < 60).length
   const stockoutHigh = data.products.filter((p) => p.stockoutRisk === 'HIGH').length
@@ -106,6 +144,25 @@ export default async function PortfolioPage({
         dataFreshness={data.dataFreshness}
       />
     </div>
+  )
+}
+
+export default function PortfolioPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="px-4 py-4 max-w-6xl" aria-busy="true">
+          <div className="flex items-start gap-3 mb-5">
+            <BarChart2 className="h-6 w-6 text-violet-600 dark:text-violet-400 mt-0.5 shrink-0" />
+            <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+              Portfolio Intelligence
+            </h1>
+          </div>
+        </div>
+      }
+    >
+      <PortfolioPageInner />
+    </Suspense>
   )
 }
 

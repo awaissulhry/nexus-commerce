@@ -1,8 +1,10 @@
+'use client'
+
 // MC.13.5 — Storage analytics dashboard.
 //
-// Server-fetches the analytics snapshot from /api/assets/analytics
-// (MC.13.4) + the workspace storage quota from /api/assets/overview
-// (MC.13.1) and renders the operator-facing visual breakdown:
+// Fetches the analytics snapshot from /api/assets/analytics (MC.13.4) +
+// the workspace storage quota from /api/assets/overview (MC.13.1) and
+// renders the operator-facing visual breakdown:
 //
 //   - KPI strip (total / orphaned / avg size / cloudinary deletes)
 //   - Storage usage bar (used vs hard cap when set)
@@ -13,13 +15,19 @@
 //
 // The page is read-only — operators land here from the Hub via a
 // "View analytics" entry point in MC.13.5-followup.
+//
+// The API session cookie lives on the API origin (cross-site setup) — the
+// Next server can never present it, so data MUST load client-side where the
+// fetch patch adds credentials. Server-side this page 401'd into the
+// "Analytics unavailable" alert for everyone.
 
+import { useEffect, useState } from 'react'
 import { ImageIcon, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import PageHeader from '@/components/layout/PageHeader'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import StorageAnalyticsClient from './StorageAnalyticsClient'
 import type { OverviewPayload } from '../_lib/types'
-
-export const dynamic = 'force-dynamic'
 
 interface AnalyticsPayload {
   totalAssets: number
@@ -76,11 +84,47 @@ async function fetchOverview(): Promise<OverviewPayload | null> {
   }
 }
 
-export default async function StorageAnalyticsPage() {
-  const [{ data, error }, overview] = await Promise.all([
-    fetchAnalytics(),
-    fetchOverview(),
-  ])
+export default function StorageAnalyticsPage() {
+  const { t } = useTranslations()
+  const [result, setResult] = useState<{
+    data: AnalyticsPayload | null
+    error: string | null
+    overview: OverviewPayload | null
+  } | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    Promise.all([fetchAnalytics(), fetchOverview()]).then(
+      ([{ data, error }, overview]) => {
+        if (alive) setResult({ data, error, overview })
+      },
+    )
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  if (!result) {
+    return (
+      <div className="space-y-4" aria-busy="true">
+        <PageHeader
+          title={t('marketingAnalytics.title')}
+          description={t('marketingAnalytics.description')}
+        />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-20 animate-pulse rounded-lg border border-default bg-slate-100 dark:border-slate-800 dark:bg-slate-800"
+            />
+          ))}
+        </div>
+        <div className="h-64 animate-pulse rounded-lg border border-default bg-slate-100 dark:border-slate-800 dark:bg-slate-800" />
+      </div>
+    )
+  }
+
+  const { data, error, overview } = result
 
   if (error || !data) {
     return (

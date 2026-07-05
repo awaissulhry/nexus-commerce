@@ -1,16 +1,22 @@
+'use client'
+
 /**
  * RX.5 — Review action items (closed SR.3 loop).
  *
  * Spike-driven AI fixes (improved bullets, A+ modules, recall flags)
  * surfaced as an apply/dismiss workqueue.
+ *
+ * The API session cookie lives on the API origin (cross-site setup) — the
+ * Next server can never present it, so data MUST load client-side where the
+ * fetch patch adds credentials. Server-side this page 401'd into an empty
+ * workqueue (ActionsClient deliberately skips its initial load).
  */
 
+import { useEffect, useState } from 'react'
 import { Wrench } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsNav } from '../_shared/ReviewsNav'
 import { ActionsClient, type ActionItem } from './ActionsClient'
-
-export const dynamic = 'force-dynamic'
 
 async function fetchJson<T>(url: string, fallback: T): Promise<T> {
   try {
@@ -22,12 +28,19 @@ async function fetchJson<T>(url: string, fallback: T): Promise<T> {
   }
 }
 
-export default async function ReviewActionsPage() {
-  const backend = getBackendUrl()
-  const { items } = await fetchJson<{ items: ActionItem[] }>(
-    `${backend}/api/reviews/action-items?status=OPEN&limit=200`,
-    { items: [] },
-  )
+export default function ReviewActionsPage() {
+  const [items, setItems] = useState<ActionItem[] | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    fetchJson<{ items: ActionItem[] }>(
+      `${getBackendUrl()}/api/reviews/action-items?status=OPEN&limit=200`,
+      { items: [] },
+    ).then((d) => {
+      if (alive) setItems(d.items)
+    })
+    return () => { alive = false }
+  }, [])
 
   return (
     <div className="px-4 py-4">
@@ -46,7 +59,15 @@ export default async function ReviewActionsPage() {
       </div>
 
       <ReviewsNav />
-      <ActionsClient initial={items} />
+      {items ? (
+        <ActionsClient initial={items} />
+      ) : (
+        <div aria-busy="true" className="mt-4 space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-24 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

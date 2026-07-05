@@ -1,17 +1,23 @@
+'use client'
+
 /**
  * SR.2 — Day × category sentiment heatmap.
  *
  * Volume mode: cell intensity = log(total). Operator can flip to "rate"
  * mode to color by negative percentage instead. Click-through drills
  * into the underlying reviews for that (day, category) cohort.
+ *
+ * The API session cookie lives on the API origin (cross-site setup) — the
+ * Next server can never present it, so data MUST load client-side where the
+ * fetch patch adds credentials. Server-side this page 401'd into the "No
+ * data" empty state for everyone.
  */
 
+import { useEffect, useState } from 'react'
 import { Grid } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsNav } from '../_shared/ReviewsNav'
 import { HeatmapGrid } from './HeatmapGrid'
-
-export const dynamic = 'force-dynamic'
 
 interface HeatmapCell {
   date: string
@@ -42,10 +48,19 @@ async function fetchHeatmap(): Promise<HeatmapResponse> {
   }
 }
 
-export default async function HeatmapPage() {
-  const data = await fetchHeatmap()
-  const totalReviews = data.cells.reduce((acc, c) => acc + c.total, 0)
-  const totalNegative = data.cells.reduce((acc, c) => acc + c.negative, 0)
+export default function HeatmapPage() {
+  const [data, setData] = useState<HeatmapResponse | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    fetchHeatmap().then((d) => {
+      if (alive) setData(d)
+    })
+    return () => { alive = false }
+  }, [])
+
+  const totalReviews = (data?.cells ?? []).reduce((acc, c) => acc + c.total, 0)
+  const totalNegative = (data?.cells ?? []).reduce((acc, c) => acc + c.negative, 0)
 
   return (
     <div className="px-4 py-4">
@@ -63,25 +78,38 @@ export default async function HeatmapPage() {
       </div>
       <ReviewsNav />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-        <Stat label="Reviews in period" value={totalReviews} />
-        <Stat label="Active categories" value={data.categories.length} />
-        <Stat
-          label="Total negative"
-          value={totalNegative}
-          tone={totalNegative > 0 ? 'rose' : null}
-        />
-      </div>
-
-      {data.cells.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
-          No data in {data.sinceDays} days. Run the ingest:{' '}
-          <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
-            POST /api/reviews/cron/ingest/trigger
-          </code>
+      {data === null ? (
+        <div aria-busy="true">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-16 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            ))}
+          </div>
+          <div className="h-64 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
         </div>
       ) : (
-        <HeatmapGrid dates={data.dates} categories={data.categories} cells={data.cells} />
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <Stat label="Reviews in period" value={totalReviews} />
+            <Stat label="Active categories" value={data.categories.length} />
+            <Stat
+              label="Total negative"
+              value={totalNegative}
+              tone={totalNegative > 0 ? 'rose' : null}
+            />
+          </div>
+
+          {data.cells.length === 0 ? (
+            <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
+              No data in {data.sinceDays} days. Run the ingest:{' '}
+              <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
+                POST /api/reviews/cron/ingest/trigger
+              </code>
+            </div>
+          ) : (
+            <HeatmapGrid dates={data.dates} categories={data.categories} cells={data.cells} />
+          )}
+        </>
       )}
     </div>
   )

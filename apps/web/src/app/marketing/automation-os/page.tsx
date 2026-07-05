@@ -9,22 +9,17 @@
  *
  * Mounted at /marketing/automation-os (the legacy /marketing/automation is
  * the MC content-automation surface — kept separate until P14 retirement).
+ *
+ * Rules load client-side in AutomationStudioLoader — the cross-site API
+ * session cookie means server fetches can never authenticate. page.tsx
+ * stays a server component for the metadata export.
  */
 
 import type { Metadata } from 'next'
-import { AutomationStudioClient, type MarketingRule } from './AutomationStudioClient'
-import { getBackendUrl } from '@/lib/backend-url'
+import { AutomationStudioLoader } from './AutomationStudioLoader'
 
 export const metadata: Metadata = { title: 'Marketing · Automation' }
-export const dynamic = 'force-dynamic'
 
-export default async function MarketingAutomationPage() {
-  let rules: MarketingRule[] = []
-  try {
-    const res = await fetch(`${getBackendUrl()}/api/marketing/os/rules`, { cache: 'no-store' })
-    if (res.ok) rules = (await res.json()).items ?? []
-  } catch {
-    // empty
-  }
-  return <AutomationStudioClient initialRules={rules} />
+export default function MarketingAutomationPage() {
+  return <AutomationStudioLoader />
 }

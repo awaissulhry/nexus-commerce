@@ -1,7 +1,13 @@
+'use client'
+
+// The API session cookie lives on the API origin (cross-site setup) — the
+// Next server can never present it, so data MUST load client-side where the
+// fetch patch adds credentials. Server-side these fetches 401'd into
+// "2FA disabled / no sessions / no login history" for everyone.
+
+import { useEffect, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import SecurityClient from './SecurityClient'
-
-export const dynamic = 'force-dynamic'
 
 interface RawSession {
   id: string
@@ -26,7 +32,18 @@ interface RawLoginEvent {
   createdAt: string
 }
 
-export default async function SecurityPage() {
+interface InitialData {
+  twoFactor: {
+    enabled: boolean
+    enrolledAt: string | null
+    recoveryCodesRemaining: number
+  }
+  sessions: RawSession[]
+  loginEvents: RawLoginEvent[]
+  loadError: string | null
+}
+
+async function fetchInitialData(): Promise<InitialData> {
   const backend = getBackendUrl()
   let twoFactor = {
     enabled: false,
@@ -56,12 +73,36 @@ export default async function SecurityPage() {
     loadError = err?.message ?? String(err)
   }
 
+  return { twoFactor, sessions, loginEvents, loadError }
+}
+
+export default function SecurityPage() {
+  const [data, setData] = useState<InitialData | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    fetchInitialData().then((d) => {
+      if (alive) setData(d)
+    })
+    return () => { alive = false }
+  }, [])
+
+  if (!data) {
+    return (
+      <div className="max-w-3xl space-y-6" aria-busy="true">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-40 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+        ))}
+      </div>
+    )
+  }
+
   return (
     <SecurityClient
-      twoFactor={twoFactor}
-      sessions={sessions}
-      loginEvents={loginEvents}
-      initialError={loadError}
+      twoFactor={data.twoFactor}
+      sessions={data.sessions}
+      loginEvents={data.loginEvents}
+      initialError={data.loadError}
     />
   )
 }

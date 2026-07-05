@@ -1,17 +1,27 @@
+'use client'
+
 /**
  * Settings rebuild — Phase B.5
  *
  * /settings/audit — settings change history. Reads from
- * /api/settings/audit. Server-rendered initial page; the client
- * component handles filter changes + revert with refetch.
+ * /api/settings/audit. Initial page loads CLIENT-side (the API session
+ * cookie lives on the API origin, so server fetches can never
+ * authenticate — they 401'd into an empty log); the client component
+ * handles filter changes + revert with refetch.
  */
 
+import { useEffect, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import AuditClient, { type AuditRow, type KeyCountMap } from './AuditClient'
 
-export const dynamic = 'force-dynamic'
+interface InitialData {
+  items: AuditRow[]
+  total: number
+  keyCounts: KeyCountMap
+  loadError: string | null
+}
 
-export default async function SettingsAuditPage() {
+async function fetchInitialData(): Promise<InitialData> {
   const backend = getBackendUrl()
   let items: AuditRow[] = []
   let total = 0
@@ -38,12 +48,37 @@ export default async function SettingsAuditPage() {
     loadError = err?.message ?? String(err)
   }
 
+  return { items, total, keyCounts, loadError }
+}
+
+export default function SettingsAuditPage() {
+  const [data, setData] = useState<InitialData | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    fetchInitialData().then((d) => {
+      if (alive) setData(d)
+    })
+    return () => { alive = false }
+  }, [])
+
+  if (!data) {
+    return (
+      <div className="max-w-4xl space-y-4" aria-busy="true">
+        <div className="h-10 w-64 rounded-md bg-slate-100 dark:bg-slate-800 animate-pulse" />
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-14 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+        ))}
+      </div>
+    )
+  }
+
   return (
     <AuditClient
-      initial={items}
-      initialTotal={total}
-      initialKeyCounts={keyCounts}
-      initialError={loadError}
+      initial={data.items}
+      initialTotal={data.total}
+      initialKeyCounts={data.keyCounts}
+      initialError={data.loadError}
     />
   )
 }

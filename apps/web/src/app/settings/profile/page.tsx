@@ -1,6 +1,5 @@
 import { prisma } from '@nexus/database'
-import { getBackendUrl } from '@/lib/backend-url'
-import ProfileClient from './ProfileClient'
+import ProfilePageClient from './ProfilePageClient'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,21 +13,11 @@ export default async function ProfilePage() {
     console.error('[settings/profile] prisma error:', err)
   }
 
-  // Pull 2FA status from the API so the security section knows
-  // whether to render Enroll or "Enabled · regen / disable".
-  let twoFactor = { enabled: false, enrolledAt: null as string | null, recoveryCodesRemaining: 0 }
-  try {
-    const res = await fetch(`${getBackendUrl()}/api/settings/2fa/status`, {
-      cache: 'no-store',
-    })
-    if (res.ok) twoFactor = await res.json()
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('[settings/profile] 2fa status fetch failed:', err)
-  }
-
+  // 2FA status loads in ProfilePageClient (client-side): the API session
+  // cookie lives on the API origin, so a server-side fetch can never
+  // authenticate — it 401'd and the security section always showed "Enroll".
   return (
-    <ProfileClient
+    <ProfilePageClient
       profile={profile ? {
         displayName: profile.displayName ?? '',
         email: profile.email ?? '',
@@ -42,7 +31,6 @@ export default async function ProfilePage() {
         workingHoursEnd: profile.workingHoursEnd ?? '',
         hasPassword: !!profile.passwordHash,
       } : null}
-      twoFactor={twoFactor}
     />
   )
 }

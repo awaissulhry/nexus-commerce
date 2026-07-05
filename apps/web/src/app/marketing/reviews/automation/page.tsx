@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * SR.3 — Review-domain automation rules workspace.
  *
@@ -7,15 +9,19 @@
  *   - "Run evaluator" button (manual cron tick against OPEN spikes)
  *   - Per-rule link to the shared advertising rule detail page
  *   - Link to execution history
+ *
+ * The API session cookie lives on the API origin (cross-site setup) — the
+ * Next server can never present it, so data MUST load client-side where the
+ * fetch patch adds credentials. Server-side this page 401'd into an empty
+ * rules list for everyone.
  */
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { AlertCircle, Bot, History, ChevronRight } from 'lucide-react'
 import { ReviewsNav } from '../_shared/ReviewsNav'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewAutomationActionsClient } from './ReviewAutomationActionsClient'
-
-export const dynamic = 'force-dynamic'
 
 interface AutomationRule {
   id: string
@@ -36,12 +42,16 @@ interface AutomationRule {
 }
 
 async function fetchRules(): Promise<AutomationRule[]> {
-  const res = await fetch(`${getBackendUrl()}/api/reviews/automation-rules`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) return []
-  const json = (await res.json()) as { items: AutomationRule[] }
-  return json.items
+  try {
+    const res = await fetch(`${getBackendUrl()}/api/reviews/automation-rules`, {
+      cache: 'no-store',
+    })
+    if (!res.ok) return []
+    const json = (await res.json()) as { items: AutomationRule[] }
+    return json.items
+  } catch {
+    return []
+  }
 }
 
 function statusLabel(rule: AutomationRule): { label: string; cls: string } {
@@ -67,8 +77,37 @@ const TRIGGER_LABEL: Record<string, string> = {
   REVIEW_SPIKE_DETECTED: 'Review Spike',
 }
 
-export default async function ReviewAutomationPage() {
-  const rules = await fetchRules()
+export default function ReviewAutomationPage() {
+  const [rules, setRules] = useState<AutomationRule[] | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    fetchRules().then((items) => {
+      if (alive) setRules(items)
+    })
+    return () => { alive = false }
+  }, [])
+
+  if (rules === null) {
+    return (
+      <div className="px-4 py-4" aria-busy="true">
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <Bot className="h-5 w-5 text-blue-500" />
+          Review Automation
+        </h1>
+        <div className="mt-3">
+          <ReviewsNav />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-16 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+          ))}
+        </div>
+        <div className="h-40 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+      </div>
+    )
+  }
+
   const live = rules.filter((r) => r.enabled && !r.dryRun).length
   const dryRun = rules.filter((r) => r.enabled && r.dryRun).length
 

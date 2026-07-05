@@ -1,14 +1,10 @@
+'use client'
+
 /**
  * L.2.0 — Unified observability hub.
  *
- * Replaces the prior page (a 245-line static table that read 50 rows
- * from the SyncLog table — Amazon-only labelling, zero filters, zero
- * client interactivity, and 0 rows in the DB so it always rendered
- * the empty state).
- *
- * The hub aggregates four already-mounted Fastify endpoints in one
- * server fetch so first paint is fully populated, then hands off to
- * the client component which polls every 30s.
+ * The hub aggregates the Fastify observability endpoints in one initial
+ * fetch, then hands off to SyncLogsHubClient which polls every 30s.
  *
  *   GET /api/dashboard/health      — channel matrix + queue depth +
  *                                    24h sync rollup + recent errors
@@ -17,15 +13,16 @@
  *   GET /api/audit-log/search      — recent mutations across the
  *                                    platform with facets
  *
- * Future Phase L2 commits will add sub-routes (/sync-logs/cron,
- * /sync-logs/activity, /sync-logs/outbound, /sync-logs/webhooks,
- * /sync-logs/errors) backed by the same endpoints + new typed Fastify
- * routes for webhook delivery and outbound API call streams.
+ * The API session cookie lives on the API origin (cross-site setup) — the
+ * Next server can never present it, so the old server-side fetches 401'd
+ * and everyone saw an empty hub until the first 30s poll tick. The initial
+ * load MUST run client-side where the patched window.fetch adds credentials.
  */
 
+import { useEffect, useState } from 'react'
 import PageHeader from '@/components/layout/PageHeader'
 import { getBackendUrl } from '@/lib/backend-url'
-import { getServerT } from '@/lib/i18n/server'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import SyncLogsHubClient, {
   type HealthRollup,
   type CronRunsRollup,
@@ -35,17 +32,16 @@ import SyncLogsHubClient, {
   type AlertsRollup,
 } from './SyncLogsHubClient'
 
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
-async function fetchInitial(): Promise<{
+interface InitialPayload {
   health: HealthRollup | null
   crons: CronRunsRollup | null
   audit: AuditRollup | null
   apiCalls: ApiCallsRollup | null
   errorGroups: ErrorGroupsRollup | null
   alerts: AlertsRollup | null
-}> {
+}
+
+async function fetchInitial(): Promise<InitialPayload> {
   const backend = getBackendUrl()
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   const [
@@ -105,8 +101,20 @@ async function fetchInitial(): Promise<{
   return { health, crons, audit, apiCalls, errorGroups, alerts }
 }
 
-export default async function SyncLogsHubPage() {
-  const [initial, t] = await Promise.all([fetchInitial(), getServerT()])
+export default function SyncLogsHubPage() {
+  const { t } = useTranslations()
+  const [initial, setInitial] = useState<InitialPayload | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    fetchInitial().then((payload) => {
+      if (alive) setInitial(payload)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
   return (
     <div>
       <PageHeader
@@ -117,7 +125,22 @@ export default async function SyncLogsHubPage() {
           { label: t('syncLogs.hub.title') },
         ]}
       />
-      <SyncLogsHubClient initial={initial} />
+      {initial ? (
+        <SyncLogsHubClient initial={initial} />
+      ) : (
+        <div className="space-y-5" aria-busy="true">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-20 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse"
+              />
+            ))}
+          </div>
+          <div className="h-56 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+          <div className="h-56 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+        </div>
+      )}
     </div>
   )
 }

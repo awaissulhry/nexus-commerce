@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * CE.3 — Buy Box Engine: Repricing Decisions Dashboard.
  *
@@ -8,14 +10,18 @@
  * When NEXUS_REPRICER_LIVE=1 is set, applied=true rows indicate that
  * ChannelListing.priceOverride was updated and a PRICE_UPDATE was
  * enqueued to OutboundSyncQueue.
+ *
+ * The API session cookie lives on the API origin (cross-site setup) — the
+ * Next server can never present it, so the old server-side fetch 401'd and
+ * everyone saw zeroed KPIs + an empty table in prod. Data MUST load
+ * client-side where the patched window.fetch adds credentials.
  */
 
+import { useEffect, useState } from 'react'
 import { TrendingUp } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RepricingDecisionsClient } from './RepricingDecisionsClient'
 import { RepricingRuleStats } from './RepricingRuleStats'
-
-export const dynamic = 'force-dynamic'
 
 interface Decision {
   id: string
@@ -50,8 +56,50 @@ async function fetchDecisions(): Promise<Decision[]> {
   }
 }
 
-export default async function RepricingPage() {
-  const decisions = await fetchDecisions()
+export default function RepricingPage() {
+  const [decisions, setDecisions] = useState<Decision[] | null>(null)
+  useEffect(() => {
+    let alive = true
+    fetchDecisions().then((d) => {
+      if (alive) setDecisions(d)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const header = (
+    <div className="flex items-start gap-3 mb-5">
+      <TrendingUp className="h-6 w-6 text-violet-600 dark:text-violet-400 mt-0.5 shrink-0" />
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+          Repricing Decisions
+        </h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+          Buy Box Engine evaluator output — price decisions from the last evaluator tick.
+          Set <code className="text-[11px] px-1 py-0.5 bg-slate-100 dark:bg-slate-800 rounded">NEXUS_REPRICER_LIVE=1</code> to
+          enable live price writes; without it, decisions are logged for review only.
+        </p>
+      </div>
+    </div>
+  )
+
+  if (!decisions) {
+    return (
+      <div className="px-4 py-4 max-w-5xl" aria-busy="true">
+        {header}
+        <div className="grid grid-cols-3 gap-3 mb-5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-16 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse"
+            />
+          ))}
+        </div>
+        <div className="h-64 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+      </div>
+    )
+  }
 
   const applied = decisions.filter((d) => d.applied).length
   const pending = decisions.filter((d) => !d.applied && Number(d.newPrice) !== Number(d.oldPrice)).length
@@ -59,19 +107,7 @@ export default async function RepricingPage() {
 
   return (
     <div className="px-4 py-4 max-w-5xl">
-      <div className="flex items-start gap-3 mb-5">
-        <TrendingUp className="h-6 w-6 text-violet-600 dark:text-violet-400 mt-0.5 shrink-0" />
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-            Repricing Decisions
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Buy Box Engine evaluator output — price decisions from the last evaluator tick.
-            Set <code className="text-[11px] px-1 py-0.5 bg-slate-100 dark:bg-slate-800 rounded">NEXUS_REPRICER_LIVE=1</code> to
-            enable live price writes; without it, decisions are logged for review only.
-          </p>
-        </div>
-      </div>
+      {header}
 
       {/* KPI strip */}
       <div className="grid grid-cols-3 gap-3 mb-5">

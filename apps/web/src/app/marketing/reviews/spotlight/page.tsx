@@ -1,13 +1,19 @@
+'use client'
+
 /**
  * RX.4 — AI Review Spotlight (Voice-of-Customer brief).
+ *
+ * The API session cookie lives on the API origin (cross-site setup) — the
+ * Next server can never present it, so data MUST load client-side where the
+ * fetch patch adds credentials. Server-side this page 401'd into an empty
+ * "no spotlight" state.
  */
 
+import { useEffect, useState } from 'react'
 import { Lightbulb } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsNav } from '../_shared/ReviewsNav'
 import { SpotlightClient, type Spotlight } from './SpotlightClient'
-
-export const dynamic = 'force-dynamic'
 
 async function fetchJson<T>(url: string, fallback: T): Promise<T> {
   try {
@@ -19,12 +25,19 @@ async function fetchJson<T>(url: string, fallback: T): Promise<T> {
   }
 }
 
-export default async function SpotlightPage() {
-  const backend = getBackendUrl()
-  const { spotlight } = await fetchJson<{ spotlight: Spotlight | null }>(
-    `${backend}/api/reviews/spotlight`,
-    { spotlight: null },
-  )
+export default function SpotlightPage() {
+  const [data, setData] = useState<{ spotlight: Spotlight | null } | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    fetchJson<{ spotlight: Spotlight | null }>(
+      `${getBackendUrl()}/api/reviews/spotlight`,
+      { spotlight: null },
+    ).then((d) => {
+      if (alive) setData(d)
+    })
+    return () => { alive = false }
+  }, [])
 
   return (
     <div className="px-4 py-4">
@@ -42,7 +55,15 @@ export default async function SpotlightPage() {
       </div>
 
       <ReviewsNav />
-      <SpotlightClient initial={spotlight} />
+      {data ? (
+        <SpotlightClient initial={data.spotlight} />
+      ) : (
+        <div aria-busy="true" className="mt-4 space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-24 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,78 +1,133 @@
+'use client'
+
 /**
  * W5.49 — listing recovery page.
  *
- * Server component: pulls the product + its existing channel listings
- * and the last 20 audit events, then hands them to the client picker.
+ * Pulls the product + its existing channel listings and the last 20
+ * audit events, then hands them to the client picker.
+ *
+ * The API session cookie lives on the API origin (cross-site setup) — the
+ * Next server can never present it, so the old server-side fetches 401'd
+ * and everyone saw the failure card in prod. Data MUST load client-side
+ * where the patched window.fetch adds credentials.
  *
  * The actual destructive call goes via /api/products/:id/recover; on
  * success the client redirects to the wizard URL the API returned for
  * the recreate step.
  */
 
-import { notFound } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { notFound, useParams } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
-import { getServerT } from '@/lib/i18n/server'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import RecoverClient, {
   type RecoverChannelListing,
   type RecoverProduct,
   type RecoveryEvent,
 } from './RecoverClient'
 import NewTabClickPerf from '@/components/perf/NewTabClickPerf'
+import RecoverLoading from './loading'
 
-export const dynamic = 'force-dynamic'
+type LoadState =
+  | { phase: 'loading' }
+  | { phase: 'notfound' }
+  | { phase: 'error'; titleKey: string; detail: string | null }
+  | {
+      phase: 'ready'
+      product: RecoverProduct & { channelListings?: RecoverChannelListing[] }
+      events: RecoveryEvent[]
+    }
 
-interface PageProps {
-  params: Promise<{ id: string }>
-}
+export default function RecoverPage() {
+  const params = useParams<{ id: string }>()
+  const productId = params?.id ?? ''
+  const { t } = useTranslations()
 
-export default async function RecoverPage({ params }: PageProps) {
-  const { id: productId } = await params
-  const t = await getServerT()
-  const backend = getBackendUrl()
+  const [state, setState] = useState<LoadState>({ phase: 'loading' })
 
-  // EH.3 — Parallel fetch of /health (slow: 200–500 ms Prisma joins)
-  // and /recover/events (cheap: ~50 ms). Previously sequential, so
-  // the cheap events query waited on the slow health query for no
-  // reason. .catch(() => null) on each preserves the "network error
-  // vs non-2xx" distinction the original try/catch made.
-  const [productRes, eventsRes] = await Promise.all([
-    fetch(`${backend}/api/products/${productId}/health`, {
-      cache: 'no-store',
-    }).catch(() => null),
-    fetch(`${backend}/api/products/${productId}/recover/events`, {
-      cache: 'no-store',
-    }).catch(() => null),
-  ])
+  useEffect(() => {
+    let alive = true
+    setState({ phase: 'loading' })
+    ;(async () => {
+      const backend = getBackendUrl()
 
-  if (!productRes) {
+      // EH.3 — Parallel fetch of /health (slow: 200–500 ms Prisma joins)
+      // and /recover/events (cheap: ~50 ms). .catch(() => null) on each
+      // preserves the "network error vs non-2xx" distinction.
+      const [productRes, eventsRes] = await Promise.all([
+        fetch(`${backend}/api/products/${productId}/health`, {
+          cache: 'no-store',
+        }).catch(() => null),
+        fetch(`${backend}/api/products/${productId}/recover/events`, {
+          cache: 'no-store',
+        }).catch(() => null),
+      ])
+      if (!alive) return
+
+      if (!productRes) {
+        setState({
+          phase: 'error',
+          titleKey: 'recover.error.unreachableTitle',
+          detail: null,
+        })
+        return
+      }
+      if (productRes.status === 404) {
+        setState({ phase: 'notfound' })
+        return
+      }
+      if (!productRes.ok) {
+        setState({
+          phase: 'error',
+          titleKey: 'recover.error.loadFailedTitle',
+          detail: `HTTP ${productRes.status}`,
+        })
+        return
+      }
+
+      const product = (await productRes.json()) as RecoverProduct & {
+        channelListings?: RecoverChannelListing[]
+      }
+      if (!alive) return
+      if (!product?.id) {
+        setState({ phase: 'notfound' })
+        return
+      }
+
+      const events: RecoveryEvent[] =
+        eventsRes && eventsRes.ok
+          ? ((await eventsRes.json()) as { events?: RecoveryEvent[] }).events ?? []
+          : []
+      if (!alive) return
+
+      setState({ phase: 'ready', product, events })
+    })()
+    return () => {
+      alive = false
+    }
+  }, [productId])
+
+  if (state.phase === 'notfound') notFound()
+
+  if (state.phase === 'loading') {
+    return (
+      <>
+        {/* EH.8 — Cross-tab click→FCP perf telemetry. */}
+        <NewTabClickPerf button="recover" productId={productId} />
+        <RecoverLoading />
+      </>
+    )
+  }
+
+  if (state.phase === 'error') {
     return (
       <FailureView
         productId={productId}
-        title={t('recover.error.unreachableTitle')}
-        detail={t('recover.error.unreachableDetail')}
+        title={t(state.titleKey)}
+        detail={state.detail ?? t('recover.error.unreachableDetail')}
       />
     )
   }
-  if (productRes.status === 404) notFound()
-  if (!productRes.ok) {
-    return (
-      <FailureView
-        productId={productId}
-        title={t('recover.error.loadFailedTitle')}
-        detail={`HTTP ${productRes.status}`}
-      />
-    )
-  }
-
-  const product = (await productRes.json()) as RecoverProduct & {
-    channelListings?: RecoverChannelListing[]
-  }
-  if (!product?.id) notFound()
-
-  const events: RecoveryEvent[] =
-    eventsRes && eventsRes.ok
-      ? ((await eventsRes.json()) as { events?: RecoveryEvent[] }).events ?? []
-      : []
 
   return (
     <>
@@ -80,9 +135,9 @@ export default async function RecoverPage({ params }: PageProps) {
       <NewTabClickPerf button="recover" productId={productId} />
       <RecoverClient
         productId={productId}
-        product={product}
-        listings={product.channelListings ?? []}
-        events={events}
+        product={state.product}
+        listings={state.product.channelListings ?? []}
+        events={state.events}
       />
     </>
   )

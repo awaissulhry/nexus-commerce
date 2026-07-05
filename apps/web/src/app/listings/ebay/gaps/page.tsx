@@ -7,12 +7,15 @@
  *   - Select products and schedule bulk listing creation
  *   - Set daily limit (default 50, max 200)
  *   - View scheduling progress
+ *
+ * page.tsx stays a server component because of generateMetadata; the
+ * gap/progress data loads in EbayGapsLoader (client) because the API
+ * session cookie lives on the API origin and server fetches 401.
  */
 
 import type { Metadata } from 'next'
-import { getBackendUrl } from '@/lib/backend-url'
 import { COUNTRY_NAMES } from '@/lib/country-names'
-import EbayGapsClient from './EbayGapsClient'
+import EbayGapsLoader from './EbayGapsLoader'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -20,32 +23,21 @@ export const revalidate = 0
 export async function generateMetadata({
   searchParams,
 }: {
-  searchParams: Record<string, string>
+  searchParams: Promise<Record<string, string>>
 }): Promise<Metadata> {
-  const mp = (searchParams.marketplace ?? 'IT').toUpperCase()
+  const params = await searchParams
+  const mp = (params.marketplace ?? 'IT').toUpperCase()
   const label = COUNTRY_NAMES[mp] ?? mp
   return { title: `eBay Listing Gaps · ${label}` }
-}
-
-async function fetchGapData(marketplace: string) {
-  const backend = getBackendUrl()
-  const [gapRes, progressRes] = await Promise.all([
-    fetch(`${backend}/api/ebay/phase3/gap?marketplace=${marketplace}`, { cache: 'no-store' }).catch(() => null),
-    fetch(`${backend}/api/ebay/phase3/progress?marketplace=${marketplace}`, { cache: 'no-store' }).catch(() => null),
-  ])
-  return {
-    gap: gapRes?.ok ? await gapRes.json().catch(() => null) : null,
-    progress: progressRes?.ok ? await progressRes.json().catch(() => null) : null,
-  }
 }
 
 export default async function EbayGapsPage({
   searchParams,
 }: {
-  searchParams: Record<string, string>
+  searchParams: Promise<Record<string, string>>
 }) {
-  const marketplace = searchParams.marketplace ?? 'IT'
-  const { gap, progress } = await fetchGapData(marketplace)
+  const params = await searchParams
+  const marketplace = params.marketplace ?? 'IT'
 
-  return <EbayGapsClient marketplace={marketplace} initialGap={gap} initialProgress={progress} />
+  return <EbayGapsLoader marketplace={marketplace} />
 }

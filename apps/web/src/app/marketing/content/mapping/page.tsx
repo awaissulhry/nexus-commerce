@@ -8,79 +8,19 @@
  * Each rule maps a condition (e.g. brand == 'Xavia') to a field action
  * (e.g. APPEND ' - Premium Motorcycle Gear' to title). Rules are
  * evaluated in priority order; first match per field wins.
+ *
+ * Data loads client-side in MappingCanvasLoader — the cross-site API
+ * session cookie means server fetches can never authenticate. The page
+ * stays a server component so router.refresh() (seed-schemas + Refresh)
+ * mints a new refreshToken and re-triggers the loader.
  */
 
 import { Layers } from 'lucide-react'
-import { getBackendUrl } from '@/lib/backend-url'
-import { MappingCanvasClient } from './MappingCanvasClient'
+import { MappingCanvasLoader } from './MappingCanvasLoader'
 
 export const dynamic = 'force-dynamic'
 
-interface TransformRule {
-  id: string
-  name: string
-  description: string | null
-  channel: string
-  marketplace: string | null
-  field: string
-  priority: number
-  enabled: boolean
-  condition: { field: string; op: string; value: unknown } | null
-  action: { type: string; value?: string; template?: string }
-  createdAt: string
-  updatedAt: string
-}
-
-interface ChannelSchemaField {
-  id: string
-  channel: string
-  marketplace: string | null
-  fieldKey: string
-  label: string
-  maxLength: number | null
-  required: boolean
-}
-
-async function fetchRules(): Promise<TransformRule[]> {
-  try {
-    const res = await fetch(`${getBackendUrl()}/api/feed-transform/rules`, {
-      cache: 'no-store',
-    })
-    if (!res.ok) return []
-    const json = (await res.json()) as { rules: TransformRule[] }
-    return json.rules
-  } catch {
-    return []
-  }
-}
-
-async function fetchSchema(channel: string): Promise<ChannelSchemaField[]> {
-  try {
-    const res = await fetch(`${getBackendUrl()}/api/feed-transform/schema/${channel}`, {
-      cache: 'no-store',
-    })
-    if (!res.ok) return []
-    const json = (await res.json()) as { schema: ChannelSchemaField[] }
-    return json.schema
-  } catch {
-    return []
-  }
-}
-
-export default async function MappingCanvasPage() {
-  const [rules, amazonSchema, ebaySchema, shopifySchema] = await Promise.all([
-    fetchRules(),
-    fetchSchema('AMAZON'),
-    fetchSchema('EBAY'),
-    fetchSchema('SHOPIFY'),
-  ])
-
-  const allSchemaFields = [
-    ...amazonSchema.map((f) => ({ ...f, channel: 'AMAZON' })),
-    ...ebaySchema.map((f) => ({ ...f, channel: 'EBAY' })),
-    ...shopifySchema.map((f) => ({ ...f, channel: 'SHOPIFY' })),
-  ]
-
+export default function MappingCanvasPage() {
   return (
     <div className="px-4 py-4 max-w-6xl">
       <div className="flex items-start gap-3 mb-5">
@@ -97,10 +37,7 @@ export default async function MappingCanvasPage() {
         </div>
       </div>
 
-      <MappingCanvasClient
-        initialRules={rules}
-        schemaFields={allSchemaFields}
-      />
+      <MappingCanvasLoader refreshToken={Date.now()} />
     </div>
   )
 }

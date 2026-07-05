@@ -1,11 +1,17 @@
+'use client'
+
 /**
  * H.7 — AI providers + spend dashboard.
  *
- * Server-fetched first paint (no spinner on the rollups), then the
- * client refreshes via SWR-style polling so the recent-calls tail
- * stays live as new AI calls fire.
+ * Data loads CLIENT-side: the API session cookie lives on the API origin
+ * (cross-site setup), so server-side fetches can never authenticate — they
+ * 401'd into empty providers/zero spend for everyone. After the initial
+ * load the usage client keeps refreshing via SWR-style polling so the
+ * recent-calls tail stays live as new AI calls fire.
  */
 
+import { useEffect, useState } from 'react'
+import { Sparkles } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import AiUsageClient from './AiUsageClient'
 import AiPromptsClient, { type PromptTemplateRow } from './AiPromptsClient'
@@ -22,15 +28,42 @@ import AiModelsClient, {
 import AiApprovalsClient from './AiApprovalsClient'
 import AiAgentsClient from './AiAgentsClient'
 
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+interface InitialData {
+  providers: any[]
+  killSwitch: boolean
+  summary7: any
+  summary30: any
+  recent: any[]
+  posture: any
+  topWizards: any
+  prompts: PromptTemplateRow[]
+  wizardTemplates: WizardTemplateRow[]
+  brandVoices: BrandVoiceRow[]
+  modelCatalog: ModelCatalog | null
+  featurePrefs: PrefsOverview | null
+}
 
-export default async function AiSettingsPage() {
+const EMPTY: InitialData = {
+  providers: [],
+  killSwitch: false,
+  summary7: null,
+  summary30: null,
+  recent: [],
+  posture: null,
+  topWizards: null,
+  prompts: [],
+  wizardTemplates: [],
+  brandVoices: [],
+  modelCatalog: null,
+  featurePrefs: null,
+}
+
+async function fetchInitialData(): Promise<InitialData> {
   const backend = getBackendUrl()
 
   // AI-1.7 + AI-1.8 + AI-2.5 + WT.5 — providers + budget posture +
   // per-wizard ROI + prompt templates + wizard templates round-trip
-  // together. First paint renders every card without a client spinner.
+  // together. First paint renders every card without extra spinners.
   const [
     providersRes,
     summary7Res,
@@ -85,26 +118,80 @@ export default async function AiSettingsPage() {
     ? await featurePrefsRes.json()
     : null
 
+  return {
+    providers,
+    killSwitch,
+    summary7,
+    summary30,
+    recent,
+    posture,
+    topWizards,
+    prompts,
+    wizardTemplates,
+    brandVoices,
+    modelCatalog,
+    featurePrefs,
+  }
+}
+
+export default function AiSettingsPage() {
+  const [data, setData] = useState<InitialData | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    fetchInitialData()
+      .catch(() => EMPTY) // network failure → same empties as per-response !ok fallbacks
+      .then((d) => {
+        if (alive) setData(d)
+      })
+    return () => { alive = false }
+  }, [])
+
+  if (!data) {
+    return (
+      <div className="space-y-6" aria-busy="true">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-purple-600" />
+            AI providers + spend
+          </h1>
+          <p className="text-base text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
+            Per-provider configuration and token + cost telemetry across
+            every server-side AI call.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-20 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+          ))}
+        </div>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-48 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <AiUsageClient
-        providers={providers}
-        killSwitch={killSwitch}
-        summary7={summary7}
-        summary30={summary30}
-        recent={recent}
-        posture={posture}
-        topWizards={topWizards}
+        providers={data.providers}
+        killSwitch={data.killSwitch}
+        summary7={data.summary7}
+        summary30={data.summary30}
+        recent={data.recent}
+        posture={data.posture}
+        topWizards={data.topWizards}
       />
       <AiModelsClient
-        initialCatalog={modelCatalog}
-        initialPrefs={featurePrefs}
+        initialCatalog={data.modelCatalog}
+        initialPrefs={data.featurePrefs}
       />
       <AiApprovalsClient />
       <AiAgentsClient />
-      <AiPromptsClient initialRows={prompts} />
-      <AiBrandVoicesClient initialRows={brandVoices} />
-      <AiWizardTemplatesClient initialRows={wizardTemplates} />
+      <AiPromptsClient initialRows={data.prompts} />
+      <AiBrandVoicesClient initialRows={data.brandVoices} />
+      <AiWizardTemplatesClient initialRows={data.wizardTemplates} />
     </div>
   )
 }
