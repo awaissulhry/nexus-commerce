@@ -133,6 +133,25 @@ export async function runEbayFlatFileCreates(
   errors.push(...plan.errors)
   warnings.push(...plan.warnings)
 
+  // ── Step 2b: Apply parentPromotions (promote standalone → isParent:true) ─
+  // Runs BEFORE childCreates and reparents so promoted products are valid parents
+  // when children point at them. Idempotent: already-isParent rows are harmless.
+  for (const promotion of plan.parentPromotions) {
+    try {
+      await p.product.update({
+        where: { id: promotion.productId },
+        data: {
+          isParent: true,
+          ...(promotion.variationTheme ? { variationTheme: promotion.variationTheme } : {}),
+        },
+      })
+    } catch (err: unknown) {
+      errors.push({
+        reason: `Promotion failed for product ${promotion.productId}: ${err instanceof Error ? err.message : String(err)}`,
+      })
+    }
+  }
+
   // ── Step 3: Organise childCreates by parent reference ─────────────────
   const childrenByTempParent = new Map<string, typeof plan.childCreates>()
   const childrenByExistingParent = new Map<string, typeof plan.childCreates>()

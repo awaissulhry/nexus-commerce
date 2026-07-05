@@ -77,6 +77,10 @@ export type CreatePlan = {
      *  The service resolves this tempRowId → real productId via tempToRealId before updating. */
     newParentTempRowId?: string
   }>
+  /** P2: existing STANDALONE products that must be promoted to isParent=true so children
+   *  can attach to them. Deduped by productId. Applied by the service BEFORE childCreates
+   *  and reparents so promoted products are valid parents when children point at them. */
+  parentPromotions: Array<{ productId: string; variationTheme: string | null }>
   errors: Array<{ sku?: string; tempRowId?: string; reason: string }>
   warnings: Array<{ sku?: string; reason: string }>
 }
@@ -285,6 +289,7 @@ export function planEbayFamilyCreates(input: {
   const parentCreates: CreatePlan['parentCreates'] = []
   const childCreates: CreatePlan['childCreates'] = []
   const reparents: CreatePlan['reparents'] = []
+  const parentPromotions: CreatePlan['parentPromotions'] = []
   const errors: CreatePlan['errors'] = []
   const warnings: CreatePlan['warnings'] = []
 
@@ -402,14 +407,27 @@ export function planEbayFamilyCreates(input: {
           // Try an existing parent by SKU (ExistingProduct already carries variationTheme)
           const existingParentBySku = existingBySku.get(parentSku)
           if (existingParentBySku) {
-            const tempRowId = String(row._rowId ?? row._productId ?? sku)
-            childCreates.push({
-              tempRowId,
-              sku,
-              row,
-              parentRef: { kind: 'existing', productId: existingParentBySku.id },
-              variationTheme: existingParentBySku.variationTheme,
-            })
+            // P2: 3-level hierarchy guard — reject if X is itself a child (parentId != null).
+            if (existingParentBySku.parentId != null) {
+              errors.push({ sku, reason: `parent_sku "${parentSku}" is itself a variant of another product — cannot nest` })
+            } else {
+              // P2: promote standalone X to a real parent (dedup by productId).
+              // Prefer X's existing variationTheme; fall back to the child row's variation_theme.
+              if (!existingParentBySku.isParent) {
+                const theme = existingParentBySku.variationTheme ?? (row.variation_theme ? String(row.variation_theme) : null)
+                if (!parentPromotions.some(p => p.productId === existingParentBySku.id)) {
+                  parentPromotions.push({ productId: existingParentBySku.id, variationTheme: theme })
+                }
+              }
+              const tempRowId = String(row._rowId ?? row._productId ?? sku)
+              childCreates.push({
+                tempRowId,
+                sku,
+                row,
+                parentRef: { kind: 'existing', productId: existingParentBySku.id },
+                variationTheme: existingParentBySku.variationTheme,
+              })
+            }
           } else {
             // P2: auto-create a synthetic parent so the whole family persists in one save.
             // Deduped: if another child in this batch already referenced the same missing
@@ -501,8 +519,22 @@ export function planEbayFamilyCreates(input: {
         if (parentSku) {
           const resolvedParent = existingBySku.get(parentSku)
           if (resolvedParent) {
-            // Existing parent resolved by SKU
-            resolvedParentId = resolvedParent.id
+            // P2: 3-level hierarchy guard — reject if X is itself a child (parentId != null).
+            if (resolvedParent.parentId != null) {
+              errors.push({ sku, reason: `parent_sku "${parentSku}" is itself a variant of another product — cannot nest` })
+              // resolvedParentId stays '' → no reparent will be emitted below
+            } else {
+              // P2: promote standalone X to a real parent (dedup by productId).
+              // Prefer X's existing variationTheme; fall back to the child row's variation_theme.
+              if (!resolvedParent.isParent) {
+                const theme = resolvedParent.variationTheme ?? (row.variation_theme ? String(row.variation_theme) : null)
+                if (!parentPromotions.some(p => p.productId === resolvedParent.id)) {
+                  parentPromotions.push({ productId: resolvedParent.id, variationTheme: theme })
+                }
+              }
+              // Existing parent resolved by SKU
+              resolvedParentId = resolvedParent.id
+            }
           } else {
             // Escalate: batch parent → already-registered synthetic → defer creation
             const batchParent = parentCreates.find(p => p.sku === parentSku)
@@ -578,5 +610,5 @@ export function planEbayFamilyCreates(input: {
     }
   }
 
-  return { parentCreates, childCreates, reparents, errors, warnings }
+  return { parentCreates, childCreates, reparents, parentPromotions, errors, warnings }
 }

@@ -996,6 +996,201 @@ describe('planEbayFamilyCreates', () => {
     expect(result.parentCreates.some(p => p.tempRowId.startsWith('__synth__'))).toBe(false)
   })
 
+  // ── P2: parentPromotions — standalone-to-parent promotion ─────────────
+
+  // New child + parent_sku=X, X existing STANDALONE → promotion recorded + child created
+  it('P2-promo: new child + parent_sku=X, X is STANDALONE → parentPromotions has X with theme, child created under X', () => {
+    const childRow = {
+      sku: 'NEW-CHILD',
+      _rowId: 'nc-tmp',
+      parentage: 'child',
+      parent_sku: 'STANDALONE-X',
+      variation_theme: 'Colore',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [childRow],
+      existingBySku: new Map([
+        ['STANDALONE-X', { id: 'x-id', parentId: null, variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    // One promotion: X must be promoted to isParent=true with theme from child row (X has none)
+    expect(result.parentPromotions).toHaveLength(1)
+    expect(result.parentPromotions[0]).toEqual({ productId: 'x-id', variationTheme: 'Colore' })
+    // Child create still happens under X
+    expect(result.childCreates).toHaveLength(1)
+    expect(result.childCreates[0].sku).toBe('NEW-CHILD')
+    expect(result.childCreates[0].parentRef).toEqual({ kind: 'existing', productId: 'x-id' })
+    expect(result.parentCreates).toHaveLength(0)
+  })
+
+  // New child + parent_sku=X, X existing STANDALONE with its own theme → promotion uses X's theme
+  it('P2-promo: promotion variationTheme prefers X\'s existing theme over child row\'s', () => {
+    const childRow = {
+      sku: 'NEW-CHILD',
+      _rowId: 'nc-tmp',
+      parentage: 'child',
+      parent_sku: 'STANDALONE-X',
+      variation_theme: 'Taglia',  // child says Taglia
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [childRow],
+      existingBySku: new Map([
+        // X already has variationTheme 'Colore' from a prior session
+        ['STANDALONE-X', { id: 'x-id', parentId: null, variationTheme: 'Colore', isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.parentPromotions).toHaveLength(1)
+    // X's existing theme 'Colore' wins over the child's 'Taglia'
+    expect(result.parentPromotions[0]).toEqual({ productId: 'x-id', variationTheme: 'Colore' })
+  })
+
+  // Existing child reparent + parent_sku=X, X existing STANDALONE → promotion + reparent
+  it('P2-promo: existing child reparent + parent_sku=X, X is STANDALONE → promotion recorded + reparent emitted', () => {
+    const row = {
+      sku: 'EXIST-CHILD',
+      _productId: 'idEC',
+      parentage: 'child',
+      parent_sku: 'STANDALONE-X',
+      variation_theme: 'Colore',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['EXIST-CHILD', { id: 'idEC', parentId: 'old-parent-id', variationTheme: null, isParent: false }],
+        ['STANDALONE-X', { id: 'x-id', parentId: null, variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    // Promotion must be recorded
+    expect(result.parentPromotions).toHaveLength(1)
+    expect(result.parentPromotions[0]).toEqual({ productId: 'x-id', variationTheme: 'Colore' })
+    // Reparent must be emitted
+    expect(result.reparents).toHaveLength(1)
+    expect(result.reparents[0]).toEqual({ productId: 'idEC', sku: 'EXIST-CHILD', newParentId: 'x-id' })
+    expect(result.childCreates).toHaveLength(0)
+  })
+
+  // New child + parent_sku=X, X is a CHILD (parentId set) → ERROR, no promotion, no create
+  it('P2-nest: new child + parent_sku=X, X is itself a CHILD → ERROR, no promotion, no childCreate', () => {
+    const childRow = {
+      sku: 'NEW-CHILD',
+      _rowId: 'nc-tmp',
+      parentage: 'child',
+      parent_sku: 'EXISTING-CHILD-X',
+      variation_theme: 'Colore',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [childRow],
+      existingBySku: new Map([
+        // X is itself a child (parentId set)
+        ['EXISTING-CHILD-X', { id: 'x-id', parentId: 'grandparent-id', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].sku).toBe('NEW-CHILD')
+    expect(result.errors[0].reason).toMatch(/is itself a variant.*cannot nest/)
+    expect(result.parentPromotions).toHaveLength(0)
+    expect(result.childCreates).toHaveLength(0)
+    expect(result.parentCreates).toHaveLength(0)
+  })
+
+  // Existing child reparent + parent_sku=X, X is a CHILD → ERROR, no promotion, no reparent
+  it('P2-nest: existing child reparent + parent_sku=X, X is itself a CHILD → ERROR, no promotion, no reparent', () => {
+    const row = {
+      sku: 'EXIST-CHILD',
+      _productId: 'idEC',
+      parentage: 'child',
+      parent_sku: 'EXISTING-CHILD-X',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [row],
+      existingBySku: new Map([
+        ['EXIST-CHILD', { id: 'idEC', parentId: 'old-parent-id', variationTheme: null, isParent: false }],
+        // X is itself a child
+        ['EXISTING-CHILD-X', { id: 'x-id', parentId: 'grandparent-id', variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].sku).toBe('EXIST-CHILD')
+    expect(result.errors[0].reason).toMatch(/is itself a variant.*cannot nest/)
+    expect(result.parentPromotions).toHaveLength(0)
+    expect(result.reparents).toHaveLength(0)
+  })
+
+  // parent_sku=X, X already isParent → no promotion (unchanged path)
+  it('P2-promo: parent_sku=X, X already isParent=true → no promotion entry', () => {
+    const childRow = {
+      sku: 'NEW-CHILD',
+      _rowId: 'nc-tmp',
+      parentage: 'child',
+      parent_sku: 'REAL-PARENT-X',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [childRow],
+      existingBySku: new Map([
+        ['REAL-PARENT-X', { id: 'px-id', parentId: null, variationTheme: 'Colore', isParent: true }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    // Already isParent → no promotion needed
+    expect(result.parentPromotions).toHaveLength(0)
+    expect(result.childCreates).toHaveLength(1)
+    expect(result.childCreates[0].parentRef).toEqual({ kind: 'existing', productId: 'px-id' })
+  })
+
+  // Two new children target same standalone X → exactly ONE promotion entry (dedup)
+  it('P2-promo: two new children both target same standalone X → exactly ONE promotion entry', () => {
+    const child1 = {
+      sku: 'CHILD-A',
+      _rowId: 'ca-tmp',
+      parentage: 'child',
+      parent_sku: 'STANDALONE-X',
+      variation_theme: 'Colore',
+    }
+    const child2 = {
+      sku: 'CHILD-B',
+      _rowId: 'cb-tmp',
+      parentage: 'child',
+      parent_sku: 'STANDALONE-X',
+      variation_theme: 'Colore',
+    }
+
+    const result = planEbayFamilyCreates({
+      rows: [child1, child2],
+      existingBySku: new Map([
+        ['STANDALONE-X', { id: 'x-id', parentId: null, variationTheme: null, isParent: false }],
+      ]),
+      existingParentById: new Map(),
+    })
+
+    expect(result.errors).toHaveLength(0)
+    // Deduped: exactly ONE promotion even though two children target X
+    expect(result.parentPromotions).toHaveLength(1)
+    expect(result.parentPromotions[0].productId).toBe('x-id')
+    // Both children created under X
+    expect(result.childCreates).toHaveLength(2)
+  })
+
   // ── FIX 2: auto-create warning emitted at both sites ─────────────────
 
   // Site 1: new child with unresolved parent_sku → synthetic created + warning emitted

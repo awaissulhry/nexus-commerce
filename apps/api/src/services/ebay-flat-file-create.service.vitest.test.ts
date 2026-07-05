@@ -412,6 +412,92 @@ describe('RP1 temp-parent reparent — newParentTempRowId resolved via tempToRea
 })
 
 // ──────────────────────────────────────────────────────────────────────
+// Test: P2 parentPromotions — promotes standalone product via product.update
+// ──────────────────────────────────────────────────────────────────────
+describe('P2 parentPromotions — promotes standalone to isParent:true before children attach', () => {
+  it('calls product.update({isParent:true, variationTheme}) for a standalone parent BEFORE child creates', async () => {
+    const { prisma, calls } = makeMock({
+      // STANDALONE-X is returned by the existingBySku query (isParent:false, parentId:null)
+      existingBySku: [
+        { id: 'standalone-x-id', sku: 'STANDALONE-X', parentId: null, variationTheme: null, isParent: false },
+      ],
+      existingParentById: [],
+    })
+
+    const rows = [
+      // New child whose parent_sku points to the standalone product
+      {
+        sku: 'NEW-CHILD',
+        _rowId: 'nc-tmp',
+        parentage: 'child',
+        parent_sku: 'STANDALONE-X',
+        variation_theme: 'Colore',
+        it_price: '49.99',
+      },
+    ]
+
+    const result = await runEbayFlatFileCreates(prisma, rows)
+
+    expect(result.errors).toHaveLength(0)
+
+    // product.update was called: promotion + (potentially reparent — but here it's a new child
+    // under an existing product, so no reparent; just the promotion + child create)
+    const updateCalls = calls.update as any[]
+    const promotionCall = updateCalls.find((c: any) => c.where?.id === 'standalone-x-id')
+    expect(promotionCall).toBeDefined()
+    expect(promotionCall.data.isParent).toBe(true)
+    expect(promotionCall.data.variationTheme).toBe('Colore')
+
+    // Child was created under the (now-promoted) standalone product
+    const createCalls = calls.create as any[]
+    expect(createCalls).toHaveLength(1)
+    expect(createCalls[0].data.sku).toBe('NEW-CHILD')
+    expect(createCalls[0].data.parentId).toBe('standalone-x-id')
+  })
+
+  it('promotion update runs before child create (update call index < create call index)', async () => {
+    // We track global call order by pushing into a shared log.
+    const callLog: Array<'update' | 'create'> = []
+
+    const { prisma } = makeMock({
+      existingBySku: [
+        { id: 'standalone-x-id', sku: 'STANDALONE-X', parentId: null, variationTheme: null, isParent: false },
+      ],
+      existingParentById: [],
+    })
+
+    // Override update + create to record order
+    ;(prisma.product.update as ReturnType<typeof vi.fn>).mockImplementation(async (args: any) => {
+      callLog.push('update')
+      return {}
+    })
+    ;(prisma.product.create as ReturnType<typeof vi.fn>).mockImplementation(async (args: any) => {
+      callLog.push('create')
+      return { id: 'new-child-id' }
+    })
+
+    const rows = [
+      {
+        sku: 'NEW-CHILD',
+        _rowId: 'nc-tmp',
+        parentage: 'child',
+        parent_sku: 'STANDALONE-X',
+        variation_theme: 'Colore',
+      },
+    ]
+
+    await runEbayFlatFileCreates(prisma, rows)
+
+    // update (promotion) must appear before create (child)
+    const updateIdx = callLog.indexOf('update')
+    const createIdx = callLog.indexOf('create')
+    expect(updateIdx).toBeGreaterThanOrEqual(0)
+    expect(createIdx).toBeGreaterThanOrEqual(0)
+    expect(updateIdx).toBeLessThan(createIdx)
+  })
+})
+
+// ──────────────────────────────────────────────────────────────────────
 // FIX 3: out-of-payload parent_sku resolution
 // A child whose parent_sku references a real existing parent NOT present
 // as a row in the payload must resolve to that parent — not create a synthetic.
