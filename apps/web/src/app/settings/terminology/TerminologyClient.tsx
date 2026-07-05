@@ -13,6 +13,9 @@ import { Button } from '@/components/ui/Button'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 export interface TerminologyItem {
   id: string
@@ -384,27 +387,28 @@ function Modal({
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Marketplace">
-              <select
+            {/* Not <Field> — its wrapping <label> must not contain the
+                Listbox popover's option buttons. Same markup, div wrapper. */}
+            <div className="block">
+              <div className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
+                Marketplace
+              </div>
+              <Listbox
                 value={editor.marketplace}
-                onChange={(e) =>
+                onChange={(v) =>
                   setEditor({
                     ...editor,
-                    marketplace: e.target.value,
+                    marketplace: v,
                     // Cheap heuristic — most marketplaces map 1:1 to a
                     // language code. User can override the language box.
-                    language: e.target.value.toLowerCase(),
+                    language: v.toLowerCase(),
                   })
                 }
-                className={inputCls}
-              >
-                {MARKETPLACES.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </Field>
+                options={MARKETPLACES.map((m) => ({ value: m, label: m }))}
+                ariaLabel="Marketplace"
+                className="w-full"
+              />
+            </div>
             <Field label="Language">
               <input
                 type="text"

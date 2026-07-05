@@ -51,6 +51,9 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 export interface FamilyDetail {
   id: string
@@ -537,18 +540,16 @@ function AddAttributeModal({
           <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
             Attribute
           </label>
-          <select
+          <Listbox
             value={attributeId}
-            onChange={(e) => setAttributeId(e.target.value)}
-            className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
-            autoFocus
-          >
-            {attributePool.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.label} ({a.code} · {a.type})
-              </option>
-            ))}
-          </select>
+            onChange={setAttributeId}
+            options={attributePool.map((a) => ({
+              value: a.id,
+              label: `${a.label} (${a.code} · ${a.type})`,
+            }))}
+            ariaLabel="Attribute"
+            className="w-full"
+          />
         </div>
         <div>
           <label className="inline-flex items-center gap-2 text-base text-slate-700 dark:text-slate-300">
@@ -756,19 +757,19 @@ function ReparentModal({
           <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
             Parent family
           </label>
-          <select
+          <Listbox
             value={parentId}
-            onChange={(e) => setParentId(e.target.value)}
-            autoFocus
-            className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
-          >
-            <option value="">— root (no parent) —</option>
-            {families.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.label} ({f.code})
-              </option>
-            ))}
-          </select>
+            onChange={setParentId}
+            options={[
+              { value: '', label: '— root (no parent) —' },
+              ...families.map((f) => ({
+                value: f.id,
+                label: `${f.label} (${f.code})`,
+              })),
+            ]}
+            ariaLabel="Parent family"
+            className="w-full"
+          />
         </div>
         {err && (
           <div className="border border-rose-200 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/40 rounded px-3 py-2 text-base text-rose-700 dark:text-rose-300">

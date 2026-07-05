@@ -19,6 +19,9 @@ import { useCallback } from 'react'
 import { Plus, X, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 // Mirrors the server-side TransformOp union in schema-mapping.service.ts
 // (FM.3). Kept as a local copy — the canvas doesn't import API types.
@@ -191,17 +194,13 @@ function TransformRow({
       )}
     >
       <span className="text-[10px] text-zinc-400 w-4 text-right tabular-nums">{index + 1}</span>
-      <select
+      <Listbox
         value={value.type}
-        onChange={(e) => onTypeChange(e.target.value as TransformOp['type'])}
-        className="px-1 py-0.5 text-[11px] rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
-      >
-        {TRANSFORM_TYPES.map((t) => (
-          <option key={t.type} value={t.type}>
-            {t.label}
-          </option>
-        ))}
-      </select>
+        onChange={(v) => onTypeChange(v as TransformOp['type'])}
+        options={TRANSFORM_TYPES.map((t) => ({ value: t.type, label: t.label }))}
+        ariaLabel="Transform type"
+        className="w-36"
+      />
 
       {/* Type-specific inputs */}
       <div className="flex-1 flex items-center gap-1">
@@ -420,15 +419,16 @@ function TransformFields({
             className="w-28 text-[11px]"
             aria-label="channel max length"
           />
-          <select
+          <Listbox
             value={value.mode ?? 'truncate'}
-            onChange={(e) => onChange({ mode: e.target.value as 'truncate' | 'flag' } as Partial<TransformOp>)}
-            className="px-1 py-0.5 text-[11px] rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            aria-label="over-limit mode"
-          >
-            <option value="truncate">truncate</option>
-            <option value="flag">flag</option>
-          </select>
+            onChange={(v) => onChange({ mode: v as 'truncate' | 'flag' } as Partial<TransformOp>)}
+            options={[
+              { value: 'truncate', label: 'truncate' },
+              { value: 'flag', label: 'flag' },
+            ]}
+            ariaLabel="over-limit mode"
+            className="w-28"
+          />
         </div>
       )
     case 'translate':
@@ -453,17 +453,17 @@ function OnMissSelect({
   onChange: (v: 'keep' | 'null' | 'flag') => void
 }) {
   return (
-    <select
+    <Listbox
       value={value ?? 'keep'}
-      onChange={(e) => onChange(e.target.value as 'keep' | 'null' | 'flag')}
-      className="px-1 py-0.5 text-[11px] rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
-      aria-label="on miss"
-      title="What to do when no mapping/conversion is found"
-    >
-      <option value="keep">miss→keep</option>
-      <option value="null">miss→null</option>
-      <option value="flag">miss→flag</option>
-    </select>
+      onChange={(v) => onChange(v as 'keep' | 'null' | 'flag')}
+      options={[
+        { value: 'keep', label: 'miss→keep' },
+        { value: 'null', label: 'miss→null' },
+        { value: 'flag', label: 'miss→flag' },
+      ]}
+      ariaLabel="on miss"
+      className="w-32"
+    />
   )
 }
 

@@ -18,6 +18,7 @@
  *   3. Implement the handler branch in BulkActionService.processItem.
  */
 
+import { Listbox } from '@/design-system/components/Listbox'
 import type { OperationConfig } from './types'
 import { Field, OverrideNumber, BoolField, inputCls } from './_helpers'
 
@@ -35,17 +36,17 @@ export const OPERATIONS: OperationConfig[] = [
     renderParams: (p, set) => (
       <>
         <Field label="Adjustment">
-          <select
+          <Listbox
             value={(p.adjustmentType as string) ?? 'PERCENT'}
-            onChange={(e) =>
-              set({ ...p, adjustmentType: e.target.value as string })
-            }
-            className={inputCls}
-          >
-            <option value="ABSOLUTE">Set to absolute amount</option>
-            <option value="DELTA">Add / subtract fixed amount</option>
-            <option value="PERCENT">Change by percentage</option>
-          </select>
+            onChange={(v) => set({ ...p, adjustmentType: v })}
+            ariaLabel="Adjustment"
+            className="w-full"
+            options={[
+              { value: 'ABSOLUTE', label: 'Set to absolute amount' },
+              { value: 'DELTA', label: 'Add / subtract fixed amount' },
+              { value: 'PERCENT', label: 'Change by percentage' },
+            ]}
+          />
         </Field>
         <Field
           label={
@@ -117,16 +118,16 @@ export const OPERATIONS: OperationConfig[] = [
     renderParams: (p, set) => (
       <>
         <Field label="Mode">
-          <select
+          <Listbox
             value={(p.adjustmentType as string) ?? 'ABSOLUTE'}
-            onChange={(e) =>
-              set({ ...p, adjustmentType: e.target.value as string })
-            }
-            className={inputCls}
-          >
-            <option value="ABSOLUTE">Set to value</option>
-            <option value="DELTA">Add / subtract</option>
-          </select>
+            onChange={(v) => set({ ...p, adjustmentType: v })}
+            ariaLabel="Mode"
+            className="w-full"
+            options={[
+              { value: 'ABSOLUTE', label: 'Set to value' },
+              { value: 'DELTA', label: 'Add / subtract' },
+            ]}
+          />
         </Field>
         <Field label="Quantity">
           <input
@@ -151,15 +152,17 @@ export const OPERATIONS: OperationConfig[] = [
       ['DRAFT', 'ACTIVE', 'INACTIVE'].includes(p.status as string),
     renderParams: (p, set) => (
       <Field label="New status">
-        <select
+        <Listbox
           value={(p.status as string) ?? 'ACTIVE'}
-          onChange={(e) => set({ ...p, status: e.target.value })}
-          className={inputCls}
-        >
-          <option value="DRAFT">Draft</option>
-          <option value="ACTIVE">Active</option>
-          <option value="INACTIVE">Inactive</option>
-        </select>
+          onChange={(v) => set({ ...p, status: v })}
+          ariaLabel="New status"
+          className="w-full"
+          options={[
+            { value: 'DRAFT', label: 'Draft' },
+            { value: 'ACTIVE', label: 'Active' },
+            { value: 'INACTIVE', label: 'Inactive' },
+          ]}
+        />
       </Field>
     ),
   },
@@ -293,17 +296,17 @@ export const OPERATIONS: OperationConfig[] = [
             </label>
             {'pricingRule' in p && (
               <>
-                <select
+                <Listbox
                   value={(p.pricingRule as string) ?? 'FIXED'}
-                  onChange={(e) =>
-                    set({ ...p, pricingRule: e.target.value })
-                  }
-                  className={inputCls}
-                >
-                  <option value="FIXED">Fixed price</option>
-                  <option value="MATCH_AMAZON">Match Amazon Buy Box</option>
-                  <option value="PERCENT_OF_MASTER">Percent of master</option>
-                </select>
+                  onChange={(v) => set({ ...p, pricingRule: v })}
+                  ariaLabel="Pricing rule"
+                  className="w-full"
+                  options={[
+                    { value: 'FIXED', label: 'Fixed price' },
+                    { value: 'MATCH_AMAZON', label: 'Match Amazon Buy Box' },
+                    { value: 'PERCENT_OF_MASTER', label: 'Percent of master' },
+                  ]}
+                />
                 {p.pricingRule === 'PERCENT_OF_MASTER' && (
                   <input
                     type="number"
@@ -385,16 +388,18 @@ export const OPERATIONS: OperationConfig[] = [
       return (
         <>
           <Field label="Sync type">
-            <select
+            <Listbox
               value={syncType}
-              onChange={(e) => set({ ...p, syncType: e.target.value })}
-              className={inputCls}
-            >
-              <option value="FULL_SYNC">Full sync (every field)</option>
-              <option value="PRICE_UPDATE">Price only</option>
-              <option value="QUANTITY_UPDATE">Quantity only</option>
-              <option value="ATTRIBUTE_UPDATE">Attributes only</option>
-            </select>
+              onChange={(v) => set({ ...p, syncType: v })}
+              ariaLabel="Sync type"
+              className="w-full"
+              options={[
+                { value: 'FULL_SYNC', label: 'Full sync (every field)' },
+                { value: 'PRICE_UPDATE', label: 'Price only' },
+                { value: 'QUANTITY_UPDATE', label: 'Quantity only' },
+                { value: 'ATTRIBUTE_UPDATE', label: 'Attributes only' },
+              ]}
+            />
           </Field>
           <Field label="Channels (empty = all)">
             <div className="flex flex-wrap gap-1.5">

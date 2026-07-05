@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2, X, Sparkles } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
 import { cn } from '@/lib/utils'
 import {
   OP_LABELS,
@@ -149,31 +150,27 @@ export function ConditionalFormatBar(props: ConditionalFormatBarProps) {
                 aria-label="Enable rule"
               />
               {/* Column dropdown */}
-              <select
+              <Listbox
                 value={rule.columnId}
-                onChange={(e) => update(rule.id, { columnId: e.target.value })}
-                className="h-7 px-1.5 text-xs border border-default rounded bg-white max-w-[140px]"
-              >
-                {visibleColumns.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => update(rule.id, { columnId: v })}
+                ariaLabel="Column"
+                className="max-w-[140px]"
+                options={visibleColumns.map((c) => ({
+                  value: c.id,
+                  label: c.label,
+                }))}
+              />
               {/* Op dropdown */}
-              <select
+              <Listbox
                 value={rule.op}
-                onChange={(e) =>
-                  update(rule.id, { op: e.target.value as RuleOp })
-                }
-                className="h-7 px-1.5 text-xs border border-default rounded bg-white"
-              >
-                {ALL_OPS.map((op) => (
-                  <option key={op} value={op}>
-                    {OP_LABELS[op]}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => update(rule.id, { op: v as RuleOp })}
+                ariaLabel="Operator"
+                className="w-32"
+                options={ALL_OPS.map((op) => ({
+                  value: op,
+                  label: OP_LABELS[op],
+                }))}
+              />
               {/* Value input — hidden for empty / notEmpty */}
               {showValueInput && (
                 <input

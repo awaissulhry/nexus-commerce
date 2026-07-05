@@ -34,6 +34,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import {
   emitInvalidation,
@@ -3512,32 +3513,24 @@ export default function BulkOperationsClient() {
                 separators between groups. Choosing "(none)" clears
                 grouping back to the operator's manual sort order. */}
             <div className="inline-flex items-center gap-1">
-              <select
+              <Listbox
                 value={groupByColumnId}
-                onChange={(e) => {
-                  setGroupByColumnId(e.target.value)
+                onChange={(v) => {
+                  setGroupByColumnId(v)
                   // Reset collapsed-group cache when switching groups
                   // so a stale collapse from another column doesn't
                   // hide rows in the new grouping.
                   setCollapsedGroupKeys(new Set())
                 }}
-                title="Group rows by a column — pins it as the primary sort key"
-                className={cn(
-                  'h-7 px-1.5 text-xs border rounded',
-                  groupByColumnId
-                    ? 'bg-purple-50 border-purple-300 text-purple-700'
-                    : 'bg-white dark:bg-slate-900 border-default dark:border-slate-700 text-slate-600 dark:text-slate-400',
-                )}
-              >
-                <option value="">Group: (none)</option>
-                {visibleColumnsList
-                  .filter((c) => !c.id.startsWith('__'))
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      Group: {c.label}
-                    </option>
-                  ))}
-              </select>
+                ariaLabel="Group rows by a column — pins it as the primary sort key"
+                className="w-44"
+                options={[
+                  { value: '', label: 'Group: (none)' },
+                  ...visibleColumnsList
+                    .filter((c) => !c.id.startsWith('__'))
+                    .map((c) => ({ value: c.id, label: `Group: ${c.label}` })),
+                ]}
+              />
               {groupByColumnId && groupBucketCount > 0 && (
                 <span
                   className="text-xs tabular-nums text-purple-700"

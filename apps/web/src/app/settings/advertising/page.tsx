@@ -7,6 +7,9 @@ import {
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 interface AdsConnection {
   id: string
@@ -391,27 +394,23 @@ export default function AdvertisingSettingsPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Marketplace *</label>
-              <select
+              <Listbox
                 value={form.marketplace}
-                onChange={(e) => setForm((f) => ({ ...f, marketplace: e.target.value }))}
-                className="w-full rounded-md border border-default px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                {MARKETPLACE_OPTIONS.map((m) => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
+                onChange={(v) => setForm((f) => ({ ...f, marketplace: v }))}
+                options={MARKETPLACE_OPTIONS}
+                ariaLabel="Marketplace"
+                className="w-full"
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Region *</label>
-              <select
+              <Listbox
                 value={form.region}
-                onChange={(e) => setForm((f) => ({ ...f, region: e.target.value }))}
-                className="w-full rounded-md border border-default px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                {REGION_OPTIONS.map((r) => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
-                ))}
-              </select>
+                onChange={(v) => setForm((f) => ({ ...f, region: v }))}
+                options={REGION_OPTIONS}
+                ariaLabel="Region"
+                className="w-full"
+              />
             </div>
           </div>
 

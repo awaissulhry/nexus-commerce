@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { AlertCircle, Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import ProductTypePicker from '@/components/products/ProductTypePicker'
@@ -202,18 +203,19 @@ export default function NewProductModal({
 
           {mode === 'variant' && (
             <Field label="Parent product">
-              <select
+              <Listbox
                 value={parentId}
-                onChange={(e) => setParentId(e.target.value)}
-                className={inputCls}
-              >
-                <option value="">— Pick a parent —</option>
-                {parentCandidates.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.sku} · {p.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setParentId(v)}
+                ariaLabel="Parent product"
+                className="w-full"
+                options={[
+                  { value: '', label: '— Pick a parent —' },
+                  ...parentCandidates.map((p) => ({
+                    value: p.id,
+                    label: `${p.sku} · ${p.name}`,
+                  })),
+                ]}
+              />
             </Field>
           )}
 
@@ -255,35 +257,37 @@ export default function NewProductModal({
                   source. Defaults to AMAZON:IT. */}
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Channel">
-                  <select
+                  <Listbox
                     value={pickerChannel}
-                    onChange={(e) =>
-                      setPickerChannel(
-                        e.target.value as 'AMAZON' | 'EBAY',
-                      )
+                    onChange={(v) =>
+                      setPickerChannel(v as 'AMAZON' | 'EBAY')
                     }
-                    className={inputCls}
-                  >
-                    <option value="AMAZON">Amazon</option>
-                    <option value="EBAY">eBay</option>
-                  </select>
+                    ariaLabel="Channel"
+                    className="w-full"
+                    options={[
+                      { value: 'AMAZON', label: 'Amazon' },
+                      { value: 'EBAY', label: 'eBay' },
+                    ]}
+                  />
                 </Field>
                 <Field label="Marketplace">
-                  <select
+                  <Listbox
                     value={pickerMarketplace}
-                    onChange={(e) => setPickerMarketplace(e.target.value)}
-                    className={inputCls}
-                  >
-                    <option value="IT">Italy (IT)</option>
-                    <option value="DE">Germany (DE)</option>
-                    <option value="FR">France (FR)</option>
-                    <option value="ES">Spain (ES)</option>
-                    <option value="UK">United Kingdom (UK)</option>
-                    <option value="NL">Netherlands (NL)</option>
-                    <option value="SE">Sweden (SE)</option>
-                    <option value="PL">Poland (PL)</option>
-                    <option value="US">United States (US)</option>
-                  </select>
+                    onChange={(v) => setPickerMarketplace(v)}
+                    ariaLabel="Marketplace"
+                    className="w-full"
+                    options={[
+                      { value: 'IT', label: 'Italy (IT)' },
+                      { value: 'DE', label: 'Germany (DE)' },
+                      { value: 'FR', label: 'France (FR)' },
+                      { value: 'ES', label: 'Spain (ES)' },
+                      { value: 'UK', label: 'United Kingdom (UK)' },
+                      { value: 'NL', label: 'Netherlands (NL)' },
+                      { value: 'SE', label: 'Sweden (SE)' },
+                      { value: 'PL', label: 'Poland (PL)' },
+                      { value: 'US', label: 'United States (US)' },
+                    ]}
+                  />
                 </Field>
               </div>
 

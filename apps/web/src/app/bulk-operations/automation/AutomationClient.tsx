@@ -38,6 +38,7 @@ import {
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -607,17 +608,13 @@ export default function AutomationClient() {
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             1. Trigger
           </div>
-          <select
+          <Listbox
             value={draft.trigger}
-            onChange={(e) => setDraft({ ...draft, trigger: e.target.value })}
-            className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
-          >
-            {TRIGGERS.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setDraft({ ...draft, trigger: v })}
+            ariaLabel="Trigger"
+            className="w-full"
+            options={TRIGGERS.map((t) => ({ value: t.id, label: t.label }))}
+          />
           {triggerMeta?.helpText && (
             <div className="text-xs text-slate-500">{triggerMeta.helpText}</div>
           )}
@@ -661,21 +658,17 @@ export default function AutomationClient() {
                 placeholder="job.failureRate"
                 className="flex-1 h-7 px-2 text-xs font-mono border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
               />
-              <select
+              <Listbox
                 value={c.op}
-                onChange={(e) => {
+                onChange={(v) => {
                   const next = [...draft.conditions]
-                  next[i] = { ...c, op: e.target.value }
+                  next[i] = { ...c, op: v }
                   setDraft({ ...draft, conditions: next })
                 }}
-                className="h-7 px-1.5 text-xs border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
-              >
-                {COMMON_OPS.map((op) => (
-                  <option key={op} value={op}>
-                    {op}
-                  </option>
-                ))}
-              </select>
+                ariaLabel="Condition operator"
+                className="w-28"
+                options={COMMON_OPS.map((op) => ({ value: op, label: op }))}
+              />
               <input
                 type="text"
                 value={String(c.value ?? '')}
@@ -733,21 +726,20 @@ export default function AutomationClient() {
               className="border border-subtle dark:border-slate-800 rounded p-1.5 space-y-1"
             >
               <div className="flex items-center gap-1.5">
-                <select
+                <Listbox
                   value={a.type}
-                  onChange={(e) => {
+                  onChange={(v) => {
                     const next = [...draft.actions]
-                    next[i] = { type: e.target.value }
+                    next[i] = { type: v }
                     setDraft({ ...draft, actions: next })
                   }}
-                  className="flex-1 h-7 px-1.5 text-xs border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
-                >
-                  {ACTION_TYPES.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
+                  ariaLabel="Action type"
+                  className="flex-1"
+                  options={ACTION_TYPES.map((t) => ({
+                    value: t.id,
+                    label: t.label,
+                  }))}
+                />
                 <button
                   type="button"
                   onClick={() =>

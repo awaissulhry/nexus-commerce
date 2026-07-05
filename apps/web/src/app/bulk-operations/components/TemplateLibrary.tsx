@@ -31,6 +31,7 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -438,18 +439,19 @@ export function TemplateLibrary(props: TemplateLibraryProps) {
               <span className="text-xs font-medium text-slate-600 mb-1 block">
                 Category
               </span>
-              <select
+              <Listbox
                 value={saveCategory}
-                onChange={(e) => setSaveCategory(e.target.value)}
-                className="w-full h-8 px-2 text-sm border border-default rounded bg-white"
-              >
-                <option value="">(none)</option>
-                {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setSaveCategory(v)}
+                ariaLabel="Category"
+                className="w-full"
+                options={[
+                  { value: '', label: '(none)' },
+                  ...Object.entries(CATEGORY_LABELS).map(([k, label]) => ({
+                    value: k,
+                    label,
+                  })),
+                ]}
+              />
             </label>
             <div className="bg-slate-50 border border-default rounded p-2 text-xs">
               <div className="font-medium text-slate-700 mb-1">

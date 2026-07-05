@@ -36,6 +36,7 @@ import { Button } from '@/components/ui/Button'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
+import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { cn } from '@/lib/utils'
@@ -344,15 +345,16 @@ export default function ImportsClient() {
                 before apply. Per-row results so failures never go silent.
               </p>
             </div>
-            <select
+            <Listbox
               value={onError}
-              onChange={(e) => setOnErrorMode(e.target.value as 'skip' | 'abort')}
-              className="h-7 px-1.5 text-xs border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
-              title="What to do when a row fails validation"
-            >
-              <option value="skip">On error: skip failed</option>
-              <option value="abort">On error: abort apply</option>
-            </select>
+              onChange={(v) => setOnErrorMode(v as 'skip' | 'abort')}
+              ariaLabel="What to do when a row fails validation"
+              className="w-48"
+              options={[
+                { value: 'skip', label: 'On error: skip failed' },
+                { value: 'abort', label: 'On error: abort apply' },
+              ]}
+            />
             <label className="cursor-pointer">
               <input
                 type="file"
@@ -428,21 +430,19 @@ export default function ImportsClient() {
                       {f.required && <span className="text-red-600 ml-0.5">*</span>}
                     </span>
                     <ChevronRight className="w-3 h-3 text-tertiary" />
-                    <select
+                    <Listbox
                       value={mapping[f.id] ?? ''}
-                      onChange={(e) =>
-                        setMapping({ ...mapping, [f.id]: e.target.value })
+                      onChange={(v) =>
+                        setMapping({ ...mapping, [f.id]: v })
                       }
                       disabled={stage !== 'review'}
-                      className="flex-1 h-6 px-1 text-xs border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
-                    >
-                      <option value="">(skip)</option>
-                      {preview.headers.map((h) => (
-                        <option key={h} value={h}>
-                          {h}
-                        </option>
-                      ))}
-                    </select>
+                      ariaLabel={f.label}
+                      className="flex-1"
+                      options={[
+                        { value: '', label: '(skip)' },
+                        ...preview.headers.map((h) => ({ value: h, label: h })),
+                      ]}
+                    />
                   </div>
                 ))}
               </div>

@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/Button'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
+import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -230,33 +231,34 @@ export default function ExportsClient() {
             <span className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-0.5 block">
               Format
             </span>
-            <select
+            <Listbox
               value={format}
-              onChange={(e) => setFormat(e.target.value as Format)}
-              className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
-            >
-              {(Object.keys(FORMAT_LABELS) as Format[]).map((f) => (
-                <option key={f} value={f}>
-                  {FORMAT_LABELS[f]}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setFormat(v as Format)}
+              ariaLabel="Format"
+              className="w-full"
+              options={(Object.keys(FORMAT_LABELS) as Format[]).map((f) => ({
+                value: f,
+                label: FORMAT_LABELS[f],
+              }))}
+            />
           </label>
           <div className="block">
             <span className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-0.5 block">
               Filters (Status / Brand)
             </span>
             <div className="flex gap-1">
-              <select
+              <Listbox
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="flex-1 h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
-              >
-                <option value="">All</option>
-                <option value="ACTIVE">ACTIVE</option>
-                <option value="DRAFT">DRAFT</option>
-                <option value="INACTIVE">INACTIVE</option>
-              </select>
+                onChange={(v) => setStatusFilter(v)}
+                ariaLabel="Status filter"
+                className="flex-1"
+                options={[
+                  { value: '', label: 'All' },
+                  { value: 'ACTIVE', label: 'ACTIVE' },
+                  { value: 'DRAFT', label: 'DRAFT' },
+                  { value: 'INACTIVE', label: 'INACTIVE' },
+                ]}
+              />
               <input
                 type="text"
                 value={brandFilter}

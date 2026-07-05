@@ -42,6 +42,9 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { useSettingsForm } from '../_shell/SettingsSaveBar'
 import { saveProfile, changePassword } from './actions'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 interface ProfileData {
   displayName: string
@@ -420,75 +423,63 @@ function LocaleSection({
       icon={<Globe size={14} />}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Timezone" htmlFor="timezone">
-          <select
-            id="timezone"
+        <Field label="Timezone">
+          <Listbox
             value={draft.timezone}
-            onChange={(e) =>
-              setDraft((d) => ({ ...d, timezone: e.target.value }))
+            onChange={(v) =>
+              setDraft((d) => ({ ...d, timezone: v }))
             }
-            className={INPUT_CLS}
-          >
-            {!COMMON_TIMEZONES.includes(draft.timezone) && draft.timezone && (
-              <option value={draft.timezone}>{draft.timezone}</option>
-            )}
-            {COMMON_TIMEZONES.map((tz) => (
-              <option key={tz} value={tz}>
-                {tz}
-              </option>
-            ))}
-          </select>
+            options={[
+              ...(!COMMON_TIMEZONES.includes(draft.timezone) && draft.timezone
+                ? [{ value: draft.timezone, label: draft.timezone }]
+                : []),
+              ...COMMON_TIMEZONES.map((tz) => ({ value: tz, label: tz })),
+            ]}
+            ariaLabel="Timezone"
+            className="w-full"
+          />
         </Field>
 
-        <Field label="Language" htmlFor="language">
-          <select
-            id="language"
+        <Field label="Language">
+          <Listbox
             value={draft.language}
-            onChange={(e) =>
-              setDraft((d) => ({ ...d, language: e.target.value }))
+            onChange={(v) =>
+              setDraft((d) => ({ ...d, language: v }))
             }
-            className={INPUT_CLS}
-          >
-            {LANGUAGES.map((l) => (
-              <option key={l.value} value={l.value}>
-                {l.label}
-              </option>
-            ))}
-          </select>
+            options={LANGUAGES.map((l) => ({ value: l.value, label: l.label }))}
+            ariaLabel="Language"
+            className="w-full"
+          />
         </Field>
 
-        <Field label="Date format" htmlFor="dateFormat">
-          <select
-            id="dateFormat"
+        <Field label="Date format">
+          <Listbox
             value={draft.dateFormat}
-            onChange={(e) =>
-              setDraft((d) => ({ ...d, dateFormat: e.target.value }))
+            onChange={(v) =>
+              setDraft((d) => ({ ...d, dateFormat: v }))
             }
-            className={INPUT_CLS}
-          >
-            {DATE_FORMATS.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
+            options={DATE_FORMATS.map((f) => ({
+              value: f.value,
+              label: f.label,
+            }))}
+            ariaLabel="Date format"
+            className="w-full"
+          />
         </Field>
 
-        <Field label="Week starts on" htmlFor="weekStart">
-          <select
-            id="weekStart"
-            value={draft.weekStart ?? 1}
-            onChange={(e) =>
-              setDraft((d) => ({ ...d, weekStart: Number(e.target.value) }))
+        <Field label="Week starts on">
+          <Listbox
+            value={String(draft.weekStart ?? 1)}
+            onChange={(v) =>
+              setDraft((d) => ({ ...d, weekStart: Number(v) }))
             }
-            className={INPUT_CLS}
-          >
-            {WEEK_START.map((w) => (
-              <option key={w.value} value={w.value}>
-                {w.label}
-              </option>
-            ))}
-          </select>
+            options={WEEK_START.map((w) => ({
+              value: String(w.value),
+              label: w.label,
+            }))}
+            ariaLabel="Week starts on"
+            className="w-full"
+          />
         </Field>
       </div>
     </Card>

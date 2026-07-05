@@ -26,6 +26,7 @@ import {
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface ScheduledImport {
@@ -278,19 +279,13 @@ export default function ScheduledImportsPanel() {
               <span className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-0.5 block">
                 Target entity
               </span>
-              <select
+              <Listbox
                 value={targetEntity}
-                onChange={(e) =>
-                  setTargetEntity(e.target.value as typeof targetEntity)
-                }
-                className="w-full h-8 px-2 text-sm border border-default dark:border-slate-700 dark:bg-slate-900 rounded"
-              >
-                {TARGET_ENTITIES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setTargetEntity(v as typeof targetEntity)}
+                ariaLabel="Target entity"
+                className="w-full"
+                options={TARGET_ENTITIES.map((t) => ({ value: t, label: t }))}
+              />
             </label>
             <label className="block">
               <span className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-0.5 block">

@@ -41,6 +41,9 @@ import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 export interface AttributeGroupRow {
   id: string
@@ -642,17 +645,13 @@ function CreateAttributeModal({
             <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
               Group <span className="text-rose-500">*</span>
             </label>
-            <select
+            <Listbox
               value={groupId}
-              onChange={(e) => setGroupId(e.target.value)}
-              className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
-            >
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.label}
-                </option>
-              ))}
-            </select>
+              onChange={setGroupId}
+              options={groups.map((g) => ({ value: g.id, label: g.label }))}
+              ariaLabel="Group"
+              className="w-full"
+            />
           </div>
         </div>
         <div className="space-y-1">
@@ -672,30 +671,31 @@ function CreateAttributeModal({
             <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
               Type
             </label>
-            <select
+            <Listbox
               value={type}
-              onChange={(e) => setType(e.target.value)}
-              className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
-            >
-              {ATTRIBUTE_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+              onChange={setType}
+              options={ATTRIBUTE_TYPES.map((t) => ({
+                value: t.value,
+                label: t.label,
+              }))}
+              ariaLabel="Type"
+              className="w-full"
+            />
           </div>
           <div className="space-y-1">
             <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
               Scope
             </label>
-            <select
+            <Listbox
               value={scope}
-              onChange={(e) => setScope(e.target.value)}
-              className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
-            >
-              <option value="global">Global (one value per product)</option>
-              <option value="per_variant">Per variant</option>
-            </select>
+              onChange={setScope}
+              options={[
+                { value: 'global', label: 'Global (one value per product)' },
+                { value: 'per_variant', label: 'Per variant' },
+              ]}
+              ariaLabel="Scope"
+              className="w-full"
+            />
           </div>
         </div>
         <div>

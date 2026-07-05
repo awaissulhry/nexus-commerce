@@ -35,6 +35,9 @@ import { useSettingsForm } from '../_shell/SettingsSaveBar'
 import { saveNotificationPreferences } from './actions'
 import { EVENT_TYPES } from './event-types'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 export interface LoadedPref {
   eventType: string
@@ -558,19 +561,16 @@ function PrefsTable({
                     />
                   </td>
                   <td className="px-2 py-3">
-                    <select
+                    <Listbox
                       value={pref.digestCadence}
-                      onChange={(e) =>
-                        update(ev.key, { digestCadence: e.target.value })
-                      }
-                      className="px-2 py-1 text-sm border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
-                    >
-                      {CADENCES.map((c) => (
-                        <option key={c.value} value={c.value}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => update(ev.key, { digestCadence: v })}
+                      options={CADENCES.map((c) => ({
+                        value: c.value,
+                        label: c.label,
+                      }))}
+                      ariaLabel={`Cadence for ${ev.label}`}
+                      className="w-36"
+                    />
                   </td>
                   <td className="px-4 py-3 max-w-md">
                     <ChannelMultiSelect

@@ -28,6 +28,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
+import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -324,28 +325,24 @@ export default function AlertsClient() {
               className="w-full px-2 py-1 text-sm rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-slate-400 dark:focus:border-slate-500"
             />
             <div className="flex items-center gap-1.5 flex-wrap">
-              <select
+              <Listbox
                 value={newMetric}
-                onChange={(e) => setNewMetric(e.target.value)}
-                className="text-sm px-2 py-1 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-              >
-                {METRICS.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {t(`syncLogs.metric.${m.value}`)}
-                  </option>
-                ))}
-              </select>
-              <select
+                onChange={(v) => setNewMetric(v)}
+                className="w-52"
+                options={METRICS.map((m) => ({
+                  value: m.value,
+                  label: t(`syncLogs.metric.${m.value}`),
+                }))}
+              />
+              <Listbox
                 value={newOperator}
-                onChange={(e) => setNewOperator(e.target.value)}
-                className="text-sm px-2 py-1 rounded border border-default dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-              >
-                {OPERATORS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {t(`syncLogs.operator.${o.value}`)}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setNewOperator(v)}
+                className="w-20"
+                options={OPERATORS.map((o) => ({
+                  value: o.value,
+                  label: t(`syncLogs.operator.${o.value}`),
+                }))}
+              />
               <input
                 type="text"
                 value={newThreshold}

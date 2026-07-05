@@ -37,6 +37,9 @@ import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 export interface AssetRow {
   id: string
@@ -216,17 +219,16 @@ export default function DamClient({
             className="h-8 pl-7 pr-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 w-72"
           />
         </div>
-        <select
+        <Listbox
           value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="h-8 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
-        >
-          {TYPE_OPTIONS.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt === '' ? t('pim.dam.filter.allTypes') : opt}
-            </option>
-          ))}
-        </select>
+          onChange={setTypeFilter}
+          options={TYPE_OPTIONS.map((opt) => ({
+            value: opt,
+            label: opt === '' ? t('pim.dam.filter.allTypes') : opt,
+          }))}
+          ariaLabel="Filter by type"
+          className="w-40"
+        />
         <div className="ml-auto text-sm text-slate-500 dark:text-slate-400">
           {t(
             cursor

@@ -34,6 +34,9 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 export interface FamilyRow {
   id: string
@@ -383,25 +386,22 @@ function CreateFamilyModal({
           />
         </div>
         <div className="space-y-1">
-          <label
-            htmlFor="family-parent"
-            className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block"
-          >
+          <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
             Parent family
           </label>
-          <select
-            id="family-parent"
+          <Listbox
             value={parentFamilyId}
-            onChange={(e) => setParentFamilyId(e.target.value)}
-            className="w-full h-9 px-2 text-base border border-default dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
-          >
-            <option value="">— root (no parent) —</option>
-            {allFamilies.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.label} ({f.code})
-              </option>
-            ))}
-          </select>
+            onChange={setParentFamilyId}
+            options={[
+              { value: '', label: '— root (no parent) —' },
+              ...allFamilies.map((f) => ({
+                value: f.id,
+                label: `${f.label} (${f.code})`,
+              })),
+            ]}
+            ariaLabel="Parent family"
+            className="w-full"
+          />
           <p className="text-xs text-slate-500 dark:text-slate-400">
             Children inherit ALL parent attributes (Akeneo-strict
             additive). Children can ADD more but never remove or

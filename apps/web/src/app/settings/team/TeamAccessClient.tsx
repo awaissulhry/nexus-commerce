@@ -13,6 +13,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import MfaSetup from './MfaSetup'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 interface Role {
   id: string; key: string; name: string; description: string
@@ -218,7 +221,7 @@ function InviteModal({ roles, onClose, onDone }: { roles: Role[]; onClose: () =>
     <Modal title="Invite a member" onClose={onClose}>
       {err && <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
       <label className="mb-3 block"><span className="mb-1 block text-sm font-medium text-slate-700">Email</span><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" /></label>
-      <label className="mb-4 block"><span className="mb-1 block text-sm font-medium text-slate-700">Role</span><select value={roleKey} onChange={(e) => setRoleKey(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">{roles.map((r) => <option key={r.key} value={r.key}>{r.name}</option>)}</select></label>
+      <div className="mb-4 block"><span className="mb-1 block text-sm font-medium text-slate-700">Role</span><Listbox value={roleKey} onChange={setRoleKey} options={roles.map((r) => ({ value: r.key, label: r.name }))} ariaLabel="Role" className="w-full" /></div>
       <div className="flex justify-end gap-2"><button onClick={onClose} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm">Cancel</button><button disabled={busy || !email || !roleKey} onClick={submit} className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-60">{busy ? 'Sending…' : 'Send invite'}</button></div>
     </Modal>
   )

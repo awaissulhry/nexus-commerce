@@ -41,6 +41,9 @@ import {
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { useSettingsForm } from '../_shell/SettingsSaveBar'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import {
   VAT_SCHEMES,
   validatePiva,
@@ -745,25 +748,24 @@ function FiscalSection({
 
         <Field
           label="VAT scheme"
-          htmlFor="vatScheme"
           hint="Drives invoice math + downstream rimanenze valuation."
           error={errors.vatScheme}
         >
-          <select
-            id="vatScheme"
+          <Listbox
             value={draft.vatScheme ?? ''}
-            onChange={(e) =>
-              setDraft((d) => ({ ...d, vatScheme: e.target.value || null }))
+            onChange={(v) =>
+              setDraft((d) => ({ ...d, vatScheme: v || null }))
             }
-            className={INPUT_CLS}
-          >
-            <option value="">— Not set —</option>
-            {VAT_SCHEMES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label} — {s.description}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: '', label: '— Not set —' },
+              ...VAT_SCHEMES.map((s) => ({
+                value: s.value,
+                label: `${s.label} — ${s.description}`,
+              })),
+            ]}
+            ariaLabel="VAT scheme"
+            className="w-full"
+          />
         </Field>
 
         <div className="flex items-start gap-2 p-3 rounded-md border border-default dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 text-xs text-slate-600 dark:text-slate-400">

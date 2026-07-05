@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { cn } from '@/lib/utils'
@@ -789,21 +790,22 @@ export default function BulkOperationModal({
                   schemaManifest.fields.length > 0 && (
                     <>
                       <Field label="Field">
-                        <select
+                        <Listbox
                           value={schemaFieldId}
-                          onChange={(e) => {
-                            setSchemaFieldId(e.target.value)
+                          onChange={(v) => {
+                            setSchemaFieldId(v)
                             setSchemaValue(undefined)
                           }}
-                          className={inputCls}
-                        >
-                          <option value="">— Pick a field —</option>
-                          {schemaManifest.fields.map((f) => (
-                            <option key={f.id} value={f.id}>
-                              {f.label} ({f.id})
-                            </option>
-                          ))}
-                        </select>
+                          ariaLabel="Field"
+                          className="w-full"
+                          options={[
+                            { value: '', label: '— Pick a field —' },
+                            ...schemaManifest.fields.map((f) => ({
+                              value: f.id,
+                              label: `${f.label} (${f.id})`,
+                            })),
+                          ]}
+                        />
                       </Field>
                       {schemaField && (
                         <Field label="Value">
@@ -939,23 +941,24 @@ export default function BulkOperationModal({
                     />
                   </Field>
                   <Field label="Status">
-                    <select
+                    <Listbox
                       value={subsetFilters.status ?? ''}
-                      onChange={(e) =>
+                      onChange={(v) =>
                         setSubsetFilters({
                           ...subsetFilters,
                           status:
-                            (e.target.value as ScopeFilters['status']) ||
-                            undefined,
+                            (v as ScopeFilters['status']) || undefined,
                         })
                       }
-                      className={inputCls}
-                    >
-                      <option value="">Any</option>
-                      <option value="DRAFT">Draft</option>
-                      <option value="ACTIVE">Active</option>
-                      <option value="INACTIVE">Inactive</option>
-                    </select>
+                      ariaLabel="Status"
+                      className="w-full"
+                      options={[
+                        { value: '', label: 'Any' },
+                        { value: 'DRAFT', label: 'Draft' },
+                        { value: 'ACTIVE', label: 'Active' },
+                        { value: 'INACTIVE', label: 'Inactive' },
+                      ]}
+                    />
                   </Field>
                   <Field label="Stock min">
                     <input

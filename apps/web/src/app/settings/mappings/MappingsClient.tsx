@@ -38,6 +38,9 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
 import { cn } from '@/lib/utils'
+import { Listbox } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 import FieldRuleRow, {
   type FieldRow,
   type FieldMappingRule,
@@ -577,19 +580,16 @@ export default function MappingsClient() {
               <div className="flex items-center gap-3 mt-2">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] uppercase tracking-wide text-zinc-400">Overlay</span>
-                  <select
+                  <Listbox
                     value={editProductType}
-                    onChange={(e) => setEditProductType(e.target.value)}
-                    className="px-1.5 py-1 text-xs rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    title="Edit the default bucket (all product types) or one productType's overlay"
-                  >
-                    <option value="">Default · all product types</option>
-                    {typeOptions.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setEditProductType}
+                    options={[
+                      { value: '', label: 'Default · all product types' },
+                      ...typeOptions.map((t) => ({ value: t, label: t })),
+                    ]}
+                    ariaLabel="Edit the default bucket (all product types) or one productType's overlay"
+                    className="w-52"
+                  />
                   <Input
                     placeholder="+ productType"
                     className="w-32 text-xs font-mono"

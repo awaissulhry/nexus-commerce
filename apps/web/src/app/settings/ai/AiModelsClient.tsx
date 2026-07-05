@@ -21,8 +21,10 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import { Cpu, RefreshCw, Loader2, RotateCcw, KeyRound } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox, type ListboxOption } from '@/design-system/components/Listbox'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 type ProviderName = 'gemini' | 'anthropic'
 
@@ -357,34 +359,39 @@ function ModelSelect({
   ariaLabel: string
   extraModel?: Pref | null
 }) {
+  // Native <optgroup> flattened for Listbox: each provider group becomes a
+  // disabled (non-selectable) header row followed by its models, preserving
+  // the original order.
+  const options: ListboxOption[] = [
+    { value: DEFAULT_VALUE, label: 'Use default' },
+    ...(extraModel
+      ? [
+          {
+            value: `${extraModel.provider}:${extraModel.model}`,
+            label: `${extraModel.model} (unavailable)`,
+          },
+        ]
+      : []),
+    ...providers.flatMap((p) => [
+      {
+        value: `__group:${p.provider}`,
+        label: PROVIDER_LABEL[p.provider] ?? p.provider,
+        disabled: true,
+      },
+      ...p.models.map((m) => ({
+        value: `${m.provider}:${m.id}`,
+        label: `${m.displayName} · ${fmtPrice(m)}${m.isDefault ? ' · default' : ''}`,
+      })),
+    ]),
+  ]
   return (
-    <select
-      aria-label={ariaLabel}
+    <Listbox
+      ariaLabel={ariaLabel}
       value={value}
       disabled={disabled}
-      onChange={(e) => onChange(e.target.value)}
-      className={cn(
-        'h-8 text-base border border-default dark:border-slate-700 rounded px-2',
-        'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100',
-        'max-w-xs w-full disabled:opacity-50',
-      )}
-    >
-      <option value={DEFAULT_VALUE}>Use default</option>
-      {extraModel && (
-        <option value={`${extraModel.provider}:${extraModel.model}`}>
-          {extraModel.model} (unavailable)
-        </option>
-      )}
-      {providers.map((p) => (
-        <optgroup key={p.provider} label={PROVIDER_LABEL[p.provider] ?? p.provider}>
-          {p.models.map((m) => (
-            <option key={m.id} value={`${m.provider}:${m.id}`}>
-              {m.displayName} · {fmtPrice(m)}
-              {m.isDefault ? ' · default' : ''}
-            </option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
+      onChange={onChange}
+      options={options}
+      className="max-w-xs w-full"
+    />
   )
 }
