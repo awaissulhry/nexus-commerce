@@ -13,6 +13,7 @@
  *   - Never guess destructively: blank = no-change marker; __CLEAR__ = explicit clear.
  */
 import ExcelJS from 'exceljs'
+import { canonicalizeText } from './normalize.js'
 
 // ── Public interfaces ──────────────────────────────────────────────────────────
 
@@ -98,19 +99,11 @@ export function normalizeCell(raw: unknown): { value: string; warning?: string }
 
   // Rule 6 — string (the common path)
   if (typeof raw === 'string') {
-    let s = raw
-    // Strip BOM (U+FEFF) — Excel sometimes emits it in UTF-8 encoded cells
-    if (s.charCodeAt(0) === 0xfeff) s = s.slice(1)
     // NOTE: leading apostrophe (0x27) is intentionally NOT stripped here.
-    // A real leading ' value (e.g. Italian 'O sole mio) would be corrupted.
-    // Replace curly quotes with straight equivalents (no String.replaceAll)
-    s = s.split('‘').join("'")  // LEFT  SINGLE QUOTATION MARK
-    s = s.split('’').join("'")  // RIGHT SINGLE QUOTATION MARK
-    s = s.split('“').join('"')  // LEFT  DOUBLE QUOTATION MARK
-    s = s.split('”').join('"')  // RIGHT DOUBLE QUOTATION MARK
-    // Trim trailing whitespace (leading whitespace is significant — leave alone)
-    s = s.trimEnd()
-    return { value: s }
+    // A real leading ‘ value (e.g. Italian ‘O sole mio) would be corrupted.
+    // Delegate to canonicalizeText (shared with diff.ts) — BOM strip + curly
+    // quotes + trimEnd — so file-side and DB-side canonicalisations are symmetric.
+    return { value: canonicalizeText(raw) }
   }
 
   // Rule 7 — ExcelJS compound cell (formula result, rich-text, other objects)

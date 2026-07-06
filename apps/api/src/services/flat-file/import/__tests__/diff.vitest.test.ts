@@ -164,7 +164,7 @@ function diff(
   const wb = makeWb(amazonRows, productsRows)
   const scope = defaultScope({ channel: 'AMAZON', market: 'IT' })
   const scoped = classifyColumns(wb, scope)
-  return computeDiff(wb, scoped, CURRENT, opts)
+  return computeDiff(wb, scoped, CURRENT, scope, opts)
 }
 
 // Helper: find a specific CellChange
@@ -355,7 +355,8 @@ describe('computeDiff — out-of-scope', () => {
     expect(change!.kind).toBe('out-of-scope')
     expect(change!.market).toBe('DE')
     expect(String(change!.from)).toBe('189.9') // DB effective for DE
-    expect(change!.to).toBe('155.0')
+    // canon('155.0', priceField) → canonicalizeDecimal → Number('155.0')=155 → '155'
+    expect(change!.to).toBe('155')
     expect(result.stats.outOfScope).toBe(1)
     expect(result.stats.updates).toBe(0)
   })
@@ -378,7 +379,7 @@ describe('computeDiff — out-of-scope', () => {
     const wb = makeWb([], [productsRow('GALE-M', '', { brand: 'NewBrand' })])
     const scope = defaultScope({ channel: 'AMAZON', market: 'IT' })
     const scoped = classifyColumns(wb, scope)
-    const result = computeDiff(wb, scoped, CURRENT, {})
+    const result = computeDiff(wb, scoped, CURRENT, scope, {})
     const change = result.masterChanges.find(c => c.column === 'brand')
     expect(change).toBeDefined()
     expect(change!.kind).toBe('out-of-scope')
@@ -391,7 +392,7 @@ describe('computeDiff — out-of-scope', () => {
     const wb = makeWb([], [productsRow('GALE-M', '', { brand: 'NewBrand' })])
     const scope = { channel: 'AMAZON' as const, markets: ['IT'] as string[], includeMaster: true }
     const scoped = classifyColumns(wb, scope)
-    const result = computeDiff(wb, scoped, CURRENT, {})
+    const result = computeDiff(wb, scoped, CURRENT, scope, {})
     const change = result.masterChanges.find(c => c.column === 'brand')
     expect(change).toBeDefined()
     expect(change!.kind).toBe('update')
@@ -442,7 +443,8 @@ describe('computeDiff — add cases', () => {
 describe('computeDiff — delete cases', () => {
   it('Action=DELETE records the row in the deletes bucket (one entry per row)', () => {
     const result = diff([amazonRow('GALE-M', 'DELETE', {})])
-    expect(result.deletes).toContainEqual({ sku: 'GALE-M', sheet: 'Amazon', channel: 'AMAZON' })
+    // scope = AMAZON IT → delete is in-scope; markets carries the scope's markets array
+    expect(result.deletes).toContainEqual({ sku: 'GALE-M', sheet: 'Amazon', channel: 'AMAZON', markets: ['IT'] })
     expect(result.deletes).toHaveLength(1)
     expect(result.stats.deletes).toBe(1)
   })
@@ -453,15 +455,15 @@ describe('computeDiff — delete cases', () => {
     expect(result.changes).toHaveLength(0)
     expect(result.masterChanges).toHaveLength(0)
     // The row is only surfaced via the deletes bucket.
-    expect(result.deletes).toContainEqual({ sku: 'GALE-M', sheet: 'Amazon', channel: 'AMAZON' })
+    expect(result.deletes).toContainEqual({ sku: 'GALE-M', sheet: 'Amazon', channel: 'AMAZON', markets: ['IT'] })
     expect(findChange(result, 'price@IT')).toBeUndefined()
   })
 
-  it('delete record carries sku + sheet + channel', () => {
+  it('delete record carries sku + sheet + channel + markets', () => {
     const result = diff([amazonRow('GALE-M', 'DELETE', {})])
     const entry = result.deletes.find(d => d.sku === 'GALE-M')
     expect(entry).toBeDefined()
-    expect(entry).toEqual({ sku: 'GALE-M', sheet: 'Amazon', channel: 'AMAZON' })
+    expect(entry).toEqual({ sku: 'GALE-M', sheet: 'Amazon', channel: 'AMAZON', markets: ['IT'] })
   })
 
   it('__CLEAR__ on non-empty field → delete CellChange (distinct from Action=DELETE)', () => {
@@ -528,7 +530,7 @@ describe('computeDiff — stats', () => {
       amazonRow('GALE-L', 'DELETE', {}),                     // row-level delete
     ])
     expect(result.stats.deletes).toBe(2)
-    expect(result.deletes).toContainEqual({ sku: 'GALE-L', sheet: 'Amazon', channel: 'AMAZON' })
+    expect(result.deletes).toContainEqual({ sku: 'GALE-L', sheet: 'Amazon', channel: 'AMAZON', markets: ['IT'] })
   })
 })
 
@@ -539,7 +541,7 @@ describe('computeDiff — masterChanges bucket', () => {
     const wb = makeWb([], [productsRow('GALE-M', '', { brand: 'NewBrand' })])
     const scope = { channel: 'AMAZON' as const, markets: ['IT'] as string[], includeMaster: true }
     const scoped = classifyColumns(wb, scope)
-    const result = computeDiff(wb, scoped, CURRENT, {})
+    const result = computeDiff(wb, scoped, CURRENT, scope, {})
     expect(result.masterChanges.length).toBeGreaterThan(0)
     const brandChange = result.masterChanges.find(c => c.column === 'brand')
     expect(brandChange).toBeDefined()
@@ -563,7 +565,7 @@ describe('computeDiff — masterChanges bucket', () => {
     )
     const scope = { channel: 'AMAZON' as const, markets: ['IT'] as string[], includeMaster: true }
     const scoped = classifyColumns(wb, scope)
-    const result = computeDiff(wb, scoped, CURRENT, {})
+    const result = computeDiff(wb, scoped, CURRENT, scope, {})
     // price@IT update + brand update = 2 updates
     expect(result.stats.updates).toBe(2)
   })
@@ -592,7 +594,7 @@ describe('computeDiff — sheet + base fields on every CellChange', () => {
     const wb = makeWb([], [productsRow('GALE-M', '', { brand: 'NewBrand' })])
     const scope = { channel: 'AMAZON' as const, markets: ['IT'] as string[], includeMaster: true }
     const scoped = classifyColumns(wb, scope)
-    const result = computeDiff(wb, scoped, CURRENT, {})
+    const result = computeDiff(wb, scoped, CURRENT, scope, {})
     const change = result.masterChanges.find(c => c.column === 'brand')
     expect(change!.sheet).toBe('Products')
     expect(change!.base).toBe('brand')
@@ -621,13 +623,10 @@ describe('computeDiff — round-trip identity (real export→parse→diff)', () 
     const parsed = await parseWorkbook(bytes)
     // 3. Classify with the WIDEST scope so EVERY cell exercises the in-scope
     //    no-change path (not the out-of-scope short-circuit).
-    const scoped = classifyColumns(parsed, {
-      channel: 'AMAZON',
-      markets: ['IT', 'DE'],
-      includeMaster: true,
-    })
+    const rtScope = { channel: 'AMAZON' as const, markets: ['IT', 'DE'] as string[], includeMaster: true }
+    const scoped = classifyColumns(parsed, rtScope)
     // 4. Diff against the SAME catalog state the workbook was generated from.
-    const result = computeDiff(parsed, scoped, CURRENT, {})
+    const result = computeDiff(parsed, scoped, CURRENT, rtScope, {})
 
     // THE contract guarantee: an unedited export applies nothing.
     expect(result.stats.adds).toBe(0)
@@ -705,13 +704,10 @@ describe('computeDiff — C1 round-trip: pipe-containing array element', () => {
     // 2. Parse the xlsx bytes back through the real parser.
     const parsed = await parseWorkbook(bytes)
     // 3. Classify with includeMaster=true so the Products sheet is in-scope.
-    const scoped = classifyColumns(parsed, {
-      channel: 'AMAZON',
-      markets: [] as string[],
-      includeMaster: true,
-    })
+    const pipeScope = { channel: 'AMAZON' as const, markets: [] as string[], includeMaster: true }
+    const scoped = classifyColumns(parsed, pipeScope)
     // 4. Diff against the identical catalog state used for generation.
-    const result = computeDiff(parsed, scoped, PIPE_CURRENT, {})
+    const result = computeDiff(parsed, scoped, PIPE_CURRENT, pipeScope, {})
 
     // Key assertion: no false update on bullet_points (round-trip identity).
     const bulletChange = result.masterChanges.find(c => c.column === 'bullet_points')
@@ -720,5 +716,232 @@ describe('computeDiff — C1 round-trip: pipe-containing array element', () => {
     expect(result.stats.updates).toBe(0)
     expect(result.stats.adds).toBe(0)
     expect(result.stats).toMatchObject({ adds: 0, updates: 0, conflicts: 0 })
+  })
+})
+
+// ── Suite 13: C1 — curly-quote round-trip identity ─────────────────────────────
+//
+// DB value has a curly right-single-quote (U+2019, e.g. "L'Aquila Giacca").
+// The xlsx generator emits the curly quote verbatim. The parser normalises it
+// to a straight quote (U+0027). Without the symmetric DB-side canonicalisation
+// in diff.ts the string comparison sees:
+//   fileValue   = "L'Aquila Giacca"  (straight, from parser)
+//   fromStr/old = "L’Aquila Giacca"  (curly, raw DB value)
+// → not equal → FALSE update.
+// With canon() applied to both sides the test resolves to no-change (MUST fail
+// before the C1 fix, MUST pass after).
+
+describe('computeDiff — C1: curly-quote DB value round-trips as no-change', () => {
+  const CURLY_MODEL: WorkbookModel = {
+    markets: { AMAZON: [], EBAY: [], SHOPIFY: [] },
+    sheets: [
+      { name: 'Products', sharedFields: MASTER_FIELDS, marketFields: [] },
+    ],
+  }
+
+  // U+2019 RIGHT SINGLE QUOTATION MARK in the product name (Italian possessive).
+  const CURLY_CURRENT: WorkbookData = {
+    products: [
+      {
+        sku: 'CURLY-SKU',
+        parent_sku: '',
+        isParent: false,
+        name: 'L’Aquila Giacca',   // curly right single quote
+        brand: 'Xavia',
+        status: 'ACTIVE',
+      },
+    ],
+    listings: { AMAZON: [], EBAY: [], SHOPIFY: [] },
+  }
+
+  it('name with curly-quote DB value round-trips as no-change (C1 fix)', async () => {
+    // 1. Export — generator writes "L’Aquila Giacca" verbatim into the xlsx cell.
+    const bytes = await generateWorkbook(CURLY_MODEL, CURLY_CURRENT, {
+      snapshotId: 'c1-curly',
+      exportedAt: '2026-07-06',
+    })
+    // 2. Parse — normalizeCell converts U+2019 → U+0027 (straight quote).
+    //    So parsed cell value = "L'Aquila Giacca" (straight).
+    const parsed = await parseWorkbook(bytes)
+    // 3. Classify with includeMaster=true so the Products sheet is in-scope.
+    const curlyScope = { channel: 'AMAZON' as const, markets: [] as string[], includeMaster: true }
+    const scoped = classifyColumns(parsed, curlyScope)
+    // 4. Diff against the original (curly-quote) catalog state.
+    const result = computeDiff(parsed, scoped, CURLY_CURRENT, curlyScope, {})
+
+    // Key assertion: no false update on `name` (round-trip identity).
+    // Without C1 fix: "L'Aquila Giacca" !== "L’Aquila Giacca" → update.
+    // With C1 fix: canon() normalises both to "L'Aquila Giacca" → no update.
+    const nameChange = result.masterChanges.find(c => c.column === 'name')
+    expect(nameChange).toBeUndefined()
+    // Whole diff must be clean.
+    expect(result.stats).toMatchObject({ adds: 0, updates: 0, conflicts: 0 })
+  })
+})
+
+// ── Suite 14: I1 + I2 — decimal canonicalisation ──────────────────────────────
+//
+// I1: IT comma-decimal format in the file (e.g. '189,90') must compare equal to
+//     the DB effective value '189.9'. A genuinely different value ('199,90')
+//     must still emit an update with `to` normalised to '199.9'.
+//
+// I2: Trailing-zero padded decimal from DB (e.g. '189.90', as a Prisma.Decimal
+//     stringifies) must compare equal to the file value '189.9'.
+
+describe('computeDiff — I1 + I2: decimal canonicalisation', () => {
+  // I1: file has '189,90' — IT locale; DB effective is 189.9 (number).
+  it('I1 — file "189,90" vs DB 189.9 → no update (canonical match)', () => {
+    const result = diff([amazonRow('GALE-M', '', { 'price@IT': '189,90' })])
+    const change = findChange(result, 'price@IT')
+    // Without I1 fix: '189,90' !== '189.9' → false update.
+    // With fix: canonicalizeDecimal('189,90') = '189.9'; match → no update.
+    expect(change).toBeUndefined()
+    expect(result.stats.updates).toBe(0)
+  })
+
+  it('I1 — file "199,90" vs DB 189.9 → update with to:"199.9"', () => {
+    const result = diff([amazonRow('GALE-M', '', { 'price@IT': '199,90' })])
+    const change = findChange(result, 'price@IT')
+    expect(change).toBeDefined()
+    expect(change!.kind).toBe('update')
+    // to is the clean canonical form, not the raw comma-decimal.
+    expect(change!.to).toBe('199.9')
+    expect(result.stats.updates).toBe(1)
+  })
+
+  // I2: DB value serialised with trailing zero (simulates Prisma.Decimal.toString()).
+  it('I2 — file "189.9" vs DB "189.90" (padded) → no update (canonical match)', () => {
+    // Simulate a Prisma.Decimal that serialises to "189.90" by using a string
+    // value in the listing fixture. toStr/canon sees String("189.90") = "189.90".
+    const paddedCurrent: WorkbookData = {
+      ...CURRENT,
+      listings: {
+        ...CURRENT.listings,
+        AMAZON: [
+          {
+            ...CURRENT.listings.AMAZON[0],
+            // Override masterPrice with string "189.90" to simulate Prisma.Decimal
+            // toString() producing a padded decimal representation.
+            masterPrice: '189.90' as any,
+          },
+          CURRENT.listings.AMAZON[1],
+        ],
+      },
+    }
+    const wb = makeWb([amazonRow('GALE-M', '', { 'price@IT': '189.9' })])
+    const scope = defaultScope({ channel: 'AMAZON', market: 'IT' })
+    const scoped = classifyColumns(wb, scope)
+    const result = computeDiff(wb, scoped, paddedCurrent, scope, {})
+    const change = result.changes.find(c => c.column === 'price@IT')
+    // Without I2 fix: '189.9' !== '189.90' → false update.
+    // With fix: canonicalizeDecimal('189.9') = '189.9' === canonicalizeDecimal('189.90') = '189.9'.
+    expect(change).toBeUndefined()
+    expect(result.stats.updates).toBe(0)
+  })
+})
+
+// ── Suite 15: C2 — scope-aware deletes ────────────────────────────────────────
+//
+// A DELETE row must only be recorded when it is actionable for the import scope:
+//   Channel sheet DELETE: only if SHEET_CHANNEL[sheet] === scope.channel.
+//   Products sheet DELETE: only if scope.includeMaster === true.
+//
+// Out-of-scope deletes are silently skipped (no entry, no stats.deletes bump).
+
+describe('computeDiff — C2: scope-aware deletes', () => {
+  /** Build a minimal workbook that contains a Products sheet + both Amazon + eBay sheets. */
+  function makeMixedWb(
+    amazonRows: ParsedRow[],
+    ebayRows: ParsedRow[],
+    productsRows: ParsedRow[] = [],
+  ): ParsedWorkbook {
+    const sheets: ParsedWorkbook['sheets'] = {
+      Amazon: {
+        headers: ['Action', 'sku', 'price@IT'],
+        rows: amazonRows,
+      },
+      eBay: {
+        headers: ['Action', 'sku', 'price@IT'],
+        rows: ebayRows,
+      },
+    }
+    if (productsRows.length > 0) {
+      sheets['Products'] = { headers: ['Action', 'sku', 'brand'], rows: productsRows }
+    }
+    return { sheets, meta: { markets: { AMAZON: ['IT'], EBAY: ['IT'] } }, parseWarnings: [] }
+  }
+
+  function makeEbayRow(sku: string, action: string): ParsedRow {
+    return {
+      sheet: 'eBay',
+      rowNumber: 2,
+      cells: { Action: makeCell(action), sku: makeCell(sku), 'price@IT': blankCell() },
+    }
+  }
+
+  // C2a: DELETE on eBay sheet while scope=AMAZON → NOT recorded.
+  it('C2a — eBay DELETE with scope.channel=AMAZON → not in deletes, stats.deletes=0', () => {
+    const wb = makeMixedWb(
+      [],
+      [makeEbayRow('GALE-M', 'DELETE')],  // eBay sheet
+    )
+    const scope = { channel: 'AMAZON' as const, markets: ['IT'] as string[], includeMaster: false }
+    const scoped = classifyColumns(wb, scope)
+    const result = computeDiff(wb, scoped, CURRENT, scope, {})
+    expect(result.deletes).toHaveLength(0)
+    expect(result.stats.deletes).toBe(0)
+  })
+
+  // C2b-false: DELETE on Products sheet with includeMaster=false → NOT recorded.
+  it('C2b — Products DELETE with includeMaster=false → not in deletes', () => {
+    const pr = {
+      sheet: 'Products',
+      rowNumber: 2,
+      cells: { Action: makeCell('DELETE'), sku: makeCell('GALE-M'), brand: blankCell() },
+    }
+    const wb = makeMixedWb([], [], [pr])
+    const scope = { channel: 'AMAZON' as const, markets: ['IT'] as string[], includeMaster: false }
+    const scoped = classifyColumns(wb, scope)
+    const result = computeDiff(wb, scoped, CURRENT, scope, {})
+    expect(result.deletes).toHaveLength(0)
+    expect(result.stats.deletes).toBe(0)
+  })
+
+  // C2b-true: DELETE on Products sheet with includeMaster=true → IS recorded.
+  it('C2b — Products DELETE with includeMaster=true → in deletes (no channel/markets)', () => {
+    const pr = {
+      sheet: 'Products',
+      rowNumber: 2,
+      cells: { Action: makeCell('DELETE'), sku: makeCell('GALE-M'), brand: blankCell() },
+    }
+    const wb = makeMixedWb([], [], [pr])
+    const scope = { channel: 'AMAZON' as const, markets: ['IT'] as string[], includeMaster: true }
+    const scoped = classifyColumns(wb, scope)
+    const result = computeDiff(wb, scoped, CURRENT, scope, {})
+    expect(result.deletes).toHaveLength(1)
+    expect(result.deletes[0]).toEqual({ sku: 'GALE-M', sheet: 'Products' })
+    expect(result.stats.deletes).toBe(1)
+    // Products delete has no channel or markets (whole-product op)
+    expect(result.deletes[0]).not.toHaveProperty('channel')
+    expect(result.deletes[0]).not.toHaveProperty('markets')
+  })
+
+  // C2c: in-scope Amazon DELETE → recorded with markets = scope.markets.
+  it('C2c — Amazon DELETE with scope.channel=AMAZON → in deletes with markets=scope.markets', () => {
+    const wb = makeMixedWb(
+      [amazonRow('GALE-M', 'DELETE', {})],  // Amazon sheet, in-scope
+      [],
+    )
+    const scope = { channel: 'AMAZON' as const, markets: ['IT', 'DE'] as string[], includeMaster: false }
+    const scoped = classifyColumns(wb, scope)
+    const result = computeDiff(wb, scoped, CURRENT, scope, {})
+    expect(result.deletes).toHaveLength(1)
+    expect(result.deletes[0]).toEqual({
+      sku: 'GALE-M',
+      sheet: 'Amazon',
+      channel: 'AMAZON',
+      markets: ['IT', 'DE'],
+    })
+    expect(result.stats.deletes).toBe(1)
   })
 })

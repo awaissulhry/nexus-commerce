@@ -36,8 +36,9 @@
  */
 
 import type { ParsedWorkbook } from './parse.js'
-import type { ScopedColumn, Channel } from './scope.js'
+import type { ScopedColumn, Channel, ImportScope } from './scope.js'
 import type { WorkbookData } from '../fetch.js'
+import { canonicalizeText, canonicalizeDecimal } from './normalize.js'
 import { MASTER_FIELDS } from '../registry/master-fields.js'
 import { CHANNEL_MARKET_FIELDS } from '../registry/channel-fields.js'
 import type { FieldDefinition } from '../registry/types.js'
@@ -99,8 +100,8 @@ export interface ImportDiff {
   changes: CellChange[]
   /** Products-sheet CellChanges (master data, separate bucket). */
   masterChanges: CellChange[]
-  /** Rows flagged for deletion via Action=DELETE (one entry per row). */
-  deletes: { sku: string; sheet: string; channel?: Channel }[]
+  /** Rows flagged for deletion via Action=DELETE (one entry per row, scope-filtered). */
+  deletes: { sku: string; sheet: string; channel?: Channel; markets?: string[] | 'ALL' }[]
   stats: {
     adds: number
     updates: number
@@ -121,25 +122,32 @@ export interface ImportDiff {
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 /**
- * Normalise a DB value to the same string representation the flat-file parser
- * produces, so file vs DB comparisons are apples-to-apples.
+ * Canonical comparison helper — symmetrically normalises both the file side and the
+ * DB side before comparison so round-trip identity holds for:
+ *   - Text with curly quotes or BOM (canonicalizeText)
+ *   - Decimals in IT locale format or with trailing zeros (canonicalizeDecimal)
+ *   - Arrays: joined with the field's arrayDelimiter, inner delimiter escaped to '/'
  *
- *   null / undefined → ''
- *   boolean          → 'true' | 'false'
- *   number           → String(n)
- *   array            → joined with the field's arrayDelimiter (default ' | ')
- *   string           → as-is
+ * Rules (in priority order):
+ *   null / undefined  → ''
+ *   boolean           → 'true' | 'false'
+ *   Array             → escape+join (same algorithm as the workbook generator)
+ *   decimal / number  → canonicalizeDecimal(String(v))
+ *   everything else   → canonicalizeText(String(v))
  */
-function toStr(v: unknown, field?: FieldDefinition): string {
+function canon(v: unknown, field?: FieldDefinition): string {
   if (v == null) return ''
   if (typeof v === 'boolean') return v ? 'true' : 'false'
-  if (typeof v === 'number') return String(v)
   if (Array.isArray(v)) {
     const delim = field?.arrayDelimiter ?? ' | '
     const inner = delim.trim()
     return (v as unknown[]).map((x) => String(x).split(inner).join('/')).join(delim)
   }
-  return String(v)
+  const s = String(v)
+  if (field?.kind === 'decimal' || field?.kind === 'number') {
+    return canonicalizeDecimal(s)
+  }
+  return canonicalizeText(s)
 }
 
 /**
@@ -220,6 +228,7 @@ export function computeDiff(
   wb: ParsedWorkbook,
   scoped: ScopedColumn[],
   current: WorkbookData,
+  scope: ImportScope,
   opts?: { fingerprints?: Record<string, string> },
 ): ImportDiff {
   // ── Build lookup maps ─────────────────────────────────────────────────────
@@ -258,7 +267,7 @@ export function computeDiff(
 
   const changes: CellChange[] = []
   const masterChanges: CellChange[] = []
-  const deletes: { sku: string; sheet: string; channel?: Channel }[] = []
+  const deletes: { sku: string; sheet: string; channel?: Channel; markets?: string[] | 'ALL' }[] = []
 
   // ── Process each sheet ────────────────────────────────────────────────────
 
@@ -303,9 +312,22 @@ export function computeDiff(
 
       // DELETE rows → record the row deletion and skip cell diffing entirely.
       // Deletion is never implicit; only an explicit Action=DELETE reaches here.
+      // Scope-aware: only record deletes that are actionable for the current scope.
       if (action === 'DELETE') {
-        // market-scoping of DELETE is resolved at apply time per the import scope
-        deletes.push({ sku, sheet: sheetName, channel })
+        if (isProductsSheet) {
+          // Master delete: only if the operator explicitly opted into master changes.
+          if (scope.includeMaster) {
+            deletes.push({ sku, sheet: sheetName })
+          }
+          // includeMaster=false → silently skip; not actionable in this scope.
+        } else if (channel !== undefined) {
+          // Channel sheet delete: only if this sheet's channel matches the scope channel.
+          // Cross-channel deletes (e.g. eBay row when scope=AMAZON) are not actionable.
+          if (SHEET_CHANNEL[sheetName] === scope.channel) {
+            deletes.push({ sku, sheet: sheetName, channel: SHEET_CHANNEL[sheetName], markets: scope.markets })
+          }
+          // Out-of-channel → silently skip.
+        }
         continue
       }
 
@@ -415,18 +437,24 @@ export function computeDiff(
           continue
         }
 
-        const fromStr = toStr(fromValue, field)
+        // Canonical DB value — symmetric with the file-side canon() so that
+        // curly quotes, BOM, trailing spaces, and decimal locale variants don't
+        // produce false updates on round-trip.
+        const canonFrom = canon(fromValue, field)
         const fileValue = cell.value
 
         // ── Out-of-scope: diff + show greyed, but never apply ──────────
 
         if (!sc.inScope) {
-          // Only emit if the file has a non-blank value that differs from DB
-          // (blank = nothing to report; matching = nothing to warn about)
-          if (fileValue !== '' && fileValue !== fromStr) {
-            const toValue = fileValue === '__CLEAR__' ? '' : fileValue
-            const note = fileValue === '__CLEAR__' ? '__CLEAR__' : undefined
-            emit(sku, sc, fromValue, toValue, 'out-of-scope', note)
+          // Only emit if the file has a non-blank value that canonically differs from DB.
+          // (blank = nothing to report; canonical match = nothing to warn about)
+          if (fileValue !== '') {
+            const canonFile = canon(fileValue, field)
+            if (canonFile !== canonFrom) {
+              const toValue = fileValue === '__CLEAR__' ? '' : canonFile
+              const note = fileValue === '__CLEAR__' ? '__CLEAR__' : undefined
+              emit(sku, sc, fromValue, toValue, 'out-of-scope', note)
+            }
           }
           continue
         }
@@ -439,15 +467,19 @@ export function computeDiff(
         // __CLEAR__ as a cell value: explicit clear → delete kind if DB has a value.
         // (Distinct from Action=DELETE, which is handled at row level above.)
         if (fileValue === '__CLEAR__') {
-          if (fromStr !== '') {
+          if (canonFrom !== '') {
             emit(sku, sc, fromValue, '', 'delete', '__CLEAR__')
           }
           // DB already empty → no-change; skip
           continue
         }
 
-        // Values equal → no-change; don't emit
-        if (fileValue === fromStr) continue
+        // Canonical comparison — both sides normalised identically.
+        // Emits `to` as the clean canonical value (e.g. '189,90' → '189.9').
+        const canonFile = canon(fileValue, field)
+
+        // Values equal (canonically) → no-change; don't emit
+        if (canonFile === canonFrom) continue
 
         // Values differ → classify kind
         const isNewSku = !productMap.has(sku)
@@ -465,7 +497,7 @@ export function computeDiff(
           sku,
           sc,
           fromValue,
-          fileValue,
+          canonFile,
           kind,
           kind === 'conflict' ? 'Row changed in DB since export' : undefined,
         )
