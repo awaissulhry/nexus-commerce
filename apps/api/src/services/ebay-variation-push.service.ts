@@ -158,9 +158,9 @@ export function toListingLanguage(mp: string): string {
 async function ebayFetchRetry(
   url: string,
   init: RequestInit,
-  opts: { retries?: number; baseDelayMs?: number } = {},
+  opts: { retries?: number; baseDelayMs?: number; maxDelayMs?: number } = {},
 ): Promise<Response> {
-  const { retries = 3, baseDelayMs = 2000 } = opts
+  const { retries = 3, baseDelayMs = 2000, maxDelayMs = 10000 } = opts
   let res = await fetch(url, init)
   for (let attempt = 0; attempt < retries; attempt++) {
     if (res.ok || res.status === 204) return res
@@ -170,7 +170,7 @@ async function ebayFetchRetry(
       res.status === 500 || res.status === 503 ||
       body.includes('"errorId":25001') || body.includes('"errorId":25604')
     if (!transient) return res
-    await new Promise((r) => setTimeout(r, baseDelayMs * 2 ** attempt)) // 2s → 4s → 8s
+    await new Promise((r) => setTimeout(r, Math.min(baseDelayMs * 2 ** attempt, maxDelayMs))) // 2s → 4s → 8s → capped at maxDelayMs
     res = await fetch(url, init)
   }
   return res
@@ -1053,12 +1053,21 @@ export async function pushVariationGroup(
   const publishRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/offer/publish_by_inventory_item_group`, {
     method: 'POST', headers,
     body: JSON.stringify({ inventoryItemGroupKey: effectiveGroupKey, marketplaceId }),
-  })
+    // publish_by_group is the step most exposed to eBay's eventual consistency — 25604
+    // "product not found" fires against inventory_items written seconds earlier. eBay
+    // itself says "Riprova" (retry), so give it a much bigger budget than the default
+    // ~14s: 6 attempts, ~2+4+8+10+10 ≈ 34s of capped backoff before giving up.
+  }, { retries: 6, baseDelayMs: 2000 })
 
   if (!publishRes.ok) {
     const err = await publishRes.text().catch(() => '')
     console.log('[ebay-push][debug] publish_by_group FAILED status=%d body=%s', publishRes.status, err.slice(0, 2000))
-    const pubMsg = `publish_by_group ${publishRes.status}: ${err.slice(0, 1000)}`
+    // 25604/25001 are transient eBay-side consistency errors — say so plainly instead of
+    // a raw 500, so the operator knows to retry rather than think the data is broken.
+    const isTransient = err.includes('"errorId":25604') || err.includes('"errorId":25001')
+    const pubMsg = isTransient
+      ? `eBay is still syncing this listing on its side (transient ${publishRes.status}/25604 after ~34s of retries) — the policies/offer were sent but eBay couldn't confirm the items in time. Wait ~30s and re-push; it almost always lands on the next try.`
+      : `publish_by_group ${publishRes.status}: ${err.slice(0, 1000)}`
     // Preserve per-SKU step-1 errors — only stamp publish failure on rows that
     // made it through to the offer stage (status 'PUSHED'). Overwriting step-1
     // errors with "Manca Marca" masks the real root cause (e.g. imageUrls empty).
