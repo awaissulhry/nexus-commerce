@@ -1374,20 +1374,25 @@ export function toChannelMarket(mp: Market): string {
 
 /**
  * Fields that ALWAYS come from the live DB-derived row, never from the snapshot.
- * Mirrors Amazon's SNAPSHOT_LIVE_OVERLAY: prices/quantities may be updated by the
- * repricer or stock system after the user saved; eBay item IDs are set after push;
- * sync_status and system fields are owned by the backend; identity fields (sku, ean)
- * and grouping flags (_isParent, platformProductId) are always DB-authoritative.
+ * Mirrors Amazon's SNAPSHOT_LIVE_OVERLAY: quantities may be updated by the stock
+ * system after the user saved; eBay item IDs are set after push; sync_status and
+ * system fields are owned by the backend; identity fields (sku, ean) and grouping
+ * flags (_isParent, platformProductId) are always DB-authoritative.
+ *
+ * FFP.1 — per-market PRICE is deliberately NOT in this set: the operator's typed
+ * price (snapshot) is authoritative in the grid and on push. When the live DB
+ * price diverges (repricer/external), GET /rows attaches a `_live_price_{mp}`
+ * hint field instead of silently overriding what the operator entered.
  */
 export const EBAY_SNAPSHOT_LIVE_FIELDS = new Set([
   // Identity — product-level, not user-entered in the flat file
   'sku', 'ean',
   // Live eBay system fields
   'ebay_item_id', 'listing_status', 'sync_status', 'last_pushed_at',
-  // Per-market live fields (may be updated by repricer / stock system)
+  // Per-market live fields (qty owned by the stock system; ids/status by publish)
   ...MARKETS.flatMap((mp) => {
     const p = mp.toLowerCase();
-    return [`${p}_price`, `${p}_qty`, `${p}_item_id`, `${p}_status`, `${p}_listing_id`];
+    return [`${p}_qty`, `${p}_item_id`, `${p}_status`, `${p}_listing_id`];
   }),
   // Grouping / family structure — derived from Product.parentId, not user intent
   'platformProductId', '_isParent',

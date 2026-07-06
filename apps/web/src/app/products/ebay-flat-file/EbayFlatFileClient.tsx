@@ -52,6 +52,7 @@ import { useFlatFileCore } from '@/components/flat-file/useFlatFileCore'
 import { ColumnGroupModal } from '@/components/flat-file/ColumnGroupModal'
 import { EBAY_FILTER_DEFAULT, type EbayFilterDims } from '../_shared/flat-file-filter.types'
 import { isSharedDuplicateAllowed } from './validateRows.shared'
+import { draftKey, readDraft, writeDraft, clearDraft, mergeDraftRows } from './draftStore'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -696,6 +697,16 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   const ebayKey = `${familyId ?? '__global__'}:${marketplace}`
 
+  // ── FFP.1 — unsaved-edit draft layer (Amazon parity) ────────────────────
+  // Dirty rows autosave to a per-market localStorage draft; a reload / tab
+  // close / market switch never loses an edit. Restored once per mount (or
+  // per market switch) by onReload; explicit Discard / Reload-from-server
+  // skip the merge so they stay destructive-by-intent.
+  const [draftNotice, setDraftNotice] = useState<{ count: number } | null>(null)
+  const pendingDraftRestoreRef = useRef(true)
+  const draftNoticeShownRef = useRef(false)
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Track whether we have rows ready to pass to FlatFileGrid. Starts false;
   // set to true once the SWR cache or client fetch resolves.
   const [rowsReady, setRowsReady] = useState(false)
@@ -745,12 +756,22 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // shows instantly from cache; a fresh one triggers the grid's reload to fetch only
   // that market's listed products. (Column swap is already handled by the MS-E memo.)
   useEffect(() => {
+    const prevMarketplace = marketplaceRef.current
     marketplaceRef.current = marketplace
     if (isFirstMarketEffect.current) { isFirstMarketEffect.current = false; return }
+    // FFP.1 — flush the OUTGOING market's unsaved edits to its draft BEFORE the
+    // grid rows are replaced: a market switch must never silently drop edits.
+    if (prevMarketplace !== marketplace) {
+      writeDraft(draftKey(prevMarketplace, familyId), latestRowsRef.current)
+    }
     const snap = _ebay_swr.get(ebayKey)
     if (snap && Date.now() - snap.fetchedAt < EBAY_SWR_TTL_MS) {
-      latestSetRowsRef.current?.(snap.rows)
+      // FFP.1 — merge the INCOMING market's draft over its cached server rows.
+      const draft = readDraft(draftKey(marketplace, familyId))
+      const merged = draft?.rows?.length ? mergeDraftRows(snap.rows, draft.rows).rows : snap.rows
+      latestSetRowsRef.current?.(merged)
     } else {
+      pendingDraftRestoreRef.current = true
       void onReloadCtxRef.current?.()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -930,6 +951,24 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     // the mount-only effect elsewhere only sees the initial SSR rows, not these fresh ones.
     const reloadedCat = rows.find((r) => (r as EbayRow).category_id)?.category_id as string | undefined
     if (reloadedCat) void loadCategorySchema(String(reloadedCat))
+
+    // FFP.1 — restore pending drafts exactly once per mount / market switch.
+    // Explicit "Discard" / "Reload from server" leave the flag false, so those
+    // stay destructive on purpose (and the autosave loop then clears the draft).
+    if (pendingDraftRestoreRef.current) {
+      pendingDraftRestoreRef.current = false
+      const draft = readDraft(draftKey(marketplaceRef.current, familyId))
+      if (draft?.rows?.length) {
+        const { rows: merged, restored } = mergeDraftRows(rows, draft.rows)
+        if (restored > 0) {
+          if (!draftNoticeShownRef.current) {
+            draftNoticeShownRef.current = true
+            setDraftNotice({ count: restored })
+          }
+          return merged
+        }
+      }
+    }
     return rows
   }, [familyId, BACKEND, ebayKey, savedErrorRows, loadCategorySchema])
 
@@ -939,7 +978,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     const res = await fetch(`${BACKEND}/api/ebay/flat-file/rows`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rows: dirty }),
+      // FFP.1 — marketplace scopes content fields + flatFileSnapshot to the
+      // ACTIVE market's listing server-side (each market file is independent).
+      body: JSON.stringify({ rows: dirty, marketplace: marketplaceRef.current }),
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     // P1-surface: read the full response including createResult to detect rows that failed to persist
@@ -958,6 +999,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     }
 
     const errors = result.createResult?.errors ?? []
+
+    // FFP.1 — successful save clears the draft; failed rows stay in it so a
+    // reload after a partial save still restores what didn't persist.
+    if (errors.length === 0) {
+      clearDraft(draftKey(marketplaceRef.current, familyId))
+    }
+
     if (errors.length > 0) {
       // Map each failed dirty row to its error entry (by SKU or tempRowId)
       const failedRows: EbayRow[] = dirty.flatMap((r) => {
@@ -971,6 +1019,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
       // Store failed rows so onReload can re-inject them if user reloads the grid
       if (failedRows.length > 0) setSavedErrorRows(failedRows)
+      // FFP.1 — keep only the failed rows in the draft (saved ones left it)
+      writeDraft(draftKey(marketplaceRef.current, familyId), failedRows)
 
       // Re-mark failed rows in the grid AFTER the grid's own setRows(_dirty:false) call.
       // setTimeout(0) ensures we fire after saveDraft's synchronous state update.
@@ -1382,6 +1432,25 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── Cell content overrides ─────────────────────────────────────────────
   const renderCellContent = useCallback<RenderCellContent>((col, _row, value, displayVal) => {
+    // FFP.1 — typed price is authoritative; when the live DB price diverges
+    // (repricer/external) the row carries `_live_price_{mp}` and we show a
+    // subtle amber dot with the live value in the tooltip.
+    if (/^(it|de|fr|es|uk)_price$/.test(col.id)) {
+      const mp = col.id.split('_')[0]
+      const live = (_row as Record<string, unknown>)[`_live_price_${mp}`]
+      if (live != null && displayVal != null && displayVal !== '') {
+        return (
+          <span className="inline-flex items-center gap-1 min-w-0">
+            <span className="truncate">{displayVal}</span>
+            <span
+              title={`Live ${mp.toUpperCase()} price is €${live} (repricer/external). Your value is shown — it's what gets saved and pushed.`}
+              className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"
+            />
+          </span>
+        )
+      }
+      return undefined
+    }
     // SKU — parent / variant cue + completeness chip
     if (col.id === 'sku') {
       const er = _row as EbayRow
@@ -1686,9 +1755,26 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // Task 4 — also show a muted "Showing SKUs listed on eBay / Show all products" cue when scoped.
   const renderFeedBanner = useCallback(() => {
     const hasCue = scope === 'listed' && !familyId
-    if (!hasCue && !categorySchemaError) return null
+    if (!hasCue && !categorySchemaError && !draftNotice) return null
     return (
       <>
+        {draftNotice && (
+          <Banner tone="warning" onDismiss={() => setDraftNotice(null)}>
+            Restored {draftNotice.count} unsaved edit{draftNotice.count === 1 ? '' : 's'} from your last
+            session on eBay {marketplace} — Save to persist {draftNotice.count === 1 ? 'it' : 'them'}.{' '}
+            <button
+              type="button"
+              className="underline text-red-600 dark:text-red-400"
+              onClick={() => {
+                clearDraft(draftKey(marketplaceRef.current, familyId))
+                setDraftNotice(null)
+                void onReloadCtxRef.current?.()
+              }}
+            >
+              Discard drafts
+            </button>
+          </Banner>
+        )}
         {hasCue && (
           <div className="flex items-center gap-1 px-4 py-1 text-xs text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
             Showing SKUs listed on eBay.{' '}
@@ -1708,7 +1794,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         )}
       </>
     )
-  }, [scope, familyId, categorySchemaError])
+  }, [scope, familyId, categorySchemaError, draftNotice, marketplace])
 
   // ── Slot: fetch button ─────────────────────────────────────────────────
 
@@ -1861,6 +1947,16 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     latestSelectedRowsRef.current = selectedRows
     latestSetRowsRef.current = setRows
     latestPushHistoryRef.current = pushHistory
+
+    // FFP.1 — debounced draft autosave. This slot re-renders on every grid
+    // rows change, so it doubles as the rows-changed signal (the grid exposes
+    // no onRowsChange). Key captured at schedule time so edits flush to the
+    // market they were made on even across a market switch.
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
+    {
+      const k = draftKey(marketplaceRef.current, familyId)
+      draftTimerRef.current = setTimeout(() => { writeDraft(k, latestRowsRef.current) }, 400)
+    }
 
     // ── sheetParents (DRY) — single derivation reused by AddListingPopover and Move-to-parent ──
     const sheetParents = deriveSheetParents(rows)

@@ -63,12 +63,12 @@ function snapshot(overrides: Record<string, unknown> = {}): Record<string, unkno
     listing_status: 'DRAFT',      // stale — should NOT win
     sync_status: 'pending',       // stale — should NOT win
     last_pushed_at: '2026-01-01', // stale — should NOT win
-    it_price: 45.00,              // stale price — should NOT win
+    it_price: 45.00,              // typed price — SHOULD win (FFP.1)
     it_qty: 3,                    // stale qty — should NOT win
     it_item_id: 'OLD-IT-ID',      // stale — should NOT win
     it_status: 'ENDED',           // stale — should NOT win
     it_listing_id: 'OLD-OFFER',   // stale — should NOT win
-    de_price: 50.00,              // stale — should NOT win
+    de_price: 50.00,              // typed price — SHOULD win (FFP.1)
     platformProductId: 'wrong-id', // stale — should NOT win
     ...overrides,
   }
@@ -95,15 +95,26 @@ describe('applyEbayFlatFileSnapshot — live fields always win', () => {
     expect(result.last_pushed_at).toBe('2026-07-01T12:00:00Z')
   })
 
-  it('per-market price/qty/item_id/status/listing_id come from derivedRow', () => {
+  it('per-market qty/item_id/status/listing_id come from derivedRow', () => {
     const result = applyEbayFlatFileSnapshot(derived(), snapshot())
-    expect(result.it_price).toBe(55.00)
     expect(result.it_qty).toBe(10)
     expect(result.it_item_id).toBe('IT-LIVE-ID')
     expect(result.it_status).toBe('ACTIVE')
     expect(result.it_listing_id).toBe('OFFER-IT')
-    expect(result.de_price).toBe(60.00)
     expect(result.de_qty).toBe(5)
+  })
+
+  it('FFP.1 — per-market PRICE comes from the snapshot (typed price wins)', () => {
+    const result = applyEbayFlatFileSnapshot(derived(), snapshot())
+    expect(result.it_price).toBe(45.00)   // operator's saved value, not live 55.00
+    expect(result.de_price).toBe(50.00)   // operator's saved value, not live 60.00
+  })
+
+  it('FFP.1 — price absent from snapshot falls through to the live value', () => {
+    const s = snapshot()
+    delete s.it_price
+    const result = applyEbayFlatFileSnapshot(derived(), s)
+    expect(result.it_price).toBe(55.00)
   })
 
   it('platformProductId comes from derivedRow (grouping key)', () => {
@@ -205,9 +216,9 @@ describe('applyEbayFlatFileSnapshot — fallback for fields absent from snapshot
 })
 
 describe('EBAY_SNAPSHOT_LIVE_FIELDS whitelist', () => {
-  it('contains all 5 market price/qty/item_id/status/listing_id combinations', () => {
+  it('contains all 5 market qty/item_id/status/listing_id combinations (price excluded — FFP.1)', () => {
     for (const mp of ['it', 'de', 'fr', 'es', 'uk']) {
-      expect(EBAY_SNAPSHOT_LIVE_FIELDS.has(`${mp}_price`)).toBe(true)
+      expect(EBAY_SNAPSHOT_LIVE_FIELDS.has(`${mp}_price`)).toBe(false)
       expect(EBAY_SNAPSHOT_LIVE_FIELDS.has(`${mp}_qty`)).toBe(true)
       expect(EBAY_SNAPSHOT_LIVE_FIELDS.has(`${mp}_item_id`)).toBe(true)
       expect(EBAY_SNAPSHOT_LIVE_FIELDS.has(`${mp}_status`)).toBe(true)

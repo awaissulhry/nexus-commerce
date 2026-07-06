@@ -108,6 +108,26 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         orderBy: { sku: 'asc' },
       });
 
+      // FFP.1 — deterministic listing order: the ACTIVE market's listing first,
+      // then most-recently-updated. Both buildFlatRow's shared-field source
+      // (listings[0]) and the snapshot overlay below depend on element order;
+      // without this, [0] is arbitrary DB row order and a reload can serve a
+      // stale snapshot / stale content from a different market than the one
+      // the operator saved on.
+      {
+        const activeRegion = marketplace ? (marketplace === 'UK' ? 'GB' : marketplace) : undefined;
+        const ts = (l: { updatedAt?: Date | string | null }) =>
+          l?.updatedAt ? new Date(l.updatedAt).getTime() : 0;
+        for (const p of products) {
+          (p.channelListings as Array<{ region?: string | null; updatedAt?: Date | null }>).sort((a, b) => {
+            const aActive = activeRegion && a?.region === activeRegion ? 1 : 0;
+            const bActive = activeRegion && b?.region === activeRegion ? 1 : 0;
+            if (aActive !== bActive) return bActive - aActive;
+            return ts(b) - ts(a);
+          });
+        }
+      }
+
       // P4 — image inheritance: build a parent-images lookup for child products.
       const imagesByProductId = new Map(products.map((p) => [p.id, p.images ?? []]))
       const rows = products.map((p) => {
@@ -175,12 +195,34 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       // parent_sku, title, description, category, aspects, images, policies …)
       // while live/system fields (per-market price/qty/item_id/status, sku,
       // sync_status, platformProductId, _isParent) keep their DB-derived values.
+      // FFP.1 — pick the first listing that actually HAS a snapshot (the sort
+      // above puts the active market first, then freshest — so the active
+      // market's snapshot wins, and pre-existing saves that landed on another
+      // market's listing still round-trip instead of silently reverting).
       for (let i = 0; i < rows.length; i++) {
-        const firstListing = (products[i] as any)?.channelListings?.[0];
-        if (!firstListing) continue;
-        const snapshot = (firstListing as any).flatFileSnapshot as Record<string, unknown> | null | undefined;
-        if (snapshot && typeof snapshot === 'object' && Object.keys(snapshot).length > 0) {
-          rows[i] = applyEbayFlatFileSnapshot(rows[i] as Record<string, unknown>, snapshot as Record<string, unknown>);
+        const listings = (((products[i] as any)?.channelListings ?? []) as Array<Record<string, any>>);
+        const snapListing = listings.find(
+          (l) => l?.flatFileSnapshot && typeof l.flatFileSnapshot === 'object'
+            && Object.keys(l.flatFileSnapshot as Record<string, unknown>).length > 0,
+        );
+        if (!snapListing) continue;
+        rows[i] = applyEbayFlatFileSnapshot(
+          rows[i] as Record<string, unknown>,
+          snapListing.flatFileSnapshot as Record<string, unknown>,
+        );
+
+        // FFP.1 — typed price wins (snapshot); when the live DB price diverges
+        // (repricer/external), attach a `_live_price_{mp}` hint so the grid can
+        // show both. `_`-prefixed → internal-only, stripped from future snapshots.
+        for (const mp of MARKETS) {
+          const p = mp.toLowerCase();
+          const region = mp === 'UK' ? 'GB' : mp;
+          const listing = listings.find((l) => l?.region === region);
+          const live = listing?.price != null ? Number(listing.price) : null;
+          const shown = (rows[i] as Record<string, unknown>)[`${p}_price`];
+          if (live != null && shown != null && shown !== '' && Number(shown) !== live) {
+            (rows[i] as Record<string, unknown>)[`_live_price_${p}`] = live;
+          }
         }
       }
 
@@ -326,7 +368,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
   // find-or-create the ChannelListing and update it. Creates
   // OutboundSyncQueue entries when price or qty actually changes.
   fastify.patch<{
-    Body: { rows: Array<Record<string, unknown>> }
+    Body: { rows: Array<Record<string, unknown>>; marketplace?: string }
   }>('/ebay/flat-file/rows', async (request, reply) => {
     const { rows } = request.body;
 
@@ -334,7 +376,19 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'rows must be a non-empty array' });
     }
 
-    let saved = 0;
+    // FFP.1 — the ACTIVE market of the per-market file this save came from.
+    // Content fields (title/description) + the flatFileSnapshot are scoped to
+    // THIS market's listing; other markets in the loop only receive their own
+    // per-market columns (price/qty/item_id/status). Absent (legacy callers) →
+    // the pre-FFP behavior is preserved unchanged.
+    const activeMpRaw = (request.body.marketplace ?? '').toUpperCase();
+    const activeMp = (MARKETS as readonly string[]).includes(activeMpRaw)
+      ? (activeMpRaw as Market)
+      : undefined;
+
+    let saved = 0;          // rows that produced at least one ChannelListing write
+    let processed = 0;      // rows iterated (legacy `saved` semantics)
+    let contentOnly = 0;    // rows persisted via the snapshot-only fallback
 
     // Lookup primary warehouse once for StockLevel writes (same pattern as Amazon flat-file service)
     const primaryLocation = await prisma.stockLocation.findFirst({
@@ -395,6 +449,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         );
 
         // Process each market
+        let rowListingWrites = 0;
+        const writtenMps = new Set<Market>();
         for (const mp of MARKETS) {
           const prefix = mp.toLowerCase() as Lowercase<Market>;
           const newPrice = row[`${prefix}_price`] != null ? Number(row[`${prefix}_price`]) : null;
@@ -417,9 +473,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           const oldPrice = existing?.price?.toNumber() ?? null;
           const oldQty = existing?.quantity ?? null;
 
+          // FFP.1 — content + snapshot belong to the active market's file.
+          // Legacy callers (no marketplace in body) keep writing them everywhere.
+          const isActiveMp = !activeMp || mp === activeMp;
+
           const listingData = {
-            title: sharedPacked.title,
-            description: sharedPacked.description,
+            ...(isActiveMp
+              ? { title: sharedPacked.title, description: sharedPacked.description }
+              : {}),
             price: newPrice ?? undefined,
             quantity: newQty ?? undefined,
             // externalListingId + listingStatus are SERVER-ASSIGNED at publish time
@@ -436,9 +497,13 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             updatedAt: new Date(),
             // P4 — persist entered row verbatim for lossless round-trip so
             // parentage/parent_sku and all user-entered fields survive reload
-            // even if DB derivation or backend state changes.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            flatFileSnapshot: flatFileSnapshot as any,
+            // even if DB derivation or backend state changes. FFP.1 — scoped
+            // to the active market's listing (each market file round-trips its
+            // own saved state).
+            ...(isActiveMp
+              ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                { flatFileSnapshot: flatFileSnapshot as any }
+              : {}),
           };
 
           let listingId: string;
@@ -450,6 +515,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               data: listingData as any,
             });
             listingId = existing.id;
+            rowListingWrites++;
+            writtenMps.add(mp);
           } else {
             const created = await prisma.channelListing.create({
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -463,6 +530,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               } as any,
             });
             listingId = created.id;
+            rowListingWrites++;
+            writtenMps.add(mp);
           }
 
           // Create OutboundSyncQueue entries only when price or qty actually changed
@@ -520,6 +589,63 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               flatFileType: 'EBAY_FLAT_FILE',
             },
           })
+        }
+
+        // ── FFP.1 — content-only save fallback ───────────────────────
+        // THE reload-revert fix: when no market column carried price/qty/
+        // item_id/status (a pure content edit: title, aspects, category,
+        // parentage, policies …) the loop above wrote NOTHING — yet the old
+        // code still counted the row as "saved". Persist the snapshot (and
+        // content fields) to the ACTIVE market's listing so the edit
+        // round-trips; create a DRAFT listing when the market has none yet.
+        if (activeMp && !writtenMps.has(activeMp)) {
+          const region = activeMp === 'UK' ? 'GB' : activeMp;
+          const existing = await prisma.channelListing.findFirst({
+            where: { productId, channel: 'EBAY', region },
+            select: { id: true, title: true, description: true },
+          });
+          if (existing) {
+            await prisma.channelListing.update({
+              where: { id: existing.id },
+              data: {
+                title: sharedPacked.title,
+                description: sharedPacked.description,
+                platformAttributes: sharedPacked.platformAttributes,
+                updatedAt: new Date(),
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                flatFileSnapshot: flatFileSnapshot as any,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              } as any,
+            });
+            // Content auto-publish only when the content actually changed —
+            // a snapshot-only save (aspects, parentage …) must not enqueue.
+            if (
+              (sharedPacked.title ?? '') !== (existing.title ?? '') ||
+              (sharedPacked.description ?? '') !== (existing.description ?? '')
+            ) {
+              void enqueueContentSyncIfEnabled([existing.id]);
+            }
+          } else {
+            await prisma.channelListing.create({
+              data: {
+                productId,
+                channel: 'EBAY',
+                channelMarket: toChannelMarket(activeMp),
+                region,
+                marketplace: activeMp,
+                listingStatus: 'DRAFT',
+                fulfillmentMethod: 'FBM',
+                title: sharedPacked.title,
+                description: sharedPacked.description,
+                platformAttributes: sharedPacked.platformAttributes,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                flatFileSnapshot: flatFileSnapshot as any,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              } as any,
+            });
+          }
+          contentOnly++;
+          rowListingWrites++;
         }
 
         // ── StockLevel update (once per product, FBM warehouse) ──────
@@ -623,11 +749,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           })
         }
 
-        saved++;
+        processed++;
+        if (rowListingWrites > 0) saved++;
       }
 
-      // Preserve existing `{ saved }` shape; add createResult as a new field (additive only).
-      return reply.send({ saved, createResult });
+      // FFP.1 — `saved` now counts rows that produced at least one real
+      // ChannelListing write (honest counter); `processed` keeps the legacy
+      // rows-iterated semantics; `contentOnly` = snapshot-fallback saves.
+      return reply.send({ saved, processed, contentOnly, createResult });
     } catch (err: unknown) {
       request.log.error(err, 'ebay/flat-file/rows PATCH failed');
       return reply
