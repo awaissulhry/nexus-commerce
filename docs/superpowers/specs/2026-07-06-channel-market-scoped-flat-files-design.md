@@ -163,6 +163,8 @@ Phase 1 alone delivers the Owner's goal (separate, scoped, my-way files with syn
 
 > **Delivered 2026-07-06 — Plan 1 (channel/market-scoped removal + inventory guard):** the eBay editor's delete now removes only the EBAY/{market} `ChannelListing` (`remove-channel-listing` intent — Product/stock/other channels untouched), and the Amazon editor gained a real market-scoped removal (`removeAmazonListing` + `POST /api/amazon/flat-file/remove`), replacing its cosmetic delete. Both guarded by inventory-invariant tests (17/17 pass). See `docs/superpowers/plans/2026-07-06-channel-market-scoped-removal.md`. **Remaining:** scoped-view load (C3) + the staged Action column (Deactivate/End/Delete + `ReviseFixedPriceItem`) = Plans 2-3.
 
+> **Delivered 2026-07-06 — Plan 2 (scoped-view load, C3):** both editors now default to their channel(+market) *listed* SKUs via the shared family-coherent `buildListingScopeWhere` helper, with a persistent **"This file" / "All products"** toggle (localStorage, SSR-guarded) and a "showing listed only — show all" cue. eBay scopes at channel level (multi-market editor); Amazon at channel+market. Drill-in (`familyId`/`productId`) ignores scope. See `docs/superpowers/plans/2026-07-06-scoped-view-load.md`. **Remaining:** the staged Action column (Deactivate/End/Delete verbs) + `ReviseFixedPriceItem` (eBay content revise) = Plan 3-4. Per-market eBay scoping is a noted future refinement.
+
 ---
 
 ## 9. Affected surfaces (for the plan)
