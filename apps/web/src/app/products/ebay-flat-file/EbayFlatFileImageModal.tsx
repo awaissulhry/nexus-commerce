@@ -143,6 +143,8 @@ export interface FamilySectionHandle {
 
 interface FamilySectionProps {
   productId: string
+  /** Active eBay marketplace — image publish targets ONLY this market. */
+  marketplace: string
   /** Show collapse chevron + independent Save/Publish per section. */
   collapsible?: boolean
   /** Mirrors modal open prop — triggers workspace load on open, reset on close. */
@@ -151,7 +153,7 @@ interface FamilySectionProps {
 }
 
 const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
-  function FamilySection({ productId, collapsible = false, open, onSyncColumns }, ref) {
+  function FamilySection({ productId, marketplace, collapsible = false, open, onSyncColumns }, ref) {
     const { toast } = useToast()
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -378,7 +380,7 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
       }
       setPublishState('publishing')
       try {
-        const res = await beFetch(`/api/products/${productId}/ebay-images/publish`, { method: 'POST' })
+        const res = await beFetch(`/api/products/${productId}/ebay-images/publish?marketplace=${encodeURIComponent(marketplace)}`, { method: 'POST' })
         const body: PublishResult = await res.json()
         setPublishResult(body)
         setPublishState(body.success ? 'done' : 'failed')
@@ -388,7 +390,7 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
         setPublishResult({ success: false, message: msg, pictureCount: 0, colorSetCount: 0 })
         setPublishState('failed')
       }
-    }, [productId, hasDirty, flush, toast])
+    }, [productId, marketplace, hasDirty, flush, toast])
 
     // ── Imperative handle ─────────────────────────────────────────────────────
 
@@ -647,6 +649,8 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
 export interface EbayFlatFileImageModalProps {
   open: boolean
   onClose: () => void
+  /** Active eBay marketplace — image publish targets ONLY this market. */
+  marketplace: string
   /** IDs of all product families currently loaded in the flat-file editor. */
   productIds: string[]
   /**
@@ -656,7 +660,7 @@ export interface EbayFlatFileImageModalProps {
   onSyncColumns?: (productId: string, urls: string[]) => void
 }
 
-export function EbayFlatFileImageModal({ open, onClose, productIds, onSyncColumns }: EbayFlatFileImageModalProps) {
+export function EbayFlatFileImageModal({ open, onClose, marketplace, productIds, onSyncColumns }: EbayFlatFileImageModalProps) {
   const { toast } = useToast()
 
   // Stable ref map keyed by productId — persists across renders without extra deps.
@@ -726,6 +730,7 @@ export function EbayFlatFileImageModal({ open, onClose, productIds, onSyncColumn
               key={pid}
               ref={getRef(pid)}
               productId={pid}
+              marketplace={marketplace}
               collapsible={isMulti}
               open={open}
               onSyncColumns={onSyncColumns ? urls => onSyncColumns(pid, urls) : undefined}

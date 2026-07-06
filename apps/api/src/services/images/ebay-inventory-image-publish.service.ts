@@ -41,6 +41,7 @@ export interface EbayInventoryPublishResult {
 
 export async function publishEbayImagesViaInventory(
   productId: string,
+  marketplace?: string,
 ): Promise<EbayInventoryPublishResult> {
   const product = await prisma.product.findUnique({
     where: { id: productId },
@@ -77,11 +78,19 @@ export async function publishEbayImagesViaInventory(
     where: { productId: { in: childProductIds }, channel: 'EBAY' },
     select: { region: true, price: true, productId: true },
   })
-  const markets = [...new Set(
+  const allPricedMarkets = [...new Set(
     childListings
       .filter((l) => l.price != null && Number(l.price) > 0)
       .map((l) => (l.region === 'GB' ? 'UK' : l.region)),
   )].filter((m): m is Market => (MARKETS as readonly string[]).includes(m))
+  // MARKET-SPECIFIC: publish ONLY to the market the operator is on (the flat file's
+  // active marketplace). Fanning out to every priced market is what pushed IT images
+  // to DE and returned a German 25007 (invalid DE shipping policy). Absent marketplace
+  // → legacy all-markets behaviour (kept for any non-flat-file caller).
+  const wantMarket = marketplace
+    ? (marketplace.toUpperCase() === 'GB' ? 'UK' : marketplace.toUpperCase())
+    : null
+  const markets = wantMarket ? allPricedMarkets.filter((m) => m === wantMarket) : allPricedMarkets
 
   // Build per-market set of productIds that have an eBay listing (any price).
   // Variants with NO listing haven't been set up for eBay yet — they carry
@@ -95,7 +104,10 @@ export async function publishEbayImagesViaInventory(
   }
 
   if (markets.length === 0) {
-    return { success: false, message: 'No eBay market has priced variant listings for this product yet', pictureCount: 0, colorSetCount: 0, error: 'No priced eBay markets' }
+    const msg = wantMarket
+      ? `This product isn't priced/listed on eBay ${wantMarket} yet — set it up on that market before publishing images there.`
+      : 'No eBay market has priced variant listings for this product yet'
+    return { success: false, message: msg, pictureCount: 0, colorSetCount: 0, error: 'No priced eBay markets' }
   }
 
   // eBay connection + token (mirrors the flat-file /push path).

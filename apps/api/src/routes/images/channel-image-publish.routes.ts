@@ -53,10 +53,12 @@ const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Params: { productId: string }
     Body: { activeAxis?: string }
+    Querystring: { marketplace?: string }
   }>(
     '/products/:productId/ebay-images/publish',
     async (request, reply) => {
       const { productId } = request.params
+      const marketplace = request.query?.marketplace
 
       const product = await prisma.product.findUnique({
         where: { id: productId },
@@ -65,7 +67,7 @@ const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
       if (!product) return reply.code(404).send({ error: 'Product not found' })
 
       try {
-        const result = await publishEbayImagesViaInventory(productId)
+        const result = await publishEbayImagesViaInventory(productId, marketplace)
         // PB.16 — Audit log.
         void recordImagePublishAudit({
           productId,

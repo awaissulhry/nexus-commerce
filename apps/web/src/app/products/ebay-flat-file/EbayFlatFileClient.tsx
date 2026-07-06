@@ -2377,6 +2377,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       <EbayFlatFileImageModal
         open={imageModalOpen}
         onClose={() => setImageModalOpen(false)}
+        marketplace={marketplace}
         productIds={derivedProductIds}
         onSyncColumns={(productId, urls) => {
           const IMAGE_COLS = ['image_1', 'image_2', 'image_3', 'image_4', 'image_5', 'image_6'] as const
