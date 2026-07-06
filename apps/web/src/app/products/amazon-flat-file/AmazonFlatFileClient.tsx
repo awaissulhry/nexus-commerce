@@ -777,6 +777,18 @@ export default function AmazonFlatFileClient({
   // the DB rows loaded on this page open.
   const [draftBanner, setDraftBanner] = useState<Row[] | null>(null)
 
+  // Scope: 'listed' = only SKUs with a ChannelListing on this Amazon market (default);
+  // 'all' = full catalog. Persisted to localStorage; ignored in family drill-in view.
+  const [scope, setScope] = useState<'listed' | 'all'>(() => {
+    if (typeof window === 'undefined') return 'listed'
+    return (window.localStorage.getItem('amazon-ff-scope') as 'listed' | 'all') || 'listed'
+  })
+  const scopeRef = useRef(scope)
+  useEffect(() => {
+    scopeRef.current = scope
+    try { window.localStorage.setItem('amazon-ff-scope', scope) } catch {}
+  }, [scope])
+
   const [loading, setLoading] = useState(false)
   // FF-MS.6 — carry which (mp, pt) failed and the HTTP status so the banner
   // can render a market-specific message + tailored copy for 429/5xx/network
@@ -2457,6 +2469,7 @@ export default function AmazonFlatFileClient({
         try {
           const q = new URLSearchParams({ marketplace, productType: t })
           if (familyId) q.set('productId', familyId)
+          else q.set('scope', scopeRef.current)
           const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/rows?${q}`)
           if (!alive || !res.ok) continue
           const d = await res.json()
@@ -2602,6 +2615,7 @@ export default function AmazonFlatFileClient({
     const qs = new URLSearchParams({ marketplace: mp, productType: pt, ...(force ? { force: '1' } : {}) })
     const rowsQs = new URLSearchParams({ marketplace: mp, productType: pt })
     if (familyId) rowsQs.set('productId', familyId)
+    else rowsQs.set('scope', scopeRef.current)
     try {
       if (force) {
         // Schema refresh — update manifest only, keep current rows unchanged.
@@ -2674,6 +2688,16 @@ export default function AmazonFlatFileClient({
     }
   }, [familyId, initialManifest, initialMarketplace, initialProductType, initialRows])
 
+  // Reload rows from DB when scope toggles between 'listed' and 'all'.
+  // Skip the initial mount (loadData fires separately in the mount effect).
+  const scopeReloadMountedRef = useRef(false)
+  useEffect(() => {
+    if (!scopeReloadMountedRef.current) { scopeReloadMountedRef.current = true; return }
+    if (!productType || !marketplace) return
+    void loadData(marketplace, productType, false, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope])
+
   // FF-MS.4 — Best-effort hover/focus prefetch for market buttons. Fires a
   // fetch for the (mp, currentPT) pair so the click is instant. Aborts if
   // the snapshot is already fresh or another prefetch is in-flight. Errors
@@ -2690,6 +2714,7 @@ export default function AmazonFlatFileClient({
       const qs = new URLSearchParams({ marketplace: mp.toUpperCase(), productType: pt.toUpperCase() })
       const rowsQs = new URLSearchParams({ marketplace: mp.toUpperCase(), productType: pt.toUpperCase() })
       if (familyId) rowsQs.set('productId', familyId)
+      else rowsQs.set('scope', scopeRef.current)
       const [mRes, rRes] = await Promise.all([
         fetch(`${backend}/api/amazon/flat-file/template?${qs}`),
         fetch(`${backend}/api/amazon/flat-file/rows?${rowsQs}`),
@@ -4587,6 +4612,35 @@ export default function AmazonFlatFileClient({
                 }}
                 disabled={!rows.length}
               />
+              {/* Scope: This file / All products — hidden in family drill-in view */}
+              {!familyId && (
+                <div
+                  className="flex items-center gap-0.5 ml-1 pl-1.5 border-l border-slate-200 dark:border-slate-700"
+                  title="This file = only SKUs listed on this Amazon market. All products = full catalog."
+                >
+                  <span className="text-[10px] uppercase tracking-wide text-slate-400 mr-0.5 select-none">Scope</span>
+                  {(['listed', 'all'] as const).map((val) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setScope(val)}
+                      aria-pressed={scope === val}
+                      className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${
+                        scope === val
+                          ? 'bg-blue-600 text-white'
+                          : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      {val === 'listed' ? 'This file' : 'All products'}
+                    </button>
+                  ))}
+                  {scope === 'listed' && (
+                    <span className="ml-1 text-[10px] text-slate-400 dark:text-slate-500 whitespace-nowrap select-none">
+                      Showing Amazon {marketplace} only
+                    </span>
+                  )}
+                </div>
+              )}
             </>
           }
         />

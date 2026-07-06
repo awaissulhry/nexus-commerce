@@ -21,6 +21,7 @@ import { casUpdateChannelListing, isVersionConflict } from '../channel-listing-c
 import { productReadCacheService } from '../product-read-cache.service.js'
 import { extractBrowseNodes, browseNodeIdFromRow, resolveBrowseNodeId, buildPlatformAttributes, type BrowseNode } from './browse-nodes.js'
 import { amazonMarketplaceId } from '../categories/marketplace-ids.js'
+import { buildListingScopeWhere, type ListingScope } from '../flat-file/listing-scope.js'
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -1333,6 +1334,7 @@ export class AmazonFlatFileService {
     marketplace: string,
     productType?: string,
     productId?: string,
+    scope: ListingScope = 'listed',
   ): Promise<FlatFileRow[]> {
     const mp = marketplace.toUpperCase()
     let products: any[]
@@ -1369,7 +1371,10 @@ export class AmazonFlatFileService {
         products = [anchor]
       }
     } else {
-      const where: Record<string, any> = { deletedAt: null }
+      const where: Record<string, any> = {
+        deletedAt: null,
+        ...buildListingScopeWhere({ channel: 'AMAZON', marketplace: mp, scope }),
+      }
       if (productType) where.productType = productType.toUpperCase()
       products = await this.prisma.product.findMany({
         where,

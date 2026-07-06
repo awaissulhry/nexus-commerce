@@ -28,6 +28,7 @@ import { aiSuggestColumns } from '../services/amazon/flat-file-mapping-ai.js'
 import { coerceRowsWithAi } from '../services/amazon/flat-file-coerce-ai.js'
 import { planImportMerge, type ImportApplyMode } from '../services/amazon/flat-file-merge.js'
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
+import type { ListingScope } from '../services/flat-file/listing-scope.js'
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
 import { preflightRow, buildPerTypeValidation, validateImportRows, validateParentChildBatch } from '../services/listing-preflight.service.js'
 import {
@@ -280,14 +281,15 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // ── GET /api/amazon/flat-file/rows ──────────────────────────────────
   // Returns existing products pre-filled as flat file rows.
   fastify.get<{
-    Querystring: { marketplace?: string; productType?: string; productId?: string }
+    Querystring: { marketplace?: string; productType?: string; productId?: string; scope?: ListingScope }
   }>('/amazon/flat-file/rows', async (request, reply) => {
     const marketplace = (request.query.marketplace ?? 'IT').toUpperCase()
     const productType = request.query.productType?.toUpperCase() ?? undefined
     const productId   = request.query.productId ?? undefined
+    const scope: ListingScope = request.query.scope === 'all' ? 'all' : 'listed'
 
     try {
-      const rows = await flatFileService.getExistingRows(marketplace, productType, productId)
+      const rows = await flatFileService.getExistingRows(marketplace, productType, productId, scope)
       return reply.send({ rows })
     } catch (err: any) {
       request.log.error(err, 'flat-file/rows failed')
