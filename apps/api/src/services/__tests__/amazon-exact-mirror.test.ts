@@ -105,7 +105,10 @@ describe('buildJsonListingsFeedBody (image op)', () => {
       '/attributes/other_product_image_locator_2',
       '/attributes/swatch_product_image_locator',
     ])
-    expect(deletes.every((p: object) => !('value' in p))).toBe(true)
+    // 6bd1800c — Amazon's PATCH delete REQUIRES a marketplace selector value;
+    // an empty-value delete is rejected and fails the whole message.
+    expect(deletes.every((p: { value?: Array<{ marketplace_id?: string }> }) =>
+      Array.isArray(p.value) && !!p.value[0]?.marketplace_id)).toBe(true)
   })
 
   it('throws rather than delete MAIN', () => {

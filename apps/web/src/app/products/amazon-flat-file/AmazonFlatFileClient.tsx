@@ -954,6 +954,9 @@ export default function AmazonFlatFileClient({
   }
   const [reviewModal, setReviewModal] = useState<{ data: ReviewData; resolve: (ok: boolean) => void } | null>(null)
   const [reviewAck, setReviewAck] = useState(false)
+  // FFP.10 — double-submit advisory (FFS.7 pain): identical rows to the same
+  // markets within 90s is usually an accidental re-click mid-processing.
+  const lastSubmitRef = useRef<{ key: string; at: number } | null>(null)
   // FFP.2 — errors are acknowledgeable too (Amazon validates authoritatively);
   // only the compliance + FBA-flip server gates remain hard blocks.
   const [reviewErrorAck, setReviewErrorAck] = useState(false)
@@ -3304,6 +3307,20 @@ export default function AmazonFlatFileClient({
       if (!proceed) return
     } catch {
       // Pre-flight is advisory — never block a deliberate submit on a check failure.
+    }
+
+    // FFP.10 — double-submit advisory. Two rapid submits of the same rows
+    // create two live Amazon feeds; warn (never block) inside 90 seconds.
+    {
+      const submitKey = `${[...markets].sort().join(',')}|${scope}|${[...markets]
+        .flatMap((m) => gatherRows(m).map((r) => String(r.item_sku ?? '')))
+        .sort()
+        .join(',')}`
+      const last = lastSubmitRef.current
+      if (last && last.key === submitKey && Date.now() - last.at < 90_000) {
+        if (!confirm('You submitted these exact rows to the same market(s) less than 90 seconds ago — that feed may still be processing. Submit again anyway?')) return
+      }
+      lastSubmitRef.current = { key: submitKey, at: Date.now() }
     }
 
     setSubmitting(true)

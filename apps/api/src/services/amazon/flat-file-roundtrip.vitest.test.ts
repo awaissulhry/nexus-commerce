@@ -191,13 +191,19 @@ describe('buildJsonFeedBody — operationType (partial vs full)', () => {
   const build = (row: any) => JSON.parse(svc2.buildJsonFeedBody([row], 'IT', 'SELLER', {})).messages[0]
 
   it('existing-listing edit → PARTIAL_UPDATE, no requirements (no full required-attr enforcement)', () => {
-    const m = build({ item_sku: 'E1', item_name: 'edited title', record_action: 'full_update', _isNew: false })
+    // FFP.2 — pulled rows default to record_action 'partial_update'.
+    const m = build({ item_sku: 'E1', item_name: 'edited title', record_action: 'partial_update', _isNew: false })
     expect(m.operationType).toBe('PARTIAL_UPDATE')
     expect(m.requirements).toBeUndefined()
   })
   it('row with no _isNew flag (pulled listing) → PARTIAL_UPDATE', () => {
-    const m = build({ item_sku: 'E2', item_name: 'edited', record_action: 'full_update' })
+    const m = build({ item_sku: 'E2', item_name: 'edited', record_action: 'partial_update' })
     expect(m.operationType).toBe('PARTIAL_UPDATE')
+  })
+  it('FFP.2 — explicit full_update on an existing row → full UPDATE with requirements', () => {
+    const m = build({ item_sku: 'E3', item_name: 'edited', record_action: 'full_update', _isNew: false })
+    expect(m.operationType).toBe('UPDATE')
+    expect(m.requirements).toBe('LISTING')
   })
   it('new listing → full UPDATE with requirements:LISTING', () => {
     const m = build({ item_sku: 'N1', item_name: 'brand new', _isNew: true })

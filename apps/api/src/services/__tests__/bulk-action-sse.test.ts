@@ -23,14 +23,17 @@ const bulkActionJobFindUnique = vi.fn().mockResolvedValue({
   startedAt: new Date('2026-05-22T00:00:00Z'),
 })
 
-vi.mock('@nexus/database', () => ({
-  prisma: {
+vi.mock('@nexus/database', () => {
+  const prisma = {
     bulkActionJob: {
       update: (...args: unknown[]) => bulkActionJobUpdate(...args),
       findUnique: (...args: unknown[]) => bulkActionJobFindUnique(...args),
     },
-  },
-}))
+  }
+  // src/db.ts does `import prisma from "@nexus/database"` — the module graph
+  // reaches it (outbound-sync et al.), so the mock needs a default export too.
+  return { prisma, default: prisma }
+})
 
 // Other dependencies of bulk-action.service aren't exercised by the
 // methods under test — mock minimally so the import succeeds.
