@@ -168,7 +168,13 @@ async function ebayFetchRetry(
     try { body = await res.clone().text() } catch { /* unreadable — treat as non-transient */ }
     const transient =
       res.status === 500 || res.status === 503 ||
-      body.includes('"errorId":25001') || body.includes('"errorId":25604')
+      body.includes('"errorId":25001') || body.includes('"errorId":25604') ||
+      // 25007 ("invalid shipping policy on the offer") frequently fires spuriously against
+      // an offer/policy written seconds earlier while eBay's Inventory Service is still
+      // eventually-consistent — even when the policy is valid & already on a published offer.
+      // Retry it too; a genuinely-bad policy still fails after the backoff (+ the publish
+      // probe then names the real culprit).
+      body.includes('"errorId":25007')
     if (!transient) return res
     await new Promise((r) => setTimeout(r, Math.min(baseDelayMs * 2 ** attempt, maxDelayMs))) // 2s → 4s → 8s → capped at maxDelayMs
     res = await fetch(url, init)
@@ -1074,9 +1080,34 @@ export async function pushVariationGroup(
     // 25604/25001 are transient eBay-side consistency errors — say so plainly instead of
     // a raw 500, so the operator knows to retry rather than think the data is broken.
     const isTransient = err.includes('"errorId":25604') || err.includes('"errorId":25001')
+    // publish_by_group reports a GROUP error without naming WHICH variant's offer is bad —
+    // one broken (5xx), missing, unpublished, or policy-less/location-less offer fails the
+    // whole group. Probe each variant's offer to pinpoint the culprit(s) so the operator
+    // gets an actionable "variant X: <problem>" instead of an opaque group 25007. (Only on
+    // non-transient failures — a transient error is about eBay sync, not a specific offer.)
+    let detail = ''
+    if (!isTransient) {
+      const issues: string[] = []
+      for (const r of variantRows) {
+        const s = String(r.sku ?? '')
+        if (!s) continue
+        try {
+          const or = await fetch(`${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(s)}&marketplace_id=${marketplaceId}`, { headers })
+          if (!or.ok) { issues.push(`${s}: offer GET ${or.status}`); continue }
+          const oj = await or.json() as { offers?: Array<{ status?: string; listingPolicies?: { fulfillmentPolicyId?: string }; merchantLocationKey?: string }> }
+          const o = oj.offers?.[0]
+          if (!o) issues.push(`${s}: no offer`)
+          else if (!o.listingPolicies?.fulfillmentPolicyId) issues.push(`${s}: no fulfillment policy`)
+          else if (!o.merchantLocationKey) issues.push(`${s}: no merchant location`)
+        } catch { issues.push(`${s}: offer probe failed`) }
+      }
+      detail = issues.length
+        ? ` Problem offer(s): ${issues.slice(0, 8).join('; ')} — fix these, then re-push.`
+        : ` All ${variantRows.length} variant offers look valid (policy + merchant location present), so this is very likely a transient eBay-side error — wait ~30s and re-push.`
+    }
     const pubMsg = isTransient
       ? `eBay is still syncing this listing on its side (transient ${publishRes.status}/25604 after ~34s of retries) — the policies/offer were sent but eBay couldn't confirm the items in time. Wait ~30s and re-push; it almost always lands on the next try.`
-      : `publish_by_group ${publishRes.status}: ${err.slice(0, 1000)}`
+      : `publish_by_group ${publishRes.status}: ${err.slice(0, 600)}.${detail}`
     // Preserve per-SKU step-1 errors — only stamp publish failure on rows that
     // made it through to the offer stage (status 'PUSHED'). Overwriting step-1
     // errors with "Manca Marca" masks the real root cause (e.g. imageUrls empty).
