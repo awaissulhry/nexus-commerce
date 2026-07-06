@@ -1551,7 +1551,17 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // switching just changes which market's columns are shown. No reload, no
   // lost edits.
   const handleMarketSwitch = useCallback((m: string) => {
-    setMarketplace(m.toUpperCase())
+    const up = m.toUpperCase()
+    // Sync the market into the URL via the History API (shallow — no Next.js server
+    // round-trip), matching the Amazon flat file, so the switch is visible in the URL,
+    // bookmarkable, and survives a hard refresh (page.tsx reads ?marketplace on load).
+    // eBay loads every market's data up front, so the column swap stays instant.
+    try {
+      const params = new URLSearchParams(window.location.search)
+      params.set('marketplace', up)
+      window.history.replaceState(null, '', `?${params.toString()}`)
+    } catch { /* non-fatal — fall back to state-only switch */ }
+    setMarketplace(up)
   }, [])
 
   // ── Slot: channel strip ────────────────────────────────────────────────
