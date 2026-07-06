@@ -54,6 +54,7 @@ import ebayCockpitRoutes from "./routes/ebay-cockpit.routes.js";
 import ebayVolumePricingRoutes from "./routes/ebay-volume-pricing.routes.js";
 import flatFilePullHistoryRoutes from "./routes/flat-file-pull-history.routes.js";
 import flatFileUnifiedRoutes from "./routes/flat-file-unified.routes.js";
+import flatFileImportRoutes from "./routes/flat-file-import.routes.js";
 import marketplacesRoutes from "./routes/marketplaces.routes.js";
 import fulfillmentRoutes from "./routes/fulfillment.routes.js";
 import returnsRoutes from "./routes/returns.routes.js";
@@ -601,6 +602,7 @@ app.register(ebayCockpitRoutes, { prefix: '/api' });
 app.register(ebayVolumePricingRoutes, { prefix: '/api' });
 app.register(flatFilePullHistoryRoutes, { prefix: '/api' });
 app.register(flatFileUnifiedRoutes, { prefix: '/api' });
+app.register(flatFileImportRoutes, { prefix: '/api' }); // FF2.8b
 app.register(marketplacesRoutes, { prefix: '/api' });
 app.register(fulfillmentRoutes, { prefix: '/api' });
 app.register(returnsRoutes, { prefix: '/api' });

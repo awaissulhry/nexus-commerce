@@ -252,6 +252,10 @@ const ENTRIES: Entry[] = [
   // ── Listings / channels ─────────────────────────────────────────
   P(F.listingsFlatfileEdit, pfx('/api/amazon/flat-file')),
   P(F.listingsFlatfileEdit, pfx('/api/ebay/flat-file')),
+  // FF2.8b: import-history routes (preview/apply/list/report) use products.import,
+  // not listingsFlatfileEdit. Must appear BEFORE the /api/flat-file catch-all.
+  P(F.productsImport, pfx('/api/flat-file/import')),
+  P(F.productsImport, pfx('/api/flat-file/imports')),
   P(F.listingsFlatfileEdit, pfx('/api/flat-file')),
   RW(F.listingsView, F.listingsPublish, pfx('/api/listing-wizard')),
   RW(F.listingsView, F.listingsPublish, pfx('/api/wizard-templates')),
