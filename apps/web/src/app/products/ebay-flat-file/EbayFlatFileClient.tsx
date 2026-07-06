@@ -905,8 +905,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     }
 
     _ebay_swr.set(ebayKey, { rows, fetchedAt: Date.now() })
+    // Re-derive the category-driven columns (Item Specifics / Variation axes) from the
+    // reloaded rows, so a saved Category ID keeps its columns after an in-app reload —
+    // the mount-only effect elsewhere only sees the initial SSR rows, not these fresh ones.
+    const reloadedCat = rows.find((r) => (r as EbayRow).category_id)?.category_id as string | undefined
+    if (reloadedCat) void loadCategorySchema(String(reloadedCat))
     return rows
-  }, [familyId, BACKEND, ebayKey, savedErrorRows])
+  }, [familyId, BACKEND, ebayKey, savedErrorRows, loadCategorySchema])
 
   // ── API: save ─────────────────────────────────────────────────────────
 
@@ -1110,6 +1115,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         } else {
           toast.success(`Pushed ${json.results.length} rows`)
         }
+        // Auto-refresh the grid so the just-created Item ID / Listing ID / status columns
+        // populate from the persisted push result — no manual reload needed.
+        void onReload()
       }
     } catch (err) {
       toast.error('Push failed: ' + (err instanceof Error ? err.message : String(err)))
@@ -1153,6 +1161,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         } else {
           toast.success(`Updated ${json.results.length} offer${json.results.length !== 1 ? 's' : ''} — live on eBay`)
         }
+        // Auto-refresh so status/quantity reflect the live update without a manual reload.
+        void onReload()
       }
     } catch (err) {
       toast.error('Quick update failed: ' + (err instanceof Error ? err.message : String(err)))
