@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/Badge'
 import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
 import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx, RenderCellContent } from '@/components/flat-file/FlatFileGrid.types'
 import { Modal } from '@/design-system/components/Modal'
+import { Menu } from '@/design-system/components/Menu'
 import { Banner } from '@/design-system/components/Banner'
 import { Combobox } from '@/design-system/components/Combobox'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
@@ -2087,17 +2088,48 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           )}
         </div>
 
-        {/* Move to parent — re-parent selected variants under a different family in the sheet */}
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={selectedRows.size === 0}
-          onClick={() => { setMoveParentOpen(true); setMoveTargetId('') }}
-          title="Move selected variants under a different parent in this sheet — persisted on Save"
-        >
-          <GitBranch className="w-3.5 h-3.5 mr-1.5" />
-          Move to parent…
-        </Button>
+        {/* FFP.9 — selection row-actions live in ONE menu instead of three
+            permanent toolbar residents (they only apply to selected rows). */}
+        {(() => {
+          const deletable = (rows as EbayRow[])
+            .filter((r) => selectedRows.has(r._rowId))
+            .filter((r) => !!r.sku && !(r._readonly === true && r._shared !== true))
+          return (
+            <Menu
+              label={
+                <span className="inline-flex items-center gap-1.5">
+                  <GitBranch className="w-3.5 h-3.5" />
+                  Rows{selectedRows.size > 0 ? ` (${selectedRows.size})` : ''}
+                </span>
+              }
+              triggerProps={{
+                disabled: selectedRows.size === 0,
+                title: 'Actions for the selected rows — move to a parent, detach to standalone, or delete',
+              }}
+              items={[
+                {
+                  id: 'move-to-parent',
+                  label: 'Move to parent…',
+                  icon: <GitBranch className="w-3.5 h-3.5" />,
+                  onSelect: () => { setMoveParentOpen(true); setMoveTargetId('') },
+                },
+                {
+                  id: 'detach-standalone',
+                  label: 'Detach to standalone',
+                  icon: <Unlink className="w-3.5 h-3.5" />,
+                  onSelect: () => setDetachOpen(true),
+                },
+                {
+                  id: 'delete-rows',
+                  label: `Delete… (${deletable.length})`,
+                  icon: <Trash2 className="w-3.5 h-3.5" />,
+                  disabled: deletable.length === 0,
+                  onSelect: () => setDeleteConfirmRows(deletable),
+                },
+              ]}
+            />
+          )
+        })()}
         {moveParentOpen && (
           <Modal
             open
@@ -2137,17 +2169,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           </Modal>
         )}
 
-        {/* Detach to standalone — clear parent link on selected variants */}
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={selectedRows.size === 0}
-          onClick={() => setDetachOpen(true)}
-          title="Detach selected variants to standalone products — parent link removed on Save"
-        >
-          <Unlink className="w-3.5 h-3.5 mr-1.5" />
-          Detach to standalone
-        </Button>
         {detachOpen && (
           <Modal
             open
@@ -2182,25 +2203,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           </Modal>
         )}
 
-        {/* P2.D2 — Delete selected rows */}
-        {selectedRows.size > 0 && (() => {
-          const deletable = (rows as EbayRow[])
-            .filter((r) => selectedRows.has(r._rowId))
-            .filter((r) => !!r.sku && !(r._readonly === true && r._shared !== true))
-          if (!deletable.length) return null
-          return (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setDeleteConfirmRows(deletable)}
-              title="Delete selected rows — ends live eBay listing(s) permanently"
-              className="text-danger-600 hover:text-danger-700 border-danger-200 hover:border-danger-300 dark:text-danger-400 dark:border-danger-800"
-            >
-              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-              Delete selected ({deletable.length})
-            </Button>
-          )
-        })()}
+        {/* P2.D2 — Delete selected rows: moved into the Rows menu (FFP.9). */}
 
         {/* Phase 3 — Pull from eBay (full data, undoable, diff preview) */}
         <div className="relative">

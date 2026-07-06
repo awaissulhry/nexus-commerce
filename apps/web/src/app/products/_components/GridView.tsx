@@ -1043,6 +1043,22 @@ function EditSplitButton({
       },
       dividerBefore: true,
     }
+    // FFP.9 — one-click family-scoped flat-file entry from the grid (both
+    // channels). The flat files adopt the last-used market (FFP.4).
+    const familyId = product.parentId ?? product.id
+    const flatFileItems: MenuItemDef[] = [
+      {
+        id: 'amazon-flat-file',
+        label: 'Amazon flat file',
+        href: `/products/amazon-flat-file?familyId=${familyId}${product.productType ? `&productType=${encodeURIComponent(String(product.productType))}` : ''}`,
+        dividerBefore: true,
+      },
+      {
+        id: 'ebay-flat-file',
+        label: 'eBay flat file',
+        href: `/products/ebay-flat-file?familyId=${familyId}`,
+      },
+    ]
     if (product.isParent) {
       return [
         {
@@ -1051,6 +1067,7 @@ function EditSplitButton({
           href: `/products/${product.id}/edit?tab=images`,
         },
         { id: 'copy', label: 'Copy', onClick: handleCopy },
+        ...flatFileItems,
         {
           id: 'create-ad',
           label: 'Create ad',
@@ -1072,6 +1089,7 @@ function EditSplitButton({
         href: `/products/${product.id}/edit?tab=images`,
       },
       { id: 'copy', label: 'Copy', onClick: handleCopy },
+      ...flatFileItems,
       {
         id: 'add-condition',
         label: 'Add condition',
