@@ -1114,13 +1114,19 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             let sPaymentId      = (row.payment_policy_id      as string | undefined) || connPolicies.paymentPolicyId      || ''
             let sReturnId       = (row.return_policy_id       as string | undefined) || connPolicies.returnPolicyId       || ''
             let sMlk            = (row.merchant_location_key  as string | undefined) || connPolicies.merchantLocationKey   || ''
-            if (!sFulfillmentId || !sPaymentId || !sReturnId || !sMlk) {
+            // MARKET-SPECIFIC policy guard: a policy id from another marketplace (a DE
+            // default on an IT offer) → eBay 25007. Always reconcile against THIS market's
+            // policies and REPLACE any id not in its list — not just missing ones.
+            try {
               const snap = await ebayAccountService.getSnapshot(connection.id, marketplaceId)
-              if (!sFulfillmentId) sFulfillmentId = snap.fulfillmentPolicies[0]?.id ?? ''
-              if (!sPaymentId)     sPaymentId     = snap.paymentPolicies[0]?.id     ?? ''
-              if (!sReturnId)      sReturnId      = snap.returnPolicies[0]?.id      ?? ''
-              if (!sMlk)           sMlk           = snap.locations[0]?.key           ?? ''
-            }
+              const fSet = new Set(snap.fulfillmentPolicies.map((p) => p.id))
+              const pSet = new Set(snap.paymentPolicies.map((p) => p.id))
+              const rSet = new Set(snap.returnPolicies.map((p) => p.id))
+              if (!sFulfillmentId || !fSet.has(sFulfillmentId)) sFulfillmentId = snap.fulfillmentPolicies[0]?.id ?? ''
+              if (!sPaymentId     || !pSet.has(sPaymentId))     sPaymentId     = snap.paymentPolicies[0]?.id     ?? ''
+              if (!sReturnId      || !rSet.has(sReturnId))      sReturnId      = snap.returnPolicies[0]?.id      ?? ''
+              if (!sMlk)          sMlk           = snap.locations[0]?.key ?? ''
+            } catch { /* best-effort — the sMlk hard-check below still guards error 25002 */ }
             if (!sMlk) {
               perRowResults.push({ sku, market: mp, status: 'ERROR',
                 message: 'Missing merchantLocation: add an inventory location in eBay Seller Hub > Inventory > Locations' })

@@ -926,14 +926,23 @@ export async function pushVariationGroup(
   let returnPolicyId      = (parentRow.return_policy_id      as string | undefined) || configured.returnPolicyId      || ''
   let merchantLocationKey = (parentRow.merchant_location_key as string | undefined) || configured.merchantLocationKey || ''
 
-  if (!fulfillmentPolicyId || !paymentPolicyId || !returnPolicyId || !merchantLocationKey) {
-    try {
-      const snapshot = await ebayAccountService.getSnapshot(connectionId, marketplaceId)
-      if (!fulfillmentPolicyId) fulfillmentPolicyId = snapshot.fulfillmentPolicies[0]?.id ?? ''
-      if (!paymentPolicyId)     paymentPolicyId     = snapshot.paymentPolicies[0]?.id     ?? ''
-      if (!returnPolicyId)      returnPolicyId      = snapshot.returnPolicies[0]?.id      ?? ''
-      if (!merchantLocationKey) merchantLocationKey = snapshot.locations[0]?.key           ?? ''
-    } catch (err) {
+  // MARKET-SPECIFIC policy guard. eBay business policies belong to ONE marketplace; a
+  // policy id from another market (e.g. a DE default applied to an IT offer) is the
+  // classic 25007 "invalid shipping policy" cause — often surfacing as a mixed IT/DE
+  // error. Reconcile against THIS market's policies (snapshot is per-market, cached
+  // 5min) and REPLACE any id that isn't in this market's list — not just missing ones.
+  try {
+    const snapshot = await ebayAccountService.getSnapshot(connectionId, marketplaceId)
+    const fSet = new Set(snapshot.fulfillmentPolicies.map((p) => p.id))
+    const pSet = new Set(snapshot.paymentPolicies.map((p) => p.id))
+    const rSet = new Set(snapshot.returnPolicies.map((p) => p.id))
+    if (!fulfillmentPolicyId || !fSet.has(fulfillmentPolicyId)) fulfillmentPolicyId = snapshot.fulfillmentPolicies[0]?.id ?? ''
+    if (!paymentPolicyId     || !pSet.has(paymentPolicyId))     paymentPolicyId     = snapshot.paymentPolicies[0]?.id     ?? ''
+    if (!returnPolicyId      || !rSet.has(returnPolicyId))      returnPolicyId      = snapshot.returnPolicies[0]?.id      ?? ''
+    if (!merchantLocationKey) merchantLocationKey = snapshot.locations[0]?.key ?? ''
+  } catch (err) {
+    // Only hard-fail if we also have no usable policy to fall back on.
+    if (!fulfillmentPolicyId || !returnPolicyId || !merchantLocationKey) {
       const msg = `Could not fetch seller policies: ${err instanceof Error ? err.message : String(err)}`
       return rows.map(r => ({ sku: (r.sku ?? '') as string, market: mp, status: 'ERROR' as const, message: msg }))
     }
@@ -1216,14 +1225,23 @@ export async function pushOffersOnly(
   let returnPolicyId      = (parentRow.return_policy_id      as string | undefined) || configured.returnPolicyId      || ''
   let merchantLocationKey = (parentRow.merchant_location_key as string | undefined) || configured.merchantLocationKey || ''
 
-  if (!fulfillmentPolicyId || !paymentPolicyId || !returnPolicyId || !merchantLocationKey) {
-    try {
-      const snapshot = await ebayAccountService.getSnapshot(connectionId, marketplaceId)
-      if (!fulfillmentPolicyId) fulfillmentPolicyId = snapshot.fulfillmentPolicies[0]?.id ?? ''
-      if (!paymentPolicyId)     paymentPolicyId     = snapshot.paymentPolicies[0]?.id     ?? ''
-      if (!returnPolicyId)      returnPolicyId      = snapshot.returnPolicies[0]?.id      ?? ''
-      if (!merchantLocationKey) merchantLocationKey = snapshot.locations[0]?.key           ?? ''
-    } catch (err) {
+  // MARKET-SPECIFIC policy guard. eBay business policies belong to ONE marketplace; a
+  // policy id from another market (e.g. a DE default applied to an IT offer) is the
+  // classic 25007 "invalid shipping policy" cause — often surfacing as a mixed IT/DE
+  // error. Reconcile against THIS market's policies (snapshot is per-market, cached
+  // 5min) and REPLACE any id that isn't in this market's list — not just missing ones.
+  try {
+    const snapshot = await ebayAccountService.getSnapshot(connectionId, marketplaceId)
+    const fSet = new Set(snapshot.fulfillmentPolicies.map((p) => p.id))
+    const pSet = new Set(snapshot.paymentPolicies.map((p) => p.id))
+    const rSet = new Set(snapshot.returnPolicies.map((p) => p.id))
+    if (!fulfillmentPolicyId || !fSet.has(fulfillmentPolicyId)) fulfillmentPolicyId = snapshot.fulfillmentPolicies[0]?.id ?? ''
+    if (!paymentPolicyId     || !pSet.has(paymentPolicyId))     paymentPolicyId     = snapshot.paymentPolicies[0]?.id     ?? ''
+    if (!returnPolicyId      || !rSet.has(returnPolicyId))      returnPolicyId      = snapshot.returnPolicies[0]?.id      ?? ''
+    if (!merchantLocationKey) merchantLocationKey = snapshot.locations[0]?.key ?? ''
+  } catch (err) {
+    // Only hard-fail if we also have no usable policy to fall back on.
+    if (!fulfillmentPolicyId || !returnPolicyId || !merchantLocationKey) {
       const msg = `Could not fetch seller policies: ${err instanceof Error ? err.message : String(err)}`
       return rows.map(r => ({ sku: (r.sku ?? '') as string, market: mp, status: 'ERROR' as const, message: msg }))
     }
