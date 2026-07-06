@@ -2483,11 +2483,17 @@ export default function FlatFileGrid({
 
                         {/* Checkbox + drag handle */}
                         <td className={cn('sticky left-0 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-1.5 w-9 text-center cursor-grab active:cursor-grabbing', frozenBg)}
-                          onMouseDown={(e) => { if ((e.target as HTMLElement).tagName === 'INPUT') return; canDragRef.current = true; setArmedDragRowId(row._rowId) }} onMouseUp={() => { canDragRef.current = false; setArmedDragRowId(null) }}>
+                          title="Drag to reorder · click to select"
+                          // FFP.11 — Amazon parity: arm the drag from the CHECKBOX too
+                          // (the INPUT guard made grabbing the checkbox itself inert, so
+                          // reordering felt missing). A plain click still toggles — the
+                          // native drag only starts if the pointer moves while held, and
+                          // a completed drag suppresses the click.
+                          onMouseDown={() => { canDragRef.current = true; setArmedDragRowId(row._rowId) }} onMouseUp={() => { canDragRef.current = false; setArmedDragRowId(null) }}>
                           {row._status === 'pushed'  ? <CheckCircle2 className="w-3 h-3 text-emerald-500 mx-auto" />
                           : row._status === 'error'   ? <Tooltip label={<span className="text-xs">{String(row._feedMessage ?? 'Push error')}</span>} className="h10-ds-tooltip--light"><AlertCircle className="w-3 h-3 text-red-500 mx-auto" /></Tooltip>
                           : row._status === 'pending' ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
-                          : <input type="checkbox" className="w-3.5 h-3.5 accent-blue-600" checked={isRowSel}
+                          : <input type="checkbox" className="w-3.5 h-3.5 accent-blue-600" checked={isRowSel} draggable={false}
                               aria-label={`Select row ${rowNum + 1}${row.sku ? ` (${row.sku})` : ''}`}
                               // Read shiftKey from onClick (a real MouseEvent) — onChange's
                               // nativeEvent doesn't reliably carry modifier keys, so shift-range

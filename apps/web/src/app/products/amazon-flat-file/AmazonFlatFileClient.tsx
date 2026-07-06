@@ -345,6 +345,43 @@ const MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK']
 const SWR_TTL_MS = 5 * 60 * 1000
 type Snapshot = { manifest: Manifest; rows: Row[]; fetchedAt: number }
 const _swr = new Map<string, Snapshot>()
+
+// ── FFP.11 — persistent manifest cache (localStorage) ─────────────────
+// The in-memory SWR cache dies on a hard reload, and the SSR template
+// prefetch is anonymous under RBAC (always null) — so every reload used to
+// block the first paint on a full template+rows round trip ("Preparing …").
+// The manifest (~120KB) is stable for a given (market, productType); persist
+// it so a reload paints the grid instantly and the fetch revalidates quietly.
+const MANIFEST_LS_VERSION = 1
+const MANIFEST_LS_TTL_MS = 24 * 60 * 60 * 1000
+const manifestLsKey = (mp: string, pt: string) => `ff-manifest-${mp.toUpperCase()}-${pt.toUpperCase()}`
+
+function loadCachedManifest(mp: string, pt: string): Manifest | null {
+  try {
+    const raw = localStorage.getItem(manifestLsKey(mp, pt))
+    if (!raw) return null
+    const p = JSON.parse(raw) as { v?: number; savedAt?: number; manifest?: Manifest }
+    if (p?.v !== MANIFEST_LS_VERSION || !p.manifest) return null
+    if (Date.now() - (p.savedAt ?? 0) > MANIFEST_LS_TTL_MS) return null
+    return p.manifest
+  } catch { return null }
+}
+
+function saveCachedManifest(mp: string, pt: string, manifest: Manifest): void {
+  const write = () =>
+    localStorage.setItem(manifestLsKey(mp, pt), JSON.stringify({ v: MANIFEST_LS_VERSION, savedAt: Date.now(), manifest }))
+  try { write() } catch {
+    // Quota — evict other cached manifests and retry once; on failure the
+    // background refresh path still works, we just lose the instant paint.
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i)
+        if (k && k.startsWith('ff-manifest-') && k !== manifestLsKey(mp, pt)) localStorage.removeItem(k)
+      }
+      write()
+    } catch { /* give up quietly */ }
+  }
+}
 const _prefetchInFlight = new Set<string>()
 
 const GROUP_COLORS: Record<string, {
@@ -1134,6 +1171,8 @@ export default function AmazonFlatFileClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const displayRowsRef = useRef<Row[]>([])
+  // FFP.11 — anchor row for shift-click checkbox range selection.
+  const lastRowSelRef = useRef<string | null>(null)
   const allColumnsRef = useRef<Column[]>([])
   const selAnchorRef = useRef<{ ri: number; ci: number } | null>(null)
   const selEndRef = useRef<{ ri: number; ci: number } | null>(null)
@@ -2651,6 +2690,18 @@ export default function AmazonFlatFileClient({
         setRows(saved && saved.length > 0 ? mergeAsinCache(saved, mp) : snap.rows)
         paintedFromCache = true
         recordSwitchPerf(mp, pt, 'cache')
+      } else {
+        // FFP.11 — hard-reload path: the in-memory cache is empty, but the
+        // localStorage manifest (+ the autosaved rows draft) paint the grid
+        // instantly; the fetch below revalidates and swaps in fresh data.
+        const cachedManifest = loadCachedManifest(mp, pt)
+        if (cachedManifest) {
+          setManifest(cachedManifest)
+          const saved = loadSavedRows(mp, pt)
+          if (saved && saved.length > 0) setRows(mergeAsinCache(saved, mp))
+          paintedFromCache = true
+          recordSwitchPerf(mp, pt, 'cache')
+        }
       }
     }
     if (!paintedFromCache) { setLoading(true); setManifest(null) }
@@ -2676,6 +2727,7 @@ export default function AmazonFlatFileClient({
         // Refresh the cached manifest without disturbing the cached rows.
         const prev = _swr.get(cacheKey(mp, pt))
         _swr.set(cacheKey(mp, pt), { manifest, rows: prev?.rows ?? [], fetchedAt: Date.now() })
+        saveCachedManifest(mp, pt, manifest)
       } else {
         // Full load — fetch manifest + rows in parallel.
         // fromDB=true: always use DB rows (called on external invalidation or
@@ -2710,6 +2762,8 @@ export default function AmazonFlatFileClient({
         if (fromDB) { setDraftBanner(null); localDivergedRef.current = false } // FFX.2 — grid == DB
         // FF-MS.4 — Write through to the SWR cache so next visit is instant.
         _swr.set(cacheKey(mp, pt), { manifest, rows: freshRows, fetchedAt: Date.now() })
+        // FFP.11 — and to localStorage so the next HARD reload is instant too.
+        saveCachedManifest(mp, pt, manifest)
         // FF-MS.9 — Only record fetch-source telemetry if cache didn't already
         // resolve this switch — otherwise we'd double-log a cache+fetch pair.
         if (!paintedFromCache) recordSwitchPerf(mp, pt, 'fetch')
@@ -5415,7 +5469,31 @@ export default function AmazonFlatFileClient({
                   isEditing={isEditing}
                   editInitialChar={editInitialChar}
                   clipboardRange={clipboardRange}
-                  onSelect={(checked) => setSelectedRows((prev) => { const n = new Set(prev); checked ? n.add(row._rowId as string) : n.delete(row._rowId as string); return n })}
+                  onSelect={(checked, shiftKey) => {
+                    // FFP.11 — eBay-parity shift-click range selection: apply
+                    // the toggle to every displayed row between the last
+                    // clicked checkbox and this one.
+                    const id = row._rowId as string
+                    setSelectedRows((prev) => {
+                      const n = new Set(prev)
+                      const anchor = lastRowSelRef.current
+                      if (shiftKey && anchor && anchor !== id) {
+                        const ids = displayRowsRef.current.filter((r) => !r._ghost).map((r) => r._rowId as string)
+                        const a = ids.indexOf(anchor)
+                        const b = ids.indexOf(id)
+                        if (a !== -1 && b !== -1) {
+                          for (let i = Math.min(a, b); i <= Math.max(a, b); i++) {
+                            if (checked) n.add(ids[i]); else n.delete(ids[i])
+                          }
+                          lastRowSelRef.current = id
+                          return n
+                        }
+                      }
+                      if (checked) n.add(id); else n.delete(id)
+                      lastRowSelRef.current = id
+                      return n
+                    })
+                  }}
                   onDeactivate={() => setIsEditing(false)}
                   onChange={(colId, val) => updateCell(row._rowId as string, colId, val)}
                   onLiveChange={(colId, val) => liveUpdateCell(row._rowId as string, colId, val)}
@@ -6064,7 +6142,8 @@ interface RowProps {
   matchKeys: Set<string>
   toneMap: Map<string, string>
   onToggleCollapse: (rowId: string) => void
-  onSelect: (c: boolean) => void
+  /** FFP.11 — shiftKey enables eBay-parity range selection (anchor → clicked row). */
+  onSelect: (c: boolean, shiftKey?: boolean) => void
   onDeactivate: () => void; onChange: (colId: string, val: unknown) => void
   onLiveChange: (colId: string, val: string) => void
   onPushSnapshot: () => void
@@ -6264,7 +6343,13 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
             )
           })()
           : status === 'pending' ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
-          : <input type="checkbox" checked={selected} onChange={(e) => onSelect(e.target.checked)} className="w-3.5 h-3.5 accent-blue-600" />}
+          : <input type="checkbox" checked={selected}
+              // FFP.11 — read shiftKey from onClick (a real MouseEvent) so
+              // shift-range selection works, mirroring the eBay grid; onChange
+              // stays a no-op to satisfy React's controlled-checkbox rule.
+              onClick={(e) => onSelect(!selected, e.shiftKey)}
+              onChange={() => {}}
+              className="w-3.5 h-3.5 accent-blue-600" />}
       </td>
       {/* Row # + ASIN badge + row-height resize handle */}
       <td
