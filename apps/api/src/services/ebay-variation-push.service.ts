@@ -1094,7 +1094,7 @@ export async function pushVariationGroup(
   // Use effectiveGroupKey (may be old UUID if 25703 triggered in-place update).
   console.log('[ebay-push][debug] publish_by_group groupKey=%s specs=%j imageVariesBy=%j',
     effectiveGroupKey, specifications, imageVariesByAxes)
-  const publishRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/offer/publish_by_inventory_item_group`, {
+  let publishRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/offer/publish_by_inventory_item_group`, {
     method: 'POST', headers,
     body: JSON.stringify({ inventoryItemGroupKey: effectiveGroupKey, marketplaceId }),
     // publish_by_group is the step most exposed to eBay's eventual consistency — 25604
@@ -1102,6 +1102,12 @@ export async function pushVariationGroup(
     // itself says "Riprova" (retry), so give it a much bigger budget than the default
     // ~14s: 6 attempts, ~2+4+8+10+10 ≈ 34s of capped backoff before giving up.
   }, { retries: 6, baseDelayMs: 2000 })
+  // FFP.14 — market independence, self-healing: when the publish is poisoned by
+  // UNPUBLISHED drafts on OTHER marketplaces (eBay validates every offer on the
+  // group's SKUs, drafts included), the drafts are auto-removed and the publish
+  // retried once. True per-market isolation isn't possible at eBay's API level
+  // (SKU/item/group are account-scoped) — so Nexus removes the coupling itself.
+  let healedByOrphanCleanup = false
 
   if (!publishRes.ok) {
     const err = await publishRes.text().catch(() => '')
@@ -1165,20 +1171,58 @@ export async function pushVariationGroup(
             } catch { /* best-effort probe */ }
           }
         }
-        detail = orphans.length
-          ? ` Found UNPUBLISHED draft offer(s) for this family on ${orphans.join(', ')} — eBay validates those too, and a draft with a wrong-market policy fails the whole publish (that's the foreign-language detail in the error). Delete those drafts (Action column → end on that market, or ask me) or fix that market's policies, then re-push.`
-          : ` All ${variantRows.length} variant offers look valid (policy + merchant location present), so this is very likely a transient eBay-side error — wait ~30s and re-push.`
+        if (orphans.length > 0) {
+          // FFP.14 — auto-heal: delete the poison drafts (UNPUBLISHED only,
+          // never a live offer — a draft is recreatable by simply pushing that
+          // market properly later) and retry the publish once.
+          let removed = 0
+          for (const otherId of orphans) {
+            const otherHeaders = { ...headers, 'X-EBAY-C-MARKETPLACE-ID': otherId, 'Content-Language': toListingLanguage(otherId), 'Accept-Language': toListingLanguage(otherId) }
+            for (const r of variantRows) {
+              const s = String(r.sku ?? '')
+              if (!s) continue
+              try {
+                const or = await fetch(`${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(s)}&marketplace_id=${otherId}`, { headers: otherHeaders })
+                if (!or.ok) continue
+                const oj = await or.json() as { offers?: Array<{ offerId?: string; status?: string }> }
+                const o = oj.offers?.[0]
+                if (o?.offerId && o.status === 'UNPUBLISHED') {
+                  const dr = await fetch(`${apiBase}/sell/inventory/v1/offer/${o.offerId}`, { method: 'DELETE', headers: otherHeaders })
+                  if (dr.ok || dr.status === 204) removed++
+                }
+              } catch { /* best-effort cleanup */ }
+            }
+          }
+          console.log(`[ebay-push] FFP.14 — removed ${removed} unpublished cross-market draft(s) on ${orphans.join(', ')}; retrying publish`)
+          if (removed > 0) {
+            const retryRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/offer/publish_by_inventory_item_group`, {
+              method: 'POST', headers,
+              body: JSON.stringify({ inventoryItemGroupKey: effectiveGroupKey, marketplaceId }),
+            }, { retries: 3, baseDelayMs: 2000 })
+            if (retryRes.ok) {
+              publishRes = retryRes
+              healedByOrphanCleanup = true
+            }
+          }
+          detail = healedByOrphanCleanup ? '' : ` Removed ${removed} unpublished cross-market draft offer(s) on ${orphans.join(', ')} but the publish still failed — re-push in ~30s; if it persists, check that market's policies in Seller Hub.`
+        } else {
+          detail = ` All ${variantRows.length} variant offers look valid (policy + merchant location present), so this is very likely a transient eBay-side error — wait ~30s and re-push.`
+        }
       } else {
         detail = ` Problem offer(s): ${issues.slice(0, 8).join('; ')} — fix these, then re-push.`
       }
     }
-    const pubMsg = isTransient
-      ? `eBay is still syncing this listing on its side (transient ${publishRes.status}/25604 after ~34s of retries) — the policies/offer were sent but eBay couldn't confirm the items in time. Wait ~30s and re-push; it almost always lands on the next try.`
-      : `publish_by_group ${publishRes.status}: ${err.slice(0, 600)}.${detail}`
-    // Preserve per-SKU step-1 errors — only stamp publish failure on rows that
-    // made it through to the offer stage (status 'PUSHED'). Overwriting step-1
-    // errors with "Manca Marca" masks the real root cause (e.g. imageUrls empty).
-    return results.map(r => r.status === 'ERROR' ? r : { ...r, status: 'ERROR' as const, message: pubMsg })
+    // FFP.14 — a successful orphan-cleanup retry falls through to the normal
+    // success path below (publishRes was reassigned to the OK retry response).
+    if (!healedByOrphanCleanup) {
+      const pubMsg = isTransient
+        ? `eBay is still syncing this listing on its side (transient ${publishRes.status}/25604 after ~34s of retries) — the policies/offer were sent but eBay couldn't confirm the items in time. Wait ~30s and re-push; it almost always lands on the next try.`
+        : `publish_by_group ${publishRes.status}: ${err.slice(0, 600)}.${detail}`
+      // Preserve per-SKU step-1 errors — only stamp publish failure on rows that
+      // made it through to the offer stage (status 'PUSHED'). Overwriting step-1
+      // errors with "Manca Marca" masks the real root cause (e.g. imageUrls empty).
+      return results.map(r => r.status === 'ERROR' ? r : { ...r, status: 'ERROR' as const, message: pubMsg })
+    }
   }
 
   const pubData = await publishRes.json().catch(() => ({})) as { listingId?: string }
