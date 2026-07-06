@@ -1088,22 +1088,36 @@ export async function pushVariationGroup(
     let detail = ''
     if (!isTransient) {
       const issues: string[] = []
+      let offersSeen = 0
+      let allZeroQty = true
       for (const r of variantRows) {
         const s = String(r.sku ?? '')
         if (!s) continue
         try {
           const or = await fetch(`${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(s)}&marketplace_id=${marketplaceId}`, { headers })
-          if (!or.ok) { issues.push(`${s}: offer GET ${or.status}`); continue }
-          const oj = await or.json() as { offers?: Array<{ status?: string; listingPolicies?: { fulfillmentPolicyId?: string }; merchantLocationKey?: string }> }
+          if (!or.ok) { issues.push(`${s}: offer GET ${or.status}`); allZeroQty = false; continue }
+          const oj = await or.json() as { offers?: Array<{ status?: string; availableQuantity?: number; listingPolicies?: { fulfillmentPolicyId?: string }; merchantLocationKey?: string }> }
           const o = oj.offers?.[0]
-          if (!o) issues.push(`${s}: no offer`)
-          else if (!o.listingPolicies?.fulfillmentPolicyId) issues.push(`${s}: no fulfillment policy`)
-          else if (!o.merchantLocationKey) issues.push(`${s}: no merchant location`)
-        } catch { issues.push(`${s}: offer probe failed`) }
+          if (!o) { issues.push(`${s}: no offer`); allZeroQty = false }
+          else if (!o.listingPolicies?.fulfillmentPolicyId) { issues.push(`${s}: no fulfillment policy`); allZeroQty = false }
+          else if (!o.merchantLocationKey) { issues.push(`${s}: no merchant location`); allZeroQty = false }
+          else {
+            offersSeen++
+            if (Number(o.availableQuantity ?? 0) > 0) allZeroQty = false
+          }
+        } catch { issues.push(`${s}: offer probe failed`); allZeroQty = false }
       }
-      detail = issues.length
-        ? ` Problem offer(s): ${issues.slice(0, 8).join('; ')} — fix these, then re-push.`
-        : ` All ${variantRows.length} variant offers look valid (policy + merchant location present), so this is very likely a transient eBay-side error — wait ~30s and re-push.`
+      // FFP.7 — every-variant-at-zero: eBay cannot (re)publish a variation
+      // listing with no purchasable variant, and reports it as a misleading
+      // 25007 "invalid shipping" error. Verified live 2026-07-06 (all offers
+      // valid, policies valid — publish only fails while every qty is 0).
+      if (issues.length === 0 && offersSeen > 0 && allZeroQty) {
+        detail = ` Every variant's quantity is 0 — eBay can't (re)publish a listing with no purchasable variant (its 25007 message is misleading). Set a quantity ≥ 1 on at least one variant (Quick update is enough), then re-push.`
+      } else {
+        detail = issues.length
+          ? ` Problem offer(s): ${issues.slice(0, 8).join('; ')} — fix these, then re-push.`
+          : ` All ${variantRows.length} variant offers look valid (policy + merchant location present), so this is very likely a transient eBay-side error — wait ~30s and re-push.`
+      }
     }
     const pubMsg = isTransient
       ? `eBay is still syncing this listing on its side (transient ${publishRes.status}/25604 after ~34s of retries) — the policies/offer were sent but eBay couldn't confirm the items in time. Wait ~30s and re-push; it almost always lands on the next try.`
