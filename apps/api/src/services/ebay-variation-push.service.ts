@@ -853,15 +853,20 @@ export async function pushVariationGroup(
     method: 'PUT', headers, body: JSON.stringify({ ...groupBody, inventoryItemGroupKey: effectiveGroupKey }),
   })
 
+  // Read the body ONCE — a Response stream can only be consumed once. Reusing this
+  // single variable everywhere below prevents the swallowed-error bug where a second
+  // `.text()` on the same response returned '' and hid eBay's real 400 reason from
+  // operators (the "inventory_item_group PUT 400:" with nothing after it).
+  let groupErrText = groupRes.ok ? '' : await groupRes.text().catch(() => '')
+
   if (!groupRes.ok && groupRes.status === 400) {
-    const errText = await groupRes.text().catch(() => '')
     let errJson: { errors?: Array<{ errorId?: number; message?: string }> } = {}
-    try { errJson = JSON.parse(errText) } catch { /* raw text fallback */ }
+    try { errJson = JSON.parse(groupErrText) } catch { /* raw text fallback */ }
     const firstErr = errJson.errors?.[0]
-    const is25703 = firstErr?.errorId === 25703 || errText.includes('"errorId":25703')
+    const is25703 = firstErr?.errorId === 25703 || groupErrText.includes('"errorId":25703')
     if (is25703) {
       // Extract the existing groupId from the error message text ("...groupId: abc123")
-      const groupIdMatch = (firstErr?.message ?? errText).match(/groupId[:\s]+([a-zA-Z0-9]+)/)
+      const groupIdMatch = (firstErr?.message ?? groupErrText).match(/groupId[:\s]+([a-zA-Z0-9]+)/)
       const oldGroupId = groupIdMatch?.[1]
       if (oldGroupId && oldGroupId !== effectiveGroupKey) {
         // Update the existing group in place (preserving its old key on eBay)
@@ -870,15 +875,15 @@ export async function pushVariationGroup(
         groupRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(effectiveGroupKey)}`, {
           method: 'PUT', headers, body: JSON.stringify({ ...groupBody, inventoryItemGroupKey: effectiveGroupKey }),
         })
+        groupErrText = groupRes.ok ? '' : await groupRes.text().catch(() => '') // re-read the retry's body
       }
     }
     // If still not ok after 25703 fallback (or other error), fall through to error return below
   }
 
   if (!groupRes.ok && groupRes.status !== 204) {
-    const err = await groupRes.text().catch(() => '')
-    console.log('[ebay-push][debug] inventory_item_group PUT FAILED status=%d body=%s', groupRes.status, err.slice(0, 2000))
-    return results.map(r => ({ ...r, status: 'ERROR' as const, message: `inventory_item_group PUT ${groupRes.status}: ${err.slice(0, 500)}` }))
+    console.log('[ebay-push][debug] inventory_item_group PUT FAILED status=%d body=%s', groupRes.status, groupErrText.slice(0, 2000))
+    return results.map(r => ({ ...r, status: 'ERROR' as const, message: `inventory_item_group PUT ${groupRes.status}: ${groupErrText.slice(0, 500) || '(eBay returned an empty 400 body — check images/aspects on all variants)'}` }))
   }
 
   // Step 3.5: Create/update one offer per variant.
