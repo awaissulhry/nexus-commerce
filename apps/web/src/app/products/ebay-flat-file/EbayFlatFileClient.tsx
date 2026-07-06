@@ -633,6 +633,17 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   useEffect(() => { try { localStorage.setItem('ff-show-cascade', showCascadeButtons ? '1' : '0') } catch {} }, [showCascadeButtons])
   const [cascadeRow, setCascadeRow] = useState<BaseRow | null>(null)
 
+  // Task 4 — scoped view: show only eBay-listed SKUs by default (persisted)
+  const [scope, setScope] = useState<'listed' | 'all'>(() => {
+    if (typeof window === 'undefined') return 'listed'
+    return (window.localStorage.getItem('ebay-ff-scope') as 'listed' | 'all') || 'listed'
+  })
+  const scopeRef = useRef(scope)
+  const isFirstScopeEffect = useRef(true)
+  // Captures ctx.onReload from renderToolbarImport so the scope-change effect
+  // can call the SAME reload the toolbar's Reload button uses.
+  const onReloadCtxRef = useRef<(() => void) | null>(null)
+
   const [addListingOpen, setAddListingOpen] = useState(false)
   const [moveParentOpen, setMoveParentOpen] = useState(false)
   const [moveTargetId, setMoveTargetId] = useState('')
@@ -701,6 +712,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     // No cache or stale — fetch from the API
     const qs = new URLSearchParams()
     if (familyId) qs.set('familyId', familyId)
+    qs.set('scope', scopeRef.current)
     fetch(`${BACKEND}/api/ebay/flat-file/rows?${qs}`)
       .then((r) => r.json())
       .then((json: { rows: EbayRow[] }) => {
@@ -712,6 +724,18 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       .finally(() => setRowsReady(true))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Task 4 — sync scope ref + localStorage; reload when scope changes
+  useEffect(() => {
+    scopeRef.current = scope
+    try { window.localStorage.setItem('ebay-ff-scope', scope) } catch {}
+    if (isFirstScopeEffect.current) { isFirstScopeEffect.current = false; return }
+    // Bust SWR cache so the next mount re-fetches with the new scope, then
+    // trigger the grid's own reload (same path as the toolbar Reload button).
+    _ebay_swr.delete(ebayKey)
+    void onReloadCtxRef.current?.()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope])
 
   // Fetch policies once on mount (non-blocking — column options update when done)
   useEffect(() => {
@@ -864,6 +888,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const onReload = useCallback(async (): Promise<BaseRow[]> => {
     const qs = new URLSearchParams()
     if (familyId) qs.set('familyId', familyId)
+    qs.set('scope', scopeRef.current)
     const res = await fetch(`${BACKEND}/api/ebay/flat-file/rows?${qs}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const json = await res.json() as { rows: EbayRow[] }
@@ -1615,11 +1640,32 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // Feed status is shown inline in Bar 1 (renderPushExtras chip) — no longer needed as a banner below the toolbar.
   // If the category schema failed to load, surface a dismissible danger banner here.
-  const renderFeedBanner = useCallback(() => categorySchemaError ? (
-    <Banner tone="danger" onDismiss={() => setCategorySchemaError(null)}>
-      {categorySchemaError}
-    </Banner>
-  ) : null, [categorySchemaError])
+  // Task 4 — also show a muted "Showing SKUs listed on eBay / Show all products" cue when scoped.
+  const renderFeedBanner = useCallback(() => {
+    const hasCue = scope === 'listed' && !familyId
+    if (!hasCue && !categorySchemaError) return null
+    return (
+      <>
+        {hasCue && (
+          <div className="flex items-center gap-1 px-4 py-1 text-xs text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
+            Showing SKUs listed on eBay.{' '}
+            <button
+              type="button"
+              className="text-blue-600 dark:text-blue-400 hover:underline"
+              onClick={() => setScope('all')}
+            >
+              Show all products
+            </button>
+          </div>
+        )}
+        {categorySchemaError && (
+          <Banner tone="danger" onDismiss={() => setCategorySchemaError(null)}>
+            {categorySchemaError}
+          </Banner>
+        )}
+      </>
+    )
+  }, [scope, familyId, categorySchemaError])
 
   // ── Slot: fetch button ─────────────────────────────────────────────────
 
@@ -2024,55 +2070,85 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // View-toggle slot (Override / Cascade / Reset). Import-from-Amazon
   // moved to renderToolbarFetch in Phase C so all data-fetch actions
   // sit together.
-  const renderToolbarImport = useCallback((ctx: ToolbarImportCtx) => (
-    <>
-      {/* IN.1 — Override badges toggle */}
-      <SharedTbBtn
-        icon={<GitBranch className="w-3.5 h-3.5" />}
-        title={showOverrideBadges ? 'Hide field-override indicators' : 'Show field-override indicators (amber ⎇ badge on rows with channel overrides)'}
-        onClick={() => setShowOverrideBadges((o) => !o)}
-        active={showOverrideBadges}
-      />
+  // Task 4 — also captures ctx.onReload (same pattern as renderToolbarFetch captures setRows)
+  // so the scope-change useEffect can trigger the grid's own reload mechanism.
+  const renderToolbarImport = useCallback((ctx: ToolbarImportCtx) => {
+    onReloadCtxRef.current = ctx.onReload
+    return (
+      <>
+        {/* Task 4 — This file / All products scope toggle (hidden in family drill-in mode) */}
+        {!familyId && (
+          <div
+            className="flex items-center rounded-md border border-slate-200 dark:border-slate-700 divide-x divide-slate-200 dark:divide-slate-700 overflow-hidden"
+            title="Scope: This file shows only eBay-listed SKUs; All products shows the full catalog"
+          >
+            <Button
+              size="sm"
+              variant={scope === 'listed' ? 'secondary' : 'ghost'}
+              onClick={() => setScope('listed')}
+              className="rounded-none border-none px-2.5"
+            >
+              This file
+            </Button>
+            <Button
+              size="sm"
+              variant={scope === 'all' ? 'secondary' : 'ghost'}
+              onClick={() => setScope('all')}
+              className="rounded-none border-none px-2.5"
+            >
+              All products
+            </Button>
+          </div>
+        )}
 
-      {/* IN.2 — Cascade buttons toggle */}
-      <SharedTbBtn
-        icon={<GitFork className="w-3.5 h-3.5" />}
-        title={showCascadeButtons ? 'Hide cascade-to-siblings buttons' : 'Show cascade-to-siblings buttons (⎇↓ on each row)'}
-        onClick={() => setShowCascadeButtons((o) => !o)}
-        active={showCascadeButtons}
-      />
+        {/* IN.1 — Override badges toggle */}
+        <SharedTbBtn
+          icon={<GitBranch className="w-3.5 h-3.5" />}
+          title={showOverrideBadges ? 'Hide field-override indicators' : 'Show field-override indicators (amber ⎇ badge on rows with channel overrides)'}
+          onClick={() => setShowOverrideBadges((o) => !o)}
+          active={showOverrideBadges}
+        />
 
-      {/* IN.2 — Reset all visible overrides back to master */}
-      <SharedTbBtn
-        icon={<RotateCcw className="w-3.5 h-3.5" />}
-        title="Reset all channel overrides to master values (sets followMaster=true on all visible rows)"
-        onClick={async () => {
-          const overrideRows = ctx.rows.filter((r) => {
-            const fs = (r as any)._fieldStates
-            return fs && Object.values(fs).some((v) => v === 'OVERRIDE')
-          })
-          if (!overrideRows.length) return
-          const ids = overrideRows.map((r) => (r as any)._listingId as string).filter(Boolean)
-          await Promise.all(
-            ids.map((id) =>
-              fetch(`${getBackendUrl()}/api/listings/${id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  followMasterPrice: true, followMasterTitle: true,
-                  followMasterDescription: true, followMasterQuantity: true,
-                  followMasterBulletPoints: true,
+        {/* IN.2 — Cascade buttons toggle */}
+        <SharedTbBtn
+          icon={<GitFork className="w-3.5 h-3.5" />}
+          title={showCascadeButtons ? 'Hide cascade-to-siblings buttons' : 'Show cascade-to-siblings buttons (⎇↓ on each row)'}
+          onClick={() => setShowCascadeButtons((o) => !o)}
+          active={showCascadeButtons}
+        />
+
+        {/* IN.2 — Reset all visible overrides back to master */}
+        <SharedTbBtn
+          icon={<RotateCcw className="w-3.5 h-3.5" />}
+          title="Reset all channel overrides to master values (sets followMaster=true on all visible rows)"
+          onClick={async () => {
+            const overrideRows = ctx.rows.filter((r) => {
+              const fs = (r as any)._fieldStates
+              return fs && Object.values(fs).some((v) => v === 'OVERRIDE')
+            })
+            if (!overrideRows.length) return
+            const ids = overrideRows.map((r) => (r as any)._listingId as string).filter(Boolean)
+            await Promise.all(
+              ids.map((id) =>
+                fetch(`${getBackendUrl()}/api/listings/${id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    followMasterPrice: true, followMasterTitle: true,
+                    followMasterDescription: true, followMasterQuantity: true,
+                    followMasterBulletPoints: true,
+                  }),
                 }),
-              }),
-            ),
-          )
-          void ctx.onReload()
-        }}
-        disabled={!ctx.rows.length}
-      />
-    </>
+              ),
+            )
+            void ctx.onReload()
+          }}
+          disabled={!ctx.rows.length}
+        />
+      </>
+    )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [showOverrideBadges, showCascadeButtons])
+  }, [showOverrideBadges, showCascadeButtons, scope, familyId])
 
   // ── Slot: Bar3 left ────────────────────────────────────────────────────
 

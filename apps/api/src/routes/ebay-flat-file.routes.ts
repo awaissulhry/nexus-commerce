@@ -49,6 +49,8 @@ import { ebayFamilyKey } from '../services/ebay-flat-file-create.logic.js';
 import { runEbayFlatFileDelete, type DeleteTarget } from '../services/ebay-flat-file-delete.service.js';
 // Task 4 — shared-SKU management: synthesize membership rows for the GET /rows response
 import { loadSharedMembershipRows } from '../services/ebay-shared-membership-rows.js';
+// Scoped-view load — filter to eBay-listed families when scope=listed (default)
+import { buildListingScopeWhere, type ListingScope } from '../services/flat-file/listing-scope.js';
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
 
@@ -73,9 +75,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
   // Returns one flat row per Product (not per market), with per-market
   // fields prefixed: it_price, de_qty, uk_item_id, etc.
   fastify.get<{
-    Querystring: { familyId?: string }
+    Querystring: { familyId?: string; scope?: ListingScope }
   }>('/ebay/flat-file/rows', async (request, reply) => {
     const { familyId } = request.query;
+    const scope: ListingScope = request.query.scope === 'all' ? 'all' : 'listed';
 
     try {
       const products = await prisma.product.findMany({
@@ -84,7 +87,11 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           // EV.5 — a family must load the parent AND its variant children
           // so the bulk editor shows every variation (price/qty come from
           // their eBay ChannelListings, which the cockpit matrix writes).
-          ...(familyId ? { OR: [{ id: familyId }, { parentId: familyId }] } : {}),
+          // Scoped-view: when not drilling into a family, apply scope filter
+          // (listed = family-coherent eBay channel filter; all = whole catalog).
+          ...(familyId
+            ? { OR: [{ id: familyId }, { parentId: familyId }] }
+            : buildListingScopeWhere({ channel: 'EBAY', scope })),
         },
         include: {
           channelListings: {
