@@ -2833,11 +2833,40 @@ export default function AmazonFlatFileClient({
 
   // ── Row operations ─────────────────────────────────────────────────
 
-  const deleteSelected = useCallback(() => {
+  // Market-scoped Amazon listing removal: POSTs product ids to the real
+  // removal endpoint, then prunes only the rows the server confirmed removed.
+  // The Product and its stock are never touched (inventory invariant I2/I3).
+  const removeFromAmazon = useCallback(async (rowsToRemove: Row[]) => {
+    const targets = rowsToRemove
+      .map((r) => ({ productId: String(r._productId ?? ''), marketplace }))
+      .filter((t) => t.productId)
+    if (!targets.length) return
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targets }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const { results } = await res.json() as { results: Array<{ productId: string; channelListingsRemoved: number; error?: string }> }
+      const removedIds = new Set(results.filter((r) => !r.error && r.channelListingsRemoved > 0).map((r) => r.productId))
+      setRows((prev) => prev.filter((r) => !removedIds.has(String(r._productId ?? ''))))
+      const removed = removedIds.size
+      toast.success(`Removed ${removed} listing${removed === 1 ? '' : 's'} from Amazon ${marketplace} — product and stock kept.`)
+    } catch (err) {
+      toast.error('Remove from Amazon failed: ' + (err instanceof Error ? err.message : String(err)))
+    }
+  }, [marketplace, setRows, toast])
+
+  const deleteSelected = useCallback(async () => {
+    const rowsToRemove = rows.filter((r) => selectedRows.has(r._rowId as string))
+    const n = rowsToRemove.length
+    if (!n) return
+    if (!confirm(`Remove ${n} listing${n === 1 ? '' : 's'} from Amazon ${marketplace}? The product and its stock stay in Nexus; other channels are untouched.`)) return
     pushSnapshot()
-    setRows((prev) => prev.filter((r) => !selectedRows.has(r._rowId as string)))
+    await removeFromAmazon(rowsToRemove)
     setSelectedRows(new Set())
-  }, [selectedRows])
+  }, [rows, selectedRows, marketplace, pushSnapshot, removeFromAmazon])
 
   // P3 — open the Create-Group popover for the current selection (checkbox Set ∪
   // drag-range), so grouping works from ticked checkboxes, not only a range.
@@ -5775,13 +5804,14 @@ export default function AmazonFlatFileClient({
               const next = [...prev]; next.splice(idx, 0, newRow); return next
             })
           }}
-          onDeleteRows={() => {
+          onDeleteRows={async () => {
             if (!normSel) return
+            const toRemove = displayRowsRef.current.slice(normSel.rMin, normSel.rMax + 1)
+            const n = toRemove.length
+            if (!n) return
+            if (!confirm(`Remove ${n} listing${n === 1 ? '' : 's'} from Amazon ${marketplace}? The product and its stock stay in Nexus; other channels are untouched.`)) return
             pushSnapshot()
-            const toDelete = new Set(
-              displayRowsRef.current.slice(normSel.rMin, normSel.rMax + 1).map(r => r._rowId as string)
-            )
-            setRows(prev => prev.filter(r => !toDelete.has(r._rowId as string)))
+            await removeFromAmazon(toRemove)
             setSelAnchor(null); setSelEnd(null)
           }}
           onClearCells={handleDeleteCells}
