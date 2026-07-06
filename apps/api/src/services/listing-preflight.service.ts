@@ -112,6 +112,11 @@ export function preflightRow(
   requiredColumns: RequiredColumn[],
   lengthColumns: LengthColumn[] = [],
 ): PreflightIssue[] {
+  // FFP.2 — a DELETE feed message is `{sku, operationType: DELETE}` with NO
+  // attributes, so there is nothing to validate. Requiring the full attribute
+  // set to delete a listing was pure friction.
+  if (String(row.record_action ?? '').toLowerCase() === 'delete') return []
+
   const issues: PreflightIssue[] = []
 
   for (const m of findMissingRequired(row, requiredColumns)) {
@@ -168,6 +173,9 @@ export function validateParentChildBatch(
   }
   for (const r of rows) {
     if (String(r.parentage_level ?? '').toLowerCase() !== 'child') continue
+    // FFP.2 — deleting a child alone is legal; the delete message carries no
+    // parentage, so don't demand its parent in the same submission.
+    if (String(r.record_action ?? '').toLowerCase() === 'delete') continue
     const parent = String(r.parent_sku ?? '').trim()
     if (parent && !parentSkus.has(parent)) {
       out.push({

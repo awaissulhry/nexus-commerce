@@ -1129,7 +1129,7 @@ export class AmazonFlatFileService {
           labelEn: 'Operation', labelLocal: ll('record_action', 'Offer Action'),
           required: true, kind: 'enum', width: 140, selectionOnly: true,
           options: ['full_update', 'partial_update', 'delete'],
-          description: 'full_update = create/replace · partial_update = merge fields · delete = remove',
+          description: 'partial_update (default) = merge only the fields you send · full_update = create/FULL replace (omitted attributes are dropped on Amazon) · delete = remove the listing (only SKU is needed — no other field is validated)',
         },
       ],
     }
@@ -1520,7 +1520,10 @@ export class AmazonFlatFileService {
         external_product_id:      listing?.externalListingId ?? '',
         external_product_id_type: listing?.externalListingId ? 'ASIN' : '',
         product_type:          (p.productType as string | null) ?? productType ?? '',
-        record_action:         'full_update',
+        // FFP.2 — pulled rows default to partial_update (the safe merge op that
+        // matches what the feed builder actually does for existing rows). A row
+        // carrying full_update is now an EXPLICIT operator choice → full UPDATE.
+        record_action:         'partial_update',
         // SP-API stores canonical 'parent'/'child' codes in attrs; fall back to DB flags
         parentage_level:       String(attrs.parentage_level?.[0]?.value ?? (p.isParent ? 'parent' : (p as any).parentId ? 'child' : '')),
         parent_sku:            parentSku,
@@ -1930,18 +1933,19 @@ export class AmazonFlatFileService {
       .filter((r) => r.item_sku)
       .map((row, i) => {
         // operationType — the flat-file editor overwhelmingly EDITS existing
-        // listings, so default to PARTIAL_UPDATE: it patches only the attributes we
-        // actually send and does NOT enforce the product type's full required-
-        // attribute set. A full UPDATE (with requirements:'LISTING') rejects a
-        // partial edit for any required attr we didn't resend — e.g. outer/inner/
-        // closure on a jacket — which is exactly what sank the DE feed. Only a
-        // genuinely NEW listing needs a full UPDATE to satisfy creation
-        // requirements. record_action defaults to 'full_update' on EVERY pulled row
-        // (getExistingRows), so it can't signal intent — it drives DELETE only.
+        // listings, so the default is PARTIAL_UPDATE: it patches only the
+        // attributes we actually send and does NOT enforce the product type's
+        // full required-attribute set. A full UPDATE (requirements:'LISTING')
+        // rejects a partial edit for any required attr we didn't resend — which
+        // is exactly what sank the DE feed. FFP.2 — pulled rows now default to
+        // record_action 'partial_update', so a row carrying 'full_update' is an
+        // EXPLICIT operator choice and maps to a full UPDATE (create/replace:
+        // attributes omitted from the row are DROPPED on Amazon).
         const opRaw = String(row.record_action ?? '').toLowerCase()
         const operationType =
           opRaw === 'delete' ? 'DELETE'
           : row._isNew === true ? 'UPDATE'
+          : opRaw === 'full_update' ? 'UPDATE'
           : 'PARTIAL_UPDATE'
         const productType = String(row.product_type ?? '').toUpperCase()
 
@@ -2767,7 +2771,7 @@ export class AmazonFlatFileService {
         const cells = line.split('\t')
         const row: FlatFileRow = {
           _rowId: `import-${idx}`, _isNew: false, _status: 'idle',
-          product_type: productType, record_action: 'full_update',
+          product_type: productType, record_action: 'partial_update',
           item_sku: '', parentage_level: '', parent_sku: '', variation_theme: '',
         }
         cols.forEach((col, i) => {

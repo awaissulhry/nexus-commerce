@@ -219,3 +219,26 @@ describe('G.1 — validateParentChildBatch (orphan variant)', () => {
     expect(validateParentChildBatch([{ item_sku: 'C1', parentage_level: 'child', parent_sku: '' }])).toEqual([])
   })
 })
+
+describe('FFP.2 — delete rows skip validation entirely', () => {
+  const req = [{ id: 'brand', label: 'Brand' }, { id: 'color', label: 'Color' }]
+  it('preflightRow returns [] for record_action=delete even with every required missing', () => {
+    expect(preflightRow({ item_sku: 'X', record_action: 'delete' }, req)).toEqual([])
+  })
+  it('preflightRow returns [] for Delete (case-insensitive)', () => {
+    expect(preflightRow({ item_sku: 'X', record_action: 'Delete' }, req)).toEqual([])
+  })
+  it('non-delete rows still validate', () => {
+    expect(preflightRow({ item_sku: 'X', record_action: 'partial_update' }, req).length).toBeGreaterThan(0)
+  })
+  it('validateParentChildBatch skips delete children (deleting a child alone is legal)', () => {
+    expect(validateParentChildBatch([
+      { item_sku: 'C1', parentage_level: 'child', parent_sku: 'GHOST', record_action: 'delete' },
+    ])).toEqual([])
+  })
+  it('validateParentChildBatch still flags non-delete orphans', () => {
+    expect(validateParentChildBatch([
+      { item_sku: 'C1', parentage_level: 'child', parent_sku: 'GHOST', record_action: 'partial_update' },
+    ])).toHaveLength(1)
+  })
+})

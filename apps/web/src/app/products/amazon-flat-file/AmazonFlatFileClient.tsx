@@ -170,10 +170,19 @@ interface Manifest {
   expandedFields: Record<string, string>
 }
 
+/** FFP.2 — which rows a submit sends: edited/pending (default), the grid
+ *  selection, or every real row in view. Full operator freedom either way —
+ *  Amazon is the authoritative validator. */
+type SubmitScope = 'edited' | 'selected' | 'all'
+
 interface Row {
   _rowId: string
   _isNew?: boolean
   _dirty?: boolean
+  /** FFP.2 — saved to Nexus but not yet submitted to Amazon. Set when Save
+   *  clears _dirty; cleared when a feed completes (isPublished resync). Submit
+   *  gathers _dirty || _isNew || _needsPublish, so Save never disarms Submit. */
+  _needsPublish?: boolean
   /** GX.5 — a trailing blank "canvas" row (Sheets-style). Never counted, saved,
    *  submitted or exported; materializes into a real row on first edit. */
   _ghost?: boolean
@@ -945,8 +954,12 @@ export default function AmazonFlatFileClient({
   }
   const [reviewModal, setReviewModal] = useState<{ data: ReviewData; resolve: (ok: boolean) => void } | null>(null)
   const [reviewAck, setReviewAck] = useState(false)
+  // FFP.2 — errors are acknowledgeable too (Amazon validates authoritatively);
+  // only the compliance + FBA-flip server gates remain hard blocks.
+  const [reviewErrorAck, setReviewErrorAck] = useState(false)
   const openReviewModal = useCallback((data: ReviewData) => {
     setReviewAck(false)
+    setReviewErrorAck(false)
     return new Promise<boolean>((resolve) => {
       setReviewModal({ data, resolve: (ok) => { setReviewModal(null); resolve(ok) } })
     })
@@ -1394,6 +1407,8 @@ export default function AmazonFlatFileClient({
     const m = new Map<string, ValidationIssue>()
     for (const row of rows) {
       if (row._ghost) continue // GX.5 — don't validate blank canvas rows
+      // FFP.2 — a delete row sends only sku+operationType; nothing to validate.
+      if (String(row.record_action ?? '').toLowerCase() === 'delete') continue
       for (const col of manifestColumns) {
         const rawVal = row[col.id]
         const val = rawVal != null ? String(rawVal) : ''
@@ -1401,12 +1416,14 @@ export default function AmazonFlatFileClient({
           m.set(`${row._rowId as string}:${col.id}`, { level: 'error', msg: `${col.labelEn} is required` })
         } else if (col.maxUtf8ByteLength && val) {
           // P2.3 — Amazon enforces UTF-8 byte limits (accented chars = 2+ bytes).
+          // FFP.2 — level 'error' to match server preflight (was 'warn'; the
+          // Review modal counted it as an error, so the grid must agree).
           const bytes = new TextEncoder().encode(val).length
           if (bytes > col.maxUtf8ByteLength) {
-            m.set(`${row._rowId as string}:${col.id}`, { level: 'warn', msg: `Exceeds ${col.maxUtf8ByteLength}-byte Amazon limit (${bytes} bytes; accented chars count as 2+)` })
+            m.set(`${row._rowId as string}:${col.id}`, { level: 'error', msg: `Exceeds ${col.maxUtf8ByteLength}-byte Amazon limit (${bytes} bytes; accented chars count as 2+)` })
           }
         } else if (col.maxLength && val.length > col.maxLength) {
-          m.set(`${row._rowId as string}:${col.id}`, { level: 'warn', msg: `Exceeds max ${col.maxLength} chars (${val.length})` })
+          m.set(`${row._rowId as string}:${col.id}`, { level: 'error', msg: `Exceeds max ${col.maxLength} chars (${val.length})` })
         } else if (col.options?.length && val && !col.options.includes(val)) {
           m.set(`${row._rowId as string}:${col.id}`, { level: 'warn', msg: `"${val}" is not a valid option` })
         }
@@ -2339,6 +2356,11 @@ export default function AmazonFlatFileClient({
   }, [frozenColCount, allColumns, colWidths, rowHeaderWidth, categoryInsertAfterIdx])
 
   const dirtyRows = useMemo(() => rows.filter((r) => r._dirty || r._isNew), [rows])
+  // FFP.2 — rows Submit can send: unsaved edits OR saved-but-not-yet-submitted.
+  const publishableRows = useMemo(
+    () => rows.filter((r) => !r._ghost && (r._dirty || r._isNew || r._needsPublish)),
+    [rows],
+  )
   const newCount  = useMemo(() => rows.filter((r) => r._isNew).length, [rows])
 
   // Memoised string of all unique ASINs in current rows — used as dep to avoid
@@ -2400,7 +2422,26 @@ export default function AmazonFlatFileClient({
   function loadSavedRows(mp: string, pt: string): Row[] | null {
     try {
       const raw = localStorage.getItem(rowStorageKey(mp, pt))
-      return raw ? JSON.parse(raw) : null
+      if (!raw) return null
+      let saved: Row[] = JSON.parse(raw)
+      // FFP.2 — one-time migration per draft key: 'full_update' used to be the
+      // inert default on every pulled row. Now that full_update maps to a real
+      // full-replace UPDATE, legacy stored defaults must not silently become
+      // one — normalize non-new rows to partial_update ONCE. An explicit
+      // full_update picked after this ships round-trips untouched.
+      const migrKey = `ff-opmigr1-${rowStorageKey(mp, pt)}`
+      if (!localStorage.getItem(migrKey)) {
+        saved = saved.map((r) =>
+          !r._isNew && !r._ghost && String(r.record_action ?? '') === 'full_update'
+            ? { ...r, record_action: 'partial_update' }
+            : r,
+        )
+        try {
+          localStorage.setItem(rowStorageKey(mp, pt), JSON.stringify(saved))
+          localStorage.setItem(migrKey, '1')
+        } catch {}
+      }
+      return saved
     } catch { return null }
   }
 
@@ -3161,16 +3202,28 @@ export default function AmazonFlatFileClient({
 
   // ── Submit ─────────────────────────────────────────────────────────
 
-  const handleSubmitToMarkets = useCallback(async (markets: Set<string>) => {
-    // Gather the dirty/new rows for a market — the active market from state, the
-    // others from their localStorage snapshot. Shared by pre-flight + the submit.
+  const handleSubmitToMarkets = useCallback(async (markets: Set<string>, scope: SubmitScope = 'edited') => {
+    // FFP.2 — gather rows per market by SCOPE: 'edited' (dirty/new/needs-publish,
+    // the default), 'selected' (grid selection), or 'all' (every real row in
+    // view). The active market reads from state; other markets read their
+    // localStorage draft — for selected/all they match by SKU, since row ids
+    // are per-market.
+    const needsPublish = (r: Row) => r._dirty || r._isNew || r._needsPublish
+    const scopeSkus: Set<string> =
+      scope === 'selected'
+        ? new Set(rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string)).map((r) => String(r.item_sku ?? '')).filter(Boolean))
+        : scope === 'all'
+          ? new Set(rows.filter((r) => !r._ghost).map((r) => String(r.item_sku ?? '')).filter(Boolean))
+          : new Set<string>()
     const gatherRows = (mp: string): Row[] => {
-      if (mp === marketplace) return rows.filter((r) => r._dirty || r._isNew)
-      try {
-        const raw = localStorage.getItem(rowStorageKey(mp, productType))
-        const saved: Row[] = raw ? JSON.parse(raw) : []
-        return saved.filter((r) => r._dirty || r._isNew)
-      } catch { return [] }
+      if (mp === marketplace) {
+        if (scope === 'selected') return rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string))
+        if (scope === 'all') return rows.filter((r) => !r._ghost)
+        return rows.filter((r) => !r._ghost && needsPublish(r))
+      }
+      const saved = loadSavedRows(mp, productType) ?? []
+      if (scope === 'edited') return saved.filter((r) => !r._ghost && needsPublish(r))
+      return saved.filter((r) => !r._ghost && scopeSkus.has(String(r.item_sku ?? '')))
     }
 
     // A5 — pre-flight BEFORE the feed goes out: per market, check required fields /
@@ -3239,7 +3292,8 @@ export default function AmazonFlatFileClient({
     }
 
     if (markets.has(marketplace)) {
-      setRows((prev) => prev.map((r) => r._dirty || r._isNew ? { ...r, _status: 'pending' } : r))
+      const sending = new Set(gatherRows(marketplace).map((r) => r._rowId))
+      setRows((prev) => prev.map((r) => sending.has(r._rowId) ? { ...r, _status: 'pending' } : r))
     }
 
     const settled = await Promise.allSettled(
@@ -3345,7 +3399,7 @@ export default function AmazonFlatFileClient({
       ))
     }
     setSubmitting(false)
-  }, [rows, marketplace, productType, manifest, saveSubmissionRecord, createVersion, toast, openReviewModal])
+  }, [rows, selectedRows, marketplace, productType, manifest, saveSubmissionRecord, createVersion, toast, openReviewModal])
 
   // ── Platform sync ──────────────────────────────────────────────────
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle')
@@ -3387,9 +3441,15 @@ export default function AmazonFlatFileClient({
         const sku = String(r.item_sku ?? '')
         const v = newVersions[sku]
         const withVersion = v != null ? { ...r, _version: v } : r
-        return !r._ghost && !errorSkus.has(sku) && (withVersion._dirty || withVersion._isNew)
-          ? { ...withVersion, _dirty: false, _isNew: false }
-          : withVersion
+        if (!r._ghost && !errorSkus.has(sku) && (withVersion._dirty || withVersion._isNew)) {
+          // FFP.2 — a DB save marks the row as still needing an Amazon submit;
+          // the post-feed resync (isPublished=true) clears the flag instead.
+          return { ...withVersion, _dirty: false, _isNew: false, _needsPublish: !isPublished }
+        }
+        if (isPublished && !r._ghost && !errorSkus.has(sku) && withVersion._needsPublish) {
+          return { ...withVersion, _needsPublish: false }
+        }
+        return withVersion
       }))
       setTimeout(() => setSyncStatus('idle'), 4000)
       // FFC — surface newly-created products (new SKUs become real Nexus products).
@@ -4176,11 +4236,14 @@ export default function AmazonFlatFileClient({
             <Button size="sm" onClick={() => setSubmitPanelOpen((o) => !o)}
               disabled={submitting || loading} loading={submitting}
               className={submitPanelOpen ? 'bg-blue-700' : ''}>
-              <Send className="w-3.5 h-3.5 mr-1.5" />Submit to Amazon{dirtyRows.length > 0 && ` (${dirtyRows.length})`}
+              <Send className="w-3.5 h-3.5 mr-1.5" />Submit to Amazon{publishableRows.length > 0 && ` (${publishableRows.length})`}
             </Button>
             {submitPanelOpen && (
               <SubmitToAmazonPanel currentMarket={marketplace} productType={productType}
-                familyId={familyId} currentDirtyRows={dirtyRows}
+                familyId={familyId} currentDirtyRows={publishableRows}
+                currentSelectedRows={rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string))}
+                currentAllRows={rows.filter((r) => !r._ghost)}
+                getMarketRows={(mp) => loadSavedRows(mp, productType) ?? []}
                 onSubmit={handleSubmitToMarkets} onClose={() => setSubmitPanelOpen(false)} />
             )}
           </div>
@@ -4248,11 +4311,15 @@ export default function AmazonFlatFileClient({
                     </div>
                   )}
                   {reviewModal.data.errors.length > 0 && (
-                    <div className="text-[11.5px] text-rose-700 dark:text-rose-400 inline-flex items-center gap-1.5">
-                      <AlertCircle className="w-3.5 h-3.5" />Fix {reviewModal.data.errors.length} error{reviewModal.data.errors.length === 1 ? '' : 's'} before publishing.
-                    </div>
+                    <label className="flex items-start gap-2 text-[11.5px] text-rose-700 dark:text-rose-400 cursor-pointer">
+                      <input type="checkbox" checked={reviewErrorAck} onChange={(e) => setReviewErrorAck(e.target.checked)} className="w-3.5 h-3.5 mt-0.5 accent-rose-600" />
+                      <span>
+                        I understand the {reviewModal.data.errors.length} error{reviewModal.data.errors.length === 1 ? '' : 's'} — publish anyway.
+                        Amazon validates authoritatively and reports per-SKU results.
+                      </span>
+                    </label>
                   )}
-                  {reviewModal.data.errors.length === 0 && reviewModal.data.warnings.length > 0 && (
+                  {reviewModal.data.warnings.length > 0 && (
                     <label className="flex items-center gap-2 text-[11.5px] text-slate-700 dark:text-slate-300 cursor-pointer">
                       <input type="checkbox" checked={reviewAck} onChange={(e) => setReviewAck(e.target.checked)} className="w-3.5 h-3.5" />
                       I&apos;ve reviewed the {reviewModal.data.warnings.length} warning{reviewModal.data.warnings.length === 1 ? '' : 's'} and want to publish.
@@ -4262,7 +4329,7 @@ export default function AmazonFlatFileClient({
                 <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-subtle dark:border-slate-800">
                   <button type="button" onClick={() => reviewModal.resolve(false)} className="inline-flex items-center h-7 px-3 rounded text-[12px] border border-default dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
                   <button type="button" onClick={() => reviewModal.resolve(true)}
-                    disabled={reviewModal.data.errors.length > 0 || (reviewModal.data.warnings.length > 0 && !reviewAck)}
+                    disabled={(reviewModal.data.errors.length > 0 && !reviewErrorAck) || (reviewModal.data.warnings.length > 0 && !reviewAck)}
                     className="inline-flex items-center gap-1.5 h-7 px-3 rounded text-[12px] font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
                     <Send className="w-3.5 h-3.5" />Publish to {reviewModal.data.markets.join(', ')}
                   </button>
@@ -5964,6 +6031,8 @@ interface RowProps {
 // required cells are excluded so the chip never over-counts.
 function computeRowCompleteness(row: Row, columns: Column[]): { filled: number; total: number } {
   if (row._ghost) return { filled: 0, total: 0 }
+  // FFP.2 — delete rows need only the SKU; the completeness chip has nothing to count.
+  if (String(row.record_action ?? '').toLowerCase() === 'delete') return { filled: 0, total: 0 }
   const parentage = String(row.parentage_level ?? '')
   const rowType = parentage.toLowerCase() === 'parent' ? 'VARIATION_PARENT'
     : parentage.toLowerCase() === 'child' ? 'VARIATION_CHILD'
@@ -7430,33 +7499,51 @@ interface SubmitPanelProps {
   currentMarket: string
   productType: string
   familyId?: string
+  /** FFP.2 — rows needing publish on the current market (edited scope). */
   currentDirtyRows: Row[]
-  onSubmit: (markets: Set<string>) => void
+  currentSelectedRows: Row[]
+  currentAllRows: Row[]
+  getMarketRows: (mp: string) => Row[]
+  onSubmit: (markets: Set<string>, scope: SubmitScope) => void
   onClose: () => void
 }
 
 function SubmitToAmazonPanel({
-  currentMarket, productType, familyId, currentDirtyRows, onSubmit, onClose,
+  currentMarket, productType, familyId, currentDirtyRows, currentSelectedRows,
+  currentAllRows, getMarketRows, onSubmit, onClose,
 }: SubmitPanelProps) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set([currentMarket]))
+  // FFP.2 — submit scope: edited (default) / grid selection / everything in view.
+  const [scope, setScope] = useState<SubmitScope>('edited')
   const [counts, setCounts] = useState<Record<string, number>>({})
   const panelRef = useRef<HTMLDivElement>(null)
 
-  // Compute dirty-row counts per market from localStorage (non-current markets)
+  // Per-market row counts for the chosen scope. The current market counts from
+  // live state; other markets count their localStorage draft — edited scope by
+  // flags, selected/all by SKU match (row ids are per-market).
   useEffect(() => {
+    const scopeSkus = scope === 'edited' ? null : new Set(
+      (scope === 'selected' ? currentSelectedRows : currentAllRows)
+        .map((r) => String(r.item_sku ?? '')).filter(Boolean),
+    )
     const out: Record<string, number> = {}
     for (const mp of ALL_MARKETS) {
-      if (mp === currentMarket) { out[mp] = currentDirtyRows.length; continue }
+      if (mp === currentMarket) {
+        out[mp] = scope === 'selected' ? currentSelectedRows.length
+          : scope === 'all' ? currentAllRows.length
+          : currentDirtyRows.length
+        continue
+      }
       try {
-        const key = familyId
-          ? `ff-rows-${mp.toUpperCase()}-${productType.toUpperCase()}-family-${familyId}`
-          : `ff-rows-${mp.toUpperCase()}-${productType.toUpperCase()}`
-        const saved: Row[] = JSON.parse(localStorage.getItem(key) ?? '[]')
-        out[mp] = saved.filter((r) => r._dirty || r._isNew).length
+        const saved = getMarketRows(mp)
+        out[mp] = scope === 'edited'
+          ? saved.filter((r) => !r._ghost && (r._dirty || r._isNew || r._needsPublish)).length
+          : saved.filter((r) => !r._ghost && scopeSkus!.has(String(r.item_sku ?? ''))).length
       } catch { out[mp] = 0 }
     }
     setCounts(out)
-  }, [currentMarket, productType, familyId, currentDirtyRows.length])
+  }, [scope, currentMarket, productType, familyId, currentDirtyRows.length,
+    currentSelectedRows, currentAllRows, getMarketRows])
 
   useEffect(() => {
     function handle(e: MouseEvent) {
@@ -7485,6 +7572,30 @@ function SubmitToAmazonPanel({
         <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
       </div>
 
+      {/* FFP.2 — rows-to-submit scope */}
+      <div className="px-4 pt-3 pb-1 space-y-1.5 border-b border-slate-100 dark:border-slate-800">
+        <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Rows to submit</div>
+        {([
+          { id: 'edited' as const, label: `Edited / pending (${currentDirtyRows.length})` },
+          { id: 'selected' as const, label: `Selected in grid (${currentSelectedRows.length})` },
+          { id: 'all' as const, label: `All rows in view (${currentAllRows.length})` },
+        ]).map((opt) => (
+          <label key={opt.id} className="flex items-center gap-2 cursor-pointer text-[12px] text-slate-700 dark:text-slate-300">
+            <input
+              type="radio"
+              name="ff-submit-scope"
+              checked={scope === opt.id}
+              onChange={() => setScope(opt.id)}
+              className="w-3 h-3 accent-blue-600"
+            />
+            {opt.label}
+          </label>
+        ))}
+        {scope !== 'edited' && (
+          <div className="text-[10.5px] text-slate-400 pb-1">Other markets match these rows by SKU.</div>
+        )}
+      </div>
+
       <div className="px-4 py-3 space-y-2.5">
         {ALL_MARKETS.map((mp) => {
           const count = counts[mp] ?? 0
@@ -7508,7 +7619,7 @@ function SubmitToAmazonPanel({
                   ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
                   : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-600',
               )}>
-                {count} unsaved
+                {count} to send
               </span>
             </label>
           )
@@ -7521,7 +7632,7 @@ function SubmitToAmazonPanel({
         </div>
         <Button
           size="sm"
-          onClick={() => onSubmit(selected)}
+          onClick={() => onSubmit(selected, scope)}
           disabled={selected.size === 0 || totalRows === 0}
         >
           <Send className="w-3.5 h-3.5 mr-1.5" />Submit
