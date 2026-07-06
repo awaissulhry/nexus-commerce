@@ -742,6 +742,20 @@ export async function pushVariationGroup(
     results.push({ sku, market: mp, status: 'PUSHED', message: 'inventory_item updated' })
   }
 
+  // Guard (prevents eBay error 25701): every variant must have a created inventory_item
+  // before the group PUT can reference it. If any variant was skipped/failed above (e.g.
+  // "No images found for this SKU"), abort NOW with the real per-variant reason — otherwise
+  // the group PUT references SKUs eBay never created (25701) AND that error overwrites every
+  // row's message, hiding the true cause from the operator.
+  const blockedVariants = results.filter(r => r.status === 'ERROR')
+  if (blockedVariants.length > 0) {
+    const blockers = blockedVariants.map(r => r.sku).join(', ')
+    console.log('[ebay-push] aborting group PUT — %d/%d variant(s) not created on eBay: %s', blockedVariants.length, variantRows.length, blockers)
+    return results.map(r => r.status === 'ERROR'
+      ? r
+      : { ...r, status: 'ERROR' as const, message: `Listing not published — first fix the blocked variant(s): ${blockers}` })
+  }
+
   // eBay's Inventory Service has eventual consistency: a freshly PUT inventory_item
   // may not be visible to the offer endpoint for ~1s. Without this pause, rapid
   // sequential calls hit a 25604 "product not found" / 25001 internal error on
