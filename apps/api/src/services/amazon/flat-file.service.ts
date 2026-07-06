@@ -2262,14 +2262,35 @@ export class AmazonFlatFileService {
     if (deleteSkus.length) {
       const delProducts = await this.prisma.product.findMany({
         where: { sku: { in: deleteSkus }, deletedAt: null },
-        select: { id: true },
+        select: { id: true, sku: true },
       })
       if (delProducts.length) {
         const delIds = delProducts.map((p) => p.id)
-        await this.prisma.channelListing.updateMany({
-          where: { productId: { in: delIds }, channel: 'AMAZON', marketplace: mp },
-          data: { listingStatus: 'ENDED', isPublished: false },
-        })
+        // FFP.13 — persist the delete-row's snapshot too. Delete rows are
+        // excluded from the normal save pass (validRows), so the listing kept
+        // the snapshot from the PREVIOUS save — and a reload then showed the
+        // old operation (e.g. partial_update) as if the delete never happened.
+        // The row must round-trip record_action='delete' (and every other
+        // entered value) until the operator changes it.
+        const delRowBySku = new Map(
+          rows
+            .filter((r) => String(r.record_action ?? '').toLowerCase() === 'delete')
+            .map((r) => [String(r.item_sku ?? '').trim(), r] as const),
+        )
+        for (const p of delProducts) {
+          const row = delRowBySku.get(p.sku)
+          const snapshot = row
+            ? Object.fromEntries(Object.entries(row).filter(([k]) => !k.startsWith('_')))
+            : undefined
+          await this.prisma.channelListing.updateMany({
+            where: { productId: p.id, channel: 'AMAZON', marketplace: mp },
+            data: {
+              listingStatus: 'ENDED',
+              isPublished: false,
+              ...(snapshot ? { flatFileSnapshot: snapshot as any } : {}),
+            },
+          })
+        }
         // Keep the /products grid honest (it reads ProductReadCache).
         await Promise.all(
           delIds.map((id) => productReadCacheService.refresh(id).catch(() => undefined)),

@@ -437,3 +437,31 @@ describe('buildJsonFeedBody — parentage + condition_type + variation_theme via
     expect(m.attributes.child_parent_sku_relationship[0].parent_sku).toBe('PAR1')
   })
 })
+
+// FFP.13 — the Operation column must round-trip losslessly: a saved
+// record_action (delete included) survives reload; only genuinely live
+// fields (price/qty/ASIN) are overlaid from the DB row.
+describe('FFP.13 — applySnapshotOverlay keeps record_action', () => {
+  const live = {
+    _rowId: 'p1', _productId: 'p1', _isNew: false, _status: 'idle',
+    item_sku: 'SKU-1', record_action: 'partial_update',
+    purchasable_offer__our_price: '49.9',
+    fulfillment_availability__quantity: '7',
+  } as never
+
+  it("snapshot record_action='delete' survives the overlay", () => {
+    const out = applySnapshotOverlay({ item_sku: 'SKU-1', record_action: 'delete', item_name: 'saved' }, live)
+    expect(out.record_action).toBe('delete')
+    expect(out.item_name).toBe('saved')
+  })
+
+  it('live price/qty still win over the snapshot', () => {
+    const out = applySnapshotOverlay(
+      { item_sku: 'SKU-1', record_action: 'delete', purchasable_offer__our_price: '1.0', fulfillment_availability__quantity: '99' },
+      live,
+    )
+    expect(out.purchasable_offer__our_price).toBe('49.9')
+    expect(out.fulfillment_availability__quantity).toBe('7')
+    expect(out.record_action).toBe('delete')
+  })
+})
