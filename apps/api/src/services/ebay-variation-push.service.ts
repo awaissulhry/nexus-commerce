@@ -465,8 +465,12 @@ export async function pushVariationGroup(
 
   const COLOR_AXIS_NAMES_PRE = new Set(['colore', 'color', 'farbe', 'couleur', 'colour', 'kleur'])
   const colorAxisRawName = effectiveVarAxesDeDuped.find(n => COLOR_AXIS_NAMES_PRE.has(n.toLowerCase()))
+  // FFP.16 — explicit override matches across locales too (Taglia ≡ Size):
+  // an operator's deliberate axis pick is always honored when it truly varies.
   const pictureAxis = (pictureAxisOverride
-    && effectiveVarAxesDeDuped.find(a => a.toLowerCase() === pictureAxisOverride.toLowerCase()))
+    && effectiveVarAxesDeDuped.find(a =>
+      a.toLowerCase() === pictureAxisOverride.toLowerCase()
+      || axisSynonymKey(a) === axisSynonymKey(pictureAxisOverride)))
     || colorAxisRawName
 
   // Build variesBy specifications here (before Step 1) so we can:
@@ -532,12 +536,15 @@ export async function pushVariationGroup(
     ? deduplicatedSpecs.find(s => s.name.toLowerCase() === pictureAxis.toLowerCase()
         || (COLOR_AXIS_NAMES_PRE.has(s.name.toLowerCase()) && COLOR_AXIS_NAMES_PRE.has(pictureAxis.toLowerCase())))
     : undefined
-  // FFP.15 — shared-gallery mode: no picture axis at all. eBay then shows the
-  // listing-level gallery for every variation (correct for a single-colour
-  // family: the buyer's size pick never swaps photos).
+  // FFP.15/16 — picture-axis policy: pictures vary ONLY by a colour-like axis
+  // or an explicit operator pick. NEVER default to the first spec — on
+  // size-only families that produced per-size picture sets (unprofessional
+  // PDP: the gallery swaps as the buyer clicks sizes). With no eligible axis
+  // the group is published WITHOUT aspectsImageVariesBy → one shared gallery
+  // (the 400-retry below is the safety net if eBay refuses that shape).
   const imageVariesByAxes = opts?.omitImageVariesBy
     ? []
-    : (pictureSpec ? [pictureSpec.name] : validSpecs.slice(0, 1).map(e => e.name)).filter(Boolean)
+    : (pictureSpec ? [pictureSpec.name] : []).filter(Boolean)
 
   // Row normalisation: write the canonical spec key to any row that only has a
   // synonym alias. Without this, families where existing variants were pushed
@@ -942,11 +949,11 @@ export async function pushVariationGroup(
     // If still not ok after 25703 fallback (or other error), fall through to error return below
   }
 
-  // FFP.15 — shared-gallery fallback: if eBay rejected the group WITHOUT
+  // FFP.15/16 — shared-gallery fallback: if eBay rejected the group WITHOUT
   // aspectsImageVariesBy, retry once with the default axis. Images stay
   // uniform across variations either way (every variant carries the same
   // gallery), so the buyer experience is identical.
-  if (!groupRes.ok && groupRes.status === 400 && opts?.omitImageVariesBy) {
+  if (!groupRes.ok && groupRes.status === 400 && imageVariesByAxes.length === 0) {
     const fallbackAxes = (validSpecs.slice(0, 1).map(e => e.name)).filter(Boolean)
     if (fallbackAxes.length > 0) {
       console.log(`[ebay-push] FFP.15 — group rejected without aspectsImageVariesBy; retrying with [${fallbackAxes.join(', ')}]`)

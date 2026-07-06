@@ -177,8 +177,15 @@ export async function publishEbayImagesViaInventory(
   // shape is ONE shared gallery for the whole listing: the curated set goes
   // to the listing-level imageUrls (and uniformly to every variant), and
   // aspectsImageVariesBy is omitted (with a safe retry if eBay insists).
-  const sharedGallery = !matchedMulti && !!matchedAny
-  const pictureAxis = matchedMulti ?? (sharedGallery ? matchedAny!.label : (multiAxes[0] ?? requestedAxis))
+  // FFP.16 — the FALLBACK may never pick a size-like axis (per-size picture
+  // sets make the PDP gallery swap as the buyer clicks sizes). An EXPLICIT
+  // size pick (activeAxis) on a family that truly varies by size is still
+  // honored via matchedMulti above — operator intent always wins.
+  const sizeLike = (label: string) => axisSynonymKey(label) === axisSynonymKey('Size')
+  const fallbackAxis = multiAxes.find((a) => !sizeLike(a))
+  const sharedGallery = !matchedMulti && (!!matchedAny || !fallbackAxis)
+  const pictureAxis = matchedMulti
+    ?? (matchedAny ? matchedAny.label : (fallbackAxis ?? requestedAxis))
 
   job = await prisma.channelImagePublishJob.create({
     data: {
