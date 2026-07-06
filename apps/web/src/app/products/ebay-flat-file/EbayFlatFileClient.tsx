@@ -92,6 +92,8 @@ export interface EbayRow extends BaseRow {
   _readonly?: boolean
   /** P2.B2 — explicit parentage column value: 'parent' | 'child' | '' | undefined */
   parentage?: '' | 'parent' | 'child'
+  /** FFP.6 — per-row lifecycle action applied on Push: '' publish · deactivate (qty 0, ItemID kept) · end · skip */
+  row_action?: '' | 'deactivate' | 'end' | 'skip'
   /** P2.B2 — parent row's SKU for child rows (drives live grouping + orphan validation) */
   parent_sku?: string
   it_price?: number | null; it_qty?: number | null; it_item_id?: string | null
@@ -1148,19 +1150,45 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       .filter((r) => !(r as EbayRow)._readonly && !(r as EbayRow)._shared)
     if (!toPush.length) { toast({ title: 'Nothing to push', tone: 'info' }); return }
 
-    // G.1 — hard-block structural errors (duplicate SKU, orphan variant, oversized
-    // title) before pushing, surfaced persistently rather than as a vanishing toast.
-    const blocking = validateRows(toPush, rows).filter((i) => i.level === 'error')
+    // FFP.6 — Action column: 'skip' rows never leave the client; deactivate/end
+    // rows go to the server but are exempt from publish validation (an 'end'
+    // doesn't need a title).
+    const actionOf = (r: BaseRow) => String((r as EbayRow).row_action ?? '').trim().toLowerCase()
+    let sendRows = toPush.filter((r) => actionOf(r) !== 'skip')
+    const skippedByAction = toPush.length - sendRows.length
+    if (!sendRows.length) { toast({ title: 'All rows are set to skip — nothing to push', tone: 'info' }); return }
+    const publishRows = sendRows.filter((r) => !['deactivate', 'end'].includes(actionOf(r)))
+
+    // G.1 — structural errors (duplicate SKU, orphan variant, oversized title),
+    // surfaced persistently rather than as a vanishing toast. FFP.6 — no longer
+    // an unconditional wall: when every blocked row is UNPUBLISHED (not live on
+    // this market and not a parent), the operator can push the rest without
+    // them — the blocked rows simply stay untouched on eBay.
+    const blocking = validateRows(publishRows, rows).filter((i) => i.level === 'error')
     if (blocking.length) {
       setBlockingErrors(blocking)
       setPublishPanelOpen(true)
-      toast.error(`${blocking.length} blocking issue${blocking.length > 1 ? 's' : ''} — fix before pushing`)
-      return
+      const blockedSkus = new Set(blocking.map((b) => b.sku))
+      const mpKey = marketplace.toLowerCase()
+      const isLiveHere = (r: BaseRow) =>
+        Boolean(String((r as EbayRow)[`${mpKey}_item_id` as keyof EbayRow] ?? '').trim()) ||
+        String((r as EbayRow)[`${mpKey}_status` as keyof EbayRow] ?? '').toUpperCase() === 'ACTIVE'
+      const isBlocked = (r: BaseRow) => blockedSkus.has(String((r as EbayRow).sku ?? ''))
+      const hardBlocked = publishRows.filter((r) => isBlocked(r) && ((r as EbayRow)._isParent === true || isLiveHere(r)))
+      const rest = sendRows.filter((r) => !isBlocked(r))
+      const excludableCount = publishRows.filter(isBlocked).length - hardBlocked.length
+      if (hardBlocked.length > 0 || rest.length === 0 || excludableCount === 0) {
+        toast.error(`${blocking.length} blocking issue${blocking.length > 1 ? 's' : ''} — fix before pushing`)
+        return
+      }
+      if (!confirm(`${excludableCount} row(s) have blocking issues but aren't live on eBay ${marketplace} yet.\n\nPush the other ${rest.length} row(s) without them? The blocked rows stay untouched on eBay.`)) return
+      sendRows = rest
+    } else {
+      setBlockingErrors([])
     }
-    setBlockingErrors([])
 
     // EFF.3 — pre-push completeness check (warn, not block)
-    const incomplete = toPush.flatMap((r) => {
+    const incomplete = sendRows.flatMap((r) => {
       const { missing } = computeRowCompleteness(r, columnGroups)
       return missing.length ? [{ sku: String((r as EbayRow).sku ?? ''), count: missing.length }] : []
     })
@@ -1184,10 +1212,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       const res = await fetch(`${BACKEND}/api/ebay/flat-file/push`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: toPush, markets: publishTargets }),
+        body: JSON.stringify({ rows: sendRows, markets: publishTargets }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json() as { results?: PushResult[]; taskId?: string }
+      if (skippedByAction > 0) {
+        toast({ title: `${skippedByAction} row${skippedByAction !== 1 ? 's' : ''} skipped (Action = skip)`, tone: 'info' })
+      }
       // A push just landed — refresh the durable history, and auto-open it on
       // errors so the operator sees the full per-SKU result, not a vanishing toast.
       setHistoryRefreshKey((k) => k + 1)

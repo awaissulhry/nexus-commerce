@@ -1012,8 +1012,20 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     }> = [];
 
     // Group rows by family (platformProductId). Rows without one are their own family.
+    // FFP.6 — per-row Action column. '' → publish/update (default); 'skip' →
+    // excluded from this push; 'deactivate' → live offer quantity set to 0
+    // (ItemID kept — the safe hide); 'end' → end on the target market (child
+    // row = that variation's offer, parent row = the whole listing; the ItemID
+    // is lost and a later publish mints a new one).
+    const actionOf = (r: Record<string, unknown>) =>
+      String((r as { row_action?: unknown }).row_action ?? '').trim().toLowerCase();
+    const skippedCount = rows.filter((r) => actionOf(r) === 'skip').length;
+    const deactivateRows = rows.filter((r) => actionOf(r) === 'deactivate' && r._shared !== true);
+    const endRows = rows.filter((r) => actionOf(r) === 'end' && r._shared !== true);
+    const pushableRows = rows.filter((r) => !['skip', 'deactivate', 'end'].includes(actionOf(r)));
+
     const families = new Map<string, typeof rows>();
-    for (const row of rows) {
+    for (const row of pushableRows) {
       // C2 (defensive) — synthesized shared-membership rows (_shared) are read-only VIEW
       // rows, never a push source; skip them so they can't create a phantom listing even
       // if the client filter is bypassed.
@@ -1025,6 +1037,108 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
     for (const mp of targetMarkets) {
       const marketplaceId = toMarketplaceId(mp);
+
+      // ── FFP.6 — Action: deactivate (offer qty → 0, ItemID kept) ──────
+      if (deactivateRows.length > 0) {
+        const zeroed = deactivateRows.map((r) => ({
+          ...r,
+          [`${(mp as string).toLowerCase()}_qty`]: 0,
+          quantity: 0,
+        }));
+        const res = await pushOffersOnly(
+          zeroed, mp, token, connection.id,
+          (connection.connectionMetadata ?? {}) as Record<string, unknown>,
+          EBAY_API_BASE, marketplaceId, capToFbm,
+        );
+        perRowResults.push(...res.map((r) =>
+          r.status === 'PUSHED' ? { ...r, message: 'deactivated — quantity 0 on the live offer (ItemID kept)' } : r,
+        ));
+        const okSkus = new Set(res.filter((r) => r.status === 'PUSHED').map((r) => r.sku));
+        const okIds = deactivateRows
+          .filter((r) => okSkus.has(String(r.sku ?? '')))
+          .map((r) => r._productId as string | undefined)
+          .filter((v): v is string => Boolean(v));
+        if (okIds.length) {
+          await prisma.channelListing.updateMany({
+            where: { productId: { in: okIds }, channel: 'EBAY', region: mp === 'UK' ? 'GB' : mp },
+            data: { quantity: 0 },
+          });
+        }
+      }
+
+      // ── FFP.6 — Action: end (delist on THIS market) ──────────────────
+      for (const row of endRows) {
+        const sku = String(row.sku ?? '');
+        if (!sku) continue;
+        const region = mp === 'UK' ? 'GB' : mp;
+        const lang = toListingLanguage(marketplaceId);
+        const endHeaders = {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Content-Language': lang,
+          'Accept-Language': lang,
+          Accept: 'application/json',
+          'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
+        };
+        try {
+          // Shared-SKU (Trading API) listings have no Inventory offer — ending
+          // them here would silently desync; route those through Delete →
+          // remove listing instead.
+          const membership = await prisma.sharedListingMembership.findFirst({
+            where: { sku, marketplace: mp, status: 'ACTIVE' },
+            select: { id: true },
+          });
+          if (membership) {
+            perRowResults.push({ sku, market: mp, status: 'ERROR', message: 'Shared-SKU (Trading API) listing — end it via Delete → Remove listing, not the Action column' });
+            continue;
+          }
+          if (row._isParent === true) {
+            // Parent row → end the WHOLE listing (all variations) on this market.
+            const wr = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/withdraw_by_inventory_item_group`, {
+              method: 'POST', headers: endHeaders,
+              body: JSON.stringify({ inventoryItemGroupKey: sku, marketplaceId }),
+            });
+            if (wr.ok || wr.status === 204) {
+              const pid = row._productId as string | undefined;
+              if (pid) {
+                await prisma.channelListing.updateMany({
+                  where: { product: { OR: [{ id: pid }, { parentId: pid }] }, channel: 'EBAY', region },
+                  data: { listingStatus: 'ENDED', offerActive: false, externalListingId: null },
+                });
+              }
+              perRowResults.push({ sku, market: mp, status: 'PUSHED', message: 'listing ended on this market (ItemID retired — a future publish creates a new one)' });
+            } else {
+              const t = await wr.text().catch(() => '');
+              perRowResults.push({ sku, market: mp, status: 'ERROR', message: `end failed ${wr.status}: ${t.slice(0, 300)}` });
+            }
+          } else {
+            // Child row → end just this variation's offer.
+            const gr = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`, { headers: endHeaders });
+            const gj = gr.ok ? (await gr.json() as { offers?: Array<{ offerId?: string }> }) : {};
+            const offerId = gj.offers?.[0]?.offerId;
+            if (!offerId) {
+              perRowResults.push({ sku, market: mp, status: 'ERROR', message: 'no live offer on this market — nothing to end' });
+              continue;
+            }
+            const dr = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, { method: 'DELETE', headers: endHeaders });
+            if (dr.ok || dr.status === 204) {
+              const pid = row._productId as string | undefined;
+              if (pid) {
+                await prisma.channelListing.updateMany({
+                  where: { productId: pid, channel: 'EBAY', region },
+                  data: { listingStatus: 'ENDED', offerActive: false, externalListingId: null },
+                });
+              }
+              perRowResults.push({ sku, market: mp, status: 'PUSHED', message: 'variation ended on this market' });
+            } else {
+              const t = await dr.text().catch(() => '');
+              perRowResults.push({ sku, market: mp, status: 'ERROR', message: `end failed ${dr.status}: ${t.slice(0, 300)}` });
+            }
+          }
+        } catch (err) {
+          perRowResults.push({ sku, market: mp, status: 'ERROR', message: err instanceof Error ? err.message : 'end failed' });
+        }
+      }
 
       for (const [familyKey, familyRows] of families) {
         if (strategy === 'offers-only') {
@@ -1417,7 +1531,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       });
     } catch { /* SSE is best-effort */ }
 
-    return reply.send({ mode: 'api', pushed, errors, results: perRowResults, warnings: oversellWarnings });
+    return reply.send({ mode: 'api', pushed, errors, skipped: skippedCount, results: perRowResults, warnings: oversellWarnings });
   });
 
   // ── GET /api/ebay/flat-file/pushes ──────────────────────────────────
@@ -1710,6 +1824,21 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             where: { productId, channel: 'EBAY', region },
             include: { product: { select: { sku: true } } },
           });
+
+          // FFP.6 — shared-SKU (Trading API) listings have no Inventory offer.
+          // The old flow found none, then reset the DB row to DRAFT and nulled
+          // the ItemID WITHOUT touching eBay — a false "delisted". Route these
+          // through Delete → remove listing (membership-aware) instead.
+          if (listing?.product?.sku) {
+            const membership = await prisma.sharedListingMembership.findFirst({
+              where: { sku: listing.product.sku, marketplace: mpUpper, status: 'ACTIVE' },
+              select: { id: true },
+            });
+            if (membership) {
+              results.push({ productId, market: mpUpper, status: 'ERROR', message: 'Shared-SKU (Trading API) listing — use Delete → Remove listing; withdrawing the Inventory offer would desync the DB without ending the eBay item' });
+              continue;
+            }
+          }
 
           if (!listing) {
             results.push({ productId, market: mpUpper, status: 'SKIPPED', message: 'No listing found' });

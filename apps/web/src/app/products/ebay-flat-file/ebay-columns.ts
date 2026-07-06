@@ -140,6 +140,17 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
         frozen: true,
       },
       {
+        // FFP.6 — per-row lifecycle action, applied by Push to the TARGET market(s).
+        id: 'row_action',
+        label: 'Action',
+        description: 'Applied on Push, to this market only: blank = publish/update · deactivate = set the live offer to quantity 0 (keeps the ItemID — the safe hide; set it on variant rows) · end = end on this market (child row = that variation, parent row = the whole listing; the ItemID is lost, a later publish creates a new one) · skip = leave this row out of pushes. Deleting rows stays under the Delete toolbar action.',
+        required: false,
+        kind: 'enum',
+        options: ['', 'deactivate', 'end', 'skip'],
+        enumMode: 'strict',
+        width: 110,
+      },
+      {
         id: 'parentage',
         label: 'Parent/Child',
         description: 'Whether this SKU is a variation parent, a child variant, or standalone. Set to "parent" for the listing container, "child" for variant rows, or leave blank for standalone items.',
