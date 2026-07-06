@@ -22,7 +22,13 @@ export interface ParsedRow { sheet: string; rowNumber: number; cells: Record<str
 export interface ParsedSheet { headers: string[]; rows: ParsedRow[] }
 export interface ParsedWorkbook {
   sheets: Record<string, ParsedSheet>
-  meta: { snapshotId?: string; schemaVersion?: string; markets?: Record<string, string[]> }
+  meta: {
+    snapshotId?: string
+    schemaVersion?: string
+    markets?: Record<string, string[]>
+    /** Per-row fingerprints from the _meta sheet. Key format: `SheetName|SKU`. */
+    fingerprints?: Record<string, string>
+  }
   parseWarnings: string[]
 }
 
@@ -169,8 +175,13 @@ export async function parseWorkbook(bytes: Uint8Array): Promise<ParsedWorkbook> 
           meta.markets[channel] = v
             ? v.split(',').map((s) => s.trim()).filter(Boolean)
             : []
+        } else if (k.indexOf('|') !== -1) {
+          // Fingerprint row: key format is `SheetName|SKU` (e.g. 'Products|P1', 'Amazon|P1').
+          // Collect into meta.fingerprints so the diff engine can detect staleness conflicts.
+          if (!meta.fingerprints) meta.fingerprints = {}
+          meta.fingerprints[k] = v
         }
-        // exportedAt and fingerprint rows are intentionally ignored here
+        // exportedAt and separator rows (e.g. '--- fingerprints ---') are intentionally skipped
       })
       continue
     }

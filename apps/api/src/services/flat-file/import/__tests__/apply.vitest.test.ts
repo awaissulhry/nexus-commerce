@@ -320,8 +320,8 @@ describe('applyChanges', () => {
     expect(created.followMasterPrice).toBe(false)
   })
 
-  // ── 8. Conflict and out-of-scope skipped ──────────────────────────────────
-  it('8 — conflict and out-of-scope changes are SKIPPED; nothing written', async () => {
+  // ── 8. Conflict policy: db-wins and out-of-scope both skip ──────────────────
+  it('8 — conflict(db-wins) and out-of-scope → both SKIPPED; nothing written', async () => {
     const prisma = makeMockPrisma()
     const diff: ImportDiff = {
       ...makeEmptyDiff(),
@@ -331,7 +331,10 @@ describe('applyChanges', () => {
       ],
     }
 
-    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT })
+    const result = await applyChanges(prisma, diff, {
+      scope: SCOPE_AMAZON_IT,
+      conflictPolicy: 'db-wins',
+    })
 
     expect(result.applied).toBe(0)
     expect(result.skipped).toBe(2)
@@ -339,9 +342,73 @@ describe('applyChanges', () => {
     expect(prisma._calls.channelListingUpdateMany).toHaveLength(0)
     expect(prisma._calls.channelListingCreate).toHaveLength(0)
     expect(prisma._calls.productUpdateMany).toHaveLength(0)
-    // Both rows reported
     expect(result.rows).toHaveLength(2)
     expect(result.rows.every((r) => r.status === 'SKIPPED')).toBe(true)
+    // db-wins detail is specific
+    const conflictRow = result.rows.find(r => r.detail === 'conflict: kept DB value')
+    expect(conflictRow).toBeDefined()
+  })
+
+  // ── 8a. Conflict with file-wins → APPLIED ─────────────────────────────────
+  it('8a — conflict with file-wins applies the file value (governed write-back)', async () => {
+    const prisma = makeMockPrisma({
+      channelListingRow: { followMasterPrice: true, priceOverride: null },
+      productRow: { sku: 'GALE-M', deletedAt: null },
+    })
+    const diff: ImportDiff = {
+      ...makeEmptyDiff(),
+      changes: [
+        makeChannelChange({
+          kind: 'conflict',
+          to: '199.9',
+          note: 'Row changed in DB since export',
+        }),
+      ],
+    }
+
+    const result = await applyChanges(prisma, diff, {
+      scope: SCOPE_AMAZON_IT,
+      conflictPolicy: 'file-wins',
+    })
+
+    expect(result.applied).toBe(1)
+    expect(result.skipped).toBe(0)
+    expect(prisma._calls.channelListingUpdateMany).toHaveLength(1)
+    const written = prisma._calls.channelListingUpdateMany[0].data
+    expect(written.priceOverride).toBe(199.9)
+    expect(written.followMasterPrice).toBe(false)
+  })
+
+  // ── 8b. Conflict file-wins on out-of-scope market → still not written ──────
+  it('8b — conflict(file-wins) on out-of-scope market DE → not written (defensive guard)', async () => {
+    const prisma = makeMockPrisma({
+      channelListingRow: { salePrice: 100.0 },
+      productRow: { sku: 'GALE-M', deletedAt: null },
+    })
+    const diff: ImportDiff = {
+      ...makeEmptyDiff(),
+      changes: [
+        makeChannelChange({
+          kind: 'conflict',
+          column: 'sale_price@DE',
+          base: 'sale_price',
+          market: 'DE',
+          to: '79.9',
+          note: 'Row changed in DB since export',
+        }),
+      ],
+    }
+
+    const result = await applyChanges(prisma, diff, {
+      scope: SCOPE_AMAZON_IT,   // only IT in scope
+      conflictPolicy: 'file-wins',
+    })
+
+    expect(result.skipped).toBe(1)
+    expect(result.applied).toBe(0)
+    expect(result.rows[0].status).toBe('SKIPPED')
+    expect(result.rows[0].detail).toMatch(/scope/i)
+    expect(prisma._calls.channelListingUpdateMany).toHaveLength(0)
   })
 
   // ── 9. Soft-delete guard ───────────────────────────────────────────────────

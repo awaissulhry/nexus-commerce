@@ -186,15 +186,31 @@ export async function applyChanges(
       const { sku, kind, base } = change
 
       // ── Kind gate ────────────────────────────────────────────────────────
-      if (kind !== 'add' && kind !== 'update' && kind !== 'delete') {
+      // out-of-scope: shown greyed in preview; never applied regardless of policy.
+      if (kind === 'out-of-scope') {
         skipped++
-        rows.push({
-          sku,
-          status: 'SKIPPED',
-          detail: kind === 'conflict'
-            ? 'conflict: not applied (resolve via T7)'
-            : 'out-of-scope',
-        })
+        rows.push({ sku, status: 'SKIPPED', detail: 'out-of-scope' })
+        continue
+      }
+
+      // conflict: apply or skip based on the caller's conflict resolution policy.
+      //   'file-wins' (default): apply the file value, identical to an 'update'.
+      //   'db-wins': retain the current DB value unchanged.
+      // Scope + readonly guards below still apply for 'file-wins'.
+      // NOTE: apply-time fingerprint RE-check (re-fetch DB fp vs snapshot) is a future enhancement.
+      if (kind === 'conflict') {
+        if (opts.conflictPolicy === 'db-wins') {
+          skipped++
+          rows.push({ sku, status: 'SKIPPED', detail: 'conflict: kept DB value' })
+          continue
+        }
+        // 'file-wins': fall through to the normal write path
+      }
+
+      // Any remaining non-actionable kind (no-change or future unknown) → skip defensively.
+      if (kind !== 'add' && kind !== 'update' && kind !== 'delete' && kind !== 'conflict') {
+        skipped++
+        rows.push({ sku, status: 'SKIPPED', detail: 'out-of-scope' })
         continue
       }
 

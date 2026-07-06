@@ -83,9 +83,9 @@ export async function previewImport(
   })
 
   // 6. Per-cell diff against current DB state (pure; no DB).
-  //    NOTE: conflict detection via opts.fingerprints is wired in Task 7;
-  //    pass empty opts here so no conflicts are raised yet.
-  const diff = computeDiff(wb, scoped, current, scope, {})
+  //    Fingerprints from the _meta sheet are passed so computeDiff can detect
+  //    conflicts (file value differs from DB AND DB row changed since export).
+  const diff = computeDiff(wb, scoped, current, scope, { fingerprints: wb.meta.fingerprints })
 
   return { validation, diff, scope, meta: wb.meta }
 }

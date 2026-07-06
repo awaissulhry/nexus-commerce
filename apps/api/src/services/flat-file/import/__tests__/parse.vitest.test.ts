@@ -126,6 +126,21 @@ describe('parseWorkbook — structural (FF1 round-trip)', () => {
 
     expect(Array.isArray(parsed.parseWarnings)).toBe(true)
   })
+
+  // ── FF2.7: fingerprint extraction ─────────────────────────────────────────
+  it('meta.fingerprints is populated with Products|P1 and Amazon|P1 keys (non-empty hashes)', async () => {
+    const bytes = await generateWorkbook(MODEL, DATA, META)
+    const parsed = await parseWorkbook(bytes)
+
+    expect(parsed.meta.fingerprints).toBeDefined()
+    const fps = parsed.meta.fingerprints!
+    // Products sheet fingerprint for P1 must be a non-empty hex string
+    expect(typeof fps['Products|P1']).toBe('string')
+    expect(fps['Products|P1'].length).toBeGreaterThan(0)
+    // Amazon sheet fingerprint for P1 must be a non-empty hex string
+    expect(typeof fps['Amazon|P1']).toBe('string')
+    expect(fps['Amazon|P1'].length).toBeGreaterThan(0)
+  })
 })
 
 // ── Suite 2: Cell-level mutation cases ────────────────────────────────────────

@@ -206,6 +206,74 @@ describe('previewImport — result shape', () => {
   })
 })
 
+// ── Suite 4: Conflict detection (FF2.7) ──────────────────────────────────────
+
+describe('previewImport — conflict detection (FF2.7)', () => {
+  it('DB quantity changed since export → diff contains kind:conflict for quantity@IT', async () => {
+    // Generate workbook from state A (quantityOverride = 5 for P1)
+    const bytes = await generateWorkbook(MODEL, DATA, {
+      snapshotId: 'conflict-snap-001',
+      exportedAt: '2026-07-06',
+    })
+
+    // Mock prisma returning state B: DB has quantity changed to 10 after export
+    const mockPrismaStateB = {
+      product: {
+        findMany: async () => [
+          {
+            sku: 'P1',
+            parent: null,
+            ean: '08054323310123',
+            name: 'P1 Giacca Moto',
+            brand: 'Xavia',
+            status: 'ACTIVE',
+            fulfillmentMethod: 'FBA',
+          },
+        ],
+      },
+      channelListing: {
+        findMany: async () => [
+          {
+            marketplace: 'IT',
+            channel: 'AMAZON',
+            product: { sku: 'P1' },
+            followMasterPrice: true,
+            masterPrice: 189.9,
+            priceOverride: null,
+            followMasterTitle: true,
+            masterTitle: 'P1 Giacca Moto',
+            titleOverride: null,
+            followMasterDescription: true,
+            masterDescription: 'Giacca moto per piloti.',
+            descriptionOverride: null,
+            followMasterQuantity: false,
+            masterQuantity: 0,
+            quantityOverride: 10, // CHANGED from 5 → 10 in DB after export
+            followMasterBulletPoints: true,
+            masterBulletPoints: ['CE Level 2'],
+            bulletPointsOverride: null,
+            listingStatus: 'ACTIVE',
+            syncStatus: 'IN_SYNC',
+            isPublished: true,
+            offerActive: true,
+            fulfillmentMethod: 'FBA',
+          },
+        ],
+      },
+    }
+
+    const result = await previewImport(mockPrismaStateB, bytes, DEFAULT_SCOPE)
+
+    // quantity@IT in workbook = 5 (state A); quantity@IT in DB = 10 (state B)
+    // Snapshot fingerprint (state A) ≠ current DB fingerprint (state B) → conflict
+    expect(result.diff.stats.conflicts).toBeGreaterThan(0)
+    const conflictChange = result.diff.changes.find(c => c.kind === 'conflict')
+    expect(conflictChange).toBeDefined()
+    expect(conflictChange!.sku).toBe('P1')
+    expect(conflictChange!.note).toBe('Row changed in DB since export')
+  })
+})
+
 // ── Suite 3: Read-only guard ──────────────────────────────────────────────────
 
 describe('previewImport — read-only guard', () => {
