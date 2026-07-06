@@ -47,6 +47,7 @@ import { TtlCache } from '../utils/ttl-cache.js'
 import { ServerTiming } from '../utils/server-timing.js'
 import { extractBrowseNodes } from '../services/amazon/browse-nodes.js'
 import { amazonMarketplaceId } from '../services/categories/marketplace-ids.js'
+import { removeAmazonListing } from '../services/amazon/amazon-flat-file-remove.service.js'
 
 const amazon = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazon)
@@ -1394,4 +1395,25 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: err?.message ?? 'Audit write failed' })
     }
   })
+
+  // ── POST /api/amazon/flat-file/remove ────────────────────────────────
+  // Market-scoped listing removal. Deletes the AMAZON ChannelListing(s) for
+  // each target product+marketplace pair without touching the Product record
+  // or its stock (inventory invariant I2/I3).
+  // Body: { targets: Array<{ productId: string; marketplace: string }> }
+  fastify.post<{ Body: { targets?: Array<{ productId: string; marketplace: string }> } }>(
+    '/amazon/flat-file/remove',
+    async (request, reply) => {
+      const targets = request.body?.targets ?? []
+      const results = []
+      for (const t of targets) {
+        if (!t?.productId || !t?.marketplace) {
+          results.push({ productId: t?.productId ?? '', marketplace: t?.marketplace ?? '', channelListingsRemoved: 0, delisted: false, error: 'productId and marketplace are required' })
+          continue
+        }
+        results.push(await removeAmazonListing(prisma, t))
+      }
+      return reply.send({ results })
+    },
+  )
 }
