@@ -53,40 +53,36 @@ export function useCatalogWorkbookExport() {
       if (job?.id && job?.status === 'COMPLETED') {
         const downloadUrl = `${getBackendUrl()}/api/export-jobs/${job.id}/download`
 
-        // Probe the download endpoint before firing the browser redirect so we
-        // can surface a clear message when the artifact isn't available (large
-        // exports in environments without object storage).
-        try {
-          const headRes = await fetch(downloadUrl, { method: 'HEAD' })
-          if (headRes.status === 404 || headRes.status === 503) {
-            toast({
-              title: 'Workbook exported but not downloadable',
-              description:
-                'Workbook exported but too large to download from this environment — set STORAGE_PROVIDER=S3/R2, or export a smaller SKU subset.',
-              tone: 'warning',
-              durationMs: 10000,
-            })
-            return
-          }
-          // Check for JSON error body (some adapters return 200 + JSON error)
-          const ct = headRes.headers.get('content-type') ?? ''
-          if (!headRes.ok && ct.includes('application/json')) {
-            toast({
-              title: 'Workbook exported but not downloadable',
-              description:
-                'Workbook exported but too large to download from this environment — set STORAGE_PROVIDER=S3/R2, or export a smaller SKU subset.',
-              tone: 'warning',
-              durationMs: 10000,
-            })
-            return
-          }
-        } catch {
-          // HEAD probe failed (CORS, network). Fall through and let the browser
-          // attempt the download — this mirrors the ExportsClient fallback.
+        // Download via a CREDENTIALED fetch. The install-fetch shim adds
+        // credentials:'include' to API-origin fetches, so the partitioned
+        // session cookie rides. A raw `window.location` navigation would hit the
+        // cross-site API anonymously (the cookie doesn't cross the partition on a
+        // top-level navigation) → 401, and the browser would just display the JSON
+        // error. So fetch the bytes and save the blob client-side instead.
+        const dlRes = await fetch(downloadUrl)
+        const dlCt = dlRes.headers.get('content-type') ?? ''
+        if (!dlRes.ok || dlCt.includes('application/json')) {
+          // Artifact not available — typically a >1 MB export in an environment
+          // without object storage (LOCAL/ephemeral). Surface it, don't crash.
+          toast({
+            title: 'Workbook exported but not downloadable',
+            description:
+              'Workbook exported but too large to download from this environment — set STORAGE_PROVIDER=S3/R2, or export a smaller SKU subset.',
+            tone: 'warning',
+            durationMs: 10000,
+          })
+          return
         }
-
-        toast.success('Catalog workbook downloading…')
-        window.location.href = downloadUrl
+        const blob = await dlRes.blob()
+        const objectUrl = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = objectUrl
+        a.download = `catalog-workbook-${job.id}.xlsx`
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        URL.revokeObjectURL(objectUrl)
+        toast.success('Catalog workbook downloaded')
       } else {
         // Job was created but isn't COMPLETED yet (queued / processing).
         toast({
