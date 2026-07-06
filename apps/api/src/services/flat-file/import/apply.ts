@@ -18,12 +18,11 @@
  *   - Before every write, a read-before-write captures the columns being
  *     overwritten into an InverseCell, enabling a future rollback pass.
  *
- * Transaction semantics:
+ * Transaction semantics (I2a):
  *   - Wraps all writes in prisma.$transaction if available.
- *   - Per-row errors are caught and recorded as FAILED; the batch continues.
- *   - Within a batch-level transaction, a FAILED row causes $transaction to
- *     throw and rolls back ALL prior writes in the batch. When prisma does
- *     not expose $transaction (mock / test), writes are independent.
+ *   - Per-row errors are caught and recorded as FAILED; other records still
+ *     apply (per-record independence). Each row's outcome is independent.
+ *   - When prisma.$transaction is not available (mock/test), writes run directly.
  */
 
 import type { ImportDiff, CellChange } from './diff.js'
@@ -40,7 +39,14 @@ export interface InverseCell {
   sku: string
   channel?: Channel
   market?: string
-  /** The columns' PREVIOUS values (to restore on rollback). */
+  /**
+   * The columns' PREVIOUS values (to restore on rollback).
+   *
+   * Special shape for C1 children restore (master-delete cascade):
+   *   { __restoreChildrenOf: parentId, childIds: string[], deletedAt: null }
+   * The T9 rollback pass recognises __restoreChildrenOf and issues
+   *   product.updateMany({ where: { id: { in: childIds } }, data: { deletedAt: null } })
+   */
   data: Record<string, unknown>
 }
 
@@ -63,6 +69,9 @@ export interface ApplyResult {
 /** Infix that identifies a follow-master control column. */
 const FM_INFIX = '_follows_master@'
 
+/** Field classes that must never be written by apply — mirrors diff.ts READONLY_CLS. */
+const READONLY_CLS = new Set<string>(['READONLY_SYNCED', 'DERIVED', 'SYSTEM'])
+
 // ── Registry lookups (built once at module load) ───────────────────────────────
 
 const MASTER_BY_ID = new Map<string, FieldDefinition>()
@@ -77,21 +86,44 @@ for (const f of CHANNEL_MARKET_FIELDS) {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
+/** Thrown by coerce when a numeric field value is non-parseable (e.g. 'N/A'). */
+class CoerceSkipError extends Error {
+  constructor(reason: string) {
+    super(reason)
+    this.name = 'CoerceSkipError'
+  }
+}
+
 /**
  * Coerce an import cell value to the appropriate Prisma-ready type.
  *
  * - Empty string / null / undefined → null  (the __CLEAR__ / delete sentinel)
- * - decimal / number field          → Number(value)
- * - boolean field                   → value === 'true'
- * - array field                     → split by arrayDelimiter (lossy; known trade-off)
+ * - decimal / number field          → Number(value.trim()); throws CoerceSkipError
+ *                                     if !Number.isFinite (I4: blocks NaN writes).
+ *                                     Whitespace-only → null, never 0 (I4 blank guard).
+ * - boolean field                   → case-insensitive match on true/yes/1/y/t (M1)
+ * - array field                     → split by arrayDelimiter
+ *                                     NOTE (I3): the '|' delimiter is lossy on write —
+ *                                     a value containing the delimiter will be split on
+ *                                     round-trip. Revisit with a non-colliding delimiter.
  * - otherwise                       → string
  */
 function coerce(value: unknown, field: FieldDefinition | undefined): unknown {
   if (value === '' || value === null || value === undefined) return null
   const s = String(value)
   if (!field) return s
-  if (field.kind === 'decimal' || field.kind === 'number') return Number(s)
-  if (field.kind === 'boolean') return s === 'true'
+  if (field.kind === 'decimal' || field.kind === 'number') {
+    // I4: whitespace-only → null (avoid Number(' ') === 0 writing a spurious zero)
+    if (s.trim() === '') return null
+    const n = Number(s.trim())
+    // I4: non-finite (NaN / Infinity / -Infinity) → skip, never write
+    if (!Number.isFinite(n)) throw new CoerceSkipError('skipped: non-numeric value')
+    return n
+  }
+  // M1: boolean coerce is case-insensitive and accepts common truthy spellings
+  if (field.kind === 'boolean') {
+    return ['true', 'yes', '1', 'y', 't'].includes(s.trim().toLowerCase())
+  }
   if (field.kind === 'array') return s.split(field.arrayDelimiter ?? ' | ')
   return s
 }
@@ -193,6 +225,17 @@ export async function applyChanges(
             continue
           }
 
+          // I5: defensive readonly guard — reject READONLY_SYNCED/DERIVED/SYSTEM
+          if (READONLY_CLS.has(field.cls)) {
+            skipped++
+            rows.push({
+              sku,
+              status: 'SKIPPED',
+              detail: `skipped (defensive): field '${base}' is ${field.cls} (readonly)`,
+            })
+            continue
+          }
+
           // Read-before-write: for inverse diff and soft-delete guard.
           const before = await tx.product.findFirst({ where: { sku } })
 
@@ -220,7 +263,8 @@ export async function applyChanges(
             })
           }
 
-          await tx.product.updateMany({ where: { sku }, data })
+          // M4: deletedAt:null guard — do not update soft-deleted products
+          await tx.product.updateMany({ where: { sku, deletedAt: null }, data })
           applied++
           rows.push({ sku, status: 'SUCCESS' })
         } else {
@@ -229,6 +273,17 @@ export async function applyChanges(
           if (!channel || !market) {
             skipped++
             rows.push({ sku, status: 'SKIPPED', detail: 'missing channel or market on channel change' })
+            continue
+          }
+
+          // I5: defensive out-of-scope market guard — trust opts.scope over diff classification
+          if (opts.scope.markets !== 'ALL' && !opts.scope.markets.includes(market)) {
+            skipped++
+            rows.push({
+              sku,
+              status: 'SKIPPED',
+              detail: `skipped (defensive): market '${market}' is out of scope`,
+            })
             continue
           }
 
@@ -267,6 +322,16 @@ export async function applyChanges(
               })
               continue
             }
+            // I5: defensive readonly guard for follow-flag fields
+            if (READONLY_CLS.has(field.cls)) {
+              skipped++
+              rows.push({
+                sku,
+                status: 'SKIPPED',
+                detail: `skipped (defensive): field '${base}' is ${field.cls} (readonly)`,
+              })
+              continue
+            }
             const { followColumn, overrideColumn } = field.followMaster
             if (change.to === 'true') {
               // Re-attach to master: set flag true, null the override
@@ -281,6 +346,16 @@ export async function applyChanges(
             if (!field) {
               skipped++
               rows.push({ sku, status: 'SKIPPED', detail: 'unknown channel field: ' + base })
+              continue
+            }
+            // I5: defensive readonly guard for value fields
+            if (READONLY_CLS.has(field.cls)) {
+              skipped++
+              rows.push({
+                sku,
+                status: 'SKIPPED',
+                detail: `skipped (defensive): field '${base}' is ${field.cls} (readonly)`,
+              })
               continue
             }
             if (field.followMaster) {
@@ -310,11 +385,20 @@ export async function applyChanges(
 
           if (!before) {
             // New ChannelListing: CREATE and connect to the Product by SKU.
+            // I1: channelMarket and region are NON-NULL columns — always include them.
             await tx.channelListing.create({
-              data: { product: { connect: { sku } }, channel, marketplace: market, ...data },
+              data: {
+                product: { connect: { sku } },
+                channel,
+                marketplace: market,
+                ...data,
+                channelMarket: `${channel}_${market}`,
+                region: market,
+              },
             })
           } else {
             // Existing ChannelListing: UPDATE via updateMany (no upsert to keep mock simple).
+            // Note (M4): ChannelListing has no deletedAt column — guard not applicable here.
             await tx.channelListing.updateMany({ where, data })
           }
 
@@ -322,10 +406,13 @@ export async function applyChanges(
           rows.push({ sku, status: 'SUCCESS' })
         }
       } catch (err) {
+        // I4: non-numeric coerce is a skip (operator data quality), not an apply failure.
+        if (err instanceof CoerceSkipError) {
+          skipped++
+          rows.push({ sku, status: 'SKIPPED', detail: err.message })
+          continue
+        }
         // Per-row errors don't abort the batch; they are recorded as FAILED.
-        // Note: inside a $transaction, any FAILED row that propagates (i.e. re-throws)
-        // would roll back all prior writes in the batch. We catch here to allow
-        // partial success when not using a transaction.
         failed++
         rows.push({
           sku,
@@ -358,10 +445,20 @@ export async function applyChanges(
  *     Sets { listingStatus:'ENDED', isPublished:false, offerActive:false }.
  *     Does NOT touch the Product row or any other channel.
  *
+ *     markets behaviour (C2):
+ *       string[]  → end each market individually (per-market inverse capture + write).
+ *       'ALL'     → findMany the distinct affected marketplaces, then loop per-market
+ *                   (same as string[] path — NEVER capture-one/write-many).
+ *       undefined → SKIP with detail 'delete skipped: no market scope' (footgun M3).
+ *
  *   Master delete   (no channel, sheet='Products'):
  *     Soft-deletes the product via deletedAt=now().
  *     Cascades the same soft-delete to all immediate children
  *     (where parentId = product.id AND deletedAt IS NULL).
+ *     I2b: cascade runs BEFORE the parent write so a cascade failure keeps
+ *     the parent alive (atomic within the record).
+ *     C1: children are found before the cascade and their ids are stored in
+ *     an InverseCell so T9 rollback can null their deletedAt back.
  *
  * Typed-confirm gate (required):
  *   opts.deleteConfirmation MUST equal deleteConfirmationPhrase(diff) before
@@ -370,8 +467,14 @@ export async function applyChanges(
  * Inverse diff:
  *   Captures the previous state of the columns being overwritten, enabling
  *   a future rollback pass.
+ *
+ * M2 note: deleteConfirmationPhrase counts ALL entries in diff.deletes
+ *   (both master-delete rows AND channel-end rows) in its "N PRODUCTS" total.
+ *   The phrase is intentionally a typed-confirm gate, not an exact semantic count.
  */
 export function deleteConfirmationPhrase(diff: ImportDiff): string {
+  // M2: diff.deletes includes both master-delete rows and channel-end rows;
+  // the phrase counts all of them even though channel-ends are not product deletes.
   return 'DELETE ' + diff.deletes.length + ' PRODUCTS'
 }
 
@@ -408,23 +511,41 @@ export async function applyDeletes(
 
           const markets = record.markets
 
-          if (markets === 'ALL' || markets === undefined) {
-            // No marketplace filter — end all markets for this channel+SKU
-            const before = await tx.channelListing.findFirst({
+          if (markets === undefined) {
+            // C2: no market scope defined — skip rather than end all markets (footgun M3)
+            skipped++
+            rows.push({ sku, status: 'SKIPPED', detail: 'delete skipped: no market scope' })
+            continue
+          } else if (markets === 'ALL') {
+            // C2: find all distinct markets via findMany, then loop per-market.
+            // NEVER capture-one/write-many: every market gets its own inverse capture + write.
+            const allListings = await tx.channelListing.findMany({
               where: { product: { sku }, channel: record.channel },
+              select: { marketplace: true },
             })
-            if (before) {
-              inverseDiff.push({
-                model: 'ChannelListing',
-                sku,
-                channel: record.channel,
-                data: captureInverse(endData, before),
+            const distinctMarkets = [
+              ...new Set(allListings.map((l: { marketplace: string }) => l.marketplace)),
+            ] as string[]
+
+            for (let i = 0; i < distinctMarkets.length; i++) {
+              const mkt = distinctMarkets[i]
+              const before = await tx.channelListing.findFirst({
+                where: { product: { sku }, channel: record.channel, marketplace: mkt },
+              })
+              if (before) {
+                inverseDiff.push({
+                  model: 'ChannelListing',
+                  sku,
+                  channel: record.channel,
+                  market: mkt,
+                  data: captureInverse(endData, before),
+                })
+              }
+              await tx.channelListing.updateMany({
+                where: { product: { sku }, channel: record.channel, marketplace: mkt },
+                data: endData,
               })
             }
-            await tx.channelListing.updateMany({
-              where: { product: { sku }, channel: record.channel },
-              data: endData,
-            })
           } else {
             // string[] — end each scoped market individually
             for (let i = 0; i < markets.length; i++) {
@@ -465,16 +586,36 @@ export async function applyDeletes(
             })
           }
 
-          // Primary soft-delete
-          await tx.product.updateMany({ where: { sku }, data: deleteData })
-
-          // Cascade to children: soft-delete only those not yet deleted
+          // C1 + I2b: cascade children BEFORE writing the parent.
+          // Order matters for atomicity: if the cascade throws the parent stays alive.
+          // Also capture children's inverse here so T9 rollback can restore them.
           if (before && before.id !== undefined && before.id !== null) {
+            // C1: find non-deleted children before the cascade so their ids are known.
+            const affectedChildren = await tx.product.findMany({
+              where: { parentId: before.id, deletedAt: null },
+              select: { id: true },
+            })
+            const childIds = affectedChildren.map((c: { id: string }) => c.id) as string[]
+
+            if (childIds.length > 0) {
+              // C1: children inverse — shape carries __restoreChildrenOf so T9 rollback
+              // issues: product.updateMany({ where:{ id:{ in: childIds } }, data:{ deletedAt:null } })
+              inverseDiff.push({
+                model: 'Product',
+                sku,
+                data: { __restoreChildrenOf: before.id, childIds, deletedAt: null },
+              })
+            }
+
+            // I2b: cascade first (atomicity — if this throws, parent write below is skipped)
             await tx.product.updateMany({
               where: { parentId: before.id, deletedAt: null },
               data: { deletedAt: now },
             })
           }
+
+          // Primary soft-delete — runs AFTER cascade so a cascade failure keeps parent alive
+          await tx.product.updateMany({ where: { sku }, data: deleteData })
 
           applied++
           rows.push({ sku, status: 'SUCCESS' })

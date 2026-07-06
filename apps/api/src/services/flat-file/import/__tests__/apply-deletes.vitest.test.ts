@@ -13,6 +13,9 @@
  *     3  — master delete soft-deletes product + cascades to children
  *     4a — inverse diff captures previous channel listing state
  *     4b — inverse diff captures previous product deletedAt
+ *     C1 — master delete with 2 children → inverseDiff captures children
+ *     C2a — channel delete markets=ALL: per-market inverse+end (not capture-one/write-many)
+ *     C2b — channel delete markets=undefined → SKIPPED (footgun guard)
  */
 
 import { describe, it, expect } from 'vitest'
@@ -24,8 +27,12 @@ import type { ImportDiff } from '../diff.js'
 interface MockDeletesPrismaOpts {
   /** Returned by channelListing.findFirst (for inverse capture before end). */
   channelListingRow?: Record<string, unknown> | null
+  /** Returned by channelListing.findMany (for ALL-market discovery). */
+  channelListingRows?: Record<string, unknown>[]
   /** Returned by product.findFirst (for soft-delete + cascade). */
   productRow?: Record<string, unknown> | null
+  /** Returned by product.findMany (for C1 children capture). */
+  productChildRows?: { id: string }[]
 }
 
 function makeMockPrisma(opts: MockDeletesPrismaOpts = {}) {
@@ -38,6 +45,8 @@ function makeMockPrisma(opts: MockDeletesPrismaOpts = {}) {
     channelListing: {
       findFirst: async (_args: any) =>
         opts.channelListingRow !== undefined ? opts.channelListingRow : null,
+      findMany: async (_args: any) =>
+        opts.channelListingRows !== undefined ? opts.channelListingRows : [],
       updateMany: async (args: { where: any; data: any }) => {
         calls.channelListingUpdateMany.push(args)
         return { count: 1 }
@@ -46,6 +55,8 @@ function makeMockPrisma(opts: MockDeletesPrismaOpts = {}) {
     product: {
       findFirst: async (_args: any) =>
         opts.productRow !== undefined ? opts.productRow : null,
+      findMany: async (_args: any) =>
+        opts.productChildRows !== undefined ? opts.productChildRows : [],
       updateMany: async (args: { where: any; data: any }) => {
         calls.productUpdateMany.push(args)
         return { count: 1 }
@@ -193,8 +204,9 @@ describe('applyDeletes', () => {
   })
 
   // ── 3. Master delete + cascade ────────────────────────────────────────────
+  // I2b: cascade runs BEFORE primary so a cascade failure keeps parent alive.
 
-  it('3 — master delete soft-deletes product AND cascades to children; no channelListing write', async () => {
+  it('3 — master delete cascades first then soft-deletes parent; no channelListing write', async () => {
     const prisma = makeMockPrisma({
       productRow: { id: 'p1', sku: 'P', deletedAt: null },
     })
@@ -206,18 +218,18 @@ describe('applyDeletes', () => {
 
     const result = await applyDeletes(prisma, diff, { deleteConfirmation: phrase })
 
-    // Exactly 2 product.updateMany: primary + cascade
+    // Exactly 2 product.updateMany: cascade (first) + primary (second) — I2b order
     expect(prisma._calls.productUpdateMany).toHaveLength(2)
 
-    const [primary, cascade] = prisma._calls.productUpdateMany
+    const [cascade, primary] = prisma._calls.productUpdateMany
 
-    // Primary soft-delete: keyed by SKU
-    expect(primary.where).toEqual({ sku: 'P' })
-    expect(primary.data.deletedAt).toBeInstanceOf(Date)
-
-    // Cascade: keyed by parentId from findFirst result
+    // Cascade runs first: keyed by parentId from findFirst result
     expect(cascade.where).toEqual({ parentId: 'p1', deletedAt: null })
     expect(cascade.data.deletedAt).toBeInstanceOf(Date)
+
+    // Primary soft-delete runs second: keyed by SKU
+    expect(primary.where).toEqual({ sku: 'P' })
+    expect(primary.data.deletedAt).toBeInstanceOf(Date)
 
     // NO channelListing writes
     expect(prisma._calls.channelListingUpdateMany).toHaveLength(0)
@@ -265,12 +277,101 @@ describe('applyDeletes', () => {
 
     const result = await applyDeletes(prisma, diff, { deleteConfirmation: phrase })
 
-    // At least one inverse cell for the Product model
+    // At least one inverse cell for the Product model with deletedAt from before
     const productInverse = result.inverseDiff.find(
-      (inv) => inv.model === 'Product' && inv.sku === 'P',
+      (inv) => inv.model === 'Product' && inv.sku === 'P' && 'deletedAt' in inv.data && !('__restoreChildrenOf' in inv.data),
     )
     expect(productInverse).toBeDefined()
     // Previous deletedAt was null
     expect(productInverse!.data.deletedAt).toBeNull()
+  })
+
+  // ── C1. Children inverse (cascade rollback) ───────────────────────────────
+
+  it('C1 — master delete with 2 children → inverseDiff captures children ids for rollback', async () => {
+    const prisma = makeMockPrisma({
+      productRow: { id: 'p1', sku: 'PARENT', deletedAt: null },
+      productChildRows: [{ id: 'c1' }, { id: 'c2' }],
+    })
+    const diff: ImportDiff = {
+      ...makeEmptyDiff(),
+      deletes: [{ sku: 'PARENT', sheet: 'Products' }],
+    }
+    const phrase = deleteConfirmationPhrase(diff)
+
+    const result = await applyDeletes(prisma, diff, { deleteConfirmation: phrase })
+
+    expect(result.applied).toBe(1)
+
+    // Children inverse is present and contains both child ids
+    const childrenInverse = result.inverseDiff.find(
+      (inv) => inv.model === 'Product' && inv.sku === 'PARENT' && '__restoreChildrenOf' in inv.data,
+    )
+    expect(childrenInverse).toBeDefined()
+    expect(childrenInverse!.data.__restoreChildrenOf).toBe('p1')
+    expect(childrenInverse!.data.childIds).toEqual(['c1', 'c2'])
+    expect(childrenInverse!.data.deletedAt).toBeNull()
+  })
+
+  // ── C2. ALL-market and undefined-market channel deletes ───────────────────
+
+  it('C2a — channel delete markets=ALL: findMany discovers markets; per-market inverse+end', async () => {
+    const prisma = makeMockPrisma({
+      channelListingRow: { listingStatus: 'ACTIVE', isPublished: true, offerActive: true },
+      channelListingRows: [
+        { marketplace: 'IT', listingStatus: 'ACTIVE', isPublished: true, offerActive: true },
+        { marketplace: 'DE', listingStatus: 'ACTIVE', isPublished: true, offerActive: true },
+      ],
+    })
+    const diff: ImportDiff = {
+      ...makeEmptyDiff(),
+      deletes: [{ sku: 'X', sheet: 'Amazon', channel: 'AMAZON', markets: 'ALL' }],
+    }
+    const phrase = deleteConfirmationPhrase(diff)
+
+    const result = await applyDeletes(prisma, diff, { deleteConfirmation: phrase })
+
+    expect(result.applied).toBe(1)
+    expect(result.skipped).toBe(0)
+
+    // 2 per-market inverseDiff entries (one per discovered market)
+    const channelInverses = result.inverseDiff.filter(
+      (inv) => inv.model === 'ChannelListing' && inv.sku === 'X',
+    )
+    expect(channelInverses).toHaveLength(2)
+    const capturedMarkets = channelInverses.map((inv) => inv.market).sort()
+    expect(capturedMarkets).toEqual(['DE', 'IT'])
+
+    // 2 per-market updateMany calls
+    expect(prisma._calls.channelListingUpdateMany).toHaveLength(2)
+    const writtenMarkets = prisma._calls.channelListingUpdateMany
+      .map((c: any) => c.where.marketplace)
+      .sort()
+    expect(writtenMarkets).toEqual(['DE', 'IT'])
+    // All calls end the listing
+    for (const call of prisma._calls.channelListingUpdateMany) {
+      expect(call.data.listingStatus).toBe('ENDED')
+    }
+  })
+
+  it('C2b — channel delete markets=undefined → SKIPPED; no writes', async () => {
+    const prisma = makeMockPrisma({
+      channelListingRow: { listingStatus: 'ACTIVE', isPublished: true, offerActive: true },
+    })
+    const diff: ImportDiff = {
+      ...makeEmptyDiff(),
+      // markets field absent → undefined
+      deletes: [{ sku: 'X', sheet: 'Amazon', channel: 'AMAZON' }],
+    }
+    const phrase = deleteConfirmationPhrase(diff)
+
+    const result = await applyDeletes(prisma, diff, { deleteConfirmation: phrase })
+
+    expect(result.skipped).toBe(1)
+    expect(result.applied).toBe(0)
+    expect(result.rows[0].status).toBe('SKIPPED')
+    expect(result.rows[0].detail).toBe('delete skipped: no market scope')
+    expect(prisma._calls.channelListingUpdateMany).toHaveLength(0)
+    expect(prisma._calls.productUpdateMany).toHaveLength(0)
   })
 })

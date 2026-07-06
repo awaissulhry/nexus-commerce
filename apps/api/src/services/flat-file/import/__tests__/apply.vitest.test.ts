@@ -5,15 +5,21 @@
  * The mock records every write call into arrays so tests can assert on them.
  *
  * Suites:
- *   1. Governed write-back (price update → priceOverride + followMasterPrice=false)
- *   2. Follow-flag true (price_follows_master@IT=true → followMasterPrice=true, priceOverride=null)
- *   3. Non-governed field (sale_price → salePrice column)
- *   4. Master field (brand → product.updateMany)
- *   5. SKU guard (base=sku → SKIPPED, no write)
- *   5b. parent_sku guard (base=parent_sku → SKIPPED, reparent detail)
- *   6. Inverse diff (captures previous values for rollback)
- *   7. New listing (findFirst=null → channelListing.create with product.connect)
- *   8. Conflict and out-of-scope → SKIPPED, not written
+ *   1.   Governed write-back (price update → priceOverride + followMasterPrice=false)
+ *   2.   Follow-flag true (price_follows_master@IT=true → followMasterPrice=true, priceOverride=null)
+ *   3.   Non-governed field (sale_price → salePrice column)
+ *   4.   Master field (brand → product.updateMany with deletedAt:null guard)
+ *   5.   SKU guard (base=sku → SKIPPED, no write)
+ *   5b.  parent_sku guard (base=parent_sku → SKIPPED, reparent detail)
+ *   6.   Inverse diff (captures previous values for rollback)
+ *   7.   New listing (findFirst=null → channelListing.create with product.connect)
+ *   8.   Conflict and out-of-scope → SKIPPED, not written
+ *   9.   Soft-delete guard (add for soft-deleted product → SKIPPED)
+ *   10.  delete kind (to="" writes null for the field)
+ *   I1.  New listing create includes required channelMarket + region columns
+ *   I4.  Decimal field with non-numeric value → SKIPPED, no write
+ *   I5a. Readonly field (READONLY_SYNCED/DERIVED/SYSTEM) slipped into diff → not written
+ *   I5b. Out-of-scope market slipped into diff → not written (defensive guard)
  */
 
 import { describe, it, expect } from 'vitest'
@@ -191,7 +197,8 @@ describe('applyChanges', () => {
   })
 
   // ── 4. Master field ────────────────────────────────────────────────────────
-  it('4 — master (Products sheet) change calls product.updateMany', async () => {
+  // M4: product.updateMany where now includes deletedAt:null to skip soft-deleted rows.
+  it('4 — master (Products sheet) change calls product.updateMany with deletedAt:null guard', async () => {
     const prisma = makeMockPrisma({
       productRow: { brand: 'Xavia', deletedAt: null },
     })
@@ -208,7 +215,8 @@ describe('applyChanges', () => {
     expect(prisma._calls.productUpdateMany).toHaveLength(1)
     expect(prisma._calls.channelListingUpdateMany).toHaveLength(0)
     const call = prisma._calls.productUpdateMany[0]
-    expect(call.where).toEqual({ sku: 'GALE-M' })
+    // M4: where includes deletedAt:null so soft-deleted products are not updated
+    expect(call.where).toEqual({ sku: 'GALE-M', deletedAt: null })
     expect(call.data).toEqual({ brand: 'Xavia New' })
   })
 
@@ -386,5 +394,139 @@ describe('applyChanges', () => {
     expect(result.applied).toBe(1)
     const written = prisma._calls.channelListingUpdateMany[0].data
     expect(written.salePrice).toBeNull()
+  })
+
+  // ── I1. New listing requires channelMarket + region (non-null columns) ─────
+
+  it('I1 — new listing create includes channelMarket and region required columns', async () => {
+    const createdArgs: any[] = []
+
+    // Mock that throws if the required non-null columns are absent
+    const prisma = {
+      channelListing: {
+        findFirst: async (_args: any) => null,
+        updateMany: async (_args: any) => ({ count: 0 }),
+        create: async (args: { data: any }) => {
+          if (!args.data.channelMarket) throw new Error('channelMarket is required (non-null)')
+          if (!args.data.region) throw new Error('region is required (non-null)')
+          createdArgs.push(args)
+          return {}
+        },
+      },
+      product: {
+        findFirst: async (_args: any) => ({ sku: 'NEW', deletedAt: null }),
+        updateMany: async (_args: any) => ({ count: 0 }),
+      },
+    }
+
+    const diff: ImportDiff = {
+      ...makeEmptyDiff(),
+      changes: [
+        makeChannelChange({
+          sku: 'NEW',
+          column: 'price@IT',
+          base: 'price',
+          to: '99.9',
+          kind: 'add',
+        }),
+      ],
+    }
+
+    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT })
+
+    // Must succeed (not fall into failed)
+    expect(result.applied).toBe(1)
+    expect(result.failed).toBe(0)
+    // The create was called exactly once with the required columns present
+    expect(createdArgs).toHaveLength(1)
+    expect(createdArgs[0].data.channelMarket).toBe('AMAZON_IT')
+    expect(createdArgs[0].data.region).toBe('IT')
+  })
+
+  // ── I4. NaN/blank guard in coerce ─────────────────────────────────────────
+
+  it('I4 — decimal field with non-numeric value (N/A) is SKIPPED; no write', async () => {
+    const prisma = makeMockPrisma({
+      channelListingRow: { salePrice: 100.0 },
+      productRow: { sku: 'GALE-M', deletedAt: null },
+    })
+    const diff: ImportDiff = {
+      ...makeEmptyDiff(),
+      changes: [
+        makeChannelChange({
+          column: 'sale_price@IT',
+          base: 'sale_price',
+          to: 'N/A',
+          kind: 'update',
+        }),
+      ],
+    }
+
+    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT })
+
+    expect(result.skipped).toBe(1)
+    expect(result.applied).toBe(0)
+    expect(result.rows[0].status).toBe('SKIPPED')
+    expect(result.rows[0].detail).toContain('non-numeric')
+    expect(prisma._calls.channelListingUpdateMany).toHaveLength(0)
+  })
+
+  // ── I5a. Readonly field defensive guard ───────────────────────────────────
+
+  it('I5a — readonly master field (fnsku, READONLY_SYNCED) slipped into diff is not written', async () => {
+    const prisma = makeMockPrisma({
+      productRow: { fnsku: 'X00ABC123', deletedAt: null },
+    })
+    const diff: ImportDiff = {
+      ...makeEmptyDiff(),
+      // fnsku is READONLY_SYNCED in the master field registry
+      masterChanges: [
+        makeMasterChange({
+          column: 'fnsku',
+          base: 'fnsku',
+          to: 'HACKED',
+          kind: 'update',
+        }),
+      ],
+    }
+
+    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT })
+
+    expect(result.skipped).toBe(1)
+    expect(result.applied).toBe(0)
+    expect(result.rows[0].status).toBe('SKIPPED')
+    expect(result.rows[0].detail).toMatch(/readonly|READONLY/i)
+    expect(prisma._calls.productUpdateMany).toHaveLength(0)
+  })
+
+  // ── I5b. Out-of-scope market defensive guard ──────────────────────────────
+
+  it('I5b — change for market DE slipped into diff when scope is IT-only is not written', async () => {
+    const prisma = makeMockPrisma({
+      channelListingRow: { salePrice: 100.0 },
+      productRow: { sku: 'GALE-M', deletedAt: null },
+    })
+    const diff: ImportDiff = {
+      ...makeEmptyDiff(),
+      changes: [
+        // market=DE but scope only covers IT
+        makeChannelChange({
+          column: 'sale_price@DE',
+          base: 'sale_price',
+          market: 'DE',
+          to: '79.9',
+          kind: 'update',
+        }),
+      ],
+    }
+
+    // scope only covers IT
+    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT })
+
+    expect(result.skipped).toBe(1)
+    expect(result.applied).toBe(0)
+    expect(result.rows[0].status).toBe('SKIPPED')
+    expect(result.rows[0].detail).toMatch(/scope|out.of.scope/i)
+    expect(prisma._calls.channelListingUpdateMany).toHaveLength(0)
   })
 })
