@@ -150,7 +150,7 @@ export async function publishEbayImagesViaInventory(
   // curating by an axis the family doesn't have (e.g. the old hardcoded 'Color'
   // default on a Size-only family) silently dropped every curated set and
   // produced an inconsistent group — the misleading 25007 on image publishes.
-  const realAxes = (() => {
+  const axisInfo = (() => {
     const found = new Map<string, { label: string; values: Set<string> }>()
     for (const r of variantRows) {
       for (const [k, v] of Object.entries(r)) {
@@ -164,11 +164,21 @@ export async function publishEbayImagesViaInventory(
         found.set(syn, e)
       }
     }
-    return [...found.values()].filter((a) => a.values.size > 1).map((a) => a.label)
+    return [...found.values()]
   })()
+  const multiAxes = axisInfo.filter((a) => a.values.size > 1).map((a) => a.label)
   const requestedAxis = activeAxis?.trim() || product.imageAxisPreference || 'Color'
-  const matchedAxis = realAxes.find((a) => axisSynonymKey(a) === axisSynonymKey(requestedAxis))
-  const pictureAxis = matchedAxis ?? realAxes[0] ?? requestedAxis
+  const matchedMulti = multiAxes.find((a) => axisSynonymKey(a) === axisSynonymKey(requestedAxis))
+  const matchedAny = axisInfo.find((a) => axisSynonymKey(a.label) === axisSynonymKey(requestedAxis))
+  // FFP.15 — the operator curated by an axis the family does NOT vary by
+  // (e.g. Colour on a single-colour family). The old fallback silently
+  // switched to the first varying axis (Size) and DROPPED the curation —
+  // producing per-size picture sets nobody asked for. The correct listing
+  // shape is ONE shared gallery for the whole listing: the curated set goes
+  // to the listing-level imageUrls (and uniformly to every variant), and
+  // aspectsImageVariesBy is omitted (with a safe retry if eBay insists).
+  const sharedGallery = !matchedMulti && !!matchedAny
+  const pictureAxis = matchedMulti ?? (sharedGallery ? matchedAny!.label : (multiAxes[0] ?? requestedAxis))
 
   job = await prisma.channelImagePublishJob.create({
     data: {
@@ -177,7 +187,7 @@ export async function publishEbayImagesViaInventory(
       marketplace: wantMarket ?? null,
       status: 'SUBMITTING',
       vendorEntityId: groupKey,
-      requestPayload: { markets, groupKey, requestedAxis, pictureAxis, realAxes } as object,
+      requestPayload: { markets, groupKey, requestedAxis, pictureAxis, realAxes: multiAxes, sharedGallery } as object,
     },
   })
   const curatedRows = await prisma.listingImage.findMany({
@@ -219,6 +229,16 @@ export async function publishEbayImagesViaInventory(
     for (const [k, urls] of imageOverrideBySku) imageOverrideBySku.set(k, urls.filter((u) => !sharedSet.has(u)))
   }
 
+  // FFP.15 — shared-gallery mode: the curated set IS the listing gallery.
+  // Fold the single-value axis set into the listing-level urls (cover/common
+  // first, curated set after); variants still each carry the same set via
+  // imageOverrideByColor, so the gallery is uniform however the buyer clicks.
+  if (sharedGallery) {
+    for (const urls of imageOverrideByColor.values()) {
+      for (const u of urls) if (!sharedUrls.includes(u)) sharedUrls.push(u)
+    }
+  }
+
   const allResults: Array<{ sku: string; market: string; status: string; message: string }> = []
   for (const mp of markets) {
     const listedIds = listedByMarket.get(mp) ?? new Set<string>()
@@ -237,7 +257,7 @@ export async function publishEbayImagesViaInventory(
       pictureAxis,
       imageOverrideBySku.size > 0 ? imageOverrideBySku : undefined,
       sharedUrls.length > 0 ? sharedUrls : undefined,
-      { skipOffersOnNoPrice: true },
+      { skipOffersOnNoPrice: true, omitImageVariesBy: sharedGallery },
     )
     allResults.push(...groupResults)
   }
@@ -274,7 +294,9 @@ export async function publishEbayImagesViaInventory(
   return {
     success,
     message: success
-      ? `Published eBay images across ${markets.join(', ')} · ${variantRows.length} variants · vary by ${pictureAxis}${imageOverrideByColor.size > 0 ? ` (${imageOverrideByColor.size} ${pictureAxis.toLowerCase()} curated)` : ''}${imageOverrideBySku.size > 0 ? ` + ${imageOverrideBySku.size} per-SKU` : ''}`
+      ? (sharedGallery
+          ? `Published eBay images across ${markets.join(', ')} · ${variantRows.length} variants · ONE shared gallery (family has a single ${pictureAxis} value — pictures no longer swap when the buyer picks a size)`
+          : `Published eBay images across ${markets.join(', ')} · ${variantRows.length} variants · vary by ${pictureAxis}${imageOverrideByColor.size > 0 ? ` (${imageOverrideByColor.size} ${pictureAxis.toLowerCase()} curated)` : ''}${imageOverrideBySku.size > 0 ? ` + ${imageOverrideBySku.size} per-SKU` : ''}`)
       : `eBay publish failed: ${errors[0]?.message ?? 'unknown error'}`,
     pictureCount: pushedSkus,
     colorSetCount: colours.size,

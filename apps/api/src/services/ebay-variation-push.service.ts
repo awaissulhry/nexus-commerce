@@ -264,7 +264,14 @@ export async function pushVariationGroup(
   // When true, variants with no price are silently skipped in the offer step
   // instead of failing the whole push. Used by the images tab which only needs
   // inventory_item + group updates — not offer updates — to deliver images.
-  opts?: { skipOffersOnNoPrice?: boolean },
+  opts?: {
+    skipOffersOnNoPrice?: boolean
+    /** FFP.15 — shared-gallery mode (single-colour families): publish ONE
+     *  gallery for the whole listing instead of varying pictures by an axis.
+     *  If eBay rejects the group without aspectsImageVariesBy, the group PUT
+     *  retries once with the default axis (images stay uniform either way). */
+    omitImageVariesBy?: boolean
+  },
 ): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
   const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
 
@@ -525,7 +532,12 @@ export async function pushVariationGroup(
     ? deduplicatedSpecs.find(s => s.name.toLowerCase() === pictureAxis.toLowerCase()
         || (COLOR_AXIS_NAMES_PRE.has(s.name.toLowerCase()) && COLOR_AXIS_NAMES_PRE.has(pictureAxis.toLowerCase())))
     : undefined
-  const imageVariesByAxes = (pictureSpec ? [pictureSpec.name] : validSpecs.slice(0, 1).map(e => e.name)).filter(Boolean)
+  // FFP.15 — shared-gallery mode: no picture axis at all. eBay then shows the
+  // listing-level gallery for every variation (correct for a single-colour
+  // family: the buyer's size pick never swaps photos).
+  const imageVariesByAxes = opts?.omitImageVariesBy
+    ? []
+    : (pictureSpec ? [pictureSpec.name] : validSpecs.slice(0, 1).map(e => e.name)).filter(Boolean)
 
   // Row normalisation: write the canonical spec key to any row that only has a
   // synonym alias. Without this, families where existing variants were pushed
@@ -877,7 +889,9 @@ export async function pushVariationGroup(
     imageUrls: groupImageUrls,
     variantSKUs: variantRows.map(r => r.sku as string),
     variesBy: {
-      aspectsImageVariesBy: imageVariesByAxes,
+      // FFP.15 — omitted entirely in shared-gallery mode (single-colour family):
+      // the listing then shows ONE gallery for every variation.
+      ...(imageVariesByAxes.length > 0 ? { aspectsImageVariesBy: imageVariesByAxes } : {}),
       specifications,
     },
     aspects: {
@@ -926,6 +940,26 @@ export async function pushVariationGroup(
       }
     }
     // If still not ok after 25703 fallback (or other error), fall through to error return below
+  }
+
+  // FFP.15 — shared-gallery fallback: if eBay rejected the group WITHOUT
+  // aspectsImageVariesBy, retry once with the default axis. Images stay
+  // uniform across variations either way (every variant carries the same
+  // gallery), so the buyer experience is identical.
+  if (!groupRes.ok && groupRes.status === 400 && opts?.omitImageVariesBy) {
+    const fallbackAxes = (validSpecs.slice(0, 1).map(e => e.name)).filter(Boolean)
+    if (fallbackAxes.length > 0) {
+      console.log(`[ebay-push] FFP.15 — group rejected without aspectsImageVariesBy; retrying with [${fallbackAxes.join(', ')}]`)
+      groupRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(effectiveGroupKey)}`, {
+        method: 'PUT', headers,
+        body: JSON.stringify({
+          ...groupBody,
+          inventoryItemGroupKey: effectiveGroupKey,
+          variesBy: { aspectsImageVariesBy: fallbackAxes, specifications },
+        }),
+      })
+      groupErrText = groupRes.ok ? '' : await groupRes.text().catch(() => '')
+    }
   }
 
   if (!groupRes.ok && groupRes.status !== 204) {
