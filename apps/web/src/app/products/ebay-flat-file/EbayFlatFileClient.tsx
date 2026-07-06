@@ -1650,10 +1650,26 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       params.set('marketplace', up)
       window.history.replaceState(null, '', `?${params.toString()}`)
     } catch { /* non-fatal — fall back to state-only switch */ }
+    // FFP.4 — market memory: deep links without ?marketplace adopt this.
+    try { localStorage.setItem('ff-ebay-last-market', up) } catch {}
     setMarketplace(up)
     // Market-specific: default Publish / Quick-update to the market you're now on
     // (the panel still lets you add other markets before pushing).
     setPublishTargets([up])
+  }, [])
+
+  // FFP.4 — market memory: entering WITHOUT an explicit ?marketplace adopts
+  // the last market you worked on (deep links no longer hardcode a market).
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      if (params.has('marketplace')) return
+      const last = localStorage.getItem('ff-ebay-last-market')?.toUpperCase()
+      if (last && (EBAY_MARKETPLACES as readonly string[]).includes(last) && last !== marketplace) {
+        handleMarketSwitch(last)
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ── Slot: channel strip ────────────────────────────────────────────────

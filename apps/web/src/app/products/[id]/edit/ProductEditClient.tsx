@@ -1158,24 +1158,42 @@ export default function ProductEditClient({
             {(() => {
               const pt = (product.productType as string | null) ?? 'OUTERWEAR'
               const familyId = (product as any).parentId ?? product.id
-              const href = `/products/amazon-flat-file?familyId=${familyId}&productType=${pt}&marketplace=IT`
+              // FFP.4 — no hardcoded marketplace: the flat file adopts the last
+              // market you worked on (localStorage memory) when the param is absent.
+              const href = `/products/amazon-flat-file?familyId=${familyId}&productType=${pt}`
+              const ebayHref = `/products/ebay-flat-file?familyId=${familyId}`
               return (
-                <a
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title={t('products.edit.flatFileTooltip')}
-                  onMouseEnter={headerPrefetch.onHoverFlatFile}
-                  onFocus={headerPrefetch.onHoverFlatFile}
-                  onClick={() => markNewTabClick('flatFile', familyId)}
-                  onAuxClick={() => markNewTabClick('flatFile', familyId)}
-                  className={headerOpenInNewTabClass}
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" aria-hidden />
-                  {t('products.edit.flatFile')}
-                  <ExternalLink className="w-3 h-3 ml-1 opacity-60 group-hover:opacity-100 transition-opacity" aria-hidden />
-                  <span className="sr-only">{t('products.edit.opensInNewTab')}</span>
-                </a>
+                <>
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={t('products.edit.flatFileTooltip')}
+                    onMouseEnter={headerPrefetch.onHoverFlatFile}
+                    onFocus={headerPrefetch.onHoverFlatFile}
+                    onClick={() => markNewTabClick('flatFile', familyId)}
+                    onAuxClick={() => markNewTabClick('flatFile', familyId)}
+                    className={headerOpenInNewTabClass}
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" aria-hidden />
+                    {t('products.edit.flatFile')}
+                    <ExternalLink className="w-3 h-3 ml-1 opacity-60 group-hover:opacity-100 transition-opacity" aria-hidden />
+                    <span className="sr-only">{t('products.edit.opensInNewTab')}</span>
+                  </a>
+                  {/* FFP.4 — eBay parity: same one-click family-scoped entry. */}
+                  <a
+                    href={ebayHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={t('products.edit.ebayFlatFileTooltip')}
+                    className={headerOpenInNewTabClass}
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" aria-hidden />
+                    {t('products.edit.ebayFlatFile')}
+                    <ExternalLink className="w-3 h-3 ml-1 opacity-60 group-hover:opacity-100 transition-opacity" aria-hidden />
+                    <span className="sr-only">{t('products.edit.opensInNewTab')}</span>
+                  </a>
+                </>
               )
             })()}
             <a

@@ -2773,6 +2773,22 @@ export default function AmazonFlatFileClient({
   // observes URL changes and drives state + re-fetch. This ordering means
   // a hard refresh during an in-flight switch lands on the NEW market (URL
   // has already updated) instead of snapping back to the previous one.
+  // FFP.4 — market memory: entering WITHOUT an explicit ?marketplace adopts
+  // the last market you worked on (the editor deep link no longer pins IT).
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      if (params.has('marketplace')) return
+      const last = localStorage.getItem('ff-amazon-last-market')?.toUpperCase()
+      if (last && (MARKETPLACES as readonly string[]).includes(last) && last !== marketplace.toUpperCase()) {
+        // navigateTo is declared below; the effect runs post-render, so the
+        // binding is initialized by the time this executes.
+        navigateTo(last, productType)
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const navigateTo = useCallback((nextMp: string, nextPt: string) => {
     // FF-MS.5 — Force-flush any pending edits to localStorage before we
     // switch away. The 1s autosave debounce can leave the last few keystrokes
@@ -2785,6 +2801,8 @@ export default function AmazonFlatFileClient({
     // to compute click→ready ms and tags it with source (cache vs fetch).
     const nextMpU = nextMp.toUpperCase()
     const nextPtU = nextPt.toUpperCase()
+    // FFP.4 — market memory: deep links without ?marketplace adopt this.
+    try { localStorage.setItem('ff-amazon-last-market', nextMpU) } catch {}
     if (nextMpU !== marketplace.toUpperCase() || nextPtU !== productType.toUpperCase()) {
       switchPerfRef.current = {
         from: `${marketplace}·${productType}`,
@@ -5055,11 +5073,28 @@ export default function AmazonFlatFileClient({
       </header>
 
       {/* ── Empty / loading states ────────────────────────────── */}
-      {!manifest && !loading && (
+      {/* FFP.4 — the schema auto-loads; there is no "Load" button. A missing
+          manifest is either the pre-load frame (spinner) or a real fetch
+          failure (error + Retry) — never an instructional dead end. */}
+      {!manifest && !loading && !loadError && (
+        <div
+          className="flex-1 flex items-center justify-center gap-2 text-slate-500 text-sm"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="w-5 h-5 animate-spin" aria-hidden />
+          Preparing {marketplace}{productType ? ` · ${productType}` : ''} schema…
+        </div>
+      )}
+      {!manifest && !loading && loadError && (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center text-slate-400">
             <FileSpreadsheet className="w-10 h-10 mx-auto mb-2 opacity-40" />
-            <p className="text-sm">Select a marketplace and product type, then click Load.</p>
+            <p className="text-sm mb-1">Couldn&apos;t load the Amazon schema for {marketplace}{productType ? ` · ${productType}` : ''}.</p>
+            <p className="text-xs mb-3 text-slate-500">{loadError.message}</p>
+            <Button size="sm" onClick={() => { setLoadError(null); void loadData(marketplace, productType, true) }}>
+              Retry
+            </Button>
           </div>
         </div>
       )}
