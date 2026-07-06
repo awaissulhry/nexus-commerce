@@ -1155,8 +1155,11 @@ export async function pushVariationGroup(
         select: { id: true },
       })
       void syncActivatedListings(activated.map(l => l.id))
-    } catch {
-      /* DB write-back failure is non-fatal — listing is already live on eBay */
+    } catch (e) {
+      // Previously swallowed silently — which hid that the ItemID/status never persisted.
+      // Non-fatal (the listing is live on eBay) but MUST be visible so a broken write-back
+      // surfaces instead of looking like "the fields keep vanishing".
+      console.error('[ebay-push] listing write-back FAILED (externalListingId/status NOT saved):', e instanceof Error ? e.message : e)
     }
   }
 

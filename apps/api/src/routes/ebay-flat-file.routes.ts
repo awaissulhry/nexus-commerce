@@ -419,9 +419,13 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             description: sharedPacked.description,
             price: newPrice ?? undefined,
             quantity: newQty ?? undefined,
-            externalListingId: itemId ?? sharedPacked.externalListingId,
-            listingStatus: status ?? sharedPacked.listingStatus,
-            offerActive: (status ?? sharedPacked.listingStatus) === 'ACTIVE',
+            // externalListingId + listingStatus are SERVER-ASSIGNED at publish time
+            // (eBay hands back the ItemID). NEVER clobber them from the often-empty
+            // grid columns on save — only write when the row carries a real value,
+            // otherwise preserve exactly what the publish write-back stored. This is
+            // the fix for "the Item ID / status vanishes every time I reload".
+            ...(itemId ? { externalListingId: itemId } : {}),
+            ...(status ? { listingStatus: status, offerActive: status === 'ACTIVE' } : {}),
             platformAttributes: sharedPacked.platformAttributes,
             // FCF.4 — eBay is merchant-fulfilled: mark fulfillment on THIS
             // listing (per channel×marketplace), not on the shared product.
