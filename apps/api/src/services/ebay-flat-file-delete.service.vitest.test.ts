@@ -384,6 +384,59 @@ describe('best-effort delist', () => {
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
+// NEW: remove-channel-listing — channel/market isolation + inventory guard
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('remove-channel-listing — channel/market isolation + inventory guard', () => {
+  function guardPrisma(deleteManyAssert: (args: any) => void) {
+    // product has NO update/updateMany → any attempt to soft-delete throws → guard.
+    return {
+      product: {
+        findFirst: async () => ({ id: 'p1', sku: 'SKU1', ebayItemId: null }),
+        findMany: async () => [],                       // no children
+      },
+      sharedListingMembership: { findMany: async () => [], deleteMany: async () => ({ count: 0 }) },
+      channelListing: {
+        findMany: async () => [{ externalListingId: 'IT-ITEM-1' }],
+        deleteMany: async (a: any) => { deleteManyAssert(a); return { count: 1 } },
+      },
+      $transaction: async (fn: any) => fn({
+        product: {
+          update: () => { throw new Error('Product.update must NOT be called (inventory guard)') },
+          updateMany: () => { throw new Error('Product.updateMany must NOT be called') },
+        },
+        sharedListingMembership: { deleteMany: async () => ({ count: 0 }) },
+        channelListing: { deleteMany: async (a: any) => { deleteManyAssert(a); return { count: 1 } } },
+      }),
+    }
+  }
+
+  it('removes only the EBAY listing for the target marketplace; Product untouched', async () => {
+    const prisma = guardPrisma((a) => {
+      expect(a.where.channel).toBe('EBAY')
+      expect(a.where.marketplace).toBe('IT')
+    })
+    const [res] = await runEbayFlatFileDelete(prisma as any, [
+      { sku: 'SKU1', productId: 'p1', marketplace: 'IT', intent: 'remove-channel-listing' },
+    ])
+    expect(res.error).toBeUndefined()
+    expect(res.intent).toBe('remove-channel-listing')
+    expect(res.softDeleted).toEqual([])          // inventory guard: nothing soft-deleted
+    expect(res.channelListingsRemoved).toBe(1)
+  })
+
+  it('errors (does not throw) when the product is missing', async () => {
+    const prisma = guardPrisma(() => {})
+    ;(prisma.product as any).findFirst = async () => null
+    const [res] = await runEbayFlatFileDelete(prisma as any, [
+      { sku: 'GONE', marketplace: 'IT', intent: 'remove-channel-listing' },
+    ])
+    expect(res.error).toMatch(/not found/i)
+    expect(res.channelListingsRemoved).toBe(0)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 6. Per-target isolation — one failure does not abort others
 // ═══════════════════════════════════════════════════════════════════════════
 

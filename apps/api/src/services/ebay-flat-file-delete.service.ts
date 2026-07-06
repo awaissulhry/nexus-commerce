@@ -36,6 +36,7 @@ export type DeleteIntent =
   | 'delete-product'
   | 'delete-family'
   | 'remove-listing'
+  | 'remove-channel-listing' // NEW: channel+market-scoped; ChannelListing only, Product untouched
 
 export interface DeleteTarget {
   /** Nexus Product.id — preferred identifier; falls back to sku when omitted. */
@@ -60,6 +61,7 @@ export interface DeleteTargetResult {
   /** Product IDs that were soft-deleted (deletedAt set). */
   softDeleted: string[]
   membershipsRemoved: number
+  channelListingsRemoved?: number // NEW
   /** Whether the channel delist call succeeded (false = not implemented yet for eBay). */
   delisted: boolean
   /** Present only when this target errored; other targets are unaffected. */
@@ -81,13 +83,20 @@ interface MembershipTable {
   findMany(args: unknown): Promise<unknown[]>
 }
 
+interface ChannelListingTable {
+  findMany(args: unknown): Promise<unknown[]>
+  deleteMany(args: unknown): Promise<{ count: number }>
+}
+
 export interface EbayDeletePrisma {
   product: ProductTable
   sharedListingMembership: MembershipTable
+  channelListing: ChannelListingTable // NEW
   $transaction<T>(
     fn: (tx: {
       product: ProductTable
       sharedListingMembership: MembershipTable
+      channelListing: ChannelListingTable // NEW
     }) => Promise<T>,
   ): Promise<T>
 }
@@ -200,6 +209,8 @@ async function processTarget(
       return handleDeleteProduct(prisma, target)
     case 'delete-family':
       return handleDeleteFamily(prisma, target)
+    case 'remove-channel-listing':
+      return handleRemoveChannelListing(prisma, target)
     default: {
       // TypeScript exhaustiveness guard — unreachable at runtime if callers
       // validate before calling.
@@ -453,6 +464,78 @@ async function handleDeleteFamily(
     intent: 'delete-family',
     softDeleted,
     membershipsRemoved,
+    delisted,
+  }
+}
+
+// ── remove-channel-listing ───────────────────────────────────────────────────
+// Channel+market-scoped: removes the EBAY ChannelListing(s) for this row's
+// product (and its children when the row is a parent) in ONE marketplace.
+// The Product is intentionally never modified — inventory invariant (I2/I3).
+async function handleRemoveChannelListing(
+  prisma: EbayDeletePrisma,
+  target: DeleteTarget,
+): Promise<DeleteTargetResult> {
+  const { sku, marketplace, productId } = target
+
+  const product = (await prisma.product.findFirst({
+    where: productId ? { id: productId } : { sku },
+    select: { id: true, sku: true, ebayItemId: true },
+  } as any)) as { id: string; sku: string; ebayItemId?: string | null } | null
+
+  if (!product) {
+    return {
+      sku,
+      intent: 'remove-channel-listing',
+      softDeleted: [],
+      membershipsRemoved: 0,
+      channelListingsRemoved: 0,
+      delisted: false,
+      error: `Product not found: ${productId ?? sku}`,
+    }
+  }
+
+  // Parent row → include non-deleted children so "remove from eBay {market}"
+  // clears the whole family's presence in that one market.
+  const children = (await prisma.product.findMany({
+    where: { parentId: product.id, deletedAt: null },
+    select: { id: true },
+  } as any)) as Array<{ id: string }>
+  const productIds = [product.id, ...children.map((c) => c.id)]
+
+  // Collect ItemIDs for best-effort delist BEFORE the listings are deleted.
+  const listings = (await prisma.channelListing.findMany({
+    where: { productId: { in: productIds }, channel: 'EBAY', marketplace },
+    select: { externalListingId: true },
+  } as any)) as Array<{ externalListingId: string | null }>
+
+  let channelListingsRemoved = 0
+  await prisma.$transaction(async (tx) => {
+    const del = await tx.channelListing.deleteMany({
+      where: { productId: { in: productIds }, channel: 'EBAY', marketplace },
+    } as any)
+    channelListingsRemoved = (del as { count: number }).count
+    // Product is intentionally NOT modified here.
+  })
+
+  const delistIds = new Set<string>(
+    [
+      ...listings.map((l) => l.externalListingId),
+      product.ebayItemId ?? null,
+    ].filter((x): x is string => Boolean(x)),
+  )
+  let delisted = false
+  for (const iid of delistIds) {
+    const ok = await tryDelist(iid, marketplace, product.id)
+    if (ok) delisted = true
+  }
+
+  return {
+    sku: product.sku,
+    intent: 'remove-channel-listing',
+    softDeleted: [],
+    membershipsRemoved: 0,
+    channelListingsRemoved,
     delisted,
   }
 }
