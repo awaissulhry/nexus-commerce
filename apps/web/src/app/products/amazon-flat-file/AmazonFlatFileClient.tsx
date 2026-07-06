@@ -3215,15 +3215,31 @@ export default function AmazonFlatFileClient({
         : scope === 'all'
           ? new Set(rows.filter((r) => !r._ghost).map((r) => String(r.item_sku ?? '')).filter(Boolean))
           : new Set<string>()
+    // FFP.3 — auto-include the parent row: submitting an edited child without
+    // its parent hard-failed preflight ("Parent isn't in this submission").
+    // When the parent exists in the sheet, bring it along automatically.
+    const withParents = (gathered: Row[], all: Row[]): Row[] => {
+      const have = new Set(gathered.map((r) => String(r.item_sku ?? '')))
+      const out = [...gathered]
+      for (const r of gathered) {
+        if (String(r.parentage_level ?? '').toLowerCase() !== 'child') continue
+        if (String(r.record_action ?? '').toLowerCase() === 'delete') continue
+        const ps = String(r.parent_sku ?? '').trim()
+        if (!ps || have.has(ps)) continue
+        const parent = all.find((p) => !p._ghost && String(p.item_sku ?? '') === ps)
+        if (parent) { out.push(parent); have.add(ps) }
+      }
+      return out
+    }
     const gatherRows = (mp: string): Row[] => {
       if (mp === marketplace) {
-        if (scope === 'selected') return rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string))
+        if (scope === 'selected') return withParents(rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string)), rows)
         if (scope === 'all') return rows.filter((r) => !r._ghost)
-        return rows.filter((r) => !r._ghost && needsPublish(r))
+        return withParents(rows.filter((r) => !r._ghost && needsPublish(r)), rows)
       }
       const saved = loadSavedRows(mp, productType) ?? []
-      if (scope === 'edited') return saved.filter((r) => !r._ghost && needsPublish(r))
-      return saved.filter((r) => !r._ghost && scopeSkus.has(String(r.item_sku ?? '')))
+      if (scope === 'edited') return withParents(saved.filter((r) => !r._ghost && needsPublish(r)), saved)
+      return withParents(saved.filter((r) => !r._ghost && scopeSkus.has(String(r.item_sku ?? ''))), saved)
     }
 
     // A5 — pre-flight BEFORE the feed goes out: per market, check required fields /

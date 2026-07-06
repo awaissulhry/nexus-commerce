@@ -470,6 +470,11 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       booleanFields,
       // Only when we actually have schema data — otherwise tag everything (legacy).
       localizedFields: localizedFields.size > 0 ? localizedFields : undefined,
+      // FFP.3 — per-type applicable columns (union manifest) prune attributes
+      // that don't belong to a row's product type; batch type backfills rows
+      // with a blank product_type cell.
+      applicableByType: applicableByType ?? undefined,
+      defaultProductType: productType,
     })
 
     try {

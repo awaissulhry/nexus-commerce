@@ -1870,6 +1870,14 @@ export class AmazonFlatFileService {
       localizedFields?: Set<string>
       numericFields?: Set<string>
       booleanFields?: Set<string>
+      /** FFP.3 — per product-type APPLICABLE column ids (from the union
+       *  manifest). When a row's type has a set, columns outside it are NOT
+       *  emitted — this kills the ~50-warnings-per-SKU spray of attributes
+       *  that don't belong to the product type (90000900). */
+      applicableByType?: Map<string, Set<string>>
+      /** FFP.3 — fallback productType when a row's own cell is blank (a blank
+       *  productType malformed the whole feed: 4002010 '#/productType'). */
+      defaultProductType?: string
     } = {},
   ): string {
     const mp = marketplace.toUpperCase()
@@ -1880,6 +1888,8 @@ export class AmazonFlatFileService {
     const numericFields = feedSchema.numericFields ?? new Set<string>()
     const booleanFields = feedSchema.booleanFields ?? new Set<string>()
     const localizedFields = feedSchema.localizedFields
+    const applicableByType = feedSchema.applicableByType
+    const defaultProductType = (feedSchema.defaultProductType ?? '').toUpperCase()
 
     // Enum fields are shown in the editor as display LABELS (e.g. "Pakistan") but
     // Amazon's JSON feed requires the underlying CODE (e.g. "PK"). Convert
@@ -1947,11 +1957,24 @@ export class AmazonFlatFileService {
           : row._isNew === true ? 'UPDATE'
           : opRaw === 'full_update' ? 'UPDATE'
           : 'PARTIAL_UPDATE'
-        const productType = String(row.product_type ?? '').toUpperCase()
+        // FFP.3 — blank row productType falls back to the submission's type; an
+        // empty productType malformed the entire feed (4002010 schema halt).
+        const productType = String(row.product_type ?? '').toUpperCase() || defaultProductType
 
         if (operationType === 'DELETE') {
-          return { messageId: i + 1, sku: String(row.item_sku), operationType, productType, attributes: {} }
+          // FFP.3 — minimal DELETE per the v2 message schema: {sku, operationType}.
+          // productType/attributes/requirements are "not applicable" for DELETE,
+          // so sending them only adds validation surface.
+          return { messageId: i + 1, sku: String(row.item_sku), operationType }
         }
+
+        // FFP.3 — parentage decides which attribute families a message may carry
+        // (a parent has no offer). Normalized early; the parent/child structural
+        // attributes themselves are emitted further down.
+        const parentageCode = normalizeParentage(String(row.parentage_level ?? ''), enumCodeMap['parentage_level'] ?? {})
+        const isParentRow = parentageCode === 'parent'
+        // FFP.3 — this row's applicable column set (per its own product type).
+        const applicableCols = applicableByType?.get(productType)
 
         const attrs: Record<string, any> = {}
         const wrap  = (v: string) => [{ value: v, marketplace_id: marketplaceId }]
@@ -1986,9 +2009,12 @@ export class AmazonFlatFileService {
           }
         }
 
-        // purchasable_offer — read from expanded sub-columns, fall back to bare value
+        // purchasable_offer — read from expanded sub-columns, fall back to bare value.
+        // FFP.3 — NEVER on a parent: a variation parent is not buyable, and offer
+        // data on the parent message is a documented cause of parent feed
+        // failures ("attribute not valid for parent").
         const poPrice = row['purchasable_offer__our_price'] ?? row.purchasable_offer ?? row.standard_price
-        if (poPrice !== undefined && poPrice !== '') {
+        if (!isParentRow && poPrice !== undefined && poPrice !== '') {
           const poCurrency   = String(row['purchasable_offer__currency'] ?? CURRENCY_MAP[mp] ?? 'EUR')
           const poCondition  = String(row['purchasable_offer__condition_type'] ?? '')
           const poSalePrice  = row['purchasable_offer__sale_price']
@@ -2022,7 +2048,10 @@ export class AmazonFlatFileService {
         const faLeadNum  = faLeadRaw !== undefined && faLeadRaw !== '' ? parseLocaleInt(faLeadRaw) : null
         const isFbaChannel      = faCode.startsWith('AMAZON') || faCode === 'AFN' || faCode === 'FBA'
         const isMerchantChannel = faCode === 'DEFAULT' || faCode === 'MFN'
-        if (isFbaChannel) {
+        // FFP.3 — a parent carries no fulfillment/stock; see purchasable_offer note.
+        if (isParentRow) {
+          // no fulfillment_availability on parent messages
+        } else if (isFbaChannel) {
           const fa: Record<string, any> = { fulfillment_channel_code: faCode, marketplace_id: marketplaceId }
           if (faLeadNum !== null && faLeadNum >= 0) fa.lead_time_to_ship_max_days = faLeadNum
           attrs.fulfillment_availability = [fa]
@@ -2034,9 +2063,7 @@ export class AmazonFlatFileService {
         }
         // blank/unknown faCode → omit fulfillment_availability entirely (fail-closed).
 
-        // Normalize: handles canonical ('parent'/'child'), title-case ('Parent'/'Child'),
-        // and localized labels ('Articolo padre') via enumCodeMap before comparison.
-        const parentageCode = normalizeParentage(String(row.parentage_level ?? ''), enumCodeMap['parentage_level'] ?? {})
+        // (parentageCode normalized above — canonical/'Parent'/localized labels.)
         if (parentageCode === 'parent') {
           // HIGH-5 — a parent must declare its parentage_level, not just the
           // variation theme, or Amazon won't register it as a variation parent.
@@ -2061,6 +2088,10 @@ export class AmazonFlatFileService {
 
         for (const [k, v] of Object.entries(row)) {
           if (k.startsWith('_') || !v || EXPLICIT_KEYS.has(k)) continue
+          // FFP.3 — skip columns that don't apply to THIS row's product type
+          // (Amazon's own manifest is the truth). Kills the not-applicable
+          // attribute spray that buried real errors under ~50 warnings/SKU.
+          if (applicableCols && !applicableCols.has(k)) continue
           const path = expandedFields[k]
           if (path) {
             if (!path.includes('.')) {
