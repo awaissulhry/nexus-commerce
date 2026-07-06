@@ -429,27 +429,14 @@ function computeRowCompleteness(
 
 // ── P2.D2 — Delete intent derivation + confirm modal ──────────────────────
 
-type DeleteIntent = 'delete-product' | 'delete-family' | 'remove-listing'
+type DeleteIntent = 'delete-product' | 'delete-family' | 'remove-listing' | 'remove-channel-listing'
 
 /** Determine the delete intent for a given row given the full sheet context. */
-function deriveDeleteIntent(row: EbayRow, allRows: EbayRow[]): DeleteIntent {
-  // Synthesized shared-membership rows always → remove-listing
+function deriveDeleteIntent(row: EbayRow, _allRows: EbayRow[]): DeleteIntent {
+  // Synthesized shared-membership rows → remove just that membership.
   if (row._shared === true) return 'remove-listing'
-
-  // Explicit parent OR legacy _isParent=true with children in sheet → delete-family
-  if (row._isParent === true || row.parentage === 'parent' || row.parentage === '') {
-    const ownSku = String(row.sku ?? '').trim()
-    const parentId = String(row._productId ?? row.platformProductId ?? '')
-    const hasChildren = allRows.some((r) => {
-      if (r._rowId === row._rowId) return false
-      if (r._isParent === false && parentId && String(r.platformProductId ?? '') === parentId) return true
-      if (r.parentage === 'child' && ownSku && String(r.parent_sku ?? '').trim() === ownSku) return true
-      return false
-    })
-    if (hasChildren) return 'delete-family'
-  }
-
-  return 'delete-product'
+  // All other rows → remove ONLY this channel+market's listing (Product untouched).
+  return 'remove-channel-listing'
 }
 
 /** Count direct children in the sheet for a parent row. */
@@ -474,12 +461,14 @@ function getRowItemId(row: EbayRow, marketplace: string): string | undefined {
 function EbayDeleteConfirmModal({
   rows,
   allRows,
+  marketplace,
   loading,
   onConfirm,
   onClose,
 }: {
   rows: EbayRow[]
   allRows: EbayRow[]
+  marketplace: string
   loading: boolean
   onConfirm: () => void
   onClose: () => void
@@ -489,6 +478,9 @@ function EbayDeleteConfirmModal({
   const familyCount  = intents.filter((i) => i === 'delete-family').length
   const variantCount = intents.filter((i) => i === 'delete-product').length
   const listingCount = intents.filter((i) => i === 'remove-listing').length
+  const channelCount = intents.filter((i) => i === 'remove-channel-listing').length
+
+  const isAllScopedRemoval = channelCount === intents.length
 
   let mainText: string
   let actionLabel: string
@@ -497,7 +489,13 @@ function EbayDeleteConfirmModal({
     const row = rows[0]
     const sku    = String(row.sku ?? '')
     const intent = intents[0]
-    if (intent === 'delete-family') {
+    if (intent === 'remove-channel-listing') {
+      const n = countFamilyChildren(row, allRows)
+      mainText    = n > 0
+        ? `Remove "${sku}" and its ${n} variant${n !== 1 ? 's' : ''} from eBay ${marketplace}? The product and its stock stay in Nexus, and other channels are untouched.`
+        : `Remove "${sku}" from eBay ${marketplace}? The product and its stock stay in Nexus, and other channels are untouched.`
+      actionLabel = 'Remove from eBay'
+    } else if (intent === 'delete-family') {
       const n = countFamilyChildren(row, allRows)
       mainText    = `Delete family "${sku}" and its ${n} variant${n !== 1 ? 's' : ''}? This is recoverable (soft-delete).`
       actionLabel = 'Delete Family'
@@ -510,18 +508,21 @@ function EbayDeleteConfirmModal({
     }
   } else {
     const parts: string[] = []
-    if (familyCount)  parts.push(`${familyCount} famil${familyCount  > 1 ? 'ies' : 'y'}`)
-    if (variantCount) parts.push(`${variantCount} variant${variantCount > 1 ? 's' : ''}`)
-    if (listingCount) parts.push(`${listingCount} shared listing${listingCount > 1 ? 's' : ''}`)
-    mainText    = `Delete ${parts.join(', ')}? Soft-delete — recoverable.`
-    actionLabel = `Delete ${rows.length} Items`
+    if (channelCount)  parts.push(`${channelCount} listing${channelCount > 1 ? 's' : ''}`)
+    if (familyCount)   parts.push(`${familyCount} famil${familyCount  > 1 ? 'ies' : 'y'}`)
+    if (variantCount)  parts.push(`${variantCount} variant${variantCount > 1 ? 's' : ''}`)
+    if (listingCount)  parts.push(`${listingCount} shared listing${listingCount > 1 ? 's' : ''}`)
+    mainText    = channelCount > 0
+      ? `Remove ${parts.join(', ')} from eBay ${marketplace}? The product and stock stay in Nexus, and other channels are untouched.`
+      : `Delete ${parts.join(', ')}? Soft-delete — recoverable.`
+    actionLabel = channelCount > 0 ? `Remove ${rows.length} from eBay` : `Delete ${rows.length} Items`
   }
 
   return (
     <Modal
       open
       onClose={onClose}
-      title="Confirm delete"
+      title={isAllScopedRemoval ? `Remove from eBay ${marketplace}` : 'Confirm delete'}
       size="sm"
       footer={
         <>
@@ -535,7 +536,10 @@ function EbayDeleteConfirmModal({
     >
       <p className="text-sm text-slate-700 dark:text-slate-300 mb-3">{mainText}</p>
       <Banner variant="warning">
-        This permanently ends the live eBay listing and removes it from Nexus (Nexus record is recoverable; the eBay listing is not). If eBay can&apos;t be reached it stays live — end it manually in Seller Hub.
+        {isAllScopedRemoval
+          ? `This removes the eBay ${marketplace} listing from Nexus. The product and its stock remain — only this channel’s listing is affected. If eBay can’t be reached the listing stays live — end it manually in Seller Hub.`
+          : `This permanently ends the live eBay listing and removes it from Nexus (Nexus record is recoverable; the eBay listing is not). If eBay can’t be reached it stays live — end it manually in Seller Hub.`
+        }
       </Banner>
     </Modal>
   )
@@ -973,7 +977,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json() as {
-        results: Array<{ sku: string; intent: string; softDeleted: string[]; membershipsRemoved: number; delisted: boolean; error?: string }>
+        results: Array<{ sku: string; intent: string; softDeleted: string[]; membershipsRemoved: number; channelListingsRemoved?: number; delisted: boolean; error?: string }>
       }
 
       // Collect every SKU that was successfully removed
@@ -982,6 +986,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       for (const r of json.results) {
         if (r.error) { warnCount++; continue }
         if (r.intent === 'remove-listing' && r.membershipsRemoved === 0) { warnCount++; continue }
+        if (r.intent === 'remove-channel-listing' && (r.channelListingsRemoved ?? 0) === 0) { warnCount++; continue }
         removedSkus.add(r.sku)
         // For family deletes the backend soft-deletes all children too
         for (const s of (r.softDeleted ?? [])) removedSkus.add(s)
@@ -997,15 +1002,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       const deleted = succeeded.length
       const delistedCount = succeeded.filter((r) => r.delisted).length
       const notDelistedCount = deleted - delistedCount
-      const label = deleted !== 1 ? 'items' : 'item'
+      const label = deleted !== 1 ? 'listings' : 'listing'
       if (notDelistedCount > 0) {
-        const base = `Deleted ${deleted} ${label} in Nexus — couldn't end ${notDelistedCount} on eBay (end manually in Seller Hub).`
-        toast({ title: base, tone: 'info' })
+        toast({ title: `Removed ${deleted} ${label} from eBay ${marketplace} — couldn't end ${notDelistedCount} on eBay (end manually in Seller Hub). Product and stock kept.`, tone: 'info' })
       } else if (warnCount > 0) {
-        const base = `Deleted ${deleted} ${label} — eBay listing${deleted !== 1 ? 's' : ''} ended.`
-        toast({ title: base, description: `${warnCount} item${warnCount !== 1 ? 's' : ''} had warnings — check the grid.`, tone: 'info' })
+        toast({ title: `Removed ${deleted} ${label} from eBay ${marketplace} — product and stock kept.`, description: `${warnCount} row${warnCount !== 1 ? 's' : ''} had nothing to remove — check the grid.`, tone: 'info' })
       } else {
-        toast.success(`Deleted ${deleted} ${label} — eBay listing${deleted !== 1 ? 's' : ''} ended.`)
+        toast.success(`Removed ${deleted} ${label} from eBay ${marketplace} — product and stock kept.`)
       }
       setDeleteConfirmRows(null)
     } catch (err) {
@@ -2332,6 +2335,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         <EbayDeleteConfirmModal
           rows={deleteConfirmRows}
           allRows={latestRowsRef.current as EbayRow[]}
+          marketplace={marketplace}
           loading={deleteLoading}
           onConfirm={() => void handleExecuteDelete()}
           onClose={() => setDeleteConfirmRows(null)}
