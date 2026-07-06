@@ -668,6 +668,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [variantAxisNames, setVariantAxisNames] = useState<string[]>([])
   const variantAxisCacheRef = useRef<Map<string, string[]>>(new Map())
   const [categoryLoading, setCategoryLoading] = useState(false)
+  const [categorySchemaError, setCategorySchemaError] = useState<string | null>(null)
 
   // ── Business policies (fulfillment / payment / return) ─────────────────
   const [policyOptions, setPolicyOptions] = useState<{
@@ -825,7 +826,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     try {
       const mpId = marketplace.startsWith('EBAY_') ? marketplace : `EBAY_${marketplace}`
       const res  = await fetch(`${BACKEND}/api/ebay/flat-file/category-schema?categoryId=${encodeURIComponent(categoryId)}&marketplace=${mpId}`)
-      if (!res.ok) return
+      if (!res.ok) { setCategorySchemaError("Couldn't load the eBay category schema — Item Specifics / variation columns are hidden. Check the eBay connection or the Category ID."); return }
       const json  = await res.json() as { aspects: CategoryAspect[]; conditions?: Array<{ value: string; label: string }> }
       const group = buildCategoryColumns(json.aspects)
       const conds = json.conditions ?? []
@@ -839,7 +840,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       setCategoryColumns(group)
       setConditionOptions(conds)
       setVariantAxisNames(axisNames)
-    } catch { /* silently fail — optional */ }
+      setCategorySchemaError(null)
+    } catch { setCategorySchemaError("Couldn't load the eBay category schema — Item Specifics / variation columns are hidden. Check the eBay connection or the Category ID.") }
     finally { setCategoryLoading(false) }
   }, [marketplace, categoryColumnsCache, BACKEND])
 
@@ -1608,8 +1610,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── Slot: feed banner ──────────────────────────────────────────────────
 
-  // Feed status is shown inline in Bar 1 (renderPushExtras chip) — no longer needed as a banner below the toolbar
-  const renderFeedBanner = useCallback(() => null, [])
+  // Feed status is shown inline in Bar 1 (renderPushExtras chip) — no longer needed as a banner below the toolbar.
+  // If the category schema failed to load, surface a dismissible danger banner here.
+  const renderFeedBanner = useCallback(() => categorySchemaError ? (
+    <Banner tone="danger" onDismiss={() => setCategorySchemaError(null)}>
+      {categorySchemaError}
+    </Banner>
+  ) : null, [categorySchemaError])
 
   // ── Slot: fetch button ─────────────────────────────────────────────────
 

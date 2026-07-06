@@ -94,7 +94,7 @@ export function generateVariantRowsUnderParent(
       parentage: 'child' as const,
       parent_sku: parentSku,
       ...Object.fromEntries(
-        axes.map((axis) => [`aspect_${axis.toLowerCase()}`, valueMap[axis]]),
+        axes.map((axis) => [`aspect_${axis.replace(/\s+/g, '_')}`, valueMap[axis]]),
       ),
     }
   })

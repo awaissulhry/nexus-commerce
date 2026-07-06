@@ -86,7 +86,7 @@ export function AddListingPopover({ categoryAxisNames = [], existingParents, onC
     ...categoryOnlyAxes.map((n) => ({ name: n, suggestions: [] })),
   ]
 
-  const [selectedAxes, setSelectedAxes] = useState<string[]>(['Color', 'Size'])
+  const [selectedAxes, setSelectedAxes] = useState<string[]>(() => categoryAxisNames.length ? categoryAxisNames : ['Color', 'Size'])
   const [axisValues, setAxisValues] = useState<Record<string, string[]>>({})
   const [customAxisName, setCustomAxisName] = useState('')
   const [customAxes, setCustomAxes] = useState<string[]>([])
@@ -200,7 +200,7 @@ export function AddListingPopover({ categoryAxisNames = [], existingParents, onC
         parent_sku: parentSku,
         // carry axis values as aspects (flat-file will map them to the right columns)
         ...Object.fromEntries(
-          selectedAxes.map((axis) => [`aspect_${axis.toLowerCase()}`, valueMap[axis]]),
+          selectedAxes.map((axis) => [`aspect_${axis.replace(/\s+/g, '_')}`, valueMap[axis]]),
         ),
       }
       return row
