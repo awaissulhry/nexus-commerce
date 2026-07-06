@@ -974,11 +974,13 @@ export async function pushVariationGroup(
     if (!returnPolicyId      || !rSet.has(returnPolicyId))      returnPolicyId      = snapshot.returnPolicies[0]?.id      ?? ''
     if (!merchantLocationKey) merchantLocationKey = snapshot.locations[0]?.key ?? ''
   } catch (err) {
-    // Only hard-fail if we also have no usable policy to fall back on.
-    if (!fulfillmentPolicyId || !returnPolicyId || !merchantLocationKey) {
-      const msg = `Could not fetch seller policies: ${err instanceof Error ? err.message : String(err)}`
-      return rows.map(r => ({ sku: (r.sku ?? '') as string, market: mp, status: 'ERROR' as const, message: msg }))
-    }
+    // FFP.12 — NEVER proceed with UNVERIFIED policy ids. The old fallback
+    // ("keep whatever ids we have") is exactly how another market's policy
+    // got written onto DE offers — creating unpublishable drafts that then
+    // failed EVERY publish of the family with a mixed-locale 25007. Policies
+    // are per-marketplace; if we can't verify them for THIS market, stop.
+    const msg = `Couldn't verify ${mp} business policies (${err instanceof Error ? err.message : String(err)}) — refusing to write unverified policy ids onto ${mp} offers (a wrong-market policy is the classic persistent 25007). Retry in a minute.`
+    return rows.map(r => ({ sku: (r.sku ?? '') as string, market: mp, status: 'ERROR' as const, message: msg }))
   }
 
   const missing: string[] = []
@@ -1140,10 +1142,34 @@ export async function pushVariationGroup(
       // valid, policies valid — publish only fails while every qty is 0).
       if (issues.length === 0 && offersSeen > 0 && allZeroQty) {
         detail = ` Every variant's quantity is 0 — eBay can't (re)publish a listing with no purchasable variant (its 25007 message is misleading). Set a quantity ≥ 1 on at least one variant (Quick update is enough), then re-push.`
-      } else {
-        detail = issues.length
-          ? ` Problem offer(s): ${issues.slice(0, 8).join('; ')} — fix these, then re-push.`
+      } else if (issues.length === 0) {
+        // FFP.12 — cross-market orphan sweep. publish_by_group validates EVERY
+        // offer attached to the group's SKUs — including UNPUBLISHED drafts on
+        // OTHER marketplaces. A draft carrying a wrong-market policy fails the
+        // whole publish with a mixed-locale 25007 (the foreign-language detail
+        // names the draft's marketplace). Verified live 2026-07-06: ten
+        // unpublished DE drafts with an IT policy blocked every IT publish.
+        const orphans: string[] = []
+        const otherMkts = MARKETS.map((m) => toMarketplaceId(m)).filter((id) => id !== marketplaceId)
+        for (const otherId of otherMkts) {
+          const otherHeaders = { ...headers, 'X-EBAY-C-MARKETPLACE-ID': otherId, 'Content-Language': toListingLanguage(otherId), 'Accept-Language': toListingLanguage(otherId) }
+          // Bounded probe: the first hit per market is enough to name the culprit.
+          for (const r of variantRows.slice(0, 4)) {
+            const s = String(r.sku ?? '')
+            if (!s) continue
+            try {
+              const or = await fetch(`${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(s)}&marketplace_id=${otherId}`, { headers: otherHeaders })
+              if (!or.ok) continue
+              const oj = await or.json() as { offers?: Array<{ status?: string }> }
+              if (oj.offers?.[0]?.status === 'UNPUBLISHED') { orphans.push(otherId); break }
+            } catch { /* best-effort probe */ }
+          }
+        }
+        detail = orphans.length
+          ? ` Found UNPUBLISHED draft offer(s) for this family on ${orphans.join(', ')} — eBay validates those too, and a draft with a wrong-market policy fails the whole publish (that's the foreign-language detail in the error). Delete those drafts (Action column → end on that market, or ask me) or fix that market's policies, then re-push.`
           : ` All ${variantRows.length} variant offers look valid (policy + merchant location present), so this is very likely a transient eBay-side error — wait ~30s and re-push.`
+      } else {
+        detail = ` Problem offer(s): ${issues.slice(0, 8).join('; ')} — fix these, then re-push.`
       }
     }
     const pubMsg = isTransient
@@ -1312,11 +1338,13 @@ export async function pushOffersOnly(
     if (!returnPolicyId      || !rSet.has(returnPolicyId))      returnPolicyId      = snapshot.returnPolicies[0]?.id      ?? ''
     if (!merchantLocationKey) merchantLocationKey = snapshot.locations[0]?.key ?? ''
   } catch (err) {
-    // Only hard-fail if we also have no usable policy to fall back on.
-    if (!fulfillmentPolicyId || !returnPolicyId || !merchantLocationKey) {
-      const msg = `Could not fetch seller policies: ${err instanceof Error ? err.message : String(err)}`
-      return rows.map(r => ({ sku: (r.sku ?? '') as string, market: mp, status: 'ERROR' as const, message: msg }))
-    }
+    // FFP.12 — NEVER proceed with UNVERIFIED policy ids. The old fallback
+    // ("keep whatever ids we have") is exactly how another market's policy
+    // got written onto DE offers — creating unpublishable drafts that then
+    // failed EVERY publish of the family with a mixed-locale 25007. Policies
+    // are per-marketplace; if we can't verify them for THIS market, stop.
+    const msg = `Couldn't verify ${mp} business policies (${err instanceof Error ? err.message : String(err)}) — refusing to write unverified policy ids onto ${mp} offers (a wrong-market policy is the classic persistent 25007). Retry in a minute.`
+    return rows.map(r => ({ sku: (r.sku ?? '') as string, market: mp, status: 'ERROR' as const, message: msg }))
   }
 
   if (!merchantLocationKey) {
