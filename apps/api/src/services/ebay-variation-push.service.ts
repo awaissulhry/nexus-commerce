@@ -637,6 +637,8 @@ export async function pushVariationGroup(
   }
 
   // Step 1: Create/update each variant's inventory_item.
+  // FFP.17 — transient eBay flakes (25604/25001/5xx) collected for a second pass.
+  const transientItemFailures: Array<{ sku: string; url: string; body: string }> = []
   for (const row of variantRows) {
     const sku = row.sku as string
 
@@ -783,15 +785,44 @@ export async function pushVariationGroup(
       ...(pkgSize ? { packageWeightAndSize: pkgSize } : {}),
     }
 
-    const itemRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, {
-      method: 'PUT', headers, body: JSON.stringify(itemBody),
-    })
+    // FFP.17 — the item write is just as exposed to the Seller Inventory
+    // Service's flakiness (25604 "Prodotto non trovato — Riprova" / 25001 /
+    // bare 5xx) as the publish step; give it a real retry budget.
+    const itemUrl = `${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`
+    const itemBodyJson = JSON.stringify(itemBody)
+    const itemRes = await ebayFetchRetry(itemUrl, {
+      method: 'PUT', headers, body: itemBodyJson,
+    }, { retries: 4, baseDelayMs: 1500 })
     if (!itemRes.ok && itemRes.status !== 204) {
       const err = await itemRes.text().catch(() => '')
-      results.push({ sku, market: mp, status: 'ERROR', message: `inventory_item PUT ${itemRes.status}: ${err.slice(0, 300)}` })
+      const isTransientItemErr = itemRes.status >= 500
+        || err.includes('"errorId":25604') || err.includes('"errorId":25001')
+      if (isTransientItemErr) transientItemFailures.push({ sku, url: itemUrl, body: itemBodyJson })
+      results.push({
+        sku, market: mp, status: 'ERROR',
+        message: `inventory_item PUT ${itemRes.status}: ${err.slice(0, 300)}${isTransientItemErr ? ' — eBay inventory-service hiccup (their own message says retry); auto-retries ran, press Publish again in ~30s if this variant is still listed as blocked.' : ''}`,
+      })
       continue
     }
     results.push({ sku, market: mp, status: 'PUSHED', message: 'inventory_item updated' })
+  }
+
+  // FFP.17 — second pass for transient item-write flakes: the SAME PUT
+  // typically lands seconds later (verified live — an unchanged re-push
+  // succeeded). Retry just the flaked variants once after a short settle
+  // instead of aborting the whole family.
+  if (transientItemFailures.length > 0) {
+    console.log(`[ebay-push] FFP.17 — ${transientItemFailures.length} inventory_item PUT(s) hit transient eBay errors; settling 3s, then one more pass`)
+    await new Promise((r) => setTimeout(r, 3000))
+    for (const f of transientItemFailures) {
+      try {
+        const retryRes = await ebayFetchRetry(f.url, { method: 'PUT', headers, body: f.body }, { retries: 3, baseDelayMs: 2000 })
+        if (retryRes.ok || retryRes.status === 204) {
+          const idx = results.findIndex((r) => r.sku === f.sku && r.status === 'ERROR')
+          if (idx >= 0) results[idx] = { sku: f.sku, market: mp, status: 'PUSHED', message: 'inventory_item updated (recovered after transient eBay error)' }
+        }
+      } catch { /* keep the original error result */ }
+    }
   }
 
   // Guard (prevents eBay error 25701): every variant must have a created inventory_item
