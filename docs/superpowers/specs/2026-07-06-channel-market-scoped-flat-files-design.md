@@ -161,6 +161,8 @@ Already in the model + create/read paths:
 
 Phase 1 alone delivers the Owner's goal (separate, scoped, my-way files with synced stock).
 
+> **Delivered 2026-07-06 — Plan 1 (channel/market-scoped removal + inventory guard):** the eBay editor's delete now removes only the EBAY/{market} `ChannelListing` (`remove-channel-listing` intent — Product/stock/other channels untouched), and the Amazon editor gained a real market-scoped removal (`removeAmazonListing` + `POST /api/amazon/flat-file/remove`), replacing its cosmetic delete. Both guarded by inventory-invariant tests (17/17 pass). See `docs/superpowers/plans/2026-07-06-channel-market-scoped-removal.md`. **Remaining:** scoped-view load (C3) + the staged Action column (Deactivate/End/Delete + `ReviseFixedPriceItem`) = Plans 2-3.
+
 ---
 
 ## 9. Affected surfaces (for the plan)
