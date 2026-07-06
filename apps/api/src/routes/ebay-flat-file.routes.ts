@@ -40,6 +40,7 @@ import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, toListin
 import { pushSharedListings, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot } from '../services/ebay-variation-push.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
+import { publishOrderEvent } from '../services/order-events.service.js';
 import { renderExport } from '../services/export/renderers.js';
 import { parseCsv, parseFile, sniffDelimiter, detectFileKind, type ParsedFile } from '../services/import/parsers.js';
 // P1.2 — eBay flat-file create/reparent pre-pass (new products persist under their parent before ChannelListing loop runs)
@@ -969,13 +970,22 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         await uploadFeedFile(taskId, ndjson, token);
 
         // Durable push-history record (feed mode). Non-fatal — never blocks the push.
+        let feedJobId = '';
         try {
-          await prisma.ebayPushJob.create({
+          const j = await prisma.ebayPushJob.create({
             data: { mode: 'feed', taskId, markets: [mp], skuCount: rows.length, status: 'SUBMITTED', warnings: oversellWarnings as any },
           });
+          feedJobId = j.id;
         } catch (e) {
           request.log.warn({ err: e }, 'ebay/flat-file/push: failed to persist EbayPushJob feed-mode (non-fatal)');
         }
+        // FFP.5 — real-time: open flat-file tabs refresh their push badge live.
+        try {
+          publishOrderEvent({
+            type: 'ebay_push.status_changed', jobId: feedJobId, taskId,
+            status: 'SUBMITTED', pushed: 0, failed: 0, ts: Date.now(),
+          });
+        } catch { /* SSE is best-effort */ }
 
         return reply.send({
           mode: 'feed',
@@ -1377,8 +1387,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
     // Durable push-history record (mirrors AmazonFlatFileFeedJob) so a failed push
     // is inspectable forever, not a 3-second toast. Non-fatal.
+    let apiJobId = '';
     try {
-      await prisma.ebayPushJob.create({
+      const j = await prisma.ebayPushJob.create({
         data: {
           mode: 'api',
           markets: targetMarkets,
@@ -1391,9 +1402,20 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           completedAt: new Date(),
         },
       });
+      apiJobId = j.id;
     } catch (e) {
       request.log.warn({ err: e }, 'ebay/flat-file/push: failed to persist EbayPushJob (non-fatal)');
     }
+
+    // FFP.5 — real-time: itemId/status writebacks just landed in the DB; tell
+    // every open flat-file tab to refresh instead of waiting for a manual reload.
+    try {
+      publishOrderEvent({
+        type: 'ebay_push.status_changed', jobId: apiJobId, taskId: '',
+        status: errors === 0 ? 'DONE' : pushed === 0 ? 'FATAL' : 'PARTIAL',
+        pushed, failed: errors, ts: Date.now(),
+      });
+    } catch { /* SSE is best-effort */ }
 
     return reply.send({ mode: 'api', pushed, errors, results: perRowResults, warnings: oversellWarnings });
   });
@@ -1624,6 +1646,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     const published = results.filter((r) => r.status === 'PUBLISHED').length;
     const errors = results.filter((r) => r.status === 'ERROR').length;
 
+    // FFP.5 — real-time refresh for the publish path's status/itemId writeback.
+    try {
+      publishOrderEvent({
+        type: 'ebay_push.status_changed', jobId: '', taskId: '',
+        status: errors === 0 ? 'DONE' : published === 0 ? 'FATAL' : 'PARTIAL',
+        pushed: published, failed: errors, ts: Date.now(),
+      });
+    } catch { /* SSE is best-effort */ }
+
     return reply.send({ published, errors, results });
   });
 
@@ -1731,6 +1762,13 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
     const deleted = results.filter((r) => r.status === 'DELETED').length;
     const errors2 = results.filter((r) => r.status === 'ERROR').length;
+    // FFP.5 — offers were withdrawn / DB statuses reset: refresh open tabs.
+    try {
+      publishOrderEvent({
+        type: 'ebay_push.status_changed', jobId: '', taskId: '',
+        status: errors2 === 0 ? 'DONE' : 'PARTIAL', pushed: deleted, failed: errors2, ts: Date.now(),
+      });
+    } catch { /* SSE is best-effort */ }
     return reply.send({ deleted, errors: errors2, results });
   });
 

@@ -53,6 +53,7 @@ import { ColumnGroupModal } from '@/components/flat-file/ColumnGroupModal'
 import { EBAY_FILTER_DEFAULT, type EbayFilterDims } from '../_shared/flat-file-filter.types'
 import { isSharedDuplicateAllowed } from './validateRows.shared'
 import { draftKey, readDraft, writeDraft, clearDraft, mergeDraftRows } from './draftStore'
+import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -972,6 +973,24 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     return rows
   }, [familyId, BACKEND, ebayKey, savedErrorRows, loadCategorySchema])
 
+  // ── FFP.5 — real-time grid refresh ─────────────────────────────────────
+  // Reload the MOUNTED grid (via the grid's own loadData handle) while
+  // preserving any in-progress edits: the draft layer re-merges dirty rows
+  // over the fresh server rows, so live itemId/status/qty land without
+  // clobbering what the operator is typing.
+  const reloadGridPreservingEdits = useCallback(() => {
+    try { writeDraft(draftKey(marketplaceRef.current, familyId), latestRowsRef.current) } catch {}
+    pendingDraftRestoreRef.current = true
+    void onReloadCtxRef.current?.()
+  }, [familyId])
+
+  // Push status changed anywhere (this tab's push, another tab, or the feed
+  // poll cron finishing a bulk task) → refresh itemIds/status live.
+  useOrderEventsRefresh(() => { reloadGridPreservingEdits() }, {
+    eventTypes: ['ebay_push.status_changed'],
+    debounceMs: 1500,
+  })
+
   // ── API: save ─────────────────────────────────────────────────────────
 
   const onSave = useCallback(async (dirty: BaseRow[]): Promise<{ saved: number; createResult?: { errors?: unknown[] } }> => {
@@ -1185,9 +1204,10 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         } else {
           toast.success(`Pushed ${json.results.length} rows`)
         }
-        // Auto-refresh the grid so the just-created Item ID / Listing ID / status columns
-        // populate from the persisted push result — no manual reload needed.
-        void onReload()
+        // FFP.5 — refresh the MOUNTED grid (old onReload only warmed the SWR
+        // cache; the new Item ID / status columns never appeared until a manual
+        // reload). Edits in progress survive via the draft merge.
+        reloadGridPreservingEdits()
       }
     } catch (err) {
       toast.error('Push failed: ' + (err instanceof Error ? err.message : String(err)))
@@ -1231,8 +1251,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         } else {
           toast.success(`Updated ${json.results.length} offer${json.results.length !== 1 ? 's' : ''} — live on eBay`)
         }
-        // Auto-refresh so status/quantity reflect the live update without a manual reload.
-        void onReload()
+        // FFP.5 — refresh the mounted grid (see pushToEbay note).
+        reloadGridPreservingEdits()
       }
     } catch (err) {
       toast.error('Quick update failed: ' + (err instanceof Error ? err.message : String(err)))
@@ -2559,7 +2579,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           marketplace="IT"
           availableFields={ebayCascadeFields}
           onClose={() => setCascadeRow(null)}
-          onSuccess={(n) => { if (n > 0) void onReload() }}
+          onSuccess={(n) => { if (n > 0) reloadGridPreservingEdits() }}
         />
       )}
       {/* P2.D2 — Delete confirm modal */}
