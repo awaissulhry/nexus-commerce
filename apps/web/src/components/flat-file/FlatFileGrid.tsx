@@ -7,6 +7,7 @@ import {
 import { useRouter } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
+  FileSpreadsheet,
   Image as ImageIcon, Keyboard, Layers, Loader2, Pin, Plus, Settings2,
   Search, Trash2, Undo2, Redo2, X,
 } from 'lucide-react'
@@ -41,6 +42,7 @@ import {
 } from '@/app/products/_shared/FlatFileIconToolbar'
 import { KeyboardShortcutsModal } from '@/app/_shared/grid-lens/KeyboardShortcutsModal'
 import { FLAT_FILE_SHORTCUTS } from '@/app/products/_shared/flat-file-shortcuts'
+import { useCatalogWorkbookExport } from '@/app/products/_shared/useCatalogWorkbookExport'
 
 // ── Internal types ─────────────────────────────────────────────────────────
 
@@ -778,6 +780,7 @@ export default function FlatFileGrid({
 }: FlatFileGridProps) {
   const router = useRouter()
   const { toast } = useToast()
+  const { exportCatalogWorkbook, exporting: exportingWorkbook } = useCatalogWorkbookExport()
 
   // ── Row state ──────────────────────────────────────────────────────────
   const paddedInitRef = useRef<BaseRow[] | null>(null)
@@ -1973,6 +1976,8 @@ export default function FlatFileGrid({
           <MenuDropdown label="File" items={[
             { label: 'Reload from server', icon: <Undo2 className="w-3.5 h-3.5" />, disabled: loading,
               onClick: () => { if (confirm('Reload rows? Unsaved edits will be lost.')) void loadData() } },
+            { separator: true },
+            { label: exportingWorkbook ? 'Exporting workbook…' : 'Catalog workbook (v2)', icon: <FileSpreadsheet className="w-3.5 h-3.5" />, disabled: exportingWorkbook, onClick: () => void exportCatalogWorkbook() },
             ...(fileMenuItems ?? []),
           ]} />
           <MenuDropdown label="Edit" items={[

@@ -25,6 +25,7 @@ import { type PullDiffApplyResult } from './PullDiffModal'
 import { type ImportApplyResult } from './ImportWizardModal'
 import { PendingPullBanner } from '../_shared/PendingPullBanner'
 import { FLAT_FILE_SHORTCUTS } from '../_shared/flat-file-shortcuts'
+import { useCatalogWorkbookExport } from '../_shared/useCatalogWorkbookExport'
 import { FlatFileToolbar as FlatFileIconToolbar, TbBtn as SharedTbBtn } from '@/components/flat-file/FlatFileToolbar'
 import { ColumnGroupModal } from '@/design-system/components/ColumnGroupModal'
 import { Tooltip } from '@/design-system/primitives/Tooltip'
@@ -918,6 +919,7 @@ export default function AmazonFlatFileClient({
   const [submitting, setSubmitting] = useState(false)
   const [polling, setPolling] = useState(false)
   const { toast } = useToast() // FFS.7 — submit summary + feed-completion notices
+  const { exportCatalogWorkbook, exporting: exportingWorkbook } = useCatalogWorkbookExport()
   const [submitPanelOpen, setSubmitPanelOpen] = useState(false)
   // FFC — pre-publish Review & Confirm gate. A Promise-based modal so Submit can
   // `await` the operator's decision in place of the old crude confirm().
@@ -3988,6 +3990,8 @@ export default function AmazonFlatFileClient({
                 }},
               { separator: true },
               { label: 'Version history…', icon: <Clock className="w-3.5 h-3.5" />, onClick: () => setHistoryOpen(true), disabled: !manifest },
+              { separator: true },
+              { label: exportingWorkbook ? 'Exporting workbook…' : 'Catalog workbook (v2)', icon: <FileSpreadsheet className="w-3.5 h-3.5" />, disabled: exportingWorkbook, onClick: () => void exportCatalogWorkbook() },
             ]} />
             <MenuDropdown label="Edit" items={[
               { label: 'Undo', icon: <Undo2 className="w-3.5 h-3.5" />, onClick: undo, disabled: !history.length, shortcut: '⌘Z' },
