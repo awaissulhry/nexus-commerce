@@ -5774,6 +5774,36 @@ model BulkAutomationApproval {
 //   upload    operator picked a file in the browser
 //   url       scheduled pull from a URL (W8.4)
 //   ftp       scheduled pull from FTP (W8.4)
+// ── FF2: Flat-file import history ─────────────────────────────────────
+//
+// One row per flat-file import (preview → apply). Persists the uploaded
+// file handle, the dry-run diff, the inverse diff (for one-click rollback),
+// and the scope, so imports are auditable and reversible. Additive table;
+// distinct from the legacy ImportJob (which serves the old import wizard).
+model FlatFileImport {
+  id            String    @id @default(cuid())
+  channel       String
+  markets       Json
+  includeMaster Boolean   @default(false)
+  snapshotId    String?
+  filename      String?
+  uploadHandle  String?
+  reportHandle  String?
+  diff          Json?
+  inverseDiff   Json?
+  status        String    @default("PREVIEW")
+  appliedCount  Int       @default(0)
+  skippedCount  Int       @default(0)
+  failedCount   Int       @default(0)
+  rolledBackAt  DateTime?
+  createdBy     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([channel, createdAt(sort: Desc)])
+  @@index([status])
+}
+
 model ImportJob {
   id String @id @default(cuid())
 
