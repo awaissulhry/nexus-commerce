@@ -571,7 +571,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const latestSelectedRowsRef = useRef<Set<string>>(new Set())
   const latestSetRowsRef = useRef<((rows: BaseRow[]) => void) | null>(null)
   const latestPushHistoryRef = useRef<((rows: BaseRow[]) => void) | null>(null)
-  const [publishTargets, setPublishTargets]   = useState<string[]>(['IT'])
+  const [publishTargets, setPublishTargets]   = useState<string[]>([marketplace])
   const [descModal, setDescModal]             = useState<{ rowId: string } | null>(null)
   const [categorySearchOpen, setCategorySearchOpen]   = useState(false)
   const [categorySearchRowId, setCategorySearchRowId] = useState<string | null>(null)
@@ -1582,6 +1582,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       window.history.replaceState(null, '', `?${params.toString()}`)
     } catch { /* non-fatal — fall back to state-only switch */ }
     setMarketplace(up)
+    // Market-specific: default Publish / Quick-update to the market you're now on
+    // (the panel still lets you add other markets before pushing).
+    setPublishTargets([up])
   }, [])
 
   // ── Slot: channel strip ────────────────────────────────────────────────
