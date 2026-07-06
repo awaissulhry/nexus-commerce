@@ -345,3 +345,157 @@ export async function applyChanges(
 
   return { applied, skipped, failed, rows, inverseDiff }
 }
+
+// ── applyDeletes ───────────────────────────────────────────────────────────────
+
+/**
+ * FF2.6b — Apply row-level deletions from a dry-run diff.
+ *
+ * Two delete variants:
+ *
+ *   Channel delete  (record.channel is set):
+ *     Ends the listing(s) for the scoped market(s) only.
+ *     Sets { listingStatus:'ENDED', isPublished:false, offerActive:false }.
+ *     Does NOT touch the Product row or any other channel.
+ *
+ *   Master delete   (no channel, sheet='Products'):
+ *     Soft-deletes the product via deletedAt=now().
+ *     Cascades the same soft-delete to all immediate children
+ *     (where parentId = product.id AND deletedAt IS NULL).
+ *
+ * Typed-confirm gate (required):
+ *   opts.deleteConfirmation MUST equal deleteConfirmationPhrase(diff) before
+ *   any DB write is attempted. A mismatch throws immediately.
+ *
+ * Inverse diff:
+ *   Captures the previous state of the columns being overwritten, enabling
+ *   a future rollback pass.
+ */
+export function deleteConfirmationPhrase(diff: ImportDiff): string {
+  return 'DELETE ' + diff.deletes.length + ' PRODUCTS'
+}
+
+export async function applyDeletes(
+  prisma: any,
+  diff: ImportDiff,
+  opts: { deleteConfirmation: string },
+): Promise<ApplyResult> {
+  // ── Typed-confirm gate — throw BEFORE any write ────────────────────────────
+  if (opts.deleteConfirmation !== deleteConfirmationPhrase(diff)) {
+    throw new Error('delete confirmation phrase does not match')
+  }
+
+  const rows: ApplyRowResult[] = []
+  const inverseDiff: InverseCell[] = []
+  let applied = 0
+  let skipped = 0
+  let failed = 0
+
+  // ── Inner delete function (runs inside $transaction or directly) ────────────
+
+  const deleteFn = async (tx: any): Promise<void> => {
+    for (const record of diff.deletes) {
+      const { sku } = record
+
+      try {
+        if (record.channel) {
+          // ── Channel delete: end the scoped market listing(s) ────────────────
+          const endData = {
+            listingStatus: 'ENDED',
+            isPublished: false,
+            offerActive: false,
+          }
+
+          const markets = record.markets
+
+          if (markets === 'ALL' || markets === undefined) {
+            // No marketplace filter — end all markets for this channel+SKU
+            const before = await tx.channelListing.findFirst({
+              where: { product: { sku }, channel: record.channel },
+            })
+            if (before) {
+              inverseDiff.push({
+                model: 'ChannelListing',
+                sku,
+                channel: record.channel,
+                data: captureInverse(endData, before),
+              })
+            }
+            await tx.channelListing.updateMany({
+              where: { product: { sku }, channel: record.channel },
+              data: endData,
+            })
+          } else {
+            // string[] — end each scoped market individually
+            for (let i = 0; i < markets.length; i++) {
+              const market = markets[i]
+              const before = await tx.channelListing.findFirst({
+                where: { product: { sku }, channel: record.channel, marketplace: market },
+              })
+              if (before) {
+                inverseDiff.push({
+                  model: 'ChannelListing',
+                  sku,
+                  channel: record.channel,
+                  market,
+                  data: captureInverse(endData, before),
+                })
+              }
+              await tx.channelListing.updateMany({
+                where: { product: { sku }, channel: record.channel, marketplace: market },
+                data: endData,
+              })
+            }
+          }
+
+          applied++
+          rows.push({ sku, status: 'SUCCESS' })
+        } else {
+          // ── Master delete: soft-delete product + cascade to children ─────────
+          const now = new Date()
+          const deleteData = { deletedAt: now }
+
+          // Read current product to get its id for cascade + capture inverse.
+          const before = await tx.product.findFirst({ where: { sku } })
+          if (before) {
+            inverseDiff.push({
+              model: 'Product',
+              sku,
+              data: captureInverse(deleteData, before),
+            })
+          }
+
+          // Primary soft-delete
+          await tx.product.updateMany({ where: { sku }, data: deleteData })
+
+          // Cascade to children: soft-delete only those not yet deleted
+          if (before && before.id !== undefined && before.id !== null) {
+            await tx.product.updateMany({
+              where: { parentId: before.id, deletedAt: null },
+              data: { deletedAt: now },
+            })
+          }
+
+          applied++
+          rows.push({ sku, status: 'SUCCESS' })
+        }
+      } catch (err) {
+        failed++
+        rows.push({
+          sku,
+          status: 'FAILED',
+          detail: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+  }
+
+  // ── Execute: transactionally if available, directly otherwise ───────────────
+  if (typeof prisma.$transaction === 'function') {
+    await prisma.$transaction(deleteFn)
+  } else {
+    await deleteFn(prisma)
+  }
+
+  return { applied, skipped, failed, rows, inverseDiff }
+}
