@@ -640,6 +640,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   })
   const scopeRef = useRef(scope)
   const isFirstScopeEffect = useRef(true)
+  const marketplaceRef = useRef(marketplace)
+  const isFirstMarketEffect = useRef(true)
   // Captures ctx.onReload from renderToolbarImport so the scope-change effect
   // can call the SAME reload the toolbar's Reload button uses.
   const onReloadCtxRef = useRef<(() => void) | null>(null)
@@ -692,7 +694,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     return:      Array<{ id: string; name: string }>
   }>({ fulfillment: [], payment: [], return: [] })
 
-  const ebayKey = familyId ?? '__global__'
+  const ebayKey = `${familyId ?? '__global__'}:${marketplace}`
 
   // Track whether we have rows ready to pass to FlatFileGrid. Starts false;
   // set to true once the SWR cache or client fetch resolves.
@@ -713,6 +715,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     const qs = new URLSearchParams()
     if (familyId) qs.set('familyId', familyId)
     qs.set('scope', scopeRef.current)
+    qs.set('marketplace', marketplaceRef.current)
     fetch(`${BACKEND}/api/ebay/flat-file/rows?${qs}`)
       .then((r) => r.json())
       .then((json: { rows: EbayRow[] }) => {
@@ -736,6 +739,22 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     void onReloadCtxRef.current?.()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope])
+
+  // Per-market file — re-scope rows to the active market on switch. The SWR cache is
+  // keyed per market (ebayKey includes marketplace), so a market we've already loaded
+  // shows instantly from cache; a fresh one triggers the grid's reload to fetch only
+  // that market's listed products. (Column swap is already handled by the MS-E memo.)
+  useEffect(() => {
+    marketplaceRef.current = marketplace
+    if (isFirstMarketEffect.current) { isFirstMarketEffect.current = false; return }
+    const snap = _ebay_swr.get(ebayKey)
+    if (snap && Date.now() - snap.fetchedAt < EBAY_SWR_TTL_MS) {
+      latestSetRowsRef.current?.(snap.rows)
+    } else {
+      void onReloadCtxRef.current?.()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marketplace])
 
   // Fetch policies once on mount (non-blocking — column options update when done)
   useEffect(() => {
@@ -889,6 +908,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     const qs = new URLSearchParams()
     if (familyId) qs.set('familyId', familyId)
     qs.set('scope', scopeRef.current)
+    qs.set('marketplace', marketplaceRef.current)
     const res = await fetch(`${BACKEND}/api/ebay/flat-file/rows?${qs}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const json = await res.json() as { rows: EbayRow[] }

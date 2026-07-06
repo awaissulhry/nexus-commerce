@@ -75,10 +75,13 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
   // Returns one flat row per Product (not per market), with per-market
   // fields prefixed: it_price, de_qty, uk_item_id, etc.
   fastify.get<{
-    Querystring: { familyId?: string; scope?: ListingScope }
+    Querystring: { familyId?: string; scope?: ListingScope; marketplace?: string }
   }>('/ebay/flat-file/rows', async (request, reply) => {
     const { familyId } = request.query;
     const scope: ListingScope = request.query.scope === 'all' ? 'all' : 'listed';
+    // Per-market scope: when a marketplace is given, "listed" means listed on eBay/{market}
+    // (a genuinely separate per-market file). When absent, falls back to channel-level.
+    const marketplace = request.query.marketplace?.toUpperCase() || undefined;
 
     try {
       const products = await prisma.product.findMany({
@@ -91,7 +94,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           // (listed = family-coherent eBay channel filter; all = whole catalog).
           ...(familyId
             ? { OR: [{ id: familyId }, { parentId: familyId }] }
-            : buildListingScopeWhere({ channel: 'EBAY', scope })),
+            : buildListingScopeWhere({ channel: 'EBAY', marketplace, scope })),
         },
         include: {
           channelListings: {
