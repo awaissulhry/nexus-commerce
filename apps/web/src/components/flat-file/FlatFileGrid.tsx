@@ -1977,7 +1977,7 @@ export default function FlatFileGrid({
             { label: 'Reload from server', icon: <Undo2 className="w-3.5 h-3.5" />, disabled: loading,
               onClick: () => { if (confirm('Reload rows? Unsaved edits will be lost.')) void loadData() } },
             { separator: true },
-            { label: exportingWorkbook ? 'Exporting workbook…' : 'Catalog workbook (v2)', icon: <FileSpreadsheet className="w-3.5 h-3.5" />, disabled: exportingWorkbook, onClick: () => void exportCatalogWorkbook() },
+            { label: exportingWorkbook ? 'Exporting workbook…' : 'Catalog workbook (v2)', icon: <FileSpreadsheet className="w-3.5 h-3.5" />, disabled: exportingWorkbook, onClick: () => { const skuIn = [...new Set(rows.filter((r) => !r._ghost).map((r) => skuOf(r)).filter(Boolean))]; void exportCatalogWorkbook({ skuIn }) } },
             ...(fileMenuItems ?? []),
           ]} />
           <MenuDropdown label="Edit" items={[

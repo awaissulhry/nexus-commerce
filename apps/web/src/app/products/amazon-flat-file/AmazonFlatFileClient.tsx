@@ -3991,7 +3991,7 @@ export default function AmazonFlatFileClient({
               { separator: true },
               { label: 'Version history…', icon: <Clock className="w-3.5 h-3.5" />, onClick: () => setHistoryOpen(true), disabled: !manifest },
               { separator: true },
-              { label: exportingWorkbook ? 'Exporting workbook…' : 'Catalog workbook (v2)', icon: <FileSpreadsheet className="w-3.5 h-3.5" />, disabled: exportingWorkbook, onClick: () => void exportCatalogWorkbook() },
+              { label: exportingWorkbook ? 'Exporting workbook…' : 'Catalog workbook (v2)', icon: <FileSpreadsheet className="w-3.5 h-3.5" />, disabled: exportingWorkbook, onClick: () => { const skuIn = [...new Set(rows.filter((r) => !r._ghost).map((r) => String(r.item_sku ?? '')).filter(Boolean))]; void exportCatalogWorkbook({ skuIn }) } },
             ]} />
             <MenuDropdown label="Edit" items={[
               { label: 'Undo', icon: <Undo2 className="w-3.5 h-3.5" />, onClick: undo, disabled: !history.length, shortcut: '⌘Z' },

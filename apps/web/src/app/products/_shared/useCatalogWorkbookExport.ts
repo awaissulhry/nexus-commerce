@@ -21,19 +21,24 @@ export function useCatalogWorkbookExport() {
   const { toast } = useToast()
   const [exporting, setExporting] = useState(false)
 
-  async function exportCatalogWorkbook() {
+  async function exportCatalogWorkbook(opts?: { skuIn?: string[]; channels?: string[] }) {
     if (exporting) return
     setExporting(true)
     try {
+      const skuIn   = (opts?.skuIn   ?? []).filter(Boolean)
+      const channels = opts?.channels ?? ['AMAZON', 'EBAY', 'SHOPIFY']
+      const jobName  = skuIn.length
+        ? `Workbook (${skuIn.length} SKU${skuIn.length === 1 ? '' : 's'})`
+        : 'Catalog workbook'
       const res = await fetch(`${getBackendUrl()}/api/export-jobs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          jobName: 'Catalog workbook',
+          jobName,
           format: 'workbook',
           targetEntity: 'catalog',
           columns: [],
-          filters: { channels: ['AMAZON', 'EBAY', 'SHOPIFY'] },
+          filters: { channels, ...(skuIn.length ? { skuIn } : {}) },
           runImmediately: true,
         }),
       })
