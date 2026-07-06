@@ -18,7 +18,9 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { submitAmazonImageFeed } from '../services/images/amazon-image-feed.service.js'
-import { publishEbayImages } from '../services/images/ebay-image-publish.service.js'
+// FFP.7 — the Trading-API path (publishEbayImages) is a permanent no-op for
+// Inventory-listed products (ebayItemId is null); use the real Inventory push.
+import { publishEbayImagesViaInventory } from '../services/images/ebay-inventory-image-publish.service.js'
 import { publishShopifyImages } from '../services/images/shopify-image-publish.service.js'
 import { recordImagePublishAudit } from '../utils/image-publish-audit.js'
 
@@ -115,7 +117,7 @@ const bulkImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
                 : `Partial: ${okCount}/${markets.length} markets queued`,
             })
           } else if (channel === 'EBAY') {
-            const out = await publishEbayImages(productId)
+            const out = await publishEbayImagesViaInventory(productId)
             results.push({
               productId,
               ok: out.success,

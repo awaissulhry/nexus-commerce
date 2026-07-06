@@ -2214,7 +2214,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         {derivedProductIds.length > 0 && (
           <SharedTbBtn
             icon={<ImageIcon className="w-3.5 h-3.5" />}
-            title="Manage eBay images — curate per-color image sets, upload new photos, push to all markets"
+            title="Manage eBay images — curate per-variation image sets, upload new photos; publishes to the selected market only"
             onClick={() => setImageModalOpen(true)}
             active={imageModalOpen}
           />

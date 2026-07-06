@@ -67,7 +67,8 @@ const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
       if (!product) return reply.code(404).send({ error: 'Product not found' })
 
       try {
-        const result = await publishEbayImagesViaInventory(productId, marketplace)
+        // FFP.7 — honor the axis the operator selected in the modal.
+        const result = await publishEbayImagesViaInventory(productId, marketplace, request.body?.activeAxis)
         // PB.16 — Audit log.
         void recordImagePublishAudit({
           productId,

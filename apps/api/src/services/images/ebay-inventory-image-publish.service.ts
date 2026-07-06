@@ -42,6 +42,8 @@ export interface EbayInventoryPublishResult {
 export async function publishEbayImagesViaInventory(
   productId: string,
   marketplace?: string,
+  /** FFP.7 — the axis the operator selected in the modal (wins over the stored preference). */
+  activeAxis?: string,
 ): Promise<EbayInventoryPublishResult> {
   const product = await prisma.product.findUnique({
     where: { id: productId },
@@ -127,15 +129,9 @@ export async function publishEbayImagesViaInventory(
   }
 
   // Track the attempt so the publish dashboard/history sees it immediately.
-  const job = await prisma.channelImagePublishJob.create({
-    data: {
-      productId,
-      channel: 'EBAY',
-      status: 'SUBMITTING',
-      vendorEntityId: groupKey,
-      requestPayload: { markets, groupKey } as object,
-    },
-  })
+  // FFP.7 — the job row is created AFTER axis resolution below so the payload
+  // records which axis was actually used (observability for axis mismatches).
+  let job: { id: string } | null = null
 
   // The Images tab changes images only — keep each variant's currently-published
   // quantity (passthrough cap; the row qty already reflects what's live on eBay).
@@ -147,7 +143,43 @@ export async function publishEbayImagesViaInventory(
   // axis, variantGroupValue = e.g. "Nero") and optional per-SKU overrides
   // (variationId = the variant's product id). Both feed the push and WIN over the
   // default (Amazon-CDN child) images; per-SKU wins over per-axis-value.
-  const pictureAxis = product.imageAxisPreference ?? 'Color'
+  //
+  // FFP.7 — axis resolution. Priority: the axis the operator SAW in the modal →
+  // the stored preference → the family's first REAL variation axis. Either way
+  // the result is validated against the axes the variants actually vary by:
+  // curating by an axis the family doesn't have (e.g. the old hardcoded 'Color'
+  // default on a Size-only family) silently dropped every curated set and
+  // produced an inconsistent group — the misleading 25007 on image publishes.
+  const realAxes = (() => {
+    const found = new Map<string, { label: string; values: Set<string> }>()
+    for (const r of variantRows) {
+      for (const [k, v] of Object.entries(r)) {
+        if (!k.startsWith('aspect_') || typeof v !== 'string' || !v.trim()) continue
+        const label = k.slice('aspect_'.length).replace(/_/g, ' ')
+        const syn = axisSynonymKey(label)
+        const e = found.get(syn) ?? { label, values: new Set<string>() }
+        // prefer the cased variant of the key (buildFlatRow writes both)
+        if (/[A-Z]/.test(label[0] ?? '') && !/[A-Z]/.test(e.label[0] ?? '')) e.label = label
+        e.values.add(v.trim().toLowerCase())
+        found.set(syn, e)
+      }
+    }
+    return [...found.values()].filter((a) => a.values.size > 1).map((a) => a.label)
+  })()
+  const requestedAxis = activeAxis?.trim() || product.imageAxisPreference || 'Color'
+  const matchedAxis = realAxes.find((a) => axisSynonymKey(a) === axisSynonymKey(requestedAxis))
+  const pictureAxis = matchedAxis ?? realAxes[0] ?? requestedAxis
+
+  job = await prisma.channelImagePublishJob.create({
+    data: {
+      productId,
+      channel: 'EBAY',
+      marketplace: wantMarket ?? null,
+      status: 'SUBMITTING',
+      vendorEntityId: groupKey,
+      requestPayload: { markets, groupKey, requestedAxis, pictureAxis, realAxes } as object,
+    },
+  })
   const curatedRows = await prisma.listingImage.findMany({
     where: { productId, platform: 'EBAY', mediaType: 'IMAGE' },
     orderBy: { position: 'asc' },
@@ -228,12 +260,14 @@ export async function publishEbayImagesViaInventory(
       : { publishStatus: 'ERROR', publishError: (errors[0]?.message ?? 'eBay publish failed').slice(0, 500) },
   })
 
-  await prisma.channelImagePublishJob.update({
-    where: { id: job.id },
-    data: success
-      ? { status: 'DONE', completedAt: new Date(), response: { markets, results: allResults } as object }
-      : { status: 'FATAL', completedAt: new Date(), errorMessage: (errors[0]?.message ?? 'eBay publish failed').slice(0, 500), response: { markets, results: allResults } as object },
-  })
+  if (job) {
+    await prisma.channelImagePublishJob.update({
+      where: { id: job.id },
+      data: success
+        ? { status: 'DONE', completedAt: new Date(), response: { markets, results: allResults } as object }
+        : { status: 'FATAL', completedAt: new Date(), errorMessage: (errors[0]?.message ?? 'eBay publish failed').slice(0, 500), response: { markets, results: allResults } as object },
+    })
+  }
 
   logger.info('[ebay-inventory-image-publish]', { productId, groupKey, markets, success, pushedSkus, errors: errors.length })
 
@@ -244,7 +278,7 @@ export async function publishEbayImagesViaInventory(
       : `eBay publish failed: ${errors[0]?.message ?? 'unknown error'}`,
     pictureCount: pushedSkus,
     colorSetCount: colours.size,
-    jobId: job.id,
+    jobId: job?.id,
     markets,
     results: allResults,
     ...(success ? {} : { error: errors[0]?.message }),

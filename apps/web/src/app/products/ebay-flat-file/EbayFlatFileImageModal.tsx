@@ -380,7 +380,15 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
       }
       setPublishState('publishing')
       try {
-        const res = await beFetch(`/api/products/${productId}/ebay-images/publish?marketplace=${encodeURIComponent(marketplace)}`, { method: 'POST' })
+        // FFP.7 — send the axis the operator is LOOKING AT. The server used to
+        // re-derive it (imageAxisPreference ?? 'Color'), which silently curated
+        // against a different axis than the one on screen — on single-axis
+        // (Size-only) families that mismatch broke the publish outright.
+        const res = await beFetch(`/api/products/${productId}/ebay-images/publish?marketplace=${encodeURIComponent(marketplace)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activeAxis: axis }),
+        })
         const body: PublishResult = await res.json()
         setPublishResult(body)
         setPublishState(body.success ? 'done' : 'failed')
@@ -390,7 +398,7 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
         setPublishResult({ success: false, message: msg, pictureCount: 0, colorSetCount: 0 })
         setPublishState('failed')
       }
-    }, [productId, marketplace, hasDirty, flush, toast])
+    }, [productId, marketplace, axis, hasDirty, flush, toast])
 
     // ── Imperative handle ─────────────────────────────────────────────────────
 
@@ -601,7 +609,7 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
                           <div className="flex flex-wrap gap-1.5">
                             {publishResult.results.map((r, i) => (
                               <span
-                                key={i} title={r.message}
+                                key={i} title={`${r.sku}: ${r.message}`}
                                 className={[
                                   'rounded-full px-2 py-0.5 text-[10px] font-medium',
                                   r.status === 'SUCCESS' || r.status === 'success'
@@ -613,6 +621,18 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
                               </span>
                             ))}
                           </div>
+                        )}
+                        {/* FFP.7 — every distinct failure, not just the first */}
+                        {!publishResult.success && publishResult.results && (
+                          <ul className="space-y-0.5 max-h-24 overflow-y-auto">
+                            {[...new Set(
+                              publishResult.results
+                                .filter((r) => r.status !== 'SUCCESS' && r.status !== 'success' && r.status !== 'PUSHED')
+                                .map((r) => r.message),
+                            )].slice(0, 5).map((m, i) => (
+                              <li key={i} className="text-[10px] text-red-600 dark:text-red-400 truncate" title={m}>{m}</li>
+                            ))}
+                          </ul>
                         )}
                       </div>
                     )}
@@ -672,6 +692,12 @@ export function EbayFlatFileImageModal({ open, onClose, marketplace, productIds,
 
   const [busyAll, setBusyAll] = useState(false)
 
+  // FFP.7 — explicit publish-market selector (market-specific by design).
+  // Defaults to the flat file's active market; the operator can retarget
+  // without leaving the modal.
+  const [publishMarket, setPublishMarket] = useState(marketplace)
+  useEffect(() => { setPublishMarket(marketplace) }, [marketplace, open])
+
   const saveAll = useCallback(async () => {
     setBusyAll(true)
     let failed = 0
@@ -725,12 +751,32 @@ export function EbayFlatFileImageModal({ open, onClose, marketplace, productIds,
         </Banner>
       ) : (
         <div className="flex flex-col gap-4">
+          {/* FFP.7 — publish-market strip */}
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-slate-500 dark:text-slate-400 font-medium mr-1">Publish to</span>
+            {(['IT', 'DE', 'FR', 'ES', 'UK'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setPublishMarket(m)}
+                className={[
+                  'rounded px-2 py-0.5 text-[11px] font-medium border transition-colors',
+                  publishMarket === m
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800',
+                ].join(' ')}
+              >
+                {m}
+              </button>
+            ))}
+            <span className="ml-1 text-[10.5px] text-slate-400">images publish to this market only</span>
+          </div>
           {productIds.map(pid => (
             <FamilySection
               key={pid}
               ref={getRef(pid)}
               productId={pid}
-              marketplace={marketplace}
+              marketplace={publishMarket}
               collapsible={isMulti}
               open={open}
               onSyncColumns={onSyncColumns ? urls => onSyncColumns(pid, urls) : undefined}
