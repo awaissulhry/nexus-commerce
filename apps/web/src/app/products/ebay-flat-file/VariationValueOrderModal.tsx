@@ -24,7 +24,8 @@ import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useToast } from '@/components/ui/Toast'
 import type { EbayRow } from './EbayFlatFileClient'
-import { sortClothing, deriveAxes } from './variationValueOrder.pure'
+import { sortClothing, deriveAxes, axisSynonymKey } from './variationValueOrder.pure'
+import { ChevronUp, ChevronDown } from 'lucide-react'
 
 // ── Sortable item ─────────────────────────────────────────────────────────
 
@@ -160,12 +161,46 @@ export function VariationValueOrderModal({
   )
   const [saving, setSaving] = useState(false)
 
+  // FFP.8 — axis ORDER: which dropdown the buyer picks first on the listing.
+  // Persists as _variationAxes (same key the cockpit's Variations card writes);
+  // the push now orders variesBy.specifications by it.
+  const [axisSeq, setAxisSeq] = useState<string[]>([])
+
   // Re-initialise when modal reopens (fresh rows may have changed)
   useEffect(() => {
     if (open) {
       setAxisOrder(Object.fromEntries(axes.map((a) => [a.key, a.values])))
+      const derived = axes.map((a) => a.displayName)
+      setAxisSeq(derived)
+      // Seed the axis order from the stored per-market config so the modal
+      // shows what the push will actually use. Best-effort — derived order
+      // stands if the fetch fails.
+      if (parentProductId && derived.length > 1) {
+        void fetch(`${BACKEND}/api/ebay/cockpit/variation-matrix?parentProductId=${encodeURIComponent(parentProductId)}&marketplace=${encodeURIComponent(marketplace)}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d: { pickedAxes?: string[] } | null) => {
+            const stored = d?.pickedAxes
+            if (!stored?.length) return
+            const rank = new Map(stored.map((a, i) => [axisSynonymKey(a), i]))
+            setAxisSeq([...derived].sort(
+              (a, b) => (rank.get(axisSynonymKey(a)) ?? Number.MAX_SAFE_INTEGER) - (rank.get(axisSynonymKey(b)) ?? Number.MAX_SAFE_INTEGER),
+            ))
+          })
+          .catch(() => {})
+      }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, axes])
+
+  const moveAxis = useCallback((index: number, delta: -1 | 1) => {
+    setAxisSeq((prev) => {
+      const next = [...prev]
+      const j = index + delta
+      if (j < 0 || j >= next.length) return prev
+      ;[next[index], next[j]] = [next[j], next[index]]
+      return next
+    })
+  }, [])
 
   const handleAxisChange = useCallback((key: string, newValues: string[]) => {
     setAxisOrder((prev) => ({ ...prev, [key]: newValues }))
@@ -182,13 +217,15 @@ export function VariationValueOrderModal({
           parentProductId,
           marketplace,
           axisValueOrder: axisOrder,
+          // FFP.8 — the axis sequence itself (buyer-facing dropdown order).
+          ...(axisSeq.length > 1 ? { pickedAxes: axisSeq } : {}),
         }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as { error?: string }
         throw new Error(err.error ?? `HTTP ${res.status}`)
       }
-      toast.success('Value order saved — will take effect on next push')
+      toast.success('Variation order saved — applies on next push')
       onSaved?.()
       onClose()
     } catch (e) {
@@ -202,8 +239,8 @@ export function VariationValueOrderModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Variation value order"
-      subtitle="Drag values to set the order they appear on the eBay listing. Applies on next push."
+      title="Variation order"
+      subtitle="Order the axes (which dropdown comes first) and the values within each. Applies on next push."
       size="md"
       footer={
         <div className="flex justify-end gap-2">
@@ -224,6 +261,40 @@ export function VariationValueOrderModal({
         </p>
       ) : (
         <div className="py-2">
+          {/* FFP.8 — axis order (buyer picks in this order on the listing) */}
+          {axisSeq.length > 1 && (
+            <div className="mb-3 rounded-lg border border-slate-200 dark:border-slate-700 p-2.5">
+              <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
+                Axis order — buyers pick in this order on eBay
+              </div>
+              <ul className="space-y-1">
+                {axisSeq.map((name, i) => (
+                  <li key={name} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                    <span className="w-4 text-[11px] tabular-nums text-slate-400">{i + 1}.</span>
+                    <span className="flex-1">{name}</span>
+                    <button
+                      type="button"
+                      disabled={i === 0}
+                      onClick={() => moveAxis(i, -1)}
+                      className="p-0.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30"
+                      aria-label={`Move ${name} up`}
+                    >
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={i === axisSeq.length - 1}
+                      onClick={() => moveAxis(i, 1)}
+                      className="p-0.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30"
+                      aria-label={`Move ${name} down`}
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {axes.map((axis) => (
             <AxisPanel
               key={axis.key}

@@ -2699,7 +2699,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       toolbarTrailing={
         <SharedTbBtn
           icon={<ListOrdered className="w-3.5 h-3.5" />}
-          title="Value order — set the display order of variation axis values (Size, Color) on the eBay listing"
+          title="Variation order — set which axis buyers pick first (e.g. Colour before Size) and the value order within each, per market"
           onClick={() => setValueOrderOpen(true)}
         />
       }

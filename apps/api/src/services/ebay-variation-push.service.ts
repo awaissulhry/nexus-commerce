@@ -307,6 +307,8 @@ export async function pushVariationGroup(
   let nameLabels: Record<string, string> = {}
   let valueLabels: Record<string, Record<string, string>> = {}
   let valueOrder: Record<string, string[]> = {}
+  // FFP.8 — operator's stored axis ORDER (_variationAxes, per market+channel).
+  let storedAxisOrder: string[] = []
   const brandBySku = new Map<string, string>()
   try {
     const skus = rows.map((r) => r.sku as string).filter(Boolean)
@@ -328,6 +330,20 @@ export async function pushVariationGroup(
       nameLabels = (pa._axisNameLabels ?? {}) as Record<string, string>
       valueLabels = (pa._axisValueLabels ?? {}) as Record<string, Record<string, string>>
       valueOrder  = (pa._axisValueOrder  ?? {}) as Record<string, string[]>
+      // FFP.8 — the cockpit Variations card writes _axisSortOrder (raw-name
+      // keyed) and _variationAxes (ordered axis list); both were push-dead.
+      // Merge the cockpit value order where the modal hasn't set one, and
+      // capture the axis order for the variesBy.specifications sort below.
+      const rawSort = (pa._axisSortOrder ?? {}) as Record<string, string[]>
+      for (const [name, vals] of Object.entries(rawSort)) {
+        if (!Array.isArray(vals) || vals.length === 0) continue
+        if (!(name in valueOrder) && !(axisSynonymKey(name) in valueOrder) && !(name.toLowerCase() in valueOrder)) {
+          valueOrder[name] = vals
+        }
+      }
+      storedAxisOrder = Array.isArray(pa._variationAxes)
+        ? (pa._variationAxes as unknown[]).filter((s): s is string => typeof s === 'string')
+        : []
     }
   } catch (err) {
     console.warn('[ebay-push] brand/label fetch failed — proceeding without renames', err)
@@ -428,6 +444,17 @@ export async function pushVariationGroup(
     seenSynonymDims.add(sk)
     return true
   })
+
+  // FFP.8 — honor the operator's stored axis ORDER. eBay renders the
+  // buyer-facing dropdowns in the order variesBy.specifications is sent, so
+  // this is what makes "Gender → Colour → Size" real. Unranked axes keep
+  // their derived order after the ranked ones (stable sort).
+  if (storedAxisOrder.length > 0) {
+    const rank = new Map(storedAxisOrder.map((a, i) => [axisSynonymKey(a), i]))
+    effectiveVarAxesDeDuped.sort((a, b) =>
+      (rank.get(axisSynonymKey(a)) ?? Number.MAX_SAFE_INTEGER)
+      - (rank.get(axisSynonymKey(b)) ?? Number.MAX_SAFE_INTEGER))
+  }
 
   const COLOR_AXIS_NAMES_PRE = new Set(['colore', 'color', 'farbe', 'couleur', 'colour', 'kleur'])
   const colorAxisRawName = effectiveVarAxesDeDuped.find(n => COLOR_AXIS_NAMES_PRE.has(n.toLowerCase()))
