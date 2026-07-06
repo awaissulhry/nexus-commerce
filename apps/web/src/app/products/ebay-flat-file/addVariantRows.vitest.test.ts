@@ -26,12 +26,12 @@ describe('generateVariantRowsUnderParent', () => {
 
     const [r0, r1] = rows
     expect(r0.sku).toBe('JKT-Red-M')
-    expect(r0.aspect_color).toBe('Red')
-    expect(r0.aspect_size).toBe('M')
+    expect(r0.aspect_Color).toBe('Red')
+    expect(r0.aspect_Size).toBe('M')
 
     expect(r1.sku).toBe('JKT-Blue-M')
-    expect(r1.aspect_color).toBe('Blue')
-    expect(r1.aspect_size).toBe('M')
+    expect(r1.aspect_Color).toBe('Blue')
+    expect(r1.aspect_Size).toBe('M')
   })
 
   it('(b) every _rowId is unique across rows and across multiple calls', () => {
