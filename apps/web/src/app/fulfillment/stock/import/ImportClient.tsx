@@ -15,7 +15,7 @@
 import { Listbox } from '@/design-system/components/Listbox'
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Upload, FileText, CheckCircle2, AlertTriangle, ArrowRight,
   ArrowLeft, Download, Search, Trash2, Plus, RefreshCw,
@@ -54,9 +54,21 @@ type MainTab = 'wizard' | 'aliases' | 'history'
 interface ParsedFileResult {
   filename: string
   kind: string
+  delimiter: string | null
   headers: string[]
   totalRows: number
+  truncated: boolean
+  /** ALL parsed rows (server-side parse, capped at 5000) — the single source of truth. */
+  rows: Record<string, unknown>[]
   preview: Record<string, unknown>[]
+}
+
+interface DroppedRow {
+  /** 1-based data-row number in the file (excluding the header row). */
+  line: number
+  identifier: string
+  rawQty: string
+  reason: string
 }
 
 interface ResolvedRow {
@@ -187,33 +199,96 @@ function autoMapHeaders(headers: string[]): Record<string, string> {
   return result
 }
 
-function buildRowsFromFile(
-  parsed: ParsedFileResult,
+/**
+ * Robust quantity coercion. Handles Excel numeric cells, "+5", accounting
+ * negatives "(5)", and both Italian and English separator conventions
+ * ("1.234" / "1,234" thousands, "1,5" / "1.5" decimals — decimals are
+ * rejected as "not a whole number" since stock quantities are integers).
+ * Lettered cells are surfaced as mapping mistakes, never silently guessed.
+ */
+function parseQuantityCell(value: unknown): { qty: number } | { reason: string } {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return { reason: 'not a number' }
+    if (!Number.isInteger(value)) return { reason: 'not a whole number' }
+    if (Math.abs(value) > 1_000_000) return { reason: 'out of range' }
+    return { qty: value }
+  }
+  let s = String(value ?? '').trim()
+  if (!s) return { reason: 'empty quantity' }
+  // JS \s already covers NBSP / thin / narrow no-break group separators
+  s = s.replace(/\s/g, '')
+  const paren = /^\((.+)\)$/.exec(s)
+  if (paren) s = `-${paren[1]}`
+  s = s.replace(/^\+/, '')
+  if (!/^-?[\d.,]+$/.test(s)) return { reason: 'not a number' }
+  const neg = s.startsWith('-')
+  const digits = neg ? s.slice(1) : s
+  const lastDot = digits.lastIndexOf('.')
+  const lastComma = digits.lastIndexOf(',')
+  let normalized = digits
+  if (lastDot !== -1 && lastComma !== -1) {
+    // Both present → the later one is the decimal separator.
+    const group = lastDot > lastComma ? ',' : '.'
+    normalized = digits.split(group).join('')
+    if (group === '.') normalized = normalized.replace(',', '.')
+  } else if (lastComma !== -1 || lastDot !== -1) {
+    // One separator kind only: groups of exactly 3 → thousands, else decimal.
+    const sep = lastComma !== -1 ? ',' : '.'
+    const parts = digits.split(sep)
+    const isGrouping =
+      parts.length >= 2 &&
+      parts[0].length >= 1 && parts[0].length <= 3 &&
+      parts.slice(1).every((p) => p.length === 3)
+    normalized = isGrouping ? parts.join('') : parts.join('.')
+  }
+  const n = Number(neg ? `-${normalized}` : normalized)
+  if (!Number.isFinite(n)) return { reason: 'not a number' }
+  if (!Number.isInteger(n)) return { reason: 'not a whole number' }
+  if (Math.abs(n) > 1_000_000) return { reason: 'out of range' }
+  return { qty: n }
+}
+
+interface BuiltRows {
+  rows: Array<{ raw: string; quantity: number; notes?: string; channel?: string; marketplace?: string }>
+  dropped: DroppedRow[]
+}
+
+function buildRowsFromParsed(
+  fileRows: Record<string, unknown>[],
   colMap: Record<string, string>,
-): Array<{ raw: string; quantity: number; notes?: string; channel?: string; marketplace?: string }> {
+): BuiltRows {
   const idCol = Object.entries(colMap).find(([, v]) => v === 'identifier')?.[0]
   const qtyCol = Object.entries(colMap).find(([, v]) => v === 'quantity')?.[0]
   const notesCol = Object.entries(colMap).find(([, v]) => v === 'notes')?.[0]
   const channelCol = Object.entries(colMap).find(([, v]) => v === 'channel')?.[0]
   const mpCol = Object.entries(colMap).find(([, v]) => v === 'marketplace')?.[0]
-  if (!idCol || !qtyCol) return []
+  if (!idCol || !qtyCol) return { rows: [], dropped: [] }
 
-  const rows = []
-  for (const row of (parsed as any)._fullRows ?? []) {
+  const rows: BuiltRows['rows'] = []
+  const dropped: DroppedRow[] = []
+  fileRows.forEach((row, i) => {
     const raw = String(row[idCol] ?? '').trim()
-    if (!raw) continue
-    const rawQty = String(row[qtyCol] ?? '').trim().replace(/^\+/, '')
-    const quantity = Number(rawQty)
-    if (!Number.isFinite(quantity)) continue
+    const rawQty = String(row[qtyCol] ?? '').trim()
+    const isBlankLine = !raw && !rawQty
+    if (isBlankLine) return // ignore fully blank lines silently
+    if (!raw) {
+      dropped.push({ line: i + 1, identifier: '', rawQty, reason: 'empty identifier' })
+      return
+    }
+    const parsed = parseQuantityCell(row[qtyCol])
+    if ('reason' in parsed) {
+      dropped.push({ line: i + 1, identifier: raw, rawQty, reason: parsed.reason })
+      return
+    }
     rows.push({
       raw,
-      quantity,
+      quantity: parsed.qty,
       notes: notesCol ? String(row[notesCol] ?? '').trim() || undefined : undefined,
       channel: channelCol ? String(row[channelCol] ?? '').trim().toUpperCase() || undefined : undefined,
       marketplace: mpCol ? String(row[mpCol] ?? '').trim().toUpperCase() || undefined : undefined,
     })
-  }
-  return rows
+  })
+  return { rows, dropped }
 }
 
 // ── Main inner component ──────────────────────────────────────────────────────
@@ -231,7 +306,6 @@ function ImportWizardInner() {
 
   // ── Step: UPLOAD ─────────────────────────────────────────────────────
   const [parsedFile, setParsedFile] = useState<ParsedFileResult | null>(null)
-  const [fullRows, setFullRows] = useState<Record<string, unknown>[]>([])
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -290,17 +364,21 @@ function ImportWizardInner() {
 
   const handleFile = useCallback(async (file: File) => {
     if (file.size > 10_000_000) { setUploadError('File exceeds 10 MB limit'); return }
+    const lower = file.name.toLowerCase()
+    if (lower.endsWith('.xls') && !lower.endsWith('.xlsx')) {
+      setUploadError('Legacy .xls files are not supported — open the file in Excel and save it as .xlsx (or export as CSV), then retry.')
+      return
+    }
     setUploadError(null); setBusy(true)
     try {
       const formData = new FormData()
       formData.append('file', file)
       const res = await fetch(`${getBackendUrl()}/api/stock/import/parse`, { method: 'POST', body: formData })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`) }
-      const data = await res.json()
-      const rows = await readAllRows(file)
-      setFullRows(rows)
-      setParsedFile({ ...data, _fullRows: rows } as any)
-      // Auto-map columns
+      const data: ParsedFileResult = await res.json()
+      // Server parse is the single source of truth — headers AND rows come
+      // from the same pass, so mapped columns always exist on the rows.
+      setParsedFile(data)
       setColMap(autoMapHeaders(data.headers))
       setStep('MAP')
     } catch (err) {
@@ -309,20 +387,6 @@ function ImportWizardInner() {
       setBusy(false)
     }
   }, [])
-
-  async function readAllRows(file: File): Promise<Record<string, unknown>[]> {
-    const text = await file.text()
-    // Client-side minimal CSV parse for column mapping preview
-    const lines = text.replace(/\r\n/g, '\n').split('\n').filter((l) => l.trim())
-    if (lines.length < 2) return []
-    const headers = lines[0].split(/,|\t/).map((h) => h.trim())
-    return lines.slice(1).map((line) => {
-      const parts = line.split(/,|\t/)
-      const obj: Record<string, unknown> = {}
-      headers.forEach((h, i) => { obj[h] = parts[i]?.trim() ?? '' })
-      return obj
-    })
-  }
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragging(false)
@@ -333,11 +397,28 @@ function ImportWizardInner() {
   const handlePasteText = useCallback(async () => {
     const text = pasteRef.current?.value.trim()
     if (!text) return
-    const file = new File([text], 'pasted.csv', { type: 'text/csv' })
+    // .txt (not .csv) so the server's content sniffer picks the delimiter —
+    // cells pasted from Excel are tab-separated.
+    const file = new File([text], 'pasted.txt', { type: 'text/plain' })
     await handleFile(file)
   }, [handleFile])
 
   // ── Step: MAP → proceed to RESOLVE ────────────────────────────────────
+
+  // Live mapping result — recomputed as the operator changes column picks so
+  // the MAP step always shows "N rows ready · M dropped (why)" BEFORE Next.
+  const builtRows = useMemo<BuiltRows>(() => {
+    if (!parsedFile) return { rows: [], dropped: [] }
+    return buildRowsFromParsed(parsedFile.rows ?? [], colMap)
+  }, [parsedFile, colMap])
+
+  function downloadDroppedReport() {
+    const csv = [
+      'row,identifier,quantity,reason',
+      ...builtRows.dropped.map((d) => `${d.line},"${d.identifier.replace(/"/g, '""')}","${d.rawQty.replace(/"/g, '""')}",${d.reason}`),
+    ].join('\n')
+    downloadBlob(csv, 'import-dropped-rows.csv')
+  }
 
   async function proceedToResolve() {
     if (!parsedFile) return
@@ -345,8 +426,8 @@ function ImportWizardInner() {
     const qtyCol = Object.entries(colMap).find(([, v]) => v === 'quantity')?.[0]
     if (!idCol || !qtyCol) { toast('Please map at least the Identifier and Quantity columns', 'danger'); return }
 
-    const rows = buildRowsFromFile({ ...parsedFile, _fullRows: fullRows } as any, colMap)
-    if (rows.length === 0) { toast('No valid rows found after mapping', 'danger'); return }
+    const rows = builtRows.rows
+    if (rows.length === 0) { toast('No valid rows found after mapping — check the dropped-row reasons above', 'danger'); return }
 
     setBusy(true)
     try {
@@ -520,7 +601,7 @@ function ImportWizardInner() {
 
   function resetWizard() {
     setStep('UPLOAD')
-    setParsedFile(null); setFullRows([]); setUploadError(null)
+    setParsedFile(null); setUploadError(null)
     setColMap({}); setMode('ADJUST'); setTarget('WAREHOUSE')
     setResolvedRows([]); setPreviewRows([]); setApplyResult(null)
   }
@@ -611,7 +692,7 @@ function ImportWizardInner() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".csv,.tsv,.xlsx,.xls,.json,text/csv,application/json"
+                    accept=".csv,.tsv,.txt,.xlsx,.json,text/csv,text/plain,application/json"
                     className="sr-only"
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f) }}
                   />
@@ -697,6 +778,58 @@ function ImportWizardInner() {
                   })}
                 </div>
 
+                {/* Live mapping validation — visible BEFORE clicking Next */}
+                {(() => {
+                  const idMapped = Object.values(colMap).includes('identifier')
+                  const qtyMapped = Object.values(colMap).includes('quantity')
+                  if (!idMapped || !qtyMapped) {
+                    return (
+                      <div className="flex items-center gap-2 rounded-md bg-surface-2 border border-default px-3 py-2 text-sm text-secondary">
+                        <AlertTriangle size={14} className="shrink-0 text-amber-500" />
+                        Map the {!idMapped && !qtyMapped ? 'Identifier and Quantity columns' : !idMapped ? 'Identifier column' : 'Quantity column'} to continue.
+                      </div>
+                    )
+                  }
+                  const ok = builtRows.rows.length
+                  const bad = builtRows.dropped.length
+                  const reasonCounts = builtRows.dropped.reduce<Record<string, number>>((acc, d) => {
+                    acc[d.reason] = (acc[d.reason] ?? 0) + 1
+                    return acc
+                  }, {})
+                  return (
+                    <div className={[
+                      'flex items-start justify-between gap-3 rounded-md border px-3 py-2 text-sm',
+                      ok === 0
+                        ? 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-300'
+                        : bad > 0
+                        ? 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300'
+                        : 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-300',
+                    ].join(' ')}>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium">
+                          {ok} of {ok + bad} rows ready to import
+                          {bad > 0 && ` · ${bad} dropped`}
+                        </span>
+                        {bad > 0 && (
+                          <span className="text-xs opacity-90">
+                            {Object.entries(reasonCounts).map(([r, n]) => `${n}× ${r}`).join(' · ')}
+                          </span>
+                        )}
+                        {parsedFile.truncated && (
+                          <span className="text-xs opacity-90">
+                            File has {parsedFile.totalRows} rows — only the first {parsedFile.rows.length} will be imported.
+                          </span>
+                        )}
+                      </div>
+                      {bad > 0 && (
+                        <Button variant="ghost" size="sm" onClick={downloadDroppedReport}>
+                          <Download size={13} /> Dropped rows
+                        </Button>
+                      )}
+                    </div>
+                  )
+                })()}
+
                 {/* Preview of first rows */}
                 {parsedFile.preview.length > 0 && (
                   <div>
@@ -751,7 +884,7 @@ function ImportWizardInner() {
                   <Button variant="ghost" size="sm" onClick={() => setStep('UPLOAD')}>
                     <ArrowLeft size={14} /> Back
                   </Button>
-                  <Button variant="primary" size="sm" onClick={proceedToResolve} disabled={busy}>
+                  <Button variant="primary" size="sm" onClick={proceedToResolve} disabled={busy || builtRows.rows.length === 0}>
                     {busy ? <Spinner size={14} /> : <ArrowRight size={14} />}
                     Next: Resolve SKUs
                   </Button>

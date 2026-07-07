@@ -56,6 +56,57 @@ export function sniffDelimiter(filename: string | null | undefined, text: string
   return tabs > commas ? '\t' : ','
 }
 
+/**
+ * IM.2 — content-first delimiter sniff for operator-supplied stock files.
+ *
+ * Unlike sniffDelimiter (whose .csv→comma shortcut existing flat-file
+ * callers depend on), this variant NEVER trusts a .csv extension: Excel
+ * under an Italian locale writes semicolon-separated files as `.csv`, and
+ * pasted Excel cells arrive tab-separated under any name. Candidates are
+ * scored across the first rows — a real delimiter splits the header AND
+ * splits every data row into the same column count (quotes respected).
+ * `.tsv`/`.tab` extensions still force tab. Additive export: the legacy
+ * sniffDelimiter above is untouched.
+ */
+export function sniffDelimiterSmart(
+  filename: string | null | undefined,
+  text: string,
+): ',' | ';' | '\t' | '|' {
+  const lower = (filename ?? '').toLowerCase()
+  if (lower.endsWith('.tsv') || lower.endsWith('.tab')) return '\t'
+  const lines = text
+    .split(/\r?\n/)
+    .filter((l) => l.trim() !== '')
+    .slice(0, 10)
+  if (lines.length === 0) return ','
+  const candidates: Array<',' | ';' | '\t' | '|'> = [',', ';', '\t', '|']
+  let best: ',' | ';' | '\t' | '|' = ','
+  let bestScore = 0
+  for (const d of candidates) {
+    const counts = lines.map((l) => countOutsideQuotes(l, d))
+    const headerCount = counts[0]
+    if (headerCount === 0) continue
+    const consistent = counts.filter((c) => c === headerCount).length / counts.length
+    const score = headerCount * consistent + (consistent === 1 ? 2 : 0)
+    if (score > bestScore) {
+      bestScore = score
+      best = d
+    }
+  }
+  return best
+}
+
+function countOutsideQuotes(line: string, delimiter: string): number {
+  let count = 0
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (ch === '"') inQuotes = !inQuotes
+    else if (ch === delimiter && !inQuotes) count++
+  }
+  return count
+}
+
 function dedupeHeaders(headers: string[]): string[] {
   const seen = new Map<string, number>()
   return headers.map((h) => {

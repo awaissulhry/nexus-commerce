@@ -13,7 +13,7 @@ import {
   type ImportMode,
   type ImportTarget,
 } from '../services/stock-import.service.js'
-import { detectFileKind, parseCsv, parseXlsx, sniffDelimiter } from '../services/import/parsers.js'
+import { detectFileKind, parseCsv, parseJson, parseXlsx, sniffDelimiterSmart } from '../services/import/parsers.js'
 import {
   reserveStock,
   releaseReservation,
@@ -3138,32 +3138,86 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   // IM.1 — Bulk Inventory Import Wizard endpoints
   // ════════════════════════════════════════════════════════════════
 
+  // ExcelJS can emit Date / rich-text / formula objects; the wizard's
+  // mapping+resolution steps expect flat scalars (string/number/null).
+  function scalarizeImportRow(row: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(row)) {
+      if (v instanceof Date) {
+        out[k] = v.toISOString().slice(0, 10)
+      } else if (v != null && typeof v === 'object') {
+        const o = v as { text?: unknown; result?: unknown; richText?: Array<{ text?: string }> }
+        if (Array.isArray(o.richText)) out[k] = o.richText.map((r) => r.text ?? '').join('')
+        else if ('text' in o) out[k] = o.text ?? ''
+        else if ('result' in o) out[k] = o.result ?? ''
+        else out[k] = String(v)
+      } else {
+        out[k] = v
+      }
+    }
+    return out
+  }
+
   // ── POST /api/stock/import/parse ────────────────────────────────
-  // Accepts multipart file upload (CSV/XLSX/JSON/TSV). Returns
-  // detected headers + first 20 rows so the column-mapper step can
-  // render a live preview without sending the full payload.
+  // Accepts multipart file upload (CSV/XLSX/JSON/TSV, any delimiter).
+  // IM.2 — parses ONCE server-side and returns ALL rows (capped at the
+  // resolve limit) so the wizard's mapping step operates on exactly the
+  // rows that produced the headers. The old client-side re-parse is gone.
   fastify.post('/stock/import/parse', async (request, reply) => {
     try {
       const data = await request.file()
       if (!data) return reply.code(400).send({ error: 'No file attached' })
       const filename = data.filename ?? 'upload'
+      const lower = filename.toLowerCase()
+      if (lower.endsWith('.xls') && !lower.endsWith('.xlsx')) {
+        return reply.code(400).send({
+          error:
+            'Legacy .xls files are not supported — open the file in Excel and save it as .xlsx (or export as CSV), then retry.',
+        })
+      }
       const kind = detectFileKind(filename)
-      const buf = await data.toBuffer()
+      let buf: Buffer
+      try {
+        buf = await data.toBuffer()
+      } catch (sizeErr: any) {
+        if (sizeErr?.code === 'FST_REQ_FILE_TOO_LARGE') {
+          return reply.code(413).send({ error: 'File exceeds the 50 MB upload limit' })
+        }
+        throw sizeErr
+      }
 
       let parsed: { headers: string[]; rows: Record<string, unknown>[] }
+      let delimiter: string | null = null
       if (kind === 'xlsx') {
         parsed = await parseXlsx(buf)
+      } else if (kind === 'json') {
+        parsed = parseJson(buf.toString('utf8'))
       } else {
         const text = buf.toString('utf8')
-        parsed = parseCsv(text, sniffDelimiter(filename, text))
+        delimiter = sniffDelimiterSmart(filename, text)
+        parsed = parseCsv(text, delimiter)
       }
+
+      if (parsed.headers.length === 0) {
+        return reply.code(400).send({ error: 'File appears to be empty — no header row found' })
+      }
+
+      // Excel cells can surface as Date/rich objects; the wizard consumes
+      // plain scalars. Same cap as /stock/import/resolve so mapping can
+      // never promise more rows than resolution accepts.
+      const MAX_ROWS = 5000
+      const truncated = parsed.rows.length > MAX_ROWS
+      const rows = (truncated ? parsed.rows.slice(0, MAX_ROWS) : parsed.rows).map(scalarizeImportRow)
 
       return {
         filename,
         kind,
+        delimiter,
         headers: parsed.headers,
         totalRows: parsed.rows.length,
-        preview: parsed.rows.slice(0, 20),
+        truncated,
+        rows,
+        preview: rows.slice(0, 20),
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/import/parse] failed')

@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import ExcelJS from 'exceljs'
-import { parseCsv, parseJson, parseXlsx, sniffDelimiter, detectFileKind } from './parsers.js'
+import { parseCsv, parseJson, parseXlsx, sniffDelimiter, sniffDelimiterSmart, detectFileKind } from './parsers.js'
 
 describe('FX.2 — parseCsv delimiter', () => {
   it('defaults to comma (existing callers unchanged)', () => {
@@ -37,6 +37,33 @@ describe('FX.2 — sniffDelimiter', () => {
     expect(sniffDelimiter('data.txt', '\n\nSKU\tTitle\tPrice')).toBe('\t')
     expect(sniffDelimiter('data.txt', 'SKU,Title,Price')).toBe(',')
     expect(sniffDelimiter(undefined, 'SKU\tTitle')).toBe('\t')
+  })
+})
+
+describe('IM.2 — sniffDelimiterSmart (content-first, never trusts .csv)', () => {
+  it('semicolon CSV under a .csv extension (Italian Excel) → semicolon', () => {
+    expect(sniffDelimiterSmart('magazzino.csv', 'sku;qta;note\nGAL-1;5;ok\nGAL-2;3;')).toBe(';')
+  })
+  it('plain comma CSV stays comma', () => {
+    expect(sniffDelimiterSmart('stock.csv', 'sku,qty\nA,1\nB,2')).toBe(',')
+  })
+  it('pasted Excel cells (tabs, no meaningful extension) → tab', () => {
+    expect(sniffDelimiterSmart('pasted.txt', 'sku\tqty\nA\t1')).toBe('\t')
+  })
+  it('.tsv extension still forces tab', () => {
+    expect(sniffDelimiterSmart('x.tsv', 'a;b')).toBe('\t')
+  })
+  it('quoted commas inside semicolon fields do not fool the sniff', () => {
+    expect(sniffDelimiterSmart('x.csv', '"Giacca, nera";qty\n"Guanti, pelle";2')).toBe(';')
+  })
+  it('comma delimiter wins when data rows have consistent comma counts but stray semicolons', () => {
+    expect(sniffDelimiterSmart('x.csv', 'sku,note\nA,ciao;mondo\nB,ok')).toBe(',')
+  })
+  it('pipe-separated files sniff to pipe', () => {
+    expect(sniffDelimiterSmart('x.txt', 'sku|qty\nA|1\nB|2')).toBe('|')
+  })
+  it('single-column file defaults to comma', () => {
+    expect(sniffDelimiterSmart('x.csv', 'sku\nA\nB')).toBe(',')
   })
 })
 
