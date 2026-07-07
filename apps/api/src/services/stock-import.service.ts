@@ -27,7 +27,13 @@
 
 import prisma from '../db.js'
 import { applyStockMovement } from './stock-movement.service.js'
+import { coalescePendingQuantityRows } from './sync-coalesce.js'
+import { outboundSyncQueue } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
+
+// Same undo-grace as manual stock edits (see stock-movement.service.ts) —
+// gives the operator a window to re-import before the push dispatches.
+const IMPORT_HOLD_MS = 30 * 1000
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -57,11 +63,22 @@ export interface ResolvedRow extends ImportRow {
   candidates: Array<{ productId: string; sku: string; name: string; score: number }>
 }
 
+export interface ChannelListingPreview {
+  id: string
+  channel: string
+  marketplace: string
+  current: number
+  wouldBe: number
+  clamped: boolean
+}
+
 export interface PreviewRow extends ResolvedRow {
   currentWarehouseQty: number | null
   wouldBeWarehouseQty: number | null
   currentChannelQty: number | null
   wouldBeChannelQty: number | null
+  /** IM.2 P3 — per-listing detail for CHANNEL/BOTH targets (preview = apply). */
+  channelListings: ChannelListingPreview[]
   warnings: string[]
   error: string | null
 }
@@ -305,7 +322,9 @@ export async function previewImport(opts: {
   })
   const stockByProduct = new Map(stockLevels.map((sl) => [sl.productId, sl]))
 
-  // Batch-load channel listings for CHANNEL/BOTH targets
+  // Batch-load channel listings for CHANNEL/BOTH targets. One query for all
+  // products; per-row channel/marketplace filters (a row's own columns)
+  // apply in JS — the SAME filter apply uses, so preview never diverges.
   let channelListingsByProduct = new Map<string, Array<{ id: string; channel: string; marketplace: string; quantity: number | null; quantityOverride: number | null; listingStatus: string }>>()
   if (target !== 'WAREHOUSE') {
     const cls = await prisma.channelListing.findMany({
@@ -324,6 +343,12 @@ export async function previewImport(opts: {
 
   let resolvedCount = 0, fuzzyCount = 0, unresolvedCount = 0, errorCount = 0, wouldUpdateCount = 0
 
+  // Duplicate-SKU tracking: warehouse math previews SEQUENTIALLY (row 2 of
+  // the same SKU starts from row 1's result — matching apply), and dup rows
+  // get an explicit warning instead of silently misleading.
+  const seenPerProduct = new Map<string, number>()
+  const effectiveWarehouseQty = new Map<string, number>()
+
   const previewRows: PreviewRow[] = resolved.map((r): PreviewRow => {
     const warnings: string[] = []
     let error: string | null = null
@@ -332,31 +357,73 @@ export async function previewImport(opts: {
     else if (r.tier === 'FUZZY_NAME') { fuzzyCount++ }
     else { resolvedCount++ }
 
+    const dupIndex = r.productId ? (seenPerProduct.get(r.productId) ?? 0) : 0
+    if (r.productId) seenPerProduct.set(r.productId, dupIndex + 1)
+    if (dupIndex > 0) {
+      warnings.push(
+        mode === 'SET'
+          ? `Duplicate SKU in file (row ${dupIndex + 1} for this product) — the LAST value wins`
+          : `Duplicate SKU in file (row ${dupIndex + 1} for this product) — adjustments apply cumulatively`,
+      )
+    }
+
     const sl = r.productId ? stockByProduct.get(r.productId) : undefined
+    const baseWarehouseQty = r.productId
+      ? effectiveWarehouseQty.get(r.productId) ?? sl?.quantity ?? 0
+      : null
     const currentWarehouseQty = sl?.quantity ?? (r.productId ? 0 : null)
 
     let wouldBeWarehouseQty: number | null = null
-    if (currentWarehouseQty !== null && r.productId && target !== 'CHANNEL') {
-      wouldBeWarehouseQty = mode === 'SET' ? r.quantity : currentWarehouseQty + r.quantity
+    if (baseWarehouseQty !== null && r.productId && target !== 'CHANNEL') {
+      wouldBeWarehouseQty = mode === 'SET' ? r.quantity : baseWarehouseQty + r.quantity
       if (wouldBeWarehouseQty < 0) {
-        error = `Would go negative (${currentWarehouseQty} + ${r.quantity} = ${wouldBeWarehouseQty})`
+        error = `Would go negative (${baseWarehouseQty} + ${r.quantity} = ${wouldBeWarehouseQty})`
         errorCount++
+      } else {
+        effectiveWarehouseQty.set(r.productId, wouldBeWarehouseQty)
+      }
+      if (mode === 'ADJUST' && r.quantity === 0) {
+        warnings.push('No change (quantity is 0)')
       }
     }
 
-    // Channel preview
+    // Channel preview — per-listing, honoring the row's own channel /
+    // marketplace columns and skipping ENDED (exactly what apply does)
     const cls = r.productId ? (channelListingsByProduct.get(r.productId) ?? []) : []
-    const activeCls = cls.filter((cl) => cl.listingStatus !== 'ENDED')
-    const currentChannelQty = activeCls.length > 0
-      ? activeCls[0].quantityOverride ?? activeCls[0].quantity ?? null
-      : null
-    const wouldBeChannelQty = target !== 'WAREHOUSE' && currentChannelQty !== null
-      ? (mode === 'SET' ? r.quantity : currentChannelQty + r.quantity)
-      : null
+    const matchedCls = cls
+      .filter((cl) => cl.listingStatus !== 'ENDED')
+      .filter((cl) => !r.channel || cl.channel === r.channel)
+      .filter((cl) => !r.marketplace || cl.marketplace === r.marketplace)
 
-    if (wouldBeChannelQty !== null && wouldBeChannelQty < 0) {
-      warnings.push(`Channel qty would go negative (${currentChannelQty} → ${wouldBeChannelQty})`)
+    const channelListings: ChannelListingPreview[] = target !== 'WAREHOUSE'
+      ? matchedCls.map((cl) => {
+          const current = cl.quantityOverride ?? cl.quantity ?? 0
+          const rawWouldBe = mode === 'SET' ? r.quantity : current + r.quantity
+          return {
+            id: cl.id,
+            channel: cl.channel,
+            marketplace: cl.marketplace,
+            current,
+            wouldBe: Math.max(0, rawWouldBe),
+            clamped: rawWouldBe < 0,
+          }
+        })
+      : []
+
+    if (target !== 'WAREHOUSE' && r.productId && !error) {
+      if (channelListings.length === 0) {
+        const filterDesc = [r.channel, r.marketplace].filter(Boolean).join('/')
+        const msg = `No active channel listing matches${filterDesc ? ` (${filterDesc})` : ''}`
+        if (target === 'CHANNEL') { error = msg; errorCount++ }
+        else warnings.push(`${msg} — only the warehouse will update`)
+      }
+      if (channelListings.some((c) => c.clamped)) {
+        warnings.push('Channel quantity would go negative — will be clamped to 0')
+      }
     }
+
+    const currentChannelQty = channelListings[0]?.current ?? null
+    const wouldBeChannelQty = channelListings[0]?.wouldBe ?? null
 
     if (r.tier === 'FUZZY_NAME') warnings.push('Fuzzy match — please verify this is the correct product')
     if (!error && r.productId) wouldUpdateCount++
@@ -367,6 +434,7 @@ export async function previewImport(opts: {
       wouldBeWarehouseQty,
       currentChannelQty,
       wouldBeChannelQty,
+      channelListings,
       warnings,
       error,
     }
@@ -391,8 +459,14 @@ export async function applyImport(opts: {
   target: ImportTarget
   filename?: string
   fileKind?: string
+  /**
+   * IM.2 P3 — when true, CHANNEL/BOTH writes also pin quantityOverride +
+   * followMasterQuantity=false (listing stops following the warehouse pool).
+   * Default false: a one-shot push that leaves pool-following intact.
+   */
+  pinOverride?: boolean
 }): Promise<ApplyResult> {
-  const { rows, locationCode, mode, target, filename, fileKind } = opts
+  const { rows, locationCode, mode, target, filename, fileKind, pinOverride = false } = opts
 
   const location = await prisma.stockLocation.findUnique({
     where: { code: locationCode },
@@ -416,6 +490,9 @@ export async function applyImport(opts: {
 
   let succeeded = 0, failed = 0, skipped = 0
   const results: ApplyResult['results'] = []
+  // BullMQ jobs are added AFTER each row's transaction commits (rows stay
+  // PENDING for the cron drain if Redis is down — same as stock movements).
+  const queuedJobIds: Array<{ queueId: string; productId: string }> = []
 
   for (const row of rows) {
     if (row.error || !row.productId || !row.resolvedSku) {
@@ -451,7 +528,8 @@ export async function applyImport(opts: {
               notes: row.notes ?? `[SET ${row.quantity}] ${row.raw}`,
             })
           }
-        } else {
+          warehouseApplied = true
+        } else if (row.quantity !== 0) {
           await applyStockMovement({
             productId: row.productId,
             locationId: location.id,
@@ -462,40 +540,99 @@ export async function applyImport(opts: {
             actor: 'bulk-import',
             notes: row.notes ?? `[ADJUST ${row.quantity > 0 ? '+' : ''}${row.quantity}] ${row.raw}`,
           })
+          warehouseApplied = true
         }
-        warehouseApplied = true
+        // ADJUST of 0 is a valid no-op (applyStockMovement rejects change=0)
       } catch (err) {
         rowError = err instanceof Error ? err.message : String(err)
         logger.error('stock-import: warehouse apply failed', { sku: row.resolvedSku, error: rowError })
       }
     }
 
-    // ── Channel quantity override ──
+    // ── Channel listing quantity (IM.2 P3) ──
+    // Per-listing arithmetic, ENDED listings skipped, quantity + sync-state
+    // written and an OutboundSyncQueue row enqueued so the marketplace push
+    // actually happens. followMasterQuantity flips ONLY behind pinOverride.
     if (target !== 'WAREHOUSE' && !rowError) {
       try {
         const cls = await prisma.channelListing.findMany({
           where: {
             productId: row.productId,
+            listingStatus: { not: 'ENDED' },
             channel: row.channel ? { equals: row.channel } : { in: ['AMAZON', 'EBAY', 'SHOPIFY'] },
             ...(row.marketplace ? { marketplace: row.marketplace } : {}),
           },
-          select: { id: true, quantityOverride: true, quantity: true },
+          select: {
+            id: true, channel: true, region: true, marketplace: true,
+            quantity: true, quantityOverride: true, externalListingId: true,
+          },
         })
 
-        const newQty = mode === 'SET'
-          ? row.quantity
-          : ((cls[0]?.quantityOverride ?? cls[0]?.quantity ?? 0) + row.quantity)
-
-        for (const cl of cls) {
-          await prisma.channelListing.update({
-            where: { id: cl.id },
-            data: {
-              quantityOverride: Math.max(0, newQty),
-              followMasterQuantity: false,
-            },
+        if (cls.length === 0) {
+          const filterDesc = [row.channel, row.marketplace].filter(Boolean).join('/')
+          const msg = `No active channel listing matches${filterDesc ? ` (${filterDesc})` : ''}`
+          if (target === 'CHANNEL') {
+            rowError = msg
+          }
+          // BOTH: warehouse already applied — surfaced via channelApplied=false
+        } else {
+          const validTargets = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'])
+          const holdUntil = new Date(Date.now() + IMPORT_HOLD_MS)
+          const createdQueueIds = await prisma.$transaction(async (tx) => {
+            const ids: string[] = []
+            // Cancel superseded PENDING quantity pushes for these listings —
+            // only the freshest imported value should dispatch.
+            await coalescePendingQuantityRows(tx, cls.map((c) => c.id))
+            for (const cl of cls) {
+              const current = cl.quantityOverride ?? cl.quantity ?? 0
+              const newQty = Math.max(0, mode === 'SET' ? row.quantity : current + row.quantity)
+              await tx.channelListing.update({
+                where: { id: cl.id },
+                data: {
+                  quantity: newQty,
+                  lastSyncStatus: 'PENDING',
+                  lastSyncedAt: null,
+                  version: { increment: 1 },
+                  ...(pinOverride ? { quantityOverride: newQty, followMasterQuantity: false } : {}),
+                },
+              })
+              if (validTargets.has(cl.channel)) {
+                const qRow = await tx.outboundSyncQueue.create({
+                  data: {
+                    productId: row.productId!,
+                    channelListingId: cl.id,
+                    targetChannel: cl.channel as any,
+                    targetRegion: cl.region,
+                    syncStatus: 'PENDING' as any,
+                    syncType: 'QUANTITY_UPDATE',
+                    holdUntil,
+                    externalListingId: cl.externalListingId,
+                    maxRetries: 3,
+                    payload: {
+                      source: 'STOCK_IMPORT',
+                      productId: row.productId,
+                      channel: cl.channel,
+                      marketplace: cl.marketplace,
+                      quantity: newQty,
+                      oldQuantity: cl.quantity,
+                      pinOverride,
+                      reason: 'MANUAL_ADJUSTMENT',
+                      referenceType: 'BulkImport',
+                      referenceId: job.id,
+                    },
+                  },
+                  select: { id: true },
+                })
+                ids.push(qRow.id)
+              }
+            }
+            return ids
           })
+          for (const queueId of createdQueueIds) {
+            queuedJobIds.push({ queueId, productId: row.productId })
+          }
+          channelApplied = true
         }
-        if (cls.length > 0) channelApplied = true
       } catch (err) {
         rowError = err instanceof Error ? err.message : String(err)
         logger.error('stock-import: channel apply failed', { sku: row.resolvedSku, error: rowError })
@@ -508,6 +645,22 @@ export async function applyImport(opts: {
     } else {
       succeeded++
       results.push({ sku: row.resolvedSku, raw: row.raw, applied: true, warehouseApplied, channelApplied })
+    }
+  }
+
+  // BullMQ enqueue AFTER commits — Redis-down degrades to the cron drain.
+  for (const { queueId, productId } of queuedJobIds) {
+    try {
+      await outboundSyncQueue.add(
+        'sync-job',
+        { queueId, productId, syncType: 'QUANTITY_UPDATE', source: 'STOCK_IMPORT' },
+        { delay: IMPORT_HOLD_MS, jobId: queueId },
+      )
+    } catch (err) {
+      logger.warn('stock-import: BullMQ enqueue failed (DB row remains PENDING for next drain)', {
+        queueId,
+        err: err instanceof Error ? err.message : String(err),
+      })
     }
   }
 

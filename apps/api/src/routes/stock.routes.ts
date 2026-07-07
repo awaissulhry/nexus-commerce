@@ -3275,12 +3275,13 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       target: ImportTarget
       filename?: string
       fileKind?: string
+      pinOverride?: boolean
     }
   }>('/stock/import/apply', async (request, reply) => {
     try {
-      const { rows, locationCode, mode, target, filename, fileKind } = request.body ?? {}
+      const { rows, locationCode, mode, target, filename, fileKind, pinOverride } = request.body ?? {}
       if (!rows?.length) return reply.code(400).send({ error: 'rows[] required' })
-      const result = await applyImport({ rows, locationCode, mode, target, filename, fileKind })
+      const result = await applyImport({ rows, locationCode, mode, target, filename, fileKind, pinOverride })
       return result
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/import/apply] failed')

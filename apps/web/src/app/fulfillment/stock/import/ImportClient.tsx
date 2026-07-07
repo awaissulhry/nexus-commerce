@@ -86,11 +86,21 @@ interface ResolvedRow {
   _override?: { productId: string; sku: string; name: string }
 }
 
+interface ChannelListingPreview {
+  id: string
+  channel: string
+  marketplace: string
+  current: number
+  wouldBe: number
+  clamped: boolean
+}
+
 interface PreviewRow extends ResolvedRow {
   currentWarehouseQty: number | null
   wouldBeWarehouseQty: number | null
   currentChannelQty: number | null
   wouldBeChannelQty: number | null
+  channelListings: ChannelListingPreview[]
   warnings: string[]
   error: string | null
 }
@@ -352,6 +362,7 @@ function ImportWizardInner() {
   const [colMap, setColMap] = useState<Record<string, string>>({})
   const [mode, setMode] = useState<ImportMode>('ADJUST')
   const [target, setTarget] = useState<ImportTarget>('WAREHOUSE')
+  const [pinOverride, setPinOverride] = useState(false)
 
   // ── Step: RESOLVE ────────────────────────────────────────────────────
   const [resolvedRows, setResolvedRows] = useState<ResolvedRow[]>([])
@@ -540,6 +551,7 @@ function ImportWizardInner() {
           locationCode,
           mode,
           target,
+          pinOverride: target !== 'WAREHOUSE' ? pinOverride : false,
           filename: parsedFile?.filename,
           fileKind: parsedFile?.kind,
         }),
@@ -644,7 +656,7 @@ function ImportWizardInner() {
   function resetWizard() {
     setStep('UPLOAD')
     setParsedFile(null); setUploadError(null)
-    setColMap({}); setMode('ADJUST'); setTarget('WAREHOUSE')
+    setColMap({}); setMode('ADJUST'); setTarget('WAREHOUSE'); setPinOverride(false)
     setResolvedRows([]); setPreviewRows([]); setApplyResult(null)
   }
 
@@ -914,6 +926,22 @@ function ImportWizardInner() {
                     <label className="text-sm font-medium">{t('stock.import.map.target')}</label>
                     <Listbox value={target} onChange={(v) => setTarget(v as ImportTarget)} ariaLabel={t('stock.import.map.target')}
                       options={[{ value: 'WAREHOUSE', label: t('stock.import.map.targetWarehouse') }, { value: 'CHANNEL', label: t('stock.import.map.targetChannel') }, { value: 'BOTH', label: t('stock.import.map.targetBoth') }]} />
+                    <p className="text-xs text-tertiary mt-0.5">
+                      {target === 'WAREHOUSE'
+                        ? 'Auto-syncs every channel where the product is listed (recommended).'
+                        : target === 'CHANNEL'
+                        ? 'Pushes quantities straight to the matched channel listings.'
+                        : 'Updates the warehouse pool AND pushes directly to matched listings.'}
+                    </p>
+                    {target !== 'WAREHOUSE' && (
+                      <label className="flex items-start gap-2 text-xs cursor-pointer select-none mt-1">
+                        <input type="checkbox" checked={pinOverride} onChange={(e) => setPinOverride(e.target.checked)} className="rounded mt-0.5" />
+                        <span>
+                          <span className="font-medium">Pin as channel override</span>
+                          <span className="text-tertiary"> — the listing stops following warehouse stock until unpinned. Off = one-time push; future warehouse changes keep syncing.</span>
+                        </span>
+                      </label>
+                    )}
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-sm font-medium">{t('stock.import.map.location')}</label>
@@ -1113,12 +1141,23 @@ function ImportWizardInner() {
                     ] : []),
                     ...(target !== 'WAREHOUSE' ? [
                       {
-                        key: 'chNow', label: t('stock.import.preview.colCurrentCh'), width: 110, align: 'right' as const,
-                        render: (r: PreviewRow) => <span className="tabular-nums">{r.currentChannelQty ?? '—'}</span>,
-                      },
-                      {
-                        key: 'chAfter', label: t('stock.import.preview.colNewCh'), width: 110, align: 'right' as const,
-                        render: (r: PreviewRow) => <span className="tabular-nums font-medium">{r.wouldBeChannelQty ?? '—'}</span>,
+                        key: 'channels', label: 'Channel listings (now → after)', width: 240,
+                        render: (r: PreviewRow) => (r.channelListings?.length ?? 0) > 0 ? (
+                          <div className="flex flex-col gap-0.5 py-0.5">
+                            {r.channelListings.map((cl) => (
+                              <span key={cl.id} className="text-xs tabular-nums whitespace-nowrap">
+                                <span className="font-medium">{cl.channel}</span>
+                                {cl.marketplace && cl.marketplace !== 'DEFAULT' && cl.marketplace !== 'GLOBAL' && (
+                                  <span className="text-tertiary">·{cl.marketplace}</span>
+                                )}{' '}
+                                {cl.current} → <span className={['font-semibold', cl.clamped ? 'text-rose-600' : ''].join(' ')}>{cl.wouldBe}</span>
+                                {cl.clamped && <span className="text-rose-600 ml-1">(clamped)</span>}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-tertiary text-xs">no matching listing</span>
+                        ),
                       },
                     ] : []),
                     {

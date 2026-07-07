@@ -122,7 +122,9 @@ export async function syncProductToShopify(
         quantity: product.totalStock,
       })
     } else {
-      finalQuantity = channelListing.quantityOverride || product.totalStock || 0
+      // ?? not ||: an override of 0 (operator wants the channel OFF) must
+      // push 0, never fall back to full master stock (IM.2 P3)
+      finalQuantity = channelListing.quantityOverride ?? product.totalStock ?? 0
       logger.debug('📦 [SHOPIFY] Using quantity override', {
         override: channelListing.quantityOverride,
         fallback: product.totalStock,
