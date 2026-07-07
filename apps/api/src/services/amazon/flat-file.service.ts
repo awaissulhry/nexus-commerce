@@ -382,6 +382,61 @@ export function normalizeParentage(
  * strings Amazon rejects for typed attributes). Sub-properties are coerced inline
  * in buildJsonFeedBody, so only top-level fields are classified here.
  */
+/**
+ * FFP.19 — normalize ANY variation-theme spelling to this category's APPROVED
+ * enum code. Rows carry themes in every historical dialect — legacy Seller
+ * Central "SizeName-ColorName", localized labels ("Taglia/Colore"), wrong case
+ * or separators — and Amazon rejects anything outside the enum (90244).
+ * Resolution order: manifest label→code map · exact code (case-insensitive) ·
+ * axis-set match (Size+Color ≡ COLOR/SIZE ≡ SIZE_NAME/COLOR_NAME, preferring
+ * the *_NAME style when the input used Name-suffixed tokens). No confident
+ * match → the raw value passes through (Amazon's report then names it).
+ */
+export function normalizeVariationTheme(raw: string, themeMap: Record<string, string> = {}): string {
+  const input = String(raw ?? '').trim()
+  if (!input) return input
+  const direct = themeMap[input]
+  if (direct) return direct
+  const codes = [...new Set(Object.values(themeMap))]
+  const ci = codes.find((c) => c.toUpperCase() === input.toUpperCase())
+  if (ci) return ci
+
+  const AXIS_SYNONYMS: Record<string, string> = {
+    size: 'size', taglia: 'size', formato: 'size',
+    color: 'color', colour: 'color', colore: 'color',
+    material: 'material', materiale: 'material',
+    style: 'style', stile: 'style',
+  }
+  const parse = (s: string): { key: string; ordered: string; sawName: boolean } => {
+    const tokens = s.split(/[/_\s,-]+/).map((t) => t.trim().toLowerCase()).filter(Boolean)
+    const axes: string[] = []
+    let sawName = false
+    for (const t of tokens) {
+      let tok = t
+      if (tok === 'name' || tok === 'nome') { sawName = true; continue }
+      if (tok.endsWith('name') || tok.endsWith('nome')) {
+        const base = tok.replace(/(name|nome)$/, '')
+        if (base) { sawName = true; tok = base }
+      }
+      axes.push(AXIS_SYNONYMS[tok] ?? tok)
+    }
+    const uniq = [...new Set(axes)]
+    return { key: [...uniq].sort().join('+'), ordered: uniq.join('>'), sawName }
+  }
+  const inp = parse(input)
+  if (!inp.key) return input
+  const matches = codes.filter((c) => parse(c).key === inp.key)
+  if (matches.length === 0) return input
+  if (matches.length === 1) return matches[0]
+  // Same axis set in several spellings: prefer the operator's AXIS ORDER
+  // (it drives the PDP dropdown order), then the matching Name-style.
+  const rank = (c: string) => {
+    const p = parse(c)
+    return (p.ordered === inp.ordered ? 2 : 0) + (p.sawName === inp.sawName ? 1 : 0)
+  }
+  return [...matches].sort((a, b) => rank(b) - rank(a))[0]
+}
+
 export function buildSchemaFieldHints(properties: Record<string, any>): {
   localizedFields: Set<string>; numericFields: Set<string>; booleanFields: Set<string>
   /** FFP.18 — attributes whose payload nests ONE wrapped sub-property
@@ -2104,10 +2159,10 @@ export class AmazonFlatFileService {
           if (row.variation_theme) {
             const vt = String(row.variation_theme)
             // FFP.18 — variation_theme's payload key is `name`, NOT `value`
-            // (schema: items.required ['name']). Emitting {value} left `name`
-            // empty → Amazon 99022 "field 'name' has insufficient values" and
-            // the theme was never registered.
-            attrs.variation_theme = [{ name: enumCodeMap['variation_theme']?.[vt] ?? vt, marketplace_id: marketplaceId }]
+            // (schema: items.required ['name']). FFP.19 — the value is
+            // normalized to the category's approved enum (legacy
+            // "SizeName-ColorName" spellings → SIZE_NAME/COLOR_NAME; 90244).
+            attrs.variation_theme = [{ name: normalizeVariationTheme(vt, enumCodeMap['variation_theme'] ?? {}), marketplace_id: marketplaceId }]
           }
         }
         if (parentageCode === 'child' && row.parent_sku) {
@@ -2785,8 +2840,9 @@ export class AmazonFlatFileService {
       attrs.parentage_level = [{ value: 'parent', marketplace_id: marketplaceId }]
       if (row.variation_theme) {
         const vt = String(row.variation_theme)
-        // FFP.18 — payload key is `name`, not `value` (see buildJsonFeedBody).
-        attrs.variation_theme = [{ name: enumCodeMap['variation_theme']?.[vt] ?? vt, marketplace_id: marketplaceId }]
+        // FFP.18 — payload key is `name`, not `value`; FFP.19 — value
+        // normalized to the approved enum (see buildJsonFeedBody).
+        attrs.variation_theme = [{ name: normalizeVariationTheme(vt, enumCodeMap['variation_theme'] ?? {}), marketplace_id: marketplaceId }]
       }
     }
     if (parentageLevel === 'child' && row.parent_sku) {

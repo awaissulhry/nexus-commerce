@@ -11,7 +11,7 @@
  * the readback the way getExistingRows does.
  */
 import { describe, it, expect } from 'vitest'
-import { AmazonFlatFileService, isBlankFeedValue, applySnapshotOverlay, buildSchemaEnumCodeMap, buildSchemaFieldHints, normalizeParentage } from './flat-file.service.js'
+import { AmazonFlatFileService, isBlankFeedValue, applySnapshotOverlay, buildSchemaEnumCodeMap, buildSchemaFieldHints, normalizeParentage, normalizeVariationTheme } from './flat-file.service.js'
 
 const svc = new AmazonFlatFileService({} as any, {} as any)
 // private but pure — call through an any-cast (same args syncRowsToPlatform uses)
@@ -463,5 +463,35 @@ describe('FFP.13 — applySnapshotOverlay keeps record_action', () => {
     expect(out.purchasable_offer__our_price).toBe('49.9')
     expect(out.fulfillment_availability__quantity).toBe('7')
     expect(out.record_action).toBe('delete')
+  })
+})
+
+// FFP.19 — variation_theme values normalize onto the category's approved enum
+// (legacy Seller-Central spellings, localized labels, case/separator variants).
+describe('FFP.19 — normalizeVariationTheme', () => {
+  const themeMap = {
+    'Taglia/Colore': 'SIZE/COLOR',
+    'Colore': 'COLOR',
+    'Taglia nome/Colore nome': 'SIZE_NAME/COLOR_NAME',
+  }
+  it('legacy SizeName-ColorName → SIZE_NAME/COLOR_NAME (prefers *_NAME style + input order)', () => {
+    const map = { ...themeMap, 'Colore nome/Taglia nome': 'COLOR_NAME/SIZE_NAME' }
+    expect(normalizeVariationTheme('SizeName-ColorName', map)).toBe('SIZE_NAME/COLOR_NAME')
+  })
+  it('Size-Color → SIZE/COLOR (prefers non-NAME style)', () => {
+    expect(normalizeVariationTheme('Size-Color', themeMap)).toBe('SIZE/COLOR')
+  })
+  it('localized label maps directly', () => {
+    expect(normalizeVariationTheme('Taglia/Colore', themeMap)).toBe('SIZE/COLOR')
+  })
+  it('approved code passes through with canonical casing', () => {
+    expect(normalizeVariationTheme('size/color', themeMap)).toBe('SIZE/COLOR')
+  })
+  it('order-insensitive axis match', () => {
+    expect(normalizeVariationTheme('ColorName_SizeName', themeMap)).toBe('SIZE_NAME/COLOR_NAME')
+  })
+  it('unknown value passes through untouched', () => {
+    expect(normalizeVariationTheme('FLAVOR', themeMap)).toBe('FLAVOR')
+    expect(normalizeVariationTheme('', themeMap)).toBe('')
   })
 })
