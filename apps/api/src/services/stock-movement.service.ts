@@ -1,6 +1,6 @@
 import prisma from '../db.js'
 import type { Prisma } from '@prisma/client'
-import { outboundSyncQueue } from '../lib/queue.js'
+import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { handleMovementStockoutTransition } from './stockout-detector.service.js'
 import { consumeLayersInTx, receiveLayerInTx } from './cost-layers.service.js'
@@ -475,32 +475,24 @@ export async function applyStockMovement(input: StockMovementInput) {
     const priority =
       process.env.NEXUS_OUTBOUND_PRIORITY === '0' ? undefined : outboundEnqueuePriority(reason)
     for (const queueId of transactionResult.cascade.queuedSyncIds) {
-      try {
-        await outboundSyncQueue.add(
-          'sync-job',
-          {
-            queueId,
-            productId,
-            syncType: 'QUANTITY_UPDATE',
-            source: 'STOCK_MOVEMENT',
-            reason,
-          },
-          {
-            delay: enqueueDelay,
-            jobId: queueId,
-            ...(priority !== undefined ? { priority } : {}),
-          },
-        )
-      } catch (err) {
-        logger.warn(
-          'applyStockMovement: BullMQ enqueue failed (DB row remains PENDING for next drain)',
-          {
-            queueId,
-            productId,
-            err: err instanceof Error ? err.message : String(err),
-          },
-        )
-      }
+      // addJobSafely can never hang the movement (bounded + circuit-broken);
+      // a timed-out/failed add leaves the DB row PENDING for the drain cron.
+      await addJobSafely(
+        outboundSyncQueue,
+        'sync-job',
+        {
+          queueId,
+          productId,
+          syncType: 'QUANTITY_UPDATE',
+          source: 'STOCK_MOVEMENT',
+          reason,
+        },
+        {
+          delay: enqueueDelay,
+          jobId: queueId,
+          ...(priority !== undefined ? { priority } : {}),
+        },
+      )
     }
   }
 

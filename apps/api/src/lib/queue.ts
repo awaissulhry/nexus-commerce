@@ -155,6 +155,92 @@ export const channelSyncQueueEvents: QueueEvents = new QueueEvents('channel-sync
 
 attachEventListeners(queueEvents)
 
+// ── Hang-proof enqueue (timeout + circuit breaker) ────────────────────────
+//
+// `Queue.add()` issues a Redis command over a connection configured with
+// `maxRetriesPerRequest: null`, so against an unreachable / misconfigured
+// Redis it BLOCKS FOREVER instead of rejecting — the exact failure mode this
+// file's header documents and that `initializeQueue()` already guards its
+// `ping()` against. Any request that `await`s such an add hangs with it (the
+// bulk stock import stalled mid-run this way: row 1 committed, then the
+// post-commit enqueue never returned, so row 2 never ran and the HTTP request
+// never responded).
+//
+// Every outbound enqueue is backed by a PENDING OutboundSyncQueue DB row that
+// the reconcile cron drains, so a missed instant-lane add is only a latency
+// cost, never lost work. This wrapper bounds the wait; and once one add times
+// out it opens a short circuit so a bulk loop doesn't pay the timeout on every
+// row (and concurrent requests skip straight to the cron path too). Never
+// throws — returns what happened so callers may log with their own context.
+const ENQUEUE_TIMEOUT_MS = Number(process.env.NEXUS_ENQUEUE_TIMEOUT_MS ?? 2500)
+const ENQUEUE_CIRCUIT_COOLDOWN_MS = Number(process.env.NEXUS_ENQUEUE_CIRCUIT_MS ?? 30_000)
+let _enqueueCircuitOpenUntil = 0
+
+export interface SafeEnqueueResult {
+  /** true iff BullMQ accepted the job within the timeout. */
+  enqueued: boolean
+  /** the add() didn't resolve within timeoutMs (circuit now open). */
+  timedOut?: boolean
+  /** circuit was already open — add() skipped, cron will drain the row. */
+  skipped?: boolean
+  /** add() rejected with a real error. */
+  error?: string
+}
+
+/**
+ * Enqueue a BullMQ job that can never hang the caller. See the block comment
+ * above. Safe ONLY for enqueues whose work is also guaranteed by a PENDING DB
+ * row + drain cron (the outbound-sync family) — never use it where the BullMQ
+ * job itself is the only record of the work.
+ */
+export async function addJobSafely(
+  queue: Queue,
+  name: Parameters<Queue['add']>[0],
+  data: Parameters<Queue['add']>[1],
+  opts?: Parameters<Queue['add']>[2],
+  timeoutMs: number = ENQUEUE_TIMEOUT_MS,
+): Promise<SafeEnqueueResult> {
+  // Circuit open → don't even attempt; the cron drains the PENDING row.
+  if (Date.now() < _enqueueCircuitOpenUntil) {
+    return { enqueued: false, skipped: true }
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeoutP = new Promise<'timeout'>((resolve) => {
+    timer = setTimeout(() => resolve('timeout'), timeoutMs)
+  })
+  const addP = queue.add(name, data, opts).then(() => 'ok' as const)
+  // If add() settles AFTER the timeout already won the race, its (possibly
+  // rejected) promise must still be handled or it becomes an unhandledRejection.
+  addP.catch(() => {})
+  try {
+    const winner = await Promise.race([addP, timeoutP])
+    if (winner === 'timeout') {
+      _enqueueCircuitOpenUntil = Date.now() + ENQUEUE_CIRCUIT_COOLDOWN_MS
+      logger.warn('addJobSafely: enqueue timed out — opening circuit; cron will drain the PENDING row', {
+        queue: queue.name,
+        jobName: String(name),
+        timeoutMs,
+      })
+      return { enqueued: false, timedOut: true }
+    }
+    return { enqueued: true }
+  } catch (err) {
+    logger.warn('addJobSafely: enqueue failed — cron will drain the PENDING row', {
+      queue: queue.name,
+      jobName: String(name),
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return { enqueued: false, error: err instanceof Error ? err.message : String(err) }
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+/** Test-only: reset the module-level enqueue circuit breaker between cases. */
+export function resetEnqueueCircuitForTests(): void {
+  _enqueueCircuitOpenUntil = 0
+}
+
 function attachEventListeners(events: QueueEvents) {
   if (_eventListenersAttached) return
   _eventListenersAttached = true

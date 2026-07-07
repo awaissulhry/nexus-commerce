@@ -60,7 +60,7 @@
 import type { PrismaClient } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
-import { outboundSyncQueue } from '../lib/queue.js'
+import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 
 // IS.2b — reduced from 5 min to 30s. Price changes from the edit page
@@ -374,30 +374,22 @@ export class MasterPriceService {
       const delay =
         ctx.applyGrace === false ? 0 : DEFAULT_HOLD_MS
       for (const queueId of result.queuedSyncIds) {
-        try {
-          await outboundSyncQueue.add(
-            'sync-job',
-            {
-              queueId,
-              productId,
-              syncType: 'PRICE_UPDATE',
-              source: 'MASTER_PRICE_CHANGE',
-            },
-            {
-              delay,
-              jobId: queueId,
-            },
-          )
-        } catch (err) {
-          logger.warn(
-            'MasterPriceService: BullMQ enqueue failed (DB row remains PENDING for next drain)',
-            {
-              queueId,
-              productId,
-              err: err instanceof Error ? err.message : String(err),
-            },
-          )
-        }
+        // Bounded + circuit-broken: unreachable Redis can't hang the request;
+        // the DB row stays PENDING for the drain cron.
+        await addJobSafely(
+          outboundSyncQueue,
+          'sync-job',
+          {
+            queueId,
+            productId,
+            syncType: 'PRICE_UPDATE',
+            source: 'MASTER_PRICE_CHANGE',
+          },
+          {
+            delay,
+            jobId: queueId,
+          },
+        )
       }
     }
 

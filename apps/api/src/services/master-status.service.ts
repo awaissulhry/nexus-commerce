@@ -50,7 +50,7 @@
 import type { PrismaClient } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
-import { outboundSyncQueue } from '../lib/queue.js'
+import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 
 const DEFAULT_HOLD_MS = 5 * 60 * 1000
@@ -267,27 +267,19 @@ export class MasterStatusService {
     if (!ctx.tx && result.queuedSyncIds.length > 0) {
       const delay = ctx.applyGrace === false ? 0 : DEFAULT_HOLD_MS
       for (const queueId of result.queuedSyncIds) {
-        try {
-          await outboundSyncQueue.add(
-            'sync-job',
-            {
-              queueId,
-              productId,
-              syncType: 'STATUS_UPDATE',
-              source: 'MASTER_STATUS_CHANGE',
-            },
-            { delay, jobId: queueId },
-          )
-        } catch (err) {
-          logger.warn(
-            'MasterStatusService: BullMQ enqueue failed (DB row remains PENDING for next drain)',
-            {
-              queueId,
-              productId,
-              err: err instanceof Error ? err.message : String(err),
-            },
-          )
-        }
+        // Bounded + circuit-broken: an unreachable Redis can't hang the request;
+        // the DB row stays PENDING for the drain cron.
+        await addJobSafely(
+          outboundSyncQueue,
+          'sync-job',
+          {
+            queueId,
+            productId,
+            syncType: 'STATUS_UPDATE',
+            source: 'MASTER_STATUS_CHANGE',
+          },
+          { delay, jobId: queueId },
+        )
       }
     }
 

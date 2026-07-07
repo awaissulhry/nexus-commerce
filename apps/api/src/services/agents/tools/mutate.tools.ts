@@ -22,8 +22,7 @@
 
 import { Prisma } from '@nexus/database'
 import prisma from '../../../db.js'
-import { outboundSyncQueue } from '../../../lib/queue.js'
-import { logger } from '../../../utils/logger.js'
+import { outboundSyncQueue, addJobSafely } from '../../../lib/queue.js'
 import { masterPriceService } from '../../master-price.service.js'
 import { getAmazonPublishMode } from '../../amazon-publish-gate.service.js'
 import { isEmailSuppressed } from '../../reviews/email-suppression.service.js'
@@ -172,18 +171,14 @@ const publishListing: AgentTool = {
       },
       select: { id: true },
     })
-    try {
-      await outboundSyncQueue.add(
-        'sync-job',
-        { queueId: row.id, productId: id, syncType: 'LISTING_SYNC', source: 'AGENT_PUBLISH' },
-        { jobId: row.id },
-      )
-    } catch (err) {
-      logger.warn(
-        'publish-listing: BullMQ enqueue failed (DB row stays PENDING for the next drain)',
-        { queueId: row.id, productId: id, err: err instanceof Error ? err.message : String(err) },
-      )
-    }
+    // Bounded + circuit-broken: unreachable Redis can't hang the tool call;
+    // the DB row stays PENDING for the drain cron.
+    await addJobSafely(
+      outboundSyncQueue,
+      'sync-job',
+      { queueId: row.id, productId: id, syncType: 'LISTING_SYNC', source: 'AGENT_PUBLISH' },
+      { jobId: row.id },
+    )
     return {
       ok: true,
       data: {

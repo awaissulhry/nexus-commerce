@@ -28,7 +28,7 @@
 import prisma from '../db.js'
 import { applyStockMovement } from './stock-movement.service.js'
 import { coalescePendingQuantityRows } from './sync-coalesce.js'
-import { outboundSyncQueue } from '../lib/queue.js'
+import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 
 // Same undo-grace as manual stock edits (see stock-movement.service.ts) —
@@ -756,20 +756,16 @@ export async function applyImport(opts: {
     }
   }
 
-  // BullMQ enqueue AFTER commits — Redis-down degrades to the cron drain.
+  // BullMQ enqueue AFTER commits. addJobSafely is bounded + circuit-broken, so
+  // an unreachable Redis can never hang the apply loop — the DB rows stay
+  // PENDING and the drain cron picks them up (Redis-down degrades to cron).
   for (const { queueId, productId } of queuedJobIds) {
-    try {
-      await outboundSyncQueue.add(
-        'sync-job',
-        { queueId, productId, syncType: 'QUANTITY_UPDATE', source: 'STOCK_IMPORT' },
-        { delay: IMPORT_HOLD_MS, jobId: queueId },
-      )
-    } catch (err) {
-      logger.warn('stock-import: BullMQ enqueue failed (DB row remains PENDING for next drain)', {
-        queueId,
-        err: err instanceof Error ? err.message : String(err),
-      })
-    }
+    await addJobSafely(
+      outboundSyncQueue,
+      'sync-job',
+      { queueId, productId, syncType: 'QUANTITY_UPDATE', source: 'STOCK_IMPORT' },
+      { delay: IMPORT_HOLD_MS, jobId: queueId },
+    )
   }
 
   // Close job
