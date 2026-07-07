@@ -6,8 +6,13 @@
  * Resolution tiers (in order):
  *   1. Exact Product.sku match
  *   2. SkuAlias.alias match (operator-defined or import-confirmed)
- *   3. Fuzzy product.name match (case-insensitive contains)
- *   4. Barcode match (product.ean / product.upc)
+ *   3. Channel identity match — eBay custom labels (SharedListingMembership.sku),
+ *      Amazon FNSKU (Product.fnsku), ASIN (ChannelListing ids) — so files
+ *      exported FROM a marketplace resolve without manual mapping (IM.2 P2)
+ *   4. Barcode match (product.ean / product.upc) — before fuzzy: an exact
+ *      barcode hit must never lose to a name guess
+ *   5. Fuzzy product.name match, gated: auto-accepts only a clear winner;
+ *      ambiguous scores return UNRESOLVED with ranked candidates
  *   Unresolved → status 'UNRESOLVED', must be manually assigned before commit
  *
  * Modes:
@@ -26,7 +31,7 @@ import { logger } from '../utils/logger.js'
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
-export type ResolutionTier = 'EXACT' | 'ALIAS' | 'FUZZY_NAME' | 'BARCODE' | 'UNRESOLVED'
+export type ResolutionTier = 'EXACT' | 'ALIAS' | 'CHANNEL_SKU' | 'FUZZY_NAME' | 'BARCODE' | 'UNRESOLVED'
 export type ImportMode = 'ADJUST' | 'SET'
 export type ImportTarget = 'WAREHOUSE' | 'CHANNEL' | 'BOTH'
 
@@ -104,6 +109,8 @@ interface ProductLookup {
   name: string
   ean: string | null
   upc: string | null
+  fnsku: string | null
+  amazonAsin: string | null
 }
 
 export async function resolveRows(rows: ImportRow[]): Promise<ResolvedRow[]> {
@@ -112,7 +119,7 @@ export async function resolveRows(rows: ImportRow[]): Promise<ResolvedRow[]> {
 
   // Load all products (small catalog, ~279 for Xavia — single query is fine)
   const products = await prisma.product.findMany({
-    select: { id: true, sku: true, name: true, ean: true, upc: true },
+    select: { id: true, sku: true, name: true, ean: true, upc: true, fnsku: true, amazonAsin: true },
   })
 
   // Build lookup maps
@@ -131,6 +138,35 @@ export async function resolveRows(rows: ImportRow[]): Promise<ResolvedRow[]> {
   })
   const byAlias = new Map<string, string>(aliases.map((a) => [a.alias, a.productId]))
   const productById = new Map<string, ProductLookup>(products.map((p) => [p.id, p]))
+
+  // IM.2 P2 — channel identities, so marketplace exports resolve directly:
+  // eBay custom labels (shared-SKU memberships), FNSKU, ASIN. All batched;
+  // maps are raw-lowercase → productId.
+  const byChannelId = new Map<string, string>()
+  const addChannelId = (key: string | null | undefined, productId: string | null | undefined) => {
+    if (!key || !productId) return
+    const k = key.trim().toLowerCase()
+    if (k && !byChannelId.has(k)) byChannelId.set(k, productId)
+  }
+  const [memberships, amazonListings] = await Promise.all([
+    prisma.sharedListingMembership.findMany({
+      where: { status: 'ACTIVE', productId: { not: null } },
+      select: { sku: true, productId: true },
+    }),
+    prisma.channelListing.findMany({
+      where: { channel: 'AMAZON' },
+      select: { productId: true, externalListingId: true, platformProductId: true },
+    }),
+  ])
+  for (const m of memberships) addChannelId(m.sku, m.productId)
+  for (const p of products) {
+    addChannelId(p.fnsku, p.id)
+    addChannelId(p.amazonAsin, p.id) // 264/273 products carry the child ASIN here
+  }
+  for (const cl of amazonListings) {
+    addChannelId(cl.externalListingId, cl.productId) // child ASIN
+    addChannelId(cl.platformProductId, cl.productId) // analytics ASIN key
+  }
 
   return rows.map((row): ResolvedRow => {
     const raw = row.raw.trim()
@@ -165,7 +201,37 @@ export async function resolveRows(rows: ImportRow[]): Promise<ResolvedRow[]> {
       }
     }
 
-    // Tier 3: fuzzy name (contains, case-insensitive)
+    // Tier 3: channel identity (eBay custom label / FNSKU / ASIN)
+    const channelProductId = byChannelId.get(raw.toLowerCase())
+    if (channelProductId) {
+      const p = productById.get(channelProductId)
+      if (p) {
+        return {
+          ...row,
+          productId: p.id,
+          productName: p.name,
+          resolvedSku: p.sku,
+          tier: 'CHANNEL_SKU',
+          candidates: [],
+        }
+      }
+    }
+
+    // Tier 4: barcode (EAN/UPC) — before fuzzy: exact identifiers must
+    // never lose to a name guess
+    const barcodeMatch = byEan.get(normalized) ?? byUpc.get(normalized)
+    if (barcodeMatch) {
+      return {
+        ...row,
+        productId: barcodeMatch.id,
+        productName: barcodeMatch.name,
+        resolvedSku: barcodeMatch.sku,
+        tier: 'BARCODE',
+        candidates: [],
+      }
+    }
+
+    // Tier 5: fuzzy name (contains, case-insensitive), ambiguity-gated
     const nameLower = normalized
     const nameCandidates = products
       .filter((p) => {
@@ -182,8 +248,14 @@ export async function resolveRows(rows: ImportRow[]): Promise<ResolvedRow[]> {
       .sort((a, b) => b.score - a.score)
       .slice(0, 5)
 
-    if (nameCandidates.length > 0) {
-      const best = productById.get(nameCandidates[0].productId)!
+    // Gate: auto-accept only a clear winner (≥2 matched words AND strictly
+    // ahead of the runner-up). Weak or tied scores stay UNRESOLVED with the
+    // ranked candidates surfaced for one-click assignment in the UI.
+    const top = nameCandidates[0]
+    const runnerUp = nameCandidates[1]
+    const clearWinner = top && top.score >= 2 && (!runnerUp || top.score > runnerUp.score)
+    if (clearWinner) {
+      const best = productById.get(top.productId)!
       return {
         ...row,
         productId: best.id,
@@ -194,27 +266,14 @@ export async function resolveRows(rows: ImportRow[]): Promise<ResolvedRow[]> {
       }
     }
 
-    // Tier 4: barcode (EAN/UPC)
-    const barcodeMatch = byEan.get(normalized) ?? byUpc.get(normalized)
-    if (barcodeMatch) {
-      return {
-        ...row,
-        productId: barcodeMatch.id,
-        productName: barcodeMatch.name,
-        resolvedSku: barcodeMatch.sku,
-        tier: 'BARCODE',
-        candidates: [],
-      }
-    }
-
-    // Unresolved
+    // Unresolved (candidates ranked for the assign UI, possibly empty)
     return {
       ...row,
       productId: null,
       productName: null,
       resolvedSku: null,
       tier: 'UNRESOLVED',
-      candidates: nameCandidates.slice(0, 5),
+      candidates: nameCandidates,
     }
   })
 }

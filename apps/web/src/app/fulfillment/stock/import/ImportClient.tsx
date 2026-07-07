@@ -48,7 +48,7 @@ import '@/design-system/styles/patterns.css'
 type WizardStep = 'UPLOAD' | 'MAP' | 'RESOLVE' | 'PREVIEW' | 'APPLY'
 type ImportMode = 'ADJUST' | 'SET'
 type ImportTarget = 'WAREHOUSE' | 'CHANNEL' | 'BOTH'
-type ResolutionTier = 'EXACT' | 'ALIAS' | 'FUZZY_NAME' | 'BARCODE' | 'UNRESOLVED'
+type ResolutionTier = 'EXACT' | 'ALIAS' | 'CHANNEL_SKU' | 'FUZZY_NAME' | 'BARCODE' | 'UNRESOLVED'
 type MainTab = 'wizard' | 'aliases' | 'history'
 
 interface ParsedFileResult {
@@ -141,19 +141,42 @@ interface Location {
 
 const STEPS: WizardStep[] = ['UPLOAD', 'MAP', 'RESOLVE', 'PREVIEW', 'APPLY']
 
-const SMART_HEADER_MAP: Record<string, string> = {
-  sku: 'identifier', 'item code': 'identifier', 'item no': 'identifier',
-  'part no': 'identifier', 'product code': 'identifier', code: 'identifier',
-  asin: 'identifier', 'product name': 'identifier', name: 'identifier',
-  qty: 'quantity', quantity: 'quantity', 'qty on hand': 'quantity',
-  stock: 'quantity', units: 'quantity', change: 'quantity', delta: 'quantity',
-  notes: 'notes', note: 'notes', comment: 'notes', remarks: 'notes',
-  channel: 'channel', marketplace: 'marketplace', market: 'marketplace',
+// Auto-map dictionaries, in PRIORITY order per target field. English +
+// Italian + the exact headers of Amazon/eBay inventory exports. A sku-like
+// header must always beat a name-like header for "identifier" — files with
+// both a Name and a SKU column must resolve by SKU.
+const IDENTIFIER_HEADER_TIERS: string[][] = [
+  // 1 — sku-like (incl. Amazon seller-sku, eBay custom label, Italian)
+  ['sku', 'seller sku', 'merchant sku', 'msku', 'sku1', 'custom label', 'custom label sku',
+   'item code', 'item no', 'part no', 'product code', 'code', 'codice', 'codice articolo',
+   'articolo', 'riferimento', 'cod'],
+  // 2 — marketplace ids
+  ['asin', 'asin1', 'fnsku', 'item id', 'itemid', 'item number', 'numero oggetto'],
+  // 3 — barcodes
+  ['ean', 'ean13', 'barcode', 'gtin', 'upc', 'codice a barre', 'codice ean'],
+  // 4 — name-like (last resort)
+  ['product name', 'name', 'title', 'item name', 'product title', 'nome', 'nome prodotto',
+   'titolo', 'descrizione', 'descrizione articolo'],
+]
+const QUANTITY_HEADER_TIERS: string[][] = [
+  ['quantity', 'qty', 'quantità', 'quantita', 'qta', 'q tà', 'qtà', 'quantity available',
+   'available quantity', 'qty on hand', 'on hand', 'stock qty'],
+  ['stock', 'units', 'change', 'delta', 'giacenza', 'pezzi', 'pz', 'disponibilità',
+   'disponibilita', 'available', 'inventory', 'count', 'scorte'],
+]
+const NOTES_HEADERS = ['notes', 'note', 'comment', 'comments', 'remarks', 'memo', 'commento', 'osservazioni']
+const CHANNEL_HEADERS = ['channel', 'canale']
+const MARKETPLACE_HEADERS = ['marketplace', 'market', 'mercato', 'country', 'paese']
+
+/** Normalize a header for dictionary lookup: lowercase, strip punctuation to spaces. */
+function normalizeHeader(h: string): string {
+  return h.toLowerCase().replace(/[_\-./()[\]]+/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 const TIER_LABEL: Record<ResolutionTier, string> = {
   EXACT: 'Exact SKU',
   ALIAS: 'Saved alias',
+  CHANNEL_SKU: 'Channel SKU',
   FUZZY_NAME: 'Fuzzy name',
   BARCODE: 'Barcode',
   UNRESOLVED: 'Unresolved',
@@ -162,6 +185,7 @@ const TIER_LABEL: Record<ResolutionTier, string> = {
 const TIER_TONE: Record<ResolutionTier, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
   EXACT: 'success',
   ALIAS: 'info',
+  CHANNEL_SKU: 'info',
   FUZZY_NAME: 'warning',
   BARCODE: 'info',
   UNRESOLVED: 'danger',
@@ -189,13 +213,26 @@ function downloadBlob(content: string, filename: string, mime = 'text/csv;charse
 
 function autoMapHeaders(headers: string[]): Record<string, string> {
   const result: Record<string, string> = {}
-  for (const h of headers) {
-    const key = h.toLowerCase().trim()
-    const mapped = SMART_HEADER_MAP[key]
-    if (mapped && !Object.values(result).includes(mapped)) {
-      result[h] = mapped
+  const taken = new Set<string>()
+
+  const claim = (field: string, tiers: string[][]) => {
+    for (const tier of tiers) {
+      for (const h of headers) {
+        if (taken.has(h)) continue
+        if (tier.includes(normalizeHeader(h))) {
+          result[h] = field
+          taken.add(h)
+          return
+        }
+      }
     }
   }
+
+  claim('identifier', IDENTIFIER_HEADER_TIERS)
+  claim('quantity', QUANTITY_HEADER_TIERS)
+  claim('notes', [NOTES_HEADERS])
+  claim('channel', [CHANNEL_HEADERS])
+  claim('marketplace', [MARKETPLACE_HEADERS])
   return result
 }
 
@@ -523,17 +560,22 @@ function ImportWizardInner() {
   async function searchProducts(q: string) {
     if (!q.trim()) { setAssignResults([]); return }
     try {
-      const res = await fetch(`${getBackendUrl()}/api/products/search?q=${encodeURIComponent(q)}&limit=10`)
+      // /api/products/search contract: `search=` param, rows under `items`
+      const res = await fetch(`${getBackendUrl()}/api/products/search?search=${encodeURIComponent(q)}&limit=10`)
       const data = await res.json()
-      setAssignResults((data.products ?? data.results ?? []).map((p: any) => ({ id: p.id, sku: p.sku, name: p.name })))
+      setAssignResults((data.items ?? []).map((p: any) => ({ id: p.id, sku: p.sku, name: p.name })))
     } catch { setAssignResults([]) }
+  }
+
+  function assignRow(rowIdx: number, productId: string, sku: string, name: string) {
+    setResolvedRows((rows) => rows.map((r, i) =>
+      i === rowIdx ? { ...r, _override: { productId, sku, name } } : r
+    ))
   }
 
   function confirmAssign(productId: string, sku: string, name: string) {
     if (assignModal === null) return
-    setResolvedRows((rows) => rows.map((r, i) =>
-      i === assignModal.rowIdx ? { ...r, _override: { productId, sku, name } } : r
-    ))
+    assignRow(assignModal.rowIdx, productId, sku, name)
     setAssignModal(null)
     setAssignSearch('')
     setAssignResults([])
@@ -580,9 +622,9 @@ function ImportWizardInner() {
   async function searchAliasProduct(q: string) {
     if (!q.trim()) { setAliasSearchResults([]); return }
     try {
-      const res = await fetch(`${getBackendUrl()}/api/products/search?q=${encodeURIComponent(q)}&limit=10`)
+      const res = await fetch(`${getBackendUrl()}/api/products/search?search=${encodeURIComponent(q)}&limit=10`)
       const data = await res.json()
-      setAliasSearchResults((data.products ?? data.results ?? []).map((p: any) => ({ id: p.id, sku: p.sku, name: p.name })))
+      setAliasSearchResults((data.items ?? []).map((p: any) => ({ id: p.id, sku: p.sku, name: p.name })))
     } catch { setAliasSearchResults([]) }
   }
 
@@ -944,6 +986,25 @@ function ImportWizardInner() {
                                 </div>
                               ) : (
                                 <span className="text-tertiary text-xs">—</span>
+                              )}
+                              {/* One-click candidate picks for fuzzy/unresolved rows */}
+                              {!row._skipped && !row._override && (row.tier === 'FUZZY_NAME' || row.tier === 'UNRESOLVED') && (row.candidates?.length ?? 0) > 0 && (
+                                <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                                  <span className="text-[10px] uppercase tracking-wide text-tertiary">
+                                    {row.tier === 'FUZZY_NAME' ? 'Or pick:' : 'Suggestions:'}
+                                  </span>
+                                  {row.candidates.slice(0, 3).map((c) => (
+                                    <button
+                                      key={c.productId}
+                                      type="button"
+                                      title={c.name}
+                                      onClick={() => assignRow(idx, c.productId, c.sku, c.name)}
+                                      className="font-mono text-[11px] px-1.5 py-0.5 rounded border border-default bg-surface-2 hover:bg-blue-50 hover:border-blue-300 dark:hover:bg-blue-900/20 transition-colors"
+                                    >
+                                      {c.sku}
+                                    </button>
+                                  ))}
+                                </div>
                               )}
                             </td>
                             <td className="px-3 py-2">
