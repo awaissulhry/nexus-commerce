@@ -373,6 +373,8 @@ function ImportWizardInner() {
 
   // ── Step: PREVIEW ─────────────────────────────────────────────────────
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([])
+  // DRAFT StockImportJob backing this preview — apply consumes it exactly once
+  const [draftJobId, setDraftJobId] = useState<string | null>(null)
 
   // ── Step: APPLY ───────────────────────────────────────────────────────
   const [applyResult, setApplyResult] = useState<ApplyResult | null>(null)
@@ -388,6 +390,19 @@ function ImportWizardInner() {
   // ── History tab ──────────────────────────────────────────────────────
   const [history, setHistory] = useState<ImportHistory[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyDetail, setHistoryDetail] = useState<{
+    job: ImportHistory & { results?: Array<{ sku: string; raw: string; applied: boolean; warehouseApplied?: boolean; channelApplied?: boolean; error?: string }> }
+  } | null>(null)
+  const [historyDetailLoading, setHistoryDetailLoading] = useState(false)
+
+  async function openHistoryDetail(id: string) {
+    setHistoryDetailLoading(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/stock/import/history/${id}`)
+      const data = await res.json()
+      if (data.job) setHistoryDetail({ job: data.job })
+    } catch { } finally { setHistoryDetailLoading(false) }
+  }
 
   // ── Init ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -525,11 +540,17 @@ function ImportWizardInner() {
       const res = await fetch(`${getBackendUrl()}/api/stock/import/preview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows, locationCode, mode, target }),
+        body: JSON.stringify({
+          rows, locationCode, mode, target,
+          filename: parsedFile?.filename,
+          fileKind: parsedFile?.kind,
+          jobId: draftJobId ?? undefined,
+        }),
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`) }
       const data = await res.json()
       setPreviewRows(data.rows)
+      setDraftJobId(data.jobId ?? null)
       setStep('PREVIEW')
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), 'danger')
@@ -554,6 +575,7 @@ function ImportWizardInner() {
           pinOverride: target !== 'WAREHOUSE' ? pinOverride : false,
           filename: parsedFile?.filename,
           fileKind: parsedFile?.kind,
+          jobId: draftJobId ?? undefined,
         }),
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`) }
@@ -657,7 +679,7 @@ function ImportWizardInner() {
     setStep('UPLOAD')
     setParsedFile(null); setUploadError(null)
     setColMap({}); setMode('ADJUST'); setTarget('WAREHOUSE'); setPinOverride(false)
-    setResolvedRows([]); setPreviewRows([]); setApplyResult(null)
+    setResolvedRows([]); setPreviewRows([]); setApplyResult(null); setDraftJobId(null)
   }
 
   // ── Step breadcrumb ───────────────────────────────────────────────────
@@ -1347,12 +1369,73 @@ function ImportWizardInner() {
                     render: (r) => <span className="text-xs text-secondary">{new Date(r.createdAt).toLocaleString()}</span>,
                     sortable: true, sortValue: (r) => r.createdAt,
                   },
+                  {
+                    key: 'details', label: '', width: 90, align: 'right',
+                    render: (r) => (
+                      <Button variant="ghost" size="sm" onClick={() => openHistoryDetail(r.id)} disabled={historyDetailLoading}>
+                        <Search size={12} /> Details
+                      </Button>
+                    ),
+                  },
                 ]}
               />
             )}
           </div>
         </Card>
       )}
+
+      {/* ═══ History Detail Modal ════════════════════════════════════════════ */}
+      <Modal
+        open={historyDetail !== null}
+        onClose={() => setHistoryDetail(null)}
+        title={`Import ${historyDetail?.job.filename ?? ''} — ${historyDetail ? new Date(historyDetail.job.createdAt).toLocaleString() : ''}`}
+        size="lg"
+      >
+        {historyDetail && (
+          <div className="flex flex-col gap-3 p-1">
+            <div className="flex items-center gap-3 text-sm flex-wrap">
+              <Tag tone="neutral">{historyDetail.job.mode}</Tag>
+              <Tag tone="neutral">{historyDetail.job.target}</Tag>
+              <span className="text-secondary">{historyDetail.job.locationCode}</span>
+              <span className="text-emerald-600 font-medium">{historyDetail.job.succeeded} ok</span>
+              {historyDetail.job.failed > 0 && <span className="text-rose-600 font-medium">{historyDetail.job.failed} failed</span>}
+              {historyDetail.job.skipped > 0 && <span className="text-secondary">{historyDetail.job.skipped} skipped</span>}
+            </div>
+            {(historyDetail.job.results?.length ?? 0) > 0 ? (
+              <div className="overflow-x-auto overflow-y-auto max-h-96 rounded-lg border border-default">
+                <table className="w-full text-xs">
+                  <thead className="bg-surface-2 sticky top-0">
+                    <tr>
+                      <th className="px-2 py-1.5 text-left font-medium text-secondary">Input</th>
+                      <th className="px-2 py-1.5 text-left font-medium text-secondary">SKU</th>
+                      <th className="px-2 py-1.5 text-left font-medium text-secondary">Warehouse</th>
+                      <th className="px-2 py-1.5 text-left font-medium text-secondary">Channel</th>
+                      <th className="px-2 py-1.5 text-left font-medium text-secondary">Result</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyDetail.job.results!.map((row, i) => (
+                      <tr key={i} className="border-t border-subtle">
+                        <td className="px-2 py-1.5 font-mono">{row.raw}</td>
+                        <td className="px-2 py-1.5 font-mono">{row.sku}</td>
+                        <td className="px-2 py-1.5">{row.warehouseApplied ? '✓' : '—'}</td>
+                        <td className="px-2 py-1.5">{row.channelApplied ? '✓' : '—'}</td>
+                        <td className="px-2 py-1.5">
+                          {row.applied
+                            ? <Pill tone="success">Applied</Pill>
+                            : <span className="text-rose-600">{row.error ?? 'skipped'}</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-tertiary">No per-row results stored for this job.</p>
+            )}
+          </div>
+        )}
+      </Modal>
 
       {/* ═══ Assign Modal ════════════════════════════════════════════════════ */}
       <Modal

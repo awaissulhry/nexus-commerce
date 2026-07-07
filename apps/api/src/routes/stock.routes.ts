@@ -7,6 +7,8 @@ import {
   resolveRows,
   previewImport,
   applyImport,
+  ensureDraftImportJob,
+  ImportAlreadyAppliedError,
   normalizeAlias,
   bulkCreateAliases,
   type ImportRow,
@@ -3252,13 +3254,27 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       locationCode: string
       mode: ImportMode
       target: ImportTarget
+      filename?: string
+      fileKind?: string
+      jobId?: string
     }
   }>('/stock/import/preview', async (request, reply) => {
     try {
-      const { rows, locationCode, mode, target } = request.body ?? {}
+      const { rows, locationCode, mode, target, filename, fileKind, jobId } = request.body ?? {}
       if (!rows?.length) return reply.code(400).send({ error: 'rows[] required' })
       const result = await previewImport({ rows, locationCode, mode, target })
-      return result
+      // IM.2 P4 — a DRAFT job backs every preview; apply consumes it exactly
+      // once. Re-previews reuse the same draft (no history litter).
+      const draftJobId = await ensureDraftImportJob({
+        jobId,
+        filename,
+        fileKind,
+        locationCode,
+        mode,
+        target,
+        totalRows: rows.length,
+      })
+      return { ...result, jobId: draftJobId }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/import/preview] failed')
       return reply.code(400).send({ error: error?.message ?? String(error) })
@@ -3276,14 +3292,18 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       filename?: string
       fileKind?: string
       pinOverride?: boolean
+      jobId?: string
     }
   }>('/stock/import/apply', async (request, reply) => {
     try {
-      const { rows, locationCode, mode, target, filename, fileKind, pinOverride } = request.body ?? {}
+      const { rows, locationCode, mode, target, filename, fileKind, pinOverride, jobId } = request.body ?? {}
       if (!rows?.length) return reply.code(400).send({ error: 'rows[] required' })
-      const result = await applyImport({ rows, locationCode, mode, target, filename, fileKind, pinOverride })
+      const result = await applyImport({ rows, locationCode, mode, target, filename, fileKind, pinOverride, jobId })
       return result
     } catch (error: any) {
+      if (error instanceof ImportAlreadyAppliedError) {
+        return reply.code(409).send({ error: error.message })
+      }
       fastify.log.error({ err: error }, '[stock/import/apply] failed')
       return reply.code(400).send({ error: error?.message ?? String(error) })
     }
@@ -3343,6 +3363,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/stock/import/history', async (_request, reply) => {
     try {
       const jobs = await prisma.stockImportJob.findMany({
+        where: { status: { not: 'DRAFT' } }, // drafts are wizard-internal
         orderBy: { createdAt: 'desc' },
         take: 50,
         select: {

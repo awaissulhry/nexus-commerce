@@ -450,6 +450,53 @@ export async function previewImport(opts: {
   }
 }
 
+// ── Draft job / idempotency (IM.2 P4) ────────────────────────────────────────
+
+export class ImportAlreadyAppliedError extends Error {
+  constructor() {
+    super('This import was already applied (or its draft expired) — re-run Preview to start a fresh one')
+    this.name = 'ImportAlreadyAppliedError'
+  }
+}
+
+/**
+ * Create (or refresh) the DRAFT StockImportJob backing a previewed import.
+ * The wizard gets the jobId at PREVIEW time; apply then consumes the DRAFT
+ * exactly once, so a double-click / retry can never apply stock twice.
+ * Re-previews reuse the same draft row instead of littering history.
+ */
+export async function ensureDraftImportJob(opts: {
+  jobId?: string
+  filename?: string
+  fileKind?: string
+  locationCode: string
+  mode: ImportMode
+  target: ImportTarget
+  totalRows: number
+}): Promise<string> {
+  const { jobId, filename, fileKind, locationCode, mode, target, totalRows } = opts
+  if (jobId) {
+    const updated = await prisma.stockImportJob.updateMany({
+      where: { id: jobId, status: 'DRAFT' },
+      data: { filename: filename ?? null, fileKind: fileKind ?? null, locationCode, mode, target, totalRows },
+    })
+    if (updated.count === 1) return jobId
+    // stale or already-consumed draft — mint a fresh one below
+  }
+  const job = await prisma.stockImportJob.create({
+    data: {
+      filename: filename ?? null,
+      fileKind: fileKind ?? null,
+      locationCode,
+      mode,
+      target,
+      totalRows,
+      status: 'DRAFT',
+    },
+  })
+  return job.id
+}
+
 // ── Apply ─────────────────────────────────────────────────────────────────────
 
 export async function applyImport(opts: {
@@ -465,6 +512,12 @@ export async function applyImport(opts: {
    * Default false: a one-shot push that leaves pool-following intact.
    */
   pinOverride?: boolean
+  /**
+   * IM.2 P4 — DRAFT job id from the preview step. When present, apply
+   * atomically consumes it (DRAFT→APPLYING); a second apply of the same
+   * draft throws ImportAlreadyAppliedError instead of double-writing stock.
+   */
+  jobId?: string
 }): Promise<ApplyResult> {
   const { rows, locationCode, mode, target, filename, fileKind, pinOverride = false } = opts
 
@@ -475,18 +528,83 @@ export async function applyImport(opts: {
   if (!location) throw new Error(`Location ${locationCode} not found`)
   if (location.type === 'AMAZON_FBA') throw new Error('FBA locations are read-only')
 
-  // Create audit job
-  const job = await prisma.stockImportJob.create({
-    data: {
-      filename: filename ?? null,
-      fileKind: fileKind ?? null,
-      locationCode,
-      mode,
-      target,
-      totalRows: rows.length,
-      status: 'PENDING',
-    },
-  })
+  // Audit job: consume the preview's DRAFT exactly once, or (legacy callers
+  // without a draft) create the row at apply time.
+  let jobId: string
+  if (opts.jobId) {
+    const claimed = await prisma.stockImportJob.updateMany({
+      where: { id: opts.jobId, status: 'DRAFT' },
+      data: {
+        status: 'APPLYING',
+        locationCode,
+        mode,
+        target,
+        totalRows: rows.length,
+        ...(filename !== undefined ? { filename } : {}),
+        ...(fileKind !== undefined ? { fileKind } : {}),
+      },
+    })
+    if (claimed.count !== 1) throw new ImportAlreadyAppliedError()
+    jobId = opts.jobId
+  } else {
+    const job = await prisma.stockImportJob.create({
+      data: {
+        filename: filename ?? null,
+        fileKind: fileKind ?? null,
+        locationCode,
+        mode,
+        target,
+        totalRows: rows.length,
+        status: 'PENDING',
+      },
+    })
+    jobId = job.id
+  }
+
+  // IM.2 P4 — batched pre-reads. SET-mode warehouse bases and channel
+  // listings load in two queries instead of two per row; duplicate-SKU rows
+  // stay sequentially correct via in-memory effective state (same model the
+  // preview uses).
+  const applicable = rows.filter((r) => !r.error && r.productId && r.resolvedSku)
+  const applicableProductIds = [...new Set(applicable.map((r) => r.productId as string))]
+  const warehouseQtyByProduct = new Map<string, number>()
+  if (target !== 'CHANNEL' && mode === 'SET' && applicableProductIds.length > 0) {
+    const sls = await prisma.stockLevel.findMany({
+      where: { locationId: location.id, productId: { in: applicableProductIds } },
+      select: { productId: true, quantity: true },
+    })
+    for (const sl of sls) warehouseQtyByProduct.set(sl.productId, sl.quantity)
+  }
+  type ApplyListing = {
+    id: string
+    productId: string
+    channel: string
+    region: string
+    marketplace: string
+    quantity: number | null
+    quantityOverride: number | null
+    externalListingId: string | null
+  }
+  const listingsByProduct = new Map<string, ApplyListing[]>()
+  const listingEffectiveQty = new Map<string, number>()
+  if (target !== 'WAREHOUSE' && applicableProductIds.length > 0) {
+    const cls = await prisma.channelListing.findMany({
+      where: {
+        productId: { in: applicableProductIds },
+        listingStatus: { not: 'ENDED' },
+        channel: { in: ['AMAZON', 'EBAY', 'SHOPIFY'] },
+      },
+      select: {
+        id: true, productId: true, channel: true, region: true, marketplace: true,
+        quantity: true, quantityOverride: true, externalListingId: true,
+      },
+    })
+    for (const cl of cls) {
+      const arr = listingsByProduct.get(cl.productId) ?? []
+      arr.push(cl)
+      listingsByProduct.set(cl.productId, arr)
+    }
+  }
 
   let succeeded = 0, failed = 0, skipped = 0
   const results: ApplyResult['results'] = []
@@ -509,12 +627,9 @@ export async function applyImport(opts: {
     if (target !== 'CHANNEL') {
       try {
         if (mode === 'SET') {
-          // Compute delta = target - current
-          const sl = await prisma.stockLevel.findFirst({
-            where: { locationId: location.id, productId: row.productId },
-            select: { quantity: true },
-          })
-          const current = sl?.quantity ?? 0
+          // Delta vs the batched base, kept sequentially correct for
+          // duplicate-SKU rows via the in-memory effective map.
+          const current = warehouseQtyByProduct.get(row.productId) ?? 0
           const delta = row.quantity - current
           if (delta !== 0) {
             await applyStockMovement({
@@ -523,11 +638,12 @@ export async function applyImport(opts: {
               change: delta,
               reason: 'MANUAL_ADJUSTMENT',
               referenceType: 'BulkImport',
-              referenceId: job.id,
+              referenceId: jobId,
               actor: 'bulk-import',
               notes: row.notes ?? `[SET ${row.quantity}] ${row.raw}`,
             })
           }
+          warehouseQtyByProduct.set(row.productId, row.quantity)
           warehouseApplied = true
         } else if (row.quantity !== 0) {
           await applyStockMovement({
@@ -536,7 +652,7 @@ export async function applyImport(opts: {
             change: row.quantity,
             reason: 'MANUAL_ADJUSTMENT',
             referenceType: 'BulkImport',
-            referenceId: job.id,
+            referenceId: jobId,
             actor: 'bulk-import',
             notes: row.notes ?? `[ADJUST ${row.quantity > 0 ? '+' : ''}${row.quantity}] ${row.raw}`,
           })
@@ -555,18 +671,9 @@ export async function applyImport(opts: {
     // actually happens. followMasterQuantity flips ONLY behind pinOverride.
     if (target !== 'WAREHOUSE' && !rowError) {
       try {
-        const cls = await prisma.channelListing.findMany({
-          where: {
-            productId: row.productId,
-            listingStatus: { not: 'ENDED' },
-            channel: row.channel ? { equals: row.channel } : { in: ['AMAZON', 'EBAY', 'SHOPIFY'] },
-            ...(row.marketplace ? { marketplace: row.marketplace } : {}),
-          },
-          select: {
-            id: true, channel: true, region: true, marketplace: true,
-            quantity: true, quantityOverride: true, externalListingId: true,
-          },
-        })
+        const cls = (listingsByProduct.get(row.productId) ?? [])
+          .filter((cl) => !row.channel || cl.channel === row.channel)
+          .filter((cl) => !row.marketplace || cl.marketplace === row.marketplace)
 
         if (cls.length === 0) {
           const filterDesc = [row.channel, row.marketplace].filter(Boolean).join('/')
@@ -584,8 +691,9 @@ export async function applyImport(opts: {
             // only the freshest imported value should dispatch.
             await coalescePendingQuantityRows(tx, cls.map((c) => c.id))
             for (const cl of cls) {
-              const current = cl.quantityOverride ?? cl.quantity ?? 0
+              const current = listingEffectiveQty.get(cl.id) ?? cl.quantityOverride ?? cl.quantity ?? 0
               const newQty = Math.max(0, mode === 'SET' ? row.quantity : current + row.quantity)
+              listingEffectiveQty.set(cl.id, newQty)
               await tx.channelListing.update({
                 where: { id: cl.id },
                 data: {
@@ -618,7 +726,7 @@ export async function applyImport(opts: {
                       pinOverride,
                       reason: 'MANUAL_ADJUSTMENT',
                       referenceType: 'BulkImport',
-                      referenceId: job.id,
+                      referenceId: jobId,
                     },
                   },
                   select: { id: true },
@@ -666,7 +774,7 @@ export async function applyImport(opts: {
 
   // Close job
   await prisma.stockImportJob.update({
-    where: { id: job.id },
+    where: { id: jobId },
     data: {
       succeeded,
       failed,
@@ -677,7 +785,7 @@ export async function applyImport(opts: {
     },
   })
 
-  return { jobId: job.id, succeeded, failed, skipped, total: rows.length, results }
+  return { jobId, succeeded, failed, skipped, total: rows.length, results }
 }
 
 // ── Alias CRUD ────────────────────────────────────────────────────────────────
