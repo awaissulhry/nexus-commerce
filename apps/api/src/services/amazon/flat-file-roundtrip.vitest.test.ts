@@ -308,7 +308,7 @@ describe('feed schema hints — types, localization, parent', () => {
   it('HIGH-5: a parent row emits parentage_level=parent (+ theme)', () => {
     const m = build({ item_sku: 'P1', parentage_level: 'Parent', variation_theme: 'SIZE', _isNew: true })
     expect(m.attributes.parentage_level[0].value).toBe('parent')
-    expect(m.attributes.variation_theme[0].value).toBe('SIZE')
+    expect(m.attributes.variation_theme[0].name).toBe('SIZE') // FFP.18 — key is `name` (99022)
   })
 })
 
@@ -426,7 +426,7 @@ describe('buildJsonFeedBody — parentage + condition_type + variation_theme via
       { item_sku: 'V1', parentage_level: 'parent', variation_theme: 'Taglia', _isNew: true },
       IT_SCHEMA,
     )
-    expect(m.attributes.variation_theme?.[0]?.value).toBe('SIZE')
+    expect(m.attributes.variation_theme?.[0]?.name).toBe('SIZE') // FFP.18 — key is `name` (99022)
   })
   it('child row emits parentage_level + child_parent_sku_relationship', () => {
     const m = build(

@@ -140,6 +140,25 @@ export function preflightRow(
     issues.push({ field: 'main_product_image_locator', severity: 'warning', message: 'No main product image' })
   }
 
+  // FFP.18 — GTIN-exempt guidance. A NEW listing with no product identifier
+  // must carry supplier_declared_has_product_identifier_exemption=true, or
+  // Amazon demands merchant_suggested_asin / externally_assigned_product_identifier
+  // (90220). Warning only — the operator may know better.
+  if (row._isNew === true) {
+    const hasId = GTIN_FIELDS.some((f) => !isBlank(row[f]))
+      || !isBlank(row.external_product_id)
+      || !isBlank(row.merchant_suggested_asin)
+    const exemptionRaw = String(row.supplier_declared_has_product_identifier_exemption ?? '').trim().toLowerCase()
+    const hasExemption = ['true', '1', 'sì', 'si', 'yes'].includes(exemptionRaw)
+    if (!hasId && !hasExemption) {
+      issues.push({
+        field: 'supplier_declared_has_product_identifier_exemption',
+        severity: 'warning',
+        message: 'New listing without a product identifier — fill external_product_id (EAN/ASIN) or set supplier_declared_has_product_identifier_exemption = Sì (GTIN exemption); otherwise Amazon requires merchant_suggested_asin / externally_assigned_product_identifier',
+      })
+    }
+  }
+
   // G.1 — parent/child structural integrity (Amazon variation model). A parent
   // groups its children by an axis; a child must name its parent. Catch these
   // here so a malformed family is blocked before the feed, not rejected by Amazon.

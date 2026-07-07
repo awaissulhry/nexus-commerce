@@ -414,6 +414,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     const localizedFields = new Set<string>()
     const numericFields = new Set<string>()
     const booleanFields = new Set<string>()
+    const wrappedSubPropFields: Record<string, { sub: string; localized: boolean }> = {}
     try {
       const productTypes = [...new Set(
         rows.map((r) => String(r.product_type ?? productType ?? '').toUpperCase()).filter(Boolean),
@@ -424,6 +425,8 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         h.localizedFields.forEach((f) => localizedFields.add(f))
         h.numericFields.forEach((f) => numericFields.add(f))
         h.booleanFields.forEach((f) => booleanFields.add(f))
+        // FFP.18 — nested single-sub-property attributes (closure→type …).
+        Object.assign(wrappedSubPropFields, h.wrappedSubPropFields)
       }
     } catch (err: any) {
       request.log.warn({ err: err?.message }, 'flat-file/submit: schema hints unavailable — submitting values as-is')
@@ -475,6 +478,8 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       // with a blank product_type cell.
       applicableByType: applicableByType ?? undefined,
       defaultProductType: productType,
+      // FFP.18 — nested single-sub-property attributes (closure→type …).
+      wrappedSubPropFields,
     })
 
     try {

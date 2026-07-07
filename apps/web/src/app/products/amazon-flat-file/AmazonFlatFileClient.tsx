@@ -558,10 +558,14 @@ function parseThemeAxes(theme: string | null | undefined): string[] {
     .filter(Boolean)
     .map((t) => {
       const lc = t.toLowerCase()
-      if (lc.includes('colour') || lc.includes('color')) return 'Color'
-      if (lc.includes('size')) return 'Size'
-      // Strip a trailing "name"/"_name" token so "StyleName" → "Style".
-      const cleaned = t.replace(/[_-]?name$/i, '') || t
+      // FFP.18 — the IT manifest serves LOCALIZED theme tokens (COLORE/TAGLIA/
+      // FORMATO_NOME …); without these mappings the Add-parent panel never
+      // "detected" the variation theme on Italian marketplaces.
+      if (lc.includes('colour') || lc.includes('color') || lc.includes('colore')) return 'Color'
+      if (lc.includes('size') || lc.includes('taglia') || lc.includes('formato')) return 'Size'
+      if (lc.includes('material') || lc.includes('materiale')) return 'Material'
+      // Strip a trailing "name"/"_name"/"nome" token so "StyleName" → "Style".
+      const cleaned = t.replace(/[_-]?(name|nome)$/i, '') || t
       return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase()
     })
 }

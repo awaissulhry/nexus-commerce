@@ -384,10 +384,16 @@ export function normalizeParentage(
  */
 export function buildSchemaFieldHints(properties: Record<string, any>): {
   localizedFields: Set<string>; numericFields: Set<string>; booleanFields: Set<string>
+  /** FFP.18 — attributes whose payload nests ONE wrapped sub-property
+   *  (closure→type, inner→material, outer→material …). Emitting these flat
+   *  (`closure: [{value}]`) makes Amazon read them as EMPTY — the classic
+   *  "filled in the grid but 'obbligatorio ma mancante'" (90220). */
+  wrappedSubPropFields: Record<string, { sub: string; localized: boolean }>
 } {
   const localizedFields = new Set<string>()
   const numericFields = new Set<string>()
   const booleanFields = new Set<string>()
+  const wrappedSubPropFields: Record<string, { sub: string; localized: boolean }> = {}
   for (const [fieldId, prop] of Object.entries(properties)) {
     const p = prop as Record<string, any>
     const itemProps: Record<string, any> = p?.items?.properties ?? {}
@@ -396,8 +402,21 @@ export function buildSchemaFieldHints(properties: Record<string, any>): {
     const t = valueNode?.type ?? p?.type
     if (t === 'number' || t === 'integer') numericFields.add(fieldId)
     else if (t === 'boolean') booleanFields.add(fieldId)
+    // FFP.18 — single wrapped sub-property shape: items.properties has no
+    // `value`, exactly one meaningful sub-key, and that sub-key is itself an
+    // array of {value,…} objects.
+    if (!itemProps.value) {
+      const subKeys = Object.keys(itemProps).filter((k) => k !== 'marketplace_id' && k !== 'language_tag')
+      if (subKeys.length === 1) {
+        const sub = itemProps[subKeys[0]] as Record<string, any>
+        const subItemProps: Record<string, any> = sub?.items?.properties ?? {}
+        if (sub?.type === 'array' && subItemProps.value) {
+          wrappedSubPropFields[fieldId] = { sub: subKeys[0], localized: Boolean(subItemProps.language_tag) }
+        }
+      }
+    }
   }
-  return { localizedFields, numericFields, booleanFields }
+  return { localizedFields, numericFields, booleanFields, wrappedSubPropFields }
 }
 
 /**
@@ -1527,7 +1546,7 @@ export class AmazonFlatFileService {
         // SP-API stores canonical 'parent'/'child' codes in attrs; fall back to DB flags
         parentage_level:       String(attrs.parentage_level?.[0]?.value ?? (p.isParent ? 'parent' : (p as any).parentId ? 'child' : '')),
         parent_sku:            parentSku,
-        variation_theme:       String(attrs.variation_theme?.[0]?.value ?? ''),
+        variation_theme:       String(attrs.variation_theme?.[0]?.name ?? attrs.variation_theme?.[0]?.value ?? ''),
         // Common schema fields pre-populated from DB
         item_name:             listing?.title ?? attrs.item_name?.[0]?.value ?? p.name ?? '',
         brand:                 String(attrs.brand?.[0]?.value ?? ''),
@@ -1686,6 +1705,8 @@ export class AmazonFlatFileService {
     localizedFields: Set<string>
     numericFields: Set<string>
     booleanFields: Set<string>
+    /** FFP.18 — single wrapped sub-property attributes (closure→type …). */
+    wrappedSubPropFields: Record<string, { sub: string; localized: boolean }>
     /** base field id → UTF-8 byte cap, for pre-submit byte-length validation. */
     byteLimits: Record<string, number>
   }> {
@@ -1875,6 +1896,9 @@ export class AmazonFlatFileService {
        *  emitted — this kills the ~50-warnings-per-SKU spray of attributes
        *  that don't belong to the product type (90000900). */
       applicableByType?: Map<string, Set<string>>
+      /** FFP.18 — attributes that nest ONE wrapped sub-property (closure→type,
+       *  inner/outer→material …); emitted as `[{sub: [{value,…}]}]`. */
+      wrappedSubPropFields?: Record<string, { sub: string; localized: boolean }>
       /** FFP.3 — fallback productType when a row's own cell is blank (a blank
        *  productType malformed the whole feed: 4002010 '#/productType'). */
       defaultProductType?: string
@@ -1890,6 +1914,7 @@ export class AmazonFlatFileService {
     const localizedFields = feedSchema.localizedFields
     const applicableByType = feedSchema.applicableByType
     const defaultProductType = (feedSchema.defaultProductType ?? '').toUpperCase()
+    const wrappedSubPropFields = feedSchema.wrappedSubPropFields ?? {}
 
     // Enum fields are shown in the editor as display LABELS (e.g. "Pakistan") but
     // Amazon's JSON feed requires the underlying CODE (e.g. "PK"). Convert
@@ -1903,10 +1928,18 @@ export class AmazonFlatFileService {
     // required), else the raw string.
     const emitValue = (fieldKey: string, raw: string): unknown => {
       const coded = enumCodeMap[fieldKey]?.[raw]
-      if (coded !== undefined) return coded
-      if (numericFields.has(fieldKey)) { const n = Number(raw); return Number.isFinite(n) ? n : raw }
-      if (booleanFields.has(fieldKey)) return raw === 'true' || raw === 'TRUE' || raw === '1'
-      return raw
+      // FFP.18 — enum-coded values still need schema typing. A boolean
+      // attribute's localized label ("Sì") maps to the STRING "true", which
+      // Amazon's boolean schema ignores — that silently voided the GTIN
+      // exemption flag (supplier_declared_has_product_identifier_exemption)
+      // and kept demanding a product identifier on exempt listings.
+      const effective = coded !== undefined ? coded : raw
+      if (numericFields.has(fieldKey)) { const n = Number(String(effective)); return Number.isFinite(n) ? n : effective }
+      if (booleanFields.has(fieldKey)) {
+        if (typeof effective === 'boolean') return effective
+        return effective === 'true' || effective === 'TRUE' || effective === '1'
+      }
+      return effective
     }
 
     // Only localized fields carry a language_tag. With no schema (localizedFields
@@ -2070,7 +2103,11 @@ export class AmazonFlatFileService {
           attrs.parentage_level = [{ value: 'parent', marketplace_id: marketplaceId }]
           if (row.variation_theme) {
             const vt = String(row.variation_theme)
-            attrs.variation_theme = wrap(enumCodeMap['variation_theme']?.[vt] ?? vt)
+            // FFP.18 — variation_theme's payload key is `name`, NOT `value`
+            // (schema: items.required ['name']). Emitting {value} left `name`
+            // empty → Amazon 99022 "field 'name' has insufficient values" and
+            // the theme was never registered.
+            attrs.variation_theme = [{ name: enumCodeMap['variation_theme']?.[vt] ?? vt, marketplace_id: marketplaceId }]
           }
         }
         if (parentageCode === 'child' && row.parent_sku) {
@@ -2115,6 +2152,17 @@ export class AmazonFlatFileService {
           }
           if (k.includes('image_locator')) {
             attrs[k] = [{ media_location: String(v), marketplace_id: marketplaceId }]
+          } else if (wrappedSubPropFields[k]) {
+            // FFP.18 — nested single-sub-property shape (closure→type,
+            // inner/outer→material …): `closure: [{type: [{value,…}]}]`.
+            // Flat emission made Amazon read these as EMPTY (90220
+            // "obbligatorio ma mancante" on fields the operator HAD filled).
+            const { sub, localized } = wrappedSubPropFields[k]
+            const subCell: Record<string, any> = {
+              value: enumCodeMap[`${k}.${sub}`]?.[String(v)] ?? enumCodeMap[k]?.[String(v)] ?? String(v),
+            }
+            if (localized) subCell.language_tag = languageTag
+            attrs[k] = [{ [sub]: [subCell], marketplace_id: marketplaceId }]
           } else {
             const cell: Record<string, any> = { value: emitValue(k, String(v)), marketplace_id: marketplaceId }
             if (isLocalized(k)) cell.language_tag = languageTag
@@ -2737,7 +2785,8 @@ export class AmazonFlatFileService {
       attrs.parentage_level = [{ value: 'parent', marketplace_id: marketplaceId }]
       if (row.variation_theme) {
         const vt = String(row.variation_theme)
-        attrs.variation_theme = wrap(enumCodeMap['variation_theme']?.[vt] ?? vt)
+        // FFP.18 — payload key is `name`, not `value` (see buildJsonFeedBody).
+        attrs.variation_theme = [{ name: enumCodeMap['variation_theme']?.[vt] ?? vt, marketplace_id: marketplaceId }]
       }
     }
     if (parentageLevel === 'child' && row.parent_sku) {
