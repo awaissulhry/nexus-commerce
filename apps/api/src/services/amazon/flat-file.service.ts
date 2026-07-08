@@ -895,6 +895,10 @@ export function applySnapshotOverlay(
     bullet_point: '',
     bullet_point_1: snapshot['bullet_point_1'] || snapshot['bullet_point'] || (liveRow as any)['bullet_point_1'] || '',
     ...(isFba ? { fulfillment_availability__quantity: '' } : {}),
+    // FM Phase 2b — the Follow control is a LIVE value derived from the DB
+    // followMasterQuantity flag, not snapshot content, so it must always come from
+    // liveRow (overriding any stale/absent snapshot value). '' for FBA rows.
+    follow: (liveRow as any).follow,
     item_sku: liveRow.item_sku ?? snapshot.item_sku,
     _rowId: liveRow._rowId,
     _productId: liveRow._productId,

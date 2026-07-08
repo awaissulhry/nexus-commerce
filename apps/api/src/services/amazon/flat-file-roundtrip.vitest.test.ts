@@ -181,6 +181,20 @@ describe('RR — applySnapshotOverlay (lossless grid round-trip)', () => {
     expect(row._isNew).toBe(false)
     expect(row._fieldStates).toEqual({ price: 'OVERRIDE' })
   })
+  it('surfaces the live Follow value, overriding a snapshot saved before the column existed (FM Phase 2b)', () => {
+    // The snapshot predates the Follow column (no `follow` key); the live row carries
+    // it (derived from ChannelListing.followMasterQuantity). Live must win — otherwise
+    // the Follow column reads blank for every previously-saved listing.
+    const fbmSnap = { ...snapshot, fulfillment_availability__fulfillment_channel_code: 'DEFAULT' }
+    const fbmLive = { ...liveRow, fulfillment_availability__fulfillment_channel_code: 'DEFAULT', follow: 'Pinned' }
+    const row = applySnapshotOverlay(fbmSnap, fbmLive)
+    expect(row.follow).toBe('Pinned')
+  })
+  it('keeps Follow blank for FBA rows (Amazon-managed — the grid renders it read-only)', () => {
+    const fbaLive = { ...liveRow, follow: '' } // getExistingRows blanks follow for FBA
+    const row = applySnapshotOverlay(snapshot, fbaLive)
+    expect(row.follow).toBe('')
+  })
 })
 
 // The DE feed was rejected because every push went out as a full UPDATE
