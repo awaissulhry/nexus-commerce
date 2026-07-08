@@ -1629,6 +1629,11 @@ export class AmazonFlatFileService {
         fulfillment_availability:                        '',
         fulfillment_availability__fulfillment_channel_code: faCode,
         fulfillment_availability__quantity:              isFbaChannel ? '' : (listing?.quantity != null ? String(listing.quantity) : ''),
+        // Follow-Master (per-market inventory control): 'Follow' = quantity tracks
+        // the shared warehouse pool; 'Pinned' = holds the fixed quantity you set.
+        // FBA rows leave it blank — Amazon manages FBA stock, so the column reads
+        // '—' in the grid and the follow-master endpoint skips FBA fail-closed.
+        follow: isFbaChannel ? '' : ((listing as any)?.followMasterQuantity === false ? 'Pinned' : 'Follow'),
         fulfillment_availability__lead_time_to_ship_max_days: faLeadTime,
         main_product_image_locator: String(attrs.main_product_image_locator?.[0]?.media_location ?? ''),
       }
@@ -2576,7 +2581,16 @@ export class AmazonFlatFileService {
           ...(bullets.length       ? { bulletPointsOverride: bullets, followMasterBulletPoints: false }       : {}),
           ...(price !== null && !isNaN(price)         ? { price, followMasterPrice: false }      : {}),
           ...(salePrice !== null && !isNaN(salePrice) ? { salePrice }                            : {}),
-          ...(qty !== null && !isNaN(qty)             ? { quantity: qty, followMasterQuantity: false } : {}),
+          // FM Phase 2b — the Follow column owns the follow/pin flag. When the row
+          // carries it, write the quantity but DON'T force-pin here: the follow-apply
+          // endpoint (POST /api/listings/follow-master-quantity, run right after the
+          // save) sets followMasterQuantity + quantityOverride coherently and skips FBA.
+          // Legacy rows with no Follow column keep the historical pin-on-qty behavior.
+          ...(qty !== null && !isNaN(qty)
+            ? (row.follow === 'Follow' || row.follow === 'Pinned'
+                ? { quantity: qty }
+                : { quantity: qty, followMasterQuantity: false })
+            : {}),
           // RR.1 — verbatim flat row (sans internal _ keys) for lossless grid
           // round-trip; structured fields above stay authoritative on read.
           // Normalize parentage_level to canonical 'parent'/'child' before storing

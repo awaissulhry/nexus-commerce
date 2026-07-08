@@ -520,6 +520,22 @@ function makeEmptyRow(productType: string, _marketplace: string, parentage = '')
 const CATEGORY_COL_WIDTH = 360
 const CATEGORY_COL: Column = { id: '__category', fieldRef: '', labelEn: 'Category', labelLocal: 'Category', required: false, kind: 'text', width: CATEGORY_COL_WIDTH }
 
+// FM Phase 2b — synthetic per-market Follow/Pinned control, spliced in right after
+// the Quantity column (see effectiveManifest). 'Follow' = quantity tracks the shared
+// warehouse pool; 'Pinned' = holds a fixed quantity you set. FBA rows render a
+// read-only '—' (Amazon manages FBA stock). Saving routes through the pool-safe
+// follow-apply endpoint — the flat file never writes the warehouse pool itself.
+const FOLLOW_COL_DESC =
+  'Follow = this listing draws from the shared warehouse pool and updates automatically when stock changes. ' +
+  'Pinned = this listing holds a fixed quantity you set and ignores the pool. To hold a value: set this to Pinned, then edit the Quantity. ' +
+  'Default is Follow. FBA listings show "—" (Amazon manages FBA stock). ' +
+  'Your actual stock is managed on the Stock page and imports — saving here never changes it.'
+const FOLLOW_COLUMN: Column = {
+  id: 'follow', fieldRef: 'follow', labelEn: 'Follow', labelLocal: 'Follow',
+  description: FOLLOW_COL_DESC, required: false, kind: 'enum',
+  options: ['Follow', 'Pinned'], selectionOnly: true, width: 96,
+}
+
 // GX.5 — how many trailing blank "canvas" rows to keep so you can always just
 // start typing (auto-grow, like Sheets).
 const GHOST_BUFFER = 8
@@ -695,19 +711,32 @@ export default function AmazonFlatFileClient({
   // using `manifest`, so single-type mode can't regress.
   const effectiveManifest = useMemo(() => {
     const base = unionManifest ?? manifest
+    if (!base) return base
     // MT.5 — in union mode, constrain the Product Type cell to a strict dropdown
     // of the sheet's categories, so each row's category is picked (not typed).
-    if (!base || !unionManifest) return base
+    const unionMode = !!unionManifest
     const opts = ['', ...sheetTypes.map((t) => t.toUpperCase())]
-    return {
-      ...base,
-      groups: base.groups.map((g) => ({
-        ...g,
-        columns: g.columns.map((c) =>
-          c.id === 'product_type' ? { ...c, kind: 'enum' as ColumnKind, options: opts, selectionOnly: true } : c,
-        ),
-      })),
-    }
+    // FM Phase 2b — splice the synthetic Follow column in immediately after the
+    // Quantity column (whichever group holds it). This runs in single-market mode
+    // too — the old `!unionManifest` early-return skipped it, so it only appeared
+    // in union sheets. `followInjected` guards against a (theoretical) duplicate.
+    let followInjected = false
+    const groups = base.groups.map((g) => {
+      const columns: Column[] = []
+      for (const c of g.columns) {
+        columns.push(
+          unionMode && c.id === 'product_type'
+            ? { ...c, kind: 'enum' as ColumnKind, options: opts, selectionOnly: true }
+            : c,
+        )
+        if (c.id === 'fulfillment_availability__quantity' && !followInjected) {
+          columns.push(FOLLOW_COLUMN)
+          followInjected = true
+        }
+      }
+      return { ...g, columns }
+    })
+    return { ...base, groups }
   }, [unionManifest, manifest, sheetTypes])
 
   // MT.3 — fetch the UNION manifest whenever the sheet holds >1 product type.
@@ -3515,6 +3544,22 @@ export default function AmazonFlatFileClient({
 
   const syncToPlatform = useCallback(async (rowsToSync: Row[], isPublished = false) => {
     if (!manifest) return
+    // FM Phase 2b — capture per-listing Follow/Pinned intent from the DIRTY rows
+    // BEFORE the content save; applied AFTER it (so a Pin snapshots the just-saved
+    // quantity). FBA rows carry follow='' and are excluded here; the endpoint also
+    // skips FBA fail-closed. Not run on the post-publish resync (isPublished).
+    const followByBool = new Map<boolean, Set<string>>()
+    if (!isPublished) {
+      for (const r of rowsToSync) {
+        if (!(r._dirty || r._isNew)) continue
+        const pid = String(r._productId ?? '')
+        const fv = (r as Record<string, unknown>).follow
+        if (!pid || (fv !== 'Follow' && fv !== 'Pinned')) continue
+        const followVal = fv === 'Follow'
+        if (!followByBool.has(followVal)) followByBool.set(followVal, new Set())
+        followByBool.get(followVal)!.add(pid)
+      }
+    }
     setSyncStatus('syncing')
     try {
       const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/sync-rows`, {
@@ -3569,6 +3614,31 @@ export default function AmazonFlatFileClient({
       emitInvalidation({ type: 'channel-pricing.updated', meta: { marketplace, productType, source: 'amazon-flat-file' } })
       emitInvalidation({ type: 'stock.adjusted', meta: { source: 'amazon-flat-file', marketplace } })
       emitInvalidation({ type: 'product.updated', meta: { source: 'amazon-flat-file', marketplace } })
+
+      // FM Phase 2b — content save persisted; now push each dirty row's Follow/Pinned
+      // choice through the pool-safe follow-apply endpoint. It writes all three
+      // quantity columns coherently, skips FBA fail-closed, and no-op-skips anything
+      // unchanged (so a routine save fires no needless pushes). Failures are surfaced
+      // but never roll back the content save.
+      if (followByBool.size > 0) {
+        try {
+          let followChanged = 0
+          for (const [followVal, ids] of followByBool) {
+            const fr = await fetch(`${getBackendUrl()}/api/listings/follow-master-quantity`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ productIds: [...ids], channel: 'AMAZON', markets: [marketplace], follow: followVal }),
+            })
+            if (fr.ok) followChanged += (await fr.json().catch(() => ({})))?.updated ?? 0
+            else throw new Error(`follow apply HTTP ${fr.status}`)
+          }
+          if (followChanged > 0) {
+            toast.success(`${followChanged} listing${followChanged === 1 ? '' : 's'} updated (Follow/Pinned)`)
+          }
+        } catch (e) {
+          toast.error(`Follow/Pinned change didn't apply — ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
     } catch {
       setSyncStatus('error')
       toast.error('Save failed — check your connection and try again')
@@ -5145,6 +5215,16 @@ export default function AmazonFlatFileClient({
             </div>
           </div>
         )}
+
+        {/* FM Phase 2b — persistent reminder: a save here writes per-listing values
+            only; the shared warehouse pool is managed on the Stock page + imports. */}
+        <div className="px-4 py-2 bg-blue-50 dark:bg-blue-950/30 border-t border-blue-200 dark:border-blue-900 flex items-center gap-2 text-xs text-blue-800 dark:text-blue-300">
+          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+          <span>
+            You&apos;re editing <strong>per-listing values</strong>. Saving updates each market listing only —
+            your warehouse stock is managed on the <strong>Stock page</strong> and imports; the flat file never changes your pool.
+          </span>
+        </div>
       </header>
 
       {/* ── Empty / loading states ────────────────────────────── */}
@@ -6598,10 +6678,10 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
         const appliesToType = !col.applicableProductTypes
           || col.applicableProductTypes.includes(String(row.product_type ?? '').toUpperCase())
 
-        // FBA rows: quantity is Amazon-managed (a merchant qty flips FBA→FBM).
-        // F.1 already blanks the value server-side; grey the cell so it reads as
-        // not-applicable here (FBM rows still get an editable quantity cell).
-        const isFbaQtyCell = col.id === 'fulfillment_availability__quantity'
+        // FBA rows: quantity AND the Follow control are Amazon-managed (a merchant
+        // qty would flip FBA→FBM). Both are blanked server-side; grey both cells so
+        // they read as not-applicable (FBM rows keep an editable qty + Follow cell).
+        const isFbaManagedCell = (col.id === 'fulfillment_availability__quantity' || col.id === 'follow')
           && /^(AMAZON|AFN|FBA)/.test(String(row.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase())
 
         const _cell = (
@@ -6613,7 +6693,7 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
             isEditing={isCellEditing}
             editInitialChar={isCellEditing ? editInitialChar : null}
             cellBg={stickyLeft !== undefined ? gColor(groupColor).band : gColor(groupColor).cell}
-            grayed={!appliesToType || isFbaQtyCell}
+            grayed={!appliesToType || isFbaManagedCell}
             isGhost={!!row._ghost}
             width={w}
             cellHeight={rowHeight}
@@ -6933,8 +7013,10 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
     },
   }
 
-  // Enum cell: custom dropdown
-  if (col.kind === 'enum' && col.options && col.options.length > 0) {
+  // Enum cell: custom dropdown. A grayed enum (not-applicable to this row, or an
+  // Amazon-managed control like Follow on an FBA listing) falls through to the
+  // read-only "—" render below so it can never be edited.
+  if (col.kind === 'enum' && col.options && col.options.length > 0 && !grayed) {
     // Localized display label for the stored canonical value (e.g. 'parent' → 'Articolo padre')
     const displayLabel = (col.optionLabels?.[displayValue] ?? displayValue)
     // A selection-only cell holding a value Amazon doesn't list. Allowed (you
@@ -7087,7 +7169,7 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
   return (
     <td {...tdShared} className={cn(baseCls, grayed ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30',
       viewByteOver && 'ring-1 ring-inset ring-red-400 dark:ring-red-500')}
-      style={{ ...cellStyle, ...selStyle }} title={grayed ? 'Quantity is managed by Amazon for FBA listings' : (guidanceTitle ?? validIssue?.msg ?? col.description)}>
+      style={{ ...cellStyle, ...selStyle }} title={grayed ? 'Managed by Amazon for FBA listings — set stock on the Stock page' : (guidanceTitle ?? validIssue?.msg ?? col.description)}>
       {fillHandle}
       <div className={cn('px-1.5 flex items-center text-xs truncate',
         grayed ? 'text-slate-400 dark:text-slate-500 select-none'
