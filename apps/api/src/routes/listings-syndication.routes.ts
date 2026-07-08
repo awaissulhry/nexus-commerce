@@ -16,7 +16,7 @@ import {
   type BulkActionType,
 } from '../services/bulk-action.service.js'
 import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
-import { setFollowMasterQuantity } from '../services/follow-master.service.js'
+import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // SYNDICATION — universal /listings workspace endpoints
@@ -3261,6 +3261,39 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       return reply.send(result)
     } catch (err: any) {
       request.log.error({ err }, '[listings/follow-master-quantity] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // ─────────────────────────────────────────────────────────────────
+  // POST /api/listings/stock-buffer   (Phase 4 — per-market reserve)
+  // body: { productIds[], channel: 'AMAZON'|'EBAY', markets: string[] | 'ALL', buffer: number }
+  // Sets ChannelListing.stockBuffer; a FOLLOWING listing republishes pool−buffer,
+  // a PINNED listing just stores it. NEVER writes StockLevel/totalStock (Invariant A);
+  // SKIPS FBA fail-closed (Invariant B).
+  // ─────────────────────────────────────────────────────────────────
+  fastify.post('/listings/stock-buffer', {
+    preHandler: allowApiKeyScope('listings:write'),
+  }, async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as { productIds?: unknown; channel?: unknown; markets?: unknown; buffer?: unknown }
+      const productIds = Array.isArray(body.productIds) ? body.productIds.filter((x): x is string => typeof x === 'string') : []
+      const channel = body.channel === 'AMAZON' || body.channel === 'EBAY' ? body.channel : null
+      const buffer = typeof body.buffer === 'number' && Number.isFinite(body.buffer) ? Math.max(0, Math.floor(body.buffer)) : null
+      const markets = body.markets === 'ALL'
+        ? 'ALL' as const
+        : Array.isArray(body.markets) ? body.markets.filter((x): x is string => typeof x === 'string').map((m) => m.toUpperCase()) : null
+
+      if (productIds.length === 0) return reply.code(400).send({ error: 'productIds[] is required' })
+      if (productIds.length > 500) return reply.code(400).send({ error: 'Max 500 products per request' })
+      if (!channel) return reply.code(400).send({ error: "channel must be 'AMAZON' or 'EBAY'" })
+      if (buffer === null) return reply.code(400).send({ error: 'buffer (non-negative number) is required' })
+      if (markets === null) return reply.code(400).send({ error: "markets must be a string[] or 'ALL'" })
+
+      const result = await setStockBuffer({ productIds, channel, markets, buffer })
+      return reply.send(result)
+    } catch (err: any) {
+      request.log.error({ err }, '[listings/stock-buffer] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })

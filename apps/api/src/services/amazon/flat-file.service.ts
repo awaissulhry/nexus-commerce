@@ -899,6 +899,8 @@ export function applySnapshotOverlay(
     // followMasterQuantity flag, not snapshot content, so it must always come from
     // liveRow (overriding any stale/absent snapshot value). '' for FBA rows.
     follow: (liveRow as any).follow,
+    // FM Phase 4 — buffer is also a live DB-derived value (stockBuffer), never snapshot.
+    buffer: (liveRow as any).buffer,
     item_sku: liveRow.item_sku ?? snapshot.item_sku,
     _rowId: liveRow._rowId,
     _productId: liveRow._productId,
@@ -1638,6 +1640,9 @@ export class AmazonFlatFileService {
         // FBA rows leave it blank — Amazon manages FBA stock, so the column reads
         // '—' in the grid and the follow-master endpoint skips FBA fail-closed.
         follow: isFbaChannel ? '' : ((listing as any)?.followMasterQuantity === false ? 'Pinned' : 'Follow'),
+        // Follow-Master buffer (Phase 4): units reserved from the pool. Only shapes a
+        // FOLLOWING listing's published qty (pool−buffer); blank for FBA (Amazon-managed).
+        buffer: isFbaChannel ? '' : String((listing as any)?.stockBuffer ?? 0),
         fulfillment_availability__lead_time_to_ship_max_days: faLeadTime,
         main_product_image_locator: String(attrs.main_product_image_locator?.[0]?.media_location ?? ''),
       }

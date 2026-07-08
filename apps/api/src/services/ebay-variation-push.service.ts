@@ -1661,6 +1661,7 @@ export function buildFlatRow(
       followMasterDescription?: boolean | null;
       followMasterPrice?: boolean | null;
       followMasterQuantity?: boolean | null;
+      stockBuffer?: number | null;
       followMasterBulletPoints?: boolean | null;
       masterTitle?: string | null;
       masterDescription?: string | null;
@@ -1818,6 +1819,8 @@ export function buildFlatRow(
     // 'Follow' = this market draws from the shared pool; 'Pinned' = it holds a
     // fixed quantity. null when there's no listing for this market.
     row[`${prefix}_follow`] = listing ? (listing.followMasterQuantity === false ? 'Pinned' : 'Follow') : null;
+    // FM Phase 4 — units reserved from the pool (only shapes a Following listing's qty).
+    row[`${prefix}_buffer`] = listing ? String(listing.stockBuffer ?? 0) : null;
     row[`${prefix}_item_id`] = listing?.externalListingId ?? null;
     row[`${prefix}_status`] = listing?.listingStatus ?? null;
     row[`${prefix}_listing_id`] = (attrs.offerId as string | undefined) ?? null;

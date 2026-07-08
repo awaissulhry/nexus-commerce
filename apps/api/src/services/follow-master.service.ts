@@ -248,3 +248,168 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
   })
   return result
 }
+
+// ── Stock buffer (Phase 4) ──────────────────────────────────────────────────
+// Sets ChannelListing.stockBuffer per (product × channel × market). A FOLLOWING
+// listing then republishes pool−buffer (computeAvailableToPublish subtracts it);
+// a PINNED listing just stores the buffer — its fixed quantity is untouched, since
+// a buffer only shapes what a following listing exposes. Same invariants as follow:
+// never writes StockLevel/totalStock, skips FBA fail-closed, no version bump.
+
+export interface StockBufferWrite {
+  stockBuffer: number
+  quantity: number
+  quantityOverride: number | null
+  followMasterQuantity: boolean
+  /** Non-null only when a FOLLOWING listing's published quantity moved → push it. */
+  pushQuantity: number | null
+}
+
+/** PURE — the per-listing write for a stock-buffer change. Unit-tested. */
+export function computeStockBufferWrite(
+  listing: { quantity: number | null; quantityOverride: number | null; followMasterQuantity: boolean | null; stockBuffer: number | null },
+  buffer: number,
+  warehouseAvailable: number,
+): StockBufferWrite {
+  const b = Math.max(0, Math.floor(buffer || 0))
+  const following = listing.followMasterQuantity !== false
+  if (following) {
+    const poolAvailable = computeAvailableToPublish({
+      fulfillmentMethod: 'FBM', warehouseAvailable, fbaSellable: 0, stockBuffer: b,
+    }).available
+    return { stockBuffer: b, quantity: poolAvailable, quantityOverride: null, followMasterQuantity: true, pushQuantity: poolAvailable }
+  }
+  return { stockBuffer: b, quantity: listing.quantity ?? 0, quantityOverride: listing.quantityOverride ?? null, followMasterQuantity: false, pushQuantity: null }
+}
+
+function isBufferNoOp(
+  current: { stockBuffer: number | null; quantity: number | null; quantityOverride: number | null; followMasterQuantity: boolean | null },
+  write: StockBufferWrite,
+): boolean {
+  return (
+    (current.stockBuffer ?? 0) === write.stockBuffer &&
+    current.quantity === write.quantity &&
+    current.quantityOverride === write.quantityOverride &&
+    (current.followMasterQuantity !== false) === write.followMasterQuantity
+  )
+}
+
+export interface StockBufferResult {
+  updated: number
+  skippedFba: number
+  unchanged: number
+  matched: number
+  results: Array<{
+    listingId: string; sku: string | null; channel: string; marketplace: string
+    action: 'BUFFER' | 'SKIPPED_FBA' | 'UNCHANGED'; buffer: number; quantity: number | null
+  }>
+}
+
+export interface StockBufferOpts {
+  productIds: string[]
+  channel: FollowMasterChannel
+  markets: string[] | 'ALL'
+  buffer: number
+  actor?: string
+}
+
+export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBufferResult> {
+  const { productIds, channel, buffer, actor } = opts
+  const result: StockBufferResult = { updated: 0, skippedFba: 0, unchanged: 0, matched: 0, results: [] }
+  if (productIds.length === 0) return result
+
+  const listings = await prisma.channelListing.findMany({
+    where: {
+      productId: { in: productIds },
+      channel,
+      ...(opts.markets === 'ALL' ? {} : { marketplace: { in: opts.markets } }),
+      listingStatus: { not: 'ENDED' },
+    },
+    select: {
+      id: true, productId: true, channel: true, region: true, marketplace: true,
+      quantity: true, quantityOverride: true, followMasterQuantity: true, stockBuffer: true,
+      externalListingId: true, fulfillmentMethod: true, platformAttributes: true,
+      product: { select: { sku: true, fulfillmentMethod: true } },
+    },
+  })
+  result.matched = listings.length
+  if (listings.length === 0) return result
+
+  const stockRows = await prisma.stockLevel.findMany({
+    where: { productId: { in: productIds } },
+    select: { productId: true, available: true, quantity: true, location: { select: { type: true } } },
+  })
+  const warehouseAvailByProduct = new Map<string, number>()
+  const fbaQtyByProduct = new Map<string, number>()
+  for (const s of stockRows) {
+    if (s.location?.type === 'WAREHOUSE') warehouseAvailByProduct.set(s.productId, (warehouseAvailByProduct.get(s.productId) ?? 0) + s.available)
+    else if (s.location?.type === 'AMAZON_FBA') fbaQtyByProduct.set(s.productId, (fbaQtyByProduct.get(s.productId) ?? 0) + s.quantity)
+  }
+
+  const applicable = listings.filter((cl) => {
+    // Invariant B: skip FBA fail-closed (FBA only exists on AMAZON).
+    const fba = cl.channel === 'AMAZON' && isFbaListing(
+      { fulfillmentMethod: cl.fulfillmentMethod, platformAttributes: cl.platformAttributes },
+      { fulfillmentMethod: cl.product?.fulfillmentMethod },
+      { fbaStockQty: fbaQtyByProduct.get(cl.productId) ?? 0 },
+    )
+    if (fba) {
+      result.skippedFba++
+      result.results.push({ listingId: cl.id, sku: cl.product?.sku ?? null, channel: cl.channel, marketplace: cl.marketplace, action: 'SKIPPED_FBA', buffer: cl.stockBuffer ?? 0, quantity: null })
+    }
+    return !fba
+  })
+  if (applicable.length === 0) return result
+
+  const queued: Array<{ queueId: string; productId: string }> = []
+  await prisma.$transaction(async (tx) => {
+    const holdUntil = new Date(Date.now() + FOLLOW_HOLD_MS)
+    // Coalesce stale pending pushes only for the listings that will re-push (following).
+    const willPushIds = applicable.filter((cl) => cl.followMasterQuantity !== false).map((c) => c.id)
+    if (willPushIds.length) await coalescePendingQuantityRows(tx, willPushIds)
+
+    for (const cl of applicable) {
+      const warehouseAvailable = warehouseAvailByProduct.get(cl.productId) ?? 0
+      const write = computeStockBufferWrite(cl, buffer, warehouseAvailable)
+
+      if (isBufferNoOp(cl, write)) {
+        result.unchanged++
+        result.results.push({ listingId: cl.id, sku: cl.product?.sku ?? null, channel: cl.channel, marketplace: cl.marketplace, action: 'UNCHANGED', buffer: write.stockBuffer, quantity: write.quantity })
+        continue
+      }
+
+      await tx.channelListing.update({
+        where: { id: cl.id },
+        data: {
+          stockBuffer: write.stockBuffer,
+          quantity: write.quantity,
+          quantityOverride: write.quantityOverride,
+          followMasterQuantity: write.followMasterQuantity,
+          ...(write.pushQuantity !== null ? { lastSyncStatus: 'PENDING', lastSyncedAt: null } : {}),
+          // No version bump — same reasoning as setFollowMasterQuantity.
+        },
+      })
+      result.updated++
+      result.results.push({ listingId: cl.id, sku: cl.product?.sku ?? null, channel: cl.channel, marketplace: cl.marketplace, action: 'BUFFER', buffer: write.stockBuffer, quantity: write.quantity })
+
+      if (write.pushQuantity !== null && VALID_SYNC_TARGETS.has(cl.channel)) {
+        const qRow = await tx.outboundSyncQueue.create({
+          data: {
+            productId: cl.productId, channelListingId: cl.id, targetChannel: cl.channel as any, targetRegion: cl.region,
+            syncStatus: 'PENDING' as any, syncType: 'QUANTITY_UPDATE', holdUntil, externalListingId: cl.externalListingId, maxRetries: 3,
+            payload: { source: 'STOCK_BUFFER', productId: cl.productId, channel: cl.channel, marketplace: cl.marketplace, quantity: write.pushQuantity, oldQuantity: cl.quantity, stockBuffer: write.stockBuffer, actor: actor ?? null },
+          },
+          select: { id: true },
+        })
+        queued.push({ queueId: qRow.id, productId: cl.productId })
+      }
+    }
+  })
+
+  for (const { queueId, productId } of queued) {
+    await addJobSafely(outboundSyncQueue, 'sync-job', { queueId, productId, syncType: 'QUANTITY_UPDATE', source: 'STOCK_BUFFER' }, { delay: FOLLOW_HOLD_MS, jobId: queueId })
+  }
+
+  logger.info('stock-buffer: applied', { channel, buffer, updated: result.updated, skippedFba: result.skippedFba, matched: result.matched, actor: actor ?? null })
+  return result
+}
