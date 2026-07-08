@@ -1814,6 +1814,10 @@ export function buildFlatRow(
     const prefix = mp.toLowerCase() as Lowercase<Market>;
     row[`${prefix}_price`] = listing?.price?.toNumber() ?? null;
     row[`${prefix}_qty`] = listing?.quantity ?? null;
+    // FM Phase 2 — per-market Follow/Pinned state (drives the Follow column).
+    // 'Follow' = this market draws from the shared pool; 'Pinned' = it holds a
+    // fixed quantity. null when there's no listing for this market.
+    row[`${prefix}_follow`] = listing ? (listing.followMasterQuantity === false ? 'Pinned' : 'Follow') : null;
     row[`${prefix}_item_id`] = listing?.externalListingId ?? null;
     row[`${prefix}_status`] = listing?.listingStatus ?? null;
     row[`${prefix}_listing_id`] = (attrs.offerId as string | undefined) ?? null;

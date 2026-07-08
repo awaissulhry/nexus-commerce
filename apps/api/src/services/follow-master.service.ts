@@ -52,20 +52,38 @@ export function computeFollowMasterWrite(
   if (follow) {
     return { quantity: Math.max(0, poolAvailable), quantityOverride: null, followMasterQuantity: true }
   }
-  const v = Math.max(0, listing.quantityOverride ?? listing.quantity ?? poolAvailable)
+  // Pin: snapshot the current effective PUBLISHED quantity. Prefer base
+  // `quantity` (what the operator sees + what most push paths send, and — in the
+  // save flow — the value the flat-file save just wrote) over a possibly-stale
+  // `quantityOverride`. Fall back to override, then pool-available.
+  const v = Math.max(0, listing.quantity ?? listing.quantityOverride ?? poolAvailable)
   return { quantity: v, quantityOverride: v, followMasterQuantity: false }
+}
+
+/** True when the listing already matches the desired write (nothing to do). */
+function isNoOp(
+  current: { followMasterQuantity: boolean | null; quantityOverride: number | null; quantity: number | null },
+  write: FollowMasterWrite,
+): boolean {
+  const currentFollow = current.followMasterQuantity !== false
+  return (
+    currentFollow === write.followMasterQuantity &&
+    current.quantityOverride === write.quantityOverride &&
+    current.quantity === write.quantity
+  )
 }
 
 export interface FollowMasterResult {
   updated: number
   skippedFba: number
+  unchanged: number
   matched: number
   results: Array<{
     listingId: string
     sku: string | null
     channel: string
     marketplace: string
-    action: 'FOLLOW' | 'PIN' | 'SKIPPED_FBA'
+    action: 'FOLLOW' | 'PIN' | 'SKIPPED_FBA' | 'UNCHANGED'
     quantity: number | null
   }>
 }
@@ -80,7 +98,7 @@ export interface FollowMasterOpts {
 
 export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<FollowMasterResult> {
   const { productIds, channel, follow, actor } = opts
-  const result: FollowMasterResult = { updated: 0, skippedFba: 0, matched: 0, results: [] }
+  const result: FollowMasterResult = { updated: 0, skippedFba: 0, unchanged: 0, matched: 0, results: [] }
   if (productIds.length === 0) return result
 
   // Resolve the exact listings by (productId, channel, marketplace).
@@ -150,6 +168,16 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
         stockBuffer: cl.stockBuffer ?? 0,
       }).available
       const write = computeFollowMasterWrite(cl, follow, poolAvailable)
+
+      // Skip true no-ops so a routine save never fires a needless push.
+      if (isNoOp(cl, write)) {
+        result.unchanged++
+        result.results.push({
+          listingId: cl.id, sku: cl.product?.sku ?? null, channel: cl.channel,
+          marketplace: cl.marketplace, action: 'UNCHANGED', quantity: write.quantity,
+        })
+        continue
+      }
 
       await tx.channelListing.update({
         where: { id: cl.id },

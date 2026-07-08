@@ -25,9 +25,15 @@ describe('computeFollowMasterWrite — PIN (snapshot, all three columns coherent
       quantity: 42, quantityOverride: 42, followMasterQuantity: false,
     })
   })
-  it('prefers an existing override as the snapshot value', () => {
+  it('prefers the base quantity (what the save just wrote) over a stale override', () => {
+    // e.g. the flat-file save wrote base quantity=99; a stale override=5 must NOT win.
     expect(computeFollowMasterWrite({ quantity: 99, quantityOverride: 5 }, false, 42)).toEqual({
-      quantity: 5, quantityOverride: 5, followMasterQuantity: false,
+      quantity: 99, quantityOverride: 99, followMasterQuantity: false,
+    })
+  })
+  it('falls back to override when base quantity is null', () => {
+    expect(computeFollowMasterWrite({ quantity: null, quantityOverride: 7 }, false, 42)).toEqual({
+      quantity: 7, quantityOverride: 7, followMasterQuantity: false,
     })
   })
   it('falls back to pool-available when both quantity and override are null', () => {
