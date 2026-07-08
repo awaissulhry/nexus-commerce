@@ -179,6 +179,7 @@ import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startOrphanBulkJobCleanupCron } from "./jobs/bulk-job-orphan-cleanup.job.js";
 import { startFbaFlipGuardCron } from "./jobs/fba-flip-guard.job.js";
 import { startFbaDriftDetectorCron } from "./jobs/fba-drift-detector.job.js";
+import { startReadCacheReconcileCron } from "./jobs/read-cache-reconcile.job.js";
 import { startScheduledBulkActionCron } from "./jobs/scheduled-bulk-action.job.js";
 import { startBulkAutomationTickCron } from "./jobs/bulk-automation-tick.job.js";
 import { startScheduledImportCron } from "./jobs/scheduled-import.job.js";
@@ -802,6 +803,12 @@ async function start() {
     // SKU we expect FBA shows as FBM — catches flips from ANY source (Seller
     // Central, other tools), not just Nexus. Opt out: NEXUS_ENABLE_FBA_DRIFT_DETECTOR=0.
     startFbaDriftDetectorCron();
+
+    // ES.4 — ProductReadCache reconcile (every 15 min). Worker-independent
+    // backstop that heals any drift between Product truth and the /products
+    // LIST projection (missing rows → "products disappeared", stale totalStock
+    // → "import didn't apply"). Opt out: NEXUS_ENABLE_READCACHE_RECONCILE=0.
+    startReadCacheReconcileCron();
 
     // W1.3 — orphan bulk-job cleanup (hourly). Auto-cancels PENDING /
     // QUEUED BulkActionJob rows that never got POST /:id/process'd

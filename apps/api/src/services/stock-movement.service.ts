@@ -8,6 +8,7 @@ import { computeAvailableToPublish } from './available-to-publish.service.js'
 import { enqueueSharedTradingFanout } from './ebay-shared-fanout.service.js'
 import { coalescePendingQuantityRows } from './sync-coalesce.js'
 import { outboundEnqueuePriority } from './sync-priority.js'
+import { productReadCacheService } from './product-read-cache.service.js'
 
 // S.20 — reasons that consume cost layers (decrease quantity AND
 // realise COGS). Manual-adjustment subtractions also consume; the
@@ -520,6 +521,24 @@ export async function applyStockMovement(input: StockMovementInput) {
         err: err instanceof Error ? err.message : String(err),
       })
     }
+
+    // ES.4 — refresh the ProductReadCache so the product LIST reflects the new
+    // stock. This is the ONLY place every stock change funnels through (bulk
+    // import, orders, returns, manual adjustments), and it was missing: stock
+    // movements never emitted a cache-refresh, so the /products list showed
+    // stock frozen at the last product *edit* — a SET-import looked like it did
+    // nothing. refresh() is a direct DB upsert (no Redis/worker dependency), so
+    // it can't be silently dropped like the BullMQ readCacheQueue path. Fire-
+    // and-forget + fail-open so it never blocks or breaks the movement; the
+    // read-cache reconcile cron is the backstop for any refresh that still fails.
+    void productReadCacheService
+      .refresh(productId)
+      .catch((err) =>
+        logger.warn('applyStockMovement: read-cache refresh failed (reconcile cron will heal)', {
+          productId,
+          err: err instanceof Error ? err.message : String(err),
+        }),
+      )
   }
 
   return transactionResult.movement
