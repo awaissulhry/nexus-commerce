@@ -1891,15 +1891,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // Task 4 — also show a muted "Showing SKUs listed on eBay / Show all products" cue when scoped.
   const renderFeedBanner = useCallback(() => {
     const hasCue = scope === 'listed' && !familyId
+    if (!draftNotice && !hasCue && !categorySchemaError) return null
     return (
       <>
-        {/* FM Phase 2 — standing reminder (owner-mandated): saving the flat file
-            updates per-listing values only and never moves the shared warehouse
-            pool. Persistent (no dismiss) so it can't be forgotten. */}
-        <Banner tone="info" title="You're editing per-listing values">
-          Saving here updates each market listing only. Your warehouse stock is managed on the{' '}
-          <strong>Stock page</strong> and imports — the flat file never changes your pool.
-        </Banner>
         {draftNotice && (
           <Banner tone="warning" onDismiss={() => setDraftNotice(null)}>
             Restored {draftNotice.count} unsaved edit{draftNotice.count === 1 ? '' : 's'} from your last

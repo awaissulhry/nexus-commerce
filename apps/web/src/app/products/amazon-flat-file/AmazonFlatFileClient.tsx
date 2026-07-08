@@ -5300,15 +5300,6 @@ export default function AmazonFlatFileClient({
           </div>
         )}
 
-        {/* FM Phase 2b — persistent reminder: a save here writes per-listing values
-            only; the shared warehouse pool is managed on the Stock page + imports. */}
-        <div className="px-4 py-2 bg-blue-50 dark:bg-blue-950/30 border-t border-blue-200 dark:border-blue-900 flex items-center gap-2 text-xs text-blue-800 dark:text-blue-300">
-          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-          <span>
-            You&apos;re editing <strong>per-listing values</strong>. Saving updates each market listing only —
-            your warehouse stock is managed on the <strong>Stock page</strong> and imports; the flat file never changes your pool.
-          </span>
-        </div>
       </header>
 
       {/* ── Empty / loading states ────────────────────────────── */}
