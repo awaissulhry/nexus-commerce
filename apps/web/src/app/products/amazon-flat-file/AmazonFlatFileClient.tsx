@@ -38,7 +38,8 @@ import { HistoryModal } from '@/components/flat-file/HistoryModal'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { Button } from '@/components/ui/Button'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
-import { applyBulkFollow } from '@/lib/follow-master'
+import { applyBulkFollow, applyBulkBuffer } from '@/lib/follow-master'
+import { Modal as DSModal } from '@/design-system/components/Modal'
 import { Badge } from '@/components/ui/Badge'
 import { IconButton } from '@/components/ui/IconButton'
 import { TagInput } from '@/design-system/primitives/TagInput'
@@ -538,6 +539,17 @@ const FOLLOW_COLUMN: Column = {
   options: ['Follow', 'Pinned'], selectionOnly: true, width: 96,
 }
 
+// FM Phase 4 — units reserved from the shared pool so a Following listing never
+// oversells (it advertises pool − buffer). Only applies while Following; grayed on
+// Pinned (fixed qty ignores it) and FBA (Amazon-managed). Spliced in after Follow.
+const BUFFER_COL_DESC =
+  'Buffer = units held back from the shared warehouse pool so this listing never oversells — a Following listing then advertises pool − buffer. ' +
+  'Useful when several channels draw from one pool. Only applies while Following: Pinned holds a fixed quantity and ignores it, and FBA is Amazon-managed (shows —).'
+const BUFFER_COLUMN: Column = {
+  id: 'buffer', fieldRef: 'buffer', labelEn: 'Buffer', labelLocal: 'Buffer',
+  description: BUFFER_COL_DESC, required: false, kind: 'number', width: 84,
+}
+
 // GX.5 — how many trailing blank "canvas" rows to keep so you can always just
 // start typing (auto-grow, like Sheets).
 const GHOST_BUFFER = 8
@@ -732,7 +744,7 @@ export default function AmazonFlatFileClient({
             : c,
         )
         if (c.id === 'fulfillment_availability__quantity' && !followInjected) {
-          columns.push(FOLLOW_COLUMN)
+          columns.push(FOLLOW_COLUMN, BUFFER_COLUMN)
           followInjected = true
         }
       }
@@ -1087,6 +1099,8 @@ export default function AmazonFlatFileClient({
   } | null>(null)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [showSetCategory, setShowSetCategory] = useState(false)
+  const [bufferModal, setBufferModal] = useState<{ productIds: string[] } | null>(null) // FM Phase 4
+  const [bufferInput, setBufferInput] = useState('1')
   // P1.2 — auto-save indicator
   const [lastLocalSave, setLastLocalSave] = useState<number>(0)
   const [lastSaveTick, setLastSaveTick] = useState<number>(0)
@@ -1821,6 +1835,14 @@ export default function AmazonFlatFileClient({
   const pinnedCount = useMemo(
     () => rows.filter((r) => !r._ghost && r.follow === 'Pinned').length,
     [rows],
+  )
+  // FM Phase 4 — a bulk buffer applies to the selected Following FBM rows only
+  // (buffer is inert on Pinned, and FBA is Amazon-managed).
+  const bufferEligibleCount = useMemo(
+    () => rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string)
+      && String(r.follow) === 'Follow'
+      && !/^(AMAZON|AFN|FBA)/.test(String(r.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase())).length,
+    [rows, selectedRows],
   )
   // WARM — prefetch the Set-category modal chunk before first click so it opens instantly.
   const warmSetCategoryModal = useCallback(() => { void import('./SetCategoryModal') }, [])
@@ -3143,6 +3165,37 @@ export default function AmazonFlatFileClient({
     setSelectedRows(new Set(ids))
   }, [rows, setSelectedRows, toast])
 
+  // FM Phase 4 — bulk "Set buffer" on the selected Following FBM rows (Pinned + FBA excluded).
+  const openBufferModal = useCallback(() => {
+    const selected = rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string))
+    const productIds = [...new Set(selected
+      .filter((r) => String(r.follow) === 'Follow'
+        && !/^(AMAZON|AFN|FBA)/.test(String(r.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase()))
+      .map((r) => String(r._productId ?? '')).filter(Boolean))]
+    if (productIds.length === 0) {
+      toast.error('Select some Following listings — a buffer only applies while Following (Pinned + FBA are excluded).')
+      return
+    }
+    setBufferInput('1')
+    setBufferModal({ productIds })
+  }, [rows, selectedRows, toast])
+
+  const applyBufferModal = useCallback(async () => {
+    if (!bufferModal) return
+    const buffer = Math.max(0, Math.floor(Number(bufferInput) || 0))
+    try {
+      const result = await applyBulkBuffer({ productIds: bufferModal.productIds, channel: 'AMAZON', markets: [marketplace], buffer })
+      const parts = [`${result.updated} → buffer ${buffer}`]
+      if (result.unchanged) parts.push(`${result.unchanged} already ${buffer}`)
+      toast.success(parts.join(' · '))
+      setBufferModal(null)
+      setSelectedRows(new Set())
+      void loadData(marketplace, productType, false, true)
+    } catch (e) {
+      toast.error(`Couldn't set buffer — ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }, [bufferModal, bufferInput, marketplace, productType, toast, setSelectedRows, loadData])
+
   const handleAddRows = useCallback((params: {
     type: 'row' | 'parent' | 'variant'
     count: number
@@ -3614,15 +3667,28 @@ export default function AmazonFlatFileClient({
     // quantity). FBA rows carry follow='' and are excluded here; the endpoint also
     // skips FBA fail-closed. Not run on the post-publish resync (isPublished).
     const followByBool = new Map<boolean, Set<string>>()
+    // FM Phase 4 — dirty rows' Buffer, grouped by value. Only Following FBM rows carry
+    // an editable buffer (it's grayed on Pinned/FBA); the endpoint no-op-skips unchanged.
+    const bufferByValue = new Map<number, Set<string>>()
     if (!isPublished) {
       for (const r of rowsToSync) {
         if (!(r._dirty || r._isNew)) continue
         const pid = String(r._productId ?? '')
+        if (!pid) continue
         const fv = (r as Record<string, unknown>).follow
-        if (!pid || (fv !== 'Follow' && fv !== 'Pinned')) continue
-        const followVal = fv === 'Follow'
-        if (!followByBool.has(followVal)) followByBool.set(followVal, new Set())
-        followByBool.get(followVal)!.add(pid)
+        if (fv === 'Follow' || fv === 'Pinned') {
+          const followVal = fv === 'Follow'
+          if (!followByBool.has(followVal)) followByBool.set(followVal, new Set())
+          followByBool.get(followVal)!.add(pid)
+        }
+        const bv = (r as Record<string, unknown>).buffer
+        if (fv === 'Follow' && bv !== '' && bv != null) {
+          const n = Math.max(0, Math.floor(Number(bv)))
+          if (Number.isFinite(n)) {
+            if (!bufferByValue.has(n)) bufferByValue.set(n, new Set())
+            bufferByValue.get(n)!.add(pid)
+          }
+        }
       }
     }
     setSyncStatus('syncing')
@@ -3702,6 +3768,24 @@ export default function AmazonFlatFileClient({
           }
         } catch (e) {
           toast.error(`Follow/Pinned change didn't apply — ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+
+      // FM Phase 4 — after Follow/Pinned settled, apply any edited Buffer values
+      // (grouped by value) via the pool-safe stock-buffer endpoint. Following listings
+      // republish pool−buffer; the endpoint no-op-skips unchanged.
+      if (bufferByValue.size > 0) {
+        try {
+          let bufferChanged = 0
+          for (const [buf, ids] of bufferByValue) {
+            const result = await applyBulkBuffer({ productIds: [...ids], channel: 'AMAZON', markets: [marketplace], buffer: buf })
+            bufferChanged += result.updated
+          }
+          if (bufferChanged > 0) {
+            toast.success(`${bufferChanged} listing${bufferChanged === 1 ? '' : 's'} buffer updated`)
+          }
+        } catch (e) {
+          toast.error(`Buffer change didn't apply — ${e instanceof Error ? e.message : String(e)}`)
         }
       }
     } catch {
@@ -5065,6 +5149,12 @@ export default function AmazonFlatFileClient({
                 </Button>
               </>
             )}
+            {bufferEligibleCount > 0 && (
+              <Button size="sm" variant="secondary" onClick={openBufferModal}
+                title="Reserve units of the pool on the selected Following listings (they'll advertise pool − buffer)">
+                Set buffer ({bufferEligibleCount})
+              </Button>
+            )}
             {pinnedCount > 0 && (
               <Button size="sm" variant="ghost" onClick={selectAllPinned}
                 title="Select every pinned listing in this sheet — then Set Follow to reconnect them to the pool">
@@ -6154,6 +6244,27 @@ export default function AmazonFlatFileClient({
           onApply={applyCategory} onClose={() => setShowSetCategory(false)} />
       )}
 
+      {/* FM Phase 4 — bulk Set buffer modal */}
+      {bufferModal && (
+        <DSModal open onClose={() => setBufferModal(null)} title="Set buffer" size="sm"
+          footer={
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setBufferModal(null)}>Cancel</Button>
+              <Button variant="primary" size="sm" onClick={() => void applyBufferModal()}>Set buffer</Button>
+            </>
+          }>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
+            Reserve units from the shared pool on <strong>{bufferModal.productIds.length}</strong> Following listing{bufferModal.productIds.length === 1 ? '' : 's'}. Each will then advertise <strong>pool − buffer</strong> — its live quantity may change and a sync is queued.
+          </p>
+          <label className="block text-xs font-medium text-slate-500 mb-1">Units to hold back</label>
+          <input type="number" min={0} value={bufferInput}
+            onChange={(e) => setBufferInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') void applyBufferModal() }}
+            autoFocus
+            className="w-28 px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
+        </DSModal>
+      )}
+
       {pushPanel && manifest && (
         <PushToMarketsPanel
           initialTab={pushPanel.tab}
@@ -6753,11 +6864,13 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
         const appliesToType = !col.applicableProductTypes
           || col.applicableProductTypes.includes(String(row.product_type ?? '').toUpperCase())
 
-        // FBA rows: quantity AND the Follow control are Amazon-managed (a merchant
-        // qty would flip FBA→FBM). Both are blanked server-side; grey both cells so
-        // they read as not-applicable (FBM rows keep an editable qty + Follow cell).
-        const isFbaManagedCell = (col.id === 'fulfillment_availability__quantity' || col.id === 'follow')
+        // FBA rows: quantity, Follow, AND Buffer are Amazon-managed (a merchant qty
+        // would flip FBA→FBM). All blanked server-side; grey them so they read as
+        // not-applicable (FBM rows keep editable qty + Follow + Buffer cells).
+        const isFbaManagedCell = (col.id === 'fulfillment_availability__quantity' || col.id === 'follow' || col.id === 'buffer')
           && /^(AMAZON|AFN|FBA)/.test(String(row.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase())
+        // Buffer only shapes a FOLLOWING listing → grey it on Pinned rows too.
+        const isBufferOnPinned = col.id === 'buffer' && String(row.follow) === 'Pinned'
 
         const _cell = (
           <SpreadsheetCell
@@ -6768,7 +6881,7 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
             isEditing={isCellEditing}
             editInitialChar={isCellEditing ? editInitialChar : null}
             cellBg={stickyLeft !== undefined ? gColor(groupColor).band : gColor(groupColor).cell}
-            grayed={!appliesToType || isFbaManagedCell}
+            grayed={!appliesToType || isFbaManagedCell || isBufferOnPinned}
             isGhost={!!row._ghost}
             width={w}
             cellHeight={rowHeight}

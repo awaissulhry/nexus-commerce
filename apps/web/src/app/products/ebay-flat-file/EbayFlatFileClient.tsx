@@ -10,7 +10,7 @@ import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
-import { applyBulkFollow } from '@/lib/follow-master'
+import { applyBulkFollow, applyBulkBuffer } from '@/lib/follow-master'
 import { Badge } from '@/components/ui/Badge'
 import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
 import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx, RenderCellContent } from '@/components/flat-file/FlatFileGrid.types'
@@ -557,6 +557,8 @@ function EbayDeleteConfirmModal({
 export default function EbayFlatFileClient({ initialRows, initialMarketplace, familyId }: Props) {
   const { toast } = useToast()
   const confirm = useConfirm() // FM Phase 3 — bulk Follow/Pinned confirmation
+  const [bufferModal, setBufferModal] = useState<{ productIds: string[] } | null>(null) // FM Phase 4 bulk buffer
+  const [bufferInput, setBufferInput] = useState('1')
   const [marketplace, setMarketplace] = useState(initialMarketplace.toUpperCase())
   const BACKEND = getBackendUrl()
 
@@ -1020,6 +1022,37 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     }
   }, [confirm, toast, reloadGridPreservingEdits])
 
+  // FM Phase 4 — bulk "Set buffer" on the selected Following eBay rows (buffer only
+  // applies while Following, so Pinned rows are excluded from the target set).
+  const openEbayBufferModal = useCallback((ctxRows: EbayRow[], ctxSelectedRows: Set<string>) => {
+    const followKey = `${marketplaceRef.current.toLowerCase()}_follow`
+    const productIds = [...new Set(ctxRows
+      .filter((r) => ctxSelectedRows.has(r._rowId) && (r as Record<string, unknown>)[followKey] === 'Follow')
+      .map((r) => String(r._productId ?? '')).filter(Boolean))]
+    if (productIds.length === 0) {
+      toast.error('Select some Following listings — a buffer only applies while Following.')
+      return
+    }
+    setBufferInput('1')
+    setBufferModal({ productIds })
+  }, [toast])
+
+  const applyEbayBufferModal = useCallback(async () => {
+    if (!bufferModal) return
+    const mp = marketplaceRef.current
+    const buffer = Math.max(0, Math.floor(Number(bufferInput) || 0))
+    try {
+      const res = await applyBulkBuffer({ productIds: bufferModal.productIds, channel: 'EBAY', markets: [mp], buffer })
+      const parts = [`${res.updated} → buffer ${buffer}`]
+      if (res.unchanged) parts.push(`${res.unchanged} already ${buffer}`)
+      toast.success(parts.join(' · '))
+      setBufferModal(null)
+      reloadGridPreservingEdits()
+    } catch (e) {
+      toast.error(`Couldn't set buffer — ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }, [bufferModal, bufferInput, toast, reloadGridPreservingEdits])
+
   // Push status changed anywhere (this tab's push, another tab, or the feed
   // poll cron finishing a bulk task) → refresh itemIds/status live.
   useOrderEventsRefresh(() => { reloadGridPreservingEdits() }, {
@@ -1140,6 +1173,35 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       }
     } catch (e) {
       toast({ title: 'Follow/Pinned change failed to apply', description: e instanceof Error ? e.message : String(e), tone: 'error' })
+    }
+
+    // FM Phase 4 — apply per-market Buffer changes (grouped by value) via the pool-safe
+    // stock-buffer endpoint. Following markets republish pool−buffer; Pinned markets
+    // just store it. Runs AFTER the follow-apply; the endpoint no-op-skips unchanged.
+    try {
+      const mp = marketplaceRef.current
+      const bufferKey = `${mp.toLowerCase()}_buffer`
+      const byBuffer = new Map<number, Set<string>>()
+      for (const r of dirty) {
+        const pid = String((r as EbayRow)._productId ?? '')
+        const bv = (r as Record<string, unknown>)[bufferKey]
+        if (!pid || bv === '' || bv == null) continue
+        const n = Math.max(0, Math.floor(Number(bv)))
+        if (!Number.isFinite(n)) continue
+        if (!byBuffer.has(n)) byBuffer.set(n, new Set())
+        byBuffer.get(n)!.add(pid)
+      }
+      let bufferChanged = 0
+      for (const [buf, ids] of byBuffer) {
+        if (ids.size === 0) continue
+        const res = await applyBulkBuffer({ productIds: [...ids], channel: 'EBAY', markets: [mp], buffer: buf })
+        bufferChanged += res.updated
+      }
+      if (bufferChanged > 0) {
+        toast({ title: `${bufferChanged} market listing${bufferChanged === 1 ? '' : 's'} buffer updated`, tone: 'success' })
+      }
+    } catch (e) {
+      toast({ title: 'Buffer change failed to apply', description: e instanceof Error ? e.message : String(e), tone: 'error' })
     }
 
     return { saved: result.saved, createResult: result.createResult }
@@ -2208,6 +2270,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                   disabled: selectedRows.size === 0,
                   onSelect: () => void bulkSetFollowEbay(false, rows as EbayRow[], selectedRows),
                 },
+                {
+                  id: 'set-buffer',
+                  label: 'Set buffer…',
+                  icon: <ListOrdered className="w-3.5 h-3.5" />,
+                  disabled: selectedRows.size === 0,
+                  onSelect: () => openEbayBufferModal(rows as EbayRow[], selectedRows),
+                },
               ]}
             />
           )
@@ -2354,7 +2423,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       </>
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, imageModalOpen, derivedProductIds, moveParentOpen, moveTargetId, detachOpen, bulkSetFollowEbay])
+  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, imageModalOpen, derivedProductIds, moveParentOpen, moveTargetId, detachOpen, bulkSetFollowEbay, openEbayBufferModal])
 
   // ── Slot: import button ────────────────────────────────────────────────
 
@@ -2708,6 +2777,27 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           onConfirm={() => void handleExecuteDelete()}
           onClose={() => setDeleteConfirmRows(null)}
         />
+      )}
+
+      {/* FM Phase 4 — bulk Set buffer modal */}
+      {bufferModal && (
+        <Modal open onClose={() => setBufferModal(null)} title="Set buffer" size="sm"
+          footer={
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setBufferModal(null)}>Cancel</Button>
+              <Button variant="primary" size="sm" onClick={() => void applyEbayBufferModal()}>Set buffer</Button>
+            </>
+          }>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
+            Reserve units from the shared pool on <strong>{bufferModal.productIds.length}</strong> Following listing{bufferModal.productIds.length === 1 ? '' : 's'}. Each will then advertise <strong>pool − buffer</strong> — its live quantity may change and a sync is queued.
+          </p>
+          <label className="block text-xs font-medium text-slate-500 mb-1">Units to hold back</label>
+          <input type="number" min={0} value={bufferInput}
+            onChange={(e) => setBufferInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') void applyEbayBufferModal() }}
+            autoFocus
+            className="w-28 px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
+        </Modal>
       )}
 
       {/* ColumnGroupModal — controlled by useFlatFileCore columnsOpen state */}

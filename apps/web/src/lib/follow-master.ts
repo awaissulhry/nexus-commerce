@@ -72,3 +72,48 @@ export async function applyBulkFollow(opts: ApplyBulkFollowOpts): Promise<Follow
   }
   return agg
 }
+
+export interface StockBufferResult {
+  updated: number
+  skippedFba: number
+  unchanged: number
+  matched: number
+  results?: Array<{
+    listingId: string; sku: string | null; channel: string; marketplace: string
+    action: 'BUFFER' | 'SKIPPED_FBA' | 'UNCHANGED'; buffer: number; quantity: number | null
+  }>
+}
+
+/**
+ * Bulk-set the per-listing stock buffer (units reserved from the pool). A Following
+ * listing then republishes pool−buffer; a Pinned listing just stores it. Same 500-id
+ * chunking + aggregation as applyBulkFollow. Never touches the warehouse pool; the
+ * endpoint skips FBA fail-closed.
+ */
+export async function applyBulkBuffer(opts: {
+  productIds: string[]; channel: FollowChannel; markets: string[]; buffer: number
+}): Promise<StockBufferResult> {
+  const ids = [...new Set(opts.productIds.filter(Boolean))]
+  const buffer = Math.max(0, Math.floor(opts.buffer || 0))
+  const agg: StockBufferResult = { updated: 0, skippedFba: 0, unchanged: 0, matched: 0, results: [] }
+  if (ids.length === 0) return agg
+  for (let i = 0; i < ids.length; i += FOLLOW_APPLY_MAX) {
+    const chunk = ids.slice(i, i + FOLLOW_APPLY_MAX)
+    const res = await fetch(`${getBackendUrl()}/api/listings/stock-buffer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productIds: chunk, channel: opts.channel, markets: opts.markets, buffer }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body?.error ?? `Buffer apply failed (HTTP ${res.status})`)
+    }
+    const r = (await res.json()) as StockBufferResult
+    agg.updated += r.updated ?? 0
+    agg.skippedFba += r.skippedFba ?? 0
+    agg.unchanged += r.unchanged ?? 0
+    agg.matched += r.matched ?? 0
+    if (Array.isArray(r.results)) agg.results!.push(...r.results)
+  }
+  return agg
+}
