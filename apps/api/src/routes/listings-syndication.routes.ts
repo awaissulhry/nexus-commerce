@@ -16,6 +16,7 @@ import {
   type BulkActionType,
 } from '../services/bulk-action.service.js'
 import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
+import { setFollowMasterQuantity } from '../services/follow-master.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // SYNDICATION — universal /listings workspace endpoints
@@ -3222,6 +3223,45 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         error: isTimeout ? 'CHANNEL_TIMEOUT' : 'CHANNEL_ERROR',
         detail: error?.message ?? String(error),
       })
+    }
+  })
+
+  // ─────────────────────────────────────────────────────────────────
+  // POST /api/listings/follow-master-quantity   (per-market inventory control)
+  // body: { productIds[], channel: 'AMAZON'|'EBAY', markets: string[] | 'ALL', follow: boolean }
+  // Sets the selected listings' quantity to FOLLOW the shared pool (follow=true)
+  // or PIN the current value (follow=false), per (product × channel × market).
+  // NEVER writes StockLevel/totalStock (Invariant A); SKIPS FBA fail-closed
+  // (Invariant B). Enqueues a QUANTITY_UPDATE so the marketplace reflects it.
+  // ─────────────────────────────────────────────────────────────────
+  fastify.post('/listings/follow-master-quantity', {
+    preHandler: allowApiKeyScope('listings:write'),
+  }, async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        productIds?: unknown
+        channel?: unknown
+        markets?: unknown
+        follow?: unknown
+      }
+      const productIds = Array.isArray(body.productIds) ? body.productIds.filter((x): x is string => typeof x === 'string') : []
+      const channel = body.channel === 'AMAZON' || body.channel === 'EBAY' ? body.channel : null
+      const follow = typeof body.follow === 'boolean' ? body.follow : null
+      const markets = body.markets === 'ALL'
+        ? 'ALL' as const
+        : Array.isArray(body.markets) ? body.markets.filter((x): x is string => typeof x === 'string').map((m) => m.toUpperCase()) : null
+
+      if (productIds.length === 0) return reply.code(400).send({ error: 'productIds[] is required' })
+      if (productIds.length > 500) return reply.code(400).send({ error: 'Max 500 products per request' })
+      if (!channel) return reply.code(400).send({ error: "channel must be 'AMAZON' or 'EBAY'" })
+      if (follow === null) return reply.code(400).send({ error: 'follow (boolean) is required' })
+      if (markets === null) return reply.code(400).send({ error: "markets must be a string[] or 'ALL'" })
+
+      const result = await setFollowMasterQuantity({ productIds, channel, markets, follow })
+      return reply.send(result)
+    } catch (err: any) {
+      request.log.error({ err }, '[listings/follow-master-quantity] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
 
