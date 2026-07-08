@@ -1074,6 +1074,41 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       }, 0)
     }
 
+    // FM Phase 2 — apply per-market Follow/Pinned through the dedicated endpoint
+    // (pool-safe, FBA-skipping, and it no-op-skips anything unchanged so a routine
+    // save fires no needless pushes). Runs AFTER the content save so a Pin
+    // snapshots the just-saved quantity. Grouped by follow value; failures are
+    // surfaced but never block the content save.
+    try {
+      const mp = marketplaceRef.current
+      const followKey = `${mp.toLowerCase()}_follow`
+      const byFollow = new Map<boolean, Set<string>>()
+      for (const r of dirty) {
+        const pid = String((r as EbayRow)._productId ?? '')
+        const fv = (r as Record<string, unknown>)[followKey]
+        if (!pid || (fv !== 'Follow' && fv !== 'Pinned')) continue
+        const follow = fv === 'Follow'
+        if (!byFollow.has(follow)) byFollow.set(follow, new Set())
+        byFollow.get(follow)!.add(pid)
+      }
+      let followChanged = 0
+      for (const [follow, ids] of byFollow) {
+        if (ids.size === 0) continue
+        const fr = await fetch(`${BACKEND}/api/listings/follow-master-quantity`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productIds: [...ids], channel: 'EBAY', markets: [mp], follow }),
+        })
+        if (fr.ok) followChanged += (await fr.json().catch(() => ({})))?.updated ?? 0
+        else throw new Error(`follow apply HTTP ${fr.status}`)
+      }
+      if (followChanged > 0) {
+        toast({ title: `${followChanged} market listing${followChanged === 1 ? '' : 's'} updated (Follow/Pinned)`, tone: 'success' })
+      }
+    } catch (e) {
+      toast({ title: 'Follow/Pinned change failed to apply', description: e instanceof Error ? e.message : String(e), tone: 'error' })
+    }
+
     return { saved: result.saved, createResult: result.createResult }
   }, [BACKEND, toast])
 
@@ -1823,9 +1858,15 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // Task 4 — also show a muted "Showing SKUs listed on eBay / Show all products" cue when scoped.
   const renderFeedBanner = useCallback(() => {
     const hasCue = scope === 'listed' && !familyId
-    if (!hasCue && !categorySchemaError && !draftNotice) return null
     return (
       <>
+        {/* FM Phase 2 — standing reminder (owner-mandated): saving the flat file
+            updates per-listing values only and never moves the shared warehouse
+            pool. Persistent (no dismiss) so it can't be forgotten. */}
+        <Banner tone="info" title="You're editing per-listing values">
+          Saving here updates each market listing only. Your warehouse stock is managed on the{' '}
+          <strong>Stock page</strong> and imports — the flat file never changes your pool.
+        </Banner>
         {draftNotice && (
           <Banner tone="warning" onDismiss={() => setDraftNotice(null)}>
             Restored {draftNotice.count} unsaved edit{draftNotice.count === 1 ? '' : 's'} from your last

@@ -505,6 +505,12 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
 
 // ── Market column groups ───────────────────────────────────────────────
 
+// FM Phase 2 — per-market Follow/Pinned column. Explains itself via the tooltip.
+export const FOLLOW_COL_DESC =
+  'Follow = this market draws from the shared warehouse pool and updates automatically when stock changes (the Qty shows the live pool number). ' +
+  'Pinned = this market holds a fixed quantity you set and ignores the pool. To hold a value: set this to Pinned, then edit the Qty. ' +
+  'Default is Follow. Your actual stock is managed on the Stock page and imports — saving here never changes it.'
+
 export const MARKET_COLUMN_GROUPS: EbayColumnGroup[] = [
   {
     id: 'market-IT',
@@ -513,6 +519,7 @@ export const MARKET_COLUMN_GROUPS: EbayColumnGroup[] = [
     columns: [
       { id: 'it_price',      label: 'Price (€)',  kind: 'number',   required: false, width: 90 },
       { id: 'it_qty',        label: 'Qty',        kind: 'number',   required: false, width: 70 },
+      { id: 'it_follow',     label: 'Follow',     kind: 'enum', options: ['Follow', 'Pinned'], enumMode: 'strict', description: FOLLOW_COL_DESC, required: false, width: 92 },
       { id: 'it_item_id',    label: 'Item ID',    kind: 'readonly', required: false, width: 130, readOnly: true },
       { id: 'it_status',     label: 'Status',     kind: 'readonly', required: false, width: 90,  readOnly: true },
       { id: 'it_listing_id', label: 'Listing ID', kind: 'readonly', required: false, width: 110, readOnly: true },
@@ -525,6 +532,7 @@ export const MARKET_COLUMN_GROUPS: EbayColumnGroup[] = [
     columns: [
       { id: 'de_price',      label: 'Price (€)',  kind: 'number',   required: false, width: 90 },
       { id: 'de_qty',        label: 'Qty',        kind: 'number',   required: false, width: 70 },
+      { id: 'de_follow',     label: 'Follow',     kind: 'enum', options: ['Follow', 'Pinned'], enumMode: 'strict', description: FOLLOW_COL_DESC, required: false, width: 92 },
       { id: 'de_item_id',    label: 'Item ID',    kind: 'readonly', required: false, width: 130, readOnly: true },
       { id: 'de_status',     label: 'Status',     kind: 'readonly', required: false, width: 90,  readOnly: true },
       { id: 'de_listing_id', label: 'Listing ID', kind: 'readonly', required: false, width: 110, readOnly: true },
@@ -537,6 +545,7 @@ export const MARKET_COLUMN_GROUPS: EbayColumnGroup[] = [
     columns: [
       { id: 'fr_price',      label: 'Price (€)',  kind: 'number',   required: false, width: 90 },
       { id: 'fr_qty',        label: 'Qty',        kind: 'number',   required: false, width: 70 },
+      { id: 'fr_follow',     label: 'Follow',     kind: 'enum', options: ['Follow', 'Pinned'], enumMode: 'strict', description: FOLLOW_COL_DESC, required: false, width: 92 },
       { id: 'fr_item_id',    label: 'Item ID',    kind: 'readonly', required: false, width: 130, readOnly: true },
       { id: 'fr_status',     label: 'Status',     kind: 'readonly', required: false, width: 90,  readOnly: true },
       { id: 'fr_listing_id', label: 'Listing ID', kind: 'readonly', required: false, width: 110, readOnly: true },
@@ -549,6 +558,7 @@ export const MARKET_COLUMN_GROUPS: EbayColumnGroup[] = [
     columns: [
       { id: 'es_price',      label: 'Price (€)',  kind: 'number',   required: false, width: 90 },
       { id: 'es_qty',        label: 'Qty',        kind: 'number',   required: false, width: 70 },
+      { id: 'es_follow',     label: 'Follow',     kind: 'enum', options: ['Follow', 'Pinned'], enumMode: 'strict', description: FOLLOW_COL_DESC, required: false, width: 92 },
       { id: 'es_item_id',    label: 'Item ID',    kind: 'readonly', required: false, width: 130, readOnly: true },
       { id: 'es_status',     label: 'Status',     kind: 'readonly', required: false, width: 90,  readOnly: true },
       { id: 'es_listing_id', label: 'Listing ID', kind: 'readonly', required: false, width: 110, readOnly: true },
@@ -561,6 +571,7 @@ export const MARKET_COLUMN_GROUPS: EbayColumnGroup[] = [
     columns: [
       { id: 'uk_price',      label: 'Price (£)',  kind: 'number',   required: false, width: 90 },
       { id: 'uk_qty',        label: 'Qty',        kind: 'number',   required: false, width: 70 },
+      { id: 'uk_follow',     label: 'Follow',     kind: 'enum', options: ['Follow', 'Pinned'], enumMode: 'strict', description: FOLLOW_COL_DESC, required: false, width: 92 },
       { id: 'uk_item_id',    label: 'Item ID',    kind: 'readonly', required: false, width: 130, readOnly: true },
       { id: 'uk_status',     label: 'Status',     kind: 'readonly', required: false, width: 90,  readOnly: true },
       { id: 'uk_listing_id', label: 'Listing ID', kind: 'readonly', required: false, width: 110, readOnly: true },
