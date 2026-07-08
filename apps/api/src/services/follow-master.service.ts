@@ -187,7 +187,13 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
           followMasterQuantity: write.followMasterQuantity,
           lastSyncStatus: 'PENDING',
           lastSyncedAt: null,
-          version: { increment: 1 },
+          // Deliberately NOT bumping `version`. In the flat-file save flow this
+          // endpoint runs immediately AFTER the content save (sync-rows), which owns
+          // the optimistic-concurrency `version` the grid tracks and returns. Bumping
+          // here would desync the grid's _version, so the operator's NEXT save of the
+          // same row would fail Amazon's version check ("Changed elsewhere…") and drop
+          // their content edit. This write is coherent with the content save, so the
+          // content save's version bump is sufficient.
         },
       })
       result.updated++
