@@ -2682,19 +2682,23 @@ export default function AmazonFlatFileClient({
   // (warm from a previous visit in this session) for an instant paint, or kick
   // off a client-side loadData() fetch if the cache is cold/stale.
   useEffect(() => {
-    if (!initialManifest || !initialMarketplace || !initialProductType) return
+    if (!initialMarketplace || !initialProductType) return
     const key = cacheKey(initialMarketplace, initialProductType)
     const snap = _swr.get(key)
     const isFresh = !!snap && (Date.now() - snap.fetchedAt) < SWR_TTL_MS
-    if (isFresh) {
+    if (initialManifest && isFresh) {
       // Return visit: paint rows from the module-level cache instantly.
       // Use the server-provided manifest (always fresh from the 30-min CDN cache).
       setManifest(initialManifest)
       setRows(snap.rows)
       _swr.set(key, { ...snap, manifest: initialManifest })
     } else {
-      // First visit or stale cache: loadData() fetches both manifest+rows and
-      // seeds the cache on completion so the next visit is instant.
+      // First visit, stale cache, OR a missing SSR manifest (initialManifest null
+      // — e.g. the CDN template fetch failed/timed out). Previously a null
+      // initialManifest bailed out of this effect entirely, so the client never
+      // fetched anything and the grid hung on "Preparing schema…". Fall through to
+      // loadData(), which fetches manifest+rows client-side (painting from cache
+      // first if one exists) so the page always loads.
       void loadData(initialMarketplace, initialProductType)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
