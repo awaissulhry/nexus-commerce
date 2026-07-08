@@ -391,12 +391,12 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     let processed = 0;      // rows iterated (legacy `saved` semantics)
     let contentOnly = 0;    // rows persisted via the snapshot-only fallback
 
-    // Lookup primary warehouse once for StockLevel writes (same pattern as Amazon flat-file service)
-    const primaryLocation = await prisma.stockLocation.findFirst({
-      where: { type: 'WAREHOUSE', isActive: true },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true },
-    });
+    // FM Phase 1 — the flat-file save no longer writes the shared warehouse pool.
+    // The old StockLevel/Product.totalStock write here was the AIRMESH clobber: a
+    // per-market qty cell overwrote the whole pool on every save, wiping stock set
+    // by imports and zeroing other channels. Stock is now owned ONLY by the /stock
+    // page + imports. The per-listing ChannelListing.quantity write below is
+    // unchanged (it still publishes the per-market listing quantity to eBay).
 
     try {
       // P1.2 — create/reparent PRE-PASS: persist any new products (and reparents) before the
@@ -649,92 +649,11 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           rowListingWrites++;
         }
 
-        // ── StockLevel update (once per product, FBM warehouse) ──────
-        // Use the first non-null qty across markets as the warehouse qty.
-        // eBay is always FBM — stock lives in the primary warehouse.
-        let stockQty: number | null = null;
-        for (const mp of MARKETS) {
-          const q = row[`${(mp as string).toLowerCase()}_qty`];
-          if (q != null && !isNaN(Number(q)) && Number(q) >= 0) {
-            stockQty = Number(q);
-            break;
-          }
-        }
-
-        if (primaryLocation && stockQty !== null) {
-          // findFirst (not findUnique) — variationId is null for products without a
-          // ProductVariation, and Prisma rejects a null component in a compound-
-          // unique findUnique. The unique constraint still guarantees ≤1 match.
-          const existingStock = await prisma.stockLevel.findFirst({
-            where: {
-              locationId: primaryLocation.id,
-              productId,
-              variationId: null,
-            },
-          });
-
-          if (existingStock) {
-            const delta = stockQty - existingStock.quantity;
-            if (delta !== 0) {
-              await prisma.$transaction([
-                prisma.stockLevel.update({
-                  where: { id: existingStock.id },
-                  data: {
-                    quantity: stockQty,
-                    available: Math.max(0, stockQty - existingStock.reserved),
-                  },
-                }),
-                prisma.stockMovement.create({
-                  data: {
-                    productId,
-                    locationId: primaryLocation.id,
-                    change: delta,
-                    balanceAfter: stockQty,
-                    quantityBefore: existingStock.quantity,
-                    reason: 'MANUAL_ADJUSTMENT',
-                    referenceType: 'FlatFileSync',
-                    notes: 'eBay flat-file sync',
-                    actor: 'system',
-                  },
-                }),
-                prisma.product.update({
-                  where: { id: productId },
-                  data: { totalStock: stockQty },
-                }),
-              ]);
-            }
-          } else {
-            await prisma.$transaction([
-              prisma.stockLevel.create({
-                data: {
-                  locationId: primaryLocation.id,
-                  productId,
-                  variationId: null as any,
-                  quantity: stockQty,
-                  reserved: 0,
-                  available: stockQty,
-                },
-              }),
-              prisma.stockMovement.create({
-                data: {
-                  productId,
-                  locationId: primaryLocation.id,
-                  change: stockQty,
-                  balanceAfter: stockQty,
-                  quantityBefore: 0,
-                  reason: 'MANUAL_ADJUSTMENT',
-                  referenceType: 'FlatFileSync',
-                  notes: 'eBay flat-file sync (initial)',
-                  actor: 'system',
-                },
-              }),
-              prisma.product.update({
-                where: { id: productId },
-                data: { totalStock: stockQty },
-              }),
-            ]);
-          }
-        }
+        // FM Phase 1 — StockLevel / Product.totalStock write REMOVED here (see the
+        // note above where primaryLocation used to be resolved). A flat-file save
+        // must never move the shared warehouse pool. The per-market
+        // ChannelListing.quantity write above already publishes the listing
+        // quantity to eBay; the pool stays owned by /stock + imports.
 
         // P1 — brand write-back: if operator typed a brand in the flat-file, persist to Product.brand
         const brandOverride = ((row.brand as string | undefined) ?? '').trim()

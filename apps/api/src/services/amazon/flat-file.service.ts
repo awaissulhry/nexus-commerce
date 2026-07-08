@@ -2439,11 +2439,11 @@ export class AmazonFlatFileService {
       : []
     const parentIdBySku = new Map(parentProducts.map((p) => [p.sku, p.id]))
 
-    // Primary warehouse location for StockLevel updates
-    const primaryLocation = await this.prisma.stockLocation.findFirst({
-      where: { type: 'WAREHOUSE', isActive: true },
-      orderBy: { createdAt: 'asc' },
-    })
+    // FM Phase 1 — the Amazon flat-file save no longer writes the shared warehouse
+    // pool (StockLevel / Product.totalStock). That per-market write clobbered the
+    // pool the same way the eBay save did (AIRMESH class). Stock is owned ONLY by
+    // the /stock page + imports. The per-listing ChannelListing write below (qty +
+    // followMasterQuantity) is unchanged.
 
     // FFC — create missing products for _isNew rows BEFORE the sync pass, parents
     // first so a child's parent_sku resolves to a same-batch parent. New products
@@ -2671,82 +2671,10 @@ export class AmazonFlatFileService {
           })
         }
 
-        // ── StockLevel + StockMovement ──────────────────────────────
-        if (primaryLocation && qty !== null && !isNaN(qty) && qty >= 0) {
-          // A child product has no ProductVariation, so variationId is null — and
-          // Prisma rejects a null component in a compound-unique findUnique (null ≠
-          // null in SQL), which aborted the row's save. findFirst with the same
-          // filter is the correct lookup; the unique constraint still guarantees ≤1.
-          const existingStock = await this.prisma.stockLevel.findFirst({
-            where: {
-              locationId:  primaryLocation.id,
-              productId:   product.id,
-              variationId: null,
-            },
-          })
-
-          if (existingStock) {
-            const delta = qty - existingStock.quantity
-            if (delta !== 0) {
-              await this.prisma.$transaction([
-                this.prisma.stockLevel.update({
-                  where: { id: existingStock.id },
-                  data: {
-                    quantity:  qty,
-                    available: Math.max(0, qty - existingStock.reserved),
-                  },
-                }),
-                this.prisma.stockMovement.create({
-                  data: {
-                    productId:      product.id,
-                    locationId:     primaryLocation.id,
-                    change:         delta,
-                    balanceAfter:   qty,
-                    quantityBefore: existingStock.quantity,
-                    reason:         'MANUAL_ADJUSTMENT',
-                    referenceType:  'FlatFileSync',
-                    notes:          `Amazon ${mp} flat-file sync`,
-                    actor:          'system',
-                  },
-                }),
-                this.prisma.product.update({
-                  where: { id: product.id },
-                  data: { totalStock: qty },
-                }),
-              ])
-            }
-          } else {
-            await this.prisma.$transaction([
-              this.prisma.stockLevel.create({
-                data: {
-                  locationId:  primaryLocation.id,
-                  productId:   product.id,
-                  variationId: null as any,
-                  quantity:    qty,
-                  reserved:    0,
-                  available:   qty,
-                },
-              }),
-              this.prisma.stockMovement.create({
-                data: {
-                  productId:     product.id,
-                  locationId:    primaryLocation.id,
-                  change:        qty,
-                  balanceAfter:  qty,
-                  quantityBefore: 0,
-                  reason:        'MANUAL_ADJUSTMENT',
-                  referenceType: 'FlatFileSync',
-                  notes:         `Amazon ${mp} flat-file sync (initial)`,
-                  actor:         'system',
-                },
-              }),
-              this.prisma.product.update({
-                where: { id: product.id },
-                data: { totalStock: qty },
-              }),
-            ])
-          }
-        }
+        // FM Phase 1 — StockLevel / Product.totalStock write REMOVED here (see the
+        // note above where primaryLocation used to be resolved). A flat-file save
+        // must never move the shared warehouse pool; stock is owned by /stock +
+        // imports. The per-listing ChannelListing write above is unchanged.
       } catch (err: any) {
         result.errors.push({ sku, error: err?.message ?? 'Sync failed' })
       }
