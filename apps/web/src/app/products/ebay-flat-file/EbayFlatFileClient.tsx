@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, ImageIcon, Loader2, ListOrdered, Plus, RefreshCw, RotateCcw, Search, Send, Trash2, Unlink, Upload, X, Zap,
+  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, ImageIcon, Loader2, ListOrdered, Pin, Plus, RefreshCw, RotateCcw, Search, Send, Trash2, Unlink, Upload, X, Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { applyBulkFollow } from '@/lib/follow-master'
 import { Badge } from '@/components/ui/Badge'
 import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
 import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx, RenderCellContent } from '@/components/flat-file/FlatFileGrid.types'
@@ -554,6 +556,7 @@ function EbayDeleteConfirmModal({
 
 export default function EbayFlatFileClient({ initialRows, initialMarketplace, familyId }: Props) {
   const { toast } = useToast()
+  const confirm = useConfirm() // FM Phase 3 — bulk Follow/Pinned confirmation
   const [marketplace, setMarketplace] = useState(initialMarketplace.toUpperCase())
   const BACKEND = getBackendUrl()
 
@@ -986,6 +989,36 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     pendingDraftRestoreRef.current = true
     void onReloadCtxRef.current?.()
   }, [familyId])
+
+  // FM Phase 3 — bulk Set Follow / Set Pinned on the selected eBay rows (active
+  // market), via the pool-safe endpoint (never writes the warehouse pool). eBay is
+  // always merchant-fulfilled, so there's no FBA skip. Confirms first because Follow
+  // re-points quantity at the pool (can change the live eBay quantity).
+  const bulkSetFollowEbay = useCallback(async (follow: boolean, ctxRows: EbayRow[], ctxSelectedRows: Set<string>) => {
+    const mp = marketplaceRef.current
+    const selected = ctxRows.filter((r) => ctxSelectedRows.has(r._rowId))
+    const productIds = [...new Set(selected.map((r) => String(r._productId ?? '')).filter(Boolean))]
+    if (productIds.length === 0) { toast.error('No listings selected.'); return }
+    const verb = follow ? 'Follow' : 'Pinned'
+    const ok = await confirm({
+      title: `Set ${productIds.length} eBay listing${productIds.length === 1 ? '' : 's'} to ${verb}?`,
+      description: follow
+        ? `They will track your shared warehouse pool — each listing's live eBay quantity may change to match it, queuing up to ${productIds.length} quantity sync${productIds.length === 1 ? '' : 's'}.`
+        : 'They will hold their current quantity and stop tracking the pool.',
+      tone: 'warning',
+      confirmLabel: `Set ${verb}`,
+    })
+    if (!ok) return
+    try {
+      const result = await applyBulkFollow({ productIds, channel: 'EBAY', markets: [mp], follow })
+      const parts = [`${result.updated} → ${verb}`]
+      if (result.unchanged) parts.push(`${result.unchanged} already ${follow ? 'following' : 'pinned'}`)
+      toast.success(parts.join(' · '))
+      reloadGridPreservingEdits()
+    } catch (e) {
+      toast.error(`Couldn't apply Follow/Pinned — ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }, [confirm, toast, reloadGridPreservingEdits])
 
   // Push status changed anywhere (this tab's push, another tab, or the feed
   // poll cron finishing a bulk task) → refresh itemIds/status live.
@@ -2167,6 +2200,20 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                   disabled: deletable.length === 0,
                   onSelect: () => setDeleteConfirmRows(deletable),
                 },
+                {
+                  id: 'set-follow',
+                  label: 'Set to Follow (pool)',
+                  icon: <RefreshCw className="w-3.5 h-3.5" />,
+                  disabled: selectedRows.size === 0,
+                  onSelect: () => void bulkSetFollowEbay(true, rows as EbayRow[], selectedRows),
+                },
+                {
+                  id: 'set-pinned',
+                  label: 'Set to Pinned (fixed)',
+                  icon: <Pin className="w-3.5 h-3.5" />,
+                  disabled: selectedRows.size === 0,
+                  onSelect: () => void bulkSetFollowEbay(false, rows as EbayRow[], selectedRows),
+                },
               ]}
             />
           )
@@ -2313,7 +2360,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       </>
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, imageModalOpen, derivedProductIds, moveParentOpen, moveTargetId, detachOpen])
+  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, imageModalOpen, derivedProductIds, moveParentOpen, moveTargetId, detachOpen, bulkSetFollowEbay])
 
   // ── Slot: import button ────────────────────────────────────────────────
 

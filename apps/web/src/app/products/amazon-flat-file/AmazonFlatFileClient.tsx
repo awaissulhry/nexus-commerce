@@ -37,6 +37,8 @@ import { useToast } from '@/components/ui/Toast'
 import { HistoryModal } from '@/components/flat-file/HistoryModal'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { Button } from '@/components/ui/Button'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { applyBulkFollow } from '@/lib/follow-master'
 import { Badge } from '@/components/ui/Badge'
 import { IconButton } from '@/components/ui/IconButton'
 import { TagInput } from '@/design-system/primitives/TagInput'
@@ -1010,6 +1012,7 @@ export default function AmazonFlatFileClient({
   const [submitting, setSubmitting] = useState(false)
   const [polling, setPolling] = useState(false)
   const { toast } = useToast() // FFS.7 — submit summary + feed-completion notices
+  const confirm = useConfirm() // FM Phase 3 — bulk Follow/Pinned confirmation
   const { exportCatalogWorkbook, exporting: exportingWorkbook } = useCatalogWorkbookExport()
   const [submitPanelOpen, setSubmitPanelOpen] = useState(false)
   // FFC — pre-publish Review & Confirm gate. A Promise-based modal so Submit can
@@ -1806,6 +1809,18 @@ export default function AmazonFlatFileClient({
   const selectedRealCount = useMemo(
     () => rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string)).length,
     [rows, selectedRows],
+  )
+  // FM Phase 3 — counts for the bulk Follow/Pinned buttons. `followEligibleCount`
+  // excludes FBA rows (Amazon-managed, can't follow/pin); `pinnedCount` drives the
+  // "Select all Pinned" helper for reconnecting the old auto-pins to the pool.
+  const followEligibleCount = useMemo(
+    () => rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string)
+      && !/^(AMAZON|AFN|FBA)/.test(String(r.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase())).length,
+    [rows, selectedRows],
+  )
+  const pinnedCount = useMemo(
+    () => rows.filter((r) => !r._ghost && r.follow === 'Pinned').length,
+    [rows],
   )
   // WARM — prefetch the Set-category modal chunk before first click so it opens instantly.
   const warmSetCategoryModal = useCallback(() => { void import('./SetCategoryModal') }, [])
@@ -3081,6 +3096,52 @@ export default function AmazonFlatFileClient({
     setSheetTypes((s) => Array.from(new Set([...s, c.productType.toUpperCase()])))
     setShowSetCategory(false)
   }, [selectedRows, pushSnapshot])
+
+  // FM Phase 3 — bulk Set Follow / Set Pinned on the selected rows, for the active
+  // market. Routes through the pool-safe endpoint (never writes the warehouse pool);
+  // FBA rows are excluded here and skipped fail-closed server-side. Confirms first
+  // because Follow re-points quantity at the pool (can change live Amazon quantity).
+  const bulkSetFollow = useCallback(async (follow: boolean) => {
+    const isFbaRow = (r: Row) => /^(AMAZON|AFN|FBA)/.test(String(r.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase())
+    const selected = rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string))
+    const productIds = [...new Set(selected.filter((r) => !isFbaRow(r)).map((r) => String(r._productId ?? '')).filter(Boolean))]
+    const fbaCount = selected.filter(isFbaRow).length
+    if (productIds.length === 0) {
+      toast.error(fbaCount > 0
+        ? 'Only FBA listings selected — Amazon manages their stock, so Follow/Pinned does not apply.'
+        : 'No listings selected.')
+      return
+    }
+    const verb = follow ? 'Follow' : 'Pinned'
+    const ok = await confirm({
+      title: `Set ${productIds.length} listing${productIds.length === 1 ? '' : 's'} to ${verb}?`,
+      description: follow
+        ? `They will track your shared warehouse pool — each listing's live Amazon quantity may change to match it, queuing up to ${productIds.length} quantity sync${productIds.length === 1 ? '' : 's'}.${fbaCount ? ` ${fbaCount} FBA listing${fbaCount === 1 ? '' : 's'} in the selection are skipped (Amazon-managed).` : ''}`
+        : `They will hold their current quantity and stop tracking the pool.${fbaCount ? ` ${fbaCount} FBA listing${fbaCount === 1 ? '' : 's'} in the selection are skipped (Amazon-managed).` : ''}`,
+      tone: 'warning',
+      confirmLabel: `Set ${verb}`,
+    })
+    if (!ok) return
+    try {
+      const result = await applyBulkFollow({ productIds, channel: 'AMAZON', markets: [marketplace], follow })
+      const parts = [`${result.updated} → ${verb}`]
+      if (result.unchanged) parts.push(`${result.unchanged} already ${follow ? 'following' : 'pinned'}`)
+      if (result.skippedFba) parts.push(`${result.skippedFba} FBA skipped`)
+      toast.success(parts.join(' · '))
+      setSelectedRows(new Set())
+      void loadData(marketplace, productType, false, true) // refresh follow/qty from DB
+    } catch (e) {
+      toast.error(`Couldn't apply Follow/Pinned — ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }, [rows, selectedRows, marketplace, productType, confirm, toast, setSelectedRows, loadData])
+
+  // FM Phase 3 — select every Pinned listing in the sheet (active market) so the old
+  // auto-pins can be reviewed and bulk-set to Follow in two clicks.
+  const selectAllPinned = useCallback(() => {
+    const ids = rows.filter((r) => !r._ghost && r.follow === 'Pinned').map((r) => r._rowId as string)
+    if (ids.length === 0) { toast.info('No pinned listings in this sheet.'); return }
+    setSelectedRows(new Set(ids))
+  }, [rows, setSelectedRows, toast])
 
   const handleAddRows = useCallback((params: {
     type: 'row' | 'parent' | 'variant'
@@ -4989,6 +5050,25 @@ export default function AmazonFlatFileClient({
                 onFocus={warmSetCategoryModal}
                 onClick={() => setShowSetCategory(true)}>
                 Set category ({selectedRealCount})
+              </Button>
+            )}
+            {/* FM Phase 3 — bulk Follow/Pinned on the selected rows (active market). */}
+            {followEligibleCount > 0 && (
+              <>
+                <Button size="sm" variant="secondary" onClick={() => void bulkSetFollow(true)}
+                  title="Set the selected listings to Follow the shared warehouse pool">
+                  Set Follow ({followEligibleCount})
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => void bulkSetFollow(false)}
+                  title="Pin the selected listings to their current quantity (stop tracking the pool)">
+                  Set Pinned ({followEligibleCount})
+                </Button>
+              </>
+            )}
+            {pinnedCount > 0 && (
+              <Button size="sm" variant="ghost" onClick={selectAllPinned}
+                title="Select every pinned listing in this sheet — then Set Follow to reconnect them to the pool">
+                Select all Pinned ({pinnedCount})
               </Button>
             )}
           </div>
