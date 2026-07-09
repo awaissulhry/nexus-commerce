@@ -19,6 +19,7 @@ import dynamic from 'next/dynamic'
 import { evaluateRule, TONE_CLASSES, type ConditionalRule } from '@/app/_shared/bulk-edit/conditional-format'
 import { type FindCell } from '@/app/_shared/bulk-edit/find-replace'
 import { useFlatFileCore } from '@/components/flat-file/useFlatFileCore'
+import { normalizeSyntheticCell } from './normalizeSyntheticCell'
 import { AMAZON_FILTER_DEFAULT, type AmazonFFFilterState, type AmazonFilterDims } from '../_shared/flat-file-filter.types'
 import { FFSavedViews, type FFViewState } from '../_shared/FFSavedViews'
 import { type PullDiffApplyResult } from './PullDiffModal'
@@ -544,7 +545,7 @@ const FOLLOW_COLUMN: Column = {
 // Pinned (fixed qty ignores it) and FBA (Amazon-managed). Spliced in after Follow.
 const BUFFER_COL_DESC =
   'Buffer = units held back from the shared warehouse pool so this listing never oversells — a Following listing then advertises pool − buffer. ' +
-  'Useful when several channels draw from one pool. Only applies while Following: Pinned holds a fixed quantity and ignores it, and FBA is Amazon-managed (shows —).'
+  'Useful when several channels draw from one pool. The buffer applies while the listing is Following; on a Pinned listing it is stored and takes effect if you switch it back to Following. FBA is Amazon-managed (shows —).'
 const BUFFER_COLUMN: Column = {
   id: 'buffer', fieldRef: 'buffer', labelEn: 'Buffer', labelLocal: 'Buffer',
   description: BUFFER_COL_DESC, required: false, kind: 'number', width: 84,
@@ -1258,7 +1259,9 @@ export default function AmazonFlatFileClient({
         const row = byRowId.get(ch.rowId) ?? bySku.get(ch.sku)
         if (!row) continue
         const existing = updated.get(row._rowId as string) ?? { ...row }
-        updated.set(row._rowId as string, { ...existing, [ch.field]: ch.newValue, _dirty: true })
+        // FB1-client — AI writes into the synthetic Follow/Buffer cells go through
+        // the same enum/number enforcement as paste/fill (junk keeps the previous value).
+        updated.set(row._rowId as string, { ...existing, [ch.field]: normalizeSyntheticCell(ch.field, ch.newValue, existing[ch.field]), _dirty: true })
       }
       return prev.map((r) => updated.get(r._rowId as string) ?? r)
     })
@@ -1836,11 +1839,12 @@ export default function AmazonFlatFileClient({
     () => rows.filter((r) => !r._ghost && r.follow === 'Pinned').length,
     [rows],
   )
-  // FM Phase 4 — a bulk buffer applies to the selected Following FBM rows only
-  // (buffer is inert on Pinned, and FBA is Amazon-managed).
+  // FM Phase 4 / FB4 — a bulk buffer applies to the selected FBM rows, Following
+  // OR Pinned (on Pinned it's stored and takes effect when the listing returns to
+  // Following — matches the inline cell). FBA stays excluded fail-closed.
   const bufferEligibleCount = useMemo(
     () => rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string)
-      && String(r.follow) === 'Follow'
+      && (String(r.follow) === 'Follow' || String(r.follow) === 'Pinned')
       && !/^(AMAZON|AFN|FBA)/.test(String(r.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase())).length,
     [rows, selectedRows],
   )
@@ -2017,11 +2021,14 @@ export default function AmazonFlatFileClient({
         if (hasHeaders) {
           pasteRow.forEach((val, pi) => {
             const ci = headerMap.get(pi)
-            if (ci !== undefined) { const col = allColumnsRef.current[ci]; if (col) updated[col.id] = val }
+            // FB1-client — synthetic Follow/Buffer cells enforce their enum/number
+            // rules on paste (junk keeps the previous value); other columns unchanged.
+            if (ci !== undefined) { const col = allColumnsRef.current[ci]; if (col) updated[col.id] = normalizeSyntheticCell(col.id, val, prev[idx][col.id]) }
           })
         } else {
           pasteRow.forEach((val, ciOffset) => {
-            const col = allColumnsRef.current[startCi + ciOffset]; if (col) updated[col.id] = val
+            const col = allColumnsRef.current[startCi + ciOffset]
+            if (col) updated[col.id] = normalizeSyntheticCell(col.id, val, prev[idx][col.id])
           })
         }
         next[idx] = updated
@@ -2048,7 +2055,8 @@ export default function AmazonFlatFileClient({
         const idx = prev.findIndex(r => r._rowId === dr._rowId); if (idx === -1) continue
         let updated: Row = { ...prev[idx], _dirty: true }
         for (let ci = cMin; ci <= cMax; ci++) {
-          const col = allColumnsRef.current[ci]; if (col) updated[col.id] = srcRow[col.id]
+          const col = allColumnsRef.current[ci]
+          if (col) updated[col.id] = normalizeSyntheticCell(col.id, srcRow[col.id], prev[idx][col.id])
         }
         next[idx] = updated
       }
@@ -2083,7 +2091,9 @@ export default function AmazonFlatFileClient({
           const srcCi = cMin + ((ci - fillTarget.cMin) % selW)
           const col = allColumnsRef.current[ci]
           const srcCol = allColumnsRef.current[srcCi]
-          if (col && srcCol) updated[col.id] = srcDr[srcCol.id]
+          // FB1-client — a horizontal fill can drag a foreign column's value into
+          // Follow/Buffer; the synthetic guard rejects it (keeps the previous value).
+          if (col && srcCol) updated[col.id] = normalizeSyntheticCell(col.id, srcDr[srcCol.id], prev[idx][col.id])
         }
         next[idx] = updated
       }
@@ -2119,7 +2129,7 @@ export default function AmazonFlatFileClient({
         const updated: Row = { ...prev[idx], _dirty: true }
         for (let ci = cMin; ci <= cMax; ci++) {
           const col = allColumnsRef.current[ci]
-          if (col) updated[col.id] = srcDr[col.id]
+          if (col) updated[col.id] = normalizeSyntheticCell(col.id, srcDr[col.id], prev[idx][col.id])
         }
         next[idx] = updated
       }
@@ -3165,15 +3175,16 @@ export default function AmazonFlatFileClient({
     setSelectedRows(new Set(ids))
   }, [rows, setSelectedRows, toast])
 
-  // FM Phase 4 — bulk "Set buffer" on the selected Following FBM rows (Pinned + FBA excluded).
+  // FM Phase 4 / FB4 — bulk "Set buffer" on the selected FBM rows, Following or
+  // Pinned (Pinned stores the value inert; only FBA stays excluded fail-closed).
   const openBufferModal = useCallback(() => {
     const selected = rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string))
     const productIds = [...new Set(selected
-      .filter((r) => String(r.follow) === 'Follow'
+      .filter((r) => (String(r.follow) === 'Follow' || String(r.follow) === 'Pinned')
         && !/^(AMAZON|AFN|FBA)/.test(String(r.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase()))
       .map((r) => String(r._productId ?? '')).filter(Boolean))]
     if (productIds.length === 0) {
-      toast.error('Select some Following listings — a buffer only applies while Following (Pinned + FBA are excluded).')
+      toast.error('Select some Following or Pinned listings — FBA is Amazon-managed and excluded.')
       return
     }
     setBufferInput('1')
@@ -3667,27 +3678,37 @@ export default function AmazonFlatFileClient({
     // quantity). FBA rows carry follow='' and are excluded here; the endpoint also
     // skips FBA fail-closed. Not run on the post-publish resync (isPublished).
     const followByBool = new Map<boolean, Set<string>>()
-    // FM Phase 4 — dirty rows' Buffer, grouped by value. Only Following FBM rows carry
-    // an editable buffer (it's grayed on Pinned/FBA); the endpoint no-op-skips unchanged.
+    // FM Phase 4 — dirty rows' Buffer, grouped by value. FB4 — captured on Pinned
+    // rows too (the endpoint stores it inert until the listing Follows); still
+    // grayed only on FBA (Amazon-managed). The endpoint no-op-skips unchanged.
     const bufferByValue = new Map<number, Set<string>>()
+    // FB-S1 — dirty rows that typed a Follow/Buffer intent but have no _productId
+    // yet (new / unpublished): the endpoints match 0 listings, so warn instead of
+    // silently dropping the operator's edit.
+    const unpublishedIntent = new Set<string>()
     if (!isPublished) {
       for (const r of rowsToSync) {
         if (!(r._dirty || r._isNew)) continue
-        const pid = String(r._productId ?? '')
-        if (!pid) continue
         const fv = (r as Record<string, unknown>).follow
-        if (fv === 'Follow' || fv === 'Pinned') {
+        const bv = (r as Record<string, unknown>).buffer
+        const hasFollowIntent = fv === 'Follow' || fv === 'Pinned'
+        const bufN = bv !== '' && bv != null ? Math.max(0, Math.floor(Number(bv))) : NaN
+        const hasBufferIntent = Number.isFinite(bufN)
+        const pid = String(r._productId ?? '')
+        if (!pid) {
+          if (hasFollowIntent || hasBufferIntent) unpublishedIntent.add(String(r._rowId))
+          continue
+        }
+        if (hasFollowIntent) {
           const followVal = fv === 'Follow'
           if (!followByBool.has(followVal)) followByBool.set(followVal, new Set())
           followByBool.get(followVal)!.add(pid)
         }
-        const bv = (r as Record<string, unknown>).buffer
-        if (fv === 'Follow' && bv !== '' && bv != null) {
-          const n = Math.max(0, Math.floor(Number(bv)))
-          if (Number.isFinite(n)) {
-            if (!bufferByValue.has(n)) bufferByValue.set(n, new Set())
-            bufferByValue.get(n)!.add(pid)
-          }
+        // FB4 — no longer gated on follow === 'Follow'; a numeric buffer on a Pinned
+        // row is sent and the server decides (stores inert until Following).
+        if (hasBufferIntent) {
+          if (!bufferByValue.has(bufN)) bufferByValue.set(bufN, new Set())
+          bufferByValue.get(bufN)!.add(pid)
         }
       }
     }
@@ -3722,6 +3743,26 @@ export default function AmazonFlatFileClient({
       const newVersions: Record<string, number> =
         data?.versions && typeof data.versions === 'object' ? data.versions : {}
       const errorSkus = new Set(syncErrors.map((e) => String(e.sku ?? '')).filter(Boolean))
+      // FB2 — never apply Follow/Buffer for a row whose CONTENT save failed. Map the
+      // failed SKUs back to their productIds and drop them from the apply sets (if a
+      // set empties out, it's skipped below).
+      if (errorSkus.size > 0 && (followByBool.size > 0 || bufferByValue.size > 0)) {
+        const failedPids = new Set<string>()
+        for (const r of rowsToSync) {
+          if (errorSkus.has(String(r.item_sku ?? ''))) {
+            const pid = String(r._productId ?? '')
+            if (pid) failedPids.add(pid)
+          }
+        }
+        const pruneSets = (m: Map<unknown, Set<string>>) => {
+          for (const [k, ids] of m) {
+            for (const p of failedPids) ids.delete(p)
+            if (ids.size === 0) m.delete(k)
+          }
+        }
+        pruneSets(followByBool as Map<unknown, Set<string>>)
+        pruneSets(bufferByValue as Map<unknown, Set<string>>)
+      }
       setRows((prev) => prev.map((r) => {
         const sku = String(r.item_sku ?? '')
         const v = newVersions[sku]
@@ -3751,17 +3792,26 @@ export default function AmazonFlatFileClient({
       // quantity columns coherently, skips FBA fail-closed, and no-op-skips anything
       // unchanged (so a routine save fires no needless pushes). Failures are surfaced
       // but never roll back the content save.
+      // FB-S1 — did we send any ids, and did the endpoints match any live listing?
+      // A matched:0 for rows we DID send means the products have no ChannelListing
+      // yet, so the operator's Follow/Buffer evaporated — surfaced in the warning below.
+      let sentAnyApply = false
+      let matchedTotal = 0
       if (followByBool.size > 0) {
         try {
           let followChanged = 0
           for (const [followVal, ids] of followByBool) {
+            sentAnyApply = true
             const fr = await fetch(`${getBackendUrl()}/api/listings/follow-master-quantity`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ productIds: [...ids], channel: 'AMAZON', markets: [marketplace], follow: followVal }),
             })
-            if (fr.ok) followChanged += (await fr.json().catch(() => ({})))?.updated ?? 0
-            else throw new Error(`follow apply HTTP ${fr.status}`)
+            if (fr.ok) {
+              const body = await fr.json().catch(() => ({}))
+              followChanged += body?.updated ?? 0
+              matchedTotal += body?.matched ?? 0
+            } else throw new Error(`follow apply HTTP ${fr.status}`)
           }
           if (followChanged > 0) {
             toast.success(`${followChanged} listing${followChanged === 1 ? '' : 's'} updated (Follow/Pinned)`)
@@ -3778,8 +3828,10 @@ export default function AmazonFlatFileClient({
         try {
           let bufferChanged = 0
           for (const [buf, ids] of bufferByValue) {
+            sentAnyApply = true
             const result = await applyBulkBuffer({ productIds: [...ids], channel: 'AMAZON', markets: [marketplace], buffer: buf })
             bufferChanged += result.updated
+            matchedTotal += result.matched ?? 0
           }
           if (bufferChanged > 0) {
             toast.success(`${bufferChanged} listing${bufferChanged === 1 ? '' : 's'} buffer updated`)
@@ -3787,6 +3839,20 @@ export default function AmazonFlatFileClient({
         } catch (e) {
           toast.error(`Buffer change didn't apply — ${e instanceof Error ? e.message : String(e)}`)
         }
+      }
+
+      // FB-S1 — surface Follow/Buffer intent that couldn't land instead of a silent
+      // no-op: unpublished rows (no productId) + rows we sent that matched no listing.
+      if (unpublishedIntent.size > 0 || (sentAnyApply && matchedTotal === 0)) {
+        const parts: string[] = []
+        if (unpublishedIntent.size > 0) {
+          const n = unpublishedIntent.size
+          parts.push(`${n} unpublished row${n === 1 ? '' : 's'} — publish first, then set Follow/Buffer`)
+        }
+        if (sentAnyApply && matchedTotal === 0) {
+          parts.push('no matching live listing yet for the rows you edited')
+        }
+        toast.warning(`Follow/Buffer not applied to ${parts.join(' · ')}`)
       }
     } catch {
       setSyncStatus('error')
@@ -6022,7 +6088,9 @@ export default function AmazonFlatFileClient({
             onMatchSetChange={setMatchKeys}
             onReplaceCell={(rowId, columnId, newValue) => {
               pushSnapshot()
-              setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [columnId]: newValue, _dirty: true } : r))
+              // FB1-client — replace into the synthetic Follow/Buffer cells enforces
+              // their enum/number rules (junk keeps the previous value).
+              setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [columnId]: normalizeSyntheticCell(columnId, newValue, r[columnId]), _dirty: true } : r))
             }}
           />
         </div>
@@ -6238,7 +6306,7 @@ export default function AmazonFlatFileClient({
             </>
           }>
           <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
-            Reserve units from the shared pool on <strong>{bufferModal.productIds.length}</strong> Following listing{bufferModal.productIds.length === 1 ? '' : 's'}. Each will then advertise <strong>pool − buffer</strong> — its live quantity may change and a sync is queued.
+            Reserve units from the shared pool on <strong>{bufferModal.productIds.length}</strong> listing{bufferModal.productIds.length === 1 ? '' : 's'}. A Following listing then advertises <strong>pool − buffer</strong> — its live quantity may change and a sync is queued. On a Pinned listing the buffer is stored and takes effect when it returns to Following.
           </p>
           <label className="block text-xs font-medium text-slate-500 mb-1">Units to hold back</label>
           <input type="number" min={0} value={bufferInput}
@@ -6853,8 +6921,9 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
         // not-applicable (FBM rows keep editable qty + Follow + Buffer cells).
         const isFbaManagedCell = (col.id === 'fulfillment_availability__quantity' || col.id === 'follow' || col.id === 'buffer')
           && /^(AMAZON|AFN|FBA)/.test(String(row.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase())
-        // Buffer only shapes a FOLLOWING listing → grey it on Pinned rows too.
-        const isBufferOnPinned = col.id === 'buffer' && String(row.follow) === 'Pinned'
+        // FB4 — Buffer stays EDITABLE on Pinned rows (parity with eBay + the bulk
+        // endpoint, which stores it inert until the listing is flipped to Follow).
+        // Only FBA keeps buffer read-only ('—'), via isFbaManagedCell above.
 
         const _cell = (
           <SpreadsheetCell
@@ -6865,7 +6934,7 @@ function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, active
             isEditing={isCellEditing}
             editInitialChar={isCellEditing ? editInitialChar : null}
             cellBg={stickyLeft !== undefined ? gColor(groupColor).band : gColor(groupColor).cell}
-            grayed={!appliesToType || isFbaManagedCell || isBufferOnPinned}
+            grayed={!appliesToType || isFbaManagedCell}
             isGhost={!!row._ghost}
             width={w}
             cellHeight={rowHeight}

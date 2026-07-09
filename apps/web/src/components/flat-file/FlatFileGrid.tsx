@@ -28,6 +28,7 @@ import type {
   FlatFileGridProps, BaseRow, FlatFileColumn, FlatFileColumnGroup,
   ValidationIssue, RenderCellContent, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, ReplicateCtx,
 } from './FlatFileGrid.types'
+import { normalizeCellValue } from './normalizeCellValue'
 import { SortPanel, applySortLevels, type SortLevel, type SortGroup } from './SortPanel'
 import {
   loadGroups, saveGroups, loadGroupMode, saveGroupMode, loadCollapsedGroups, saveCollapsedGroups,
@@ -1309,24 +1310,21 @@ export default function FlatFileGrid({
   const commitCells = useCallback((changes: CellChange[]) => {
     if (changes.length === 0) return
     // #23/#74/#75 — normalize every bulk-written value the same way the
-    // interactive editors do: coerce booleans, and clamp to maxLength (chars)
-    // and maxUtf8ByteLength (bytes), so paste/fill/replace/AI can't smuggle in
-    // invalid or over-long values that the channel later rejects.
+    // interactive editors do (normalizeCellValue): coerce booleans, clamp to
+    // maxLength/maxUtf8ByteLength, and — the hardening — ENFORCE strict enums
+    // (paste 'pinned' → 'Pinned', junk → rejected) and number columns (non-numeric
+    // rejected, below-min clamped) so paste/fill/replace/AI can't smuggle in
+    // invalid values the channel later rejects. A `null` result REJECTS the write
+    // for that cell: it's dropped here so the previous value is kept (never blanked).
     const colById = new Map(allColumnsRef.current.map((c) => [c.id, c]))
-    const byteLen = (s: string) => new TextEncoder().encode(s).length
-    const normalized = changes.map((ch) => {
+    const normalized: CellChange[] = []
+    for (const ch of changes) {
       const col = colById.get(ch.colId)
-      if (!col || typeof ch.value !== 'string') return ch
-      let v = ch.value
-      if (col.kind === 'boolean') {
-        const t = v.trim().toLowerCase()
-        v = ['true', 'yes', '1', 'y', 't'].includes(t) ? 'true' : ['false', 'no', '0', 'n', 'f'].includes(t) ? 'false' : ''
-      } else {
-        if (col.maxLength && v.length > col.maxLength) v = v.slice(0, col.maxLength)
-        if (col.maxUtf8ByteLength) { while (v && byteLen(v) > col.maxUtf8ByteLength) v = v.slice(0, -1) }
-      }
-      return v === ch.value ? ch : { ...ch, value: v }
-    })
+      if (!col || typeof ch.value !== 'string') { normalized.push(ch); continue }
+      const nv = normalizeCellValue(col, ch.value)
+      if (nv === null) continue // rejected — keep the cell's previous value
+      normalized.push(nv === ch.value ? ch : { ...ch, value: nv })
+    }
     // #30 — drop no-op changes (delete-empty, fill-same, re-pick same enum) so
     // rows aren't falsely marked dirty and undo isn't polluted with dead steps.
     const rowById = new Map(rowsRef.current.map((r) => [r._rowId, r]))

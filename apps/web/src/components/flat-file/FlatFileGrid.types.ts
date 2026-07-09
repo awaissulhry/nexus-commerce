@@ -37,6 +37,11 @@ export interface FlatFileColumn {
   maxLength?: number
   /** Max length in UTF-8 bytes (Amazon enforces bytes, not chars). */
   maxUtf8ByteLength?: number
+  /**
+   * Minimum allowed value for a number column. Bulk writes (paste/fill) that
+   * land below this are clamped up to it (e.g. a stock buffer's min = 0).
+   */
+  min?: number
   width: number
   frozen?: boolean
   readOnly?: boolean

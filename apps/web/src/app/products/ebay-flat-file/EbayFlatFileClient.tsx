@@ -1088,6 +1088,18 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
     const errors = result.createResult?.errors ?? []
 
+    // FB2 — identify the dirty rows whose CONTENT save FAILED (by SKU or tempRowId),
+    // so Follow/Buffer is NOT applied to them below. Built once here and reused by
+    // both the error-banner block and the follow/buffer capture loops.
+    const failedRowIds = new Set<string>()
+    if (errors.length > 0) {
+      for (const r of dirty) {
+        const sku = String((r as EbayRow).sku ?? '')
+        const hit = errors.find((e) => (e.sku && e.sku === sku) || (e.tempRowId && e.tempRowId === r._rowId))
+        if (hit) failedRowIds.add(r._rowId)
+      }
+    }
+
     // FFP.1 — successful save clears the draft; failed rows stay in it so a
     // reload after a partial save still restores what didn't persist.
     if (errors.length === 0) {
@@ -1112,7 +1124,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
       // Re-mark failed rows in the grid AFTER the grid's own setRows(_dirty:false) call.
       // setTimeout(0) ensures we fire after saveDraft's synchronous state update.
-      const failedRowIds = new Set(failedRows.map((fr) => fr._rowId))
+      // (failedRowIds is computed once above and reused here.)
       const toastFn = toast
       const savedCount = result.saved
       const errorCount = errors.length
@@ -1140,6 +1152,20 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       }, 0)
     }
 
+    // FB-S1 — Follow/Buffer intent that can't land (row not yet published, i.e. no
+    // _productId): warn instead of silently dropping. FB-S1 also flags a matched:0
+    // response for rows we DID send (product has no ChannelListing on this market yet).
+    const unpublishedIntent = new Set<string>()
+    let sentAnyApply = false
+    let matchedTotal = 0
+    // FB2/FB-S2 — a row is capturable only when its content save SUCCEEDED
+    // (!failedRowIds), it's a real editable row (not a synthesized read-only /
+    // shared-membership VIEW row), and it has a productId. Mirrors the push filter.
+    const capturable = (r: BaseRow) => {
+      const er = r as EbayRow
+      return !failedRowIds.has(r._rowId) && !er._readonly && !er._shared
+    }
+
     // FM Phase 2 — apply per-market Follow/Pinned through the dedicated endpoint
     // (pool-safe, FBA-skipping, and it no-op-skips anything unchanged so a routine
     // save fires no needless pushes). Runs AFTER the content save so a Pin
@@ -1150,9 +1176,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       const followKey = `${mp.toLowerCase()}_follow`
       const byFollow = new Map<boolean, Set<string>>()
       for (const r of dirty) {
-        const pid = String((r as EbayRow)._productId ?? '')
+        if (!capturable(r)) continue
         const fv = (r as Record<string, unknown>)[followKey]
-        if (!pid || (fv !== 'Follow' && fv !== 'Pinned')) continue
+        if (fv !== 'Follow' && fv !== 'Pinned') continue
+        const pid = String((r as EbayRow)._productId ?? '')
+        if (!pid) { unpublishedIntent.add(r._rowId); continue }
         const follow = fv === 'Follow'
         if (!byFollow.has(follow)) byFollow.set(follow, new Set())
         byFollow.get(follow)!.add(pid)
@@ -1160,13 +1188,17 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       let followChanged = 0
       for (const [follow, ids] of byFollow) {
         if (ids.size === 0) continue
+        sentAnyApply = true
         const fr = await fetch(`${BACKEND}/api/listings/follow-master-quantity`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ productIds: [...ids], channel: 'EBAY', markets: [mp], follow }),
         })
-        if (fr.ok) followChanged += (await fr.json().catch(() => ({})))?.updated ?? 0
-        else throw new Error(`follow apply HTTP ${fr.status}`)
+        if (fr.ok) {
+          const body = await fr.json().catch(() => ({}))
+          followChanged += body?.updated ?? 0
+          matchedTotal += body?.matched ?? 0
+        } else throw new Error(`follow apply HTTP ${fr.status}`)
       }
       if (followChanged > 0) {
         toast({ title: `${followChanged} market listing${followChanged === 1 ? '' : 's'} updated (Follow/Pinned)`, tone: 'success' })
@@ -1183,25 +1215,42 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       const bufferKey = `${mp.toLowerCase()}_buffer`
       const byBuffer = new Map<number, Set<string>>()
       for (const r of dirty) {
-        const pid = String((r as EbayRow)._productId ?? '')
+        if (!capturable(r)) continue
         const bv = (r as Record<string, unknown>)[bufferKey]
-        if (!pid || bv === '' || bv == null) continue
+        if (bv === '' || bv == null) continue
         const n = Math.max(0, Math.floor(Number(bv)))
         if (!Number.isFinite(n)) continue
+        const pid = String((r as EbayRow)._productId ?? '')
+        if (!pid) { unpublishedIntent.add(r._rowId); continue }
         if (!byBuffer.has(n)) byBuffer.set(n, new Set())
         byBuffer.get(n)!.add(pid)
       }
       let bufferChanged = 0
       for (const [buf, ids] of byBuffer) {
         if (ids.size === 0) continue
+        sentAnyApply = true
         const res = await applyBulkBuffer({ productIds: [...ids], channel: 'EBAY', markets: [mp], buffer: buf })
         bufferChanged += res.updated
+        matchedTotal += res.matched ?? 0
       }
       if (bufferChanged > 0) {
         toast({ title: `${bufferChanged} market listing${bufferChanged === 1 ? '' : 's'} buffer updated`, tone: 'success' })
       }
     } catch (e) {
       toast({ title: 'Buffer change failed to apply', description: e instanceof Error ? e.message : String(e), tone: 'error' })
+    }
+
+    // FB-S1 — surface dropped Follow/Buffer intent instead of a silent no-op.
+    if (unpublishedIntent.size > 0 || (sentAnyApply && matchedTotal === 0)) {
+      const parts: string[] = []
+      if (unpublishedIntent.size > 0) {
+        const n = unpublishedIntent.size
+        parts.push(`${n} unpublished row${n === 1 ? '' : 's'} — publish first, then set Follow/Buffer`)
+      }
+      if (sentAnyApply && matchedTotal === 0) {
+        parts.push('no matching live listing yet for the rows you edited')
+      }
+      toast({ title: 'Follow/Buffer not applied', description: parts.join(' · '), tone: 'warning' })
     }
 
     return { saved: result.saved, createResult: result.createResult }

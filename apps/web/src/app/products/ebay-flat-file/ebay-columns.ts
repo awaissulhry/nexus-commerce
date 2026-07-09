@@ -24,6 +24,8 @@ export interface EbayColumn {
   /** Usage level from eBay API (REQUIRED / RECOMMENDED / OPTIONAL) */
   guidance?: string
   maxLength?: number
+  /** Minimum value for a number column (bulk writes below it clamp up; buffer = 0). */
+  min?: number
   width: number
   frozen?: boolean
   readOnly?: boolean
@@ -525,7 +527,7 @@ export const MARKET_COLUMN_GROUPS: EbayColumnGroup[] = [
       { id: 'it_price',      label: 'Price (€)',  kind: 'number',   required: false, width: 90 },
       { id: 'it_qty',        label: 'Qty',        kind: 'number',   required: false, width: 70 },
       { id: 'it_follow',     label: 'Follow',     kind: 'enum', options: ['Follow', 'Pinned'], enumMode: 'strict', description: FOLLOW_COL_DESC, required: false, width: 92 },
-      { id: 'it_buffer',     label: 'Buffer',     kind: 'number', description: BUFFER_COL_DESC, required: false, width: 84 },
+      { id: 'it_buffer',     label: 'Buffer',     kind: 'number', description: BUFFER_COL_DESC, required: false, width: 84 , min: 0 },
       { id: 'it_item_id',    label: 'Item ID',    kind: 'readonly', required: false, width: 130, readOnly: true },
       { id: 'it_status',     label: 'Status',     kind: 'readonly', required: false, width: 90,  readOnly: true },
       { id: 'it_listing_id', label: 'Listing ID', kind: 'readonly', required: false, width: 110, readOnly: true },
@@ -539,7 +541,7 @@ export const MARKET_COLUMN_GROUPS: EbayColumnGroup[] = [
       { id: 'de_price',      label: 'Price (€)',  kind: 'number',   required: false, width: 90 },
       { id: 'de_qty',        label: 'Qty',        kind: 'number',   required: false, width: 70 },
       { id: 'de_follow',     label: 'Follow',     kind: 'enum', options: ['Follow', 'Pinned'], enumMode: 'strict', description: FOLLOW_COL_DESC, required: false, width: 92 },
-      { id: 'de_buffer',     label: 'Buffer',     kind: 'number', description: BUFFER_COL_DESC, required: false, width: 84 },
+      { id: 'de_buffer',     label: 'Buffer',     kind: 'number', description: BUFFER_COL_DESC, required: false, width: 84 , min: 0 },
       { id: 'de_item_id',    label: 'Item ID',    kind: 'readonly', required: false, width: 130, readOnly: true },
       { id: 'de_status',     label: 'Status',     kind: 'readonly', required: false, width: 90,  readOnly: true },
       { id: 'de_listing_id', label: 'Listing ID', kind: 'readonly', required: false, width: 110, readOnly: true },
@@ -553,7 +555,7 @@ export const MARKET_COLUMN_GROUPS: EbayColumnGroup[] = [
       { id: 'fr_price',      label: 'Price (€)',  kind: 'number',   required: false, width: 90 },
       { id: 'fr_qty',        label: 'Qty',        kind: 'number',   required: false, width: 70 },
       { id: 'fr_follow',     label: 'Follow',     kind: 'enum', options: ['Follow', 'Pinned'], enumMode: 'strict', description: FOLLOW_COL_DESC, required: false, width: 92 },
-      { id: 'fr_buffer',     label: 'Buffer',     kind: 'number', description: BUFFER_COL_DESC, required: false, width: 84 },
+      { id: 'fr_buffer',     label: 'Buffer',     kind: 'number', description: BUFFER_COL_DESC, required: false, width: 84 , min: 0 },
       { id: 'fr_item_id',    label: 'Item ID',    kind: 'readonly', required: false, width: 130, readOnly: true },
       { id: 'fr_status',     label: 'Status',     kind: 'readonly', required: false, width: 90,  readOnly: true },
       { id: 'fr_listing_id', label: 'Listing ID', kind: 'readonly', required: false, width: 110, readOnly: true },
@@ -567,7 +569,7 @@ export const MARKET_COLUMN_GROUPS: EbayColumnGroup[] = [
       { id: 'es_price',      label: 'Price (€)',  kind: 'number',   required: false, width: 90 },
       { id: 'es_qty',        label: 'Qty',        kind: 'number',   required: false, width: 70 },
       { id: 'es_follow',     label: 'Follow',     kind: 'enum', options: ['Follow', 'Pinned'], enumMode: 'strict', description: FOLLOW_COL_DESC, required: false, width: 92 },
-      { id: 'es_buffer',     label: 'Buffer',     kind: 'number', description: BUFFER_COL_DESC, required: false, width: 84 },
+      { id: 'es_buffer',     label: 'Buffer',     kind: 'number', description: BUFFER_COL_DESC, required: false, width: 84 , min: 0 },
       { id: 'es_item_id',    label: 'Item ID',    kind: 'readonly', required: false, width: 130, readOnly: true },
       { id: 'es_status',     label: 'Status',     kind: 'readonly', required: false, width: 90,  readOnly: true },
       { id: 'es_listing_id', label: 'Listing ID', kind: 'readonly', required: false, width: 110, readOnly: true },
@@ -581,7 +583,7 @@ export const MARKET_COLUMN_GROUPS: EbayColumnGroup[] = [
       { id: 'uk_price',      label: 'Price (£)',  kind: 'number',   required: false, width: 90 },
       { id: 'uk_qty',        label: 'Qty',        kind: 'number',   required: false, width: 70 },
       { id: 'uk_follow',     label: 'Follow',     kind: 'enum', options: ['Follow', 'Pinned'], enumMode: 'strict', description: FOLLOW_COL_DESC, required: false, width: 92 },
-      { id: 'uk_buffer',     label: 'Buffer',     kind: 'number', description: BUFFER_COL_DESC, required: false, width: 84 },
+      { id: 'uk_buffer',     label: 'Buffer',     kind: 'number', description: BUFFER_COL_DESC, required: false, width: 84 , min: 0 },
       { id: 'uk_item_id',    label: 'Item ID',    kind: 'readonly', required: false, width: 130, readOnly: true },
       { id: 'uk_status',     label: 'Status',     kind: 'readonly', required: false, width: 90,  readOnly: true },
       { id: 'uk_listing_id', label: 'Listing ID', kind: 'readonly', required: false, width: 110, readOnly: true },
