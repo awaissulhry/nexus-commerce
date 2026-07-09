@@ -94,7 +94,7 @@ import { Prisma } from '@nexus/database'
 import prisma from '../db.js'
 import { csvDocument } from '../lib/csv.js'
 import { EbayCategoryService } from '../services/ebay-category.service.js'
-import { parseThemeAxes } from '../services/ebay-theme-axes.js'
+import { parseThemeAxes, selfHealAxisSortOrder } from '../services/ebay-theme-axes.js'
 import { EbayPublishAdapter } from '../services/listing-wizard/ebay-publish.adapter.js'
 import { resolveComplianceById, complianceBlockers } from '../services/compliance-resolver.service.js'
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js'
@@ -607,6 +607,13 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       }
       if (axisValueOrder !== undefined) {
         nextPlatform._axisValueOrder = axisValueOrder
+        // EFX P3 — self-heal: a synonym-keyed value order supersedes any legacy
+        // raw-name _axisSortOrder entry for the same dimension. Prune the
+        // matched legacy keys (leaving unmatched ones for the push merge).
+        const prevSort = (nextPlatform._axisSortOrder ?? {}) as Record<string, string[]>
+        const healed = selfHealAxisSortOrder(prevSort, axisValueOrder)
+        if (Object.keys(healed).length > 0) nextPlatform._axisSortOrder = healed
+        else delete nextPlatform._axisSortOrder
       }
 
       if (parentListing) {
@@ -1718,7 +1725,13 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
     }
     if (flags.variations) {
       if (donorPlatform._variationAxes !== undefined) layout._variationAxes = donorPlatform._variationAxes
+      // EFX P3 — carry the canonical synonym-keyed value order too (keep the
+      // legacy _axisSortOrder copy for back-compat), plus the eBay-only renames
+      // so a templated target reproduces the donor's variation layout exactly.
+      if (donorPlatform._axisValueOrder !== undefined) layout._axisValueOrder = donorPlatform._axisValueOrder
       if (donorPlatform._axisSortOrder !== undefined) layout._axisSortOrder = donorPlatform._axisSortOrder
+      if (donorPlatform._axisNameLabels !== undefined) layout._axisNameLabels = donorPlatform._axisNameLabels
+      if (donorPlatform._axisValueLabels !== undefined) layout._axisValueLabels = donorPlatform._axisValueLabels
     }
     if (flags.compatibility && donorPlatform.compatibility !== undefined) {
       layout.compatibility = donorPlatform.compatibility

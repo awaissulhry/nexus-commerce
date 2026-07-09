@@ -129,6 +129,31 @@ export function sortAxisValues(
 }
 
 /**
+ * EFX P3 — resolve the effective per-axis value order from a parent listing's
+ * platformAttributes. The canonical store is the synonym-keyed `_axisValueOrder`
+ * (written by both the flat-file modal and the cockpit card). Legacy raw-name
+ * `_axisSortOrder` entries (older cockpit saves) are merged in ONLY where the
+ * dimension isn't already covered — so a newer `_axisValueOrder` always wins and
+ * legacy data still orders values on push until it's migrated.
+ *
+ * Extracted (verbatim behaviour) from the push body so it's unit-testable.
+ */
+export function mergeStoredValueOrder(
+  pa: Record<string, unknown>,
+): Record<string, string[]> {
+  const valueOrder = { ...((pa._axisValueOrder ?? {}) as Record<string, string[]>) }
+  const rawSort = (pa._axisSortOrder ?? {}) as Record<string, string[]>
+  for (const [name, vals] of Object.entries(rawSort)) {
+    if (!Array.isArray(vals) || vals.length === 0) continue
+    // Skip if this dimension is already ordered under ANY of its key forms.
+    if (!(name in valueOrder) && !(axisSynonymKey(name) in valueOrder) && !(name.toLowerCase() in valueOrder)) {
+      valueOrder[name] = vals
+    }
+  }
+  return valueOrder
+}
+
+/**
  * Collapse variation specs that carry an IDENTICAL value set — the same physical
  * dimension surfaced under two different aspect names. This happens when a stray or
  * mislabeled aspect duplicates a real axis (observed on AIREON: a leftover Amazon
@@ -591,18 +616,10 @@ export async function pushVariationGroup(
       const pa = (pl?.platformAttributes ?? {}) as Record<string, unknown>
       nameLabels = (pa._axisNameLabels ?? {}) as Record<string, string>
       valueLabels = (pa._axisValueLabels ?? {}) as Record<string, Record<string, string>>
-      valueOrder  = (pa._axisValueOrder  ?? {}) as Record<string, string[]>
-      // FFP.8 — the cockpit Variations card writes _axisSortOrder (raw-name
-      // keyed) and _variationAxes (ordered axis list); both were push-dead.
-      // Merge the cockpit value order where the modal hasn't set one, and
-      // capture the axis order for the variesBy.specifications sort below.
-      const rawSort = (pa._axisSortOrder ?? {}) as Record<string, string[]>
-      for (const [name, vals] of Object.entries(rawSort)) {
-        if (!Array.isArray(vals) || vals.length === 0) continue
-        if (!(name in valueOrder) && !(axisSynonymKey(name) in valueOrder) && !(name.toLowerCase() in valueOrder)) {
-          valueOrder[name] = vals
-        }
-      }
+      // EFX P3 — canonical synonym-keyed _axisValueOrder, with legacy raw-name
+      // _axisSortOrder merged in only where a dimension isn't already ordered.
+      // (Both keys were once push-dead; FFP.8 revived the merge, P3 extracted it.)
+      valueOrder = mergeStoredValueOrder(pa)
       storedAxisOrder = Array.isArray(pa._variationAxes)
         ? (pa._variationAxes as unknown[]).filter((s): s is string => typeof s === 'string')
         : []

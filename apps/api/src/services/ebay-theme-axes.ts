@@ -55,3 +55,31 @@ export function axisSynonymKey(name: string): string {
   }
   return lk
 }
+
+/**
+ * EFX P3 — self-heal the legacy raw-name-keyed `_axisSortOrder` when a save
+ * writes the canonical synonym-keyed `_axisValueOrder`.
+ *
+ * Any legacy entry whose axis maps to a synonym key that was just written is
+ * now superseded and is dropped. Entries whose synonym key was NOT written are
+ * left untouched (the push service still merges them for back-compat), so this
+ * only prunes what has genuinely been migrated. Pure + order-preserving so the
+ * PATCH route stays trivially testable.
+ *
+ * @param prevSortOrder      current `_axisSortOrder` (raw-name keyed) or undefined
+ * @param writtenValueOrder  the `_axisValueOrder` being persisted (synonym keyed)
+ * @returns the pruned `_axisSortOrder` (may be empty)
+ */
+export function selfHealAxisSortOrder(
+  prevSortOrder: Record<string, string[]> | undefined,
+  writtenValueOrder: Record<string, string[]>,
+): Record<string, string[]> {
+  if (!prevSortOrder) return {}
+  const writtenKeys = new Set(Object.keys(writtenValueOrder))
+  const out: Record<string, string[]> = {}
+  for (const [rawName, vals] of Object.entries(prevSortOrder)) {
+    if (writtenKeys.has(axisSynonymKey(rawName))) continue // superseded — drop
+    out[rawName] = vals
+  }
+  return out
+}
