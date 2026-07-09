@@ -29,14 +29,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
-import { Loader2, Save, AlertTriangle, Eraser, ChevronUp, ChevronDown, Sparkles, Download } from 'lucide-react'
+import { Loader2, Save, AlertTriangle, Eraser, Sparkles, Download } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/i18n/use-translations'
-import { Listbox } from '@/design-system/components/Listbox'
+import { AxisValueOrderEditor, type AxisEntry } from '@/components/ebay/AxisValueOrderEditor'
+import { axisSynonymKey } from '@/app/products/ebay-flat-file/variationValueOrder.pure'
 
 const EBAY_VARIANT_CAP = 250
 
@@ -59,7 +60,12 @@ interface MatrixData {
   marketplace: string
   declaredAxes: string[]
   pickedAxes: string[]
+  // Legacy raw-axis-name → value order. Still returned for back-compat; EFX P3
+  // migrates it into axisValueOrder (synonym-keyed) on the next matrix save.
   axisSortOrder: Record<string, string[]>
+  // EFX P2/P3 — synonym-keyed (__dim0__/__dim1__/lowercase-custom) value order,
+  // the canonical store the push service reads.
+  axisValueOrder?: Record<string, string[]>
   // EV.4 — eBay-only renames. Names: { Color: "Colour" }. Values:
   // { Color: { Giallo: "Yellow" } }.
   axisNameLabels?: Record<string, string>
@@ -81,6 +87,27 @@ interface Props {
   isParentWithChildren: boolean
 }
 
+// EFX P3 — build the initial synonym-keyed value order from a matrix payload.
+// Prefer the canonical axisValueOrder[synKey]; fall back to the legacy
+// axisSortOrder[rawName] (remapped to its synonym key) so old listings keep
+// their order and get lazily migrated on the next save.
+function seedValueOrder(md: MatrixData): Record<string, string[]> {
+  const observed = new Set<string>()
+  for (const c of md.cells) {
+    for (const k of Object.keys(c.variationAttributes ?? {})) observed.add(k)
+  }
+  const out: Record<string, string[]> = {}
+  for (const axis of observed) {
+    const synKey = axisSynonymKey(axis)
+    if (synKey in out) continue // first raw name for a dimension wins
+    const fromNew = md.axisValueOrder?.[synKey]
+    const fromLegacy = md.axisSortOrder?.[axis]
+    const seed = fromNew?.length ? fromNew : fromLegacy?.length ? fromLegacy : null
+    if (seed) out[synKey] = seed
+  }
+  return out
+}
+
 export default function VariationsMatrixCard({
   productId,
   marketplace,
@@ -95,8 +122,10 @@ export default function VariationsMatrixCard({
   const [dirtyCells, setDirtyCells] = useState<Record<string, DirtyCell>>({})
   const [pickedAxesDraft, setPickedAxesDraft] = useState<string[]>([])
   const [pickedDirty, setPickedDirty] = useState(false)
-  const [sortDraft, setSortDraft] = useState<Record<string, string[]>>({})
-  const [sortDirty, setSortDirty] = useState(false)
+  // EFX P3 — value order keyed by axisSynonymKey (the canonical push store),
+  // replacing the legacy raw-name-keyed sortDraft.
+  const [valueOrderDraft, setValueOrderDraft] = useState<Record<string, string[]>>({})
+  const [valueOrderDirty, setValueOrderDirty] = useState(false)
   // EV.4 — eBay-only rename drafts.
   const [nameLabels, setNameLabels] = useState<Record<string, string>>({})
   const [valueLabels, setValueLabels] = useState<Record<string, Record<string, string>>>({})
@@ -117,13 +146,18 @@ export default function VariationsMatrixCard({
       if (!res.ok) {
         setError(json?.error ?? `HTTP ${res.status}`)
       } else {
-        setData(json as MatrixData)
-        setPickedAxesDraft((json as MatrixData).pickedAxes)
-        setSortDraft((json as MatrixData).axisSortOrder)
-        setNameLabels((json as MatrixData).axisNameLabels ?? {})
-        setValueLabels((json as MatrixData).axisValueLabels ?? {})
+        const md = json as MatrixData
+        setData(md)
+        setPickedAxesDraft(md.pickedAxes)
+        // EFX P3 — build the synonym-keyed value order: prefer the canonical
+        // axisValueOrder[synKey]; fall back to the legacy axisSortOrder[rawName]
+        // (remapped to its synonym key) so old listings keep their order and get
+        // lazily migrated on the next save.
+        setValueOrderDraft(seedValueOrder(md))
+        setNameLabels(md.axisNameLabels ?? {})
+        setValueLabels(md.axisValueLabels ?? {})
         setPickedDirty(false)
-        setSortDirty(false)
+        setValueOrderDirty(false)
         setLabelsDirty(false)
       }
     } catch (err) {
@@ -148,7 +182,9 @@ export default function VariationsMatrixCard({
     return [...declared, ...extras]
   }, [data])
 
-  // Per-axis distinct values, ordered by sortDraft (custom) or insertion.
+  // Per-axis distinct values, ordered by the synonym-keyed valueOrderDraft
+  // (custom) or insertion order. Unknown/new values are appended after the
+  // stored order so nothing is ever dropped.
   const axisValues = useMemo(() => {
     const out: Record<string, string[]> = {}
     if (!data) return out
@@ -162,19 +198,28 @@ export default function VariationsMatrixCard({
           ins.push(v)
         }
       }
-      const order = sortDraft[axis] ?? []
+      const order = valueOrderDraft[axisSynonymKey(axis)] ?? []
       const ordered = order.filter((v) => seen.has(v))
       const rest = ins.filter((v) => !ordered.includes(v))
       out[axis] = [...ordered, ...rest]
     }
     return out
-  }, [data, availableAxes, sortDraft])
+  }, [data, availableAxes, valueOrderDraft])
 
-  // EV.3 — effective variation specifics (picked, else auto-default to
-  // the available axes), capped at eBay's 5. A 2D grid can only show two
-  // dimensions, so 3–5 specifics fall back to a flat one-row-per-variant
-  // table.
-  const effectiveAxes = (pickedAxesDraft.length > 0 ? pickedAxesDraft : availableAxes).slice(0, 5)
+  // EV.3 / EFX P3 — effective variation specifics: ALL available axes, ordered
+  // by the picked sequence (unranked axes appended in observation order),
+  // capped at eBay's 5. Unlike the old subset picker, ordering can never drop
+  // an axis — every varying dimension stays a variation specific (eBay requires
+  // it); the picked order only decides row/col + buyer-facing sequence. A 2D
+  // grid can only show two dimensions, so 3–5 specifics fall back to a flat
+  // one-row-per-variant table.
+  const effectiveAxes = useMemo(() => {
+    if (availableAxes.length === 0) return []
+    const rank = new Map(pickedAxesDraft.map((a, i) => [a, i]))
+    return [...availableAxes]
+      .sort((a, b) => (rank.get(a) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b) ?? Number.MAX_SAFE_INTEGER))
+      .slice(0, 5)
+  }, [availableAxes, pickedAxesDraft])
   const useFlatTable = effectiveAxes.length > 2
   const rowAxis = effectiveAxes[0] ?? null
   const colAxis = effectiveAxes[1] ?? null
@@ -206,6 +251,55 @@ export default function VariationsMatrixCard({
     })
     setLabelsDirty(true)
   }, [])
+
+  // EFX P3 — feed the shared AxisValueOrderEditor. Value panels are keyed by
+  // axisSynonymKey (the canonical store); synToRaw maps that back to the raw
+  // axis name so the eBay-only rename slots stay keyed exactly as before.
+  const editorAxes: AxisEntry[] = effectiveAxes.map((a) => ({
+    key: axisSynonymKey(a),
+    displayName: a,
+    values: axisValues[a] ?? [],
+  }))
+  const synToRaw = new Map(effectiveAxes.map((a) => [axisSynonymKey(a), a]))
+
+  // eBay-only axis-name rename input, injected into each panel heading.
+  const renderAxisExtra = useCallback(
+    (synKey: string) => {
+      const raw = synToRaw.get(synKey) ?? synKey
+      return (
+        <span className="inline-flex items-center gap-1">
+          <Sparkles className="w-3 h-3 text-violet-500 flex-shrink-0" />
+          <input
+            defaultValue={axisLabel(raw) === raw ? '' : axisLabel(raw)}
+            onBlur={(e) => handleRenameAxis(raw, e.target.value)}
+            placeholder={raw}
+            title={t('products.edit.cockpit.ebay.variations.renameAxisTitle', { axis: raw })}
+            className="normal-case font-normal bg-transparent border-b border-dashed border-slate-300 dark:border-slate-600 px-0.5 w-24 text-slate-700 dark:text-slate-300 focus:outline-none focus:border-violet-400"
+          />
+        </span>
+      )
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [axisLabel, handleRenameAxis, t, effectiveAxes.join('|')],
+  )
+
+  // eBay-only value rename input, injected into each value row.
+  const renderValueExtra = useCallback(
+    (synKey: string, value: string) => {
+      const raw = synToRaw.get(synKey) ?? synKey
+      return (
+        <input
+          defaultValue={valueLabel(raw, value) === value ? '' : valueLabel(raw, value)}
+          onBlur={(e) => handleRenameValue(raw, value, e.target.value)}
+          placeholder={value}
+          title={t('products.edit.cockpit.ebay.variations.renameValueTitle', { value })}
+          className="flex-1 min-w-0 bg-transparent border-b border-dashed border-slate-300 dark:border-slate-600 px-0.5 font-mono text-slate-700 dark:text-slate-300 focus:outline-none focus:border-violet-400"
+        />
+      )
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [valueLabel, handleRenameValue, t, effectiveAxes.join('|')],
+  )
 
   // Cell lookup by (rowVal, colVal).
   const cellAt = useCallback(
@@ -252,48 +346,18 @@ export default function VariationsMatrixCard({
     [],
   )
 
-  // EV.3 — generalised to any slot (eBay allows up to 5 variation
-  // specifics). Picking an axis already in another slot moves it here
-  // (no duplicates); picking null clears the slot.
-  const handlePickAxis = useCallback((slot: number, next: string | null) => {
-    setPickedAxesDraft((cur) => {
-      let out = [...cur]
-      if (next === null) {
-        out.splice(slot, 1)
-      } else {
-        out = out.filter((a, i) => a !== next || i === slot)
-        out[slot] = next
-      }
-      return out.filter(Boolean).slice(0, 5)
-    })
+  // EFX P3 — axis SEQ reorder (which specific a buyer picks first). The shared
+  // editor hands back the full reordered list; that becomes pickedAxes on save.
+  const handleAxisSeqChange = useCallback((seq: string[]) => {
+    setPickedAxesDraft(seq.filter(Boolean).slice(0, 5))
     setPickedDirty(true)
   }, [])
 
-  const handleMoveAxisValue = useCallback(
-    (axis: string, value: string, dir: -1 | 1) => {
-      setSortDraft((cur) => {
-        const order = cur[axis] ?? axisValues[axis] ?? []
-        const idx = order.indexOf(value)
-        if (idx === -1) {
-          // Value wasn't in custom order yet — seed with observed order.
-          const seeded = [...(axisValues[axis] ?? [])]
-          const sIdx = seeded.indexOf(value)
-          if (sIdx === -1) return cur
-          const target = sIdx + dir
-          if (target < 0 || target >= seeded.length) return cur
-          ;[seeded[sIdx], seeded[target]] = [seeded[target]!, seeded[sIdx]!]
-          return { ...cur, [axis]: seeded }
-        }
-        const target = idx + dir
-        if (target < 0 || target >= order.length) return cur
-        const next = [...order]
-        ;[next[idx], next[target]] = [next[target]!, next[idx]!]
-        return { ...cur, [axis]: next }
-      })
-      setSortDirty(true)
-    },
-    [axisValues],
-  )
+  // EFX P3 — per-axis value order change (full array), keyed by axisSynonymKey.
+  const handleAxisOrderChange = useCallback((synKey: string, values: string[]) => {
+    setValueOrderDraft((cur) => ({ ...cur, [synKey]: values }))
+    setValueOrderDirty(true)
+  }, [])
 
   const handleSaveAll = useCallback(async () => {
     if (saving) return
@@ -305,7 +369,10 @@ export default function VariationsMatrixCard({
         marketplace,
       }
       if (pickedDirty) body.pickedAxes = pickedAxesDraft
-      if (sortDirty) body.axisSortOrder = sortDraft
+      // EFX P3 — write the synonym-keyed value order (incl. lazily-migrated
+      // legacy entries seeded from axisSortOrder). No longer sends axisSortOrder;
+      // the server self-heals the superseded legacy keys.
+      if (valueOrderDirty) body.axisValueOrder = valueOrderDraft
       if (labelsDirty) {
         body.axisNameLabels = nameLabels
         body.axisValueLabels = valueLabels
@@ -328,7 +395,7 @@ export default function VariationsMatrixCard({
       }
       setDirtyCells({})
       setPickedDirty(false)
-      setSortDirty(false)
+      setValueOrderDirty(false)
       setLabelsDirty(false)
       await refresh()
       router.refresh()
@@ -337,7 +404,7 @@ export default function VariationsMatrixCard({
     } finally {
       setSaving(false)
     }
-  }, [saving, productId, marketplace, pickedDirty, pickedAxesDraft, sortDirty, sortDraft, labelsDirty, nameLabels, valueLabels, dirtyCount, dirtyCells, refresh, router])
+  }, [saving, productId, marketplace, pickedDirty, pickedAxesDraft, valueOrderDirty, valueOrderDraft, labelsDirty, nameLabels, valueLabels, dirtyCount, dirtyCells, refresh, router])
 
   if (!isParentWithChildren) {
     return (
@@ -386,50 +453,23 @@ export default function VariationsMatrixCard({
 
         {data && !loading && (
           <>
-            {/* ── Axis picker ─────────────────────────────────────── */}
-            <div className="rounded-lg border border-default dark:border-slate-800 p-3 space-y-2">
-              <div className="text-xs font-medium text-slate-700 dark:text-slate-300">{t('products.edit.cockpit.ebay.variations.axes')}</div>
-              <div className="flex items-center gap-3 flex-wrap text-xs">
-                {Array.from({ length: Math.min(5, availableAxes.length) }).map((_, i) => (
-                  <AxisSelector
-                    key={i}
-                    label={
-                      useFlatTable
-                        ? t('products.edit.cockpit.ebay.variations.specificN', { n: String(i + 1) })
-                        : i === 0
-                          ? t('products.edit.cockpit.ebay.variations.rows')
-                          : i === 1
-                            ? t('products.edit.cockpit.ebay.variations.columns')
-                            : t('products.edit.cockpit.ebay.variations.specificN', { n: String(i + 1) })
-                    }
-                    value={pickedAxesDraft[i] ?? null}
-                    available={availableAxes.filter(
-                      (a) => !pickedAxesDraft.some((p, j) => p === a && j !== i),
-                    )}
-                    onChange={(v) => handlePickAxis(i, v)}
-                  />
-                ))}
-                <span className="text-[10.5px] text-slate-500 dark:text-slate-400">
+            {/* ── EFX P3 — unified axis order + per-axis value order + renames ── */}
+            {effectiveAxes.length > 0 && (
+              <div className="rounded-lg border border-default dark:border-slate-800 p-3 space-y-2">
+                <div className="text-xs font-medium text-slate-700 dark:text-slate-300">{t('products.edit.cockpit.ebay.variations.axes')}</div>
+                <AxisValueOrderEditor
+                  axes={editorAxes}
+                  axisSeq={effectiveAxes}
+                  axisOrder={{}}
+                  onAxisSeqChange={handleAxisSeqChange}
+                  onAxisOrderChange={handleAxisOrderChange}
+                  interaction="arrows"
+                  renderAxisExtra={renderAxisExtra}
+                  renderValueExtra={renderValueExtra}
+                />
+                <span className="text-[10.5px] text-slate-500 dark:text-slate-400 block">
                   {t('products.edit.cockpit.ebay.variations.axisHint')}
                 </span>
-              </div>
-            </div>
-
-            {/* ── Axis sort + eBay-only rename editors ───────────── */}
-            {effectiveAxes.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {effectiveAxes.map((axis) => (
-                  <AxisSortEditor
-                    key={axis}
-                    axis={axis}
-                    values={axisValues[axis] ?? []}
-                    onMove={(v, dir) => handleMoveAxisValue(axis, v, dir)}
-                    nameLabel={axisLabel(axis)}
-                    valueLabelOf={(v) => valueLabel(axis, v)}
-                    onRenameAxis={(label) => handleRenameAxis(axis, label)}
-                    onRenameValue={(v, label) => handleRenameValue(axis, v, label)}
-                  />
-                ))}
               </div>
             )}
 
@@ -488,7 +528,7 @@ export default function VariationsMatrixCard({
       {data && !loading && (
         <div className="px-4 py-2.5 border-t border-subtle dark:border-slate-800 flex items-center gap-2 flex-wrap">
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            {dirtyCount === 0 && !pickedDirty && !sortDirty && !labelsDirty ? t('products.edit.cockpit.ebay.variations.allSaved') : t('products.edit.cockpit.ebay.variations.unsavedChanges')}
+            {dirtyCount === 0 && !pickedDirty && !valueOrderDirty && !labelsDirty ? t('products.edit.cockpit.ebay.variations.allSaved') : t('products.edit.cockpit.ebay.variations.unsavedChanges')}
           </span>
           <button
             type="button"
@@ -510,7 +550,7 @@ export default function VariationsMatrixCard({
           <button
             type="button"
             onClick={handleSaveAll}
-            disabled={saving || (dirtyCount === 0 && !pickedDirty && !sortDirty && !labelsDirty)}
+            disabled={saving || (dirtyCount === 0 && !pickedDirty && !valueOrderDirty && !labelsDirty)}
             className="ml-auto px-3 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
@@ -522,100 +562,6 @@ export default function VariationsMatrixCard({
   )
 }
 
-// ── Axis selector ──────────────────────────────────────────────────────
-function AxisSelector({
-  label, value, available, onChange,
-}: { label: string; value: string | null; available: string[]; onChange: (next: string | null) => void }) {
-  const { t } = useTranslations()
-  return (
-    <label className="inline-flex items-center gap-1.5 text-xs">
-      <span className="text-slate-500 dark:text-slate-400">{label}:</span>
-      <Listbox
-        value={value ?? ''}
-        onChange={(v) => onChange(v || null)}
-        ariaLabel={label}
-        className="w-32"
-        options={[
-          { value: '', label: t('products.edit.cockpit.ebay.variations.none') },
-          ...available.map((a) => ({ value: a, label: a })),
-        ]}
-      />
-    </label>
-  )
-}
-
-// ── Axis sort editor ──────────────────────────────────────────────────
-function AxisSortEditor({
-  axis,
-  values,
-  onMove,
-  nameLabel,
-  valueLabelOf,
-  onRenameAxis,
-  onRenameValue,
-}: {
-  axis: string
-  values: string[]
-  onMove: (value: string, dir: -1 | 1) => void
-  // EV.4 — eBay-only renames.
-  nameLabel: string
-  valueLabelOf: (v: string) => string
-  onRenameAxis: (label: string) => void
-  onRenameValue: (v: string, label: string) => void
-}) {
-  const { t } = useTranslations()
-  return (
-    <div className="rounded border border-default dark:border-slate-800 p-2 space-y-1">
-      <div className="text-[11px] font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-        <Sparkles className="w-3 h-3 text-violet-500" />
-        {/* eBay-only axis-name rename; placeholder = canonical name. */}
-        <input
-          defaultValue={nameLabel === axis ? '' : nameLabel}
-          onBlur={(e) => onRenameAxis(e.target.value)}
-          placeholder={axis}
-          title={t('products.edit.cockpit.ebay.variations.renameAxisTitle', { axis })}
-          className="bg-transparent border-b border-dashed border-slate-300 dark:border-slate-600 px-0.5 w-28 focus:outline-none focus:border-violet-400"
-        />
-        <span className="text-tertiary">
-          {t('products.edit.cockpit.ebay.variations.order')} ({values.length})
-        </span>
-      </div>
-      <div className="space-y-1">
-        {values.map((v, i) => (
-          <div key={v} className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-slate-50 dark:bg-slate-800/60">
-            <button
-              type="button"
-              onClick={() => onMove(v, -1)}
-              disabled={i === 0}
-              className="p-0.5 text-tertiary hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-30"
-              aria-label={t('products.edit.cockpit.ebay.variations.moveUp', { value: v })}
-            >
-              <ChevronUp className="w-3 h-3" />
-            </button>
-            <button
-              type="button"
-              onClick={() => onMove(v, +1)}
-              disabled={i === values.length - 1}
-              className="p-0.5 text-tertiary hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-30"
-              aria-label={t('products.edit.cockpit.ebay.variations.moveDown', { value: v })}
-            >
-              <ChevronDown className="w-3 h-3" />
-            </button>
-            {/* eBay-only value rename; placeholder = canonical value. */}
-            <input
-              defaultValue={valueLabelOf(v) === v ? '' : valueLabelOf(v)}
-              onBlur={(e) => onRenameValue(v, e.target.value)}
-              placeholder={v}
-              title={t('products.edit.cockpit.ebay.variations.renameValueTitle', { value: v })}
-              className="flex-1 min-w-0 bg-transparent border-b border-dashed border-slate-300 dark:border-slate-600 px-0.5 font-mono text-slate-700 dark:text-slate-300 focus:outline-none focus:border-violet-400"
-            />
-            <span className="text-[10px] text-tertiary ml-auto">{i + 1}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 // ── Matrix grid ────────────────────────────────────────────────────────
 function MatrixGrid({

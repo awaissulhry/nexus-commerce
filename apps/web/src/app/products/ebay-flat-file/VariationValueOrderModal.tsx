@@ -1,134 +1,13 @@
 'use client'
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core'
-import {
-  SortableContext,
-  arrayMove,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { GripVertical } from 'lucide-react'
 import { Modal } from '@/design-system/components/Modal'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useToast } from '@/components/ui/Toast'
 import type { EbayRow } from './EbayFlatFileClient'
-import { sortClothing, deriveAxes, axisSynonymKey, shouldInitModal } from './variationValueOrder.pure'
-import { ChevronUp, ChevronDown } from 'lucide-react'
-
-// ── Sortable item ─────────────────────────────────────────────────────────
-
-function SortableItem({ id, label }: { id: string; label: string }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
-  return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={[
-        'flex items-center gap-2 px-2 py-1.5 rounded text-sm select-none border',
-        isDragging
-          ? 'bg-blue-50 border-blue-300 dark:bg-blue-900/20 dark:border-blue-600 shadow-lg z-50'
-          : 'bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700',
-      ].join(' ')}
-    >
-      <span
-        {...attributes}
-        {...listeners}
-        className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 flex-shrink-0"
-        aria-label={`Drag to reorder ${label}`}
-      >
-        <GripVertical size={14} />
-      </span>
-      <span className="truncate text-slate-800 dark:text-slate-200">{label}</span>
-    </div>
-  )
-}
-
-// ── Axis panel ────────────────────────────────────────────────────────────
-
-interface AxisPanelProps {
-  axisKey: string
-  displayName: string
-  values: string[]
-  onChange: (values: string[]) => void
-}
-
-function AxisPanel({ displayName, values, onChange }: AxisPanelProps) {
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  )
-
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    const oldIdx = values.indexOf(String(active.id))
-    const newIdx = values.indexOf(String(over.id))
-    if (oldIdx !== -1 && newIdx !== -1) onChange(arrayMove(values, oldIdx, newIdx))
-  }, [values, onChange])
-
-  return (
-    <div className="mb-5 last:mb-0">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-          {displayName}
-        </span>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            className="text-[11px] px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-            onClick={() => onChange(sortClothing(values))}
-            title="Sort clothing/shoe sizes small → large"
-          >
-            Clothing ↕
-          </button>
-          <button
-            type="button"
-            className="text-[11px] px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-            onClick={() => onChange([...values].sort((a, b) => a.localeCompare(b)))}
-          >
-            A→Z
-          </button>
-          <button
-            type="button"
-            className="text-[11px] px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-            onClick={() => onChange([...values].sort((a, b) => b.localeCompare(a)))}
-          >
-            Z→A
-          </button>
-          <button
-            type="button"
-            className="text-[11px] px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-            onClick={() => onChange([...values].reverse())}
-          >
-            Reverse
-          </button>
-        </div>
-      </div>
-
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={values} strategy={verticalListSortingStrategy}>
-          <div className="flex flex-col gap-1">
-            {values.map((v) => (
-              <SortableItem key={v} id={v} label={v} />
-            ))}
-          </div>
-        </SortableContext>
-      </DndContext>
-    </div>
-  )
-}
+import { deriveAxes, axisSynonymKey, shouldInitModal } from './variationValueOrder.pure'
+import { AxisValueOrderEditor } from '@/components/ebay/AxisValueOrderEditor'
 
 // ── Main modal ────────────────────────────────────────────────────────────
 
@@ -233,16 +112,6 @@ export function VariationValueOrderModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, axes])
 
-  const moveAxis = useCallback((index: number, delta: -1 | 1) => {
-    setAxisSeq((prev) => {
-      const next = [...prev]
-      const j = index + delta
-      if (j < 0 || j >= next.length) return prev
-      ;[next[index], next[j]] = [next[j], next[index]]
-      return next
-    })
-  }, [])
-
   const handleAxisChange = useCallback((key: string, newValues: string[]) => {
     setAxisOrder((prev) => ({ ...prev, [key]: newValues }))
   }, [])
@@ -305,49 +174,15 @@ export function VariationValueOrderModal({
         </p>
       ) : (
         <div className="py-2">
-          {/* FFP.8 — axis order (buyer picks in this order on the listing) */}
-          {axisSeq.length > 1 && (
-            <div className="mb-3 rounded-lg border border-slate-200 dark:border-slate-700 p-2.5">
-              <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                Axis order — buyers pick in this order on eBay
-              </div>
-              <ul className="space-y-1">
-                {axisSeq.map((name, i) => (
-                  <li key={name} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                    <span className="w-4 text-[11px] tabular-nums text-slate-400">{i + 1}.</span>
-                    <span className="flex-1">{name}</span>
-                    <button
-                      type="button"
-                      disabled={i === 0}
-                      onClick={() => moveAxis(i, -1)}
-                      className="p-0.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30"
-                      aria-label={`Move ${name} up`}
-                    >
-                      <ChevronUp className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={i === axisSeq.length - 1}
-                      onClick={() => moveAxis(i, 1)}
-                      className="p-0.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30"
-                      aria-label={`Move ${name} down`}
-                    >
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {axes.map((axis) => (
-            <AxisPanel
-              key={axis.key}
-              axisKey={axis.key}
-              displayName={axis.displayName}
-              values={axisOrder[axis.key] ?? axis.values}
-              onChange={(newValues) => handleAxisChange(axis.key, newValues)}
-            />
-          ))}
+          <AxisValueOrderEditor
+            axes={axes}
+            axisSeq={axisSeq}
+            axisOrder={axisOrder}
+            onAxisSeqChange={setAxisSeq}
+            onAxisOrderChange={handleAxisChange}
+            interaction="drag"
+            showPresetSorts
+          />
         </div>
       )}
     </Modal>

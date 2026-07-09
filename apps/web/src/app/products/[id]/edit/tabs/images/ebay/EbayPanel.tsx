@@ -19,27 +19,14 @@ import ImagePickerModal from '../ImagePickerModal'
 import ImagePublishHistory from '../ImagePublishHistory'
 import ChannelImageGrid, { type ImageGridColumn, type ImageGridRow, type GridCellDisplay } from '../ChannelImageGrid'
 import type { ListingImage, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
+import { axisSynonymKey } from '@/app/products/ebay-flat-file/variationValueOrder.pure'
 
 const EBAY_MAX = PLATFORM_RULES.EBAY.maxImages ?? 24
 const MIN_COLS = 12
 const SHARED = '__shared__'
 
-// Synonym groups kept in sync with VariationValueOrderModal + push service.
-const AXIS_SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
-  ['colore', 'color', 'colour', 'color name', 'color_name', 'couleur', 'farbe', 'kleur', 'colour name', 'colori'],
-  ['taglia', 'size', 'size name', 'size_name', 'misura', 'größe', 'grosse', 'taille', 'maat', 'maten', 'koko'],
-  ['stile', 'style', 'style name', 'style_name'],
-  ['materiale', 'material', 'material name', 'material_name'],
-  ['genere', 'gender', 'department', 'target audience', 'target_audience'],
-]
-
-function axisSynonymKey(name: string): string {
-  const lk = name.toLowerCase().trim()
-  for (let i = 0; i < AXIS_SYNONYM_GROUPS.length; i++) {
-    if ((AXIS_SYNONYM_GROUPS[i] as string[]).includes(lk)) return `__dim${i}__`
-  }
-  return lk
-}
+// EFX P3 — axisSynonymKey now has ONE client home (variationValueOrder.pure.ts);
+// the local copy that used to live here was removed to prevent drift.
 
 // Phase-1 — imperative handle the panel hands to ImagesTab so the ONE shared
 // bottom action bar (Save / Discard / Publish) drives eBay too. eBay edits live

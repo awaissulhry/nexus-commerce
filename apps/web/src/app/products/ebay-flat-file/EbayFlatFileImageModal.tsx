@@ -13,6 +13,7 @@ import ChannelImageGrid, { type ImageGridColumn, type ImageGridRow } from '@/app
 import ImagePickerModal from '@/app/products/[id]/edit/tabs/images/ImagePickerModal'
 import type { WorkspaceData, ListingImage, VariantSummary, ProductImage } from '@/app/products/[id]/edit/tabs/images/types'
 import { Select } from '@/design-system/primitives/Select'
+import { axisSynonymKey } from './variationValueOrder.pure'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -21,23 +22,8 @@ const MIN_COLS = 6
 const SHARED = '__shared__'
 
 // ── Axis helpers ────────────────────────────────────────────────────────────
-// Keep in sync with EbayPanel.tsx + VariationValueOrderModal.
-
-const AXIS_SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
-  ['colore', 'color', 'colour', 'color name', 'color_name', 'couleur', 'farbe', 'kleur', 'colour name', 'colori'],
-  ['taglia', 'size', 'size name', 'size_name', 'misura', 'größe', 'grosse', 'taille', 'maat', 'maten', 'koko'],
-  ['stile', 'style', 'style name', 'style_name'],
-  ['materiale', 'material', 'material name', 'material_name'],
-  ['genere', 'gender', 'department', 'target audience', 'target_audience'],
-]
-
-function axisSynonymKey(name: string): string {
-  const lk = name.toLowerCase().trim()
-  for (let i = 0; i < AXIS_SYNONYM_GROUPS.length; i++) {
-    if ((AXIS_SYNONYM_GROUPS[i] as string[]).includes(lk)) return `__dim${i}__`
-  }
-  return lk
-}
+// EFX P3 — axisSynonymKey now has ONE client home (variationValueOrder.pure.ts);
+// the local copy that used to live here was removed to prevent drift.
 
 function getAxisValues(variants: VariantSummary[], axis: string): string[] {
   const targetKey = axisSynonymKey(axis)
