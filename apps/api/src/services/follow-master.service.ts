@@ -161,11 +161,21 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
     const holdUntil = new Date(Date.now() + FOLLOW_HOLD_MS)
     for (const cl of applicable) {
       const warehouseAvailable = warehouseAvailByProduct.get(cl.productId) ?? 0
+      // FB-S4 — re-read stockBuffer INSIDE the tx. The FOLLOW quantity is
+      // pool − buffer; the snapshot buffer read before the tx can be stale if a
+      // concurrent bulk-buffer write committed in between, and using it would
+      // overwrite that listing with a pre-buffer quantity. READ COMMITTED means
+      // this fresh read sees the latest committed buffer.
+      const freshBuffer =
+        (await tx.channelListing.findUnique({
+          where: { id: cl.id },
+          select: { stockBuffer: true },
+        }))?.stockBuffer ?? cl.stockBuffer ?? 0
       const poolAvailable = computeAvailableToPublish({
         fulfillmentMethod: 'FBM',
         warehouseAvailable,
         fbaSellable: 0,
-        stockBuffer: cl.stockBuffer ?? 0,
+        stockBuffer: freshBuffer,
       }).available
       const write = computeFollowMasterWrite(cl, follow, poolAvailable)
 

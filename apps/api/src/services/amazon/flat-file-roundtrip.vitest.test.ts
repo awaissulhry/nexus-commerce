@@ -11,7 +11,7 @@
  * the readback the way getExistingRows does.
  */
 import { describe, it, expect } from 'vitest'
-import { AmazonFlatFileService, isBlankFeedValue, applySnapshotOverlay, buildSchemaEnumCodeMap, buildSchemaFieldHints, normalizeParentage, normalizeVariationTheme } from './flat-file.service.js'
+import { AmazonFlatFileService, isBlankFeedValue, applySnapshotOverlay, buildSchemaEnumCodeMap, buildSchemaFieldHints, normalizeParentage, normalizeVariationTheme, buildFollowQuantityPatch } from './flat-file.service.js'
 
 const svc = new AmazonFlatFileService({} as any, {} as any)
 // private but pure — call through an any-cast (same args syncRowsToPlatform uses)
@@ -507,5 +507,35 @@ describe('FFP.19 — normalizeVariationTheme', () => {
   it('unknown value passes through untouched', () => {
     expect(normalizeVariationTheme('FLAVOR', themeMap)).toBe('FLAVOR')
     expect(normalizeVariationTheme('', themeMap)).toBe('')
+  })
+})
+
+// FB1 — a non-enum Follow cell must NEVER force-pin a Following listing. Only a
+// truly-legacy row (no Follow column at all) keeps the historical pin-on-qty.
+describe('FB1 — buildFollowQuantityPatch (Follow column garbage must not force-pin)', () => {
+  it("'Follow' → quantity only (follow-apply endpoint owns the flag)", () => {
+    expect(buildFollowQuantityPatch('Follow', 12)).toEqual({ quantity: 12 })
+  })
+  it("'Pinned' → quantity only (follow-apply endpoint owns the flag)", () => {
+    expect(buildFollowQuantityPatch('Pinned', 12)).toEqual({ quantity: 12 })
+  })
+  it("lowercase 'pinned' typo is NO SIGNAL → quantity only, no followMasterQuantity", () => {
+    expect(buildFollowQuantityPatch('pinned', 12)).toEqual({ quantity: 12 })
+  })
+  it("pasted garbage is NO SIGNAL → quantity only, no followMasterQuantity", () => {
+    expect(buildFollowQuantityPatch('garbage', 12)).toEqual({ quantity: 12 })
+  })
+  it("empty string is NO SIGNAL → quantity only, no followMasterQuantity", () => {
+    expect(buildFollowQuantityPatch('', 12)).toEqual({ quantity: 12 })
+  })
+  it('undefined (legacy client, no Follow column) → the historical pin-on-qty', () => {
+    expect(buildFollowQuantityPatch(undefined, 12)).toEqual({ quantity: 12, followMasterQuantity: false })
+  })
+  it('null (legacy client, no Follow column) → the historical pin-on-qty', () => {
+    expect(buildFollowQuantityPatch(null, 12)).toEqual({ quantity: 12, followMasterQuantity: false })
+  })
+  it('a null quantity writes nothing at all (no quantity, no pin)', () => {
+    expect(buildFollowQuantityPatch(undefined, null)).toEqual({})
+    expect(buildFollowQuantityPatch('garbage', null)).toEqual({})
   })
 })

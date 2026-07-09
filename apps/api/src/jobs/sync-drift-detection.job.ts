@@ -45,6 +45,8 @@
 import cron from 'node-cron'
 import prisma from '../db.js'
 import { syncHealthService } from '../services/sync-health.service.js'
+import { computeAvailableToPublish } from '../services/available-to-publish.service.js'
+import { isFbaListing } from '../services/outbound-sync.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 
@@ -66,8 +68,48 @@ interface QuantityDriftRow {
   sku: string
   listing_qty: number
   total_stock: number
+  warehouse_available: number
   buffer: number
   expected_qty: number
+}
+
+/**
+ * FB3 — the published quantity a FOLLOWING listing SHOULD carry, computed the
+ * SAME way cascadeQuantityToListings publishes it: reserved-adjusted warehouse
+ * available (StockLevel.available over WAREHOUSE) minus the listing's stockBuffer,
+ * clamped ≥0 — NOT gross Product.totalStock (the old probe's false-positive source).
+ *
+ * Returns null for FBA listings — Amazon manages their quantity, so they never
+ * follow the warehouse pool and must never be flagged as drift. FBA only exists
+ * on AMAZON (merchant channels are always FBM), so a product-level FBA flag must
+ * not exclude an eBay/Shopify listing — mirrors the follow-master.service guard.
+ * Pure + unit-tested.
+ */
+export function expectedFollowingQuantity(
+  cand: {
+    channel: string
+    stockBuffer: number | null
+    fulfillmentMethod: string | null
+    platformAttributes: unknown
+    productFulfillmentMethod: string | null
+  },
+  warehouseAvailable: number,
+  fbaStockQty: number,
+): number | null {
+  const isFba =
+    cand.channel === 'AMAZON' &&
+    isFbaListing(
+      { fulfillmentMethod: cand.fulfillmentMethod, platformAttributes: cand.platformAttributes },
+      { fulfillmentMethod: cand.productFulfillmentMethod },
+      { fbaStockQty },
+    )
+  if (isFba) return null
+  return computeAvailableToPublish({
+    fulfillmentMethod: 'FBM',
+    warehouseAvailable,
+    fbaSellable: 0,
+    stockBuffer: cand.stockBuffer ?? 0,
+  }).available
 }
 
 export interface SyncDriftDetectionResult {
@@ -159,23 +201,76 @@ export async function runSyncDriftDetection(): Promise<SyncDriftDetectionResult>
   }
 
   // ── Quantity drift ────────────────────────────────────────────────
-  // Mirrors the Phase 23.2 oversell guard: expected = max(0, totalStock - buffer).
-  const qtyDrift = (await prisma.$queryRawUnsafe(`
-    SELECT cl.id AS listing_id,
-           cl."productId" AS product_id,
-           cl.channel,
-           cl.marketplace,
-           p.sku,
-           cl.quantity AS listing_qty,
-           p."totalStock" AS total_stock,
-           COALESCE(cl."stockBuffer", 0) AS buffer,
-           GREATEST(0, p."totalStock" - COALESCE(cl."stockBuffer", 0)) AS expected_qty
-    FROM "ChannelListing" cl
-    JOIN "Product" p ON p.id = cl."productId"
-    WHERE cl."followMasterQuantity" = true
-      AND cl.quantity != GREATEST(0, p."totalStock" - COALESCE(cl."stockBuffer", 0))
-    ORDER BY cl.id
-  `)) as QuantityDriftRow[]
+  // FB3 — mirror cascadeQuantityToListings EXACTLY: a FOLLOWING FBM listing should
+  // publish reserved-adjusted warehouse available (StockLevel.available over
+  // WAREHOUSE) minus its stockBuffer, clamped ≥0 — NOT gross totalStock (the old
+  // probe flagged every listing whenever reserved>0 or a buffer was set). FBA
+  // listings are Amazon-managed and never follow the pool, so they're excluded via
+  // isFbaListing. Neither fact expresses cleanly in SQL, so we fetch the following
+  // candidates + their stock and compute expected in JS.
+  const followingCandidates = await prisma.channelListing.findMany({
+    where: { followMasterQuantity: true },
+    select: {
+      id: true,
+      productId: true,
+      channel: true,
+      marketplace: true,
+      quantity: true,
+      stockBuffer: true,
+      fulfillmentMethod: true,
+      platformAttributes: true,
+      product: { select: { sku: true, totalStock: true, fulfillmentMethod: true } },
+    },
+    orderBy: { id: 'asc' },
+  })
+
+  const candidateProductIds = [...new Set(followingCandidates.map((c) => c.productId))]
+  const stockRows = candidateProductIds.length
+    ? await prisma.stockLevel.findMany({
+        where: { productId: { in: candidateProductIds } },
+        select: { productId: true, available: true, quantity: true, location: { select: { type: true } } },
+      })
+    : []
+  const warehouseAvailByProduct = new Map<string, number>()
+  const fbaQtyByProduct = new Map<string, number>()
+  for (const s of stockRows) {
+    if (s.location?.type === 'WAREHOUSE') {
+      warehouseAvailByProduct.set(s.productId, (warehouseAvailByProduct.get(s.productId) ?? 0) + s.available)
+    } else if (s.location?.type === 'AMAZON_FBA') {
+      fbaQtyByProduct.set(s.productId, (fbaQtyByProduct.get(s.productId) ?? 0) + s.quantity)
+    }
+  }
+
+  const qtyDrift: QuantityDriftRow[] = []
+  for (const cl of followingCandidates) {
+    const warehouseAvailable = warehouseAvailByProduct.get(cl.productId) ?? 0
+    const expected = expectedFollowingQuantity(
+      {
+        channel: cl.channel,
+        stockBuffer: cl.stockBuffer,
+        fulfillmentMethod: cl.fulfillmentMethod,
+        platformAttributes: cl.platformAttributes,
+        productFulfillmentMethod: cl.product?.fulfillmentMethod ?? null,
+      },
+      warehouseAvailable,
+      fbaQtyByProduct.get(cl.productId) ?? 0,
+    )
+    // expected === null ⇒ FBA (never flagged). A null listing.quantity is not a
+    // drift (matches the old SQL `!=` NULL semantics). Otherwise flag a mismatch.
+    if (expected === null || cl.quantity === null || cl.quantity === expected) continue
+    qtyDrift.push({
+      listing_id: cl.id,
+      product_id: cl.productId,
+      channel: cl.channel,
+      marketplace: cl.marketplace,
+      sku: cl.product?.sku ?? '',
+      listing_qty: cl.quantity,
+      total_stock: cl.product?.totalStock ?? 0,
+      warehouse_available: warehouseAvailable,
+      buffer: cl.stockBuffer ?? 0,
+      expected_qty: expected,
+    })
+  }
 
   for (const d of qtyDrift) {
     try {
@@ -196,10 +291,11 @@ export async function runSyncDriftDetection(): Promise<SyncDriftDetectionResult>
       await syncHealthService.logConflict({
         channel: d.channel,
         conflictType: 'INVENTORY_MISMATCH',
-        message: `Master quantity drift on ${d.sku} (${d.channel}/${d.marketplace}): listing=${d.listing_qty} expected=${d.expected_qty} (totalStock=${d.total_stock}, buffer=${d.buffer})`,
+        message: `Master quantity drift on ${d.sku} (${d.channel}/${d.marketplace}): listing=${d.listing_qty} expected=${d.expected_qty} (warehouseAvailable=${d.warehouse_available}, totalStock=${d.total_stock}, buffer=${d.buffer})`,
         productId: d.product_id,
         localData: {
           source: 'master',
+          warehouseAvailable: d.warehouse_available,
           totalStock: d.total_stock,
           buffer: d.buffer,
           expectedQty: d.expected_qty,

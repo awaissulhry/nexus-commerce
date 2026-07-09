@@ -114,9 +114,14 @@ export async function syncProductToEbay(
     let finalQuantity: number
 
     if (channelListing.followMasterQuantity !== false) {
-      finalQuantity = product.totalStock || 0
+      // FB-E — a FOLLOWING listing publishes pool − stockBuffer (matching the
+      // cascade's available-to-publish semantics). Dropping the buffer here would
+      // silently regress the oversell guard if this legacy builder were wired live.
+      finalQuantity = Math.max(0, (product.totalStock || 0) - (channelListing.stockBuffer ?? 0))
       logger.debug('📦 [EBAY] Using master quantity', {
         quantity: product.totalStock,
+        stockBuffer: channelListing.stockBuffer ?? 0,
+        finalQuantity,
       })
     } else {
       // ?? not ||: an override of 0 (operator wants the channel OFF) must

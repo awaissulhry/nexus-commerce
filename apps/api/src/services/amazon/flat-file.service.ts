@@ -837,6 +837,37 @@ export function isBlankFeedValue(val: unknown): boolean {
   return false
 }
 
+/**
+ * FB1 — the quantity/follow patch for a flat-file content save row.
+ *
+ * The Follow column owns the follow/pin flag. When the row carries a valid enum
+ * ('Follow' | 'Pinned'), the follow-apply endpoint (run right after the save)
+ * sets followMasterQuantity + quantityOverride coherently and skips FBA, so here
+ * we only write the quantity.
+ *
+ * A TRULY legacy client sends no Follow column at all (`follow` is undefined or
+ * null) — that path keeps the historical pin-on-qty behavior
+ * (followMasterQuantity:false), which the follow-apply endpoint then corrects.
+ *
+ * ANY OTHER value (pasted garbage, a typo like 'pinned'/'Following', or an empty
+ * string) is NO SIGNAL: write the quantity but NEVER touch followMasterQuantity.
+ * Previously such rows fell into the legacy branch and silently force-pinned a
+ * Following listing.
+ */
+export function buildFollowQuantityPatch(
+  follow: unknown,
+  qty: number | null,
+): { quantity?: number; followMasterQuantity?: boolean } {
+  if (qty === null || Number.isNaN(qty)) return {}
+  // Legacy client: the Follow column is entirely absent.
+  if (follow === undefined || follow === null) {
+    return { quantity: qty, followMasterQuantity: false }
+  }
+  // Follow column present. Only the exact enum is a real signal; every other
+  // string (including '') is treated as no signal → quantity only, no pin.
+  return { quantity: qty }
+}
+
 // RR.2 — build a grid row from the verbatim flat-file snapshot: the snapshot
 // (lossless content) with the live structured columns overlaid from the DB
 // (price/qty/title/desc/bullets, so repricer/stock changes show) + the internal
@@ -2595,11 +2626,7 @@ export class AmazonFlatFileService {
           // endpoint (POST /api/listings/follow-master-quantity, run right after the
           // save) sets followMasterQuantity + quantityOverride coherently and skips FBA.
           // Legacy rows with no Follow column keep the historical pin-on-qty behavior.
-          ...(qty !== null && !isNaN(qty)
-            ? (row.follow === 'Follow' || row.follow === 'Pinned'
-                ? { quantity: qty }
-                : { quantity: qty, followMasterQuantity: false })
-            : {}),
+          ...buildFollowQuantityPatch((row as Record<string, unknown>).follow, qty),
           // RR.1 — verbatim flat row (sans internal _ keys) for lossless grid
           // round-trip; structured fields above stay authoritative on read.
           // Normalize parentage_level to canonical 'parent'/'child' before storing

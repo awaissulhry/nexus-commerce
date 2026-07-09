@@ -25,6 +25,7 @@ import {
   resolveDispatchQuantity,
   applyOversellClamp,
 } from './outbound-sync.service.js'
+import { computeAvailableToPublish } from './available-to-publish.service.js'
 
 describe('Phase 0.1 — eBay sync payload helpers', () => {
   it('currency is EUR for EU sites, GBP for GB — never USD', () => {
@@ -246,5 +247,32 @@ describe('Phase 2 — applyOversellClamp', () => {
   })
   it('clamps to 0 when nothing is available', () => {
     expect(applyOversellClamp(5, 0)).toEqual({ quantity: 0, clamped: true })
+  })
+})
+
+// FB-E — the LIVE Amazon-FBM (syncToAmazon ~:751) and eBay-FBM (syncToEbay ~:874)
+// push paths cap the outgoing quantity to computeAvailableToPublish(...).available
+// — i.e. reserved-adjusted warehouse available MINUS stockBuffer — then run it
+// through applyOversellClamp. This locks that exact composition so a refactor
+// can't silently drop the buffer subtraction and reintroduce an oversell.
+describe('FB-E — live outbound push clamps by warehouse available − stockBuffer', () => {
+  const cap = (warehouseAvailable: number, stockBuffer: number) =>
+    computeAvailableToPublish({ fulfillmentMethod: 'FBM', warehouseAvailable, fbaSellable: 0, stockBuffer }).available
+
+  it('a request above available − buffer clamps down to available − buffer', () => {
+    const c = cap(10, 3) // warehouse 10 − buffer 3 = 7
+    expect(c).toBe(7)
+    expect(applyOversellClamp(10, c)).toEqual({ quantity: 7, clamped: true })
+  })
+  it('the buffer is subtracted even when the raw request fits the pool', () => {
+    // request 9 ≤ warehouse 10 but > available−buffer 7 → still clamped to 7.
+    expect(applyOversellClamp(9, cap(10, 3))).toEqual({ quantity: 7, clamped: true })
+  })
+  it('a request within available − buffer passes through untouched', () => {
+    expect(applyOversellClamp(5, cap(10, 3))).toEqual({ quantity: 5, clamped: false })
+  })
+  it('a buffer larger than the pool clamps the push to 0', () => {
+    expect(cap(2, 5)).toBe(0)
+    expect(applyOversellClamp(2, cap(2, 5))).toEqual({ quantity: 0, clamped: true })
   })
 })
