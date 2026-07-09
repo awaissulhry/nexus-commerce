@@ -31,6 +31,14 @@ export interface EbayColumn {
   readOnly?: boolean
   /** Whether this aspect can be used as a variation dimension in multi-SKU listings */
   variantEligible?: boolean
+  /** EFX P4 — category IDs whose loaded schema includes this aspect column.
+   *  Absent on static (non-aspect) columns and on ghost columns. */
+  applicableCategories?: string[]
+  /** EFX P4 — category IDs whose loaded schema marks this aspect REQUIRED. */
+  requiredForCategories?: string[]
+  /** EFX P4 — true on a ghost column (data exists on rows, aspect not in any
+   *  loaded category schema). */
+  ghost?: boolean
 }
 
 export interface EbayColumnGroup {
@@ -638,6 +646,161 @@ export function buildCategoryColumns(aspects: CategoryAspect[]): EbayColumnGroup
       variantEligible: a.variantEligible,
     })),
   }
+}
+
+// ── EFX P4 — multi-category union of Item Specifics groups ────────────
+
+/** Strip the trailing requirement/variant markers buildCategoryColumns appends. */
+function stripLabelMarkers(label: string): string {
+  return label.replace(/[\s*○↕⚠]+$/, '').trim()
+}
+
+/** Rebuild the label markers from the merged column's own flags. */
+function applyLabelMarkers(base: string, col: Pick<EbayColumn, 'required' | 'guidance' | 'variantEligible'>): string {
+  return base
+    + (col.required ? ' *' : col.guidance === 'RECOMMENDED' ? ' ○' : '')
+    + (col.variantEligible ? ' ↕' : '')
+}
+
+/** Prefer the mixed-case id (aspect_Colore) over the all-lowercase alias
+ *  (aspect_colore) — buildFlatRow emits both for variation axes. */
+function isBetterCasedId(candidate: string, current: string): boolean {
+  return candidate !== candidate.toLowerCase() && current === current.toLowerCase()
+}
+
+/**
+ * Merge the per-category Item Specifics groups of EVERY category present in
+ * the sheet into ONE union group. Never all-or-nothing: one category's schema
+ * failing to load must not drop another category's columns.
+ *
+ * Rules:
+ *  - columns dedup by id, folding dual-cased ids (aspect_Colore / aspect_colore)
+ *    by lowercase — the mixed-case variant wins as the canonical id/label
+ *  - required = ANY category requires it (requiredForCategories records which)
+ *  - options are unioned (Set, first-seen order preserved)
+ *  - enumMode widens to 'open' if any category is open
+ *  - kind conflicts widen: any enum → enum (open); otherwise text wins over number
+ *  - applicableCategories = every category whose schema contains the aspect
+ */
+export function mergeCategoryGroups(
+  entries: Array<{ categoryId: string; group: EbayColumnGroup }>,
+): EbayColumnGroup {
+  const byLower = new Map<string, EbayColumn>()
+  const order: string[] = []
+
+  for (const { categoryId, group } of entries) {
+    for (const col of group.columns) {
+      const lower = col.id.toLowerCase()
+      const existing = byLower.get(lower)
+      if (!existing) {
+        byLower.set(lower, {
+          ...col,
+          options: col.options ? [...col.options] : undefined,
+          applicableCategories: [categoryId],
+          requiredForCategories: col.required ? [categoryId] : [],
+        })
+        order.push(lower)
+        continue
+      }
+      // Fold into the existing union column.
+      if (isBetterCasedId(col.id, existing.id)) {
+        existing.id = col.id
+        existing.label = col.label
+      }
+      if (!existing.applicableCategories!.includes(categoryId)) {
+        existing.applicableCategories!.push(categoryId)
+      }
+      if (col.required) {
+        existing.required = true
+        if (!existing.requiredForCategories!.includes(categoryId)) {
+          existing.requiredForCategories!.push(categoryId)
+        }
+      }
+      // Guidance: strongest level wins (REQUIRED > RECOMMENDED > OPTIONAL).
+      const rank = (g?: string) => (g === 'REQUIRED' ? 2 : g === 'RECOMMENDED' ? 1 : 0)
+      if (rank(col.guidance) > rank(existing.guidance)) existing.guidance = col.guidance
+      // Options union (first-seen order, then new values appended).
+      if (col.options?.length) {
+        if (!existing.options) existing.options = []
+        const seen = new Set(existing.options)
+        for (const o of col.options) if (!seen.has(o)) { seen.add(o); existing.options.push(o) }
+      }
+      // Kind widening: any enum wins; otherwise text beats number (typing stays possible).
+      if (col.kind !== existing.kind) {
+        if (col.kind === 'enum' || existing.kind === 'enum') {
+          existing.kind = 'enum'
+          existing.enumMode = 'open' // conflicting kinds → never lock the picker
+        } else if (col.kind === 'text' || existing.kind === 'text') {
+          existing.kind = 'text'
+        }
+      }
+      // enumMode widens to open if ANY category is open.
+      if (existing.kind === 'enum' && (col.enumMode === 'open' || existing.enumMode === 'open')) {
+        existing.enumMode = 'open'
+      }
+      existing.variantEligible = existing.variantEligible || col.variantEligible
+      existing.multiValue = existing.multiValue || col.multiValue
+      existing.width = Math.max(existing.width, col.width)
+    }
+  }
+
+  const columns = order.map((lower) => {
+    const col = byLower.get(lower)!
+    return { ...col, label: applyLabelMarkers(stripLabelMarkers(col.label), col) }
+  })
+
+  return { id: 'item-specifics', label: 'Item Specifics', color: 'teal', columns }
+}
+
+// ── EFX P4 — ghost columns (row data outside every loaded schema) ─────
+
+export const GHOST_COLUMN_DESC =
+  'Not in any loaded category schema — data exists on rows'
+
+/**
+ * Stable serialization of the set of aspect_* keys carried by rows (keys with
+ * a non-empty value only). Folds dual-cased keys by lowercase, keeping the
+ * mixed-case variant as the representative. Sorted → the string only changes
+ * when the SET changes, so memos keyed on it don't churn per keystroke.
+ */
+export function computeAspectKeySignature(rows: Array<Record<string, unknown>>): string {
+  const byLower = new Map<string, string>() // lowercase → representative key
+  for (const row of rows) {
+    for (const [k, v] of Object.entries(row)) {
+      if (!k.startsWith('aspect_') || k === 'aspect_') continue
+      if (v === null || v === undefined || v === '') continue
+      const lower = k.toLowerCase()
+      const cur = byLower.get(lower)
+      if (!cur || isBetterCasedId(k, cur)) byLower.set(lower, k)
+    }
+  }
+  return JSON.stringify([...byLower.values()].sort())
+}
+
+/**
+ * Build editable ghost columns for aspect_* keys that carry row data but are
+ * absent from the union schema (category schema drifted, category failed to
+ * load, or legacy data). Never lets existing data become invisible.
+ */
+export function buildGhostAspectColumns(aspectKeys: string[], unionColumnIds: string[]): EbayColumn[] {
+  const unionLower = new Set(unionColumnIds.map((id) => id.toLowerCase()))
+  const byLower = new Map<string, string>()
+  for (const k of aspectKeys) {
+    if (!k.startsWith('aspect_') || k === 'aspect_') continue
+    const lower = k.toLowerCase()
+    if (unionLower.has(lower)) continue
+    const cur = byLower.get(lower)
+    if (!cur || isBetterCasedId(k, cur)) byLower.set(lower, k)
+  }
+  return [...byLower.values()].sort().map((key) => ({
+    id: key,
+    label: key.slice('aspect_'.length).replace(/_/g, ' ') + ' ⚠',
+    description: GHOST_COLUMN_DESC,
+    required: false,
+    kind: 'text' as EbayColumnKind,
+    width: 140,
+    ghost: true,
+  }))
 }
 
 // ── Flat column list (for iteration) ──────────────────────────────────

@@ -19,6 +19,9 @@ interface Props {
   onSelect: (market: string) => void
   /** market → count of unsaved changes (renders an amber badge). */
   dirtyCounts?: Record<string, number>
+  /** EFX P4 — markets whose rows carry data (price/qty/item id); INACTIVE
+   *  chips in this list show a small dot ("Has data — switch to view"). */
+  dataMarkets?: string[]
   /** market currently (re)loading — shows a spinner on that chip. */
   loadingMarket?: string | null
   /** Bind Alt+1..N to the first nine markets (default true). */
@@ -31,6 +34,7 @@ export function FlatFileMarketStrip({
   active,
   onSelect,
   dirtyCounts = {},
+  dataMarkets = [],
   loadingMarket = null,
   enableShortcuts = true,
   label = 'Market',
@@ -59,6 +63,8 @@ export function FlatFileMarketStrip({
           const isActive = active === m
           const isLoading = loadingMarket === m
           const dirty = dirtyCounts[m] ?? 0
+          // EFX P4 — inactive markets whose rows carry data get a small dot.
+          const hasData = !isActive && dataMarkets.includes(m)
           const hint = enableShortcuts && idx < 9 ? ` (Alt+${idx + 1})` : ''
           return (
             <button
@@ -66,8 +72,10 @@ export function FlatFileMarketStrip({
               type="button"
               onClick={() => { if (!isActive) onSelect(m) }}
               aria-pressed={isActive}
-              aria-label={`Switch to ${m} marketplace${hint}${dirty > 0 ? ` (${dirty} unsaved)` : ''}`}
-              title={`${m} marketplace${hint}${dirty > 0 ? ` — ${dirty} unsaved change${dirty === 1 ? '' : 's'}` : ''}`}
+              aria-label={`Switch to ${m} marketplace${hint}${dirty > 0 ? ` (${dirty} unsaved)` : ''}${hasData ? ' (has data)' : ''}`}
+              title={hasData
+                ? `${m} marketplace${hint} — Has data — switch to view`
+                : `${m} marketplace${hint}${dirty > 0 ? ` — ${dirty} unsaved change${dirty === 1 ? '' : 's'}` : ''}`}
               className={cn(
                 'inline-flex items-center text-xs font-medium px-2 py-0.5 rounded border transition-colors',
                 isActive
@@ -77,6 +85,12 @@ export function FlatFileMarketStrip({
             >
               {isLoading && <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" aria-hidden />}
               {m}
+              {hasData && (
+                <span
+                  className="ml-1 w-1.5 h-1.5 rounded-full bg-blue-500 dark:bg-blue-400 shrink-0"
+                  aria-hidden
+                />
+              )}
               {dirty > 0 && (
                 <span className="ml-1 inline-flex items-center justify-center min-w-[14px] h-3.5 px-1 rounded-sm bg-amber-500 text-white text-[9px] font-semibold leading-none">
                   {dirty}

@@ -54,7 +54,14 @@ export function AspectsPanel({ open, row, categoryGroup, onSave, onClose }: Prop
     onClose()
   }
 
-  const cleanLabel = (raw: string) => raw.replace(/[\s*○↕]+$/, '').trim()
+  const cleanLabel = (raw: string) => raw.replace(/[\s*○↕⚠]+$/, '').trim()
+
+  // EFX P4 — per-row applicability: the union group carries EVERY sheet
+  // category's aspects; ones outside this row's category get a muted note
+  // (same check the grid's not-applicable cell graying uses).
+  const rowCategory = String((row as any)?.category_id ?? '').trim()
+  const isNotApplicable = (c: { applicableCategories?: string[] }) =>
+    Boolean(c.applicableCategories?.length && rowCategory && !c.applicableCategories.includes(rowCategory))
 
   return (
     <Drawer
@@ -72,21 +79,21 @@ export function AspectsPanel({ open, row, categoryGroup, onSave, onClose }: Prop
         {required.length > 0 && (
           <Section label="Required" indicator={<span className="text-red-500">*</span>}>
             {required.map((col) => (
-              <AspectField key={col.id} col={col} value={values[col.id] ?? ''} onChange={(v) => setValue(col.id, v)} cleanLabel={cleanLabel} />
+              <AspectField key={col.id} col={col} value={values[col.id] ?? ''} onChange={(v) => setValue(col.id, v)} cleanLabel={cleanLabel} notApplicable={isNotApplicable(col)} />
             ))}
           </Section>
         )}
         {recommended.length > 0 && (
           <Section label="Recommended" indicator={<span className="text-amber-500">○</span>}>
             {recommended.map((col) => (
-              <AspectField key={col.id} col={col} value={values[col.id] ?? ''} onChange={(v) => setValue(col.id, v)} cleanLabel={cleanLabel} />
+              <AspectField key={col.id} col={col} value={values[col.id] ?? ''} onChange={(v) => setValue(col.id, v)} cleanLabel={cleanLabel} notApplicable={isNotApplicable(col)} />
             ))}
           </Section>
         )}
         {optional.length > 0 && (
           <Section label="Optional">
             {optional.map((col) => (
-              <AspectField key={col.id} col={col} value={values[col.id] ?? ''} onChange={(v) => setValue(col.id, v)} cleanLabel={cleanLabel} />
+              <AspectField key={col.id} col={col} value={values[col.id] ?? ''} onChange={(v) => setValue(col.id, v)} cleanLabel={cleanLabel} notApplicable={isNotApplicable(col)} />
             ))}
           </Section>
         )}
@@ -115,20 +122,28 @@ function AspectField({
   value,
   onChange,
   cleanLabel,
+  notApplicable = false,
 }: {
-  col: { id: string; label: string; kind: string; options?: string[]; enumMode?: string; multiValue?: boolean; required?: boolean; guidance?: string }
+  col: { id: string; label: string; kind: string; options?: string[]; enumMode?: string; multiValue?: boolean; required?: boolean; guidance?: string; applicableCategories?: string[] }
   value: string
   onChange: (v: string) => void
   cleanLabel: (l: string) => string
+  /** EFX P4 — aspect belongs to another sheet category, not this row's. */
+  notApplicable?: boolean
 }) {
   const label = cleanLabel(col.label)
   const isRequired = col.required || col.guidance === 'REQUIRED'
 
   return (
-    <div className="group">
+    <div className={cn('group', notApplicable && 'opacity-60')}>
       <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
         {label}
-        {isRequired && <span className="ml-0.5 text-red-500">*</span>}
+        {isRequired && !notApplicable && <span className="ml-0.5 text-red-500">*</span>}
+        {notApplicable && (
+          <span className="ml-1.5 text-[10px] font-normal text-slate-400 dark:text-slate-500">
+            not applicable to this row&rsquo;s category
+          </span>
+        )}
       </label>
 
       {col.options?.length ? (

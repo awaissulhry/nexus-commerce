@@ -41,8 +41,9 @@ import { FlatFileAiPanel } from '../_shared/FlatFileAiPanel'
 import type { AiPanelCtx } from '@/components/flat-file/FlatFileGrid.types'
 import {
   EBAY_FIXED_GROUPS, MARKET_COLUMN_GROUPS, buildCategoryColumns,
+  mergeCategoryGroups, buildGhostAspectColumns, computeAspectKeySignature,
   EBAY_CONDITION_LABELS, EBAY_MARKETPLACES,
-  type CategoryAspect, type EbayColumnGroup,
+  type CategoryAspect, type EbayColumn, type EbayColumnGroup,
 } from './ebay-columns'
 import { FlatFileMarketStrip } from '@/components/flat-file/FlatFileMarketStrip'
 import { PullDiffModal, type PullDiffApplyResult } from '../amazon-flat-file/PullDiffModal'
@@ -412,26 +413,65 @@ const VARIANT_NOT_NEEDED = new Set([
 
 function computeRowCompleteness(
   row: BaseRow,
-  groups: Array<{ columns: Array<{ id: string; label: string; required?: boolean; readOnly?: boolean }> }>,
+  groups: Array<{ columns: Array<{ id: string; label: string; required?: boolean; readOnly?: boolean; applicableCategories?: string[]; requiredForCategories?: string[] }> }>,
 ): { filled: number; total: number; missing: Array<{ id: string; label: string }> } {
   const er = row as EbayRow
   const isVariant = er._isParent === false
   const isParent  = er._isParent === true
+  // EFX P4 — category-aware requiredness: an aspect column only counts as
+  // required for THIS row when the row's category is one that requires it.
+  const rowCat = String(er.category_id ?? '').trim()
   const missing: Array<{ id: string; label: string }> = []
   let total = 0, filled = 0
   for (const group of groups) {
     for (const col of group.columns) {
-      if (!col.required || col.readOnly) continue
+      if (col.readOnly) continue
+      if (col.id.startsWith('aspect_')) {
+        // Not part of this row's category at all → never counted.
+        if (col.applicableCategories?.length && rowCat && !col.applicableCategories.includes(rowCat)) continue
+        // Category tags present → required only for the categories that require it;
+        // tags absent (static/ghost column, or row without a category) → col.required.
+        const isReq = col.requiredForCategories?.length && rowCat
+          ? col.requiredForCategories.includes(rowCat)
+          : col.required
+        if (!isReq) continue
+      } else if (!col.required) continue
       if (isParent && (PARENT_NOT_NEEDED.has(col.id) || /^(it|de|fr|es|uk)_(price|qty)$/.test(col.id))) continue
       if (isVariant && VARIANT_NOT_NEEDED.has(col.id)) continue
       total++
       const val = (row as any)[col.id]
       const isEmpty = val === null || val === undefined || val === ''
       if (!isEmpty) filled++
-      else missing.push({ id: col.id, label: col.label.replace(/[\s*○↕]+$/, '').trim() })
+      else missing.push({ id: col.id, label: col.label.replace(/[\s*○↕⚠]+$/, '').trim() })
     }
   }
   return { filled, total, missing }
+}
+
+// ── EFX P4 — helpers for multi-category schema + market-data dots ──────────
+
+/** Distinct non-empty category IDs across the sheet (drafts included when the
+ *  caller passes merged rows). */
+function collectCategoryIds(rows: Array<Record<string, unknown>>): string[] {
+  return [...new Set(rows.map((r) => String(r.category_id ?? '').trim()).filter(Boolean))]
+}
+
+/** Markets whose rows carry any data ({mp}_price / {mp}_qty / {mp}_item_id
+ *  non-empty). Returns a stable sorted signature like "DE,IT". */
+function computeMarketDataSignature(rows: Array<Record<string, unknown>>): string {
+  const found = new Set<string>()
+  for (const row of rows) {
+    for (const mp of EBAY_MARKETPLACES) {
+      if (found.has(mp)) continue
+      const p = mp.toLowerCase()
+      for (const suffix of ['price', 'qty', 'item_id']) {
+        const v = row[`${p}_${suffix}`]
+        if (v !== null && v !== undefined && v !== '') { found.add(mp); break }
+      }
+    }
+    if (found.size === EBAY_MARKETPLACES.length) break
+  }
+  return [...found].sort().join(',')
 }
 
 // ── P2.D2 — Delete intent derivation + confirm modal ──────────────────────
@@ -684,18 +724,34 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   })
 
   // ── Category schema state (drives columnGroups) ────────────────────────
+  // EFX P4 — per-category groups are cached individually and merged into ONE
+  // union Item Specifics group (never all-or-nothing: one category failing to
+  // load must not drop another category's columns).
   const [categoryColumnsCache, setCategoryColumnsCache] = useState<Map<string, EbayColumnGroup>>(new Map())
-  const [categoryColumns, setCategoryColumns] = useState<EbayColumnGroup | null>(null)
-  // FF-EN.2 — the loaded category's allowed conditions (Inventory enum + label)
+  // Distinct category IDs currently present on the sheet's rows.
+  const [activeCategoryIds, setActiveCategoryIds] = useState<string[]>([])
+  // FF-EN.2 — allowed conditions, unioned across every loaded category
   const [conditionOptions, setConditionOptions] = useState<Array<{ value: string; label: string }>>([])
   const conditionsCacheRef = useRef<Map<string, Array<{ value: string; label: string }>>>(new Map())
-  // FF-EN.3 — the loaded category's variant-eligible axis names (for the
-  // Variation Theme multi-picker). English name preferred to match the
+  // FF-EN.3 — variant-eligible axis names, unioned across every loaded category
+  // (for the Variation Theme multi-picker). English name preferred to match the
   // canonical "Size,Color" theme convention.
   const [variantAxisNames, setVariantAxisNames] = useState<string[]>([])
   const variantAxisCacheRef = useRef<Map<string, string[]>>(new Map())
   const [categoryLoading, setCategoryLoading] = useState(false)
-  const [categorySchemaError, setCategorySchemaError] = useState<string | null>(null)
+  // EFX P4 — per-category load failures (categoryId → message); the banner
+  // names ONLY the failed categories, the rest keep rendering.
+  const [categorySchemaErrors, setCategorySchemaErrors] = useState<Record<string, string>>({})
+  // EFX P4.5 — categories served from the durable stored copy (eBay unreachable).
+  const staleCategoriesRef = useRef<Set<string>>(new Set())
+  const [staleSchemaCategories, setStaleSchemaCategories] = useState<string[]>([])
+  // EFX P4 — ghost columns: stable signature of the aspect_* key set present on
+  // rows (recomputed only when the SET changes, never per keystroke) + the
+  // markets whose rows carry data (drives the market-strip dots).
+  const aspectSigRef = useRef<string>('')
+  const [ghostAspectSig, setGhostAspectSig] = useState<string>('[]')
+  const marketDataSigRef = useRef<string>('')
+  const [marketsWithData, setMarketsWithData] = useState<string>('')
 
   // ── Business policies (fulfillment / payment / return) ─────────────────
   const [policyOptions, setPolicyOptions] = useState<{
@@ -795,6 +851,33 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketplace])
 
+  // ── EFX P4 — union Item Specifics group + ghost columns ────────────────
+  // The union merges EVERY loaded category's aspect columns (dedup by
+  // lowercase id, required = any category requires, options unioned).
+  const categoryUnionGroup = useMemo(() => {
+    const entries = activeCategoryIds
+      .filter((id) => categoryColumnsCache.has(id))
+      .map((id) => ({ categoryId: id, group: categoryColumnsCache.get(id)! }))
+    return entries.length ? mergeCategoryGroups(entries) : null
+  }, [activeCategoryIds, categoryColumnsCache])
+
+  // Ghost columns: aspect_* keys with row data that no loaded schema knows.
+  // Keyed on the stable signature — recomputes when the key SET changes only.
+  const ghostAspectColumns = useMemo(() => {
+    let keys: string[] = []
+    try { keys = JSON.parse(ghostAspectSig) as string[] } catch { keys = [] }
+    return buildGhostAspectColumns(keys, categoryUnionGroup?.columns.map((c) => c.id) ?? [])
+  }, [ghostAspectSig, categoryUnionGroup])
+
+  // The rendered Item Specifics group: union + ghosts. Present whenever EITHER
+  // is non-empty — dynamic eBay columns can never all vanish because one
+  // category schema failed to load.
+  const itemSpecificsGroup = useMemo((): EbayColumnGroup | null => {
+    if (!categoryUnionGroup && ghostAspectColumns.length === 0) return null
+    const base = categoryUnionGroup ?? { id: 'item-specifics', label: 'Item Specifics', color: 'teal', columns: [] as EbayColumn[] }
+    return ghostAspectColumns.length ? { ...base, columns: [...base.columns, ...ghostAspectColumns] } : base
+  }, [categoryUnionGroup, ghostAspectColumns])
+
   // Inject policy IDs as enum options into the Policies column group,
   // and (FF-EN.2) narrow the Condition column to the category's allowed set.
   const columnGroups = useMemo(() => {
@@ -858,13 +941,16 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     // all markets if the active one has no group (shouldn't happen).
     const activeMarketGroups = MARKET_COLUMN_GROUPS.filter((g) => g.id === `market-${marketplace}`)
     const marketGroups = activeMarketGroups.length ? activeMarketGroups : MARKET_COLUMN_GROUPS
-    const base = patch([...EBAY_FIXED_GROUPS, ...marketGroups])
-    return categoryColumns ? [
+    // EFX P4 — the Item Specifics group renders whenever the union OR the
+    // ghost columns are non-empty (never the old all-or-nothing null branch
+    // that made every dynamic column vanish on a single schema failure).
+    if (!itemSpecificsGroup) return patch([...EBAY_FIXED_GROUPS, ...marketGroups])
+    return [
       ...patch(EBAY_FIXED_GROUPS),
-      categoryColumns,
+      itemSpecificsGroup,
       ...patch(marketGroups),
-    ] : base
-  }, [categoryColumns, policyOptions, conditionOptions, variantAxisNames, marketplace])
+    ]
+  }, [itemSpecificsGroup, policyOptions, conditionOptions, variantAxisNames, marketplace])
 
   // ── Shared flat-file core (columns modal state, filter state) ─────────
   // initialGroups: the static base groups without category columns or policy
@@ -890,47 +976,88 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   }, [columnGroups, setCoreColumnGroups])
 
   // ── Category schema loading ────────────────────────────────────────────
+  // EFX P4 — loads ALL of the sheet's categories (union manifest). One failed
+  // category never drops the others: fetches run via Promise.allSettled, each
+  // failure is recorded per-category, and every fulfilled schema still lands.
 
-  const loadCategorySchema = useCallback(async (categoryId: string) => {
-    if (!categoryId) { setCategoryColumns(null); setConditionOptions([]); setVariantAxisNames([]); return }
-    if (categoryColumnsCache.has(categoryId)) {
-      setCategoryColumns(categoryColumnsCache.get(categoryId)!)
-      setConditionOptions(conditionsCacheRef.current.get(categoryId) ?? [])
-      setVariantAxisNames(variantAxisCacheRef.current.get(categoryId) ?? [])
+  const loadCategorySchemas = useCallback(async (categoryIds: string[]) => {
+    const ids = [...new Set(categoryIds.map((s) => String(s).trim()).filter(Boolean))]
+    setActiveCategoryIds(ids)
+    if (ids.length === 0) {
+      setConditionOptions([]); setVariantAxisNames([]); setCategorySchemaErrors({}); setStaleSchemaCategories([])
       return
     }
-    setCategoryLoading(true)
-    try {
+
+    const toFetch = ids.filter((id) => !categoryColumnsCache.has(id))
+    const failures: Record<string, string> = {}
+    if (toFetch.length > 0) {
+      setCategoryLoading(true)
       const mpId = marketplace.startsWith('EBAY_') ? marketplace : `EBAY_${marketplace}`
-      const res  = await fetch(`${BACKEND}/api/ebay/flat-file/category-schema?categoryId=${encodeURIComponent(categoryId)}&marketplace=${mpId}`)
-      if (!res.ok) { setCategorySchemaError("Couldn't load the eBay category schema — Item Specifics / variation columns are hidden. Check the eBay connection or the Category ID."); return }
-      const json  = await res.json() as { aspects: CategoryAspect[]; conditions?: Array<{ value: string; label: string }> }
-      const group = buildCategoryColumns(json.aspects)
-      const conds = json.conditions ?? []
-      // Variant-eligible axis names — prefer the English name in "Name (English)".
-      const axisNames = json.aspects
-        .filter((a) => a.variantEligible)
-        .map((a) => a.label.match(/\(([^)]+)\)\s*$/)?.[1] ?? a.label)
-      setCategoryColumnsCache((prev) => new Map(prev).set(categoryId, group))
-      conditionsCacheRef.current.set(categoryId, conds)
-      variantAxisCacheRef.current.set(categoryId, axisNames)
-      setCategoryColumns(group)
-      setConditionOptions(conds)
-      setVariantAxisNames(axisNames)
-      setCategorySchemaError(null)
-    } catch { setCategorySchemaError("Couldn't load the eBay category schema — Item Specifics / variation columns are hidden. Check the eBay connection or the Category ID.") }
-    finally { setCategoryLoading(false) }
+      const settled = await Promise.allSettled(toFetch.map(async (categoryId) => {
+        const res = await fetch(`${BACKEND}/api/ebay/flat-file/category-schema?categoryId=${encodeURIComponent(categoryId)}&marketplace=${mpId}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const json = await res.json() as { aspects: CategoryAspect[]; conditions?: Array<{ value: string; label: string }>; staleSchema?: boolean }
+        return { categoryId, json }
+      }))
+      const fetched: Array<{ categoryId: string; group: EbayColumnGroup }> = []
+      for (let i = 0; i < settled.length; i++) {
+        const r = settled[i]
+        if (r.status === 'rejected') {
+          failures[toFetch[i]] = r.reason instanceof Error ? r.reason.message : String(r.reason)
+          continue
+        }
+        const { categoryId, json } = r.value
+        fetched.push({ categoryId, group: buildCategoryColumns(json.aspects ?? []) })
+        conditionsCacheRef.current.set(categoryId, json.conditions ?? [])
+        // Variant-eligible axis names — prefer the English name in "Name (English)".
+        variantAxisCacheRef.current.set(categoryId, (json.aspects ?? [])
+          .filter((a) => a.variantEligible)
+          .map((a) => a.label.match(/\(([^)]+)\)\s*$/)?.[1] ?? a.label))
+        // EFX P4.5 — schema served from the durable stored copy (eBay down).
+        if (json.staleSchema) staleCategoriesRef.current.add(categoryId)
+        else staleCategoriesRef.current.delete(categoryId)
+      }
+      if (fetched.length > 0) {
+        setCategoryColumnsCache((prev) => {
+          const next = new Map(prev)
+          for (const f of fetched) next.set(f.categoryId, f.group)
+          return next
+        })
+      }
+      setCategoryLoading(false)
+    }
+    setCategorySchemaErrors(failures)
+    setStaleSchemaCategories(ids.filter((id) => staleCategoriesRef.current.has(id)))
+
+    // Union the per-category conditions + variant axes across ACTIVE categories.
+    const condSeen = new Set<string>()
+    const conds: Array<{ value: string; label: string }> = []
+    const axisSeen = new Set<string>()
+    const axes: string[] = []
+    for (const id of ids) {
+      for (const c of conditionsCacheRef.current.get(id) ?? []) {
+        if (!condSeen.has(c.value)) { condSeen.add(c.value); conds.push(c) }
+      }
+      for (const a of variantAxisCacheRef.current.get(id) ?? []) {
+        const k = a.toLowerCase()
+        if (!axisSeen.has(k)) { axisSeen.add(k); axes.push(a) }
+      }
+    }
+    setConditionOptions(conds)
+    setVariantAxisNames(axes)
   }, [marketplace, categoryColumnsCache, BACKEND])
 
-  // Auto-load the category schema on mount from the rows' own category, so
-  // the category-driven columns (Variation Theme axis names, item-specifics
-  // aspects, narrowed Condition) show their dropdowns immediately instead of
-  // only after the operator clicks into the Category cell.
+  // Auto-load every category schema once rows are ready, so the category-driven
+  // columns (Variation Theme axis names, item-specifics aspects, narrowed
+  // Condition) show immediately instead of only after a Category cell click.
+  // EFX P4 — union across ALL distinct categories (was: first row's category wins).
   useEffect(() => {
-    const cat = initialRows.find((r) => r.category_id)?.category_id
-    if (cat) void loadCategorySchema(String(cat))
+    if (!rowsReady) return
+    const source = clientRows.length ? clientRows : initialRows
+    const ids = collectCategoryIds(source as Array<Record<string, unknown>>)
+    if (ids.length) void loadCategorySchemas(ids)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [rowsReady])
 
   // ── API: reload ────────────────────────────────────────────────────────
 
@@ -955,11 +1082,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     }
 
     _ebay_swr.set(ebayKey, { rows, fetchedAt: Date.now() })
-    // Re-derive the category-driven columns (Item Specifics / Variation axes) from the
-    // reloaded rows, so a saved Category ID keeps its columns after an in-app reload —
-    // the mount-only effect elsewhere only sees the initial SSR rows, not these fresh ones.
-    const reloadedCat = rows.find((r) => (r as EbayRow).category_id)?.category_id as string | undefined
-    if (reloadedCat) void loadCategorySchema(String(reloadedCat))
 
     // FFP.1 — restore pending drafts exactly once per mount / market switch.
     // Explicit "Discard" / "Reload from server" leave the flag false, so those
@@ -974,12 +1096,19 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             draftNoticeShownRef.current = true
             setDraftNotice({ count: restored })
           }
+          // EFX P4 — re-derive category columns from the MERGED rows (drafts
+          // included), all distinct categories, so saved Category IDs keep
+          // their columns after an in-app reload.
+          void loadCategorySchemas(collectCategoryIds(merged as Array<Record<string, unknown>>))
           return merged
         }
       }
     }
+    // EFX P4 — union across every category on the reloaded rows (was: the
+    // first row's category only).
+    void loadCategorySchemas(collectCategoryIds(rows as Array<Record<string, unknown>>))
     return rows
-  }, [familyId, BACKEND, ebayKey, savedErrorRows, loadCategorySchema])
+  }, [familyId, BACKEND, ebayKey, savedErrorRows, loadCategorySchemas])
 
   // ── FFP.5 — real-time grid refresh ─────────────────────────────────────
   // Reload the MOUNTED grid (via the grid's own loadData handle) while
@@ -1630,13 +1759,20 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   }
 
   // ── onCellChange: trigger category schema load ─────────────────────────
+  // EFX P4 — recompute the FULL category list (union), replacing the old
+  // last-edit-wins single-category load. The grid's rows state may not yet
+  // include this edit, so exclude the edited row's old value and add the new.
 
   const onCellChange = useCallback((rowId: string, colId: string, value: unknown) => {
-    void rowId
     if (colId === 'category_id' && typeof value === 'string') {
-      void loadCategorySchema(value)
+      const others = (latestRowsRef.current as Array<Record<string, unknown>>)
+        .filter((r) => r._rowId !== rowId)
+      const ids = collectCategoryIds(others)
+      const v = value.trim()
+      if (v) ids.push(v)
+      void loadCategorySchemas(ids)
     }
-  }, [loadCategorySchema])
+  }, [loadCategorySchemas])
 
   // ── Market link URLs ───────────────────────────────────────────────────
   const MARKET_URLS: Record<string, string> = {
@@ -1839,13 +1975,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       return true
     }
     // EFF.4 — Item Specifics aspects: open structured panel instead of inline editor
-    if (col.id.startsWith('aspect_') && categoryColumns) {
+    if (col.id.startsWith('aspect_') && itemSpecificsGroup) {
       setAspectsPanelRowId(row._rowId)
       return true
     }
     return false
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryColumns])
+  }, [itemSpecificsGroup])
 
   // ── Listing guidance ──────────────────────────────────────────────────
   const getCellGuidance = useCallback((col: FlatFileColumn, row: BaseRow): 'not-applicable' | 'optional' | null => {
@@ -1872,8 +2008,16 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       const enabled = row.best_offer_enabled === true || row.best_offer_enabled === 'true'
       if (!enabled) return 'not-applicable'
     }
-    // Item specifics: use guidance from eBay category API
-    if (col.id.startsWith('aspect_') && col.guidance === 'OPTIONAL') return 'optional'
+    // Item specifics: per-row applicability + guidance from eBay category API
+    if (col.id.startsWith('aspect_')) {
+      // EFX P4 — an aspect column that belongs to OTHER categories' schemas is
+      // not applicable to a row whose category doesn't include it (union grid:
+      // every category's columns show, only the relevant ones apply per row).
+      const ac = (col as { applicableCategories?: string[] }).applicableCategories
+      const rowCat = String(er.category_id ?? '').trim()
+      if (ac?.length && rowCat && !ac.includes(rowCat)) return 'not-applicable'
+      if (col.guidance === 'OPTIONAL') return 'optional'
+    }
     return null
   }, [familyParentIds])
 
@@ -2013,7 +2157,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // Task 4 — also show a muted "Showing SKUs listed on eBay / Show all products" cue when scoped.
   const renderFeedBanner = useCallback(() => {
     const hasCue = scope === 'listed' && !familyId
-    if (!draftNotice && !hasCue && !categorySchemaError) return null
+    const failedCategories = Object.keys(categorySchemaErrors)
+    if (!draftNotice && !hasCue && failedCategories.length === 0 && staleSchemaCategories.length === 0) return null
     return (
       <>
         {draftNotice && (
@@ -2045,14 +2190,23 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             </button>
           </div>
         )}
-        {categorySchemaError && (
-          <Banner tone="danger" onDismiss={() => setCategorySchemaError(null)}>
-            {categorySchemaError}
+        {failedCategories.length > 0 && (
+          <Banner tone="danger" onDismiss={() => setCategorySchemaErrors({})}>
+            Couldn&rsquo;t load the eBay schema for categor{failedCategories.length === 1 ? 'y' : 'ies'}{' '}
+            {failedCategories.join(', ')} — {failedCategories.length === 1 ? 'its' : 'their'} Item Specifics
+            columns may be incomplete. Columns from the other categories (and any existing row data) are
+            still shown. Check the eBay connection or the Category ID.
           </Banner>
+        )}
+        {staleSchemaCategories.length > 0 && (
+          <div className="flex items-center gap-1 px-4 py-1 text-xs text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
+            Schema for categor{staleSchemaCategories.length === 1 ? 'y' : 'ies'} {staleSchemaCategories.join(', ')} is
+            served from a saved copy — eBay couldn&rsquo;t be reached. Columns stay visible; options may be slightly out of date.
+          </div>
         )}
       </>
     )
-  }, [scope, familyId, categorySchemaError, draftNotice, marketplace])
+  }, [scope, familyId, categorySchemaErrors, staleSchemaCategories, draftNotice, marketplace])
 
   // ── Slot: fetch button ─────────────────────────────────────────────────
 
@@ -2228,6 +2382,21 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     {
       const k = draftKey(marketplaceRef.current, familyId)
       draftTimerRef.current = setTimeout(() => { writeDraft(k, latestRowsRef.current) }, 400)
+    }
+
+    // EFX P4 — aspect-key + market-data signatures. This slot re-renders on
+    // every rows change (same signal the draft autosave uses); the signatures
+    // are stable serializations, so state only updates — and the ghost-column
+    // memo / market-strip dots only recompute — when the SET changes, never
+    // per keystroke. setState is deferred out of the render pass.
+    {
+      const sig = computeAspectKeySignature(rows as Array<Record<string, unknown>>)
+      const mSig = computeMarketDataSignature(rows as Array<Record<string, unknown>>)
+      if (sig !== aspectSigRef.current || mSig !== marketDataSigRef.current) {
+        aspectSigRef.current = sig
+        marketDataSigRef.current = mSig
+        setTimeout(() => { setGhostAspectSig(sig); setMarketsWithData(mSig) }, 0)
+      }
     }
 
     // ── sheetParents (DRY) — single derivation reused by AddListingPopover and Move-to-parent ──
@@ -2566,8 +2735,14 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── Slot: Bar3 left ────────────────────────────────────────────────────
 
   const renderBar3Left = useCallback(() => (
-    <FlatFileMarketStrip markets={EBAY_MARKETPLACES} active={marketplace} onSelect={handleMarketSwitch} />
-  ), [marketplace, handleMarketSwitch])
+    <FlatFileMarketStrip
+      markets={EBAY_MARKETPLACES}
+      active={marketplace}
+      onSelect={handleMarketSwitch}
+      // EFX P4 — dot on inactive markets whose rows carry data (price/qty/item id)
+      dataMarkets={marketsWithData ? marketsWithData.split(',') : []}
+    />
+  ), [marketplace, handleMarketSwitch, marketsWithData])
 
   // ── Slot: modals ───────────────────────────────────────────────────────
 
@@ -2578,11 +2753,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     const parentProductId = String(parentRow?._productId ?? parentRow?.platformProductId ?? familyId ?? '')
     return (
       <>
-        {/* EFF.4 — Aspects side panel */}
+        {/* EFF.4 — Aspects side panel (EFX P4 — union group incl. ghost columns) */}
         <AspectsPanel
           open={aspectsPanelRowId !== null}
           row={aspectsRow}
-          categoryGroup={categoryColumns}
+          categoryGroup={itemSpecificsGroup}
           onSave={(rowId, values) => {
             const next = rows.map((r) => r._rowId === rowId ? { ...r, ...values, _dirty: true } : r)
             pushHistory(next)
@@ -2610,7 +2785,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                 const next = rows.map((r) => r._rowId === categorySearchRowId ? { ...r, category_id: id, _dirty: true } : r)
                 pushHistory(next)
                 setRows(next)
-                void loadCategorySchema(id)
+                // EFX P4 — union across ALL categories on the updated rows
+                void loadCategorySchemas(collectCategoryIds(next as Array<Record<string, unknown>>))
               }
             }}
             onClose={() => { setCategorySearchOpen(false); setCategorySearchRowId(null) }}
@@ -2662,7 +2838,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       </>
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [descModal, categorySearchOpen, categorySearchRowId, marketplace, loadCategorySchema, pullDiffData, pullDiffOpen, makePullDiffApplyHandler, aspectsPanelRowId, categoryColumns, valueOrderOpen, familyId, importWizardOpen, importInitialFile, exportColumns, handleImport])
+  }, [descModal, categorySearchOpen, categorySearchRowId, marketplace, loadCategorySchemas, pullDiffData, pullDiffOpen, makePullDiffApplyHandler, aspectsPanelRowId, itemSpecificsGroup, valueOrderOpen, familyId, importWizardOpen, importInitialFile, exportColumns, handleImport])
 
   // ── Group key for eBay variations ──────────────────────────────────────
   // Mirrors server ebayFamilyKey (ebay-flat-file-create.logic.ts:255):
