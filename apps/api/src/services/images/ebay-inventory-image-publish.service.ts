@@ -25,6 +25,7 @@ import {
   type Market,
 } from '../ebay-variation-push.service.js'
 import { logger } from '../../utils/logger.js'
+import { resolveImagePictureAxis } from './ebay-image-axis.pure.js'
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
 
@@ -37,6 +38,18 @@ export interface EbayInventoryPublishResult {
   error?: string
   markets?: string[]
   results?: Array<{ sku: string; market: string; status: string; message: string }>
+  // EFX P5 — resolved-axis feedback (additive). The modal compares these with
+  // the axis the operator requested and warns visibly on any divergence.
+  /** activeAxis → stored imageAxisPreference → 'Color' ('__shared__' = explicit shared gallery). */
+  requestedAxis?: string
+  /** The axis pictures actually vary/curate by; null = explicit shared gallery. */
+  pictureAxis?: string | null
+  /** The axes the family REALLY varies by (>1 distinct value). */
+  realAxes?: string[]
+  /** Published as ONE listing-level gallery (aspectsImageVariesBy omitted). */
+  sharedGallery?: boolean
+  /** Truncation / axis-resolution warnings from the push (never silent). */
+  warnings?: string[]
 }
 
 export async function publishEbayImagesViaInventory(
@@ -166,26 +179,13 @@ export async function publishEbayImagesViaInventory(
     }
     return [...found.values()]
   })()
-  const multiAxes = axisInfo.filter((a) => a.values.size > 1).map((a) => a.label)
-  const requestedAxis = activeAxis?.trim() || product.imageAxisPreference || 'Color'
-  const matchedMulti = multiAxes.find((a) => axisSynonymKey(a) === axisSynonymKey(requestedAxis))
-  const matchedAny = axisInfo.find((a) => axisSynonymKey(a.label) === axisSynonymKey(requestedAxis))
-  // FFP.15 — the operator curated by an axis the family does NOT vary by
-  // (e.g. Colour on a single-colour family). The old fallback silently
-  // switched to the first varying axis (Size) and DROPPED the curation —
-  // producing per-size picture sets nobody asked for. The correct listing
-  // shape is ONE shared gallery for the whole listing: the curated set goes
-  // to the listing-level imageUrls (and uniformly to every variant), and
-  // aspectsImageVariesBy is omitted (with a safe retry if eBay insists).
-  // FFP.16 — the FALLBACK may never pick a size-like axis (per-size picture
-  // sets make the PDP gallery swap as the buyer clicks sizes). An EXPLICIT
-  // size pick (activeAxis) on a family that truly varies by size is still
-  // honored via matchedMulti above — operator intent always wins.
-  const sizeLike = (label: string) => axisSynonymKey(label) === axisSynonymKey('Size')
-  const fallbackAxis = multiAxes.find((a) => !sizeLike(a))
-  const sharedGallery = !matchedMulti && (!!matchedAny || !fallbackAxis)
-  const pictureAxis = matchedMulti
-    ?? (matchedAny ? matchedAny.label : (fallbackAxis ?? requestedAxis))
+  // EFX P5 — FFP.15/16 resolution rules extracted to resolveImagePictureAxis
+  // (pure, vitest-covered) + the explicit '__shared__' request: the operator
+  // picked "One shared gallery" in the modal (or it's stored as the
+  // preference), so pictureAxis is null, aspectsImageVariesBy is omitted, and
+  // ONLY the Default/cover bucket forms the listing gallery.
+  const { requestedAxis, pictureAxis, realAxes: multiAxes, sharedGallery, explicitShared } =
+    resolveImagePictureAxis(axisInfo, activeAxis, product.imageAxisPreference)
 
   job = await prisma.channelImagePublishJob.create({
     data: {
@@ -218,7 +218,7 @@ export async function publishEbayImagesViaInventory(
       if (!sku) continue
       if (!imageOverrideBySku.has(sku)) imageOverrideBySku.set(sku, [])
       imageOverrideBySku.get(sku)!.push(r.url)
-    } else if (r.variantGroupKey && axisSynonymKey(r.variantGroupKey) === axisSynonymKey(pictureAxis)) {
+    } else if (r.variantGroupKey && pictureAxis && axisSynonymKey(r.variantGroupKey) === axisSynonymKey(pictureAxis)) {
       const key = String(r.variantGroupValue ?? '').toLowerCase()
       if (!key) continue
       if (!imageOverrideByColor.has(key)) imageOverrideByColor.set(key, [])
@@ -247,6 +247,9 @@ export async function publishEbayImagesViaInventory(
   }
 
   const allResults: Array<{ sku: string; market: string; status: string; message: string }> = []
+  // EFX P5 — collects axis-resolution AND 12-image truncation warnings from
+  // the push so the modal can show them (never silent).
+  const pushWarnings: string[] = []
   for (const mp of markets) {
     const listedIds = listedByMarket.get(mp) ?? new Set<string>()
     const marketRows = rows.filter((r) => r._isParent || listedIds.has(r._productId as string))
@@ -261,10 +264,10 @@ export async function publishEbayImagesViaInventory(
       toMarketplaceId(mp),
       passthroughCap,
       imageOverrideByColor.size > 0 ? imageOverrideByColor : undefined,
-      pictureAxis,
+      pictureAxis ?? undefined,
       imageOverrideBySku.size > 0 ? imageOverrideBySku : undefined,
       sharedUrls.length > 0 ? sharedUrls : undefined,
-      { skipOffersOnNoPrice: true, omitImageVariesBy: sharedGallery },
+      { skipOffersOnNoPrice: true, omitImageVariesBy: sharedGallery, warningsSink: pushWarnings },
     )
     allResults.push(...groupResults)
   }
@@ -291,8 +294,8 @@ export async function publishEbayImagesViaInventory(
     await prisma.channelImagePublishJob.update({
       where: { id: job.id },
       data: success
-        ? { status: 'DONE', completedAt: new Date(), response: { markets, results: allResults } as object }
-        : { status: 'FATAL', completedAt: new Date(), errorMessage: (errors[0]?.message ?? 'eBay publish failed').slice(0, 500), response: { markets, results: allResults } as object },
+        ? { status: 'DONE', completedAt: new Date(), response: { markets, results: allResults, warnings: pushWarnings } as object }
+        : { status: 'FATAL', completedAt: new Date(), errorMessage: (errors[0]?.message ?? 'eBay publish failed').slice(0, 500), response: { markets, results: allResults, warnings: pushWarnings } as object },
     })
   }
 
@@ -302,14 +305,21 @@ export async function publishEbayImagesViaInventory(
     success,
     message: success
       ? (sharedGallery
-          ? `Published eBay images across ${markets.join(', ')} · ${variantRows.length} variants · ONE shared gallery (family has a single ${pictureAxis} value — pictures no longer swap when the buyer picks a size)`
-          : `Published eBay images across ${markets.join(', ')} · ${variantRows.length} variants · vary by ${pictureAxis}${imageOverrideByColor.size > 0 ? ` (${imageOverrideByColor.size} ${pictureAxis.toLowerCase()} curated)` : ''}${imageOverrideBySku.size > 0 ? ` + ${imageOverrideBySku.size} per-SKU` : ''}`)
+          ? `Published eBay images across ${markets.join(', ')} · ${variantRows.length} variants · ONE shared gallery ${explicitShared ? '(operator-selected — no per-variant images)' : `(family has a single ${pictureAxis} value — pictures no longer swap when the buyer picks a size)`}`
+          : `Published eBay images across ${markets.join(', ')} · ${variantRows.length} variants · vary by ${pictureAxis}${imageOverrideByColor.size > 0 ? ` (${imageOverrideByColor.size} ${(pictureAxis ?? '').toLowerCase()} curated)` : ''}${imageOverrideBySku.size > 0 ? ` + ${imageOverrideBySku.size} per-SKU` : ''}`)
       : `eBay publish failed: ${errors[0]?.message ?? 'unknown error'}`,
     pictureCount: pushedSkus,
     colorSetCount: colours.size,
     jobId: job?.id,
     markets,
     results: allResults,
+    // EFX P5 — resolved-axis feedback, surfaced top-level so the modal can
+    // show "Images vary by: X" / "Shared gallery" and warn on divergence.
+    requestedAxis,
+    pictureAxis,
+    realAxes: multiAxes,
+    sharedGallery,
+    ...(pushWarnings.length > 0 ? { warnings: pushWarnings } : {}),
     ...(success ? {} : { error: errors[0]?.message }),
   }
 }

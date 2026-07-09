@@ -11,7 +11,10 @@
  *       master:  ProductImage[],
  *       listing: ListingImage[],              (all scopes / platforms)
  *       variants: VariantSummary[],           (with per-channel IDs)
- *       availableAxes: string[],              (union of variationAttributes keys)
+ *       availableAxes: string[],              (union of variantAttributes +
+ *                                              categoryAttributes.variations keys,
+ *                                              synonym-deduped — EFX P5)
+ *       axisValueCounts: Record<string,number> (distinct values per axis)
  *       amazonJobs: AmazonImageFeedJob[],     (last 5 per marketplace)
  *     }
  *
@@ -35,6 +38,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../../db.js'
 import { resolveSlotTaxonomy } from '../../services/images/amazon-slot-taxonomy.service.js'
+import { deriveWorkspaceAxes } from '../../services/images/ebay-image-axis.pure.js'
 
 type ImageScope = 'GLOBAL' | 'PLATFORM' | 'MARKETPLACE'
 
@@ -208,14 +212,23 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
             shopifyVariantId: v.shopifyVariantId,
           }))
 
-      // Derive available axes from union of variant attribute keys.
-      const axisSet = new Set<string>()
-      for (const v of rawVariants) {
-        if (v.variantAttributes && typeof v.variantAttributes === 'object') {
-          Object.keys(v.variantAttributes).forEach((k) => axisSet.add(k))
-        }
-      }
-      const availableAxes = Array.from(axisSet).sort()
+      // EFX P5 — availableAxes = union of child variantAttributes keys AND
+      // categoryAttributes.variations keys, synonym-deduped (Colore ≡ Color)
+      // with first-seen casing. Axes that live ONLY in
+      // categoryAttributes.variations (legacy bulk-create, custom axes like
+      // "Tipo di prodotto") now reach the picker instead of forcing operators
+      // onto colour. axisValueCounts (additive) lets the client annotate
+      // single-valued axes ("1 value — publishes as shared gallery").
+      const { availableAxes, axisValueCounts } = deriveWorkspaceAxes(
+        childProducts.length > 0
+          ? childProducts.map((c) => ({
+              variantAttributes: c.variantAttributes as Record<string, unknown> | null,
+              categoryAttributes: c.categoryAttributes,
+            }))
+          : pvRecords.map((v) => ({
+              variantAttributes: v.variationAttributes as Record<string, unknown> | null,
+            })),
+      )
 
       // IR.7.2 — Map productImage.id → DigitalAsset.id for master rows
       // that are mirrored in the DAM library. Single batched query
@@ -262,6 +275,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
         listing,
         variants: rawVariants,
         availableAxes,
+        axisValueCounts,
         amazonJobs: recentJobs,
         damLinks,
         damDrift,

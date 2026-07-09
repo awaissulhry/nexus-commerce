@@ -311,7 +311,7 @@ const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
       // Then eBay / Shopify.
       const channelJob = await prisma.channelImagePublishJob.findUnique({
         where: { id: jobId },
-        select: { id: true, productId: true, channel: true, status: true, requestPayload: true },
+        select: { id: true, productId: true, channel: true, marketplace: true, status: true, requestPayload: true },
       })
       if (!channelJob) return reply.code(404).send({ error: 'JOB_NOT_FOUND' })
       if (['DONE', 'CANCELLED'].includes(channelJob.status)) {
@@ -327,7 +327,14 @@ const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
 
       try {
         if (channelJob.channel === 'EBAY') {
-          const result = await publishEbayImagesViaInventory(channelJob.productId)
+          // EFX P5 — replay with the SAME market + axis the original job
+          // recorded. Previously the retry dropped both: it fanned out to every
+          // priced market (the exact cross-market incident FFP.7 fixed) and fell
+          // back to the stored preference, silently diverging from the
+          // operator's request. eBay jobs record the resolved request as
+          // `requestedAxis` in requestPayload ('__shared__' included).
+          const ebayAxis = (channelJob.requestPayload as { requestedAxis?: string } | null)?.requestedAxis
+          const result = await publishEbayImagesViaInventory(channelJob.productId, channelJob.marketplace ?? undefined, ebayAxis)
           return reply.send({ ok: result.success, channel: 'EBAY', newJobId: result.jobId, status: result.success ? 'DONE' : 'FATAL', error: result.error })
         }
         if (channelJob.channel === 'SHOPIFY') {

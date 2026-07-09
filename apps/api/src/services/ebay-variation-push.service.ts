@@ -9,6 +9,7 @@ import prisma from '../db.js'
 import { ebayAccountService } from './ebay-account.service.js'
 import { syncActivatedListings } from './listing-activation-sync.service.js'
 import { parseThemeAxes, AXIS_SYNONYM_GROUPS, axisSynonymKey } from './ebay-theme-axes.js'
+import { clampImageSets, EBAY_VARIATION_IMAGE_MAX } from './images/ebay-image-axis.pure.js'
 import { Prisma } from '@nexus/database'
 
 // EFX D5 — AXIS_SYNONYM_GROUPS + axisSynonymKey now live in ebay-theme-axes.ts
@@ -547,6 +548,28 @@ export async function pushVariationGroup(
 ): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
   const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
 
+  // EFX P5 — cap consistency. eBay allows at most 12 pictures per variation in
+  // a multiple-variation listing (Inventory API "Managing images"; same cap as
+  // Trading's VariationSpecificPictureSet). Curated per-axis-value and per-SKU
+  // sets arrive operator-sized and were previously sent unclamped — eBay drops
+  // the surplus with zero feedback. Clamp HERE (covers every caller) and tell
+  // the operator via warningsSink (never silent). Mutation is idempotent, so
+  // the multi-market loop re-entering with the same maps is harmless.
+  const sinkWarn = (w: string) => {
+    if (opts?.warningsSink && !opts.warningsSink.includes(w)) opts.warningsSink.push(w)
+  }
+  if (imageOverrideByColor) {
+    for (const w of clampImageSets(imageOverrideByColor, EBAY_VARIATION_IMAGE_MAX, (k) => `Curated ${pictureAxisOverride ?? 'variation'} set "${k}"`)) sinkWarn(w)
+  }
+  if (imageOverrideBySku) {
+    for (const w of clampImageSets(imageOverrideBySku, EBAY_VARIATION_IMAGE_MAX, (k) => `Per-SKU image set for ${k}`)) sinkWarn(w)
+  }
+  if (groupImageOverride && groupImageOverride.length > EBAY_VARIATION_IMAGE_MAX) {
+    // The slice itself happens where groupImageUrls is built (below) — this is
+    // the honest-feedback half of that existing ≤12 group cap.
+    sinkWarn(`Cover & common gallery: ${groupImageOverride.length} images curated — only the first ${EBAY_VARIATION_IMAGE_MAX} were sent (eBay group gallery limit)`)
+  }
+
   const lang = toListingLanguage(mp)
   // eBay Sell Inventory API requires BOTH Content-Language AND Accept-Language
   // on every call (inventory_item, inventory_item_group, offer, publish).
@@ -1076,8 +1099,9 @@ export async function pushVariationGroup(
   const groupImageUrls: string[] = []
   if (groupImageOverride && groupImageOverride.length > 0) {
     // P5 — operator-curated cover & common gallery wins over the parent-derived
-    // mix (eBay allows up to 12 group photos).
-    groupImageUrls.push(...groupImageOverride.slice(0, 12))
+    // mix (eBay allows up to 12 group photos; truncation is warned about via
+    // warningsSink at the top of this function — EFX P5).
+    groupImageUrls.push(...groupImageOverride.slice(0, EBAY_VARIATION_IMAGE_MAX))
   } else {
     for (let i = 1; i <= 6; i++) {
       const url = parentRow[`image_${i}`] as string | undefined
