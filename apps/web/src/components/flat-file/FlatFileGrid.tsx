@@ -775,7 +775,7 @@ export default function FlatFileGrid({
   renderAiPanel, renderEmptyAction,
   onColumnsClick, columnsActive, toolbarTrailing,
   columnGroupState, onGroupStateChange,
-  fileMenuItems,
+  fileMenuItems, editMenuItems,
   enableCustomGroups = false,
 }: FlatFileGridProps) {
   const router = useRouter()
@@ -1986,6 +1986,7 @@ export default function FlatFileGrid({
             { separator: true },
             { label: 'Reset column group order', onClick: () => { setGroupOrder([]); try { localStorage.removeItem(`${storageKey}-group-order`) } catch {} onGroupStateChange?.(internalClosedGroups, []) }, disabled: !groupOrder.length },
             { label: 'Show all column groups', onClick: () => { setClosedGroups(new Set()); try { localStorage.removeItem(`${storageKey}-closed-groups`) } catch {} onGroupStateChange?.(new Set(), internalGroupOrder) }, disabled: !closedGroups.size },
+            ...(editMenuItems?.(toolbarFetchCtx) ?? []),
           ]} />
           <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
           {titleIcon}

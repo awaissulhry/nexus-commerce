@@ -2139,6 +2139,20 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     },
   ], [exportEbay])
 
+  // FM Phase 3/4 — bulk Follow/Buffer, injected into the shared grid's Edit menu
+  // (kept out of the toolbar so the sheet stays uncluttered). A factory so the items
+  // read the grid's live selection: disabled with nothing selected, and each handler
+  // acts on exactly the selected rows.
+  const editMenuItems = useCallback((ctx: ToolbarFetchCtx) => {
+    const noSel = ctx.selectedRows.size === 0
+    return [
+      { separator: true },
+      { label: 'Set to Follow (pool)', icon: <RefreshCw className="w-3.5 h-3.5" />, disabled: noSel, onClick: () => void bulkSetFollowEbay(true, ctx.rows as EbayRow[], ctx.selectedRows) },
+      { label: 'Set to Pinned (fixed)', icon: <Pin className="w-3.5 h-3.5" />, disabled: noSel, onClick: () => void bulkSetFollowEbay(false, ctx.rows as EbayRow[], ctx.selectedRows) },
+      { label: 'Set buffer…', icon: <ListOrdered className="w-3.5 h-3.5" />, disabled: noSel, onClick: () => openEbayBufferModal(ctx.rows as EbayRow[], ctx.selectedRows) },
+    ]
+  }, [bulkSetFollowEbay, openEbayBufferModal])
+
   const renderToolbarFetch = useCallback(({ rows, selectedRows, setRows, pushHistory }: ToolbarFetchCtx) => {
     // Keep refs current so fileMenuItems callbacks always act on the latest rows
     latestRowsRef.current = rows
@@ -2255,27 +2269,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                   icon: <Trash2 className="w-3.5 h-3.5" />,
                   disabled: deletable.length === 0,
                   onSelect: () => setDeleteConfirmRows(deletable),
-                },
-                {
-                  id: 'set-follow',
-                  label: 'Set to Follow (pool)',
-                  icon: <RefreshCw className="w-3.5 h-3.5" />,
-                  disabled: selectedRows.size === 0,
-                  onSelect: () => void bulkSetFollowEbay(true, rows as EbayRow[], selectedRows),
-                },
-                {
-                  id: 'set-pinned',
-                  label: 'Set to Pinned (fixed)',
-                  icon: <Pin className="w-3.5 h-3.5" />,
-                  disabled: selectedRows.size === 0,
-                  onSelect: () => void bulkSetFollowEbay(false, rows as EbayRow[], selectedRows),
-                },
-                {
-                  id: 'set-buffer',
-                  label: 'Set buffer…',
-                  icon: <ListOrdered className="w-3.5 h-3.5" />,
-                  disabled: selectedRows.size === 0,
-                  onSelect: () => openEbayBufferModal(rows as EbayRow[], selectedRows),
                 },
               ]}
             />
@@ -2423,7 +2416,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       </>
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, imageModalOpen, derivedProductIds, moveParentOpen, moveTargetId, detachOpen, bulkSetFollowEbay, openEbayBufferModal])
+  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, imageModalOpen, derivedProductIds, moveParentOpen, moveTargetId, detachOpen])
 
   // ── Slot: import button ────────────────────────────────────────────────
 
@@ -2864,6 +2857,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         </Button>
       )}
       fileMenuItems={fileMenuItems}
+      editMenuItems={editMenuItems}
       renderFeedBanner={renderFeedBanner}
       renderModals={renderModals as (ctx: ModalsCtx) => React.ReactNode}
       renderToolbarFetch={renderToolbarFetch}

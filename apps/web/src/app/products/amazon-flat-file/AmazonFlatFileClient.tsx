@@ -4441,6 +4441,14 @@ export default function AmazonFlatFileClient({
               { separator: true },
               { label: 'Copy to market…', icon: <Copy className="w-3.5 h-3.5" />, onClick: () => setPushPanel((p) => p ? null : { tab: 'copy' }), disabled: !manifest || !rows.length },
               { separator: true },
+              // FM Phase 3/4 — bulk Follow/Pinned/Buffer on the selected rows (active market).
+              // Kept in the Edit menu, not the toolbar, so the sheet stays uncluttered.
+              { label: `Set Follow${followEligibleCount ? ` (${followEligibleCount})` : ''}`, icon: <RefreshCw className="w-3.5 h-3.5" />, onClick: () => void bulkSetFollow(true), disabled: followEligibleCount === 0 },
+              { label: `Set Pinned${followEligibleCount ? ` (${followEligibleCount})` : ''}`, icon: <Pin className="w-3.5 h-3.5" />, onClick: () => void bulkSetFollow(false), disabled: followEligibleCount === 0 },
+              { label: `Set buffer…${bufferEligibleCount ? ` (${bufferEligibleCount})` : ''}`, icon: <Layers className="w-3.5 h-3.5" />, onClick: openBufferModal, disabled: bufferEligibleCount === 0 },
+              { separator: true },
+              { label: `Select all Pinned${pinnedCount ? ` (${pinnedCount})` : ''}`, onClick: selectAllPinned, disabled: pinnedCount === 0 },
+              { separator: true },
               { label: 'Reset column widths', onClick: () => { setColWidths({}); try { localStorage.removeItem('ff-col-widths') } catch {} }, disabled: !Object.keys(colWidths).length },
             ]} />
             <MenuDropdown label="View" items={[
@@ -5136,31 +5144,7 @@ export default function AmazonFlatFileClient({
                 Set category ({selectedRealCount})
               </Button>
             )}
-            {/* FM Phase 3 — bulk Follow/Pinned on the selected rows (active market). */}
-            {followEligibleCount > 0 && (
-              <>
-                <Button size="sm" variant="secondary" onClick={() => void bulkSetFollow(true)}
-                  title="Set the selected listings to Follow the shared warehouse pool">
-                  Set Follow ({followEligibleCount})
-                </Button>
-                <Button size="sm" variant="secondary" onClick={() => void bulkSetFollow(false)}
-                  title="Pin the selected listings to their current quantity (stop tracking the pool)">
-                  Set Pinned ({followEligibleCount})
-                </Button>
-              </>
-            )}
-            {bufferEligibleCount > 0 && (
-              <Button size="sm" variant="secondary" onClick={openBufferModal}
-                title="Reserve units of the pool on the selected Following listings (they'll advertise pool − buffer)">
-                Set buffer ({bufferEligibleCount})
-              </Button>
-            )}
-            {pinnedCount > 0 && (
-              <Button size="sm" variant="ghost" onClick={selectAllPinned}
-                title="Select every pinned listing in this sheet — then Set Follow to reconnect them to the pool">
-                Select all Pinned ({pinnedCount})
-              </Button>
-            )}
+            {/* FM Phase 3/4 — bulk Follow/Pinned/Buffer moved into the Edit menu (Bar 1) to keep the toolbar uncluttered. */}
           </div>
 
           {/* Search */}
