@@ -28,6 +28,27 @@ export function axisSynonymKey(name: string): string {
   return lk
 }
 
+// ── Modal init decision ───────────────────────────────────────────────────
+
+/**
+ * EFX D1 race fix — should the modal (re)initialize its working state
+ * (axisOrder + axisSeq + fetch-seed) for this render?
+ *
+ * ONLY on the closed→open transition. The parent grid re-renders frequently
+ * while the modal is open (draft autosave ~400ms, toasts, SSE refreshes) and
+ * passes a NEW `rows` array identity each time → `deriveAxes(rows)` gets a new
+ * identity → an effect keyed on `axes` re-runs MID-OPEN, resetting the
+ * operator's un-saved reordering back to derived order (which Save then
+ * persists). The modal's snapshot from open time is the correct behavior;
+ * reopening refreshes.
+ *
+ * @param open    current `open` prop
+ * @param wasOpen whether the modal was already initialized for this open cycle
+ */
+export function shouldInitModal(open: boolean, wasOpen: boolean): boolean {
+  return open && !wasOpen
+}
+
 // ── Clothing/shoe size canonical order ────────────────────────────────────
 
 export const STANDARD_SIZE_ORDER_MAP = new Map<string, number>(

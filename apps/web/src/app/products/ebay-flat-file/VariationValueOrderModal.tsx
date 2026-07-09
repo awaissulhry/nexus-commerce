@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useToast } from '@/components/ui/Toast'
 import type { EbayRow } from './EbayFlatFileClient'
-import { sortClothing, deriveAxes, axisSynonymKey } from './variationValueOrder.pure'
+import { sortClothing, deriveAxes, axisSynonymKey, shouldInitModal } from './variationValueOrder.pure'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 
 // ── Sortable item ─────────────────────────────────────────────────────────
@@ -166,9 +166,21 @@ export function VariationValueOrderModal({
   // the push now orders variesBy.specifications by it.
   const [axisSeq, setAxisSeq] = useState<string[]>([])
 
-  // Re-initialise when modal reopens (fresh rows may have changed)
+  // Init ONCE per open cycle (closed→open transition). The parent grid
+  // re-renders frequently while the modal is open (draft autosave ~400ms,
+  // toasts, SSE refreshes) with a NEW rows identity each time → `axes` gets a
+  // new identity → without this guard the effect re-ran MID-OPEN, resetting
+  // axisOrder/axisSeq to derived and discarding the operator's un-saved
+  // reordering (which Save then persisted). The open-time snapshot is correct;
+  // reopening refreshes. Decision extracted to shouldInitModal (pure, tested).
+  const wasOpenRef = useRef(false)
   useEffect(() => {
-    if (open) {
+    if (!open) {
+      wasOpenRef.current = false // closed — next open re-initializes
+      return
+    }
+    if (shouldInitModal(open, wasOpenRef.current)) {
+      wasOpenRef.current = true
       // Base: derived value order per axis (stands if the fetch fails).
       setAxisOrder(Object.fromEntries(axes.map((a) => [a.key, a.values])))
       const derived = axes.map((a) => a.displayName)

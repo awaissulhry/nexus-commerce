@@ -10,6 +10,7 @@ import {
   axisSynonymKey,
   deriveAxes,
   sortClothing,
+  shouldInitModal,
   type AxisDetectRow,
 } from './variationValueOrder.pure'
 
@@ -192,5 +193,41 @@ describe('sortClothing', () => {
     const sorted = sortClothing(original)
     expect(sorted).not.toBe(original)
     expect(original).toEqual(['L', 'S', 'M'])
+  })
+})
+
+// ── shouldInitModal (EFX D1 race fix) ─────────────────────────────────────
+// The modal must (re)initialize ONLY on the closed→open transition. Parent
+// re-renders while open (autosave/toasts/SSE) hand the effect a new `axes`
+// identity — that must NOT reset the operator's un-saved reordering.
+
+describe('shouldInitModal', () => {
+  it('initializes on the closed→open transition', () => {
+    expect(shouldInitModal(true, false)).toBe(true)
+  })
+
+  it('does NOT re-initialize on a mid-open re-render (new rows/axes identity)', () => {
+    // open cycle started: shouldInitModal(true, false) → true, ref set to true.
+    // Parent re-renders while open → effect re-runs with wasOpen=true → no init.
+    expect(shouldInitModal(true, true)).toBe(false)
+  })
+
+  it('never initializes while closed', () => {
+    expect(shouldInitModal(false, false)).toBe(false)
+    expect(shouldInitModal(false, true)).toBe(false)
+  })
+
+  it('full cycle: open → mid-open re-renders → close → reopen re-initializes', () => {
+    let wasOpen = false
+    // closed→open: init fires once
+    expect(shouldInitModal(true, wasOpen)).toBe(true)
+    wasOpen = true
+    // N mid-open re-renders: never re-init
+    for (let i = 0; i < 5; i++) expect(shouldInitModal(true, wasOpen)).toBe(false)
+    // close resets the ref (the component does this on !open)
+    wasOpen = false
+    expect(shouldInitModal(false, wasOpen)).toBe(false)
+    // reopen: fresh init
+    expect(shouldInitModal(true, wasOpen)).toBe(true)
   })
 })
