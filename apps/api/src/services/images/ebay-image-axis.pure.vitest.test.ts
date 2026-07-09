@@ -55,6 +55,76 @@ describe('deriveWorkspaceAxes', () => {
     ])
     expect(availableAxes).toEqual([])
   })
+
+  // ── EFX P5.1 — third source: per-child eBay itemSpecifics ────────────────
+
+  it('includes an itemSpecifics-only key when its values VARY across the family (AIREON shape)', () => {
+    const { availableAxes, axisValueCounts } = deriveWorkspaceAxes([
+      { variantAttributes: { Colore: 'Nero', Taglia: 'M' }, ebayItemSpecifics: { 'Tipo di prodotto': 'Giacca', Marca: 'Xavia' } },
+      { variantAttributes: { Colore: 'Nero', Taglia: 'L' }, ebayItemSpecifics: { 'Tipo di prodotto': 'Pantaloni', Marca: 'Xavia' } },
+    ])
+    expect(availableAxes).toEqual(['Colore', 'Taglia', 'Tipo di prodotto'])
+    expect(axisValueCounts['Tipo di prodotto']).toBe(2)
+  })
+
+  it('EXCLUDES single-valued itemSpecifics-only keys entirely (static aspects must not flood the picker)', () => {
+    const { availableAxes } = deriveWorkspaceAxes([
+      { variantAttributes: { Taglia: 'M' }, ebayItemSpecifics: { Marca: 'Xavia', Materiale: 'Pelle', Stagione: 'Tutte' } },
+      { variantAttributes: { Taglia: 'L' }, ebayItemSpecifics: { Marca: 'Xavia', Materiale: 'Pelle', Stagione: 'Tutte' } },
+    ])
+    // No annotated single-value entry either — unlike declared sources.
+    expect(availableAxes).toEqual(['Taglia'])
+  })
+
+  it('single-valued itemSpecifics keys still count as 1 value case-insensitively before exclusion', () => {
+    const { availableAxes } = deriveWorkspaceAxes([
+      { variantAttributes: { Taglia: 'M' }, ebayItemSpecifics: { Marca: 'Xavia' } },
+      { variantAttributes: { Taglia: 'L' }, ebayItemSpecifics: { Marca: ' XAVIA ' } },
+    ])
+    expect(availableAxes).toEqual(['Taglia'])
+  })
+
+  it('itemSpecifics synonyms merge into declared axes (values feed the counts, no new axis)', () => {
+    const { availableAxes, axisValueCounts } = deriveWorkspaceAxes([
+      { variantAttributes: { Colore: 'Nero' }, ebayItemSpecifics: { Color: 'Blu' } },
+      { variantAttributes: { Colore: 'Rosso' }, ebayItemSpecifics: { Color: 'Nero' } },
+    ])
+    expect(availableAxes).toEqual(['Colore']) // no duplicate 'Color' axis
+    expect(axisValueCounts.Colore).toBe(3)    // nero + rosso + blu across both sources
+  })
+
+  it('a declared single-valued axis stays included even when itemSpecifics agrees (declared > static rule)', () => {
+    const { availableAxes, axisValueCounts } = deriveWorkspaceAxes([
+      { categoryAttributes: { variations: { Colore: 'Nero' } }, ebayItemSpecifics: { Color: 'Nero' } },
+      { categoryAttributes: { variations: { Colore: 'Nero' } }, ebayItemSpecifics: { Color: 'Nero' } },
+    ])
+    expect(availableAxes).toEqual(['Colore']) // declared axis survives with its annotation count
+    expect(axisValueCounts.Colore).toBe(1)
+  })
+
+  it('casing preference is source-level: variantAttributes > categoryAttributes > itemSpecifics', () => {
+    const { availableAxes } = deriveWorkspaceAxes([
+      // categoryAttributes and itemSpecifics both name the colour dimension first in row order…
+      { categoryAttributes: { variations: { 'color name': 'Blu' } }, ebayItemSpecifics: { COLORE: 'Verde' } },
+      // …but a later child's variantAttributes casing still wins.
+      { variantAttributes: { Colore: 'Nero' } },
+      // itemSpecifics-only dimension keeps its own casing.
+      { ebayItemSpecifics: { 'Tipo di prodotto': 'Giacca' } },
+      { ebayItemSpecifics: { 'Tipo di prodotto': 'Pantaloni' } },
+    ])
+    expect(availableAxes).toEqual(['Colore', 'Tipo di prodotto'])
+  })
+
+  it('accepts string-array itemSpecifics values (eBay pull-back shape) and malformed shapes gracefully', () => {
+    const { availableAxes, axisValueCounts } = deriveWorkspaceAxes([
+      { ebayItemSpecifics: { 'Tipo di prodotto': ['Giacca'] } },
+      { ebayItemSpecifics: { 'Tipo di prodotto': ['Pantaloni'] } },
+      { ebayItemSpecifics: null },
+      { ebayItemSpecifics: { Rotto: { nested: 'object' } as unknown as string } },
+    ])
+    expect(availableAxes).toEqual(['Tipo di prodotto'])
+    expect(axisValueCounts['Tipo di prodotto']).toBe(2)
+  })
 })
 
 describe('resolveImagePictureAxis', () => {

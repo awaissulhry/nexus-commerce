@@ -12,8 +12,9 @@
  *       listing: ListingImage[],              (all scopes / platforms)
  *       variants: VariantSummary[],           (with per-channel IDs)
  *       availableAxes: string[],              (union of variantAttributes +
- *                                              categoryAttributes.variations keys,
- *                                              synonym-deduped — EFX P5)
+ *                                              categoryAttributes.variations keys
+ *                                              + multi-valued eBay itemSpecifics
+ *                                              keys, synonym-deduped — EFX P5/P5.1)
  *       axisValueCounts: Record<string,number> (distinct values per axis)
  *       amazonJobs: AmazonImageFeedJob[],     (last 5 per marketplace)
  *     }
@@ -106,7 +107,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
       })
       if (!product) return reply.code(404).send({ error: 'Product not found' })
 
-      const [master, listing, childProducts, pvRecords, recentJobs, liveImages] = await Promise.all([
+      const [master, listing, childProducts, pvRecords, recentJobs, liveImages, childEbayListings] = await Promise.all([
         prisma.productImage.findMany({
           where: { productId },
           orderBy: { sortOrder: 'asc' },
@@ -180,6 +181,21 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
             { sortOrder: 'asc' },
           ],
         }),
+
+        // EFX P5.1 — children's eBay listings: platformAttributes.itemSpecifics
+        // is a THIRD axis source. Some families carry their per-variant values
+        // ONLY there (AIREON's 'Tipo di prodotto': Giacca/Pantaloni) — neither
+        // variantAttributes nor categoryAttributes.variations has the key, so
+        // the picker never offered the operator's most important axis. Relation
+        // filter keeps this a single query independent of the child fetch; the
+        // legacy ProductVariation path (no child Products) matches nothing and
+        // skips the source gracefully. Ordered by marketplace so the per-child
+        // pick below is deterministic (keys are market-stable anyway).
+        prisma.channelListing.findMany({
+          where: { product: { parentId: productId }, channel: 'EBAY' },
+          orderBy: { marketplace: 'asc' },
+          select: { productId: true, marketplace: true, platformAttributes: true },
+        }),
       ])
 
       // Prefer child Products if they exist; fall back to ProductVariation records.
@@ -219,11 +235,26 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
       // "Tipo di prodotto") now reach the picker instead of forcing operators
       // onto colour. axisValueCounts (additive) lets the client annotate
       // single-valued axes ("1 value — publishes as shared gallery").
+      //
+      // EFX P5.1 — third source: each child's eBay itemSpecifics (one listing
+      // per child — the first market that actually carries specs). Only keys
+      // whose values VARY across the family become axes; single-valued
+      // itemSpecifics keys are static aspects (Marca, Materiale, …) and are
+      // excluded entirely (see deriveWorkspaceAxes).
+      const ebaySpecsByChild = new Map<string, Record<string, unknown>>()
+      for (const l of childEbayListings) {
+        if (ebaySpecsByChild.has(l.productId)) continue // first market with specs wins
+        const specs = (l.platformAttributes as Record<string, unknown> | null)?.itemSpecifics
+        if (specs && typeof specs === 'object' && !Array.isArray(specs)) {
+          ebaySpecsByChild.set(l.productId, specs as Record<string, unknown>)
+        }
+      }
       const { availableAxes, axisValueCounts } = deriveWorkspaceAxes(
         childProducts.length > 0
           ? childProducts.map((c) => ({
               variantAttributes: c.variantAttributes as Record<string, unknown> | null,
               categoryAttributes: c.categoryAttributes,
+              ebayItemSpecifics: ebaySpecsByChild.get(c.id) ?? null,
             }))
           : pvRecords.map((v) => ({
               variantAttributes: v.variationAttributes as Record<string, unknown> | null,

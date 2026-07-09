@@ -38,6 +38,16 @@ export interface WorkspaceAxisVariant {
   variantAttributes?: Record<string, unknown> | null
   /** Raw Product.categoryAttributes JSON — `.variations` is read when present. */
   categoryAttributes?: unknown
+  /**
+   * EFX P5.1 — the child's eBay ChannelListing.platformAttributes.itemSpecifics
+   * (Record<string, string>, one listing per child — keys are market-stable).
+   * Third axis source: some families (AIREON's 'Tipo di prodotto') carry their
+   * per-variant values ONLY here. Unlike the declared sources, itemSpecifics
+   * keys are mostly STATIC aspects (Marca, Materiale, …), so a key that lives
+   * only in itemSpecifics becomes an axis ONLY when its values vary across the
+   * family (>1 distinct value) — otherwise the picker floods with ~20 statics.
+   */
+  ebayItemSpecifics?: Record<string, unknown> | null
 }
 
 export interface WorkspaceAxes {
@@ -48,43 +58,83 @@ export interface WorkspaceAxes {
 }
 
 /**
- * Union of child `variantAttributes` keys AND child
- * `categoryAttributes.variations` keys, collapsed per synonym dimension
- * (Colore ≡ Color ≡ colour name → one entry) with the FIRST-seen casing kept
- * as the display name. Value counts let the picker annotate single-valued
- * axes ("1 value — publishes as shared gallery").
+ * Union of child `variantAttributes` keys, child `categoryAttributes.variations`
+ * keys, AND (EFX P5.1) per-child eBay `itemSpecifics` keys whose values VARY
+ * across the family — all collapsed per synonym dimension (Colore ≡ Color ≡
+ * colour name → one entry). Display casing preference: variantAttributes >
+ * categoryAttributes > itemSpecifics (first-seen within each source). Value
+ * counts let the picker annotate single-valued axes ("1 value — publishes as
+ * shared gallery").
+ *
+ * Source rules differ deliberately:
+ *   • declared sources (variantAttributes / categoryAttributes.variations):
+ *     every key is an axis, even single-valued — they're declared variation
+ *     axes, annotated in the picker.
+ *   • itemSpecifics: a key that exists ONLY there must have >1 distinct value
+ *     (case-insensitive) to become an axis; single-valued keys are static
+ *     aspects (Marca, Materiale, …) and are EXCLUDED entirely. Keys that also
+ *     exist in a declared source just contribute their values to the counts.
  *
  * Before EFX P5 only variantAttributes keys were considered, so axes living
- * exclusively in categoryAttributes.variations (legacy bulk-create products,
- * custom axes like "Tipo di prodotto") never reached the picker.
+ * exclusively in categoryAttributes.variations (legacy bulk-create products)
+ * or only in eBay itemSpecifics (AIREON's 'Tipo di prodotto') never reached
+ * the picker.
  */
 export function deriveWorkspaceAxes(variants: WorkspaceAxisVariant[]): WorkspaceAxes {
-  const bySyn = new Map<string, { display: string; values: Set<string> }>()
+  type AxisEntry = { display: string; values: Set<string> }
 
-  const collect = (attrs: unknown) => {
+  const addValue = (entry: AxisEntry, v: unknown) => {
+    // itemSpecifics values are strings in our writes, but eBay pull-backs can
+    // deliver string arrays — accept both defensively.
+    const raw = Array.isArray(v) ? v : [v]
+    for (const item of raw) {
+      if (typeof item !== 'string' && typeof item !== 'number') continue
+      const val = String(item).trim().toLowerCase()
+      if (val) entry.values.add(val)
+    }
+  }
+
+  const collectInto = (map: Map<string, AxisEntry>, attrs: unknown) => {
     if (!attrs || typeof attrs !== 'object' || Array.isArray(attrs)) return
     for (const [k, v] of Object.entries(attrs as Record<string, unknown>)) {
       const name = k.trim()
       if (!name) continue
       const syn = axisSynonymKey(name)
-      let entry = bySyn.get(syn)
+      let entry = map.get(syn)
       if (!entry) {
         entry = { display: name, values: new Set<string>() }
-        bySyn.set(syn, entry)
+        map.set(syn, entry)
       }
-      if (typeof v === 'string' || typeof v === 'number') {
-        const val = String(v).trim().toLowerCase()
-        if (val) entry.values.add(val)
-      }
+      addValue(entry, v)
     }
   }
 
+  const bySyn = new Map<string, AxisEntry>()
+
+  // Declared sources — one full pass per source (not per variant) so the
+  // casing preference is source-level: a dimension named in ANY child's
+  // variantAttributes keeps that casing even if another child's
+  // categoryAttributes named it first in row order.
+  for (const variant of variants) collectInto(bySyn, variant.variantAttributes)
   for (const variant of variants) {
-    collect(variant.variantAttributes)
     const cat = variant.categoryAttributes
     if (cat && typeof cat === 'object' && !Array.isArray(cat)) {
-      collect((cat as Record<string, unknown>).variations)
+      collectInto(bySyn, (cat as Record<string, unknown>).variations)
     }
+  }
+
+  // EFX P5.1 — itemSpecifics staged separately, then merged under the
+  // varies-only admission rule above.
+  const specBySyn = new Map<string, AxisEntry>()
+  for (const variant of variants) collectInto(specBySyn, variant.ebayItemSpecifics)
+  for (const [syn, spec] of specBySyn) {
+    const declared = bySyn.get(syn)
+    if (declared) {
+      for (const v of spec.values) declared.values.add(v) // counts cover this source too
+    } else if (spec.values.size > 1) {
+      bySyn.set(syn, spec)
+    }
+    // single-valued itemSpecifics-only key → static aspect, excluded entirely
   }
 
   const entries = [...bySyn.values()].sort((a, b) => a.display.localeCompare(b.display))
