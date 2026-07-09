@@ -169,22 +169,51 @@ export function VariationValueOrderModal({
   // Re-initialise when modal reopens (fresh rows may have changed)
   useEffect(() => {
     if (open) {
+      // Base: derived value order per axis (stands if the fetch fails).
       setAxisOrder(Object.fromEntries(axes.map((a) => [a.key, a.values])))
       const derived = axes.map((a) => a.displayName)
       setAxisSeq(derived)
-      // Seed the axis order from the stored per-market config so the modal
-      // shows what the push will actually use. Best-effort — derived order
-      // stands if the fetch fails.
-      if (parentProductId && derived.length > 1) {
-        void fetch(`${BACKEND}/api/ebay/cockpit/variation-matrix?parentProductId=${encodeURIComponent(parentProductId)}&marketplace=${encodeURIComponent(marketplace)}`)
+      // EFX D1/D9 — seed BOTH the axis order (pickedAxes) and the per-axis value
+      // order (axisValueOrder) from the stored per-market config so the modal
+      // reloads exactly what was saved / what the push will use. Best-effort —
+      // the derived order stands if the fetch fails. D9: NO >1-axis gate —
+      // single-axis families persist + reload their config too.
+      // Uses GET /variation-cells (the /variation-matrix GET was never
+      // registered — only its PATCH is — so the old fetch 404'd silently).
+      if (parentProductId) {
+        void fetch(`${BACKEND}/api/ebay/cockpit/variation-cells?parentProductId=${encodeURIComponent(parentProductId)}&marketplace=${encodeURIComponent(marketplace)}`)
           .then((r) => (r.ok ? r.json() : null))
-          .then((d: { pickedAxes?: string[] } | null) => {
-            const stored = d?.pickedAxes
-            if (!stored?.length) return
-            const rank = new Map(stored.map((a, i) => [axisSynonymKey(a), i]))
-            setAxisSeq([...derived].sort(
-              (a, b) => (rank.get(axisSynonymKey(a)) ?? Number.MAX_SAFE_INTEGER) - (rank.get(axisSynonymKey(b)) ?? Number.MAX_SAFE_INTEGER),
-            ))
+          .then((d: { pickedAxes?: string[]; axisValueOrder?: Record<string, string[]> } | null) => {
+            if (!d) return
+            // Axis ORDER — order the derived axes by the stored pickedAxes.
+            const stored = d.pickedAxes
+            if (stored?.length) {
+              const rank = new Map(stored.map((a, i) => [axisSynonymKey(a), i]))
+              setAxisSeq([...derived].sort(
+                (a, b) => (rank.get(axisSynonymKey(a)) ?? Number.MAX_SAFE_INTEGER) - (rank.get(axisSynonymKey(b)) ?? Number.MAX_SAFE_INTEGER),
+              ))
+            }
+            // VALUE order — within each axis, apply the stored value order first
+            // (keyed by axis.key: __dim0__/__dim1__/lowercase-custom — the SAME
+            // keys the modal saves with), appending any new/unknown values after
+            // in derived order. Stable sort keeps derived order among unknowns.
+            const storedValues = d.axisValueOrder
+            if (storedValues && Object.keys(storedValues).length) {
+              setAxisOrder((prev) => {
+                const next: Record<string, string[]> = { ...prev }
+                for (const a of axes) {
+                  const order = storedValues[a.key]
+                  if (!order?.length) continue
+                  const rank = new Map(order.map((v, i) => [v.toLowerCase(), i]))
+                  next[a.key] = [...(prev[a.key] ?? a.values)].sort((x, y) => {
+                    const xi = rank.get(x.toLowerCase()) ?? Number.MAX_SAFE_INTEGER
+                    const yi = rank.get(y.toLowerCase()) ?? Number.MAX_SAFE_INTEGER
+                    return xi - yi
+                  })
+                }
+                return next
+              })
+            }
           })
           .catch(() => {})
       }
@@ -218,7 +247,10 @@ export function VariationValueOrderModal({
           marketplace,
           axisValueOrder: axisOrder,
           // FFP.8 — the axis sequence itself (buyer-facing dropdown order).
-          ...(axisSeq.length > 1 ? { pickedAxes: axisSeq } : {}),
+          // EFX D9 — persist for single-axis families too (was gated at >1,
+          // which dropped single-axis configs). Only the empty case is skipped
+          // so we never clobber stored axes with [].
+          ...(axisSeq.length > 0 ? { pickedAxes: axisSeq } : {}),
         }),
       })
       if (!res.ok) {

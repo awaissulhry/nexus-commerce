@@ -1395,7 +1395,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         body: JSON.stringify({ rows: sendRows, markets: publishTargets }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json() as { results?: PushResult[]; taskId?: string }
+      const json = await res.json() as { results?: PushResult[]; taskId?: string; axisWarnings?: string[] }
       if (skippedByAction > 0) {
         toast({ title: `${skippedByAction} row${skippedByAction !== 1 ? 's' : ''} skipped (Action = skip)`, tone: 'info' })
       }
@@ -1419,6 +1419,17 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         // cache; the new Item ID / status columns never appeared until a manual
         // reload). Edits in progress survive via the draft merge.
         reloadGridPreservingEdits()
+      }
+      // EFX D7 — surface the push's variation-axis warnings (undeclared varying
+      // axis / declared axis missing or single-valued). Non-blocking, additive:
+      // never alters the push flow. Deduped; if more than 3, show first 3 + more.
+      if (json.axisWarnings?.length) {
+        const uniq = [...new Set(json.axisWarnings.filter(Boolean))]
+        if (uniq.length) {
+          const shown = uniq.slice(0, 3)
+          const extra = uniq.length > 3 ? `\n…and ${uniq.length - 3} more` : ''
+          toast({ title: 'Variation axis warnings', description: shown.join('\n') + extra, tone: 'warning' })
+        }
       }
     } catch (err) {
       toast.error('Push failed: ' + (err instanceof Error ? err.message : String(err)))
