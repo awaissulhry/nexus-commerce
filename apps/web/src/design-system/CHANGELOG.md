@@ -4,6 +4,14 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [DRAWER-WIDTH] — 2026-07-10 — Drawer width + subtitle props (EFX P6)
+
+- **`Drawer` gained `width`** (number = px, or any CSS length; default stays the
+  stylesheet's 420px, `max-width: 100%` still applies) **and `subtitle`** (small
+  line under the title — new `.h10-ds-drawer-ht` / `.st` in components.css,
+  token-clean). Both optional; existing callers unchanged. First consumer: the
+  eBay flat-file images drawer (840px).
+
 ## [ZERO-NATIVE] — 2026-07-04 — Listbox + DateField (Wave 1 conformance gap-fill)
 
 - **`Listbox`** (`components/Listbox.tsx`) — plain single-select styled dropdown

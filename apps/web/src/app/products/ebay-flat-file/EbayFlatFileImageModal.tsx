@@ -2,7 +2,7 @@
 import { createRef, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { CheckCircle2, ChevronDown, ChevronRight, ImageIcon, Loader2, RefreshCw, XCircle } from 'lucide-react'
-import { Modal } from '@/design-system/components/Modal'
+import { Drawer } from '@/design-system/components/Drawer'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { Banner } from '@/design-system/components/Banner'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -14,6 +14,7 @@ import ImagePickerModal from '@/app/products/[id]/edit/tabs/images/ImagePickerMo
 import type { WorkspaceData, ListingImage, VariantSummary, ProductImage } from '@/app/products/[id]/edit/tabs/images/types'
 import { Select } from '@/design-system/primitives/Select'
 import { axisSynonymKey, describeResolvedAxis, SHARED_GALLERY_AXIS, type ResolvedAxisFeedback } from './variationValueOrder.pure'
+import type { ImageFamilySummary } from './imageFamilies.pure'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -139,8 +140,18 @@ interface PublishResult {
 export interface FamilySectionHandle {
   /** Persist dirty buckets. No-op + returns true when already clean. Returns false on error. */
   save: () => Promise<boolean>
+  /** EFX P6 — same as save but without the success toast (bulk Publish All pre-saves silently). */
+  saveSilent: () => Promise<boolean>
   /** Save if dirty, then push images to all eBay markets. */
   publish: () => Promise<void>
+  /**
+   * EFX P6 — the axis pick currently on screen + its distinct-value count,
+   * consumed by the drawer's bulk Publish All (per-item activeAxis + P5
+   * resolved-axis feedback). loaded=false until the workspace fetch lands —
+   * bulk publish then omits activeAxis so the server falls back to the
+   * stored imageAxisPreference.
+   */
+  getAxisInfo: () => { axis: string; valueCount?: number; loaded: boolean }
 }
 
 interface FamilySectionProps {
@@ -439,8 +450,10 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
 
     useImperativeHandle(ref, () => ({
       save: () => flush(false),
+      saveSilent: () => flush(true),
       publish,
-    }), [flush, publish])
+      getAxisInfo: () => ({ axis, valueCount: axisValueCounts[axis], loaded: workspaceData != null }),
+    }), [flush, publish, axis, axisValueCounts, workspaceData])
 
     // ── Render ────────────────────────────────────────────────────────────────
 
@@ -742,17 +755,25 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
   },
 )
 
-// ── EbayFlatFileImageModal ────────────────────────────────────────────────────
-// Shell — renders one FamilySection per loaded product family in a scrollable
-// stacked layout. The footer adds "Save All" / "Publish All" when multi-family.
+// ── EbayFlatFileImageDrawer ───────────────────────────────────────────────────
+// EFX P6 — right-side drawer covering EVERY listing family in the sheet.
+// Families render as collapsed summary rows (parent SKU + title + variant
+// count + bulk-publish chip); expanding one mounts its FamilySection — which
+// fetches its workspace — on FIRST expand only, and it stays mounted after
+// (collapse/re-expand via the section's own chevron keeps state, no refetch).
+// Publish All is ONE bulk request (POST /products/bulk-image-publish items
+// shape) carrying each family's chosen axis + the drawer's publish market.
 
-export interface EbayFlatFileImageModalProps {
+export interface EbayFlatFileImageDrawerProps {
   open: boolean
   onClose: () => void
   /** Active eBay marketplace — image publish targets ONLY this market. */
   marketplace: string
-  /** IDs of all product families currently loaded in the flat-file editor. */
-  productIds: string[]
+  /**
+   * Family list derived from the grid's CURRENT rows at open time
+   * (deriveImageFamilies) — not the SSR snapshot.
+   */
+  families: ImageFamilySummary[]
   /**
    * Called after a successful save when a family's Default bucket has ≥1 URL.
    * productId identifies which family was saved; urls are the first 6 Default photos.
@@ -760,7 +781,24 @@ export interface EbayFlatFileImageModalProps {
   onSyncColumns?: (productId: string, urls: string[]) => void
 }
 
-export function EbayFlatFileImageModal({ open, onClose, marketplace, productIds, onSyncColumns }: EbayFlatFileImageModalProps) {
+/** Mirrors the API's MAX_PER_CALL in bulk-image-publish.routes.ts. */
+const BULK_MAX = 50
+
+/** One per-family outcome from the bulk publish, plus client-side P5 feedback. */
+interface BulkFamilyOutcome {
+  productId: string
+  ok: boolean
+  message?: string
+  pictureCount?: number
+  colorSetCount?: number
+  requestedAxis?: string
+  pictureAxis?: string | null
+  sharedGallery?: boolean
+  warnings?: string[]
+  feedback: ResolvedAxisFeedback | null
+}
+
+export function EbayFlatFileImageDrawer({ open, onClose, marketplace, families, onSyncColumns }: EbayFlatFileImageDrawerProps) {
   const { toast } = useToast()
 
   // Stable ref map keyed by productId — persists across renders without extra deps.
@@ -774,56 +812,141 @@ export function EbayFlatFileImageModal({ open, onClose, marketplace, productIds,
 
   // FFP.7 — explicit publish-market selector (market-specific by design).
   // Defaults to the flat file's active market; the operator can retarget
-  // without leaving the modal.
+  // without leaving the drawer.
   const [publishMarket, setPublishMarket] = useState(marketplace)
   useEffect(() => { setPublishMarket(marketplace) }, [marketplace, open])
+
+  // ── Lazy family mounting ──────────────────────────────────────────────────
+  // A family's FamilySection (and its N-fetch workspace load) mounts on first
+  // expand ONLY and stays mounted. Single-family sheets auto-expand so the
+  // old one-family UX is unchanged.
+  const [mountedIds, setMountedIds] = useState<Set<string>>(new Set())
+  const [bulkResults, setBulkResults] = useState<Map<string, BulkFamilyOutcome> | null>(null)
+  const [bulkError, setBulkError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!open) return
+    // `families` is snapshotted by the client at open time — initialize on
+    // the closed→open transition only (same rationale as shouldInitModal).
+    setMountedIds(families.length === 1 ? new Set([families[0].productId]) : new Set())
+    setBulkResults(null)
+    setBulkError(null)
+    refsMap.current.clear()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+  const expandFamily = useCallback((pid: string) => {
+    setMountedIds(prev => prev.has(pid) ? prev : new Set(prev).add(pid))
+  }, [])
+
+  // ── Save All (expanded families only — unexpanded ones can't be dirty) ────
 
   const saveAll = useCallback(async () => {
     setBusyAll(true)
     let failed = 0
-    for (const pid of productIds) {
-      const ok = await refsMap.current.get(pid)?.current?.save() ?? true
+    for (const f of families) {
+      const ok = await refsMap.current.get(f.productId)?.current?.save() ?? true
       if (!ok) failed++
     }
     setBusyAll(false)
     if (failed === 0) toast.success('All images saved')
     else toast.error(`${failed} product${failed !== 1 ? 's' : ''} failed to save`)
-  }, [productIds, toast])
+  }, [families, toast])
+
+  // ── Publish All — ONE bulk request instead of N sequential publishes ──────
 
   const publishAll = useCallback(async () => {
-    setBusyAll(true)
-    for (const pid of productIds) {
-      await refsMap.current.get(pid)?.current?.publish()
+    if (families.length > BULK_MAX) {
+      setBulkError(`Publish All sends at most ${BULK_MAX} families per run — this sheet has ${families.length}. Narrow the sheet's scope (or publish families individually) and retry.`)
+      return
     }
-    setBusyAll(false)
-  }, [productIds])
+    setBusyAll(true)
+    setBulkResults(null)
+    setBulkError(null)
+    try {
+      // 1 — silently save every dirty expanded family so the bulk publish
+      // pushes the curation the operator is looking at, never stale buckets.
+      const saveFailed: string[] = []
+      for (const f of families) {
+        const ok = await refsMap.current.get(f.productId)?.current?.saveSilent() ?? true
+        if (!ok) saveFailed.push(f.parentSku || f.productId)
+      }
+      if (saveFailed.length > 0) {
+        setBulkError(`Save failed for ${saveFailed.join(', ')} — nothing was published.`)
+        return
+      }
+      // 2 — one request. Expanded families send the axis on screen
+      // ('__shared__' included); never-expanded ones omit activeAxis so the
+      // server falls back to the stored imageAxisPreference (P5 persists
+      // every picker change, so the fallback tracks the last pick).
+      const items = families.map(f => {
+        const info = refsMap.current.get(f.productId)?.current?.getAxisInfo()
+        return {
+          productId: f.productId,
+          ...(info?.loaded ? { activeAxis: info.axis } : {}),
+          marketplace: publishMarket,
+        }
+      })
+      const res = await beFetch('/api/products/bulk-image-publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: 'EBAY', marketplace: publishMarket, items }),
+      })
+      const body = await res.json().catch(() => ({})) as { results?: Array<Omit<BulkFamilyOutcome, 'feedback'>>; message?: string; error?: string }
+      if (!res.ok) throw new Error(body?.message ?? body?.error ?? `HTTP ${res.status}`)
+      const map = new Map<string, BulkFamilyOutcome>()
+      for (const r of body.results ?? []) {
+        // P5 resolved-axis feedback per family. For never-expanded families
+        // the requested axis's value count is unknown client-side (undefined
+        // → treated as multi-valued), so a single-valued pick that resolves
+        // to a shared gallery shows an over-cautious warning there — never a
+        // silent divergence.
+        const sent = items.find(i => i.productId === r.productId)
+        const info = refsMap.current.get(r.productId)?.current?.getAxisInfo()
+        const requested = r.requestedAxis ?? sent?.activeAxis ?? ''
+        const feedback = requested
+          ? describeResolvedAxis(requested, info?.loaded ? info.valueCount : undefined, r)
+          : null
+        map.set(r.productId, { ...r, feedback })
+      }
+      setBulkResults(map)
+      const okN = [...map.values()].filter(r => r.ok).length
+      if (okN === families.length) {
+        toast.success(`Published images for ${okN === 1 ? 'the family' : `all ${okN} families`} to ${publishMarket}`)
+      } else {
+        toast.error(`Published ${okN}/${families.length} families to ${publishMarket} — see per-family results`)
+      }
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusyAll(false)
+    }
+  }, [families, publishMarket, toast])
 
-  const hasProducts = productIds.length > 0
-  const isMulti = productIds.length > 1
+  const hasProducts = families.length > 0
+  const isMulti = families.length > 1
 
   return (
-    <Modal
+    <Drawer
       open={open}
       onClose={onClose}
       title="eBay Images"
       subtitle={hasProducts
-        ? `${productIds.length} product famil${productIds.length !== 1 ? 'ies' : 'y'}`
+        ? `${families.length} product famil${families.length !== 1 ? 'ies' : 'y'} in this sheet`
         : undefined}
-      size="xl"
+      width={840}
       footer={isMulti ? (
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 w-full">
           <Button size="sm" variant="secondary" onClick={saveAll} disabled={busyAll}>
             {busyAll
               ? <span className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" />Working…</span>
               : 'Save All'}
           </Button>
-          <Button size="sm" onClick={publishAll} disabled={busyAll}>
+          <Button size="sm" onClick={() => { void publishAll() }} disabled={busyAll}>
             {busyAll
               ? <span className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" />Working…</span>
-              : 'Publish All'}
+              : `Publish All → ${publishMarket}`}
           </Button>
         </div>
-      ) : null}
+      ) : undefined}
     >
       {!hasProducts ? (
         <Banner variant="warning" title="No product">
@@ -851,19 +974,101 @@ export function EbayFlatFileImageModal({ open, onClose, marketplace, productIds,
             ))}
             <span className="ml-1 text-[10.5px] text-slate-400">images publish to this market only</span>
           </div>
-          {productIds.map(pid => (
-            <FamilySection
-              key={pid}
-              ref={getRef(pid)}
-              productId={pid}
-              marketplace={publishMarket}
-              collapsible={isMulti}
-              open={open}
-              onSyncColumns={onSyncColumns ? urls => onSyncColumns(pid, urls) : undefined}
-            />
-          ))}
+
+          {/* EFX P6 — Publish All per-family results */}
+          {(bulkError || bulkResults) && (
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 flex flex-col gap-2">
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Publish All — results</p>
+              {bulkError && (
+                <Banner variant="danger" title="Publish All failed">{bulkError}</Banner>
+              )}
+              {bulkResults && families.map(f => {
+                const r = bulkResults.get(f.productId)
+                if (!r) return null
+                return (
+                  <div key={f.productId} className="flex flex-col gap-1 border-b border-slate-100 dark:border-slate-800 last:border-0 pb-2 last:pb-0">
+                    <div className="flex items-center gap-2 text-xs">
+                      {r.ok
+                        ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                        : <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />}
+                      <span className="font-medium text-slate-900 dark:text-slate-100 flex-shrink-0">{f.parentSku || f.productId}</span>
+                      <span className={r.ok ? 'text-slate-500 dark:text-slate-400 truncate' : 'text-red-600 dark:text-red-400 truncate'} title={r.message}>
+                        {r.ok
+                          ? `${r.pictureCount ?? 0} image${(r.pictureCount ?? 0) !== 1 ? 's' : ''}, ${r.colorSetCount ?? 0} set${(r.colorSetCount ?? 0) !== 1 ? 's' : ''} → ${publishMarket}`
+                          : (r.message ?? 'Failed')}
+                      </span>
+                    </div>
+                    {r.ok && r.feedback && (
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 pl-5">{r.feedback.label}</p>
+                    )}
+                    {r.feedback?.mismatch && r.feedback.warning && (
+                      <Banner variant="warning" title="Published with a different image grouping">
+                        {r.feedback.warning}
+                      </Banner>
+                    )}
+                    {r.warnings && r.warnings.length > 0 && (
+                      <ul className="space-y-0.5 pl-5">
+                        {r.warnings.map((w, i) => (
+                          <li key={i} className="text-[10px] text-amber-700 dark:text-amber-400" title={w}>{w}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Family list — collapsed summary rows; FamilySection mounts on first expand */}
+          {families.map(f => {
+            const mounted = mountedIds.has(f.productId)
+            if (mounted) {
+              return (
+                <FamilySection
+                  key={f.productId}
+                  ref={getRef(f.productId)}
+                  productId={f.productId}
+                  marketplace={publishMarket}
+                  collapsible={isMulti}
+                  open={open}
+                  onSyncColumns={onSyncColumns ? urls => onSyncColumns(f.productId, urls) : undefined}
+                />
+              )
+            }
+            const r = bulkResults?.get(f.productId)
+            return (
+              <button
+                key={f.productId}
+                type="button"
+                onClick={() => expandFamily(f.productId)}
+                aria-label={`Expand ${f.parentSku || f.productId} images`}
+                className="w-full flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-4 py-2.5 text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex-shrink-0">{f.parentSku || f.productId}</span>
+                {f.title && (
+                  <span className="text-xs text-slate-500 dark:text-slate-400 truncate min-w-0">{f.title}</span>
+                )}
+                <span className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+                  {r && (
+                    <span className={[
+                      'text-[10px] rounded-full px-1.5 py-0.5 font-medium',
+                      r.ok
+                        ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                        : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                    ].join(' ')}>
+                      {r.ok ? `published → ${publishMarket}` : 'publish failed'}
+                    </span>
+                  )}
+                  <span className="text-[10px] rounded-full px-1.5 py-0.5 bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300 font-medium">
+                    {f.variantCount} variant{f.variantCount !== 1 ? 's' : ''}
+                  </span>
+                </span>
+              </button>
+            )
+          })}
         </div>
       )}
-    </Modal>
+    </Drawer>
   )
 }

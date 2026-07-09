@@ -25,7 +25,8 @@ import { parseThemeAxes } from './themeAxes'
 import { AddListingPopover } from './AddListingPopover'
 import { EbayImportWizard } from './EbayImportWizard'
 import { stampUnderParent } from './importUnderParent'
-import { EbayFlatFileImageModal } from './EbayFlatFileImageModal'
+import { EbayFlatFileImageDrawer } from './EbayFlatFileImageModal'
+import { deriveImageFamilies, type FamilyDeriveRow, type ImageFamilySummary } from './imageFamilies.pure'
 import { AspectsPanel } from './AspectsPanel'
 import { ChannelStrip } from './ChannelStrip'
 import { HistoryModal } from '@/components/flat-file/HistoryModal'
@@ -1781,18 +1782,21 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     UK: 'https://www.ebay.co.uk/itm/',
   }
 
-  // All unique family IDs present in the flat file — one per parent row.
-  // familyId prop (single-family mode) is always included when set.
-  const derivedProductIds = useMemo(() => {
-    const ids = new Set<string>()
-    if (familyId) ids.add(familyId)
-    for (const r of initialRows) {
-      if ((r as EbayRow)._isParent === true) {
-        const id = String((r as EbayRow)._productId ?? (r as EbayRow).platformProductId ?? '')
-        if (id) ids.add(id)
-      }
-    }
-    return [...ids]
+  // EFX P6 — SSR-snapshot family derivation is kept ONLY as the toolbar
+  // button's visibility gate (cheap, stable). The drawer itself snapshots the
+  // grid's CURRENT rows at open time (openImageDrawer below) so families
+  // added/removed after page load — imports, re-parenting, Add listing —
+  // are covered.
+  const hasImageFamilies = useMemo(
+    () => deriveImageFamilies(initialRows as FamilyDeriveRow[], familyId).length > 0,
+    [familyId, initialRows],
+  )
+  const [imageDrawerFamilies, setImageDrawerFamilies] = useState<ImageFamilySummary[]>([])
+  const openImageDrawer = useCallback(() => {
+    const live = latestRowsRef.current
+    const rows = (live.length > 0 ? live : initialRows) as FamilyDeriveRow[]
+    setImageDrawerFamilies(deriveImageFamilies(rows, familyId))
+    setImageModalOpen(true)
   }, [familyId, initialRows])
 
   // Parent ids that actually have variant rows loaded — so the SKU badge
@@ -2617,12 +2621,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           active={historyPanelOpen}
         />
 
-        {/* Images — curate per-color image sets and push to eBay */}
-        {derivedProductIds.length > 0 && (
+        {/* Images — drawer covering every family in the sheet (EFX P6) */}
+        {hasImageFamilies && (
           <SharedTbBtn
             icon={<ImageIcon className="w-3.5 h-3.5" />}
-            title="Manage eBay images — curate per-variation image sets, upload new photos; publishes to the selected market only"
-            onClick={() => setImageModalOpen(true)}
+            title="Manage eBay images — drawer listing every family in this sheet; curate per-variation image sets; publishes to the selected market only"
+            onClick={openImageDrawer}
             active={imageModalOpen}
           />
         )}
@@ -2645,7 +2649,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       </>
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, imageModalOpen, derivedProductIds, moveParentOpen, moveTargetId, detachOpen])
+  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, imageModalOpen, hasImageFamilies, openImageDrawer, moveParentOpen, moveTargetId, detachOpen])
 
   // ── Slot: import button ────────────────────────────────────────────────
 
@@ -2922,12 +2926,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         if (f) { setImportInitialFile(f); setImportWizardOpen(true) }
       }}
     >
-      {/* Image management modal */}
-      <EbayFlatFileImageModal
+      {/* Image management drawer — EFX P6 */}
+      <EbayFlatFileImageDrawer
         open={imageModalOpen}
         onClose={() => setImageModalOpen(false)}
         marketplace={marketplace}
-        productIds={derivedProductIds}
+        families={imageDrawerFamilies}
         onSyncColumns={(productId, urls) => {
           const IMAGE_COLS = ['image_1', 'image_2', 'image_3', 'image_4', 'image_5', 'image_6'] as const
           const cur = latestRowsRef.current
