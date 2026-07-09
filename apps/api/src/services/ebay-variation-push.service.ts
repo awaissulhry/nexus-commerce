@@ -8,7 +8,13 @@
 import prisma from '../db.js'
 import { ebayAccountService } from './ebay-account.service.js'
 import { syncActivatedListings } from './listing-activation-sync.service.js'
+import { parseThemeAxes, AXIS_SYNONYM_GROUPS, axisSynonymKey } from './ebay-theme-axes.js'
 import { Prisma } from '@nexus/database'
+
+// EFX D5 — AXIS_SYNONYM_GROUPS + axisSynonymKey now live in ebay-theme-axes.ts
+// (so the pure create-logic module can use them without importing this service).
+// Re-exported here so existing importers/tests keep working unchanged.
+export { AXIS_SYNONYM_GROUPS, axisSynonymKey }
 
 // FF-EN.2 — eBay numeric conditionId → Inventory API ConditionEnum string.
 // get_item_condition_policies returns numeric ids; the flat-file/Inventory
@@ -122,21 +128,6 @@ export function sortAxisValues(
   return values
 }
 
-export const AXIS_SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
-  ['colore', 'color', 'colour', 'color name', 'color_name', 'couleur', 'farbe', 'kleur', 'colour name', 'colori'],
-  ['taglia', 'size', 'size name', 'size_name', 'misura', 'größe', 'grosse', 'taille', 'maat', 'maten', 'koko'],
-  ['stile', 'style', 'style name', 'style_name'],
-  ['materiale', 'material', 'material name', 'material_name'],
-  ['genere', 'gender', 'department', 'target audience', 'target_audience'],
-]
-export function axisSynonymKey(name: string): string {
-  const lk = name.toLowerCase().trim()
-  for (let i = 0; i < AXIS_SYNONYM_GROUPS.length; i++) {
-    if ((AXIS_SYNONYM_GROUPS[i] as string[]).includes(lk)) return `__dim${i}__`
-  }
-  return lk
-}
-
 /**
  * Collapse variation specs that carry an IDENTICAL value set — the same physical
  * dimension surfaced under two different aspect names. This happens when a stray or
@@ -154,15 +145,238 @@ export function axisSynonymKey(name: string): string {
  */
 export function dedupeSpecsByValueFingerprint<T extends { values: Set<string>; coverage: number }>(
   specs: T[],
+  // EFX D8 — operator-declared / operator-picked axes are EXEMPT from being
+  // eliminated: they always survive, and a non-exempt look-alike sharing their
+  // value fingerprint collapses INTO them (dropped) rather than competing on
+  // coverage. With no exemptions this reduces to the original behaviour
+  // (keep the highest-coverage axis per fingerprint; ties keep the incumbent).
+  isExempt?: (s: T) => boolean,
 ): T[] {
   const fingerprint = (s: T) => [...s.values].map((v) => v.toLowerCase()).sort().join('|')
+  const exemptFps = new Set<string>()
+  if (isExempt) {
+    for (const spec of specs) if (isExempt(spec)) exemptFps.add(fingerprint(spec))
+  }
   const winnerByFp = new Map<string, T>()
   for (const spec of specs) {
+    if (isExempt?.(spec)) continue // exempt specs are always kept (below)
     const fp = fingerprint(spec)
+    if (exemptFps.has(fp)) continue // collapses into the exempt axis — never wins
     const cur = winnerByFp.get(fp)
     if (!cur || spec.coverage > cur.coverage) winnerByFp.set(fp, spec)
   }
-  return specs.filter((spec) => winnerByFp.get(fingerprint(spec)) === spec)
+  return specs.filter((spec) =>
+    isExempt?.(spec)
+      ? true
+      : !exemptFps.has(fingerprint(spec)) && winnerByFp.get(fingerprint(spec)) === spec,
+  )
+}
+
+// ── EFX D2/D7/D8 — resolve the authoritative variation-axis SET ────────────
+//
+// Extracted (behaviour-preserving in LEGACY mode) from pushVariationGroup so
+// the axis-set decision is unit-testable without prisma/eBay mocks.
+//
+// LEGACY mode (declaredAxes == null): 100% the pre-EFX behaviour — the axis set
+// is inferred purely from aspect_* columns with >1 distinct value, synonym-
+// deduped, ordered by storedAxisOrder, then fingerprint-deduped. (The only
+// added lever is D8: an operator-picked pictureAxisOverride is exempt from
+// fingerprint elimination — inert unless an override is supplied.)
+//
+// DECLARED mode (declaredAxes non-null): the operator's Variation Theme (or the
+// parent's stored _variationAxes) is AUTHORITATIVE for which axes eBay gets:
+//   • Observed multi-value axes matching a declared axis (synonym- or name-
+//     equal) form the set, in DECLARED order, keeping their observed (live-
+//     compatible) display name.
+//   • A stray observed axis whose value fingerprint equals a declared+matched
+//     axis is SUPPRESSED (the Team Name case — proven duplicate data).
+//   • A stray with a UNIQUE fingerprint is KEPT (never silently break a live
+//     listing) but raises a warning; appended after the declared axes.
+//   • A declared axis with no observed values, or only one value, is NOT sent
+//     but raises a warning (D7 — warn, don't silently vanish).
+export interface VariationAxisSpec {
+  name: string // display / canonical name (observed, locale-correct)
+  values: Set<string>
+  coverage: number
+  rawName: string // observed aspect_ name — used for aspect_<name> key lookups
+}
+
+export interface ResolveVariationAxesOptions {
+  nameLabels?: Record<string, string>
+  valueLabels?: Record<string, Record<string, string>>
+  storedAxisOrder?: string[]
+  pictureAxisOverride?: string
+}
+
+export interface ResolvedVariationAxes {
+  /** Final, ordered, non-empty axis specs sent to eBay (variesBy.specifications). */
+  validSpecs: VariationAxisSpec[]
+  /** Raw multi-value aspect names (>1 distinct value) — feeds isVarAxis. */
+  effectiveVarAxes: string[]
+  /** Surviving raw axis names in final order — feeds picture-axis selection. */
+  dedupedAxisNames: string[]
+  /** Operator-facing warnings (undeclared varying axis / missing / single-value). */
+  warnings: string[]
+  /** Strays dropped as fingerprint-duplicates of a declared axis (diagnostics). */
+  suppressed: string[]
+}
+
+export function resolveVariationAxes(
+  variantRows: Array<Record<string, unknown>>,
+  declaredAxes: string[] | null,
+  opts: ResolveVariationAxesOptions = {},
+): ResolvedVariationAxes {
+  const nameLabels = opts.nameLabels ?? {}
+  const valueLabels = opts.valueLabels ?? {}
+  const storedAxisOrder = opts.storedAxisOrder ?? []
+  const pictureAxisOverride = opts.pictureAxisOverride
+  const nmLabel = (a: string) => nameLabels[a] || a
+  const vlLabel = (a: string, v: string) => valueLabels[a]?.[v] || v
+  const fingerprint = (s: VariationAxisSpec) =>
+    [...s.values].map((v) => v.toLowerCase()).sort().join('|')
+
+  // 1. Scan aspect_* across variant rows (unchanged from the inline version).
+  const allAspectValueSets = new Map<string, Set<string>>()
+  const dimRowCoverage = new Map<string, Set<number>>()
+  variantRows.forEach((row, rowIdx) => {
+    for (const [k, v] of Object.entries(row)) {
+      if (k.startsWith('aspect_') && typeof v === 'string' && v) {
+        const name = k.slice('aspect_'.length).replace(/_/g, ' ')
+        if (!name) continue
+        if (!allAspectValueSets.has(name)) allAspectValueSets.set(name, new Set())
+        allAspectValueSets.get(name)!.add(v)
+        const dk = axisSynonymKey(name)
+        if (!dimRowCoverage.has(dk)) dimRowCoverage.set(dk, new Set())
+        dimRowCoverage.get(dk)!.add(rowIdx)
+      }
+    }
+  })
+  const dimCoverage = (name: string) => dimRowCoverage.get(axisSynonymKey(name))?.size ?? 0
+  const effectiveVarAxes = [...allAspectValueSets.entries()]
+    .filter(([, vals]) => vals.size > 1)
+    .map(([name]) => name)
+
+  // 2. Synonym-dedup (collapse Colore/Color/… to the first canonical name).
+  const seenSynonymDims = new Set<string>()
+  const effectiveVarAxesDeDuped = effectiveVarAxes.filter((axis) => {
+    const sk = axisSynonymKey(axis)
+    if (seenSynonymDims.has(sk)) return false
+    seenSynonymDims.add(sk)
+    return true
+  })
+  // storedAxisOrder ranks the deduped axes (unchanged — the operator's stored
+  // axis order still shapes derived ordering; declared order overrides below).
+  if (storedAxisOrder.length > 0) {
+    const rank = new Map(storedAxisOrder.map((a, i) => [axisSynonymKey(a), i]))
+    effectiveVarAxesDeDuped.sort((a, b) =>
+      (rank.get(axisSynonymKey(a)) ?? Number.MAX_SAFE_INTEGER)
+      - (rank.get(axisSynonymKey(b)) ?? Number.MAX_SAFE_INTEGER))
+  }
+
+  // 3. Candidate specs (display name + merged synonym values + coverage).
+  const specificationsMap = new Map<string, VariationAxisSpec>()
+  for (const rawName of effectiveVarAxesDeDuped) {
+    const label = nmLabel(rawName)
+    if (!label) continue
+    const mapKey = label.toLowerCase()
+    if (!specificationsMap.has(mapKey)) {
+      specificationsMap.set(mapKey, { name: label, values: new Set(), coverage: 0, rawName })
+    }
+    const entry = specificationsMap.get(mapKey)!
+    entry.coverage = Math.max(entry.coverage, dimCoverage(rawName))
+    for (const v of (allAspectValueSets.get(rawName) ?? [])) entry.values.add(vlLabel(rawName, v))
+    const dimKey = axisSynonymKey(rawName)
+    for (const [candidateName] of allAspectValueSets) {
+      if (candidateName === rawName) continue
+      if (axisSynonymKey(candidateName) === dimKey) {
+        for (const v of (allAspectValueSets.get(candidateName) ?? [])) entry.values.add(vlLabel(candidateName, v))
+      }
+    }
+  }
+  const candidateSpecs = [...specificationsMap.values()]
+
+  const matchesOverride = (spec: VariationAxisSpec) =>
+    !!pictureAxisOverride &&
+    (spec.name.toLowerCase() === pictureAxisOverride.toLowerCase()
+      || spec.rawName.toLowerCase() === pictureAxisOverride.toLowerCase()
+      || axisSynonymKey(spec.name) === axisSynonymKey(pictureAxisOverride)
+      || axisSynonymKey(spec.rawName) === axisSynonymKey(pictureAxisOverride))
+
+  // ── LEGACY MODE — byte-identical to pre-EFX (plus inert D8 exemption) ────
+  if (declaredAxes == null) {
+    const validSpecs = dedupeSpecsByValueFingerprint(candidateSpecs, matchesOverride)
+      .filter((e) => e.name && e.values.size > 0)
+    return {
+      validSpecs,
+      effectiveVarAxes,
+      dedupedAxisNames: effectiveVarAxesDeDuped,
+      warnings: [],
+      suppressed: [],
+    }
+  }
+
+  // ── DECLARED MODE — theme / _variationAxes authoritative for the SET ─────
+  const matchesDeclared = (spec: VariationAxisSpec, d: string) =>
+    axisSynonymKey(spec.name) === axisSynonymKey(d)
+    || spec.name.toLowerCase() === d.toLowerCase()
+    || axisSynonymKey(spec.rawName) === axisSynonymKey(d)
+    || spec.rawName.toLowerCase() === d.toLowerCase()
+
+  const warnings: string[] = []
+  const suppressed: string[] = []
+  const resolved: VariationAxisSpec[] = []
+  const usedSpecs = new Set<VariationAxisSpec>()
+
+  for (const d of declaredAxes) {
+    const cand = candidateSpecs.find((s) => !usedSpecs.has(s) && matchesDeclared(s, d))
+    if (cand) {
+      resolved.push(cand)
+      usedSpecs.add(cand)
+      continue
+    }
+    // Already represented by a spec matched to an earlier (synonym) declared axis.
+    if (candidateSpecs.some((s) => usedSpecs.has(s) && matchesDeclared(s, d))) continue
+    // No multi-value candidate — warn with the reason (D7).
+    const observed = [...allAspectValueSets.entries()].filter(([n]) =>
+      axisSynonymKey(n) === axisSynonymKey(d) || n.toLowerCase() === d.toLowerCase())
+    if (observed.length > 0 && observed.every(([, vals]) => vals.size <= 1)) {
+      warnings.push(`Variation Theme axis "${d}" has only one value across all variants, so eBay can't vary by it — it was not sent. Add more values or remove it from the theme.`)
+    } else {
+      warnings.push(`Variation Theme axis "${d}" has no values on any variant — it was not sent. Fill the "${d}" column or remove it from the theme.`)
+    }
+  }
+
+  // Strays: observed multi-value candidate specs not matched to any declared axis.
+  const resolvedFps = new Set(resolved.map(fingerprint))
+  const keptStrays: VariationAxisSpec[] = []
+  for (const s of candidateSpecs) {
+    if (usedSpecs.has(s)) continue
+    if (matchesOverride(s)) {
+      // D8 — the operator's explicit image-axis pick is never suppressed.
+      keptStrays.push(s)
+      warnings.push(`Axis "${s.name}" varies across variants but is not in your Variation Theme — add it to the theme or clear the aspect values.`)
+      continue
+    }
+    if (resolvedFps.has(fingerprint(s))) {
+      // 3a — its value fingerprint proves it duplicates a declared axis (the
+      // AIREON "Team Name" case): drop it entirely, no operator warning.
+      suppressed.push(s.name)
+      continue
+    }
+    // 3b — real varying data the operator didn't declare: keep + warn.
+    keptStrays.push(s)
+    warnings.push(`Axis "${s.name}" varies across variants but is not in your Variation Theme — add it to the theme or clear the aspect values.`)
+  }
+
+  const finalSpecs = [...resolved, ...keptStrays]
+  const validSpecs = finalSpecs.filter((e) => e.name && e.values.size > 0)
+  return {
+    validSpecs,
+    effectiveVarAxes,
+    dedupedAxisNames: validSpecs.map((s) => s.rawName),
+    warnings,
+    suppressed,
+  }
 }
 
 // Maps eBay marketplace short-code to the BCP-47 language tag that eBay's
@@ -299,6 +513,11 @@ export async function pushVariationGroup(
      *  If eBay rejects the group without aspectsImageVariesBy, the group PUT
      *  retries once with the default axis (images stay uniform either way). */
     omitImageVariesBy?: boolean
+    /** EFX D7 — mutable sink the caller passes in to collect axis-resolution
+     *  warnings (undeclared varying axis / declared axis missing or single-
+     *  valued). The push route merges these into its response `warnings` so the
+     *  flat-file client can show them. Never affects the pushed payload. */
+    warningsSink?: string[]
   },
 ): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
   const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
@@ -344,18 +563,26 @@ export async function pushVariationGroup(
   let valueOrder: Record<string, string[]> = {}
   // FFP.8 — operator's stored axis ORDER (_variationAxes, per market+channel).
   let storedAxisOrder: string[] = []
+  // EFX D2 — the operator's declared axis SET (authoritative). parseThemeAxes on
+  // the parent Product.variationTheme; falling back to the parent listing's
+  // stored _variationAxes; null ⇒ LEGACY inference (byte-identical to pre-EFX).
+  let declaredAxes: string[] | null = null
+  let parentThemeRaw: string | null = null
   const brandBySku = new Map<string, string>()
   try {
     const skus = rows.map((r) => r.sku as string).filter(Boolean)
     const prods = await prisma.product.findMany({
       where: { sku: { in: skus } },
-      select: { sku: true, parentId: true, brand: true },
+      select: { sku: true, parentId: true, brand: true, variationTheme: true },
     })
     for (const p of prods) {
       if (p.brand) brandBySku.set(p.sku, p.brand)
     }
     // Resolve name/value label overrides from the parent listing's platformAttributes
     const parentSku = (rows.find((r) => r._isParent) ?? rows[0])?.sku as string | undefined
+    parentThemeRaw = prods.find((p) => p.sku === parentSku)?.variationTheme
+      ?? prods.find((p) => p.parentId == null)?.variationTheme
+      ?? null
     if (parentSku) {
       const pl = await prisma.channelListing.findFirst({
         where: { product: { sku: parentSku }, channel: 'EBAY', marketplace: mp },
@@ -380,6 +607,13 @@ export async function pushVariationGroup(
         ? (pa._variationAxes as unknown[]).filter((s): s is string => typeof s === 'string')
         : []
     }
+    // EFX D2 — theme wins; else the parent's stored _variationAxes; else LEGACY.
+    const themeAxes = parseThemeAxes(parentThemeRaw)
+    declaredAxes = themeAxes.length > 0
+      ? themeAxes
+      : storedAxisOrder.length > 0
+        ? storedAxisOrder.slice()
+        : null
   } catch (err) {
     console.warn('[ebay-push] brand/label fetch failed — proceeding without renames', err)
   }
@@ -442,123 +676,42 @@ export async function pushVariationGroup(
   for (const [sku, urls] of amazonImagesBySku) imagesBySku.set(sku, urls)
   for (const [sku, urls] of productImagesBySku) imagesBySku.set(sku, urls) // PI wins
 
-  // Detect variation axes dynamically: scan all aspect_* keys across variant
-  // rows and find those with >1 distinct value. Robust against the Amazon
-  // variation theme (e.g. "SIZE_COLOR") not matching the eBay category's
-  // locale-specific aspect names ("Colore", "Taglia" on EBAY_IT).
-  const allAspectValueSets = new Map<string, Set<string>>()
-  // Coverage per synonym-dimension: the set of variant-row indices that carry ANY
-  // aspect_ of that dimension. Used to break identical-value ties toward the dimension
-  // present on the most variants (so a stray axis on only some variants can't win and
-  // block the rest). Keyed by axisSynonymKey so case/locale variants of one dimension
-  // count once per row.
-  const dimRowCoverage = new Map<string, Set<number>>()
-  variantRows.forEach((row, rowIdx) => {
-    for (const [k, v] of Object.entries(row)) {
-      if (k.startsWith('aspect_') && typeof v === 'string' && v) {
-        const name = k.slice('aspect_'.length).replace(/_/g, ' ')
-        if (!name) continue // guard: skip aspect_ with empty suffix
-        if (!allAspectValueSets.has(name)) allAspectValueSets.set(name, new Set())
-        allAspectValueSets.get(name)!.add(v)
-        const dk = axisSynonymKey(name)
-        if (!dimRowCoverage.has(dk)) dimRowCoverage.set(dk, new Set())
-        dimRowCoverage.get(dk)!.add(rowIdx)
-      }
-    }
+  // EFX D2/D7/D8 — resolve the authoritative variation-axis SET. In LEGACY mode
+  // (declaredAxes == null) this is byte-identical to the old inline inference:
+  // aspect_* columns with >1 distinct value, synonym-deduped, storedAxisOrder-
+  // ranked, fingerprint-deduped. When the operator declared a theme (or the
+  // parent has stored _variationAxes) the declared set is authoritative and
+  // stray look-alikes (the AIREON "Team Name" case) are suppressed. Warnings are
+  // surfaced to the caller via opts.warningsSink.
+  const resolved = resolveVariationAxes(variantRows, declaredAxes, {
+    nameLabels,
+    valueLabels,
+    storedAxisOrder,
+    pictureAxisOverride,
   })
-  const dimCoverage = (name: string) => dimRowCoverage.get(axisSynonymKey(name))?.size ?? 0
-  const effectiveVarAxes = [...allAspectValueSets.entries()]
-    .filter(([, vals]) => vals.size > 1)
-    .map(([name]) => name)
+  const { effectiveVarAxes, dedupedAxisNames, validSpecs } = resolved
+  if (opts?.warningsSink && resolved.warnings.length > 0) {
+    for (const w of resolved.warnings) if (!opts.warningsSink.includes(w)) opts.warningsSink.push(w)
+  }
+  if (resolved.warnings.length > 0 || resolved.suppressed.length > 0) {
+    console.log('[ebay-push] axis resolve: declared=%j specs=%j warnings=%j suppressed=%j',
+      declaredAxes, validSpecs.map(s => s.name), resolved.warnings, resolved.suppressed)
+  }
 
   const isVarAxis = (name: string) => effectiveVarAxes.includes(name)
 
-  // Synonym dedup: collapse variation axis aliases to the first canonical name.
-  // "Colore"/"Color"/"color name" are the same physical dimension (colour).
-  // buildFlatRow writes eBay itemSpecifics keys (Italian "Colore") in Pass 1
-  // and Amazon variation keys (English "Color"/"color name") in Pass 2. Both
-  // survive effectiveVarAxes because they carry different-language values
-  // (NERO vs Black) with non-identical fingerprints. Without synonym dedup the
-  // push would require BOTH from every variant, and new variants that only have
-  // one of the two would fail validation — even if the operator filled the
-  // correct eBay column.
-  const seenSynonymDims = new Set<string>()
-  const effectiveVarAxesDeDuped = effectiveVarAxes.filter(axis => {
-    const sk = axisSynonymKey(axis)
-    if (seenSynonymDims.has(sk)) return false
-    seenSynonymDims.add(sk)
-    return true
-  })
-
-  // FFP.8 — honor the operator's stored axis ORDER. eBay renders the
-  // buyer-facing dropdowns in the order variesBy.specifications is sent, so
-  // this is what makes "Gender → Colour → Size" real. Unranked axes keep
-  // their derived order after the ranked ones (stable sort).
-  if (storedAxisOrder.length > 0) {
-    const rank = new Map(storedAxisOrder.map((a, i) => [axisSynonymKey(a), i]))
-    effectiveVarAxesDeDuped.sort((a, b) =>
-      (rank.get(axisSynonymKey(a)) ?? Number.MAX_SAFE_INTEGER)
-      - (rank.get(axisSynonymKey(b)) ?? Number.MAX_SAFE_INTEGER))
-  }
-
   const COLOR_AXIS_NAMES_PRE = new Set(['colore', 'color', 'farbe', 'couleur', 'colour', 'kleur'])
-  const colorAxisRawName = effectiveVarAxesDeDuped.find(n => COLOR_AXIS_NAMES_PRE.has(n.toLowerCase()))
+  const colorAxisRawName = dedupedAxisNames.find(n => COLOR_AXIS_NAMES_PRE.has(n.toLowerCase()))
   // FFP.16 — explicit override matches across locales too (Taglia ≡ Size):
   // an operator's deliberate axis pick is always honored when it truly varies.
   const pictureAxis = (pictureAxisOverride
-    && effectiveVarAxesDeDuped.find(a =>
+    && dedupedAxisNames.find(a =>
       a.toLowerCase() === pictureAxisOverride.toLowerCase()
       || axisSynonymKey(a) === axisSynonymKey(pictureAxisOverride)))
     || colorAxisRawName
 
-  // Build variesBy specifications here (before Step 1) so we can:
-  //   a) pre-flight-validate variants against the FINAL spec names before
-  //      touching the eBay API, and
-  //   b) reuse the already-computed values in the group PUT below.
-  //
-  // Use effectiveVarAxesDeDuped (synonym-collapsed) so "Colore" and "Color"
-  // become a single spec. Values are merged from ALL synonym aliases so the
-  // spec carries the full value set even when variants use different locale keys.
-  const specificationsMap = new Map<string, { name: string; values: Set<string>; coverage: number }>()
-  for (const rawName of effectiveVarAxesDeDuped) {
-    const label = nmLabel(rawName)
-    if (!label) continue // guard: skip axes whose label resolves to empty
-    const mapKey = label.toLowerCase()
-    if (!specificationsMap.has(mapKey)) {
-      specificationsMap.set(mapKey, { name: label, values: new Set(), coverage: 0 })
-    }
-    const entry = specificationsMap.get(mapKey)!
-    // Track how many variants carry this dimension so the fingerprint dedup below can
-    // prefer the fully-populated axis over a stray look-alike (max across aliases).
-    entry.coverage = Math.max(entry.coverage, dimCoverage(rawName))
-    // Collect values from the canonical axis name
-    for (const v of (allAspectValueSets.get(rawName) ?? [])) {
-      entry.values.add(vlLabel(rawName, v))
-    }
-    // Also collect values stored under synonym aliases: a new variant might
-    // only have aspect_Color (English, from Amazon categoryAttributes) while
-    // existing variants use aspect_Colore (Italian, from eBay itemSpecifics).
-    // Both carry the same physical value — include them all in the spec so the
-    // group PUT has the full value set.
-    const dimKey = axisSynonymKey(rawName)
-    for (const [candidateName] of allAspectValueSets) {
-      if (candidateName === rawName) continue
-      if (axisSynonymKey(candidateName) === dimKey) {
-        for (const v of (allAspectValueSets.get(candidateName) ?? [])) {
-          entry.values.add(vlLabel(candidateName, v))
-        }
-      }
-    }
-  }
-  // Fingerprint dedup: axes that carry identical value sets are the same physical
-  // attribute expressed under different names (e.g. "Color"/"Colore" both hold
-  // {NERO,BLU,…}, or a stray "Team Name" shadowing "Tipo di prodotto"). Keep the one
-  // present on the MOST variants so a stray axis that only some variants carry can't
-  // win and block the rest; ties keep the first occurrence (eBay market-locale name,
-  // written first). Survivor order preserved. See dedupeSpecsByValueFingerprint.
-  const specificationsRaw = [...specificationsMap.values()]
-  const deduplicatedSpecs = dedupeSpecsByValueFingerprint(specificationsRaw)
-  const validSpecs = deduplicatedSpecs.filter(e => e.name && e.values.size > 0)
+  // Build variesBy specifications from the resolved spec set (value ordering +
+  // Custom Bundle fallback unchanged).
   const specifications = validSpecs.length > 0
     ? validSpecs.map(e => ({
         name: e.name,
@@ -570,7 +723,8 @@ export async function pushVariationGroup(
       }))
     : [{ name: 'Custom Bundle', values: variantRows.map(r => r.sku as string).filter(Boolean) }]
   const pictureSpec = pictureAxis
-    ? deduplicatedSpecs.find(s => s.name.toLowerCase() === pictureAxis.toLowerCase()
+    ? validSpecs.find(s => s.name.toLowerCase() === pictureAxis.toLowerCase()
+        || s.rawName.toLowerCase() === pictureAxis.toLowerCase()
         || (COLOR_AXIS_NAMES_PRE.has(s.name.toLowerCase()) && COLOR_AXIS_NAMES_PRE.has(pictureAxis.toLowerCase())))
     : undefined
   // FFP.15/16 — picture-axis policy: pictures vary ONLY by a colour-like axis
@@ -1744,11 +1898,9 @@ export function buildFlatRow(
 
   // EV.5b — variation linkage. Axis names normalised to comma-separated
   // (what the variation publish's split(',') expects); axis values from
-  // the canonical categoryAttributes.variations.
-  const variationAxisNames = (product.variationTheme ?? '')
-    .split(/[/,|]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // the canonical categoryAttributes.variations. EFX D4 — one shared parser
+  // (splits on , / | ;) so a ';'-separated theme no longer collapses to one axis.
+  const variationAxisNames = parseThemeAxes(product.variationTheme);
   // variantAttributes is the canonical per-variant field (set during product creation);
   // categoryAttributes.variations is the legacy bulk-create fallback. Merge both so
   // newly-added variants (which may have variantAttributes but empty categoryAttributes)

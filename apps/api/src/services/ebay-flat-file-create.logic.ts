@@ -16,6 +16,8 @@
  * so stored variantAttributes keys line up with what push validates.
  */
 
+import { parseThemeAxes, axisSynonymKey } from './ebay-theme-axes.js'
+
 // ──────────────────────────────────────────────────────────────────────
 // Types
 // ──────────────────────────────────────────────────────────────────────
@@ -99,7 +101,26 @@ function readAspectValue(row: EbayRow, axisName: string): string {
   const key1 = `aspect_${axisName.replace(/\s+/g, '_')}`
   const key2 = `aspect_${axisName.toLowerCase().replace(/\s+/g, '_')}`
   const raw = row[key1] ?? row[key2]
-  return String(raw ?? '').trim()
+  const exact = String(raw ?? '').trim()
+  if (exact) return exact
+
+  // EFX D5 — synonym fallback. The exact aspect_<Name> key missed, so the row
+  // may carry the axis under a locale/naming synonym (theme "Colour" but the
+  // row has aspect_Colore, or the Amazon alias "color name"). Scan the row's
+  // aspect_* keys for one whose synonym-dimension key matches the wanted axis.
+  // Only known synonym dimensions (__dim*__) participate — a custom/unmapped
+  // axis keys by its own lowercase name, so an exact miss there stays a miss.
+  const wantKey = axisSynonymKey(axisName)
+  if (!wantKey.startsWith('__dim')) return ''
+  for (const [k, v] of Object.entries(row)) {
+    if (!k.startsWith('aspect_') || v == null) continue
+    const candidateAxis = k.slice('aspect_'.length).replace(/_/g, ' ')
+    if (!candidateAxis) continue
+    if (axisSynonymKey(candidateAxis) !== wantKey) continue
+    const val = String(v).trim()
+    if (val) return val
+  }
+  return ''
 }
 
 /**
@@ -205,8 +226,10 @@ function inferVariationThemeFromRow(row: EbayRow): string | null {
  *
  * For each axis name, reads the value using the canonical two-key
  * lookup (key1 = aspect_<Name_with_underscores>,
- *           key2 = aspect_<name_lowercased_underscores>).
- * Keyed by the axis name exactly as given. Empty values are omitted.
+ *           key2 = aspect_<name_lowercased_underscores>), then falls back to a
+ * synonym scan (EFX D5) so a theme axis "Colour" still extracts a row's
+ * aspect_Colore / aspect_color_name. Keyed by the DECLARED axis name exactly as
+ * given (creation is new data — no live-listing rename concern). Empties omitted.
  * De-duplication is implicit: each axis name yields at most one entry.
  */
 export function extractVariantAttributes(
@@ -255,7 +278,7 @@ export function buildEbayProductCreateInput(
     data.isParent = true
     if (opts.variationTheme) {
       data.variationTheme = opts.variationTheme
-      const axes = opts.variationTheme.split(',').map(s => s.trim()).filter(Boolean)
+      const axes = parseThemeAxes(opts.variationTheme) // EFX D4 — one parser (, / | ;)
       if (axes.length) data.variationAxes = axes
     }
     // parentId intentionally absent for parents
@@ -265,9 +288,7 @@ export function buildEbayProductCreateInput(
     if (opts.variationTheme) data.variationTheme = opts.variationTheme
 
     // Extract variant attributes using the axis names from variationTheme
-    const axisNames = opts.variationTheme
-      ? opts.variationTheme.split(',').map(s => s.trim()).filter(Boolean)
-      : []
+    const axisNames = parseThemeAxes(opts.variationTheme) // EFX D4 — one parser (, / | ;)
     if (axisNames.length) {
       const attrs = extractVariantAttributes(row, axisNames)
       if (Object.keys(attrs).length) {

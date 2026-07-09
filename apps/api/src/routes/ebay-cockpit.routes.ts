@@ -94,6 +94,7 @@ import { Prisma } from '@nexus/database'
 import prisma from '../db.js'
 import { csvDocument } from '../lib/csv.js'
 import { EbayCategoryService } from '../services/ebay-category.service.js'
+import { parseThemeAxes } from '../services/ebay-theme-axes.js'
 import { EbayPublishAdapter } from '../services/listing-wizard/ebay-publish.adapter.js'
 import { resolveComplianceById, complianceBlockers } from '../services/compliance-resolver.service.js'
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js'
@@ -429,6 +430,13 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       typeof parentPlatform._axisSortOrder === 'object' && parentPlatform._axisSortOrder !== null
         ? (parentPlatform._axisSortOrder as Record<string, string[]>)
         : {}
+    // EFX D1 — the VariationValueOrderModal's own value-order store (keyed by
+    // axisSynonymKey: __dim0__/__dim1__/lowercase-custom). Returned so the modal
+    // can reload exactly what it saved. Additive only.
+    const axisValueOrder =
+      typeof parentPlatform._axisValueOrder === 'object' && parentPlatform._axisValueOrder !== null
+        ? (parentPlatform._axisValueOrder as Record<string, string[]>)
+        : {}
     // EV.4 — eBay-only renames. Names: { Color: "Colour" }. Values:
     // { Color: { Giallo: "Yellow" } }. Display + publish overrides only;
     // the canonical variant data is never mutated.
@@ -505,10 +513,7 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
         ? (parent.variationAxes as string[])
         : []
     if (declaredAxes.length === 0 && parent.variationTheme) {
-      declaredAxes = parent.variationTheme
-        .split(/[/,|]/)
-        .map((s) => s.trim())
-        .filter(Boolean)
+      declaredAxes = parseThemeAxes(parent.variationTheme) // EFX D4 — one parser (, / | ;)
     }
     if (declaredAxes.length === 0) {
       const seen: string[] = []
@@ -526,6 +531,7 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       declaredAxes,
       pickedAxes,
       axisSortOrder,
+      axisValueOrder,
       axisNameLabels,
       axisValueLabels,
       cells,
@@ -724,7 +730,7 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
         ? (parent.variationAxes as string[])
         : []
     if (!axes.length && parent.variationTheme) {
-      axes = parent.variationTheme.split(/[/,|]/).map((s) => s.trim()).filter(Boolean)
+      axes = parseThemeAxes(parent.variationTheme) // EFX D4 — one parser (, / | ;)
     }
     if (!axes.length) {
       const seen: string[] = []

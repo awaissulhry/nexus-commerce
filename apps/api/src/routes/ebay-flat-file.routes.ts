@@ -37,6 +37,7 @@ import {
   getEbayPullPreviewJobStatus,
 } from '../services/ebay-flat-file-pull-preview.service.js';
 import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, toListingLanguage, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
+import { parseThemeAxes } from '../services/ebay-theme-axes.js';
 import { pushSharedListings, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot } from '../services/ebay-variation-push.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
@@ -664,7 +665,17 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             where: { id: productId },
             data: {
               ...(brandOverride ? { brand: brandOverride } : {}),
-              ...(variationThemeOverride ? { variationTheme: variationThemeOverride } : {}),
+              // EFX D6 — when the theme is (re)saved, reconcile the derived axis
+              // SET too. variationAxes is authoritative for the eBay push; without
+              // this it drifts stale (e.g. AIREON parent had theme
+              // 'Tipo di prodotto,Color,Size' but variationAxes
+              // ['Body Type','Color','Size']). Uses the ONE parser so client,
+              // push, and stored axes all agree. Idempotent — heals on next save.
+              // NOTE: children's categoryAttributes.variations keys are NOT
+              // remapped here (a live-listing rename concern) — deferred to Phase 3.
+              ...(variationThemeOverride
+                ? { variationTheme: variationThemeOverride, variationAxes: parseThemeAxes(variationThemeOverride) }
+                : {}),
             },
           })
         }
@@ -930,6 +941,12 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       itemId?: string;
     }> = [];
 
+    // EFX D7 — group-level variation-axis warnings collected across every
+    // family/market push (declared axis missing/single-valued, or an undeclared
+    // axis that varies). Deduped, surfaced in the response so the flat-file
+    // client can show them without blocking the push.
+    const axisWarnings: string[] = [];
+
     // Group rows by family (platformProductId). Rows without one are their own family.
     // FFP.6 — per-row Action column. '' → publish/update (default); 'skip' →
     // excluded from this push; 'deactivate' → live offer quantity set to 0
@@ -1112,6 +1129,11 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             EBAY_API_BASE,
             marketplaceId,
             capToFbm,
+            undefined, // imageOverrideByColor
+            undefined, // pictureAxisOverride
+            undefined, // imageOverrideBySku
+            undefined, // groupImageOverride
+            { warningsSink: axisWarnings }, // EFX D7 — collect axis warnings
           );
           perRowResults.push(...groupResults);
           continue;
@@ -1450,7 +1472,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       });
     } catch { /* SSE is best-effort */ }
 
-    return reply.send({ mode: 'api', pushed, errors, skipped: skippedCount, results: perRowResults, warnings: oversellWarnings });
+    return reply.send({ mode: 'api', pushed, errors, skipped: skippedCount, results: perRowResults, warnings: oversellWarnings, axisWarnings });
   });
 
   // ── GET /api/ebay/flat-file/pushes ──────────────────────────────────
