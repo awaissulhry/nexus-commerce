@@ -137,6 +137,34 @@ export function axisSynonymKey(name: string): string {
   return lk
 }
 
+/**
+ * Collapse variation specs that carry an IDENTICAL value set — the same physical
+ * dimension surfaced under two different aspect names. This happens when a stray or
+ * mislabeled aspect duplicates a real axis (observed on AIREON: a leftover Amazon
+ * "Team Name" = {Giacca, Pantaloni} shadowing the real "Tipo di prodotto" =
+ * {Giacca, Pantaloni}).
+ *
+ * The previous rule kept the FIRST-seen name. That silently blocks the group when the
+ * stray sits on only SOME variants: every variant lacking it then fails the "all
+ * variants must carry every axis" pre-flight. Instead we keep the spec present on the
+ * MOST variants (highest `coverage`) — that minimises (usually zeroes) the variants
+ * missing the surviving axis. Ties keep the incumbent, i.e. the original first-seen
+ * behaviour, which is the eBay market-locale name (itemSpecifics are written first).
+ * The relative order of the survivors is preserved.
+ */
+export function dedupeSpecsByValueFingerprint<T extends { values: Set<string>; coverage: number }>(
+  specs: T[],
+): T[] {
+  const fingerprint = (s: T) => [...s.values].map((v) => v.toLowerCase()).sort().join('|')
+  const winnerByFp = new Map<string, T>()
+  for (const spec of specs) {
+    const fp = fingerprint(spec)
+    const cur = winnerByFp.get(fp)
+    if (!cur || spec.coverage > cur.coverage) winnerByFp.set(fp, spec)
+  }
+  return specs.filter((spec) => winnerByFp.get(fingerprint(spec)) === spec)
+}
+
 // Maps eBay marketplace short-code to the BCP-47 language tag that eBay's
 // Inventory API requires for Content-Language / Accept-Language headers.
 // eBay stores aspect names in the locale used at write time — sending en-US
@@ -419,16 +447,26 @@ export async function pushVariationGroup(
   // variation theme (e.g. "SIZE_COLOR") not matching the eBay category's
   // locale-specific aspect names ("Colore", "Taglia" on EBAY_IT).
   const allAspectValueSets = new Map<string, Set<string>>()
-  for (const row of variantRows) {
+  // Coverage per synonym-dimension: the set of variant-row indices that carry ANY
+  // aspect_ of that dimension. Used to break identical-value ties toward the dimension
+  // present on the most variants (so a stray axis on only some variants can't win and
+  // block the rest). Keyed by axisSynonymKey so case/locale variants of one dimension
+  // count once per row.
+  const dimRowCoverage = new Map<string, Set<number>>()
+  variantRows.forEach((row, rowIdx) => {
     for (const [k, v] of Object.entries(row)) {
       if (k.startsWith('aspect_') && typeof v === 'string' && v) {
         const name = k.slice('aspect_'.length).replace(/_/g, ' ')
         if (!name) continue // guard: skip aspect_ with empty suffix
         if (!allAspectValueSets.has(name)) allAspectValueSets.set(name, new Set())
         allAspectValueSets.get(name)!.add(v)
+        const dk = axisSynonymKey(name)
+        if (!dimRowCoverage.has(dk)) dimRowCoverage.set(dk, new Set())
+        dimRowCoverage.get(dk)!.add(rowIdx)
       }
     }
-  }
+  })
+  const dimCoverage = (name: string) => dimRowCoverage.get(axisSynonymKey(name))?.size ?? 0
   const effectiveVarAxes = [...allAspectValueSets.entries()]
     .filter(([, vals]) => vals.size > 1)
     .map(([name]) => name)
@@ -481,15 +519,18 @@ export async function pushVariationGroup(
   // Use effectiveVarAxesDeDuped (synonym-collapsed) so "Colore" and "Color"
   // become a single spec. Values are merged from ALL synonym aliases so the
   // spec carries the full value set even when variants use different locale keys.
-  const specificationsMap = new Map<string, { name: string; values: Set<string> }>()
+  const specificationsMap = new Map<string, { name: string; values: Set<string>; coverage: number }>()
   for (const rawName of effectiveVarAxesDeDuped) {
     const label = nmLabel(rawName)
     if (!label) continue // guard: skip axes whose label resolves to empty
     const mapKey = label.toLowerCase()
     if (!specificationsMap.has(mapKey)) {
-      specificationsMap.set(mapKey, { name: label, values: new Set() })
+      specificationsMap.set(mapKey, { name: label, values: new Set(), coverage: 0 })
     }
     const entry = specificationsMap.get(mapKey)!
+    // Track how many variants carry this dimension so the fingerprint dedup below can
+    // prefer the fully-populated axis over a stray look-alike (max across aliases).
+    entry.coverage = Math.max(entry.coverage, dimCoverage(rawName))
     // Collect values from the canonical axis name
     for (const v of (allAspectValueSets.get(rawName) ?? [])) {
       entry.values.add(vlLabel(rawName, v))
@@ -511,16 +552,12 @@ export async function pushVariationGroup(
   }
   // Fingerprint dedup: axes that carry identical value sets are the same physical
   // attribute expressed under different names (e.g. "Color"/"Colore" both hold
-  // {NERO,BLU,…}). Keep the first occurrence (eBay market-locale name wins because
-  // itemSpecifics are written before variationValues in buildFlatRow).
-  const specFingerprintsSeen = new Set<string>()
+  // {NERO,BLU,…}, or a stray "Team Name" shadowing "Tipo di prodotto"). Keep the one
+  // present on the MOST variants so a stray axis that only some variants carry can't
+  // win and block the rest; ties keep the first occurrence (eBay market-locale name,
+  // written first). Survivor order preserved. See dedupeSpecsByValueFingerprint.
   const specificationsRaw = [...specificationsMap.values()]
-  const deduplicatedSpecs = specificationsRaw.filter(spec => {
-    const fp = [...spec.values].map(v => v.toLowerCase()).sort().join('|')
-    if (specFingerprintsSeen.has(fp)) return false
-    specFingerprintsSeen.add(fp)
-    return true
-  })
+  const deduplicatedSpecs = dedupeSpecsByValueFingerprint(specificationsRaw)
   const validSpecs = deduplicatedSpecs.filter(e => e.name && e.values.size > 0)
   const specifications = validSpecs.length > 0
     ? validSpecs.map(e => ({
