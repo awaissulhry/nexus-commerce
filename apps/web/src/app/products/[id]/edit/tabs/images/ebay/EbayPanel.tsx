@@ -19,11 +19,23 @@ import ImagePickerModal from '../ImagePickerModal'
 import ImagePublishHistory from '../ImagePublishHistory'
 import ChannelImageGrid, { type ImageGridColumn, type ImageGridRow, type GridCellDisplay } from '../ChannelImageGrid'
 import type { ListingImage, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
-import { axisSynonymKey } from '@/app/products/ebay-flat-file/variationValueOrder.pure'
+import { axisSynonymKey, SHARED_GALLERY_AXIS } from '@/app/products/ebay-flat-file/variationValueOrder.pure'
 
-const EBAY_MAX = PLATFORM_RULES.EBAY.maxImages ?? 24
+// EFX P5 — eBay's REAL limit for this panel's publish path. Per eBay's
+// Inventory API "Managing images" doc: "For multiple-variation listings, a
+// maximum of 12 pictures may be used per variation" (Trading's
+// VariationSpecificPictureSet carries the same 12 cap), and our push also
+// slices the group-level "cover & common" gallery to 12
+// (ebay-variation-push.service.ts). Single-SKU listings allow 24, but this
+// panel publishes variation groups only — the previous
+// `PLATFORM_RULES.EBAY.maxImages ?? 24` overstated what actually reached eBay.
+const EBAY_MAX = 12
 const MIN_COLS = 12
-const SHARED = '__shared__'
+// Default-bucket key AND the '__shared__' wire value for "one shared gallery"
+// (activeAxis / imageAxisPreference) — intentionally the same sentinel.
+const SHARED = SHARED_GALLERY_AXIS
+// Operator-facing name for the shared-gallery mode (mirrors the flat-file modal).
+const SHARED_LABEL = 'One shared gallery (no per-variant images)'
 
 // EFX P3 — axisSynonymKey now has ONE client home (variationValueOrder.pure.ts);
 // the local copy that used to live here was removed to prevent drift.
@@ -114,6 +126,8 @@ function getAxisValues(variants: VariantSummary[], axis: string): string[] {
 
 function defaultAxis(product: WorkspaceProduct, axes: string[]): string {
   const pref = product.imageAxisPreference
+  // EFX P5 — '__shared__' stored as the preference = one shared gallery.
+  if (pref === SHARED) return SHARED
   if (pref) { const m = axes.find((a) => axisSynonymKey(a) === axisSynonymKey(pref)); if (m) return m }
   // Find the colour axis (dim0) — matches Colore, Color, Couleur, etc.
   return axes.find((a) => axisSynonymKey(a) === '__dim0__') ?? axes[0] ?? 'Color'
@@ -179,12 +193,18 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
 
   const colorValues = useMemo(() => getAxisValues(variants, axis), [variants, axis])
 
+  // EFX P5 — persist imageAxisPreference, then reload the workspace. The shared
+  // bottom bar's Publish (ImagesTab) derives its activeAxis from the workspace's
+  // imageAxisPreference, so without the reload it would publish a STALE axis and
+  // silently override this pick — '__shared__' included.
   const persistAxis = useCallback((a: string) => {
     setAxis(a)
     void beFetch(`/api/products/${productId}/images-workspace/axis`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ axis: a }),
-    }).catch(() => { /* non-fatal */ })
-  }, [productId])
+    })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return onReload?.() })
+      .catch(() => onToast?.('Could not save the axis preference — Publish may still use the previous axis'))
+  }, [productId, onReload, onToast])
 
   // ── Buckets state (SHARED + per-colour) ──────────────────────────────
   // `baseline` = the saved server truth; `buckets` = the working copy. Edits
@@ -390,7 +410,7 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
             <div className="relative">
               <button ref={axisRef} type="button" aria-haspopup="listbox" aria-expanded={axisOpen} onClick={() => setAxisOpen((o) => !o)}
                 className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-300 border border-default rounded-md px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                {axis}
+                {axis === SHARED ? 'One shared gallery' : axis}
                 <ChevronDown className={cn('w-3 h-3 text-tertiary transition-transform', axisOpen && 'rotate-180')} />
               </button>
               {axisOpen && (
@@ -401,6 +421,11 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
                       {a}
                     </button>
                   ))}
+                  {/* EFX P5 — explicit shared-gallery mode (no per-variant images). */}
+                  <button role="option" aria-selected={axis === SHARED} type="button" onClick={() => { persistAxis(SHARED); setAxisOpen(false) }}
+                    className={cn('w-full text-left px-3 py-1.5 text-xs border-t border-subtle hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors', axis === SHARED ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-slate-700 dark:text-slate-300')}>
+                    {SHARED_LABEL}
+                  </button>
                 </div>
               )}
             </div>
@@ -442,7 +467,9 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
 
       {/* The shared grid */}
       <div className="p-4">
-        {colorValues.length === 0 ? (
+        {/* EFX P5 — shared-gallery mode always renders the grid (just the
+            Default row) so the shared set stays editable. */}
+        {axis !== SHARED && colorValues.length === 0 ? (
           <div className="py-10 text-center text-xs text-tertiary">
             No variants found for axis &ldquo;{axis}&rdquo;.{axes.length > 1 && ' Try a different variation axis.'}
           </div>
@@ -461,8 +488,8 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
             onCellRemove={handleCellRemove}
             onSetPrimary={onSetPrimary}
             minDimensionPx={PLATFORM_RULES.EBAY.minDimensionPx}
-            ariaLabel={`eBay photos grouped by ${axis}`}
-            rowHeaderLabel={axis}
+            ariaLabel={`eBay photos ${axis === SHARED ? 'as one shared gallery' : `grouped by ${axis}`}`}
+            rowHeaderLabel={axis === SHARED ? 'Shared gallery' : axis}
           />
         )}
       </div>
