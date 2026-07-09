@@ -12,7 +12,7 @@
 // the layout, cells, drag-drop plumbing and keyboard navigation. Update this one
 // file and every channel that renders it gets the change.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { AlertTriangle, Link2, Plus, Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -64,11 +64,20 @@ export interface ChannelImageGridProps {
   onCellDrop?: (rowKey: string | null, columnKey: string, url: string, sourceId?: string) => void
   /** Drop an OS file onto a cell. */
   onCellFileDrop?: (rowKey: string | null, columnKey: string, file: File) => void
-  /** Move an image from one cell to another (drag-reorder). */
+  /** Move an image from one cell to another (drag-reorder). EFX P7 — when
+   *  `allowCopyDrag` is set and the operator holds Alt/Option at drop, `mode`
+   *  is 'copy' (source keeps the image); otherwise 'move' (unchanged). */
   onCellMove?: (
     from: { rowKey: string | null; columnKey: string; url: string },
     to: { rowKey: string | null; columnKey: string },
+    mode?: 'move' | 'copy',
   ) => void
+  /** EFX P7 — opt in to Alt/Option-drag = COPY between cells. Also switches the
+   *  native drag cursor to the copy affordance ('+' badge) while Alt is held. */
+  allowCopyDrag?: boolean
+  /** EFX P7 — optional per-row actions rendered under the row label
+   *  (e.g. a copy-set menu). Return null for rows without actions. */
+  rowActions?: (rowKey: string | null) => ReactNode
   /** Remove the image in a cell. */
   onCellRemove?: (rowKey: string | null, columnKey: string) => void
   /** Promote a cell's image to the row's primary/lead (the "Main" shown first).
@@ -98,7 +107,13 @@ interface CellProps {
   onFocus: () => void
   onDrop?: (url: string, sourceId?: string) => void
   onFileDrop?: (file: File) => void
-  onMoveDrop?: (payload: { rowKey: string | null; columnKey: string; url: string }) => void
+  onMoveDrop?: (payload: { rowKey: string | null; columnKey: string; url: string }, mode: 'move' | 'copy') => void
+  /** EFX P7 — Alt/Option at drop copies instead of moving (see grid prop). */
+  allowCopyDrag?: boolean
+  /** Identifies the owning grid inside the drag payload, so a cell dragged
+   *  from ANOTHER grid (other family / other channel) is treated as a plain
+   *  URL drop (copy) instead of a move within the wrong grid. */
+  gridId?: string
   onRemove?: () => void
   /** Promote this filled, non-primary cell to the row's primary/lead (Main). */
   onSetPrimary?: () => void
@@ -112,6 +127,7 @@ interface CellProps {
 function ImageCell({
   cell, column, rowLabel, rowKey, isFocused, cellRef, minDimensionPx,
   onClick, onKeyDown, onFocus, onDrop, onFileDrop, onMoveDrop, onRemove, onSetPrimary, isPrimaryColumn, onEnlarge,
+  allowCopyDrag, gridId,
 }: CellProps) {
   const [isOver, setIsOver] = useState(false)
   const tooSmall = cell?.width != null && minDimensionPx != null && cell.width < minDimensionPx
@@ -123,6 +139,11 @@ function ImageCell({
       e.dataTransfer.types.includes('Files')
     ) {
       e.preventDefault()
+      // EFX P7 — live cursor cue: Alt/Option over a cell-to-cell drag shows the
+      // native copy affordance ('+' badge / copy cursor) instead of move.
+      if (allowCopyDrag && e.dataTransfer.types.includes('application/nexus-grid-cell')) {
+        e.dataTransfer.dropEffect = e.altKey ? 'copy' : 'move'
+      }
       setIsOver(true)
     }
   }
@@ -135,9 +156,16 @@ function ImageCell({
     const movePayload = e.dataTransfer.getData('application/nexus-grid-cell')
     if (movePayload && onMoveDrop) {
       try {
-        const parsed = JSON.parse(movePayload) as { rowKey: string | null; columnKey: string; url: string }
+        const parsed = JSON.parse(movePayload) as { rowKey: string | null; columnKey: string; url: string; gridId?: string }
+        // EFX P7 — a cell dragged from a DIFFERENT grid (another family in the
+        // drawer, another channel panel) is not a move within THIS grid: treat
+        // it as a plain URL drop (copy — the source grid never saw the drop).
+        if (parsed.gridId && gridId && parsed.gridId !== gridId) {
+          if (onDrop) { onDrop(parsed.url); return }
+          return
+        }
         if (parsed.rowKey === rowKey && parsed.columnKey === column.key) return // same cell, no-op
-        onMoveDrop(parsed)
+        onMoveDrop(parsed, allowCopyDrag && e.altKey ? 'copy' : 'move')
         return
       } catch { /* fall through */ }
     }
@@ -150,8 +178,10 @@ function ImageCell({
 
   function handleDragStart(e: React.DragEvent) {
     if (!cell) return
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('application/nexus-grid-cell', JSON.stringify({ rowKey, columnKey: column.key, url: cell.url }))
+    // EFX P7 — advertise copy as a legal effect so Alt/Option can flip the
+    // drop into a copy (and the OS shows the '+' cursor while Alt is held).
+    e.dataTransfer.effectAllowed = allowCopyDrag ? 'copyMove' : 'move'
+    e.dataTransfer.setData('application/nexus-grid-cell', JSON.stringify({ rowKey, columnKey: column.key, url: cell.url, gridId }))
     const imgEl = e.currentTarget.querySelector('img') as HTMLImageElement | null
     if (imgEl) e.dataTransfer.setDragImage(imgEl, imgEl.width / 2, imgEl.height / 2)
   }
@@ -297,9 +327,13 @@ function ImageCell({
 export default function ChannelImageGrid({
   rows, columns, resolveCell, onCellClick, onCellDrop, onCellFileDrop,
   onCellMove, onCellRemove, onSetPrimary, minDimensionPx, ariaLabel, rowHeaderLabel,
+  allowCopyDrag, rowActions,
 }: ChannelImageGridProps) {
   const rowCount = rows.length
   const colCount = columns.length
+  // EFX P7 — stamped into every cell-drag payload so drops can tell
+  // this-grid moves apart from cross-grid drags (which become URL copies).
+  const gridId = useId()
 
   // Roving tabindex keyboard navigation.
   const [focused, setFocused] = useState<{ row: number; col: number }>({ row: 0, col: 0 })
@@ -360,6 +394,7 @@ export default function ChannelImageGrid({
         {/* Data rows */}
         {rows.map((row, rowIdx) => {
           const isShared = row.key === null
+          const actions = rowActions?.(row.key) ?? null
           return (
             <div
               key={row.key ?? '__shared__'}
@@ -384,6 +419,8 @@ export default function ChannelImageGrid({
                     <span className="text-[10px] text-red-500">No {columns[0].label}</span>
                   </div>
                 )}
+                {/* EFX P7 — per-row actions (e.g. copy-set menu) */}
+                {actions != null && <div className="mt-1">{actions}</div>}
               </div>
 
               {/* Cells */}
@@ -404,7 +441,9 @@ export default function ChannelImageGrid({
                     onFocus={() => setFocused({ row: rowIdx, col: colIdx })}
                     onDrop={onCellDrop ? (url, sourceId) => onCellDrop(row.key, col.key, url, sourceId) : undefined}
                     onFileDrop={onCellFileDrop ? (file) => onCellFileDrop(row.key, col.key, file) : undefined}
-                    onMoveDrop={onCellMove ? (from) => onCellMove(from, { rowKey: row.key, columnKey: col.key }) : undefined}
+                    onMoveDrop={onCellMove ? (from, mode) => onCellMove(from, { rowKey: row.key, columnKey: col.key }, mode) : undefined}
+                    allowCopyDrag={allowCopyDrag}
+                    gridId={gridId}
                     onRemove={onCellRemove && cell ? () => onCellRemove(row.key, col.key) : undefined}
                     onSetPrimary={onSetPrimary && cell && !col.isPrimary ? () => onSetPrimary(row.key, col.key) : undefined}
                     isPrimaryColumn={col.isPrimary ?? false}

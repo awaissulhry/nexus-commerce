@@ -46,6 +46,9 @@ import { fireBrowserNotification } from '@/lib/notifications/browser-notificatio
 import { fromListing, fromMaster, useLightbox } from './images/useLightbox'
 import type { LightboxImage } from './images/useLightbox'
 import type { ProductImage } from './images/types'
+// EFX P7 — '__shared__' sentinel ("one shared gallery"), first-class in the
+// flat-file drawer + EbayPanel; this tab must render it as its label, not raw.
+import { SHARED_GALLERY_AXIS } from '@/app/products/ebay-flat-file/variationValueOrder.pure'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import type { ChannelTab } from './images/types'
 
@@ -66,6 +69,10 @@ const CHANNEL_TABS: { key: ChannelTab; label: string }[] = [
   { key: 'ebay',    label: 'eBay' },
   { key: 'shopify', label: 'Shopify' },
 ]
+
+// EFX P7 — operator-facing name for the '__shared__' axis preference
+// (mirrors EbayPanel.tsx's SHARED_LABEL; the raw sentinel must never show).
+const SHARED_LABEL = 'One shared gallery (no per-variant images)'
 
 export default function ImagesTab({ product, discardSignal, onDirtyChange, onPreSaveAll }: Props) {
   const [activeChannel, setActiveChannel] = useState<ChannelTab>('master')
@@ -636,15 +643,26 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
               <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Group by</span>
               <input
                 list="images-axis-list"
-                value={activeAxis}
-                onChange={(e) => { if (e.target.value.trim()) setAxisPreference(e.target.value.trim()) }}
+                // EFX P7 — the stored '__shared__' sentinel renders as its
+                // operator-facing label (never the raw wire value); picking
+                // the label maps back to the sentinel before persisting.
+                value={activeAxis === SHARED_GALLERY_AXIS ? SHARED_LABEL : activeAxis}
+                onChange={(e) => {
+                  const v = e.target.value.trim()
+                  if (!v) return
+                  setAxisPreference(v === SHARED_LABEL ? SHARED_GALLERY_AXIS : v)
+                }}
                 placeholder="e.g. Colore"
-                className="text-xs border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-400 w-28"
+                className={cn(
+                  'text-xs border border-default dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-400',
+                  activeAxis === SHARED_GALLERY_AXIS ? 'w-56' : 'w-28',
+                )}
               />
               <datalist id="images-axis-list">
                 {[...new Set([...availableAxes, 'ASIN', 'SKU', 'Colore', 'Taglia', 'Color', 'Size', 'Colour', 'Material', 'Style', 'Gender'])].map((a) => (
                   <option key={a} value={a} />
                 ))}
+                <option value={SHARED_LABEL} />
               </datalist>
             </div>
           )}

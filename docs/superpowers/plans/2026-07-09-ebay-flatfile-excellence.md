@@ -90,6 +90,13 @@ Invariants A–E (never write pool / FBA untouchable / no version bump / pin wri
 NOTE: step 5 revises a LIVE listing — operator drives the click. Qty state: AIREON variants were qty 0/4/9/10/16/17 mixed at last look — publish needs ≥1 purchasable variant (the FFP.7a lesson: all-zero qty publishes fail with misleading 25007).
 
 - **Phase 8 — Live E2E sweep on the Arianne family.** Full walkthrough on prod: 3-axis theme of operator's choice, order axes+values, images vary by Tipo di prodotto, multi-parent drawer, reuse, columns complete across both categories, zero feed/publish errors; regression scripts kept in apps/api/scripts.
-- **Phase 9 (backlog, separate approval)** — new capability columns: compatibility/fitment, video, images 7-24, merchant_location_key, wire best_offer_* into the offer body, per-market content fields.
+- **Phase 9 (backlog, separate approval)** — new capability columns. PROPOSAL DETAIL (drafted 2026-07-10, awaiting operator approval + prioritization):
+  - **9a. Best Offer wiring (small, high value):** the sheet's best_offer_enabled/floor/ceiling columns exist but are stored-only — wire them into the offer body (bestOfferTerms + auto-accept/decline via the Negotiation/offer API shape) so Trattativa works from the sheet. Tooltips currently say "coming soon" — this closes them.
+  - **9b. merchant_location_key column (tiny):** the push already reads parentRow.merchant_location_key; add the column (enum from the account's inventory locations) so multi-warehouse sellers can steer it.
+  - **9c. Parts compatibility / fitment (large, motorcycle-gear relevant):** eBay compatibility API + fitment aspects; needs its own mini-research (kType/ePID for moto in IT?). Highest commercial value for helmets/gear once sized.
+  - **9d. Video column (small-medium):** eBay Video API (upload → videoId → inventory item video field); one videoIds column + upload affordance.
+  - **9e. Per-market content fields (medium):** title/subtitle/description per market (currently shared-only; per-market price/qty exist). Requires market-scoped snapshot extension — design carefully vs the FFP market-scoping work.
+  - **9f. quantityLimitPerBuyer column (tiny):** currently hardcoded 10 in the push.
+  - Suggested order: 9a → 9b → 9f (one small batch), then 9d, then 9e, 9c last (own research phase). NOTE: 'images 7-24' from the original list is WITHDRAWN — P5 verified eBay's real multi-variation limit is 12, which the sheet already supports.
 
 **Constraints honored:** flat-file editors untouchable without approval (this doc IS the approval request); design-system components only; ship live with guards; verify on prod; commit+push per verified unit; FBA + pool invariants never weakened. Subagent/implementation work runs on Opus 4.8 per operator directive.

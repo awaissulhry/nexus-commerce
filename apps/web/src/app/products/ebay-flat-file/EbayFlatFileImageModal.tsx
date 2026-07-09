@@ -1,9 +1,11 @@
 'use client'
 import { createRef, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
-import { CheckCircle2, ChevronDown, ChevronRight, ImageIcon, Loader2, RefreshCw, XCircle } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronRight, Copy, ImageIcon, Loader2, RefreshCw, XCircle } from 'lucide-react'
 import { Drawer } from '@/design-system/components/Drawer'
+import { Menu } from '@/design-system/components/Menu'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
+import { Checkbox } from '@/design-system/primitives/Checkbox'
 import { Banner } from '@/design-system/components/Banner'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button } from '@/components/ui/Button'
@@ -15,6 +17,9 @@ import type { WorkspaceData, ListingImage, VariantSummary, ProductImage } from '
 import { Select } from '@/design-system/primitives/Select'
 import { axisSynonymKey, describeResolvedAxis, SHARED_GALLERY_AXIS, type ResolvedAxisFeedback } from './variationValueOrder.pure'
 import type { ImageFamilySummary } from './imageFamilies.pure'
+// EFX P7 — pure assign/copy/cap semantics (reuse allowed, in-bucket dedup,
+// 12-cap rejection). See imageBuckets.vitest.test.ts for the invariants.
+import { EBAY_BUCKET_CAP, assignImage, copyImageAt, copySetTo, type Buckets } from './imageBuckets.pure'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -25,8 +30,9 @@ import type { ImageFamilySummary } from './imageFamilies.pure'
 // slices the group-level "cover & common" gallery to 12
 // (ebay-variation-push.service.ts). Single-SKU listings allow 24, but this
 // modal publishes variation groups only — the previous 24 here overstated
-// what actually reached eBay.
-const EBAY_MAX = 12
+// what actually reached eBay. Canonical value lives in imageBuckets.pure.ts
+// so the pure cap semantics and the UI can never drift apart.
+const EBAY_MAX = EBAY_BUCKET_CAP
 const MIN_COLS = 6
 // Default-bucket key AND the '__shared__' wire value for "one shared gallery"
 // (activeAxis / imageAxisPreference) — intentionally the same sentinel.
@@ -53,9 +59,8 @@ function getAxisValues(variants: VariantSummary[], axis: string): string[] {
 }
 
 // ── Bucket model ────────────────────────────────────────────────────────────
-// Mirrors EbayPanel.tsx initBuckets exactly.
-
-type Buckets = Map<string, string[]>
+// Mirrors EbayPanel.tsx initBuckets exactly. The Buckets type + edit
+// semantics live in imageBuckets.pure.ts (EFX P7).
 
 function initBuckets(listingImages: ListingImage[], axis: string, colorValues: string[]): Buckets {
   const map: Buckets = new Map()
@@ -133,9 +138,11 @@ interface PublishResult {
 // One self-contained panel per product family — manages its own workspace data,
 // buckets, axis preference, save, and publish independently.
 //
-// Cross-family drag semantics: within-family drags use onCellMove (move,
-// removes from source). Cross-family drags only fire onCellDrop on the target
-// (the source's ChannelImageGrid never saw the drag end) → copy semantics.
+// Cross-family drag semantics: within-family drags use onCellMove — move by
+// default, COPY with Alt/Option held at drop (EFX P7). Cross-family drags are
+// detected by the grid's gridId stamp and re-routed to onCellDrop on the
+// target (the source's ChannelImageGrid never saw the drag end) → copy
+// semantics, source keeps the photo.
 
 export interface FamilySectionHandle {
   /** Persist dirty buckets. No-op + returns true when already clean. Returns false on error. */
@@ -245,31 +252,37 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
     )
     const [buckets, setBuckets] = useState<Buckets>(() => cloneBuckets(baseline))
     useEffect(() => { setBuckets(cloneBuckets(baseline)) }, [baseline])
+    // EFX P7 — the copy-to picker targets THIS axis's values; close it whenever
+    // the bucket model resets (axis flip / fresh load) so it never lists stale values.
+    useEffect(() => { setCopySource(null) }, [baseline])
     const hasDirty = useMemo(() => bucketsDiff(buckets, baseline) > 0, [buckets, baseline])
 
     // ── Picker target ────────────────────────────────────────────────────────
 
     const [pickerTarget, setPickerTarget] = useState<{ bucket: string; replaceIndex: number | null } | null>(null)
 
+    // EFX P7 — 'Copy this set to…' picker state: the source bucket + the
+    // currently ticked target values. Client-state only (Save persists).
+    const [copySource, setCopySource] = useState<string | null>(null)
+    const [copyPicks, setCopyPicks] = useState<Set<string>>(new Set())
+
     // ── Edit mutations ────────────────────────────────────────────────────────
-    // No cross-bucket overlap within this family. Cross-family drags only fire
-    // onCellDrop on the target, so the source family's buckets stay untouched.
+    // EFX P7 — the same URL may live in MULTIPLE buckets (eBay + bulk-save both
+    // tolerate it; the push dedups per set by URL). Semantics live in
+    // imageBuckets.pure.ts: in-bucket dedup kept, 12-cap ops rejected whole
+    // with a toast (never silently truncated). Cross-family cell drags land
+    // here as plain URL drops (the grid's gridId guard) → copy semantics.
+
+    const bucketLabel = useCallback((b: string) => (b === SHARED ? 'Default' : b), [])
 
     const assign = useCallback((bucket: string, replaceIndex: number | null, url: string) => {
-      setBuckets(prev => {
-        const next = new Map(prev)
-        for (const [k, list] of next) {
-          if (k !== bucket && list.includes(url)) next.set(k, list.filter(u => u !== url))
-        }
-        let list = [...(next.get(bucket) ?? [])]
-        if (replaceIndex != null && replaceIndex < list.length) list[replaceIndex] = url
-        else list.push(url)
-        const seen = new Set<string>()
-        list = list.filter(u => seen.has(u) ? false : (seen.add(u), true))
-        next.set(bucket, list)
-        return next
-      })
-    }, [])
+      const { next, blocked } = assignImage(buckets, bucket, replaceIndex, url)
+      if (blocked.length > 0) {
+        toast.error(`"${bucketLabel(bucket)}" already has ${EBAY_MAX} images (eBay's max per set) — remove one first`)
+        return
+      }
+      setBuckets(next)
+    }, [buckets, toast, bucketLabel])
 
     const removeAt = useCallback((bucket: string, posOneBased: number) => {
       setBuckets(prev => {
@@ -285,11 +298,23 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
       removeAt(rowKey ?? SHARED, Number(colKey))
     }, [removeAt])
 
+    // Bucket-to-bucket drag: MOVE by default (unchanged); Alt/Option at drop =
+    // COPY (source keeps the image; cap-checked like every copy).
     const move = useCallback((
       from: { rowKey: string | null; columnKey: string; url: string },
       to: { rowKey: string | null; columnKey: string },
+      mode?: 'move' | 'copy',
     ) => {
       const fromB = from.rowKey ?? SHARED, toB = to.rowKey ?? SHARED
+      if (mode === 'copy') {
+        const { next, blocked } = copyImageAt(buckets, from.url, toB, Number(to.columnKey) - 1)
+        if (blocked.length > 0) {
+          toast.error(`"${bucketLabel(toB)}" already has ${EBAY_MAX} images (eBay's max per set) — copy blocked`)
+          return
+        }
+        setBuckets(next)
+        return
+      }
       setBuckets(prev => {
         const next = new Map(prev)
         const fromList = [...(next.get(fromB) ?? [])]
@@ -305,7 +330,62 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
         }
         return next
       })
-    }, [])
+    }, [buckets, toast, bucketLabel])
+
+    // ── EFX P7 — explicit copy-set actions ('Copy this set to…' / 'Duplicate
+    // to all values'). Client-state only; persistence stays with Save.
+
+    const applyCopySet = useCallback((fromBucket: string, targets: string[]) => {
+      const src = buckets.get(fromBucket) ?? []
+      const { next, blocked, applied } = copySetTo(buckets, fromBucket, targets)
+      setBuckets(next)
+      if (blocked.length > 0) {
+        toast.error(
+          `Not copied to ${blocked.map(bucketLabel).map(v => `"${v}"`).join(', ')} — ` +
+          `would exceed ${EBAY_MAX} images (eBay's max per set); those sets are unchanged`,
+        )
+      }
+      if (applied.length > 0) {
+        toast.success(
+          `Copied the "${bucketLabel(fromBucket)}" set (${src.length} image${src.length !== 1 ? 's' : ''}) ` +
+          `to ${applied.map(bucketLabel).map(v => `"${v}"`).join(', ')}`,
+        )
+      } else if (blocked.length === 0) {
+        toast.info(`Nothing to copy — the selected value${targets.length !== 1 ? 's already have' : ' already has'} every image in this set`)
+      }
+    }, [buckets, toast, bucketLabel])
+
+    // Per-bucket menu rendered inside the grid's row header. Values only exist
+    // off shared-gallery mode; a bucket needs ≥1 other value to copy to.
+    const bucketRowActions = useCallback((rowKey: string | null) => {
+      if (colorValues.length === 0) return null
+      const bucket = rowKey ?? SHARED
+      const targets = colorValues.filter(v => v !== bucket)
+      if (targets.length === 0) return null
+      const count = (buckets.get(bucket) ?? []).length
+      const isLastRow = colorValues.length > 0 && bucket === colorValues[colorValues.length - 1]
+      return (
+        <Menu
+          className={`efx-bucket-menu${isLastRow ? ' efx-menu-up' : ''}`}
+          label={<span className="inline-flex items-center gap-1"><Copy className="w-3 h-3" />Copy</span>}
+          items={[
+            {
+              id: 'copy-to',
+              label: 'Copy this set to…',
+              disabled: count === 0,
+              onSelect: () => { setCopyPicks(new Set()); setCopySource(bucket) },
+            },
+            {
+              id: 'duplicate-all',
+              label: 'Duplicate to all values',
+              disabled: count === 0,
+              onSelect: () => applyCopySet(bucket, targets),
+            },
+          ]}
+          triggerProps={{ 'aria-label': `Copy the ${bucketLabel(bucket)} image set to other values` }}
+        />
+      )
+    }, [colorValues, buckets, applyCopySet, bucketLabel])
 
     // ── Grid model ────────────────────────────────────────────────────────────
 
@@ -584,8 +664,9 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3">
                     <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
                       <span className="font-medium text-slate-700 dark:text-slate-200">Master gallery</span>
-                      {' · '}Drag onto a cell or click any cell to pick.
-                      Dragging to another product copies the photo (source keeps it).
+                      {' · '}Drag onto a cell or click any cell to pick — the same photo may live in several sets.
+                      Dragging between sets moves the photo; hold <kbd className="px-1 rounded border border-slate-300 dark:border-slate-600 text-[10px] font-mono">Alt/⌥</kbd> to copy.
+                      Dragging to another product always copies (source keeps it).
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {masterImages.map(img => (
@@ -633,6 +714,8 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
                     ariaLabel={`eBay photos for ${sku} ${axis === SHARED ? 'as one shared gallery' : `grouped by ${axis}`}`}
                     rowHeaderLabel={axis === SHARED ? 'Shared gallery' : axis}
                     minDimensionPx={500}
+                    allowCopyDrag
+                    rowActions={bucketRowActions}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12 gap-2">
@@ -750,6 +833,80 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
             onClose={() => setPickerTarget(null)}
           />
         )}
+
+        {/* EFX P7 — 'Copy this set to…' target picker. Rendered inside the
+            drawer's stacking context (same fixed-overlay pattern as
+            ImagePickerModal) so it always sits above the drawer. */}
+        {copySource !== null && (() => {
+          const copyTargets = colorValues.filter(v => v !== copySource)
+          const srcCount = (buckets.get(copySource) ?? []).length
+          const allPicked = copyTargets.length > 0 && copyTargets.every(v => copyPicks.has(v))
+          return (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
+              role="dialog" aria-modal="true"
+              aria-label={`Copy the ${bucketLabel(copySource)} image set to other values`}
+              onClick={() => setCopySource(null)}
+            >
+              <div
+                className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl max-w-sm w-full p-5"
+                onClick={e => e.stopPropagation()}
+              >
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Copy the &ldquo;{bucketLabel(copySource)}&rdquo; set to…
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Adds its {srcCount} image{srcCount !== 1 ? 's' : ''} to each selected value. Existing images are
+                  kept; a value that would exceed {EBAY_MAX} images is blocked whole, never trimmed.
+                </p>
+                <div className="mt-3 max-h-56 overflow-y-auto flex flex-col gap-1.5">
+                  <Checkbox
+                    label={<span className="font-medium">All values ({copyTargets.length})</span>}
+                    checked={allPicked}
+                    onChange={() => setCopyPicks(allPicked ? new Set() : new Set(copyTargets))}
+                  />
+                  <div className="border-t border-slate-100 dark:border-slate-800 my-0.5" />
+                  {copyTargets.map(v => {
+                    const n = (buckets.get(v) ?? []).length
+                    return (
+                      <Checkbox
+                        key={v}
+                        label={<span>{v} <span className="text-slate-400">· {n}/{EBAY_MAX}</span></span>}
+                        checked={copyPicks.has(v)}
+                        onChange={() => setCopyPicks(prev => {
+                          const next = new Set(prev)
+                          if (next.has(v)) next.delete(v); else next.add(v)
+                          return next
+                        })}
+                      />
+                    )
+                  })}
+                </div>
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button size="sm" variant="ghost" onClick={() => setCopySource(null)}>Cancel</Button>
+                  <Button
+                    size="sm"
+                    disabled={copyPicks.size === 0 || srcCount === 0}
+                    onClick={() => {
+                      applyCopySet(copySource, colorValues.filter(v => copyPicks.has(v)))
+                      setCopySource(null)
+                    }}
+                  >
+                    Copy to {copyPicks.size} value{copyPicks.size !== 1 ? 's' : ''}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* EFX P7 — compact trigger + open-upward variant for the per-bucket
+            copy menu (the grid's last row would otherwise clip the dropdown
+            against the scroll container's bottom edge). */}
+        <style>{`
+          .efx-bucket-menu .h10-ds-btn { font-size: 11px; padding: 2px 8px; gap: 4px; }
+          .efx-menu-up .h10-ds-menu { top: auto; bottom: calc(100% + 5px); }
+        `}</style>
       </div>
     )
   },
