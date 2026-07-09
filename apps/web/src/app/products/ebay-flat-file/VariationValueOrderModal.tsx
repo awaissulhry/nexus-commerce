@@ -277,7 +277,7 @@ export function VariationValueOrderModal({
     } finally {
       setSaving(false)
     }
-  }, [parentProductId, marketplace, axisOrder, BACKEND, toast, onSaved, onClose])
+  }, [parentProductId, marketplace, axisOrder, axisSeq, BACKEND, toast, onSaved, onClose])
 
   return (
     <Modal
