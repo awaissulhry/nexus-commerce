@@ -136,6 +136,10 @@ export interface WorkspaceData {
   listing: ListingImage[]
   variants: VariantSummary[]
   availableAxes: string[]
+  // EFX P5 — distinct value count per axis (keyed by the display name in
+  // availableAxes). Lets pickers annotate single-valued axes, which publish
+  // as a shared gallery on eBay. Optional: older API responses omit it.
+  axisValueCounts?: Record<string, number>
   amazonJobs: AmazonJobSummary[]
   // IR.7.2 — Map productImage.id → DigitalAsset.id for rows mirrored in
   // the DAM library. Empty when no master image has been pushed yet.

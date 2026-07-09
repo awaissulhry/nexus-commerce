@@ -13,13 +13,23 @@ import ChannelImageGrid, { type ImageGridColumn, type ImageGridRow } from '@/app
 import ImagePickerModal from '@/app/products/[id]/edit/tabs/images/ImagePickerModal'
 import type { WorkspaceData, ListingImage, VariantSummary, ProductImage } from '@/app/products/[id]/edit/tabs/images/types'
 import { Select } from '@/design-system/primitives/Select'
-import { axisSynonymKey } from './variationValueOrder.pure'
+import { axisSynonymKey, describeResolvedAxis, SHARED_GALLERY_AXIS, type ResolvedAxisFeedback } from './variationValueOrder.pure'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const EBAY_MAX = 24
+// EFX P5 — eBay's REAL limit for this modal's publish path. Per eBay's
+// Inventory API "Managing images" doc: "For multiple-variation listings, a
+// maximum of 12 pictures may be used per variation" (Trading's
+// VariationSpecificPictureSet carries the same 12 cap), and our push also
+// slices the group-level "cover & common" gallery to 12
+// (ebay-variation-push.service.ts). Single-SKU listings allow 24, but this
+// modal publishes variation groups only — the previous 24 here overstated
+// what actually reached eBay.
+const EBAY_MAX = 12
 const MIN_COLS = 6
-const SHARED = '__shared__'
+// Default-bucket key AND the '__shared__' wire value for "one shared gallery"
+// (activeAxis / imageAxisPreference) — intentionally the same sentinel.
+const SHARED = SHARED_GALLERY_AXIS
 
 // ── Axis helpers ────────────────────────────────────────────────────────────
 // EFX P3 — axisSynonymKey now has ONE client home (variationValueOrder.pure.ts);
@@ -110,6 +120,12 @@ interface PublishResult {
   colorSetCount: number
   markets?: string[]
   results?: Array<{ sku: string; market: string; status: string; message: string }>
+  // EFX P5 — resolved-axis feedback (additive server fields).
+  requestedAxis?: string
+  pictureAxis?: string | null
+  realAxes?: string[]
+  sharedGallery?: boolean
+  warnings?: string[]
 }
 
 // ── FamilySection ─────────────────────────────────────────────────────────────
@@ -173,10 +189,14 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
     const listingImages = workspaceData?.listing ?? []
     const variants = workspaceData?.variants ?? []
     const serverAxes = workspaceData?.availableAxes ?? []
+    // EFX P5 — distinct value count per axis; annotates single-valued options.
+    const axisValueCounts = workspaceData?.axisValueCounts ?? {}
 
     // Server-recommended axis (respects imageAxisPreference, falls back to colour dim).
     const defaultAxis = useMemo(() => {
       const pref = product?.imageAxisPreference
+      // EFX P5 — '__shared__' stored as the preference = one shared gallery.
+      if (pref === SHARED) return SHARED
       if (pref) {
         const match = serverAxes.find(a => axisSynonymKey(a) === axisSynonymKey(pref))
         if (match) return match
@@ -188,6 +208,21 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
     const [axisOverride, setAxisOverride] = useState<string | null>(null)
     useEffect(() => { setAxisOverride(null) }, [workspaceData])
     const axis = axisOverride ?? defaultAxis
+
+    // EFX P5 — picking an axis persists imageAxisPreference immediately
+    // (optimistic, non-blocking) so the scheduled + bulk publish paths — which
+    // call the publish service WITHOUT activeAxis and fall back to the stored
+    // preference — follow the same pick, '__shared__' included.
+    const changeAxis = useCallback((next: string) => {
+      setAxisOverride(next)
+      void beFetch(`/api/products/${productId}/images-workspace/axis`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ axis: next }),
+      })
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`) })
+        .catch(() => toast.error('Could not save the axis preference — this pick still applies to publishes from this modal'))
+    }, [productId, toast])
 
     const colorValues = useMemo(() => getAxisValues(variants, axis), [variants, axis])
 
@@ -277,13 +312,15 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
       [colCount],
     )
 
+    // EFX P5 — per-bucket "n/12" so the operator sees the real eBay ceiling
+    // (anything past 12 is clamped at push, with a warning).
     const gridRows: ImageGridRow[] = useMemo(() => {
       const sharedN = (buckets.get(SHARED) ?? []).length
       return [
-        { key: null, label: 'Default', sublabel: `cover + common · ${sharedN} photo${sharedN === 1 ? '' : 's'}` },
+        { key: null, label: 'Default', sublabel: `cover + common · ${sharedN}/${EBAY_MAX} photos` },
         ...colorValues.map(cv => {
           const n = (buckets.get(cv) ?? []).length
-          return { key: cv, label: cv, sublabel: `${n} photo${n === 1 ? '' : 's'}` }
+          return { key: cv, label: cv, sublabel: `${n}/${EBAY_MAX} photos` }
         }),
       ]
     }, [colorValues, buckets])
@@ -354,11 +391,15 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
 
     const [publishState, setPublishState] = useState<'idle' | 'saving' | 'publishing' | 'done' | 'failed'>('idle')
     const [publishResult, setPublishResult] = useState<PublishResult | null>(null)
+    // EFX P5 — resolved-axis feedback, snapshotted against the axis that was
+    // ACTUALLY sent (the operator may flip the picker after publishing).
+    const [axisFeedback, setAxisFeedback] = useState<ResolvedAxisFeedback | null>(null)
     const publishing = publishState === 'saving' || publishState === 'publishing'
 
     const publish = useCallback(async () => {
       if (!productId) return
       setPublishResult(null)
+      setAxisFeedback(null)
       if (hasDirty) {
         setPublishState('saving')
         const ok = await flush(true)
@@ -370,6 +411,7 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
         // re-derive it (imageAxisPreference ?? 'Color'), which silently curated
         // against a different axis than the one on screen — on single-axis
         // (Size-only) families that mismatch broke the publish outright.
+        // EFX P5 — axis may be '__shared__' (explicit one-shared-gallery mode).
         const res = await beFetch(`/api/products/${productId}/ebay-images/publish?marketplace=${encodeURIComponent(marketplace)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -378,13 +420,20 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
         const body: PublishResult = await res.json()
         setPublishResult(body)
         setPublishState(body.success ? 'done' : 'failed')
-        if (body.success) toast.success(`Published ${body.pictureCount} image${body.pictureCount !== 1 ? 's' : ''} to eBay`)
+        // EFX P5 — honest feedback: show what eBay actually got ("vary by X" /
+        // shared gallery) and WARN visibly when it differs from the pick.
+        const fb = describeResolvedAxis(body.requestedAxis ?? axis, axisValueCounts[axis], body)
+        setAxisFeedback(fb)
+        if (body.success) {
+          if (fb?.mismatch && fb.warning) toast.warning(fb.warning)
+          else toast.success(`Published ${body.pictureCount} image${body.pictureCount !== 1 ? 's' : ''} to eBay`)
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         setPublishResult({ success: false, message: msg, pictureCount: 0, colorSetCount: 0 })
         setPublishState('failed')
       }
-    }, [productId, marketplace, axis, hasDirty, flush, toast])
+    }, [productId, marketplace, axis, axisValueCounts, hasDirty, flush, toast])
 
     // ── Imperative handle ─────────────────────────────────────────────────────
 
@@ -421,10 +470,32 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
             </span>
           )}
           {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400 flex-shrink-0" />}
-          {!loading && serverAxes.length > 1 && (
-            <Select value={axis} onChange={e => setAxisOverride(e.target.value)} className="text-xs ml-1 flex-shrink-0">
-              {serverAxes.map(a => <option key={a} value={a}>{a}</option>)}
-            </Select>
+          {/* EFX P5 — the picker shows whenever the family has ANY axis (the
+              old >1 gate hid it exactly when operators needed to see/override
+              the grouping) and always offers the explicit shared-gallery mode.
+              Single-valued axes stay selectable, annotated with their outcome. */}
+          {!loading && serverAxes.length > 0 && (
+            <>
+              <Select
+                value={axis}
+                onChange={e => changeAxis(e.target.value)}
+                className="text-xs ml-1 flex-shrink-0"
+                aria-label="Axis eBay images vary by"
+              >
+                {serverAxes.map(a => (
+                  <option key={a} value={a}>
+                    {a}{(axisValueCounts[a] ?? 2) <= 1 ? ' (1 value — publishes as shared gallery)' : ''}
+                  </option>
+                ))}
+                <option value={SHARED}>One shared gallery (no per-variant images)</option>
+              </Select>
+              <span
+                className="text-[10px] text-slate-400 flex-shrink-0"
+                title="eBay allows a listing's images to vary by exactly ONE aspect (any aspect — not just colour). Pick which one, or publish one shared gallery for the whole listing."
+              >
+                eBay allows product images to vary by ONE aspect only.
+              </span>
+            </>
           )}
           <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
             {hasDirty && (
@@ -528,8 +599,9 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
                   </div>
                 )}
 
-                {/* Bucket grid */}
-                {colorValues.length > 0 || (buckets.get(SHARED) ?? []).length > 0 ? (
+                {/* Bucket grid — always rendered in shared-gallery mode so the
+                    empty Default row stays droppable (EFX P5). */}
+                {axis === SHARED || colorValues.length > 0 || (buckets.get(SHARED) ?? []).length > 0 ? (
                   <ChannelImageGrid
                     rows={gridRows} columns={columns} resolveCell={resolveCell}
                     onCellClick={(rowKey, colKey) => {
@@ -545,8 +617,8 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
                       const idx = Number(colKey) - 1
                       assign(bucket, idx < (buckets.get(bucket) ?? []).length ? idx : null, url)
                     }}
-                    ariaLabel={`eBay photos for ${sku} grouped by ${axis}`}
-                    rowHeaderLabel={axis}
+                    ariaLabel={`eBay photos for ${sku} ${axis === SHARED ? 'as one shared gallery' : `grouped by ${axis}`}`}
+                    rowHeaderLabel={axis === SHARED ? 'Shared gallery' : axis}
                     minDimensionPx={500}
                   />
                 ) : (
@@ -591,6 +663,27 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
                             </button>
                           )}
                         </div>
+                        {/* EFX P5 — resolved-axis feedback: what eBay actually
+                            got, plus a VISIBLE warning when it differs from the
+                            operator's pick (never silent). */}
+                        {publishResult.success && axisFeedback && (
+                          <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                            {axisFeedback.label}
+                          </p>
+                        )}
+                        {axisFeedback?.mismatch && axisFeedback.warning && (
+                          <Banner variant="warning" title="Published with a different image grouping">
+                            {axisFeedback.warning}
+                          </Banner>
+                        )}
+                        {/* EFX P5 — push warnings (e.g. curated set clamped to 12) */}
+                        {publishResult.warnings && publishResult.warnings.length > 0 && (
+                          <ul className="space-y-0.5">
+                            {publishResult.warnings.map((w, i) => (
+                              <li key={i} className="text-[10px] text-amber-700 dark:text-amber-400" title={w}>{w}</li>
+                            ))}
+                          </ul>
+                        )}
                         {publishResult.results && publishResult.results.length > 0 && (
                           <div className="flex flex-wrap gap-1.5">
                             {publishResult.results.map((r, i) => (
@@ -625,9 +718,10 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
                   </div>
                 )}
 
-                {/* eBay rules reminder */}
+                {/* eBay rules reminder — 12 is eBay's per-variation cap on
+                    multi-variation listings (see EBAY_MAX comment). */}
                 <p className="text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
-                  eBay rules: max {EBAY_MAX} images · min 500 px · JPEG/PNG only
+                  eBay rules: max {EBAY_MAX} images per set · min 500 px · JPEG/PNG only · images vary by ONE aspect
                 </p>
               </>
             )}

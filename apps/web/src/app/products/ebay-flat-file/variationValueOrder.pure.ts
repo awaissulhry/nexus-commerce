@@ -28,6 +28,65 @@ export function axisSynonymKey(name: string): string {
   return lk
 }
 
+// ── EFX P5 — shared-gallery axis + resolved-axis feedback ─────────────────
+
+/**
+ * Wire value for "One shared gallery (no per-variant images)". The image
+ * modal sends it as `activeAxis` and persists it as imageAxisPreference; the
+ * server (ebay-image-axis.pure.ts) treats it as an explicit shared-gallery
+ * request (aspectsImageVariesBy omitted). Doubles as the modal's Default
+ * bucket key — both are intentionally the same sentinel.
+ */
+export const SHARED_GALLERY_AXIS = '__shared__'
+
+export interface ResolvedAxisFeedback {
+  /** Plain-English outcome, e.g. "Images vary by: Colore" / "Shared gallery — …". */
+  label: string
+  /** The publish landed with a DIFFERENT grouping than the operator asked for. */
+  mismatch: boolean
+  /** Present iff mismatch — the visible warning text (never silent). */
+  warning?: string
+}
+
+/**
+ * Compare what the operator requested with what the publish service actually
+ * resolved (result.pictureAxis / result.sharedGallery — EFX P5 additive
+ * fields). Returns null when the response predates those fields.
+ *
+ * A single-valued axis pick resolving to a shared gallery is NOT a mismatch —
+ * the picker annotates those options with "1 value — publishes as shared
+ * gallery", so the outcome is exactly what was advertised
+ * (requestedAxisValueCount ≤ 1 encodes that).
+ */
+export function describeResolvedAxis(
+  requestedAxis: string,
+  requestedAxisValueCount: number | undefined,
+  result: { pictureAxis?: string | null; sharedGallery?: boolean },
+): ResolvedAxisFeedback | null {
+  if (result.sharedGallery == null && result.pictureAxis == null) return null
+  const resolvedShared = result.sharedGallery === true
+  const label = resolvedShared
+    ? 'Shared gallery — one image set for the whole listing'
+    : `Images vary by: ${result.pictureAxis ?? '—'}`
+  const requestedShared = requestedAxis === SHARED_GALLERY_AXIS
+  let mismatch: boolean
+  if (requestedShared) {
+    mismatch = !resolvedShared
+  } else if (resolvedShared) {
+    mismatch = (requestedAxisValueCount ?? 2) > 1
+  } else {
+    mismatch = axisSynonymKey(result.pictureAxis ?? '') !== axisSynonymKey(requestedAxis)
+  }
+  if (!mismatch) return { label, mismatch }
+  return {
+    label,
+    mismatch,
+    warning: `eBay was published with a different image grouping than you picked — requested ${
+      requestedShared ? 'one shared gallery' : `"${requestedAxis}"`
+    }, published ${resolvedShared ? 'one shared gallery' : `images varying by "${result.pictureAxis}"`}.`,
+  }
+}
+
 // ── Modal init decision ───────────────────────────────────────────────────
 
 /**
