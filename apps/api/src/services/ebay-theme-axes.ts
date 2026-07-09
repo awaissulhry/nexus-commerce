@@ -70,6 +70,21 @@ export function axisSynonymKey(name: string): string {
  * @param writtenValueOrder  the `_axisValueOrder` being persisted (synonym keyed)
  * @returns the pruned `_axisSortOrder` (may be empty)
  */
+/**
+ * EFX P3.1 — merge a written synonym-keyed `_axisValueOrder` over the existing
+ * stored map instead of replacing it. The flat-file modal and the cockpit card
+ * derive their axis sets from DIFFERENT sources (grid rows' aspect_* columns vs
+ * children's categoryAttributes.variations), so each writer may legitimately
+ * omit an axis the other ordered; a full replace silently dropped the other
+ * surface's entries. Written keys win; unwritten stored keys survive.
+ */
+export function mergeAxisValueOrderWrite(
+  prev: Record<string, string[]> | undefined,
+  written: Record<string, string[]>,
+): Record<string, string[]> {
+  return { ...(prev ?? {}), ...written }
+}
+
 export function selfHealAxisSortOrder(
   prevSortOrder: Record<string, string[]> | undefined,
   writtenValueOrder: Record<string, string[]>,

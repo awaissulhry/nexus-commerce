@@ -18,7 +18,7 @@ import {
   sortAxisValues,
   axisSynonymKey,
 } from './ebay-variation-push.service.js'
-import { selfHealAxisSortOrder } from './ebay-theme-axes.js'
+import { selfHealAxisSortOrder, mergeAxisValueOrderWrite } from './ebay-theme-axes.js'
 
 /** Reproduce the push call-site lookup: synonym key first, then raw, then lower. */
 function orderForAxis(
@@ -111,5 +111,30 @@ describe('selfHealAxisSortOrder — PATCH-route legacy prune', () => {
 
   it('undefined previous sort order → empty', () => {
     expect(selfHealAxisSortOrder(undefined, { __dim1__: ['M'] })).toEqual({})
+  })
+})
+
+// ── EFX P3.1 — mergeAxisValueOrderWrite (PATCH merges, never replaces) ──────
+describe('mergeAxisValueOrderWrite', () => {
+  it('keeps stored entries the writer did not send (cross-surface axis sets)', () => {
+    // Live-verified on AIREON: the cockpit card (axes from child
+    // categoryAttributes) saved without 'tipo di prodotto' (an axis only the
+    // flat-file modal sees) and the old full-replace dropped it.
+    const prev = { __dim1__: ['3XL', 'L'], 'tipo di prodotto': ['Giacca', 'Pantaloni'] }
+    const written = { __dim1__: ['L', '3XL'], 'team name': ['Giacca', 'Pantaloni'] }
+    expect(mergeAxisValueOrderWrite(prev, written)).toEqual({
+      __dim1__: ['L', '3XL'],
+      'tipo di prodotto': ['Giacca', 'Pantaloni'],
+      'team name': ['Giacca', 'Pantaloni'],
+    })
+  })
+
+  it('written keys win over stored ones', () => {
+    expect(mergeAxisValueOrderWrite({ __dim0__: ['Rosso', 'Blu'] }, { __dim0__: ['Blu', 'Rosso'] }))
+      .toEqual({ __dim0__: ['Blu', 'Rosso'] })
+  })
+
+  it('undefined previous map → written map as-is', () => {
+    expect(mergeAxisValueOrderWrite(undefined, { __dim1__: ['M'] })).toEqual({ __dim1__: ['M'] })
   })
 })

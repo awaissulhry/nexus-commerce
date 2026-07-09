@@ -53,6 +53,8 @@ import { runEbayFlatFileDelete, type DeleteTarget } from '../services/ebay-flat-
 import { loadSharedMembershipRows } from '../services/ebay-shared-membership-rows.js';
 // Scoped-view load — filter to eBay-listed families when scope=listed (default)
 import { buildListingScopeWhere, type ListingScope } from '../services/flat-file/listing-scope.js';
+// EFX P4 — required-aspect push preflight (pure helper; requiredness comes from schemaCache)
+import { findMissingRequiredAspects, type AspectRequirement } from '../services/ebay-aspect-preflight.js';
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
 
@@ -267,9 +269,12 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
     try {
       // FF-EN.2 — fetch aspects + the category's allowed conditions together.
+      // EFX P4.5 — throwOnError: true so an eBay failure is DETECTABLE (the
+      // old `false` returned [] and cached an empty schema for 24h); failures
+      // now fall through to the durable stored copy below.
       const [richAspects, condPolicies] = await Promise.all([
         ebayCategoryService.getCategoryAspectsRich(categoryId, marketplace, {
-          throwOnError: false,
+          throwOnError: true,
         }),
         ebayCategoryService
           .getItemConditionPolicies(categoryId, marketplace)
@@ -322,8 +327,68 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       const result = { categoryId, marketplace, aspects, conditions };
       schemaCache.set(cacheKey, { data: result, ts: Date.now() });
 
+      // EFX P4.5 — durable read-through copy. The CategorySchema model already
+      // carries channel + marketplace + productType columns (Amazon populates
+      // channel='AMAZON'), so eBay reuses them natively — productType holds the
+      // eBay category id, no namespacing or migration needed. schemaVersion is
+      // part of the unique key; eBay's taxonomy has no version id, so a fixed
+      // 'live' keeps exactly one durable row per (marketplace, category) that
+      // each successful fetch refreshes. Non-fatal: never blocks the response.
+      try {
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        await prisma.categorySchema.upsert({
+          where: {
+            channel_marketplace_productType_schemaVersion: {
+              channel: 'EBAY',
+              marketplace,
+              productType: categoryId,
+              schemaVersion: 'live',
+            },
+          },
+          create: {
+            channel: 'EBAY',
+            marketplace,
+            productType: categoryId,
+            schemaVersion: 'live',
+            schemaDefinition: { aspects, conditions } as object,
+            expiresAt,
+          },
+          update: {
+            schemaDefinition: { aspects, conditions } as object,
+            fetchedAt: new Date(),
+            expiresAt,
+            isActive: true,
+          },
+        });
+      } catch (e) {
+        request.log.warn({ err: e }, 'ebay/flat-file/category-schema: durable upsert failed (non-fatal)');
+      }
+
       return reply.send(result);
     } catch (err: unknown) {
+      // EFX P4.5 — eBay unreachable: serve the durable stored copy (additive
+      // staleSchema flag; the client shows a subtle hint and keeps every
+      // column visible). Deliberately NOT written to the in-memory cache so
+      // recovery is retried on the next request.
+      try {
+        const stored = await prisma.categorySchema.findFirst({
+          where: { channel: 'EBAY', marketplace, productType: categoryId, isActive: true },
+          orderBy: { fetchedAt: 'desc' },
+        });
+        if (stored) {
+          const def = (stored.schemaDefinition ?? {}) as { aspects?: unknown[]; conditions?: unknown[] };
+          request.log.warn({ categoryId, marketplace }, 'ebay/flat-file/category-schema: eBay fetch failed — serving stored copy');
+          return reply.send({
+            categoryId,
+            marketplace,
+            aspects: def.aspects ?? [],
+            conditions: def.conditions ?? [],
+            staleSchema: true,
+          });
+        }
+      } catch (dbErr) {
+        request.log.warn({ err: dbErr }, 'ebay/flat-file/category-schema: stored-copy read failed');
+      }
       request.log.error(err, 'ebay/flat-file/category-schema failed');
       return reply
         .code(500)
@@ -1090,6 +1155,59 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           )
           perRowResults.push(...offerResults)
           continue
+        }
+
+        // ── EFX P4 — required-aspect preflight ─────────────────────────
+        // Runs as this family is about to be published (the variation-axis
+        // pre-check inside pushVariationGroup fires immediately after) and
+        // turns "category requires aspect X, row has no value" into the same
+        // per-SKU status:'ERROR' rows instead of an opaque eBay 25007.
+        // Required-ness comes from the SAME in-memory schemaCache the
+        // GET /category-schema route populates. A cache miss SKIPS the check
+        // rather than fetching live: a push must never block on an eBay
+        // taxonomy round-trip, and the sheet that initiated the push has
+        // already warmed the cache for every category it displays.
+        {
+          const familyCategory = String(
+            (familyRows.find((r) => r._isParent === true && r.category_id)
+              ?? familyRows.find((r) => r.category_id))?.category_id ?? '',
+          ).trim();
+          const requiredFor = (categoryId: string): AspectRequirement[] | null => {
+            if (!categoryId) return null;
+            const cached = schemaCache.get(`${marketplaceId}:${categoryId}`);
+            if (!cached || Date.now() - cached.ts >= SCHEMA_CACHE_TTL) return null;
+            const aspects = (cached.data as { aspects?: AspectRequirement[] })?.aspects ?? [];
+            const req = aspects.filter((a) => a.required);
+            return req.length > 0 ? req : null;
+          };
+          const failures: Array<{ sku: string; missing: string[] }> = [];
+          for (const r of familyRows) {
+            // A multi-SKU family's parent row is the listing container, not a
+            // sellable SKU — its aspects live on the variants.
+            if (familyRows.length > 1 && r._isParent === true) continue;
+            const rowCat = String(r.category_id ?? '').trim() || familyCategory;
+            const req = requiredFor(rowCat);
+            if (!req) continue; // cache miss / no category → skip (see above)
+            const missing = findMissingRequiredAspects(r as Record<string, unknown>, req);
+            if (missing.length > 0) failures.push({ sku: String(r.sku ?? ''), missing });
+          }
+          if (failures.length > 0) {
+            const detail = failures.map((f) => `${f.sku}: missing ${f.missing.join(', ')}`).join('; ');
+            request.log.info({ detail }, 'ebay/flat-file/push: required-aspect pre-check blocked family');
+            for (const r of familyRows) {
+              const sku = String(r.sku ?? '');
+              const own = failures.find((f) => f.sku === sku);
+              perRowResults.push({
+                sku,
+                market: mp,
+                status: 'ERROR',
+                message: own
+                  ? `Missing required item specific${own.missing.length > 1 ? 's' : ''}: ${own.missing.join(', ')} — fill in the flat-file before pushing`
+                  : `Blocked: another variant in this group is missing required item specifics (${detail})`,
+              });
+            }
+            continue;
+          }
         }
         if (familyRows.length > 1) {
           // Phase 4 — shared-SKU listing routing. A genuinely-different-products

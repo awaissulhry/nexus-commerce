@@ -94,7 +94,7 @@ import { Prisma } from '@nexus/database'
 import prisma from '../db.js'
 import { csvDocument } from '../lib/csv.js'
 import { EbayCategoryService } from '../services/ebay-category.service.js'
-import { parseThemeAxes, selfHealAxisSortOrder } from '../services/ebay-theme-axes.js'
+import { parseThemeAxes, selfHealAxisSortOrder, mergeAxisValueOrderWrite } from '../services/ebay-theme-axes.js'
 import { EbayPublishAdapter } from '../services/listing-wizard/ebay-publish.adapter.js'
 import { resolveComplianceById, complianceBlockers } from '../services/compliance-resolver.service.js'
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js'
@@ -606,7 +606,17 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
         nextPlatform._axisValueLabels = axisValueLabels
       }
       if (axisValueOrder !== undefined) {
-        nextPlatform._axisValueOrder = axisValueOrder
+        // EFX P3.1 — MERGE written keys over the existing map, never replace it.
+        // The two writers (flat-file modal, cockpit card) derive their axis sets
+        // from different sources (grid rows' aspect_* vs children's
+        // categoryAttributes.variations), so each may legitimately omit an axis
+        // the other ordered — a full replace silently dropped the other
+        // surface's entries (live-verified on AIREON: a card save lost the
+        // modal's 'tipo di prodotto' order).
+        nextPlatform._axisValueOrder = mergeAxisValueOrderWrite(
+          nextPlatform._axisValueOrder as Record<string, string[]> | undefined,
+          axisValueOrder,
+        )
         // EFX P3 — self-heal: a synonym-keyed value order supersedes any legacy
         // raw-name _axisSortOrder entry for the same dimension. Prune the
         // matched legacy keys (leaving unmatched ones for the push merge).
