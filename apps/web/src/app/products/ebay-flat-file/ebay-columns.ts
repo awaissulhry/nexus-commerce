@@ -315,7 +315,7 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       {
         id: 'best_offer_enabled',
         label: 'Best Offer',
-        description: 'Enable Best Offer on this listing. Stored locally — not yet sent to eBay (coming soon).',
+        description: 'Enable Best Offer (Trattativa) on this listing so buyers can send offers. Sent to eBay on Push. Set on the parent row — it applies to the whole listing.',
         required: false,
         kind: 'boolean',
         width: 100,
@@ -323,7 +323,7 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       {
         id: 'best_offer_floor',
         label: 'BO Floor (EUR)',
-        description: 'Auto-decline threshold for Best Offer. Stored locally — not yet sent to eBay (coming soon).',
+        description: 'Auto-decline threshold: offers below this are declined automatically (eBay autoDeclinePrice). Sent to eBay when Best Offer is on; leave blank for no auto-decline. Must be below the ceiling.',
         required: false,
         kind: 'number',
         width: 110,
@@ -331,7 +331,7 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       {
         id: 'best_offer_ceiling',
         label: 'BO Ceiling (EUR)',
-        description: 'Auto-accept threshold for Best Offer. Stored locally — not yet sent to eBay (coming soon).',
+        description: 'Auto-accept threshold: offers at or above this are accepted automatically (eBay autoAcceptPrice). Sent to eBay when Best Offer is on; leave blank for no auto-accept. Must be above the floor.',
         required: false,
         kind: 'number',
         width: 120,
@@ -369,6 +369,16 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
         kind: 'number',
         width: 100,
       },
+      {
+        // EFX P9f — operator override for the offer's quantityLimitPerBuyer.
+        id: 'quantity_limit_per_buyer',
+        label: 'Max Per Buyer',
+        description: 'Maximum quantity a single buyer may purchase of this listing (eBay quantityLimitPerBuyer). Leave blank to use the default of 10. Set on the parent row — applies to the whole listing.',
+        required: false,
+        kind: 'number',
+        min: 1,
+        width: 110,
+      },
     ],
   },
   {
@@ -385,6 +395,18 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
         options: [...EBAY_ITEM_LOCATION_COUNTRIES],
         enumMode: 'open',
         width: 110,
+      },
+      {
+        // EFX P9b — the offer's merchantLocationKey. Free text (the seller-defined
+        // location key from eBay Seller Hub › Inventory › Locations); blank falls
+        // back to the account-configured default at push time.
+        id: 'merchant_location_key',
+        label: 'Merchant Location',
+        description: "eBay merchantLocationKey — the inventory location this listing ships from (create locations in eBay Seller Hub › Inventory › Locations). Sent as the offer's merchantLocationKey; leave blank to use your account's configured default location. Set on the parent row.",
+        required: false,
+        kind: 'text',
+        maxLength: 36,
+        width: 160,
       },
       {
         id: 'package_type',

@@ -501,6 +501,64 @@ async function saveOfferIds(
   }))
 }
 
+/**
+ * EFX P9a — map the sheet's Best Offer columns onto the eBay Inventory API
+ * offer's Best Offer terms.
+ *
+ * eBay carries Best Offer under the offer's `listingPolicies` as `bestOfferTerms`
+ * (Sell Inventory API createOffer/updateOffer → listingPolicies.bestOfferTerms:
+ * { bestOfferEnabled, autoAcceptPrice, autoDeclinePrice }, see
+ * developer.ebay.com/api-docs/sell/inventory/types/slr:BestOffer).
+ *   • autoAcceptPrice  = amount at/above which an offer auto-ACCEPTS  → our BO Ceiling
+ *   • autoDeclinePrice = amount below which an offer auto-DECLINES     → our BO Floor
+ *
+ * Always returns a terms object (never null) so switching Best Offer OFF sends
+ * an explicit { bestOfferEnabled: false } that clears any terms on the live offer.
+ *
+ * Rules:
+ *   • best_offer_enabled falsy → { bestOfferEnabled: false } (thresholds ignored).
+ *   • enabled → { bestOfferEnabled: true } plus autoDecline (floor) / autoAccept
+ *     (ceiling) ONLY when that threshold is a positive number; blanks are omitted.
+ *   • floor ≥ ceiling with both set is contradictory (auto-decline at/above the
+ *     auto-accept point) → drop BOTH thresholds and warn; Best Offer stays on.
+ */
+export function buildBestOfferTerms(
+  row: Record<string, unknown>,
+  currency: string,
+  warnings?: string[],
+): Record<string, unknown> {
+  if (!row.best_offer_enabled) return { bestOfferEnabled: false }
+
+  const floor = Number(row.best_offer_floor ?? 0)     // auto-decline threshold
+  const ceiling = Number(row.best_offer_ceiling ?? 0) // auto-accept threshold
+  const hasFloor = Number.isFinite(floor) && floor > 0
+  const hasCeiling = Number.isFinite(ceiling) && ceiling > 0
+
+  const terms: Record<string, unknown> = { bestOfferEnabled: true }
+  if (hasFloor && hasCeiling && floor >= ceiling) {
+    const w = `Best Offer thresholds ignored for ${String(row.sku ?? 'this listing')}: the auto-decline floor (${floor}) must be below the auto-accept ceiling (${ceiling}). Best Offer stays on with no automatic rules.`
+    if (warnings && !warnings.includes(w)) warnings.push(w)
+    return terms
+  }
+  if (hasCeiling) terms.autoAcceptPrice = { value: ceiling.toFixed(2), currency }
+  if (hasFloor) terms.autoDeclinePrice = { value: floor.toFixed(2), currency }
+  return terms
+}
+
+/**
+ * EFX P9f — per-listing cap on how many units one buyer may purchase
+ * (eBay offer field `quantityLimitPerBuyer`). Operator override via the sheet's
+ * quantity_limit_per_buyer column; falls back to our historical default of 10
+ * when the cell is blank or not a valid ≥1 integer. Floors at 1.
+ */
+export function resolveQuantityLimitPerBuyer(row: Record<string, unknown>): number {
+  const raw = row.quantity_limit_per_buyer
+  if (raw == null || raw === '') return 10
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n < 1) return 10
+  return Math.floor(n)
+}
+
 export async function pushVariationGroup(
   groupKey: string,
   rows: Array<Record<string, unknown>>,
@@ -1298,6 +1356,9 @@ export async function pushVariationGroup(
 
   const currency = mp === 'UK' ? 'GBP' : 'EUR'
   const catId    = (parentRow.category_id as string | undefined) ?? ''
+  // EFX P9a/P9f — shared (parent-level) offer terms, resolved once for the family.
+  const bestOfferTerms = buildBestOfferTerms(parentRow, currency, opts?.warningsSink)
+  const quantityLimitPerBuyer = resolveQuantityLimitPerBuyer(parentRow)
 
   // Seed from Step-1 errors: if any inventory_item PUT already failed, skip
   // publish_by_group — eBay would reject it because the group's variantSKUs
@@ -1339,11 +1400,13 @@ export async function pushVariationGroup(
         ...(fulfillmentPolicyId ? { fulfillmentPolicyId } : {}),
         ...(paymentPolicyId     ? { paymentPolicyId }     : {}),
         ...(returnPolicyId      ? { returnPolicyId }      : {}),
+        // EFX P9a — Best Offer (Trattativa). eBay nests it under listingPolicies.
+        bestOfferTerms,
       },
       // merchantLocationKey (top-level, not inside listingPolicies) tells eBay
       // the seller's location so it can resolve Item.Country for the listing.
       ...(merchantLocationKey ? { merchantLocationKey } : {}),
-      quantityLimitPerBuyer: 10,
+      quantityLimitPerBuyer,
     }
 
     let offerId: string | null = cachedOfferIds.get(sku) ?? null
@@ -1700,6 +1763,12 @@ export async function pushOffersOnly(
     return rows.map(r => ({ sku: (r.sku ?? '') as string, market: mp, status: 'ERROR' as const, message: msg }))
   }
 
+  // EFX P9a/P9f — shared (parent-level) offer terms, resolved once for the family.
+  const offerWarnings: string[] = []
+  const bestOfferTerms = buildBestOfferTerms(parentRow, currency, offerWarnings)
+  const quantityLimitPerBuyer = resolveQuantityLimitPerBuyer(parentRow)
+  if (offerWarnings.length > 0) console.warn('[ebay-push] offers-only best-offer:', offerWarnings.join(' | '))
+
   const variantSkusList = variantRows.map(r => r.sku as string).filter(Boolean)
   const cachedOfferIds = await loadCachedOfferIds(variantSkusList, region, marketplaceId)
   const collectedOfferIds = new Map<string, string>()
@@ -1742,9 +1811,11 @@ export async function pushOffersOnly(
         ...(fulfillmentPolicyId ? { fulfillmentPolicyId } : {}),
         ...(paymentPolicyId     ? { paymentPolicyId }     : {}),
         ...(returnPolicyId      ? { returnPolicyId }      : {}),
+        // EFX P9a — Best Offer (Trattativa). eBay nests it under listingPolicies.
+        bestOfferTerms,
       },
       ...(merchantLocationKey ? { merchantLocationKey } : {}),
-      quantityLimitPerBuyer: 10,
+      quantityLimitPerBuyer,
     }
 
     const upd = await fetch(`${apiBase}/sell/inventory/v1/offer/${offerId}`, {
@@ -1991,6 +2062,14 @@ export function buildFlatRow(
     image_4: effectiveImageUrls[3] ?? '',
     image_5: effectiveImageUrls[4] ?? '',
     image_6: effectiveImageUrls[5] ?? '',
+    // EFX P9b — eBay merchantLocationKey (shared). Blank falls back to the
+    // account-configured default location at push time.
+    merchant_location_key: (firstAttrs.merchantLocationKey as string | undefined) ?? '',
+    // EFX P9f — per-listing max qty per buyer (shared). Blank = default of 10.
+    quantity_limit_per_buyer:
+      (firstAttrs.quantityLimitPerBuyer as number | undefined) != null
+        ? (firstAttrs.quantityLimitPerBuyer as number)
+        : '',
     fulfillment_policy_id: (firstAttrs.fulfillmentPolicyId as string | undefined) ?? '',
     payment_policy_id: (firstAttrs.paymentPolicyId as string | undefined) ?? '',
     return_policy_id: (firstAttrs.returnPolicyId as string | undefined) ?? '',
@@ -2151,6 +2230,13 @@ export function packSharedFields(row: Record<string, unknown>): {
       bestOffer: Boolean(row.best_offer_enabled),
       bestOfferFloor: Number(row.best_offer_floor ?? 0),
       bestOfferCeiling: Number(row.best_offer_ceiling ?? 0),
+      // EFX P9b — merchantLocationKey (blank = account default at push).
+      merchantLocationKey: (row.merchant_location_key as string) ?? '',
+      // EFX P9f — quantityLimitPerBuyer override; null when blank (push uses 10).
+      quantityLimitPerBuyer:
+        row.quantity_limit_per_buyer != null && row.quantity_limit_per_buyer !== ''
+          ? Number(row.quantity_limit_per_buyer)
+          : null,
       fulfillmentPolicyId: (row.fulfillment_policy_id as string) ?? '',
       paymentPolicyId: (row.payment_policy_id as string) ?? '',
       returnPolicyId: (row.return_policy_id as string) ?? '',

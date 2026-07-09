@@ -39,7 +39,7 @@ import {
 import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, toListingLanguage, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
 import { parseThemeAxes } from '../services/ebay-theme-axes.js';
 import { pushSharedListings, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
-import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot } from '../services/ebay-variation-push.service.js';
+import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot, buildBestOfferTerms, resolveQuantityLimitPerBuyer } from '../services/ebay-variation-push.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
 import { publishOrderEvent } from '../services/order-events.service.js';
 import { renderExport } from '../services/export/renderers.js';
@@ -1456,9 +1456,12 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 ...(sFulfillmentId ? { fulfillmentPolicyId: sFulfillmentId } : {}),
                 ...(sPaymentId     ? { paymentPolicyId: sPaymentId }         : {}),
                 ...(sReturnId      ? { returnPolicyId: sReturnId }           : {}),
+                // EFX P9a — Best Offer (Trattativa), nested under listingPolicies.
+                bestOfferTerms: buildBestOfferTerms(row, currency),
               },
               merchantLocationKey: sMlk,
-              quantityLimitPerBuyer: 10,
+              // EFX P9f — operator override for max qty per buyer (blank → 10).
+              quantityLimitPerBuyer: resolveQuantityLimitPerBuyer(row),
             };
 
             // Check if offer exists
