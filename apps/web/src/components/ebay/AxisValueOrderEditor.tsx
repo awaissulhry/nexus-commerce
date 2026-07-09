@@ -89,13 +89,13 @@ function SortableValueRow({
         'flex items-center gap-2 px-2 py-1.5 rounded text-sm select-none border',
         isDragging
           ? 'bg-blue-50 border-blue-300 dark:bg-blue-900/20 dark:border-blue-600 shadow-lg z-50'
-          : 'bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700',
+          : 'bg-white border-default dark:bg-slate-800 dark:border-slate-700',
       ].join(' ')}
     >
       <span
         {...attributes}
         {...listeners}
-        className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 flex-shrink-0"
+        className="cursor-grab active:cursor-grabbing text-tertiary hover:text-slate-600 dark:hover:text-slate-300 flex-shrink-0"
         aria-label={`Drag to reorder ${id}`}
       >
         <GripVertical size={14} />
@@ -170,7 +170,7 @@ function AxisPanel({
           <div className="flex gap-1 flex-shrink-0">
             <button
               type="button"
-              className="text-[11px] px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              className="text-[11px] px-2 py-0.5 rounded border border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
               onClick={() => onChange(sortClothing(values))}
               title="Sort clothing/shoe sizes small → large"
             >
@@ -178,21 +178,21 @@ function AxisPanel({
             </button>
             <button
               type="button"
-              className="text-[11px] px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              className="text-[11px] px-2 py-0.5 rounded border border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
               onClick={() => onChange([...values].sort((a, b) => a.localeCompare(b)))}
             >
               A→Z
             </button>
             <button
               type="button"
-              className="text-[11px] px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              className="text-[11px] px-2 py-0.5 rounded border border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
               onClick={() => onChange([...values].sort((a, b) => b.localeCompare(a)))}
             >
               Z→A
             </button>
             <button
               type="button"
-              className="text-[11px] px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              className="text-[11px] px-2 py-0.5 rounded border border-default dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
               onClick={() => onChange([...values].reverse())}
             >
               Reverse
@@ -224,7 +224,7 @@ function AxisPanel({
                 type="button"
                 onClick={() => moveValue(i, -1)}
                 disabled={i === 0}
-                className="p-0.5 text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-30"
+                className="p-0.5 text-tertiary hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-30"
                 aria-label={`Move ${v} up`}
               >
                 <ChevronUp className="w-3 h-3" />
@@ -233,13 +233,13 @@ function AxisPanel({
                 type="button"
                 onClick={() => moveValue(i, +1)}
                 disabled={i === values.length - 1}
-                className="p-0.5 text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-30"
+                className="p-0.5 text-tertiary hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-30"
                 aria-label={`Move ${v} down`}
               >
                 <ChevronDown className="w-3 h-3" />
               </button>
               {valueContent(v)}
-              <span className="text-[10px] text-slate-400 ml-auto flex-shrink-0">{i + 1}</span>
+              <span className="text-[10px] text-tertiary ml-auto flex-shrink-0">{i + 1}</span>
             </div>
           ))}
         </div>
@@ -276,20 +276,20 @@ export function AxisValueOrderEditor({
     <div>
       {/* Axis order — buyers pick in this order on eBay */}
       {axisSeq.length > 1 && (
-        <div className="mb-3 rounded-lg border border-slate-200 dark:border-slate-700 p-2.5">
+        <div className="mb-3 rounded-lg border border-default dark:border-slate-700 p-2.5">
           <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
             Axis order — buyers pick in this order on eBay
           </div>
           <ul className="space-y-1">
             {axisSeq.map((name, i) => (
               <li key={name} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                <span className="w-4 text-[11px] tabular-nums text-slate-400">{i + 1}.</span>
+                <span className="w-4 text-[11px] tabular-nums text-tertiary">{i + 1}.</span>
                 <span className="flex-1 truncate">{name}</span>
                 <button
                   type="button"
                   disabled={i === 0}
                   onClick={() => moveAxis(i, -1)}
-                  className="p-0.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30"
+                  className="p-0.5 rounded text-tertiary hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30"
                   aria-label={`Move ${name} up`}
                 >
                   <ChevronUp className="w-3.5 h-3.5" />
@@ -298,7 +298,7 @@ export function AxisValueOrderEditor({
                   type="button"
                   disabled={i === axisSeq.length - 1}
                   onClick={() => moveAxis(i, 1)}
-                  className="p-0.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30"
+                  className="p-0.5 rounded text-tertiary hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30"
                   aria-label={`Move ${name} down`}
                 >
                   <ChevronDown className="w-3.5 h-3.5" />
