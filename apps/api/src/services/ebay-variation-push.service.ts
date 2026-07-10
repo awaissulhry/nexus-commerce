@@ -639,6 +639,16 @@ export async function pushVariationGroup(
      *  valued). The push route merges these into its response `warnings` so the
      *  flat-file client can show them. Never affects the pushed payload. */
     warningsSink?: string[]
+    /** EFX P9e — the PARENT's per-market resolved content for the target market
+     *  (title/subtitle/description). A variation listing has ONE parent-level
+     *  title/subtitle/description, so the caller resolves it from the parent
+     *  product's ChannelListing for this market (via resolvePerMarketContent,
+     *  falling back to the active-market parent row) and threads it in. When
+     *  omitted, the group falls back to the parentRow.* values (byte-identical to
+     *  pre-P9e). Only the group-level title/description + offer subtitle use this;
+     *  per-variant inventory_item title/description are non-surfacing on grouped
+     *  listings (the group title/description is authoritative) and stay as-is. */
+    parentContent?: { title: string; subtitle: string; description: string }
   },
 ): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
   const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
@@ -1187,7 +1197,9 @@ export async function pushVariationGroup(
 
   // Step 3: (specifications + imageVariesByAxes computed above before Step 1) Create/update the inventory_item_group.
   // variantSKUs is the correct field name (plain string array, not objects).
-  let parentTitle = String(parentRow.title ?? '').trim()
+  // EFX P9e — prefer this market's resolved parent title (falls back to the
+  // active-market parent row when the caller supplied none / the market has none).
+  let parentTitle = String(opts?.parentContent?.title ?? parentRow.title ?? '').trim()
   if (!parentTitle) {
     // Flat-file rows built from buildFlatRow already fall back to product.name, but
     // when the eBay ChannelListing has an explicitly empty title (operator cleared it)
@@ -1264,7 +1276,8 @@ export async function pushVariationGroup(
   const groupBody = {
     inventoryItemGroupKey: groupKey,
     title: parentTitle,
-    description: parentRow.description ?? '',
+    // EFX P9e — this market's resolved parent description (falls back to the row).
+    description: opts?.parentContent?.description ?? parentRow.description ?? '',
     imageUrls: groupImageUrls,
     variantSKUs: variantRows.map(r => r.sku as string),
     variesBy: {
@@ -1437,7 +1450,9 @@ export async function pushVariationGroup(
       continue
     }
 
-    const subtitle = (parentRow.subtitle as string | undefined)?.trim() ?? ''
+    // EFX P9e — this market's resolved (snapshot-authoritative) parent subtitle,
+    // falling back to the active-market parent row when the caller supplied none.
+    const subtitle = (opts?.parentContent?.subtitle ?? (parentRow.subtitle as string | undefined))?.trim() ?? ''
     const offerBody: Record<string, unknown> = {
       sku,
       marketplaceId,

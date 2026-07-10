@@ -104,6 +104,76 @@ describe('resolvePerMarketContent — market with no distinct content falls back
   })
 })
 
+// ── Part 1b — variation-family push resolves per-market PARENT content ─────
+// A variation listing carries ONE title/subtitle/description at the PARENT
+// level (children differ only by aspects), so per-market family content =
+// resolvePerMarketContent applied to the PARENT product's ChannelListing for
+// the target market, falling back to the active-market parent row. This models
+// the resolution the family push route now threads into pushVariationGroup
+// (ebay-flat-file.routes.ts → opts.parentContent → group title/description +
+// offer subtitle).
+
+describe('variation-family push — per-market PARENT content', () => {
+  // The flat row carries only the ACTIVE (IT) market's parent content.
+  const parentRowFallback = {
+    title: 'AIREON IT parent title',
+    description: 'AIREON IT parent description',
+    subtitle: 'AIREON IT parent subtitle',
+  }
+
+  it('target market WITH its own parent content → pushes that market’s content', () => {
+    // DE parent ChannelListing has its own saved title/description + snapshot subtitle.
+    const de = resolvePerMarketContent(
+      {
+        title: 'AIREON DE parent title',
+        description: 'AIREON DE parent description',
+        platformAttributes: { subtitle: 'DE attrs subtitle' },
+        flatFileSnapshot: { subtitle: 'AIREON DE SNAPSHOT subtitle' },
+      },
+      parentRowFallback,
+    )
+    expect(de.title).toBe('AIREON DE parent title')
+    expect(de.description).toBe('AIREON DE parent description')
+    // subtitle snapshot-authoritative → snapshot wins over platformAttributes.
+    expect(de.subtitle).toBe('AIREON DE SNAPSHOT subtitle')
+  })
+
+  it('target market WITHOUT parent content → falls back to the active parent row', () => {
+    // FR parent listing missing → the whole family push inherits the active (IT) row.
+    const fr = resolvePerMarketContent(null, parentRowFallback)
+    expect(fr).toEqual({
+      title: 'AIREON IT parent title',
+      description: 'AIREON IT parent description',
+      subtitle: 'AIREON IT parent subtitle',
+    })
+  })
+
+  it('per-field inheritance: FR has its own title but no subtitle/description → mixes market + active row', () => {
+    const fr = resolvePerMarketContent(
+      { title: 'AIREON FR parent title', description: '', platformAttributes: {}, flatFileSnapshot: {} },
+      parentRowFallback,
+    )
+    expect(fr.title).toBe('AIREON FR parent title')          // market's own — kept
+    expect(fr.description).toBe('AIREON IT parent description') // blank → inherit active
+    expect(fr.subtitle).toBe('AIREON IT parent subtitle')      // blank → inherit active
+  })
+
+  it('a non-blank market parent value is never overwritten by the active row (no reverse bleed)', () => {
+    const de = resolvePerMarketContent(
+      {
+        title: 'AIREON DE parent title',
+        description: 'AIREON DE parent description',
+        platformAttributes: { subtitle: 'AIREON DE parent subtitle' },
+        flatFileSnapshot: {},
+      },
+      parentRowFallback,
+    )
+    expect(de.title).toBe('AIREON DE parent title')
+    expect(de.description).toBe('AIREON DE parent description')
+    expect(de.subtitle).toBe('AIREON DE parent subtitle')
+  })
+})
+
 // ── Part 2 — market isolation (read path invariant) ───────────────────────
 
 type Listing = Parameters<typeof buildFlatRow>[0]['channelListings'][number]

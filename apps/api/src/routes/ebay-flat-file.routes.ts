@@ -1253,6 +1253,28 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           // rather than the internal UUID platformProductId.
           const parentRowForKey = familyRows.find(r => r._isParent) ?? familyRows[0]
           const resolvedGroupKey = (parentRowForKey.sku as string) || familyKey
+
+          // EFX P9e — per-market FAMILY content. A variation listing carries ONE
+          // title/subtitle/description at the PARENT level (children differ only
+          // by aspects), so per-market family content = the PARENT product's own
+          // saved content for THIS market. Resolve it exactly like the single-SKU
+          // path (UK→GB region map, snapshot-authoritative subtitle), falling back
+          // to the active-market parent row when the market has none — so a single
+          // IT+DE+FR family push sends each market its own parent title/description/
+          // subtitle instead of the active market's to every one.
+          const familyContentRegion = mp === 'UK' ? 'GB' : mp;
+          const parentContentListing = parentRowForKey._productId
+            ? await prisma.channelListing.findFirst({
+                where: { productId: parentRowForKey._productId as string, channel: 'EBAY', region: familyContentRegion },
+                select: { title: true, description: true, platformAttributes: true, flatFileSnapshot: true },
+              })
+            : null;
+          const parentContent = resolvePerMarketContent(parentContentListing, {
+            title: parentRowForKey.title as string | undefined,
+            description: parentRowForKey.description as string | undefined,
+            subtitle: parentRowForKey.subtitle as string | undefined,
+          });
+
           const groupResults = await pushVariationGroup(
             resolvedGroupKey,
             familyRows,
@@ -1267,7 +1289,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             undefined, // pictureAxisOverride
             undefined, // imageOverrideBySku
             undefined, // groupImageOverride
-            { warningsSink: axisWarnings }, // EFX D7 — collect axis warnings
+            { warningsSink: axisWarnings, parentContent }, // EFX D7 warnings + P9e per-market parent content
           );
           perRowResults.push(...groupResults);
           continue;
