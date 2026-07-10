@@ -3187,7 +3187,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       onGroupStateChange={(closed, order) => coreApplyGroupSettings(closed, order)}
       initialRows={clientRows as BaseRow[]}
       makeBlankRow={makeBlankRow}
-      minRows={15}
+      // UFX P2d — Sheets-style ghost canvas replaces the minRows={15} padding:
+      // unlike padToMin rows (which makeBlankRow marks _isNew/_dirty and so
+      // polluted dirty counts + Save), ghosts are excluded from dirty counts,
+      // onSave(dirty), validate() and select-all by the grid, and materialize
+      // into plain new rows on first edit.
+      ghostRows={10}
       getGroupKey={getGroupKey}
       validate={validateRows}
       onSave={onSave}
