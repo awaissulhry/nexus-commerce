@@ -392,6 +392,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
                 contentTypeValues: enumByType.get(t)?.find((c) => c.id === 'compliance_media__content_type')?.values,
                 contactAutoFill: Boolean(complianceBySku.get(String(r.item_sku ?? ''))?.responsiblePerson?.email?.trim()),
               },
+              // UFX P6g — missing-required downgraded to warnings for PARTIAL_UPDATE
+              // rows of a NOT_ENFORCED product type (absent value = ENFORCED).
+              requirementsEnforced: union.requirementsEnforcedByType?.[t] ?? union.requirementsEnforced,
             })
             // UFX P6b — warn on a DETECTED change to a schema-locked attribute
             // of an existing listing (diff vs last-saved snapshot; warn-only).
@@ -681,6 +684,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
               contentTypeValues: enumByType.get(t)?.find((c) => c.id === 'compliance_media__content_type')?.values,
               contactAutoFill: Boolean(complianceBySku.get(sku)?.responsiblePerson?.email?.trim()),
             },
+            // UFX P6g — missing-required downgraded to warnings for PARTIAL_UPDATE
+            // rows of a NOT_ENFORCED product type (absent value = ENFORCED).
+            requirementsEnforced: union.requirementsEnforcedByType?.[t] ?? union.requirementsEnforced,
           })
           // UFX P6b — warn on a DETECTED change to a schema-locked attribute
           // of an existing listing (diff vs last-saved snapshot; warn-only).

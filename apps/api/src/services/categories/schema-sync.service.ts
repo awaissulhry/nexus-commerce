@@ -222,6 +222,17 @@ export class CategorySchemaService {
       schemaDefinition.__propertyGroups = envelope.propertyGroups
     }
 
+    // UFX P6g — capture the envelope's requirementsEnforced ('ENFORCED' |
+    // 'NOT_ENFORCED') the same additive way (__ prefix avoids JSON Schema
+    // keyword collisions; no migration needed). NOT_ENFORCED means Amazon does
+    // not demand the full required-attribute set for this type — the flat-file
+    // preflight uses it to downgrade missing-required errors on PARTIAL_UPDATE
+    // rows. Rows cached before this capture simply lack the key → downstream
+    // treats them as ENFORCED (conservative).
+    if (typeof envelope.requirementsEnforced === 'string' && envelope.requirementsEnforced) {
+      schemaDefinition.__requirementsEnforced = envelope.requirementsEnforced
+    }
+
     const schemaVersion = envelope.productTypeVersion?.version ?? 'unknown'
     const variationThemes = extractVariationThemes(schemaDefinition)
 
@@ -239,10 +250,14 @@ export class CategorySchemaService {
     })
     if (existing) {
       // Also write schemaDefinition when __propertyGroups is now available
-      // but wasn't stored yet (schemas cached before FF.10 won't have it).
+      // but wasn't stored yet (schemas cached before FF.10 won't have it), or
+      // when __requirementsEnforced is newly available (UFX P6g backfill for
+      // rows cached before the capture) — same version, refreshed metadata.
       const needsDefinitionUpdate =
-        envelope.propertyGroups &&
-        !(existing.schemaDefinition as any)?.__propertyGroups
+        (envelope.propertyGroups &&
+          !(existing.schemaDefinition as any)?.__propertyGroups) ||
+        (typeof envelope.requirementsEnforced === 'string' &&
+          !(existing.schemaDefinition as any)?.__requirementsEnforced)
 
       return this.prisma.categorySchema.update({
         where: { id: existing.id },

@@ -177,6 +177,17 @@ export interface FlatFileManifest {
    * stacking a second 24 h TTL on top of the server's.
    */
   schemaVersion?: string
+  /**
+   * UFX P6g — Amazon's getDefinitionsProductType `requirementsEnforced`
+   * ('ENFORCED' | 'NOT_ENFORCED'), captured by schema-sync as
+   * __requirementsEnforced. NOT_ENFORCED means Amazon does not demand the
+   * full required-attribute set (relevant for PARTIAL_UPDATE preflight).
+   * Absent on schemas cached before the capture → callers must treat as
+   * ENFORCED (conservative).
+   */
+  requirementsEnforced?: string
+  /** UFX P6g — union manifest only: requirementsEnforced per member type. */
+  requirementsEnforcedByType?: Record<string, string>
   groups: FlatFileColumnGroup[]
   /**
    * Maps expanded column IDs back to their base schema field ID.
@@ -1294,6 +1305,15 @@ export function mergeManifestsIntoUnion(manifests: FlatFileManifest[], types: st
     ? createHash('sha256').update(memberVersions).digest('hex').slice(0, 16)
     : undefined
 
+  // UFX P6g — requirementsEnforced per member type (per-row preflight needs
+  // the row's OWN type; a union-level scalar can't express a mixed sheet).
+  const requirementsEnforcedByType: Record<string, string> = {}
+  manifests.forEach((m, i) => {
+    if (typeof m.requirementsEnforced === 'string' && m.requirementsEnforced) {
+      requirementsEnforcedByType[types[i]] = m.requirementsEnforced
+    }
+  })
+
   return {
     marketplace: manifests[0].marketplace,
     productType: types.join('+'),
@@ -1301,6 +1321,7 @@ export function mergeManifestsIntoUnion(manifests: FlatFileManifest[], types: st
     variationThemes: [...variationThemes],
     fetchedAt: new Date().toISOString(),
     schemaVersion,
+    requirementsEnforcedByType: Object.keys(requirementsEnforcedByType).length > 0 ? requirementsEnforcedByType : undefined,
     groups: groupOrder.map((id) => groupById.get(id)!),
     expandedFields,
   }
@@ -1753,6 +1774,10 @@ export class AmazonFlatFileService {
       variationThemes,
       fetchedAt: new Date().toISOString(),
       schemaVersion: `${providerVersion}.${contentHash}`,
+      // UFX P6g — getDefinitionsProductType requirementsEnforced, captured by
+      // schema-sync as __requirementsEnforced. Absent on older cached rows →
+      // undefined → downstream treats as ENFORCED (conservative).
+      requirementsEnforced: typeof def.__requirementsEnforced === 'string' ? def.__requirementsEnforced : undefined,
       groups: allGroups,
       expandedFields,
     }

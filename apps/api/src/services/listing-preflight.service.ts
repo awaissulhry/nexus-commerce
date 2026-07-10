@@ -60,6 +60,15 @@ export interface PreflightExtras {
   }
   /** UFX P6f — GPSR/DSA product-safety warnings for EU marketplaces (warn-only). */
   gpsr?: GpsrCheckContext
+  /**
+   * UFX P6g — the row's product type's `requirementsEnforced` (from the
+   * manifest / getDefinitionsProductType). When 'NOT_ENFORCED' and the row is
+   * a PARTIAL_UPDATE (not _isNew, record_action not 'full_update'), Amazon
+   * does not demand the full required-attribute set — so missing-required
+   * issues are downgraded to warnings instead of errors. Absent/'ENFORCED' →
+   * unchanged (conservative default for schemas cached before the capture).
+   */
+  requirementsEnforced?: string
 }
 
 /**
@@ -399,8 +408,19 @@ export function preflightRow(
 
   const issues: PreflightIssue[] = []
 
+  // UFX P6g — a PARTIAL_UPDATE only patches the attributes it sends, and a
+  // NOT_ENFORCED product type doesn't demand the full required set even then —
+  // so a blank required cell can't fail THIS submit. Kept visible as a warning
+  // (the listing itself may still be suppressed for it); full updates and new
+  // rows (operationType UPDATE + requirements) keep the hard error.
+  const isPartialUpdate = row._isNew !== true
+    && String(row.record_action ?? '').toLowerCase() !== 'full_update'
+  const missingRequiredDowngraded = isPartialUpdate && extras.requirementsEnforced === 'NOT_ENFORCED'
+
   for (const m of findMissingRequired(row, requiredColumns)) {
-    issues.push({ field: m.id, severity: 'error', message: `Required attribute "${m.label}" is empty` })
+    issues.push(missingRequiredDowngraded
+      ? { field: m.id, severity: 'warning', message: `Required attribute "${m.label}" is empty — accepted for this partial update (Amazon doesn't enforce requirements for this product type), but the live listing may still be flagged for it` }
+      : { field: m.id, severity: 'error', message: `Required attribute "${m.label}" is empty` })
   }
 
   // Byte/char length caps from the live schema (UTF-8 byte limit wins). Optional
