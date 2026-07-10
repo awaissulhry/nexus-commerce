@@ -31,6 +31,7 @@ import type {
 } from './FlatFileGrid.types'
 import { normalizeCellValue } from './normalizeCellValue'
 import { tokenizeClipboard } from './paste-tokenizer'
+import { isComposingKeyEvent } from './composition'
 import { dropReadOnlyCellChanges, typeApplicabilityGuidance, isRequiredForRow, enumOptionsForRow } from './cellFlags'
 import { countGhosts, makeGhostRows, materializeGhostPatch, pasteGrowCount, topUpGhosts } from './ghost-rows'
 import { SortPanel, applySortLevels, type SortLevel, type SortGroup } from './SortPanel'
@@ -252,6 +253,9 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, initial
     // global keydown handler and double-fire (Escape clearing the whole
     // selection, Enter/Tab moving the active cell out from under the popover).
     e.stopPropagation()
+    // #76 / UFX P7 — Enter/Tab confirming an IME candidate in the search box
+    // must not commit an option.
+    if (isComposingKeyEvent(e.nativeEvent)) return
     if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(h + 1, totalItems - 1)) }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)) }
     else if (e.key === 'Enter') { e.preventDefault(); commit(hi, 'down') }
@@ -513,6 +517,9 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
   }
 
   function handleKeyDown(e: KeyboardEvent) {
+    // #76 / UFX P7 — a keydown that is part of an IME composition (e.g. the
+    // Enter confirming a candidate) must not commit or move the cell.
+    if (isComposingKeyEvent(e.nativeEvent)) return
     if (e.key === 'Tab') { e.preventDefault(); commitInput(); onNavigate(e.shiftKey ? 'left' : 'right') }
     else if (e.key === 'Enter' && col.kind !== 'longtext') { e.preventDefault(); commitInput(); onNavigate(e.shiftKey ? 'up' : 'down') }
     else if (e.key === 'Escape') {
@@ -1836,6 +1843,11 @@ export default function FlatFileGrid({
 
   useEffect(() => {
     function handle(e: globalThis.KeyboardEvent) {
+      // #76 / UFX P7 — IME composition in progress (or the keystroke that
+      // starts one): the grid must not type-to-edit, navigate or commit, and
+      // must not preventDefault (that would break the composition).
+      if (isComposingKeyEvent(e)) return
+
       // #2 — when focus is in a NON-grid form field (toolbar Search, Find &
       // Replace, a filter box, a dropdown search), let that field own every key.
       // Otherwise Backspace/Delete wiped the selected grid cells, Ctrl+A/C/V

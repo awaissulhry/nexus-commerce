@@ -15,8 +15,9 @@ export default function FlatFileLoading() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
       {/* ── Sticky header ──────────────────────────────────────────── */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-        {/* Channel + Market strip */}
-        <div className="px-3 h-9 flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/60">
+        {/* Channel + Market strip — h-8 matches the real ChannelStrip (UFX P7
+            item 9: h-9 caused a 1px-per-bar layout shift when content landed) */}
+        <div className="px-3 h-8 flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/60">
           <Skeleton variant="pill" width={90} />
           <Skeleton variant="pill" width={60} />
           <Skeleton variant="pill" width={140} />
