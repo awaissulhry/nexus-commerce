@@ -151,6 +151,16 @@ export interface FlatFileColumn {
    * e.g. { 'parent': 'Articolo padre', 'child': 'Articolo figlio' } for IT.
    */
   optionLabels?: Record<string, string>
+  /**
+   * UFX P6g — enum values Amazon marks DEPRECATED via the meta-schema
+   * `$lifecycle.enumDeprecated` marker (real exposure in cached schemas:
+   * variation_theme themes, vehicle_fitment standards). Contains only values
+   * the type STILL offers (codes + differing display labels), so the UI can
+   * grey them and preflight can warn — a value dropped from the enum entirely
+   * is already caught by the accepted-set check. Union manifests merge by set
+   * union (warn-only hint, so cross-type over-reach is acceptable).
+   */
+  deprecatedOptions?: string[]
 }
 
 export interface FlatFileColumnGroup {
@@ -356,6 +366,75 @@ function findEnumNode(node: Record<string, any>, depth = 0): string[] {
   }
 
   return []
+}
+
+/**
+ * UFX P6g — deprecated enum CODES for a schema subtree, from Amazon's
+ * meta-schema `$lifecycle.enumDeprecated` marker. Spelling/placement verified
+ * against the live cached schemas (49 distinct defs probed 2026-07-11): the
+ * marker sits on the SAME node that carries the enum, e.g.
+ * variation_theme.items.properties.name.$lifecycle.enumDeprecated and
+ * vehicle_fitment.items.properties.standard.items.properties.value.$lifecycle.
+ * No `replacedBy`/`replaces` marker exists in ANY cached schema (enum-value
+ * replacements have no vocabulary in Amazon's meta-schema today), so there is
+ * no replacement plumbing on the manifest — preflight accepts an optional
+ * replacement map for when Amazon ever ships one. Traversal mirrors
+ * findEnumNode so the deprecated list is found wherever the enum itself is.
+ */
+export function findEnumDeprecated(node: Record<string, any>, depth = 0): string[] {
+  if (!node || typeof node !== 'object' || depth > 5) return []
+
+  const direct = node?.$lifecycle?.enumDeprecated
+  if (Array.isArray(direct) && direct.length) return direct.map(String).filter(Boolean)
+
+  for (const key of ['anyOf', 'oneOf'] as const) {
+    if (Array.isArray(node[key])) {
+      for (const branch of node[key]) {
+        const v = findEnumDeprecated(branch as Record<string, any>, depth + 1)
+        if (v.length) return v
+      }
+    }
+  }
+
+  const itemProps: Record<string, any> = node?.items?.properties ?? {}
+
+  const valueNode = itemProps.value
+  if (valueNode) {
+    const v = findEnumDeprecated(valueNode, depth + 1)
+    if (v.length) return v
+  }
+
+  const SKIP_PROPS = new Set(['value', 'marketplace_id', 'language_tag'])
+  for (const [subId, subNode] of Object.entries(itemProps)) {
+    if (SKIP_PROPS.has(subId)) continue
+    const v = findEnumDeprecated(subNode as Record<string, any>, depth + 1)
+    if (v.length) return v
+  }
+
+  return []
+}
+
+/**
+ * UFX P6g — a column's deprecatedOptions: the schema's deprecated CODES kept
+ * only where the type STILL offers them (a dropped value is the accepted-set
+ * check's job), expressed as the code plus its differing display label (rows
+ * legitimately carry either). Shared by the top-level and Pattern C
+ * sub-column builders. Returns undefined when nothing applies.
+ */
+function deriveDeprecatedOptions(
+  prop: Record<string, any>,
+  enumOpts: string[],
+  pairs: Array<{ code: string; label: string }>,
+): string[] | undefined {
+  const deprecatedCodes = findEnumDeprecated(prop)
+  if (deprecatedCodes.length === 0) return undefined
+  const codeToLabel = new Map(pairs.map((pr) => [pr.code, pr.label]))
+  const dep = deprecatedCodes.flatMap((code) => {
+    const label = codeToLabel.get(code)
+    if (label !== undefined) return label !== code ? [code, label] : [code]
+    return enumOpts.includes(code) ? [code] : []
+  })
+  return dep.length > 0 ? [...new Set(dep)] : undefined
 }
 
 /**
@@ -753,6 +832,7 @@ function schemaFieldToColumn(
   let kind: FlatFileColumnKind = 'text'
   let options: string[] | undefined
   let optionCodes: string[] | undefined
+  let deprecatedOptions: string[] | undefined
 
   const enumOpts = schemaEnums[fieldId]
   if (enumOpts && enumOpts.length > 0) {
@@ -765,6 +845,8 @@ function schemaFieldToColumn(
     if (pairs.length > 0 && pairs.some((pr) => pr.code !== pr.label)) {
       optionCodes = pairs.map((pr) => pr.code)
     }
+    // UFX P6g — $lifecycle.enumDeprecated → still-offered deprecated values.
+    deprecatedOptions = deriveDeprecatedOptions(prop, enumOpts, pairs)
   } else if (t === 'number' || t === 'integer' || topType === 'number' || topType === 'integer') {
     kind = 'number'
   } else if (t === 'boolean') {
@@ -804,6 +886,7 @@ function schemaFieldToColumn(
     kind,
     options,
     optionCodes,
+    deprecatedOptions,
     selectionOnly,
     guidance,
     // UFX P6a — meta-schema hidden/editable flags (checked on prop AND its leaf).
@@ -1060,6 +1143,7 @@ function expandSchemaField(
       let kind: FlatFileColumnKind = 'text'
       let options: string[] | undefined
       let optionCodes: string[] | undefined
+      let deprecatedOptions: string[] | undefined
       if (opts.length > 0) {
         kind = 'enum'
         options = ['', ...opts]
@@ -1068,6 +1152,10 @@ function expandSchemaField(
         if (pairs.length > 0 && pairs.some((pr) => pr.code !== pr.label)) {
           optionCodes = pairs.map((pr) => pr.code)
         }
+        // UFX P6g — sub-prop $lifecycle.enumDeprecated (real case:
+        // vehicle_fitment__standard, where "tecdoc" is deprecated in favor of
+        // the still-offered "ktype" / "KType (TecDoc)").
+        deprecatedOptions = deriveDeprecatedOptions(subProp, opts, pairs)
       }
       else if (subType === 'integer' || subType === 'number') kind = 'number'
       else if (subType === 'boolean') { kind = 'enum'; options = ['', 'true', 'false'] }
@@ -1081,7 +1169,7 @@ function expandSchemaField(
         labelEn: subEnLabel, labelLocal: subLoLabel,
         required: isRequired && subInReq,
         requiredWithParent: !isRequired && subInReq ? true : undefined,
-        kind, options, optionCodes,
+        kind, options, optionCodes, deprecatedOptions,
         // UFX P6a — hidden/editable live on the sub-prop node (list_price.currency)
         // or its wrapped leaf; extractMetaFlags checks both.
         ...extractMetaFlags(subProp),
@@ -1304,6 +1392,8 @@ export function mergeManifestsIntoUnion(manifests: FlatFileManifest[], types: st
             requiredWithParent: undefined, requiredWithParentForProductTypes: undefined,
             conditional: undefined, optionCodes: undefined,
             optionsByProductType: undefined, optionCodesByProductType: undefined,
+            // UFX P6g — re-derived below (set union across types; warn-only hint).
+            deprecatedOptions: undefined,
             // UFX P6a — re-derived below: hidden ANDs (visible for any type →
             // shown), editableForListing ORs pessimistically with a per-type list.
             hidden: undefined, editableForListing: undefined, nonEditableForProductTypes: undefined,
@@ -1341,6 +1431,11 @@ export function mergeManifestsIntoUnion(manifests: FlatFileManifest[], types: st
         if (c.optionCodes && c.optionCodes.length) {
           mc.optionCodes = [...new Set([...(mc.optionCodes ?? []), ...c.optionCodes])]
           mc.optionCodesByProductType = { ...(mc.optionCodesByProductType ?? {}), [pt]: [...c.optionCodes] }
+        }
+        // UFX P6g — deprecated options union across types (warn-only hint, so
+        // deprecated-anywhere-warns-everywhere is the acceptable trade-off).
+        if (c.deprecatedOptions && c.deprecatedOptions.length) {
+          mc.deprecatedOptions = [...new Set([...(mc.deprecatedOptions ?? []), ...c.deprecatedOptions])]
         }
       }
     }
@@ -1593,6 +1688,11 @@ export class AmazonFlatFileService {
     // Variation themes come from the schema enum — same source as every other
     // enum field. The separately-stored variationThemes column is redundant now.
     const variationThemes: string[] = schemaEnums['variation_theme'] ?? []
+    // UFX P6g — themes Amazon marks deprecated ($lifecycle.enumDeprecated on
+    // variation_theme.items.properties.name — the biggest real enum-deprecation
+    // carrier in the cached schemas). Only themes still offered are kept.
+    const deprecatedThemes = findEnumDeprecated(properties['variation_theme'] ?? {})
+      .filter((d) => variationThemes.includes(d))
 
     // ── Group 1: Infrastructure (fixed — not in Amazon's schema) ─────────
     const infraGroup: FlatFileColumnGroup = {
@@ -1692,6 +1792,8 @@ export class AmazonFlatFileService {
           required: false,
           kind: variationThemes.length > 0 ? 'enum' : 'text',
           options: variationThemes.length > 0 ? ['', ...variationThemes] : undefined,
+          // UFX P6g — deprecated themes stay selectable (warn-only) but tagged.
+          deprecatedOptions: deprecatedThemes.length > 0 ? deprecatedThemes : undefined,
           selectionOnly: true,
           applicableParentage: ['VARIATION_PARENT'],
           width: 200,

@@ -31,6 +31,22 @@ export interface EnumColumn {
   selectionOnly?: boolean
 }
 
+/**
+ * UFX P6g — an enum column with the values Amazon marks DEPRECATED via the
+ * meta-schema $lifecycle.enumDeprecated (manifest deprecatedOptions). Values
+ * here are still ACCEPTED (deprecated ⊆ offered) — the check is warn-only.
+ */
+export interface DeprecatedEnumColumn {
+  id: string
+  label: string
+  /** Deprecated values (codes + differing display labels). */
+  values: string[]
+  /** Replacement per deprecated value, included in the warning when named.
+   *  No cached Amazon schema carries a replacement marker today (probed
+   *  2026-07-11) — plumbing exists for when one ships. */
+  replacementByValue?: Record<string, string>
+}
+
 /** UFX P1 (P0-1a) — "required-if-present" sub-columns of one expanded attribute. */
 export interface SubRequiredGroup {
   /** Base attribute id (e.g. item_package_dimensions). */
@@ -69,6 +85,13 @@ export interface PreflightExtras {
    * unchanged (conservative default for schemas cached before the capture).
    */
   requirementsEnforced?: string
+  /** UFX P6g — deprecated-enum-value warnings (manifest deprecatedOptions). */
+  deprecatedColumns?: DeprecatedEnumColumn[]
+  /** UFX P6g — canonicalize a cell before the deprecated compare (the
+   *  variation_theme case: rows carry historical spellings like
+   *  "SizeName-ColorName" that the feed builder normalizes to the approved
+   *  enum code, which is what the deprecated list names). */
+  normalizeEnumValue?: (colId: string, value: string) => string
 }
 
 /**
@@ -173,6 +196,39 @@ export function checkEnumValues(row: Record<string, any>, enumColumns: EnumColum
         message: `"${c.label}" value "${s}" isn't an accepted option for this product type`,
       })
     }
+  }
+  return issues
+}
+
+/**
+ * UFX P6g — warn (never error) when a cell carries a value Amazon marks
+ * DEPRECATED ($lifecycle.enumDeprecated). Deprecated values are still offered
+ * by the enum — they submit fine today — but Amazon retires them over time,
+ * so the operator should migrate at leisure. The optional normalizer
+ * canonicalizes historical spellings first (variation_theme). Includes the
+ * replacement when one is named. Pure + testable.
+ */
+export function checkDeprecatedValues(
+  row: Record<string, any>,
+  cols: DeprecatedEnumColumn[],
+  normalize?: (colId: string, value: string) => string,
+): PreflightIssue[] {
+  const issues: PreflightIssue[] = []
+  for (const c of cols) {
+    const raw = row[c.id]
+    if (isBlank(raw)) continue
+    const s = String(raw).trim()
+    const candidates = [s, ...(normalize ? [normalize(c.id, s)] : [])]
+    const hit = c.values.find((v) => candidates.some((x) => x === v || x.toLowerCase() === v.toLowerCase()))
+    if (!hit) continue
+    const replacement = c.replacementByValue?.[hit]
+    issues.push({
+      field: c.id,
+      severity: 'warning',
+      message: replacement
+        ? `"${c.label}" value "${s}" is deprecated by Amazon — use "${replacement}" instead (the old value still works but is being retired)`
+        : `"${c.label}" value "${s}" is deprecated by Amazon — it still works today but is being retired; switch to a current option when convenient`,
+    })
   }
   return issues
 }
@@ -510,6 +566,12 @@ export function preflightRow(
     }
   }
 
+  // UFX P6g — deprecated enum values (warn-only; deprecated ⊆ accepted, so no
+  // overlap with checkEnumValues errors).
+  if (extras.deprecatedColumns?.length) {
+    issues.push(...checkDeprecatedValues(row, extras.deprecatedColumns, extras.normalizeEnumValue))
+  }
+
   // UFX P6f — GPSR EU product-safety warnings. Deduped per field against the
   // earlier checks (checkEnumValues also validates compliance_media__content_type
   // when the manifest carries the enum) so one bad cell yields one issue.
@@ -576,6 +638,8 @@ interface UnionManifestLike {
       optionLabels?: Record<string, string>
       optionsByProductType?: Record<string, string[]>
       optionCodesByProductType?: Record<string, string[]>
+      // UFX P6g — $lifecycle.enumDeprecated values (see FlatFileColumn).
+      deprecatedOptions?: string[]
       selectionOnly?: boolean
       requiredWithParent?: boolean
       requiredWithParentForProductTypes?: string[]
@@ -600,6 +664,10 @@ export interface PerTypeValidation {
   /** UFX P6b — columns the schema marks non-editable on an existing listing,
    *  per product type (drives the change-detection warning). */
   nonEditableByType: Map<string, RequiredColumn[]>
+  /** UFX P6g — enum columns carrying Amazon-deprecated values, per product
+   *  type (warn-only; the union's deprecatedOptions is a cross-type set, so a
+   *  deprecated-anywhere value warns everywhere — acceptable for a hint). */
+  deprecatedByType: Map<string, DeprecatedEnumColumn[]>
 }
 
 /**
@@ -618,6 +686,7 @@ export function buildPerTypeValidation(union: UnionManifestLike): PerTypeValidat
   const enumByType = new Map<string, EnumColumn[]>()
   const subGroupsByType = new Map<string, SubRequiredGroup[]>()
   const nonEditableByType = new Map<string, RequiredColumn[]>()
+  const deprecatedByType = new Map<string, DeprecatedEnumColumn[]>()
   for (const t of types) {
     requiredByType.set(
       t,
@@ -691,8 +760,19 @@ export function buildPerTypeValidation(union: UnionManifestLike): PerTypeValidat
           (c.nonEditableForProductTypes ? c.nonEditableForProductTypes.includes(t) : c.editableForListing === false))
         .map((c) => ({ id: String(c.id), label: String(c.labelEn ?? c.id) })),
     )
+    // UFX P6g — deprecated enum values per type (warn-only). Unlike enumByType,
+    // variation_theme is INCLUDED — it is the biggest real deprecation carrier
+    // (30-168 still-offered deprecated themes per cached apparel type); the
+    // caller passes a normalizer so historical spellings compare canonically.
+    deprecatedByType.set(
+      t,
+      cols
+        .filter((c) => (!c.applicableProductTypes || c.applicableProductTypes.includes(t)) &&
+          Array.isArray(c.deprecatedOptions) && c.deprecatedOptions.length > 0)
+        .map((c) => ({ id: String(c.id), label: String(c.labelEn ?? c.id), values: [...c.deprecatedOptions!] })),
+    )
   }
-  return { requiredByType, applicableByType, lengthByType, enumByType, subGroupsByType, nonEditableByType }
+  return { requiredByType, applicableByType, lengthByType, enumByType, subGroupsByType, nonEditableByType, deprecatedByType }
 }
 
 /**

@@ -32,9 +32,11 @@ import {
   AmazonFlatFileService,
   buildSchemaFieldHints,
   dedupCellsBySelectors,
+  findEnumDeprecated,
+  normalizeVariationTheme,
 } from './flat-file.service.js'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
-import { preflightRow } from '../listing-preflight.service.js'
+import { buildPerTypeValidation, checkDeprecatedValues, preflightRow } from '../listing-preflight.service.js'
 
 const feedSvc = new AmazonFlatFileService({} as any, {} as any)
 const build = (rows: any[], feedSchema: any = {}) =>
@@ -293,5 +295,175 @@ describe('UFX P6g — feed builder dedups numbered columns by schema selectors',
     )
     const values = JSON.parse(r.body).messages[0].attributes.bullet_point.map((c: any) => c.value)
     expect(values).toEqual(['A', 'A'])
+  })
+})
+
+// ── P6g-4 — $lifecycle.enumDeprecated → deprecatedOptions + preflight warning ─
+
+// Shapes mirror the REAL carriers found in the live cached schemas:
+// variation_theme.items.properties.name.$lifecycle.enumDeprecated and
+// vehicle_fitment.items.properties.standard.items.properties.value.$lifecycle.
+const deprecationDef: Record<string, any> = {
+  required: [],
+  properties: {
+    variation_theme: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: {
+            type: 'string',
+            enum: ['COLOR/SIZE', 'COLOR_NAME', 'SIZE_NAME'],
+            // GONE_THEME is deprecated AND already dropped from the enum —
+            // it must NOT appear (the accepted-set check owns dropped values).
+            $lifecycle: { enumDeprecated: ['COLOR_NAME', 'SIZE_NAME', 'GONE_THEME'] },
+          },
+          marketplace_id: {},
+        },
+      },
+    },
+    // Top-level enum whose display labels differ from the codes.
+    target_gender: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          value: {
+            type: 'string',
+            enum: ['male', 'female'],
+            enumNames: ['Maschio', 'Femmina'],
+            $lifecycle: { enumDeprecated: ['male'] },
+          },
+          marketplace_id: {},
+        },
+      },
+    },
+    // Pattern C attribute with a deprecated sub-property enum (the real
+    // vehicle_fitment case: "tecdoc" deprecated, "ktype" is the successor).
+    fitment_like: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          standard: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                value: {
+                  type: 'string',
+                  enum: ['ktype', 'tecdoc'],
+                  enumNames: ['KType (TecDoc)', 'TecDoc'],
+                  $lifecycle: { enumDeprecated: ['tecdoc'] },
+                },
+                marketplace_id: {},
+              },
+            },
+          },
+          note: { type: 'string' },
+          marketplace_id: {},
+        },
+      },
+    },
+  },
+  __propertyGroups: {
+    details: { title: 'Details', propertyNames: ['target_gender', 'fitment_like'] },
+  },
+}
+
+const colById = (m: { groups: Array<{ columns: any[] }> }, id: string) =>
+  m.groups.flatMap((g) => g.columns).find((c) => c.id === id)
+
+describe('UFX P6g — $lifecycle.enumDeprecated → manifest deprecatedOptions', () => {
+  it('findEnumDeprecated finds the marker wherever the enum sits (mirrors findEnumNode)', () => {
+    expect(findEnumDeprecated(deprecationDef.properties.variation_theme)).toEqual(['COLOR_NAME', 'SIZE_NAME', 'GONE_THEME'])
+    expect(findEnumDeprecated(deprecationDef.properties.target_gender)).toEqual(['male'])
+    expect(findEnumDeprecated(deprecationDef.properties.fitment_like.items.properties.standard)).toEqual(['tecdoc'])
+    expect(findEnumDeprecated(deprecationDef.properties.fitment_like.items.properties.note ?? {})).toEqual([])
+  })
+
+  it('top-level enum column: deprecated code + its differing label; dropped values excluded', async () => {
+    const svc = svcFor({ SHIRT: deprecationDef })
+    const m = await svc.generateManifest('IT', 'SHIRT')
+    expect(colById(m, 'target_gender')?.deprecatedOptions).toEqual(['male', 'Maschio'])
+  })
+
+  it('variation_theme column tags still-offered deprecated themes only', async () => {
+    const svc = svcFor({ SHIRT: deprecationDef })
+    const m = await svc.generateManifest('IT', 'SHIRT')
+    const vt = colById(m, 'variation_theme')
+    expect(vt?.deprecatedOptions).toEqual(['COLOR_NAME', 'SIZE_NAME'])
+    // Deprecated themes stay SELECTABLE — warn-only, never removed.
+    expect(vt?.options).toContain('COLOR_NAME')
+  })
+
+  it('Pattern C sub-column (vehicle_fitment__standard shape) carries deprecatedOptions', async () => {
+    const svc = svcFor({ SHIRT: deprecationDef })
+    const m = await svc.generateManifest('IT', 'SHIRT')
+    expect(colById(m, 'fitment_like__standard')?.deprecatedOptions).toEqual(['tecdoc', 'TecDoc'])
+  })
+
+  it('union manifest merges deprecatedOptions by set union across member types', async () => {
+    const otherDef = {
+      ...deprecationDef,
+      properties: {
+        ...deprecationDef.properties,
+        target_gender: {
+          ...deprecationDef.properties.target_gender,
+          items: {
+            type: 'object',
+            properties: {
+              value: { type: 'string', enum: ['male', 'female'], enumNames: ['Maschio', 'Femmina'], $lifecycle: { enumDeprecated: ['female'] } },
+              marketplace_id: {},
+            },
+          },
+        },
+      },
+    }
+    const svc = svcFor({ SHIRT: deprecationDef, PANTS: otherDef })
+    const union = await svc.generateUnionManifest('IT', ['SHIRT', 'PANTS'])
+    expect(new Set(colById(union, 'target_gender')?.deprecatedOptions)).toEqual(new Set(['male', 'Maschio', 'female', 'Femmina']))
+  })
+})
+
+describe('UFX P6g — preflight warns on deprecated enum values', () => {
+  const cols = [{ id: 'target_gender', label: 'Target Gender', values: ['male', 'Maschio'] }]
+
+  it('deprecated value (code or label, case-insensitive) → WARNING, never error', () => {
+    for (const v of ['male', 'Maschio', 'MASCHIO']) {
+      const issues = checkDeprecatedValues({ target_gender: v }, cols)
+      expect(issues).toHaveLength(1)
+      expect(issues[0].severity).toBe('warning')
+      expect(issues[0].message).toContain('deprecated')
+    }
+    expect(checkDeprecatedValues({ target_gender: 'Femmina' }, cols)).toEqual([])
+    expect(checkDeprecatedValues({ target_gender: '' }, cols)).toEqual([])
+  })
+
+  it('includes the replacement when one is named (no live schema names one — probed 2026-07-11)', () => {
+    const withRepl = [{ id: 'std', label: 'Standard', values: ['tecdoc'], replacementByValue: { tecdoc: 'KType (TecDoc)' } }]
+    const [issue] = checkDeprecatedValues({ std: 'tecdoc' }, withRepl)
+    expect(issue.message).toContain('use "KType (TecDoc)" instead')
+  })
+
+  it('variation_theme historical spellings are caught via the normalizer', () => {
+    const vtCols = [{ id: 'variation_theme', label: 'Variation Theme', values: ['SIZE_NAME/COLOR_NAME'] }]
+    const normalize = (colId: string, v: string) =>
+      colId === 'variation_theme' ? normalizeVariationTheme(v, { 'SIZE_NAME/COLOR_NAME': 'SIZE_NAME/COLOR_NAME' }) : v
+    expect(checkDeprecatedValues({ variation_theme: 'SizeName-ColorName' }, vtCols, normalize)).toHaveLength(1)
+    expect(checkDeprecatedValues({ variation_theme: 'SizeName-ColorName' }, vtCols)).toEqual([])
+  })
+
+  it('buildPerTypeValidation exposes deprecatedByType (variation_theme INCLUDED) and preflightRow wires it', async () => {
+    const svc = svcFor({ SHIRT: deprecationDef })
+    const union = await svc.generateUnionManifest('IT', ['SHIRT'])
+    const { deprecatedByType } = buildPerTypeValidation(union)
+    const cols = deprecatedByType.get('SHIRT') ?? []
+    expect(cols.map((c) => c.id).sort()).toEqual(['fitment_like__standard', 'target_gender', 'variation_theme'])
+
+    const issues = preflightRow({ item_sku: 'S1', target_gender: 'Maschio' }, [], [], { deprecatedColumns: cols })
+    const dep = issues.find((i) => i.field === 'target_gender')
+    expect(dep?.severity).toBe('warning')
+    expect(dep?.message).toContain('deprecated')
   })
 })

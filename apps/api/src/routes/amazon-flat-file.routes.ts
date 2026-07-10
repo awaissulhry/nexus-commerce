@@ -21,6 +21,7 @@ import {
   MARKETPLACE_ID_MAP,
   flatFileExportColumns,
   filterHiddenManifestColumns,
+  normalizeVariationTheme,
   type FlatFileManifest,
 } from '../services/amazon/flat-file.service.js'
 import { renderExport } from '../services/export/renderers.js'
@@ -357,7 +358,11 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         // MT.1 union manifest across every product type in the batch → MT.2
         // per-type required + applicable sets.
         const union = await flatFileService.generateUnionManifest(mp, batchTypes)
-        const { requiredByType, applicableByType: appByType, lengthByType, enumByType, subGroupsByType, nonEditableByType } = buildPerTypeValidation(union)
+        const { requiredByType, applicableByType: appByType, lengthByType, enumByType, subGroupsByType, nonEditableByType, deprecatedByType } = buildPerTypeValidation(union)
+        // UFX P6g — canonicalize variation_theme's historical spellings before
+        // the deprecated compare (same normalization the feed builder applies).
+        const themeCodeMap = Object.fromEntries((union.variationThemes ?? []).map((v) => [v, v]))
+        const normalizeEnumValue = (colId: string, v: string) => colId === 'variation_theme' ? normalizeVariationTheme(v, themeCodeMap) : v
         applicableByType = appByType
         // UFX P1 — raw schema defs for the conditional-requirement evaluation
         // (allOf/if/then, dependentRequired) + labels for its messages.
@@ -395,6 +400,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
               // UFX P6g — missing-required downgraded to warnings for PARTIAL_UPDATE
               // rows of a NOT_ENFORCED product type (absent value = ENFORCED).
               requirementsEnforced: union.requirementsEnforcedByType?.[t] ?? union.requirementsEnforced,
+              // UFX P6g — warn on Amazon-deprecated enum values ($lifecycle).
+              deprecatedColumns: deprecatedByType.get(t),
+              normalizeEnumValue,
             })
             // UFX P6b — warn on a DETECTED change to a schema-locked attribute
             // of an existing listing (diff vs last-saved snapshot; warn-only).
@@ -642,7 +650,11 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     if (batchTypes.length === 0) return reply.send({ preflight: [], checkedRows: rows.length })
     try {
       const union = await flatFileService.generateUnionManifest(mp, batchTypes)
-      const { requiredByType, applicableByType, lengthByType, enumByType, subGroupsByType, nonEditableByType } = buildPerTypeValidation(union)
+      const { requiredByType, applicableByType, lengthByType, enumByType, subGroupsByType, nonEditableByType, deprecatedByType } = buildPerTypeValidation(union)
+      // UFX P6g — canonicalize variation_theme's historical spellings before
+      // the deprecated compare (same normalization the feed builder applies).
+      const themeCodeMap = Object.fromEntries((union.variationThemes ?? []).map((v) => [v, v]))
+      const normalizeEnumValue = (colId: string, v: string) => colId === 'variation_theme' ? normalizeVariationTheme(v, themeCodeMap) : v
       // UFX P1 — schema defs + labels for conditional-requirement evaluation.
       const schemaDefByType = await flatFileService.getSchemaDefs(mp, batchTypes)
       // UFX P6f — Brand Settings contacts: when the C1 auto-fill will cover the
@@ -687,6 +699,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
             // UFX P6g — missing-required downgraded to warnings for PARTIAL_UPDATE
             // rows of a NOT_ENFORCED product type (absent value = ENFORCED).
             requirementsEnforced: union.requirementsEnforcedByType?.[t] ?? union.requirementsEnforced,
+            // UFX P6g — warn on Amazon-deprecated enum values ($lifecycle).
+            deprecatedColumns: deprecatedByType.get(t),
+            normalizeEnumValue,
           })
           // UFX P6b — warn on a DETECTED change to a schema-locked attribute
           // of an existing listing (diff vs last-saved snapshot; warn-only).
