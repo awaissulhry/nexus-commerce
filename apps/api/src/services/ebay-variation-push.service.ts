@@ -502,6 +502,23 @@ async function saveOfferIds(
 }
 
 /**
+ * FM/25004 self-heal — return the offer body for an updateOffer (a FULL
+ * replacement) with `availableQuantity` forced to `qty`, preserving every other
+ * field eBay's getOffer echoed (marketplaceId, format, categoryId,
+ * listingPolicies, merchantLocationKey, pricingSummary, tax, subtitle…) so the
+ * PUT changes ONLY the quantity. The read-only `listing` container that getOffer
+ * returns (listingId/status/etc.) is stripped — it is not a valid updateOffer
+ * input. Pure and idempotent: raising to the same qty repeatedly is safe.
+ */
+export function withAvailableQuantity(
+  offer: Record<string, unknown>,
+  qty: number,
+): Record<string, unknown> {
+  const { listing: _listing, ...rest } = offer
+  return { ...rest, availableQuantity: Number(qty) }
+}
+
+/**
  * EFX P9a — map the sheet's Best Offer columns onto the eBay Inventory API
  * offer's Best Offer terms.
  *
@@ -1163,6 +1180,78 @@ export async function pushVariationGroup(
     }, { retries: 4, baseDelayMs: 1500 })
     if (!itemRes.ok && itemRes.status !== 204) {
       const err = await itemRes.text().catch(() => '')
+
+      // FM/25004 self-heal — eBay computes the live listing qty as
+      // min(inventory_item.quantity, offer.availableQuantity). When this SKU
+      // already has a PUBLISHED offer parked at availableQuantity:0 (from a prior
+      // deactivate / out-of-stock offers-only push), that min() floors to 0 and the
+      // inventory_item PUT is rejected with 25004 even though we sent quantity>0.
+      // Step 3.5's offer-update (which would raise availableQuantity) runs AFTER this
+      // PUT and is never reached — a deadlock. Break it here: raise the existing
+      // offer's availableQuantity to the SAME capToFbm `qty` (anti-oversell cap
+      // intact — we never send more than the FBM-available pool), then retry the PUT
+      // once. Operator has accepted that this re-lists a previously-deactivated
+      // variant that now has stock. On a fresh SKU (no offer) this is a clean no-op:
+      // the GET-by-sku returns no offers → fall through to the normal ERROR path.
+      // (The offer-ID cache + `region` aren't in scope until Step 3.5, so resolve
+      // the offer on-demand — mirrors the Step 3.5 GET-by-sku at :1497-1506.)
+      if (err.includes('"errorId":25004')) {
+        let healDetail = 'no existing offer found'
+        try {
+          const getBySku = await fetch(
+            `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
+            { headers },
+          )
+          let offerId: string | null = null
+          if (getBySku.ok) {
+            const od = await getBySku.json().catch(() => ({})) as { offers?: Array<{ offerId?: string }> }
+            offerId = od.offers?.[0]?.offerId ?? null
+          }
+          if (offerId) {
+            // updateOffer is a FULL replacement: GET the complete offer so every
+            // required field (marketplaceId, format, categoryId, listingPolicies,
+            // merchantLocationKey, pricingSummary…) is echoed back unchanged, with
+            // only availableQuantity raised.
+            const getFull = await fetch(`${apiBase}/sell/inventory/v1/offer/${offerId}`, { headers })
+            if (getFull.ok) {
+              const fullOffer = await getFull.json().catch(() => ({})) as Record<string, unknown>
+              const putRes = await ebayFetchRetry(
+                `${apiBase}/sell/inventory/v1/offer/${offerId}`,
+                { method: 'PUT', headers, body: JSON.stringify(withAvailableQuantity(fullOffer, Number(qty))) },
+                { retries: 2, baseDelayMs: 1000 },
+              )
+              if (putRes.ok || putRes.status === 204) {
+                // Offer quantity raised — retry the inventory_item PUT once; eBay's
+                // min(inventory, offer) now clears our >0 quantity. Step 3.5 later
+                // re-affirms availableQuantity=qty harmlessly.
+                const retryItem = await ebayFetchRetry(
+                  itemUrl,
+                  { method: 'PUT', headers, body: itemBodyJson },
+                  { retries: 2, baseDelayMs: 1000 },
+                )
+                if (retryItem.ok || retryItem.status === 204) {
+                  results.push({ sku, market: mp, status: 'PUSHED', message: `inventory_item updated (recovered from 25004 — raised the parked offer to quantity ${Number(qty)})` })
+                  continue
+                }
+                healDetail = `inventory_item PUT still ${retryItem.status} after raising the offer quantity`
+              } else {
+                const putErr = await putRes.text().catch(() => '')
+                healDetail = `offer quantity-raise PUT ${putRes.status}: ${putErr.slice(0, 160)}`
+              }
+            } else {
+              healDetail = `could not load the full offer (GET ${getFull.status})`
+            }
+          }
+        } catch (e) {
+          healDetail = `quantity-raise error: ${e instanceof Error ? e.message : String(e)}`
+        }
+        results.push({
+          sku, market: mp, status: 'ERROR',
+          message: `eBay already has an offer for this SKU at quantity 0 and the automatic quantity-raise failed (${healDetail}); revise the quantity in Seller Hub, then re-push.`,
+        })
+        continue
+      }
+
       const isTransientItemErr = itemRes.status >= 500
         || err.includes('"errorId":25604') || err.includes('"errorId":25001')
       if (isTransientItemErr) transientItemFailures.push({ sku, url: itemUrl, body: itemBodyJson })
