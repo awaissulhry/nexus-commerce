@@ -40,6 +40,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../../db.js'
 import { resolveSlotTaxonomy } from '../../services/images/amazon-slot-taxonomy.service.js'
 import { deriveWorkspaceAxes } from '../../services/images/ebay-image-axis.pure.js'
+import { resolveFamilyAxes } from '../../services/ebay-family-axes.service.js'
 
 type ImageScope = 'GLOBAL' | 'PLATFORM' | 'MARKETPLACE'
 
@@ -300,6 +301,26 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
         await resolveSlotTaxonomy('IT', (product as { productType?: string | null })?.productType ?? 'PRODUCT')
       ).slots
 
+      // EFX Layer A (additive) — the ONE theme-authoritative axis catalog from
+      // the shared server helper (mirrors the push). The picker + buckets can
+      // render exactly `resolvedAxes.values` so picker-count == bucket-count and
+      // ghosts (Team Name, Athlete) are gone — while `availableAxes` /
+      // `axisValueCounts` above are left untouched this pass. Marketplace picks
+      // the family's first eBay market (labels/value-order are per-market),
+      // defaulting to IT (primary market). Best-effort — never fails the load.
+      const axisMarketplace = childEbayListings[0]?.marketplace ?? 'IT'
+      let resolvedAxes: Awaited<ReturnType<typeof resolveFamilyAxes>>['axes'] = []
+      let resolvedAxisWarnings: string[] = []
+      let resolvedAxisSuppressed: string[] = []
+      try {
+        const r = await resolveFamilyAxes(productId, axisMarketplace)
+        resolvedAxes = r.axes
+        resolvedAxisWarnings = r.warnings
+        resolvedAxisSuppressed = r.suppressed
+      } catch (err) {
+        request.log?.warn?.({ err }, '[images-workspace] resolveFamilyAxes failed')
+      }
+
       return {
         product,
         master,
@@ -312,6 +333,10 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
         damDrift,
         channelLiveImages: liveImages,
         amazonSlotTaxonomy,
+        // EFX Layer A — additive, theme-authoritative:
+        resolvedAxes,
+        resolvedAxisWarnings,
+        resolvedAxisSuppressed,
       }
     },
   )

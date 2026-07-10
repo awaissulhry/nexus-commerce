@@ -95,6 +95,7 @@ import prisma from '../db.js'
 import { csvDocument } from '../lib/csv.js'
 import { EbayCategoryService } from '../services/ebay-category.service.js'
 import { parseThemeAxes, selfHealAxisSortOrder, mergeAxisValueOrderWrite } from '../services/ebay-theme-axes.js'
+import { resolveFamilyAxes } from '../services/ebay-family-axes.service.js'
 import { EbayPublishAdapter } from '../services/listing-wizard/ebay-publish.adapter.js'
 import { resolveComplianceById, complianceBlockers } from '../services/compliance-resolver.service.js'
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js'
@@ -525,6 +526,15 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       declaredAxes = seen
     }
 
+    // EFX Layer A (additive) — ONE theme-authoritative axis catalog + the
+    // widest theme-input candidate list, from the shared server helper that
+    // mirrors the push. `resolvedAxes` obeys the declared Variation Theme
+    // (synonym+fingerprint-deduped, ghosts suppressed, one clean value list);
+    // `axisCandidates` is the union for the theme combobox. Existing fields
+    // above are untouched — clients migrate at their own pace.
+    const { axes: resolvedAxes, warnings: resolvedAxisWarnings, suppressed: resolvedAxisSuppressed, candidates: axisCandidates } =
+      await resolveFamilyAxes(parentProductId, marketplace)
+
     return reply.send({
       parentProductId,
       marketplace,
@@ -536,6 +546,11 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       axisValueLabels,
       cells,
       childCount: cells.length,
+      // EFX Layer A — additive, theme-authoritative:
+      resolvedAxes,
+      resolvedAxisWarnings,
+      resolvedAxisSuppressed,
+      axisCandidates,
     })
   })
 
