@@ -245,6 +245,19 @@ export interface FlatFileGridProps {
   // Extra content rendered below row # in the row header cell
   renderRowMeta?: (row: BaseRow, rowIdx: number) => React.ReactNode
 
+  /**
+   * UFX P2e — row-header thumbnail source hook (Amazon parity: ASIN → image
+   * map resolved asynchronously). Only consulted while the toolbar's row-images
+   * toggle is on. Return:
+   * - a URL string → render that image
+   * - null         → still resolving: render a skeleton pulse
+   * - undefined    → fall back to the default `row.image_1` behavior
+   * Data-COLUMN image cells need NO hook: `renderCellContent` already covers
+   * every display path (readonly/enum/longtext/text), and while a cell is
+   * being edited the raw URL is what should show anyway.
+   */
+  getRowImageUrl?: (row: BaseRow) => string | null | undefined
+
   // Return true to intercept edit (e.g. open a modal) and suppress normal cell editing
   onBeforeEditCell?: (col: FlatFileColumn, row: BaseRow) => boolean
 

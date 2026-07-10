@@ -787,7 +787,7 @@ export default function FlatFileGrid({
   columnGroups, initialRows, makeBlankRow, minRows = 15, ghostRows,
   getGroupKey, validate,
   onSave, onReload, onCellChange,
-  renderCellContent, renderRowMeta, onBeforeEditCell, getCellGuidance, getCellReadOnly,
+  renderCellContent, renderRowMeta, getRowImageUrl, onBeforeEditCell, getCellGuidance, getCellReadOnly,
   onReplicate,
   renderChannelStrip, renderPushExtras, renderFeedBanner, renderModals,
   renderToolbarFetch, renderToolbarImport, renderBar3Left,
@@ -2664,11 +2664,21 @@ export default function FlatFileGrid({
                           onPointerDown={(e) => { if (e.button !== 0) return; e.currentTarget.releasePointerCapture(e.pointerId); rowDragRef.current = ri; const maxCi = allColumns.length - 1; selAnchorRef.current = { ri, ci: 0 }; setSelAnchor({ ri, ci: 0 }); setSelEnd({ ri, ci: maxCi }); setIsEditing(false); const col = allColumns[0]; if (col) setActiveCell({ rowId: row._rowId, colId: col.id }) }}>
                           <div className={cn('flex flex-col gap-0.5 w-full', showRowImages ? 'items-center' : 'items-end')} style={{ minHeight: rowHeight, justifyContent: 'center', padding: '4px 2px' }}>
                             {showRowImages && (() => {
-                              const imgUrl = row.image_1 ? String(row.image_1) : null
-                              return imgUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={imgUrl} alt="" className="object-contain rounded flex-shrink-0" style={{ width: imageSize, height: imageSize }} draggable={false} />
-                              ) : (
+                              // UFX P2e — thumbnail source hook (Amazon ASIN-map
+                              // parity): string → image, null → resolving
+                              // skeleton, undefined → default row.image_1.
+                              const resolved = getRowImageUrl?.(row)
+                              const imgUrl = resolved !== undefined ? resolved : (row.image_1 ? String(row.image_1) : null)
+                              if (imgUrl) {
+                                return (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={imgUrl} alt="" className="object-contain rounded flex-shrink-0" style={{ width: imageSize, height: imageSize }} draggable={false} />
+                                )
+                              }
+                              if (resolved === null && getRowImageUrl) {
+                                return <div className="rounded bg-slate-100 dark:bg-slate-800 animate-pulse flex-shrink-0" style={{ width: imageSize, height: imageSize }} />
+                              }
+                              return (
                                 <div className="rounded border border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0" style={{ width: imageSize, height: imageSize }}>
                                   <ImageIcon className="text-slate-300 dark:text-slate-600" style={{ width: imageSize * 0.4, height: imageSize * 0.4 }} />
                                 </div>
