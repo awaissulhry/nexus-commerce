@@ -209,7 +209,7 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       {
         id: 'title',
         label: 'Title',
-        description: 'eBay listing title — 80 character maximum',
+        description: 'eBay listing title — 80 character maximum. Per-market: shows the ACTIVE market’s title. Switch the market selector to edit each site’s own title; a push sends each market its own saved title.',
         required: true,
         kind: 'text',
         maxLength: 80,
@@ -254,7 +254,7 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       {
         id: 'subtitle',
         label: 'Subtitle',
-        description: 'Optional subtitle shown under listing title (55 chars max). Sent to eBay on publish.',
+        description: 'Optional subtitle shown under listing title (55 chars max). Sent to eBay on publish. Per-market: shows the ACTIVE market’s subtitle. Switch the market selector to edit each site’s own subtitle; a push sends each market its own saved subtitle.',
         required: false,
         kind: 'text',
         maxLength: 55,
@@ -291,7 +291,7 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       {
         id: 'description',
         label: 'Description',
-        description: 'HTML listing description (4000 characters max). Click to open editor.',
+        description: 'HTML listing description (4000 characters max). Click to open editor. Per-market: shows the ACTIVE market’s description. Switch the market selector to edit each site’s own description; a push sends each market its own saved description.',
         required: false,
         kind: 'longtext',
         maxLength: 4000,

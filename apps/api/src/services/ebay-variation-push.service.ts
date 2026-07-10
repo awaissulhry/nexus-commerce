@@ -1980,6 +1980,65 @@ export function applyEbayFlatFileSnapshot(
 }
 
 /**
+ * EFX P9e — per-market push content resolution.
+ *
+ * A single push can target several marketplaces at once. The flat row carries
+ * only the ACTIVE market's content (title/description come from listings[0] and
+ * subtitle from the active-market snapshot overlay). Sending that same content to
+ * every target market would bleed one site's copy onto all others. This resolver
+ * picks each market's OWN saved content from THAT market's ChannelListing, falling
+ * back to the active-market row value only when the market has no distinct content.
+ *
+ * Field authority:
+ *   • title / description — stored directly on the per-market ChannelListing.
+ *   • subtitle — SNAPSHOT-AUTHORITATIVE: the market's flatFileSnapshot.subtitle
+ *     wins, then its platformAttributes.subtitle (market-scoped since EFX P9e's
+ *     save fix), then the active-market row value.
+ *
+ * Pure (no I/O) so the caller batch-loads the market listing and unit tests can
+ * exercise every branch. "Falls back to row" fires per-field when the market's
+ * own value is blank — i.e. blank = inherit the active market (never the reverse:
+ * a non-blank market value is authoritative and is never overwritten by the row).
+ */
+export interface PerMarketListingContent {
+  title?: string | null;
+  description?: string | null;
+  platformAttributes?: unknown;
+  flatFileSnapshot?: unknown;
+}
+export interface PerMarketContentFallback {
+  title?: string | null;
+  description?: string | null;
+  subtitle?: string | null;
+}
+export function resolvePerMarketContent(
+  marketListing: PerMarketListingContent | null | undefined,
+  fallback: PerMarketContentFallback,
+): { title: string; subtitle: string; description: string } {
+  const asObj = (v: unknown): Record<string, unknown> =>
+    v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
+  const snap = asObj(marketListing?.flatFileSnapshot);
+  const attrs = asObj(marketListing?.platformAttributes);
+
+  // First non-blank string wins; blank/missing values are skipped so the fallback
+  // (active-market row) is used only when the market has no distinct value.
+  const firstNonBlank = (...vals: Array<unknown>): string => {
+    for (const v of vals) {
+      if (typeof v === 'string' && v.trim() !== '') return v;
+    }
+    return '';
+  };
+
+  return {
+    title: firstNonBlank(marketListing?.title, fallback.title),
+    description: firstNonBlank(marketListing?.description, fallback.description),
+    // snapshot-authoritative → market snapshot, then market platformAttributes,
+    // then the active-market row value.
+    subtitle: firstNonBlank(snap.subtitle, attrs.subtitle, fallback.subtitle),
+  };
+}
+
+/**
  * Build a flat multi-market row from a Product + its eBay ChannelListings.
  */
 export function buildFlatRow(

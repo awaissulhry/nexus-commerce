@@ -39,7 +39,7 @@ import {
 import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, toListingLanguage, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
 import { parseThemeAxes } from '../services/ebay-theme-axes.js';
 import { pushSharedListings, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
-import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot, buildBestOfferTerms, resolveQuantityLimitPerBuyer } from '../services/ebay-variation-push.service.js';
+import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot, buildBestOfferTerms, resolveQuantityLimitPerBuyer, resolvePerMarketContent } from '../services/ebay-variation-push.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
 import { publishOrderEvent } from '../services/order-events.service.js';
 import { renderExport } from '../services/export/renderers.js';
@@ -534,7 +534,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           // Find existing listing
           const existing = await prisma.channelListing.findFirst({
             where: { productId, channel: 'EBAY', region },
-            select: { id: true, price: true, quantity: true },
+            // platformAttributes needed to preserve THIS market's own subtitle
+            // (EFX P9e) when the active market's edit is written elsewhere.
+            select: { id: true, price: true, quantity: true, platformAttributes: true },
           });
 
           const oldPrice = existing?.price?.toNumber() ?? null;
@@ -543,6 +545,20 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           // FFP.1 — content + snapshot belong to the active market's file.
           // Legacy callers (no marketplace in body) keep writing them everywhere.
           const isActiveMp = !activeMp || mp === activeMp;
+
+          // EFX P9e — subtitle is per-market. sharedPacked.platformAttributes
+          // carries the ACTIVE market's subtitle; writing it to every market
+          // would bleed one site's subtitle onto all others (the DB was shared
+          // while the snapshot made it LOOK per-market). Split subtitle out:
+          // only the active market gets the edited value; every other market
+          // keeps its OWN existing subtitle (preserve; blank for a new listing).
+          const marketPlatformAttributes = isActiveMp
+            ? sharedPacked.platformAttributes
+            : {
+                ...(sharedPacked.platformAttributes as Record<string, unknown>),
+                subtitle:
+                  ((existing?.platformAttributes ?? {}) as Record<string, unknown>).subtitle ?? '',
+              };
 
           const listingData = {
             ...(isActiveMp
@@ -557,7 +573,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             // the fix for "the Item ID / status vanishes every time I reload".
             ...(itemId ? { externalListingId: itemId } : {}),
             ...(status ? { listingStatus: status, offerActive: status === 'ACTIVE' } : {}),
-            platformAttributes: sharedPacked.platformAttributes,
+            platformAttributes: marketPlatformAttributes as typeof sharedPacked.platformAttributes,
             // FCF.4 — eBay is merchant-fulfilled: mark fulfillment on THIS
             // listing (per channel×marketplace), not on the shared product.
             fulfillmentMethod: 'FBM' as const,
@@ -1279,6 +1295,24 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         // FCF.3 — cap at FBM-available so eBay never lists more than we hold.
         const qty = capToFbm(row._productId as string | undefined, sku, Number(row[`${prefix}_qty`] ?? row.quantity ?? 0), mp);
 
+        // EFX P9e — per-market content: the flat row carries only the ACTIVE
+        // market's title/description/subtitle. Re-resolve THIS market's own saved
+        // content from its ChannelListing (+ its snapshot for the snapshot-
+        // authoritative subtitle), falling back to the row (active) value when
+        // this market has none — so a single IT+DE+FR push sends each its own copy.
+        const contentRegion = mp === 'UK' ? 'GB' : mp;
+        const marketContentListing = row._productId
+          ? await prisma.channelListing.findFirst({
+              where: { productId: row._productId as string, channel: 'EBAY', region: contentRegion },
+              select: { title: true, description: true, platformAttributes: true, flatFileSnapshot: true },
+            })
+          : null;
+        const marketContent = resolvePerMarketContent(marketContentListing, {
+          title: row.title as string | undefined,
+          description: row.description as string | undefined,
+          subtitle: row.subtitle as string | undefined,
+        });
+
         try {
           const encodedSku = encodeURIComponent(sku);
           const invUrl = `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodedSku}`;
@@ -1363,8 +1397,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           const pkgSize = buildPackageWeightAndSize(row);
           const invBody = {
             product: {
-              title: (row.title as string) || sku,
-              description: (row.description as string) ?? '',
+              // EFX P9e — this market's own title/description (falls back to row).
+              title: marketContent.title || sku,
+              description: marketContent.description ?? '',
               imageUrls,
               aspects,
               // Always set ean/mpn explicitly — 'Does not apply' is the eBay-standard
@@ -1449,7 +1484,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               sku,
               marketplaceId,
               format: 'FIXED_PRICE',
-              listingDescription: (row.description as string) ?? '',
+              // EFX P9e — this market's own description + subtitle (falls back to row).
+              listingDescription: marketContent.description ?? '',
+              ...(marketContent.subtitle ? { subtitle: marketContent.subtitle } : {}),
               categoryId,
               pricingSummary: { price: { value: price.toFixed(2), currency } },
               listingPolicies: {
