@@ -25,6 +25,12 @@ interface Props {
   dataMarkets?: string[]
   /** market currently (re)loading — shows a spinner on that chip. */
   loadingMarket?: string | null
+  /** UFX P7 (item 11) — best-effort warm-up on hover/focus of an INACTIVE
+   *  chip (Amazon FF-MS.4 prefetch). */
+  onPrefetch?: (market: string) => void
+  /** UFX P7 (item 11) — last market-switch latency, shown as a small badge
+   *  on the ACTIVE chip (Amazon FF-MS.9/P8.4 telemetry). Null/undefined hides it. */
+  latencyMs?: number | null
   /** Bind Alt+1..N to the first nine markets (default true). */
   enableShortcuts?: boolean
   label?: string
@@ -37,6 +43,8 @@ export function FlatFileMarketStrip({
   dirtyCounts = {},
   dataMarkets = [],
   loadingMarket = null,
+  onPrefetch,
+  latencyMs = null,
   enableShortcuts = true,
   label = 'Market',
 }: Props) {
@@ -74,6 +82,8 @@ export function FlatFileMarketStrip({
               key={m}
               type="button"
               onClick={() => { if (!isActive) onSelect(m) }}
+              onMouseEnter={() => { if (!isActive) onPrefetch?.(m) }}
+              onFocus={() => { if (!isActive) onPrefetch?.(m) }}
               aria-pressed={isActive}
               aria-label={`Switch to ${m} marketplace${hint}${dirty > 0 ? ` (${dirty} unsaved)` : ''}${hasData ? ' (has data)' : ''}`}
               title={hasData
@@ -97,6 +107,14 @@ export function FlatFileMarketStrip({
               {dirty > 0 && (
                 <span className="ml-1 inline-flex items-center justify-center min-w-[14px] h-3.5 px-1 rounded-sm bg-amber-500 text-white text-[9px] font-semibold leading-none">
                   {dirty}
+                </span>
+              )}
+              {isActive && latencyMs != null && (
+                <span
+                  className="ml-1 text-[8px] font-mono leading-none text-slate-400 dark:text-slate-500 tabular-nums"
+                  title={`Market switch took ${latencyMs}ms`}
+                >
+                  {latencyMs < 1000 ? `${latencyMs}ms` : `${(latencyMs / 1000).toFixed(1)}s`}
                 </span>
               )}
             </button>

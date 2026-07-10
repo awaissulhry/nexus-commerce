@@ -32,6 +32,7 @@ import { type ImportApplyResult } from './ImportWizardModal'
 import { PendingPullBanner } from '../_shared/PendingPullBanner'
 import { TbBtn as SharedTbBtn } from '@/components/flat-file/FlatFileToolbar'
 import { FlatFileContextMenu } from '@/components/flat-file/FlatFileContextMenu'
+import { FlatFileMarketStrip } from '@/components/flat-file/FlatFileMarketStrip'
 import { ColumnGroupModal } from '@/design-system/components/ColumnGroupModal'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -1803,34 +1804,10 @@ export default function AmazonFlatFileClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manifest, productType])
 
-  // FF-MS.7 — Alt+1..5 (Option+1..5 on Mac) switches between IT/DE/FR/ES/UK.
-  // We match by `e.code` (Digit1..Digit5) because Option+digit on Mac produces
-  // special characters (¡™£¢∞) in `e.key`, but the physical key code stays
-  // stable. Suppressed when:
-  //   - any other modifier is held (avoids stomping browser shortcuts)
-  //   - a cell is in edit mode
-  //   - focus is in any text field (input/textarea/select/contenteditable)
-  // so typing in the data grid or the search box never accidentally triggers
-  // a market switch.
-  useEffect(() => {
-    function onKey(e: globalThis.KeyboardEvent) {
-      if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return
-      const target = e.target as HTMLElement | null
-      const tag = target?.tagName?.toLowerCase()
-      if (tag === 'input' || tag === 'textarea' || tag === 'select') return
-      if (target?.isContentEditable) return
-      const m = /^Digit([1-9])$/.exec(e.code)
-      if (!m) return
-      const idx = Number(m[1]) - 1
-      if (idx < 0 || idx >= MARKETPLACES.length) return
-      const next = MARKETPLACES[idx]
-      if (next === marketplace) return
-      e.preventDefault()
-      navigateTo(next, productType)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [marketplace, productType, navigateTo])
+  // FF-MS.7 — Alt+1..5 (Option+1..5 on Mac) market shortcuts now live in the
+  // shared FlatFileMarketStrip (matchMarketShortcut, e.code Digit match +
+  // modifier/field guards) rendered in renderBar3Left — UFX P7 item 11
+  // removed the page-local duplicate handler so the switch can't double-fire.
 
   // ── Row operations ─────────────────────────────────────────────────
 
@@ -3671,53 +3648,19 @@ export default function AmazonFlatFileClient({
     const selectedRealCount = liveRows.filter((r) => !r._ghost && latestSelectedRowsRef.current.has(r._rowId as string)).length
     return (
       <>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400 font-medium">Market</span>
-          <div className="flex gap-0.5">
-            {MARKETPLACES.map((m, idx) => {
-              const isActive = marketplace === m
-              const isSwitching = isActive && loading
-              const dirtyCount = otherMarketsDirtyCount[m] ?? 0
-              const shortcutHint = idx < 9 ? ` (Alt+${idx + 1})` : ''
-              return (
-                <button key={m} type="button"
-                  onClick={() => navigateTo(m, productType)}
-                  onMouseEnter={() => { if (!isActive) void prefetch(m, productType) }}
-                  onFocus={() => { if (!isActive) void prefetch(m, productType) }}
-                  aria-pressed={isActive}
-                  aria-label={`Switch to ${m} marketplace${shortcutHint}${isSwitching ? ' (loading)' : ''}${dirtyCount > 0 ? ` (${dirtyCount} unsaved)` : ''}`}
-                  title={`${m} marketplace${shortcutHint}${dirtyCount > 0 ? ` — ${dirtyCount} unsaved change${dirtyCount === 1 ? '' : 's'}` : ''}`}
-                  className={cn('inline-flex items-center text-xs font-medium px-2 py-0.5 rounded border transition-colors',
-                    isActive
-                      ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400')}>
-                  {isSwitching && <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" aria-hidden />}
-                  {m}
-                  {(() => {
-                    const count = isActive ? activeDirty : dirtyCount
-                    if (!count) return null
-                    return (
-                      <span
-                        className="ml-1 inline-flex items-center justify-center min-w-[14px] h-3.5 px-1 rounded-sm text-[9px] font-semibold leading-none bg-amber-500 text-white"
-                        title={`${count} unsaved change${count === 1 ? '' : 's'}${isActive ? '' : ` on ${m}`}`}
-                      >
-                        {count}
-                      </span>
-                    )
-                  })()}
-                  {isActive && lastSwitchMs !== null && (
-                    <span
-                      className="ml-1 text-[8px] font-mono leading-none text-slate-400 dark:text-slate-500 tabular-nums"
-                      title={`Market switch took ${lastSwitchMs}ms`}
-                    >
-                      {lastSwitchMs < 1000 ? `${lastSwitchMs}ms` : `${(lastSwitchMs / 1000).toFixed(1)}s`}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </div>
+        {/* UFX P7 (item 11) — shared FlatFileMarketStrip (same component as
+            eBay), carrying Amazon's superset: dirty badges (active + other
+            markets), hover/focus prefetch, switch-latency badge, spinner,
+            and the shared Alt+1..N shortcut matcher (market-strip-shortcut). */}
+        <FlatFileMarketStrip
+          markets={MARKETPLACES}
+          active={marketplace}
+          onSelect={(m) => navigateTo(m, productType)}
+          onPrefetch={(m) => { void prefetch(m, productType) }}
+          dirtyCounts={{ ...otherMarketsDirtyCount, [marketplace]: activeDirty }}
+          loadingMarket={loading ? marketplace : null}
+          latencyMs={lastSwitchMs}
+        />
         {familyId && (
           <span className="inline-flex items-center gap-1 text-xs bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded px-1.5 py-0.5 flex-shrink-0">
             <FileSpreadsheet className="w-3 h-3" />Family
