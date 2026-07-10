@@ -522,26 +522,46 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
         : 'Not applicable for this row / product configuration'
     : undefined
 
-  const baseCls = cn(
-    'border-b border-r border-slate-200 dark:border-slate-700 relative transition-colors',
+  // The background class(es) this cell paints — state first (same precedence
+  // as always), then the group band/guidance tint, plus the validation tint.
+  const stateBg =
     isSelected ? 'bg-blue-100/60 dark:bg-blue-900/20'
     : isClipboard ? 'bg-green-50/40 dark:bg-green-900/10'
     : isFillTarget ? 'bg-blue-50/80 dark:bg-blue-900/10'
     : isMatch ? 'bg-yellow-100 dark:bg-yellow-900/30'
     : toneCls ? toneCls
-    : guidanceCls || cellBg,
+    : guidanceCls || cellBg
+  const validBg = !isActive && !isSelected && !isMatch && !toneCls && !guidanceLevel
+    ? (validIssue?.level === 'error' ? 'bg-red-100/80 dark:bg-red-950/30'
+      : validIssue?.level === 'warn' ? 'bg-amber-50/80 dark:bg-amber-950/20'
+      : '')
+    : ''
+
+  // UFX P7 (item 4) — frozen (sticky) cells must composite OPAQUE: the
+  // selected/error/warn/fill/guidance tints are alpha classes, so rows
+  // scrolling underneath used to bleed through them. Sticky cells paint a
+  // solid base on the <td> and the tint on an inset overlay ABOVE it — the
+  // same alpha over the same solid base in light AND dark, so visual parity
+  // holds while horizontal scroll can no longer show through. (Skipped while
+  // editing: the editor input paints its own solid background.)
+  const isSticky = stickyLeft !== undefined
+  const stickyTint = isSticky && !isEditing ? cn(stateBg, validBg) : null
+  const stickyOverlay = stickyTint ? (
+    <span aria-hidden className={cn('absolute inset-0 pointer-events-none transition-colors', stickyTint)} />
+  ) : null
+
+  const baseCls = cn(
+    'border-b border-r border-slate-200 dark:border-slate-700 relative transition-colors',
+    stickyTint ? 'bg-white dark:bg-slate-900' : cn(stateBg, validBg),
     isActive && !isEditing && 'outline outline-2 outline-blue-500 outline-offset-[-1px] z-[5]',
     isEditing && 'ring-2 ring-inset ring-blue-500 z-[5]',
     // Suppress native text selection while dragging to select cells; the input
     // in an editing cell keeps its own selectable text (UA reset).
     !isEditing && 'select-none',
-    !isActive && !isSelected && !isMatch && !toneCls && !guidanceLevel && (
-      validIssue?.level === 'error' ? 'bg-red-100/80 dark:bg-red-950/30'
-      : validIssue?.level === 'warn' ? 'bg-amber-50/80 dark:bg-amber-950/20'
-      : ''
-    ),
     isReadOnly && 'opacity-75',
   )
+  // Content must be POSITIONED so it paints above the sticky overlay.
+  const contentAboveOverlay = stickyOverlay ? 'relative' : ''
 
   const tdPointerDown = (e: React.PointerEvent<HTMLTableCellElement>) => {
     if (e.button !== 0) return
@@ -608,8 +628,9 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
     return (
       <td {...tdShared} className={cn(baseCls, cellReadOnly && 'cursor-not-allowed')} style={{ ...cellStyle, ...selStyle }}
         title={cellReadOnly ? (col.description ?? 'Read-only for this row') : undefined}>
+        {stickyOverlay}
         {fillHandle}
-        <div className={cn('px-1.5 flex items-center text-xs truncate text-slate-500 dark:text-slate-400', cellReadOnly && 'select-none')} style={hStyle}>
+        <div className={cn('px-1.5 flex items-center text-xs truncate text-slate-500 dark:text-slate-400', cellReadOnly && 'select-none', contentAboveOverlay)} style={hStyle}>
           {custom ?? (cellReadOnly && isEmpty ? '—' : displayValue)}
         </div>
       </td>
@@ -644,7 +665,8 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
           pendingWordSelRef.current = charPos >= 0 ? (() => { const [s, end] = wordBoundsAt(displayValue, charPos); return { start: s, end } })() : null
           onCellDoubleClick(); setDropdownOpen(true)
         }}>
-        <div className="px-1.5 flex items-center justify-between gap-1 cursor-pointer group/cell" style={hStyle}>
+        {stickyOverlay}
+        <div className={cn('px-1.5 flex items-center justify-between gap-1 cursor-pointer group/cell', contentAboveOverlay)} style={hStyle}>
           {custom != null ? custom : (
             <span className={cn('text-xs truncate flex-1 flex items-center gap-1',
               strictInvalid ? 'text-amber-600 dark:text-amber-400'
@@ -707,8 +729,9 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
     const custom = renderCellContent?.(col, row, value, displayValue)
     return (
       <td {...tdShared} className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')} style={{ ...cellStyle, ...selStyle }}>
+        {stickyOverlay}
         {fillHandle}
-        <div className="px-1.5 flex items-center text-xs text-slate-800 dark:text-slate-200 truncate" style={hStyle}>
+        <div className={cn('px-1.5 flex items-center text-xs text-slate-800 dark:text-slate-200 truncate', contentAboveOverlay)} style={hStyle}>
           {custom ?? (displayValue || <span className="text-slate-300 dark:text-slate-600 italic">{isRequired ? '⚠ required' : ''}</span>)}
         </div>
       </td>
@@ -748,13 +771,14 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
     <td {...tdShared} className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
       style={{ ...cellStyle, ...selStyle }} title={guidanceTitle ?? validIssue?.msg ?? col.description}
       aria-invalid={validIssue?.level === 'error' ? true : undefined}>
+      {stickyOverlay}
       {fillHandle}
       {/* #41 — non-color error/warning cue (Excel-style corner marker) */}
       {validIssue && (
         <span aria-hidden className="absolute top-0 right-0 w-0 h-0 border-t-[5px] border-l-[5px] border-l-transparent"
           style={{ borderTopColor: validIssue.level === 'error' ? '#ef4444' : '#f59e0b' }} />
       )}
-      <div className={cn('px-1.5 flex items-center text-xs truncate',
+      <div className={cn('px-1.5 flex items-center text-xs truncate', contentAboveOverlay,
         isEmpty ? (isRequired ? 'text-red-500 dark:text-red-400 italic' : 'text-slate-400 dark:text-slate-500') : 'text-slate-800 dark:text-slate-200')}
         style={hStyle}>
         {custom ?? (displayValue || (isRequired ? '⚠ required' : ''))}
