@@ -12,6 +12,7 @@ import type { BaseRow } from '@/components/flat-file/FlatFileGrid.types'
 import type { EbayRow } from './EbayFlatFileClient'
 import { generateVariantRowsUnderParent } from './addVariantRows'
 import { parseThemeAxes } from './themeAxes'
+import { marketplaceDefaultAxes } from './axisDefaults.pure'
 
 // ── Predefined axes with value suggestions ───────────────────────────────────
 
@@ -54,13 +55,15 @@ interface ExistingParent {
 interface Props {
   /** Category-sourced variant-eligible axis names (injected from the loaded category schema) */
   categoryAxisNames?: string[]
+  /** Active eBay marketplace — drives the localized axis-default fallback (S1). */
+  marketplace?: string
   /** Parent rows already in the grid — enables "Add to existing family" mode */
   existingParents?: ExistingParent[]
   onConfirm: (rows: BaseRow[]) => void
   onClose: () => void
 }
 
-export function AddListingPopover({ categoryAxisNames = [], existingParents, onConfirm, onClose }: Props) {
+export function AddListingPopover({ categoryAxisNames = [], marketplace, existingParents, onConfirm, onClose }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
 
   // Close on outside click
@@ -86,10 +89,18 @@ export function AddListingPopover({ categoryAxisNames = [], existingParents, onC
     ...categoryOnlyAxes.map((n) => ({ name: n, suggestions: [] })),
   ]
 
-  const [selectedAxes, setSelectedAxes] = useState<string[]>(() => categoryAxisNames.length ? categoryAxisNames : ['Color', 'Size'])
+  // S1 — default axes: prefer the loaded category's LOCALIZED names; when no
+  // category is loaded yet, fall back to the marketplace's own language
+  // (Colore/Taglia on IT) instead of hard-coded English. Degrades gracefully —
+  // a missing category never blocks creation.
+  const initialAxes = categoryAxisNames.length ? categoryAxisNames : marketplaceDefaultAxes(marketplace)
+  const [selectedAxes, setSelectedAxes] = useState<string[]>(() => initialAxes)
   const [axisValues, setAxisValues] = useState<Record<string, string[]>>({})
   const [customAxisName, setCustomAxisName] = useState('')
-  const [customAxes, setCustomAxes] = useState<string[]>([])
+  // Seed any default axis that's neither a preset nor a category axis (e.g. the
+  // Italian Colore/Taglia fallback) so it shows as a checkbox, not a phantom.
+  const [customAxes, setCustomAxes] = useState<string[]>(() =>
+    initialAxes.filter((n) => !PRESET_AXES.some((p) => p.name === n) && !categoryAxisNames.includes(n)))
   const [skuTemplate, setSkuTemplate] = useState('')
   const [templateEdited, setTemplateEdited] = useState(false)
 

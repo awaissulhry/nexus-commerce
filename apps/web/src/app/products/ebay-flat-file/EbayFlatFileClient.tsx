@@ -24,6 +24,9 @@ import { moveRowsToParent, detachRowsToStandalone } from './moveRows'
 import { parseThemeAxes } from './themeAxes'
 import { unionThemeOptions } from './resolvedAxes.pure'
 import { AddListingPopover } from './AddListingPopover'
+import { localizedAxisName } from './axisDefaults.pure'
+import { scanAspectConflicts, buildPrePublishIssues, type PrePublishIssue } from './prePublishIssues.pure'
+import { PrePublishWarningModal } from './PrePublishWarningModal'
 import { EbayImportWizard } from './EbayImportWizard'
 import { stampUnderParent } from './importUnderParent'
 import { EbayFlatFileImageDrawer } from './EbayFlatFileImageModal'
@@ -707,6 +710,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [aspectsPanelRowId, setAspectsPanelRowId] = useState<string | null>(null)
   const [incompleteBefore, setIncompleteBefore] = useState<Array<{ sku: string; count: number }>>([])
   const [blockingErrors, setBlockingErrors] = useState<Array<{ level: 'error' | 'warn'; sku: string; field: string; msg: string }>>([])
+  // S2 — warn-only pre-publish gate. When a push has theme/aspect issues we stash
+  // the prepared push here and show the modal; "Publish anyway" resumes it.
+  const [prePublishGate, setPrePublishGate] = useState<{
+    issues: PrePublishIssue[]
+    sendRows: BaseRow[]
+    skippedByAction: number
+  } | null>(null)
   const [valueOrderOpen, setValueOrderOpen] = useState(false)
 
   // IN.1 — Override badges toggle (default on, persisted to localStorage)
@@ -1026,10 +1036,14 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         const { categoryId, json } = r.value
         fetched.push({ categoryId, group: buildCategoryColumns(json.aspects ?? []) })
         conditionsCacheRef.current.set(categoryId, json.conditions ?? [])
-        // Variant-eligible axis names — prefer the English name in "Name (English)".
+        // S1 — variant-eligible axis names: carry the LOCALIZED name (the part
+        // before the "(English)" gloss) so a new IT family defaults to
+        // Colore/Taglia, not English Color/Size. The full "Name (English)" label
+        // is still shown verbatim in UI lists; only the value we persist as the
+        // axis/theme name is localized. Custom axes (no gloss) pass through.
         variantAxisCacheRef.current.set(categoryId, (json.aspects ?? [])
           .filter((a) => a.variantEligible)
-          .map((a) => a.label.match(/\(([^)]+)\)\s*$/)?.[1] ?? a.label))
+          .map((a) => localizedAxisName(a.label)))
         // EFX P4.5 — schema served from the durable stored copy (eBay down).
         if (json.staleSchema) staleCategoriesRef.current.add(categoryId)
         else staleCategoriesRef.current.delete(categoryId)
@@ -1519,6 +1533,65 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       return missing.length ? [{ sku: String((r as EbayRow).sku ?? ''), count: missing.length }] : []
     })
     setIncompleteBefore(incomplete)
+
+    // S2 — warn-only pre-publish scan (NEVER blocks). Gather theme/aspect issues
+    // BEFORE firing the push; if any exist, show the modal and pause. The
+    // operator can always "Publish anyway". Best-effort — a failing scan never
+    // stops a push.
+    let issues: PrePublishIssue[] = []
+    try {
+      issues = await gatherPrePublishIssues(sendRows, rows)
+    } catch { /* ignore — warn scan must never block the push */ }
+    if (issues.length > 0) {
+      setPrePublishGate({ issues, sendRows, skippedByAction })
+      return
+    }
+
+    await executePush(rows, sendRows, skippedByAction)
+  }
+
+  /**
+   * S2 — gather warn-only pre-publish issues for the rows about to be pushed:
+   *   • client conflict scan — synonym-equivalent aspect_* keys with differing
+   *     values on one variant (e.g. Color=Red vs Colore=Rosso);
+   *   • Layer A resolvedAxisWarnings + resolvedAxisSuppressed for each REAL
+   *     parent family in the push (new families have no DB id → skipped; the
+   *     conflict scan still covers them).
+   * Never throws to the caller in a way that stops the push (caller wraps it).
+   */
+  async function gatherPrePublishIssues(sendRows: BaseRow[], allRows: BaseRow[]): Promise<PrePublishIssue[]> {
+    const variantRows = sendRows.filter((r) => (r as EbayRow)._isParent !== true)
+    const conflicts = scanAspectConflicts(variantRows as Array<Record<string, unknown>>)
+
+    // Real DB parent product ids present in this push.
+    const rowById = new Map(allRows.map((r) => [r._rowId, r as EbayRow]))
+    const parentIds = new Set<string>()
+    for (const r of sendRows) {
+      const er = r as EbayRow
+      if (er._isParent === true && er._productId) {
+        parentIds.add(String(er._productId))
+      } else if (er.platformProductId) {
+        const parent = rowById.get(String(er.platformProductId))
+        if (parent?._productId) parentIds.add(String(parent._productId))
+      }
+    }
+
+    const axisWarnings: string[] = []
+    const suppressed: string[] = []
+    await Promise.allSettled([...parentIds].map(async (pid) => {
+      const res = await fetch(`${BACKEND}/api/ebay/cockpit/variation-cells?parentProductId=${encodeURIComponent(pid)}&marketplace=${encodeURIComponent(marketplace)}`)
+      if (!res.ok) return
+      const d = await res.json() as { resolvedAxisWarnings?: string[]; resolvedAxisSuppressed?: string[] }
+      if (Array.isArray(d.resolvedAxisWarnings)) axisWarnings.push(...d.resolvedAxisWarnings)
+      if (Array.isArray(d.resolvedAxisSuppressed)) suppressed.push(...d.resolvedAxisSuppressed)
+    }))
+
+    return buildPrePublishIssues({ conflicts, axisWarnings, suppressed })
+  }
+
+  /** S2 — the actual push request. Extracted from pushToEbay so the warn gate
+   *  can resume it unchanged when the operator clicks "Publish anyway". */
+  async function executePush(rows: BaseRow[], sendRows: BaseRow[], skippedByAction: number) {
     setPushing(true)
     try {
       // DSP.7 — pre-save dirty rows BEFORE pushing to eBay. Pre-DSP.7
@@ -2468,6 +2541,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           {addListingOpen && (
             <AddListingPopover
               categoryAxisNames={variantAxisNames}
+              marketplace={marketplace}
               existingParents={sheetParents}
               onConfirm={(newRows) => {
                 const next = pinBlankRowsLast([...rows, ...newRows])
@@ -2820,6 +2894,24 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             rows={rows as EbayRow[]}
             parentProductId={parentProductId || null}
             marketplace={marketplace}
+          />
+        )}
+
+        {/* S2 — warn-only pre-publish modal. Never blocks: "Publish anyway"
+            always resumes the push; "Go back & fix" just closes it. */}
+        {prePublishGate && (
+          <PrePublishWarningModal
+            open
+            issues={prePublishGate.issues}
+            publishing={pushing}
+            onGoBack={() => setPrePublishGate(null)}
+            onPublishAnyway={() => {
+              const gate = prePublishGate
+              // Traceable audit trail: operator proceeded past N issues.
+              console.warn(`[eBay push] Publish anyway — proceeding past ${gate.issues.length} pre-publish issue(s):`, gate.issues.map((i) => i.message))
+              setPrePublishGate(null)
+              void executePush(rows, gate.sendRows, gate.skippedByAction)
+            }}
           />
         )}
 
