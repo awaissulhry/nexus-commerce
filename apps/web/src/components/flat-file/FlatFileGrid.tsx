@@ -29,7 +29,7 @@ import type {
   ValidationIssue, RenderCellContent, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, ReplicateCtx,
 } from './FlatFileGrid.types'
 import { normalizeCellValue } from './normalizeCellValue'
-import { dropReadOnlyCellChanges } from './cellFlags'
+import { dropReadOnlyCellChanges, typeApplicabilityGuidance, isRequiredForRow } from './cellFlags'
 import { SortPanel, applySortLevels, type SortLevel, type SortGroup } from './SortPanel'
 import {
   loadGroups, saveGroups, loadGroupMode, saveGroupMode, loadCollapsedGroups, saveCollapsedGroups,
@@ -452,10 +452,16 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
     : ''
     : ''
 
+  // UFX P2c — the required marker/styling are per-ROW when the column declares
+  // requiredForProductTypes; legacy columns (field absent) keep col.required.
+  const isRequired = isRequiredForRow(col, row)
+
   const guidanceTitle = guidanceLevel === 'not-applicable'
-    ? col.applicableParentage?.length
-      ? `Not needed for this row type — typically set on ${col.applicableParentage.map((p) => p.replace('VARIATION_', '').toLowerCase()).join(' or ')} rows only`
-      : 'Not applicable for this row / product configuration'
+    ? typeApplicabilityGuidance(col, row) === 'not-applicable'
+      ? `Not applicable to ${String(row.product_type)} — this category doesn't use this field (still editable)`
+      : col.applicableParentage?.length
+        ? `Not needed for this row type — typically set on ${col.applicableParentage.map((p) => p.replace('VARIATION_', '').toLowerCase()).join(' or ')} rows only`
+        : 'Not applicable for this row / product configuration'
     : undefined
 
   const baseCls = cn(
@@ -581,7 +587,7 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
               strictInvalid ? 'text-amber-600 dark:text-amber-400'
               : isEmpty ? 'text-slate-300 dark:text-slate-600 italic' : 'text-slate-800 dark:text-slate-200')}>
               {strictInvalid && <AlertCircle className="w-3 h-3 shrink-0" aria-hidden />}
-              <span className="truncate">{shownLabel || (col.required ? '⚠ required' : enumOptions[1] ? `e.g. ${labelFor(enumOptions[1])}` : '—')}</span>
+              <span className="truncate">{shownLabel || (isRequired ? '⚠ required' : enumOptions[1] ? `e.g. ${labelFor(enumOptions[1])}` : '—')}</span>
             </span>
           )}
           {/* #39 — the pick-list chevron is always visible once the cell is
@@ -640,7 +646,7 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
       <td {...tdShared} className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')} style={{ ...cellStyle, ...selStyle }}>
         {fillHandle}
         <div className="px-1.5 flex items-center text-xs text-slate-800 dark:text-slate-200 truncate" style={hStyle}>
-          {custom ?? (displayValue || <span className="text-slate-300 dark:text-slate-600 italic">{col.required ? '⚠ required' : ''}</span>)}
+          {custom ?? (displayValue || <span className="text-slate-300 dark:text-slate-600 italic">{isRequired ? '⚠ required' : ''}</span>)}
         </div>
       </td>
     )
@@ -686,9 +692,9 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
           style={{ borderTopColor: validIssue.level === 'error' ? '#ef4444' : '#f59e0b' }} />
       )}
       <div className={cn('px-1.5 flex items-center text-xs truncate',
-        isEmpty ? (col.required ? 'text-red-500 dark:text-red-400 italic' : 'text-slate-400 dark:text-slate-500') : 'text-slate-800 dark:text-slate-200')}
+        isEmpty ? (isRequired ? 'text-red-500 dark:text-red-400 italic' : 'text-slate-400 dark:text-slate-500') : 'text-slate-800 dark:text-slate-200')}
         style={hStyle}>
-        {custom ?? (displayValue || (col.required ? '⚠ required' : ''))}
+        {custom ?? (displayValue || (isRequired ? '⚠ required' : ''))}
       </div>
     </td>
   )
@@ -2588,7 +2594,11 @@ export default function FlatFileGrid({
                           const isMatch     = matchKeys.has(`${ri}:${ci}`)
                           const toneCls     = toneMap.get(`${ri}:${col.id}`) ? TONE_CLASSES[toneMap.get(`${ri}:${col.id}`)! as keyof typeof TONE_CLASSES] : undefined
                           const cellBg      = stickyLeft !== undefined ? gColor(groupColor).band : gColor(groupColor).cell
-                          const guidanceLevel = getCellGuidanceRef.current?.(col, row) ?? null
+                          // UFX P2c — explicit getCellGuidance wins; the built-in
+                          // per-type applicability (applicableProductTypes vs the
+                          // row's product_type) fills in when the callback is
+                          // absent or returns null. Cell stays fully editable.
+                          const guidanceLevel = getCellGuidanceRef.current?.(col, row) ?? typeApplicabilityGuidance(col, row)
                           const cellReadOnly  = getCellReadOnlyRef.current?.(col, row) ?? false
 
                           return (

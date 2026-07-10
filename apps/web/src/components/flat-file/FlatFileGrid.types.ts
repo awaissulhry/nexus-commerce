@@ -32,6 +32,22 @@ export interface FlatFileColumn {
    * Drives the listing guidance highlight in the grid.
    */
   applicableParentage?: string[]
+  /**
+   * UFX P2c — union (multi-category) sheets: the product types this column
+   * applies to. When set and the row carries a `product_type` string that is
+   * NOT in the list (compared uppercased), the cell automatically gets the
+   * 'not-applicable' guidance overlay + tooltip — but STAYS FULLY EDITABLE
+   * (eBay semantics). An explicit getCellGuidance result wins over this
+   * built-in. Undefined = applies to all types (legacy columns unchanged).
+   */
+  applicableProductTypes?: string[]
+  /**
+   * UFX P2c — the product types for which this column is REQUIRED. When set,
+   * the empty-cell '⚠ required' marker + required styling only show for rows
+   * whose `product_type` (uppercased) is in the list. Undefined falls back to
+   * the plain `required` flag (legacy columns unchanged).
+   */
+  requiredForProductTypes?: string[]
   /** Field usage level from the channel's schema (REQUIRED/RECOMMENDED/OPTIONAL) */
   guidance?: string
   maxLength?: number

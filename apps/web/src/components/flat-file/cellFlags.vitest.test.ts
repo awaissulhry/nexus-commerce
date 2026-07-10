@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dropReadOnlyCellChanges } from './cellFlags'
+import { dropReadOnlyCellChanges, typeApplicabilityGuidance, isRequiredForRow } from './cellFlags'
 import type { BaseRow, FlatFileColumn } from './FlatFileGrid.types'
 
 const col = (over: Partial<FlatFileColumn> & { id: string }): FlatFileColumn => ({
@@ -51,5 +51,63 @@ describe('dropReadOnlyCellChanges — per-cell read-only skip', () => {
 
   it('drops everything when the predicate locks everything', () => {
     expect(dropReadOnlyCellChanges(changes, colById, rowById, () => true)).toEqual([])
+  })
+})
+
+// ── UFX P2c — built-in per-type applicability ───────────────────────────────
+
+describe('typeApplicabilityGuidance', () => {
+  const shirtOnly = col({ id: 'sleeve_type', applicableProductTypes: ['SHIRT', 'SWEATER'] })
+
+  it('returns null when the column has no applicableProductTypes (legacy column)', () => {
+    expect(typeApplicabilityGuidance(col({ id: 'title' }), row({ _rowId: 'r', product_type: 'PANTS' }))).toBeNull()
+  })
+
+  it("returns null when the row's type is in the list", () => {
+    expect(typeApplicabilityGuidance(shirtOnly, row({ _rowId: 'r', product_type: 'SHIRT' }))).toBeNull()
+    expect(typeApplicabilityGuidance(shirtOnly, row({ _rowId: 'r', product_type: 'SWEATER' }))).toBeNull()
+  })
+
+  it("returns 'not-applicable' when the row's type is NOT in the list", () => {
+    expect(typeApplicabilityGuidance(shirtOnly, row({ _rowId: 'r', product_type: 'PANTS' }))).toBe('not-applicable')
+  })
+
+  it('compares uppercased on both sides (mixed-case data and schema)', () => {
+    expect(typeApplicabilityGuidance(shirtOnly, row({ _rowId: 'r', product_type: 'shirt' }))).toBeNull()
+    expect(typeApplicabilityGuidance(shirtOnly, row({ _rowId: 'r', product_type: '  Shirt ' }))).toBeNull()
+    expect(typeApplicabilityGuidance(col({ id: 'c', applicableProductTypes: ['shirt'] }), row({ _rowId: 'r', product_type: 'SHIRT' }))).toBeNull()
+    expect(typeApplicabilityGuidance(shirtOnly, row({ _rowId: 'r', product_type: 'pants' }))).toBe('not-applicable')
+  })
+
+  it('returns null when the row has no usable product_type (absent, empty, non-string)', () => {
+    expect(typeApplicabilityGuidance(shirtOnly, row({ _rowId: 'r' }))).toBeNull()
+    expect(typeApplicabilityGuidance(shirtOnly, row({ _rowId: 'r', product_type: '' }))).toBeNull()
+    expect(typeApplicabilityGuidance(shirtOnly, row({ _rowId: 'r', product_type: 42 }))).toBeNull()
+  })
+})
+
+describe('isRequiredForRow', () => {
+  it('falls back to col.required when requiredForProductTypes is absent (legacy columns unchanged)', () => {
+    expect(isRequiredForRow(col({ id: 'c', required: true }), row({ _rowId: 'r', product_type: 'PANTS' }))).toBe(true)
+    expect(isRequiredForRow(col({ id: 'c' }), row({ _rowId: 'r', product_type: 'PANTS' }))).toBe(false)
+    expect(isRequiredForRow(col({ id: 'c', required: true }), row({ _rowId: 'r' }))).toBe(true)
+  })
+
+  it("shows required only for rows whose type is in requiredForProductTypes", () => {
+    const c = col({ id: 'c', required: true, requiredForProductTypes: ['SHIRT'] })
+    expect(isRequiredForRow(c, row({ _rowId: 'r', product_type: 'SHIRT' }))).toBe(true)
+    expect(isRequiredForRow(c, row({ _rowId: 'r', product_type: 'PANTS' }))).toBe(false)
+  })
+
+  it('compares uppercased on both sides', () => {
+    const c = col({ id: 'c', requiredForProductTypes: ['Shirt'] })
+    expect(isRequiredForRow(c, row({ _rowId: 'r', product_type: 'shirt' }))).toBe(true)
+    expect(isRequiredForRow(c, row({ _rowId: 'r', product_type: ' SHIRT ' }))).toBe(true)
+  })
+
+  it('is not required for rows without a resolvable product_type when the list is present', () => {
+    const c = col({ id: 'c', required: true, requiredForProductTypes: ['SHIRT'] })
+    expect(isRequiredForRow(c, row({ _rowId: 'r' }))).toBe(false)
+    expect(isRequiredForRow(c, row({ _rowId: 'r', product_type: '' }))).toBe(false)
   })
 })
