@@ -190,6 +190,44 @@ export function checkRequiredWithParent(row: Record<string, any>, groups: SubReq
   return issues
 }
 
+/**
+ * UFX P6b — warn when an EXISTING listing's row CHANGES an attribute the
+ * schema marks `editable: false` (brand, condition_type, externally-assigned
+ * identifier…): Amazon ignores or rejects the modification on a live listing.
+ *
+ * Change detection = diff against the last-saved flatFileSnapshot (the grid
+ * autosaves to localStorage only, so the server snapshot moves on explicit
+ * Save/Submit — a differing value IS an edit made since then). Deliberately
+ * conservative, warnings only where a change is certain:
+ *   - new rows (_isNew) are skipped — everything is settable at creation;
+ *   - no snapshot → no diff possible → no warning (tag-only);
+ *   - snapshot value blank → skipped (first-time fill may be accepted);
+ *   - full UPDATE resubmits everything, so present-but-UNCHANGED values are
+ *     normal and never flagged.
+ * Pure + testable; the caller batches the snapshot fetch.
+ */
+export function checkNonEditableChanges(
+  row: Record<string, any>,
+  nonEditableColumns: RequiredColumn[],
+  snapshot: Record<string, unknown> | null | undefined,
+): PreflightIssue[] {
+  if (row._isNew === true || !snapshot || nonEditableColumns.length === 0) return []
+  if (String(row.record_action ?? '').toLowerCase() === 'delete') return []
+  const issues: PreflightIssue[] = []
+  for (const c of nonEditableColumns) {
+    const prev = snapshot[c.id]
+    const cur = row[c.id]
+    if (isBlank(prev) || isBlank(cur)) continue
+    if (String(prev).trim() === String(cur).trim()) continue
+    issues.push({
+      field: c.id,
+      severity: 'warning',
+      message: `"${c.label}" cannot be changed on an existing listing (Amazon locks it after creation) — the new value will likely be ignored or rejected. Revert to "${String(prev).trim()}" or request the change via Seller Support.`,
+    })
+  }
+  return issues
+}
+
 // Common flat-file columns that may carry a product identifier.
 const GTIN_FIELDS = ['externally_assigned_product_identifier', 'gtin', 'ean', 'upc', 'barcode']
 
@@ -359,6 +397,9 @@ interface UnionManifestLike {
       selectionOnly?: boolean
       requiredWithParent?: boolean
       requiredWithParentForProductTypes?: string[]
+      // UFX P6a/b — meta-schema editable flag (see FlatFileColumn).
+      editableForListing?: boolean
+      nonEditableForProductTypes?: string[]
     }>
   }>
 }
@@ -374,6 +415,9 @@ export interface PerTypeValidation {
   enumByType: Map<string, EnumColumn[]>
   /** UFX P1 (P0-1a) — required-if-present sub-column groups per product type. */
   subGroupsByType: Map<string, SubRequiredGroup[]>
+  /** UFX P6b — columns the schema marks non-editable on an existing listing,
+   *  per product type (drives the change-detection warning). */
+  nonEditableByType: Map<string, RequiredColumn[]>
 }
 
 /**
@@ -391,6 +435,7 @@ export function buildPerTypeValidation(union: UnionManifestLike): PerTypeValidat
   const lengthByType = new Map<string, LengthColumn[]>()
   const enumByType = new Map<string, EnumColumn[]>()
   const subGroupsByType = new Map<string, SubRequiredGroup[]>()
+  const nonEditableByType = new Map<string, RequiredColumn[]>()
   for (const t of types) {
     requiredByType.set(
       t,
@@ -454,8 +499,18 @@ export function buildPerTypeValidation(union: UnionManifestLike): PerTypeValidat
       if (rwp) g.required.push({ id, label: String(c.labelEn ?? id) })
     }
     subGroupsByType.set(t, [...groups.values()].filter((g) => g.required.length > 0))
+    // UFX P6b — non-editable columns for this type: the per-type list wins when
+    // present (union manifest); a plain editableForListing:false (single-type
+    // manifest merged over one type) applies wherever the column is applicable.
+    nonEditableByType.set(
+      t,
+      cols
+        .filter((c) => (!c.applicableProductTypes || c.applicableProductTypes.includes(t)) &&
+          (c.nonEditableForProductTypes ? c.nonEditableForProductTypes.includes(t) : c.editableForListing === false))
+        .map((c) => ({ id: String(c.id), label: String(c.labelEn ?? c.id) })),
+    )
   }
-  return { requiredByType, applicableByType, lengthByType, enumByType, subGroupsByType }
+  return { requiredByType, applicableByType, lengthByType, enumByType, subGroupsByType, nonEditableByType }
 }
 
 /**

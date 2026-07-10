@@ -20,6 +20,8 @@ import {
   AmazonFlatFileService,
   MARKETPLACE_ID_MAP,
   flatFileExportColumns,
+  filterHiddenManifestColumns,
+  type FlatFileManifest,
 } from '../services/amazon/flat-file.service.js'
 import { renderExport } from '../services/export/renderers.js'
 import { parseCsv, parseXlsx, parseJson, detectFileKind, sniffDelimiter } from '../services/import/parsers.js'
@@ -30,7 +32,7 @@ import { planImportMerge, type ImportApplyMode } from '../services/amazon/flat-f
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
 import type { ListingScope } from '../services/flat-file/listing-scope.js'
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
-import { preflightRow, buildPerTypeValidation, validateImportRows, validateParentChildBatch } from '../services/listing-preflight.service.js'
+import { preflightRow, buildPerTypeValidation, validateImportRows, validateParentChildBatch, checkNonEditableChanges, type RequiredColumn } from '../services/listing-preflight.service.js'
 import {
   resolveComplianceForSkus,
   evaluateCompliance,
@@ -200,12 +202,23 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // ── GET /api/amazon/flat-file/template ──────────────────────────────
   // Returns the column manifest for the requested marketplace + productType.
   // Fetches the schema live from SP-API on cache miss or when force=1.
+  //
+  // UFX P6:
+  //   ?refreshSchema=1 — alias of force=1: bypasses BOTH the in-process
+  //     manifest cache and the 24 h CategorySchema DB cache (refreshSchema →
+  //     live SP-API re-fetch). The response carries `schemaVersion` (provider
+  //     version + content hash) so the client can invalidate its own cache.
+  //   Columns the Amazon meta-schema marks `hidden` are filtered from the
+  //   response by default (required ones stay — see
+  //   filterHiddenManifestColumns); ?includeHidden=1 returns them all. Feed
+  //   emission of already-present hidden values is unchanged.
   fastify.get<{
-    Querystring: { marketplace?: string; productType?: string; force?: string }
+    Querystring: { marketplace?: string; productType?: string; force?: string; refreshSchema?: string; includeHidden?: string }
   }>('/amazon/flat-file/template', async (request, reply) => {
     const marketplace = (request.query.marketplace ?? 'IT').toUpperCase()
     const productType = (request.query.productType ?? '').toUpperCase()
-    const force = request.query.force === '1'
+    const force = request.query.force === '1' || request.query.refreshSchema === '1'
+    const includeHidden = request.query.includeHidden === '1'
 
     if (!productType) {
       return reply.code(400).send({ error: 'productType is required' })
@@ -219,14 +232,16 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     try {
       // EH.4 — Skip the manifest cache on force=1 so the operator's
       // explicit refresh always re-derives from the schema.
+      // The cache stores the FULL manifest; hidden-column filtering is a
+      // per-request view (so includeHidden=1 never needs its own cache entry).
       const cacheKey = `${marketplace}:${productType}`
       if (!force) {
-        const cached = manifestCache.get(cacheKey)
+        const cached = manifestCache.get(cacheKey) as FlatFileManifest | undefined
         if (cached !== undefined) {
           tx.flag('cacheHit')
           const header = tx.toHeader()
           if (header) reply.header('Server-Timing', header)
-          return reply.send(cached)
+          return reply.send(includeHidden ? cached : filterHiddenManifestColumns(cached))
         }
         tx.flag('cacheMiss')
       } else {
@@ -240,7 +255,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       if (!force) manifestCache.set(cacheKey, manifest)
       const header = tx.toHeader()
       if (header) reply.header('Server-Timing', header)
-      return reply.send(manifest)
+      return reply.send(includeHidden ? manifest : filterHiddenManifestColumns(manifest))
     } catch (err: any) {
       request.log.error(err, 'flat-file/template failed')
       return reply.code(500).send({ error: err?.message ?? 'Failed to generate manifest' })
@@ -253,25 +268,29 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // applicableProductTypes + requiredForProductTypes so the editor can grey a
   // cell that doesn't apply to a row's type and validate required-ness per row.
   // Additive: the single-type /template endpoint is unchanged.
+  // UFX P6 — same semantics as /template: ?refreshSchema=1 (alias of force=1)
+  // bypasses the DB schema cache; hidden columns filtered unless
+  // ?includeHidden=1; response carries `schemaVersion` for client cache-bust.
   fastify.get<{
-    Querystring: { marketplace?: string; productTypes?: string; force?: string }
+    Querystring: { marketplace?: string; productTypes?: string; force?: string; refreshSchema?: string; includeHidden?: string }
   }>('/amazon/flat-file/union-template', async (request, reply) => {
     const marketplace = (request.query.marketplace ?? 'IT').toUpperCase()
     const types = (request.query.productTypes ?? '')
       .split(',').map((t) => t.trim().toUpperCase()).filter(Boolean)
-    const force = request.query.force === '1'
+    const force = request.query.force === '1' || request.query.refreshSchema === '1'
+    const includeHidden = request.query.includeHidden === '1'
     if (types.length === 0) {
       return reply.code(400).send({ error: 'productTypes is required (comma-separated)' })
     }
     const cacheKey = `union:${marketplace}:${[...types].sort().join(',')}`
     try {
       if (!force) {
-        const cached = manifestCache.get(cacheKey)
-        if (cached !== undefined) return reply.send(cached)
+        const cached = manifestCache.get(cacheKey) as FlatFileManifest | undefined
+        if (cached !== undefined) return reply.send(includeHidden ? cached : filterHiddenManifestColumns(cached))
       }
       const manifest = await flatFileService.generateUnionManifest(marketplace, types, force)
       if (!force) manifestCache.set(cacheKey, manifest)
-      return reply.send(manifest)
+      return reply.send(includeHidden ? manifest : filterHiddenManifestColumns(manifest))
     } catch (err: any) {
       request.log.error(err, 'flat-file/union-template failed')
       return reply.code(500).send({ error: err?.message ?? 'Failed to generate union manifest' })
@@ -338,7 +357,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         // MT.1 union manifest across every product type in the batch → MT.2
         // per-type required + applicable sets.
         const union = await flatFileService.generateUnionManifest(mp, batchTypes)
-        const { requiredByType, applicableByType: appByType, lengthByType, enumByType, subGroupsByType } = buildPerTypeValidation(union)
+        const { requiredByType, applicableByType: appByType, lengthByType, enumByType, subGroupsByType, nonEditableByType } = buildPerTypeValidation(union)
         applicableByType = appByType
         // UFX P1 — raw schema defs for the conditional-requirement evaluation
         // (allOf/if/then, dependentRequired) + labels for its messages.
@@ -346,6 +365,13 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         const unionLabelMap = new Map(union.groups.flatMap((g) => g.columns).map((c) => [c.id, c.labelEn]))
         const labelOf = (id: string) => unionLabelMap.get(id) ?? id
         complianceBySku = await resolveComplianceForSkus(rows.map((r: any) => String(r.item_sku ?? '')))
+        // UFX P6b — last-saved snapshots for the non-editable change warning.
+        // Fetched only when some type actually has locked columns; runs BEFORE
+        // the pre-publish sync below rewrites the snapshots to the new rows.
+        const hasNonEditable = [...nonEditableByType.values()].some((l) => l.length > 0)
+        const snapshotsBySku = hasNonEditable
+          ? await flatFileService.getFlatFileSnapshots(mp, rows.map((r: any) => String(r.item_sku ?? '')))
+          : new Map<string, Record<string, unknown>>()
         preflight = rows
           .map((r: any) => {
             // Validate each row against its OWN product type's required columns +
@@ -358,6 +384,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
               subRequiredGroups: subGroupsByType.get(t),
               conditional: schemaDef ? { schema: schemaDef, expandedFields: union.expandedFields, labelOf } : undefined,
             })
+            // UFX P6b — warn on a DETECTED change to a schema-locked attribute
+            // of an existing listing (diff vs last-saved snapshot; warn-only).
+            issues.push(...checkNonEditableChanges(r, nonEditableByType.get(t) ?? [], snapshotsBySku.get(String(r.item_sku ?? ''))))
             const cp = complianceBySku.get(String(r.item_sku ?? ''))
             if (cp) {
               const cIssues = evaluateCompliance(cp, mp, 'AMAZON')
@@ -482,7 +511,10 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const body = flatFileService.buildJsonFeedBody(rows, mp, sellerId, expandedFields, {
+    // UFX P6d — WithReport: a row with no resolvable product type (own cell →
+    // parent row by parent_sku → batch default) is SKIPPED with a per-row error
+    // instead of schema-halting the whole feed with productType:'' (4002010).
+    const { body, messageCount, skippedRows } = flatFileService.buildJsonFeedBodyWithReport(rows, mp, sellerId, expandedFields, {
       enumCodeMap,
       numericFields,
       booleanFields,
@@ -498,6 +530,17 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       // UFX P1 (P0-2) — schema-typed sub-property coercion ("38" stays a string).
       subPropTypes,
     })
+    if (messageCount === 0) {
+      return reply.code(400).send({
+        error: skippedRows.length > 0
+          ? `No submittable rows — all ${skippedRows.length} row(s) were skipped (no resolvable product type). Fill the Product Type column and resubmit.`
+          : 'No submittable rows (every row is missing item_sku)',
+        skippedRows,
+      })
+    }
+    if (skippedRows.length > 0) {
+      request.log.warn({ skus: skippedRows.map((s) => s.sku) }, 'flat-file/submit: rows skipped (no resolvable product type)')
+    }
 
     try {
       const sp = await getSpClient()
@@ -557,11 +600,14 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       return reply.send({
         feedId: feedRes.feedId,
         feedDocumentId: docRes.feedDocumentId,
-        messageCount: rows.length,
+        // UFX P6d — the count of messages actually in the feed (skipped rows
+        // excluded), plus the per-row skip report (additive).
+        messageCount,
         dryRun: false,
         preflight,
         created: ffcCreated,
         syncErrors: ffcSyncErrors,
+        skippedRows,
       })
     } catch (err: any) {
       request.log.error(err, 'flat-file/submit failed')
@@ -584,11 +630,17 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     if (batchTypes.length === 0) return reply.send({ preflight: [], checkedRows: rows.length })
     try {
       const union = await flatFileService.generateUnionManifest(mp, batchTypes)
-      const { requiredByType, lengthByType, enumByType, subGroupsByType } = buildPerTypeValidation(union)
+      const { requiredByType, lengthByType, enumByType, subGroupsByType, nonEditableByType } = buildPerTypeValidation(union)
       // UFX P1 — schema defs + labels for conditional-requirement evaluation.
       const schemaDefByType = await flatFileService.getSchemaDefs(mp, batchTypes)
       const unionLabelMap = new Map(union.groups.flatMap((g) => g.columns).map((c) => [c.id, c.labelEn]))
       const labelOf = (id: string) => unionLabelMap.get(id) ?? id
+      // UFX P6b — last-saved snapshots for the non-editable change warning
+      // (fetched only when some type actually has schema-locked columns).
+      const hasNonEditable = [...nonEditableByType.values()].some((l: RequiredColumn[]) => l.length > 0)
+      const snapshotsBySku = hasNonEditable
+        ? await flatFileService.getFlatFileSnapshots(mp, rows.map((r: any) => String(r?.item_sku ?? '')))
+        : new Map<string, Record<string, unknown>>()
       // FFC — FBA rows that carry a quantity (Amazon manages FBA stock, so it must
       // not be sent). Merchant-channel+qty = error (would flip FBA→FBM, also hard-
       // blocked at /submit); other channels = warning (qty ignored — clear it).
@@ -611,6 +663,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
             subRequiredGroups: subGroupsByType.get(t),
             conditional: schemaDef ? { schema: schemaDef, expandedFields: union.expandedFields, labelOf } : undefined,
           })
+          // UFX P6b — warn on a DETECTED change to a schema-locked attribute
+          // of an existing listing (diff vs last-saved snapshot; warn-only).
+          issues.push(...checkNonEditableChanges(r, nonEditableByType.get(t) ?? [], snapshotsBySku.get(sku)))
           const fba = fbaBySku.get(sku)
           if (fba) {
             issues.push(

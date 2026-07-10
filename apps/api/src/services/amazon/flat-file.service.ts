@@ -14,6 +14,7 @@
  *   Optional Fields — all remaining schema fields (schema-derived)
  */
 
+import { createHash } from 'node:crypto'
 import type { PrismaClient } from '@nexus/database'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
 import { parseLocaleNumber, parseLocaleInt } from '../../lib/parse-locale-number.js'
@@ -114,6 +115,24 @@ export interface FlatFileColumn {
   optionCodesByProductType?: Record<string, string[]>
   /** Amazon field usage level from x-amazon-attributes.usage */
   guidance?: 'REQUIRED' | 'RECOMMENDED' | 'OPTIONAL'
+  /**
+   * UFX P6a — Amazon meta-schema `hidden: true`: "should be hidden in Amazon
+   * user interfaces". The column is still generated (existing row data may
+   * carry a value, and the feed keeps emitting present values), but the
+   * /template + /union-template responses filter hidden columns by default
+   * (?includeHidden=1 keeps them). In real cached schemas the flag lives on
+   * the LEAF value node (items.properties.value / the sub-property node).
+   */
+  hidden?: boolean
+  /**
+   * UFX P6a — Amazon meta-schema `editable: false`: the attribute cannot be
+   * modified on an EXISTING listing (brand, condition_type,
+   * externally_assigned_product_identifier…). Tag only — the grid lock is a
+   * later phase; preflight warns when it can detect an actual change.
+   */
+  editableForListing?: boolean
+  /** UFX P6a — union manifest only: types for which this column is non-editable. */
+  nonEditableForProductTypes?: string[]
   /** Max length in CHARACTERS (JSON Schema maxLength). */
   maxLength?: number
   /**
@@ -150,6 +169,14 @@ export interface FlatFileManifest {
   productTypes?: string[]
   variationThemes: string[]
   fetchedAt: string
+  /**
+   * UFX P6c — stable version fingerprint of the underlying schema content
+   * (provider version + content hash; union = hash over the per-type
+   * versions). Changes exactly when the schema content changes, so the
+   * client can invalidate its localStorage manifest cache instead of
+   * stacking a second 24 h TTL on top of the server's.
+   */
+  schemaVersion?: string
   groups: FlatFileColumnGroup[]
   /**
    * Maps expanded column IDs back to their base schema field ID.
@@ -167,6 +194,30 @@ export interface FlatFileRow {
   _status?: 'idle' | 'pending' | 'success' | 'error'
   _feedMessage?: string
   [key: string]: unknown
+}
+
+/** Schema-derived hints for buildJsonFeedBody / buildJsonFeedBodyWithReport. */
+export interface FeedSchemaHints {
+  enumCodeMap?: Record<string, Record<string, string>>
+  localizedFields?: Set<string>
+  numericFields?: Set<string>
+  booleanFields?: Set<string>
+  /** FFP.3 — per product-type APPLICABLE column ids (from the union
+   *  manifest). When a row's type has a set, columns outside it are NOT
+   *  emitted — this kills the ~50-warnings-per-SKU spray of attributes
+   *  that don't belong to the product type (90000900). */
+  applicableByType?: Map<string, Set<string>>
+  /** FFP.18 — attributes that nest ONE wrapped sub-property (closure→type,
+   *  inner/outer→material …); emitted as `[{sub: [{value,…}]}]`. */
+  wrappedSubPropFields?: Record<string, { sub: string; localized: boolean }>
+  /** UFX P1 (P0-2) — declared schema type per sub-property path; sub-values
+   *  are coerced by THIS (a string-typed "38" stays a string) instead of
+   *  Number() sniffing. Absent (no schema) → legacy sniff. */
+  subPropTypes?: Record<string, SubPropType>
+  /** FFP.3 — fallback productType when a row's own cell is blank (a blank
+   *  productType malformed the whole feed: 4002010 '#/productType').
+   *  UFX P6d — the row's parent (by parent_sku) wins over this fallback. */
+  defaultProductType?: string
 }
 
 // ── Language types ─────────────────────────────────────────────────────
@@ -614,6 +665,26 @@ function buildSchemaLabels(properties: Record<string, any>): Record<string, stri
 // ── Schema → column conversion ─────────────────────────────────────────
 
 /**
+ * UFX P6a — Amazon meta-schema `hidden` / `editable` flags for one schema
+ * node. Verified against real cached IT/DE/UK/FR/ES schemas: the flags are
+ * spelled exactly `hidden` (boolean) and `editable` (boolean) and live on the
+ * LEAF value node — `items.properties.value` for wrapped attributes, or the
+ * sub-property node itself (e.g. list_price.items.properties.currency.hidden).
+ * Both the node and its wrapped leaf are checked so either placement works.
+ * Returns only the exceptional values (hidden: true / editableForListing:
+ * false) — the defaults (visible, editable) stay untagged.
+ */
+export function extractMetaFlags(
+  node: Record<string, any> | undefined,
+): { hidden?: true; editableForListing?: false } {
+  const leaf = node?.items?.properties?.value ?? node
+  const out: { hidden?: true; editableForListing?: false } = {}
+  if (node?.hidden === true || leaf?.hidden === true) out.hidden = true
+  if (node?.editable === false || leaf?.editable === false) out.editableForListing = false
+  return out
+}
+
+/**
  * Convert a single Amazon schema property into a FlatFileColumn.
  * Returns a column for every field — defaults to 'text' kind for
  * complex/unknown types so no schema field is silently dropped.
@@ -686,6 +757,8 @@ function schemaFieldToColumn(
     optionCodes,
     selectionOnly,
     guidance,
+    // UFX P6a — meta-schema hidden/editable flags (checked on prop AND its leaf).
+    ...extractMetaFlags(prop),
     maxLength: typeof inner?.maxLength === 'number' ? inner.maxLength : undefined,
     maxUtf8ByteLength: typeof inner?.maxUtf8ByteLength === 'number' ? inner.maxUtf8ByteLength : undefined,
     minUtf8ByteLength: typeof inner?.minUtf8ByteLength === 'number' ? inner.minUtf8ByteLength : undefined,
@@ -854,8 +927,8 @@ function expandSchemaField(
     expandedFields[uId] = `${fieldId}.unit`
 
     return [
-      { id: vId, fieldRef: `${fieldId}[marketplace_id]#1.value`, labelEn: fieldId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), labelLocal: fieldLabel, required: isRequired, requiredWithParent: !isRequired && valueInReq ? true : undefined, kind: 'number', width: 100 },
-      { id: uId, fieldRef: `${fieldId}[marketplace_id]#1.unit`,  labelEn: `${fieldId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())} Unit`, labelLocal: unitLabel, required: isRequired && unitInReq, requiredWithParent: !isRequired && unitInReq ? true : undefined, kind: unitEnums.length > 0 ? 'enum' : 'text', options: unitEnums.length > 0 ? ['', ...unitEnums.map(String)] : undefined, width: 140 },
+      { id: vId, fieldRef: `${fieldId}[marketplace_id]#1.value`, labelEn: fieldId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), labelLocal: fieldLabel, required: isRequired, requiredWithParent: !isRequired && valueInReq ? true : undefined, kind: 'number', width: 100, ...extractMetaFlags(subProps.value) },
+      { id: uId, fieldRef: `${fieldId}[marketplace_id]#1.unit`,  labelEn: `${fieldId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())} Unit`, labelLocal: unitLabel, required: isRequired && unitInReq, requiredWithParent: !isRequired && unitInReq ? true : undefined, kind: unitEnums.length > 0 ? 'enum' : 'text', options: unitEnums.length > 0 ? ['', ...unitEnums.map(String)] : undefined, width: 140, ...extractMetaFlags(subProps.unit) },
     ]
   }
 
@@ -907,6 +980,7 @@ function expandSchemaField(
           required: isRequired && subInReq,
           requiredWithParent: !isRequired && subInReq ? true : undefined,
           kind: 'number', width: 100,
+          ...extractMetaFlags(subSubProps.value),
         })
         columns.push({
           id: uId, fieldRef: `${fieldId}[marketplace_id]#1.${subId}.unit`,
@@ -916,6 +990,7 @@ function expandSchemaField(
           kind: unitEnums.length > 0 ? 'enum' : 'text',
           options: unitEnums.length > 0 ? ['', ...unitEnums.map(String)] : undefined,
           width: 140,
+          ...extractMetaFlags(subSubProps.unit),
         })
         continue
       }
@@ -958,6 +1033,9 @@ function expandSchemaField(
         required: isRequired && subInReq,
         requiredWithParent: !isRequired && subInReq ? true : undefined,
         kind, options, optionCodes,
+        // UFX P6a — hidden/editable live on the sub-prop node (list_price.currency)
+        // or its wrapped leaf; extractMetaFlags checks both.
+        ...extractMetaFlags(subProp),
         maxLength: typeof subInner?.maxLength === 'number' ? subInner.maxLength : undefined,
         maxUtf8ByteLength: typeof subInner?.maxUtf8ByteLength === 'number' ? subInner.maxUtf8ByteLength : undefined,
         minUtf8ByteLength: typeof subInner?.minUtf8ByteLength === 'number' ? subInner.minUtf8ByteLength : undefined,
@@ -1135,6 +1213,9 @@ export function mergeManifestsIntoUnion(manifests: FlatFileManifest[], types: st
             requiredWithParent: undefined, requiredWithParentForProductTypes: undefined,
             conditional: undefined, optionCodes: undefined,
             optionsByProductType: undefined, optionCodesByProductType: undefined,
+            // UFX P6a — re-derived below: hidden ANDs (visible for any type →
+            // shown), editableForListing ORs pessimistically with a per-type list.
+            hidden: undefined, editableForListing: undefined, nonEditableForProductTypes: undefined,
           }
           colMap.set(c.id, mc)
           outGroup.columns.push(mc)
@@ -1151,6 +1232,14 @@ export function mergeManifestsIntoUnion(manifests: FlatFileManifest[], types: st
           mc.requiredWithParentForProductTypes = [...new Set([...(mc.requiredWithParentForProductTypes ?? []), pt])]
         }
         if (c.conditional) mc.conditional = true
+        // UFX P6a — hidden ANDs across the types that define the column (if any
+        // type wants it visible, the union shows it); non-editable ORs (any type
+        // locking it tags the union) with the per-type list for per-row precision.
+        mc.hidden = (mc.hidden ?? true) && c.hidden === true
+        if (c.editableForListing === false) {
+          mc.editableForListing = false
+          mc.nonEditableForProductTypes = [...new Set([...(mc.nonEditableForProductTypes ?? []), pt])]
+        }
         if (c.options && c.options.length) {
           mc.options = [...new Set([...(mc.options ?? []), ...c.options])]
           // UFX P1 (MT.2b) — remember each type's OWN option set: a value valid
@@ -1173,15 +1262,49 @@ export function mergeManifestsIntoUnion(manifests: FlatFileManifest[], types: st
     for (const vt of m.variationThemes ?? []) variationThemes.add(vt)
   }
 
+  // UFX P6a — normalize the hidden AND-accumulator: false (visible somewhere)
+  // becomes undefined so the union column looks like a single-type visible one.
+  for (const colMap of colMaps.values()) {
+    for (const mc of colMap.values()) {
+      if (mc.hidden !== true) delete (mc as FlatFileColumn).hidden
+    }
+  }
+
+  // UFX P6c — union schema fingerprint: hash over the per-type versions so the
+  // union manifest changes exactly when any member schema changes.
+  const memberVersions = manifests.map((m, i) => `${types[i]}=${m.schemaVersion ?? ''}`).join('|')
+  const schemaVersion = manifests.some((m) => m.schemaVersion)
+    ? createHash('sha256').update(memberVersions).digest('hex').slice(0, 16)
+    : undefined
+
   return {
     marketplace: manifests[0].marketplace,
     productType: types.join('+'),
     productTypes: [...types],
     variationThemes: [...variationThemes],
     fetchedAt: new Date().toISOString(),
+    schemaVersion,
     groups: groupOrder.map((id) => groupById.get(id)!),
     expandedFields,
   }
+}
+
+/**
+ * UFX P6a — API-response view of a manifest with `hidden` columns stripped.
+ * Safety carve-out: a hidden column that is required (or required-if-present)
+ * stays visible — preflight demands a value for it, so hiding it would make a
+ * validation error unfixable in the grid. Groups left empty by the filter are
+ * dropped. Pure (never mutates the cached manifest); expandedFields is kept
+ * intact so feed emission of already-present values is unchanged.
+ */
+export function filterHiddenManifestColumns(manifest: FlatFileManifest): FlatFileManifest {
+  const groups = manifest.groups
+    .map((g) => ({
+      ...g,
+      columns: g.columns.filter((c) => !(c.hidden === true && !c.required && !c.requiredWithParent)),
+    }))
+    .filter((g) => g.columns.length > 0)
+  return { ...manifest, groups }
 }
 
 /**
@@ -1600,11 +1723,19 @@ export class AmazonFlatFileService {
       }
     }
 
+    // UFX P6c — stable schema fingerprint: the provider version (bumps when
+    // Amazon revises the type) + a content hash (catches in-place definition
+    // updates, e.g. the __propertyGroups backfill). The client compares this
+    // against its cached manifest instead of stacking a second 24 h TTL.
+    const contentHash = createHash('sha256').update(JSON.stringify(def)).digest('hex').slice(0, 12)
+    const providerVersion = String((cached as any)?.schemaVersion ?? 'unknown')
+
     return {
       marketplace: mp,
       productType: pt,
       variationThemes,
       fetchedAt: new Date().toISOString(),
+      schemaVersion: `${providerVersion}.${contentHash}`,
       groups: allGroups,
       expandedFields,
     }
@@ -2193,33 +2324,63 @@ export class AmazonFlatFileService {
     return delSkus.filter((s) => fbaSkus.has(s))
   }
 
+  /**
+   * UFX P6b — last-saved flat-file snapshot per SKU (ChannelListing.
+   * flatFileSnapshot, keyed by grid column ids), for the non-editable-change
+   * preflight warning: a value differing from the snapshot is a change made
+   * since the last save/submit. One batched query; SKUs with no listing or no
+   * snapshot are simply absent (the check skips them — a new/never-saved row
+   * can't be diffed).
+   */
+  async getFlatFileSnapshots(
+    marketplace: string,
+    skus: string[],
+  ): Promise<Map<string, Record<string, unknown>>> {
+    const out = new Map<string, Record<string, unknown>>()
+    const list = [...new Set(skus.filter(Boolean))]
+    if (list.length === 0) return out
+    const listings = await this.prisma.channelListing.findMany({
+      where: { channel: 'AMAZON', marketplace: marketplace.toUpperCase(), product: { sku: { in: list } } },
+      select: { flatFileSnapshot: true, product: { select: { sku: true } } },
+    })
+    for (const l of listings as any[]) {
+      const snap = l.flatFileSnapshot
+      if (snap && typeof snap === 'object' && !Array.isArray(snap)) out.set(l.product.sku, snap)
+    }
+    return out
+  }
+
+  /** Backward-compatible wrapper — see buildJsonFeedBodyWithReport for the
+   *  per-row skip report (UFX P6d). */
   buildJsonFeedBody(
     rows: FlatFileRow[],
     marketplace: string,
     sellerId: string,
     expandedFields: Record<string, string> = {},
-    feedSchema: {
-      enumCodeMap?: Record<string, Record<string, string>>
-      localizedFields?: Set<string>
-      numericFields?: Set<string>
-      booleanFields?: Set<string>
-      /** FFP.3 — per product-type APPLICABLE column ids (from the union
-       *  manifest). When a row's type has a set, columns outside it are NOT
-       *  emitted — this kills the ~50-warnings-per-SKU spray of attributes
-       *  that don't belong to the product type (90000900). */
-      applicableByType?: Map<string, Set<string>>
-      /** FFP.18 — attributes that nest ONE wrapped sub-property (closure→type,
-       *  inner/outer→material …); emitted as `[{sub: [{value,…}]}]`. */
-      wrappedSubPropFields?: Record<string, { sub: string; localized: boolean }>
-      /** UFX P1 (P0-2) — declared schema type per sub-property path; sub-values
-       *  are coerced by THIS (a string-typed "38" stays a string) instead of
-       *  Number() sniffing. Absent (no schema) → legacy sniff. */
-      subPropTypes?: Record<string, SubPropType>
-      /** FFP.3 — fallback productType when a row's own cell is blank (a blank
-       *  productType malformed the whole feed: 4002010 '#/productType'). */
-      defaultProductType?: string
-    } = {},
+    feedSchema: FeedSchemaHints = {},
   ): string {
+    return this.buildJsonFeedBodyWithReport(rows, marketplace, sellerId, expandedFields, feedSchema).body
+  }
+
+  /**
+   * UFX P6d — feed body + per-row report. A row with no resolvable product
+   * type is SKIPPED with a per-row error instead of being emitted with
+   * productType:'' (which schema-halts the ENTIRE feed: 4002010
+   * '#/productType'). Resolution order for a blank product_type cell:
+   *   1. its parent row's product_type (matched by parent_sku within the batch
+   *      — a mixed-type sheet must not stamp a child with another family's type),
+   *   2. the submission-level defaultProductType,
+   *   3. otherwise skip (reported in `skippedRows`, same {sku, error} shape as
+   *      syncRowsToPlatform's errors).
+   * DELETE rows never need a type and are never skipped.
+   */
+  buildJsonFeedBodyWithReport(
+    rows: FlatFileRow[],
+    marketplace: string,
+    sellerId: string,
+    expandedFields: Record<string, string> = {},
+    feedSchema: FeedSchemaHints = {},
+  ): { body: string; messageCount: number; skippedRows: Array<{ sku: string; error: string }> } {
     const mp = marketplace.toUpperCase()
     const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
     const languageTag = LANGUAGE_TAG_MAP[mp] ?? 'it_IT'
@@ -2289,7 +2450,18 @@ export class AmazonFlatFileService {
       'fulfillment_availability__lead_time_to_ship_max_days',
     ])
 
-    const messages = rows
+    // UFX P6d — parent type lookup (item_sku → product_type) so a blank-type
+    // child inherits ITS OWN family's type in a mixed-type sheet, and per-row
+    // skip report for rows whose type can't be resolved at all.
+    const typeBySku = new Map<string, string>()
+    for (const r of rows) {
+      const sku = String(r.item_sku ?? '').trim()
+      const t = String(r.product_type ?? '').toUpperCase()
+      if (sku && t && !typeBySku.has(sku)) typeBySku.set(sku, t)
+    }
+    const skippedRows: Array<{ sku: string; error: string }> = []
+
+    const built = rows
       .filter((r) => r.item_sku)
       .map((row, i) => {
         // operationType — the flat-file editor overwhelmingly EDITS existing
@@ -2307,15 +2479,27 @@ export class AmazonFlatFileService {
           : row._isNew === true ? 'UPDATE'
           : opRaw === 'full_update' ? 'UPDATE'
           : 'PARTIAL_UPDATE'
-        // FFP.3 — blank row productType falls back to the submission's type; an
-        // empty productType malformed the entire feed (4002010 schema halt).
-        const productType = String(row.product_type ?? '').toUpperCase() || defaultProductType
-
         if (operationType === 'DELETE') {
           // FFP.3 — minimal DELETE per the v2 message schema: {sku, operationType}.
           // productType/attributes/requirements are "not applicable" for DELETE,
           // so sending them only adds validation surface.
           return { messageId: i + 1, sku: String(row.item_sku), operationType }
+        }
+
+        // UFX P6d — blank row productType: prefer the row's OWN parent's type
+        // (matched by parent_sku within the batch — a scalar defaultProductType
+        // stamps the wrong type on a mixed-type sheet), then the submission's
+        // fallback. Still blank → SKIP the row with a per-row error; an empty
+        // productType malformed the entire feed (4002010 schema halt).
+        const ownType = String(row.product_type ?? '').toUpperCase()
+        const parentType = ownType ? '' : (typeBySku.get(String(row.parent_sku ?? '').trim()) ?? '')
+        const productType = ownType || parentType || defaultProductType
+        if (!productType) {
+          skippedRows.push({
+            sku: String(row.item_sku),
+            error: 'Row skipped: no product type — the cell is blank and neither its parent row (by parent_sku) nor the submission carries one. Fill the Product Type column and resubmit.',
+          })
+          return null
         }
 
         // FFP.3 — parentage decides which attribute families a message may carry
@@ -2544,10 +2728,17 @@ export class AmazonFlatFileService {
         return message
       })
 
-    return JSON.stringify({
+    // UFX P6d — drop skipped rows and renumber messageIds sequentially (Amazon
+    // wants unique positive ints; identical to before when nothing is skipped).
+    const messages = built
+      .filter((m): m is Record<string, any> => m !== null)
+      .map((m, i) => ({ ...m, messageId: i + 1 }))
+
+    const body = JSON.stringify({
       header: { sellerId, version: '2.0', issueLocale: languageTag.replace('_', '-') },
       messages,
     })
+    return { body, messageCount: messages.length, skippedRows }
   }
 
   buildTsvExport(manifest: FlatFileManifest, rows: FlatFileRow[]): string {

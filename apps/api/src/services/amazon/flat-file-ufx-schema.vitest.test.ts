@@ -229,7 +229,7 @@ describe('UFX P0-2 — buildJsonFeedBody sub-prop typing end-to-end', () => {
     item_package_dimensions__length_unit: 'item_package_dimensions.length.unit',
   }
   const build = (row: any, feedSchema: any = {}) =>
-    JSON.parse(feedSvc.buildJsonFeedBody([row], 'IT', 'SELLER', expanded, feedSchema)).messages[0]
+    JSON.parse(feedSvc.buildJsonFeedBody([{ product_type: 'SHIRT', ...row }], 'IT', 'SELLER', expanded, feedSchema)).messages[0]
 
   it('string-typed sub-prop "38" is emitted as a STRING when hints are present', () => {
     const m = build(
@@ -288,7 +288,7 @@ describe('UFX P4 — multi-instance values get the singleton typed coercion', ()
   const feedSvc = new AmazonFlatFileService({} as any, {} as any)
   const expanded = { thread_count_1: 'thread_count', thread_count_2: 'thread_count', flag_1: 'flag' }
   const build = (row: any, feedSchema: any = {}) =>
-    JSON.parse(feedSvc.buildJsonFeedBody([row], 'IT', 'SELLER', expanded, feedSchema)).messages[0]
+    JSON.parse(feedSvc.buildJsonFeedBody([{ product_type: 'SHIRT', ...row }], 'IT', 'SELLER', expanded, feedSchema)).messages[0]
 
   it('numeric multi-instance values are numbers, not strings', () => {
     const m = build({ item_sku: 'M1', thread_count_1: '5', thread_count_2: '7' }, { numericFields: new Set(['thread_count']) })
@@ -313,7 +313,7 @@ describe('UFX P2 — Pattern-C sub-prop cells carry language_tag when declared',
   const feedSvc = new AmazonFlatFileService({} as any, {} as any)
   const expanded = { warranty_bundle__duration: 'warranty_bundle.duration', warranty_bundle__provider: 'warranty_bundle.provider' }
   const build = (row: any, feedSchema: any = {}) =>
-    JSON.parse(feedSvc.buildJsonFeedBody([row], 'IT', 'SELLER', expanded, feedSchema)).messages[0]
+    JSON.parse(feedSvc.buildJsonFeedBody([{ product_type: 'SHIRT', ...row }], 'IT', 'SELLER', expanded, feedSchema)).messages[0]
   const row = { item_sku: 'L1', warranty_bundle__duration: '24', warranty_bundle__provider: 'Xavia' }
 
   it('schema declares language_tag on the attribute → cell carries it', () => {

@@ -64,7 +64,7 @@ describe('FFX.3 — flat-file pull round-trip contract', () => {
     const svc3 = new AmazonFlatFileService({} as any, {} as any)
     const expandedFields = { bullet_point_1: 'bullet_point', bullet_point_2: 'bullet_point', bullet_point_3: 'bullet_point' }
     const feed = JSON.parse(svc3.buildJsonFeedBody(
-      [{ item_sku: 'B2', item_name: 'T', bullet_point: '', bullet_point_1: 'First', bullet_point_2: 'Second', bullet_point_3: 'Third' } as any],
+      [{ item_sku: 'B2', product_type: 'SHIRT', item_name: 'T', bullet_point: '', bullet_point_1: 'First', bullet_point_2: 'Second', bullet_point_3: 'Third' } as any],
       'IT', 'SELLER', expandedFields,
     ))
     const bp = (feed.messages[0].attributes.bullet_point as any[]).map((b) => b.value)
@@ -121,7 +121,7 @@ describe('isBlankFeedValue (feed empty-attribute guard)', () => {
   it('buildJsonFeedBody drops a blank cell instead of sending it', () => {
     const svc2 = new AmazonFlatFileService({} as any, {} as any)
     const feed = JSON.parse(svc2.buildJsonFeedBody(
-      [{ item_sku: 'B1', item_name: 'Title', color: '   ', some_attr: '' } as any],
+      [{ item_sku: 'B1', product_type: 'SHIRT', item_name: 'Title', color: '   ', some_attr: '' } as any],
       'IT', 'SELLER', {},
     ))
     const attrs = feed.messages[0].attributes
@@ -202,7 +202,8 @@ describe('RR — applySnapshotOverlay (lossless grid round-trip)', () => {
 // attribute set on a partial edit. Existing edits must be PARTIAL_UPDATE.
 describe('buildJsonFeedBody — operationType (partial vs full)', () => {
   const svc2 = new AmazonFlatFileService({} as any, {} as any)
-  const build = (row: any) => JSON.parse(svc2.buildJsonFeedBody([row], 'IT', 'SELLER', {})).messages[0]
+  // UFX P6d — typeless rows are now SKIPPED, so fixtures carry a default type.
+  const build = (row: any) => JSON.parse(svc2.buildJsonFeedBody([{ product_type: 'SHIRT', ...row }], 'IT', 'SELLER', {})).messages[0]
 
   it('existing-listing edit → PARTIAL_UPDATE, no requirements (no full required-attr enforcement)', () => {
     // FFP.2 — pulled rows default to record_action 'partial_update'.
@@ -242,7 +243,7 @@ describe('buildJsonFeedBody — operationType (partial vs full)', () => {
 describe('enum label→code conversion (country_of_origin etc.)', () => {
   const svc3 = new AmazonFlatFileService({} as any, {} as any)
   const build = (row: any, feedSchema: any = {}) =>
-    JSON.parse(svc3.buildJsonFeedBody([row], 'IT', 'SELLER', {}, feedSchema)).messages[0]
+    JSON.parse(svc3.buildJsonFeedBody([{ product_type: 'SHIRT', ...row }], 'IT', 'SELLER', {}, feedSchema)).messages[0]
 
   describe('buildSchemaEnumCodeMap', () => {
     it('pairs enum codes with enumNames labels (label→code)', () => {
@@ -281,7 +282,7 @@ describe('enum label→code conversion (country_of_origin etc.)', () => {
 describe('feed schema hints — types, localization, parent', () => {
   const svc4 = new AmazonFlatFileService({} as any, {} as any)
   const build = (row: any, feedSchema: any = {}) =>
-    JSON.parse(svc4.buildJsonFeedBody([row], 'IT', 'SELLER', {}, feedSchema)).messages[0]
+    JSON.parse(svc4.buildJsonFeedBody([{ product_type: 'SHIRT', ...row }], 'IT', 'SELLER', {}, feedSchema)).messages[0]
 
   describe('buildSchemaFieldHints', () => {
     it('classifies localized / numeric / boolean fields from the schema', () => {
@@ -401,7 +402,7 @@ describe('applySnapshotOverlay — parentage healing', () => {
 describe('buildJsonFeedBody — parentage + condition_type + variation_theme via enumCodeMap', () => {
   const svc5 = new AmazonFlatFileService({} as any, {} as any)
   const build = (row: any, feedSchema: any = {}) =>
-    JSON.parse(svc5.buildJsonFeedBody([row], 'IT', 'SELLER', {}, feedSchema)).messages[0]
+    JSON.parse(svc5.buildJsonFeedBody([{ product_type: 'SHIRT', ...row }], 'IT', 'SELLER', {}, feedSchema)).messages[0]
 
   const IT_SCHEMA = {
     enumCodeMap: {
