@@ -159,9 +159,47 @@ async function main() {
   const childIds = children.map((c) => c.id)
   const listings = await prisma.channelListing.findMany({
     where: { productId: { in: [...childIds, PARENT_ID!] }, channel: 'EBAY', marketplace: MARKET },
-    select: { id: true, productId: true, platformAttributes: true },
+    select: { id: true, productId: true, platformAttributes: true, flatFileSnapshot: true },
   })
   const listingByProduct = new Map(listings.map((l) => [l.productId, l]))
+  const canonTheme = resolved.axes.map((a) => a.name).join(',')
+
+  // Snapshot cleaner — the eBay flat file overlays ChannelListing.flatFileSnapshot
+  // onto /rows (applyEbayFlatFileSnapshot); a structured-only clean leaves stale
+  // ghost `aspect_*` columns + polluted values + old variation_theme visible in
+  // the grid AND sent by the push. Mirror cleanAspectMap over the aspect_-prefixed
+  // snapshot keys, and rewrite variation_theme to the resolved keeper set.
+  const cleanSnapshot = (snap: Record<string, unknown> | null | undefined) => {
+    if (!snap || typeof snap !== 'object' || Array.isArray(snap)) return { next: snap, changed: false }
+    const next: Record<string, unknown> = {}
+    const pendingFill = new Map<string, unknown>()
+    const canonicalPresent = new Set<string>()
+    let changed = false
+    for (const [k, v] of Object.entries(snap)) {
+      if (k === 'variation_theme') {
+        if (typeof v === 'string' && v && canonTheme && v !== canonTheme) { next[k] = canonTheme; changed = true }
+        else next[k] = v
+        continue
+      }
+      if (!k.startsWith('aspect_')) { next[k] = v; continue }
+      const name = k.slice('aspect_'.length).replace(/_/g, ' ')
+      const kk = axisSynonymKey(name)
+      const keeper = keeperByKey.get(kk)
+      if (keeper && name.toLowerCase() === keeper.name.toLowerCase()) {
+        const { value } = depollute(v, keeper); next[k] = value; canonicalPresent.add(kk); if (value !== v) changed = true
+      } else if (keeper) {
+        const { value } = depollute(v, keeper); if (!pendingFill.has(kk)) pendingFill.set(kk, value); changed = true // synonym dup → drop
+      } else if (suppressedKeys.has(kk) || suppressedNames.has(name.toLowerCase())) {
+        changed = true // ghost stray → drop
+      } else { next[k] = v } // custom aspect → keep
+    }
+    for (const [kk, value] of pendingFill) {
+      if (canonicalPresent.has(kk)) continue
+      const keeper = keeperByKey.get(kk)!
+      next[`aspect_${keeper.name.replace(/\s+/g, '_')}`] = value
+    }
+    return { next, changed }
+  }
 
   const diff: any[] = []
   const backup: any[] = []
@@ -176,8 +214,9 @@ async function main() {
     const listing = listingByProduct.get(c.id)
     const pa = (listing?.platformAttributes ?? {}) as any
     const is = clean(pa.itemSpecifics as Record<string, unknown> | null)
+    const snap = cleanSnapshot(listing?.flatFileSnapshot as Record<string, unknown> | null)
 
-    if (!(cv.changed || va.changed || is.changed)) continue
+    if (!(cv.changed || va.changed || is.changed || snap.changed)) continue
 
     diff.push({
       sku: c.sku,
@@ -187,15 +226,17 @@ async function main() {
       unmatchedValues: [...cv.unmatched, ...va.unmatched, ...is.unmatched].length
         ? [...new Set([...cv.unmatched, ...va.unmatched, ...is.unmatched])] : undefined,
     })
-    backup.push({ productId: c.id, categoryAttributes: c.categoryAttributes, variantAttributes: c.variantAttributes, listingId: listing?.id, platformAttributes: listing?.platformAttributes })
+    backup.push({ productId: c.id, categoryAttributes: c.categoryAttributes, variantAttributes: c.variantAttributes, listingId: listing?.id, platformAttributes: listing?.platformAttributes, flatFileSnapshot: listing?.flatFileSnapshot })
 
     if (cv.changed || va.changed) {
       const nextCat = { ...cat, variations: cv.next }
       writes.push(() => prisma.product.update({ where: { id: c.id }, data: { categoryAttributes: nextCat, variantAttributes: va.next as any } }))
     }
-    if (is.changed && listing) {
-      const nextPa = { ...pa, itemSpecifics: is.next }
-      writes.push(() => prisma.channelListing.update({ where: { id: listing.id }, data: { platformAttributes: nextPa } }))
+    if ((is.changed || snap.changed) && listing) {
+      const data: any = {}
+      if (is.changed) data.platformAttributes = { ...pa, itemSpecifics: is.next }
+      if (snap.changed) data.flatFileSnapshot = snap.next
+      writes.push(() => prisma.channelListing.update({ where: { id: listing.id }, data }))
     }
   }
 
@@ -210,10 +251,13 @@ async function main() {
     pa._axisValueOrder = nextValueOrder
     const axesChanged = JSON.stringify(before._variationAxes ?? null) !== JSON.stringify(keeperNames)
     const orderChanged = JSON.stringify(before._axisValueOrder ?? null) !== JSON.stringify(nextValueOrder)
-    if (axesChanged || orderChanged) {
-      backup.push({ productId: PARENT_ID, listingId: pl.id, platformAttributes: pl.platformAttributes })
-      diff.push({ sku: parent.sku + ' (parent listing)', platformAttributes: { before, after: { _variationAxes: keeperNames, _axisValueOrder: nextValueOrder } } })
-      writes.push(() => prisma.channelListing.update({ where: { id: pl.id }, data: { platformAttributes: pa } }))
+    const psnap = cleanSnapshot(pl.flatFileSnapshot as Record<string, unknown> | null)
+    if (axesChanged || orderChanged || psnap.changed) {
+      backup.push({ productId: PARENT_ID, listingId: pl.id, platformAttributes: pl.platformAttributes, flatFileSnapshot: pl.flatFileSnapshot })
+      diff.push({ sku: parent.sku + ' (parent listing)', platformAttributes: { before, after: { _variationAxes: keeperNames, _axisValueOrder: nextValueOrder } }, snapshotThemeFixed: psnap.changed })
+      const data: any = { platformAttributes: pa }
+      if (psnap.changed) data.flatFileSnapshot = psnap.next
+      writes.push(() => prisma.channelListing.update({ where: { id: pl.id }, data }))
     }
   }
 
