@@ -559,6 +559,43 @@ export function resolveQuantityLimitPerBuyer(row: Record<string, unknown>): numb
   return Math.floor(n)
 }
 
+/**
+ * EFX P9d — map the sheet's shared `video_id` cell onto the eBay Inventory API
+ * inventory item's `product.videoIds`.
+ *
+ * eBay attaches a listing video via the createOrReplaceInventoryItem method's
+ * `product.videoIds` field — an array of one or more Media-API videoId values
+ * (developer.ebay.com/api-docs/sell/inventory/types/slr:Product → videoIds, and
+ * "Managing videos" static guide). eBay currently allows exactly ONE video per
+ * listing (Seller Help "Adding a video to your listing" — one per listing, the
+ * same video may be reused across listings), so a supplied id maps to a single-
+ * element array. A videoId is minted by uploading the file through the Media API
+ * (createVideo → uploadVideo); a raw URL/file is NOT accepted here.
+ *
+ * Rules:
+ *   • blank / null / whitespace-only → undefined (field omitted; no video change
+ *     is requested — leaves any existing live video untouched).
+ *   • a plausible id (non-empty, no internal whitespace, not a URL) → [id].
+ *   • an obviously-wrong value (contains whitespace, or looks like an http(s)
+ *     URL — the classic "pasted the video URL not the id" mistake) → undefined
+ *     plus an optional warning via the warnings sink, so it is dropped rather
+ *     than sent to trigger an opaque eBay rejection.
+ */
+export function resolveVideoIds(
+  videoIdRaw: unknown,
+  warnings?: string[],
+): string[] | undefined {
+  if (videoIdRaw == null) return undefined
+  const id = String(videoIdRaw).trim()
+  if (!id) return undefined
+  if (/\s/.test(id) || /^https?:\/\//i.test(id)) {
+    const w = `Listing video ignored: "${id.slice(0, 40)}" is not a valid eBay videoId. Upload the video via the Media API (createVideo → uploadVideo) and paste the returned videoId — not a URL.`
+    if (warnings && !warnings.includes(w)) warnings.push(w)
+    return undefined
+  }
+  return [id]
+}
+
 export async function pushVariationGroup(
   groupKey: string,
   rows: Array<Record<string, unknown>>,
@@ -925,6 +962,17 @@ export async function pushVariationGroup(
     }
   }
 
+  // EFX P9d — listing video (eBay allows one video per listing). `video_id` is a
+  // shared per-listing field, so the same Media-API videoId is attached to every
+  // variant's inventory_item.product.videoIds. Read from the parent row first,
+  // then the first variant carrying a value (round-trips via each listing's
+  // platformAttributes.videoId). Omitted entirely when blank → leaves any live
+  // video untouched; an invalid paste (URL/whitespace) is dropped + warned.
+  const rawVideoId = [parentRow, ...variantRows]
+    .map((r) => r?.video_id)
+    .find((v) => v != null && String(v).trim() !== '')
+  const listingVideoIds = resolveVideoIds(rawVideoId, opts?.warningsSink)
+
   // Step 1: Create/update each variant's inventory_item.
   // FFP.17 — transient eBay flakes (25604/25001/5xx) collected for a second pass.
   const transientItemFailures: Array<{ sku: string; url: string; body: string }> = []
@@ -1066,6 +1114,9 @@ export async function pushVariationGroup(
         ean: row.ean ? [String(row.ean)] : ['Does not apply'],
         // MPN is required alongside EAN. Use 'Does not apply' when absent.
         mpn: row.mpn ? String(row.mpn) : 'Does not apply',
+        // EFX P9d — attach the listing video (Media API videoId) when supplied.
+        // Omitted otherwise so a videoId-less push never clears an existing video.
+        ...(listingVideoIds ? { videoIds: listingVideoIds } : {}),
       },
       condition,
       availability: {
@@ -2062,6 +2113,9 @@ export function buildFlatRow(
     image_4: effectiveImageUrls[3] ?? '',
     image_5: effectiveImageUrls[4] ?? '',
     image_6: effectiveImageUrls[5] ?? '',
+    // EFX P9d — eBay listing video (shared). Stored as a single Media-API
+    // videoId; the push maps it to product.videoIds (one video per listing).
+    video_id: (firstAttrs.videoId as string | undefined) ?? '',
     // EFX P9b — eBay merchantLocationKey (shared). Blank falls back to the
     // account-configured default location at push time.
     merchant_location_key: (firstAttrs.merchantLocationKey as string | undefined) ?? '',
@@ -2230,6 +2284,8 @@ export function packSharedFields(row: Record<string, unknown>): {
       bestOffer: Boolean(row.best_offer_enabled),
       bestOfferFloor: Number(row.best_offer_floor ?? 0),
       bestOfferCeiling: Number(row.best_offer_ceiling ?? 0),
+      // EFX P9d — eBay listing video (Media-API videoId). Blank = no video.
+      videoId: ((row.video_id as string) ?? '').trim(),
       // EFX P9b — merchantLocationKey (blank = account default at push).
       merchantLocationKey: (row.merchant_location_key as string) ?? '',
       // EFX P9f — quantityLimitPerBuyer override; null when blank (push uses 10).

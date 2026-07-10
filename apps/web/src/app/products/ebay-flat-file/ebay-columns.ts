@@ -485,6 +485,20 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       { id: 'image_4', label: 'Image 4', description: 'Additional image URL', required: false, kind: 'text', maxLength: 500, width: 180 },
       { id: 'image_5', label: 'Image 5', description: 'Additional image URL', required: false, kind: 'text', maxLength: 500, width: 180 },
       { id: 'image_6', label: 'Image 6', description: 'Additional image URL', required: false, kind: 'text', maxLength: 500, width: 180 },
+      {
+        // EFX P9d — the eBay listing video (Media API videoId → inventory item
+        // product.videoIds). Shared across every market + variant of the listing.
+        id: 'video_id',
+        label: 'Video ID',
+        description:
+          'eBay listing video. eBay allows ONE video per listing (the same video may be reused on other listings). ' +
+          'Enter the eBay videoId — NOT a URL. You get a videoId by uploading the .mp4/.mov to eBay via the Media API (createVideo → uploadVideo returns the videoId); a URL or file cannot be sent directly. ' +
+          "Sent on Push as the inventory item's product.videoIds. Shared field — set it once (e.g. on the parent row); it applies to the whole listing across all markets. Leave blank for no video.",
+        required: false,
+        kind: 'text',
+        maxLength: 100,
+        width: 200,
+      },
     ],
   },
   {
