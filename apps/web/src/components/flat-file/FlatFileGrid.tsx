@@ -33,6 +33,8 @@ import type {
 import { normalizeCellValue } from './normalizeCellValue'
 import { computeDropdownPosition, MIN_DROPDOWN_WIDTH } from './dropdown-position'
 import { computeAutoFitWidth } from './column-autofit'
+import { applyColumnOrder, moveColumnInGroup, canMoveColumn } from './column-prefs'
+import { FlatFileContextMenu } from './FlatFileContextMenu'
 import { tokenizeClipboard } from './paste-tokenizer'
 import { isComposingKeyEvent } from './composition'
 import { setFlatFileDirtyCount, shouldConfirmLeave } from './unsaved-guard'
@@ -1079,6 +1081,21 @@ export default function FlatFileGrid({
     ? columnGroupState.map((g) => g.id)
     : internalGroupOrder
 
+  // ── Per-column hide/reorder (UFX P7 item 7) ────────────────────────────
+  // A view-preference layer UNDER the group machinery: hidden columns are
+  // removed from the rendered sheet only (data/saves/validation/replicate
+  // untouched); order is per group, persisted per storageKey.
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(`${storageKey}-hidden-cols`) ?? '[]')) } catch { return new Set() }
+  })
+  const [colOrderByGroup, setColOrderByGroup] = useState<Record<string, string[]>>(() => {
+    try { return JSON.parse(localStorage.getItem(`${storageKey}-col-order`) ?? '{}') } catch { return {} }
+  })
+  useEffect(() => { try { localStorage.setItem(`${storageKey}-hidden-cols`, JSON.stringify([...hiddenCols])) } catch {} }, [hiddenCols, storageKey])
+  useEffect(() => { try { localStorage.setItem(`${storageKey}-col-order`, JSON.stringify(colOrderByGroup)) } catch {} }, [colOrderByGroup, storageKey])
+  // Column header menu (chevron / right-click on a column header)
+  const [colMenu, setColMenu] = useState<{ colId: string; x: number; y: number } | null>(null)
+
   // ── Row collapse ───────────────────────────────────────────────────────
   const [collapsedRowGroups, setCollapsedRowGroups] = useState<Set<string>>(new Set())
 
@@ -1158,9 +1175,22 @@ export default function FlatFileGrid({
     [orderedGroups, openGroups],
   )
 
+  // UFX P7 (item 7) — what actually renders: each open group's columns with
+  // the per-group saved order applied and hidden columns removed; a group
+  // whose every column is hidden drops out of the sheet (its Bar-3 pill and
+  // the Edit-menu "Show hidden columns" remain as the way back).
+  // visibleGroups (full columns) still feeds replicate/sort so hide stays a
+  // pure view preference.
+  const renderGroups = useMemo(
+    () => visibleGroups
+      .map((g) => ({ ...g, columns: applyColumnOrder(g.columns, colOrderByGroup[g.id]).filter((c) => !hiddenCols.has(c.id)) }))
+      .filter((g) => g.columns.length > 0),
+    [visibleGroups, colOrderByGroup, hiddenCols],
+  )
+
   const allColumns = useMemo<FlatFileColumn[]>(
-    () => visibleGroups.flatMap((g) => g.columns),
-    [visibleGroups],
+    () => renderGroups.flatMap((g) => g.columns),
+    [renderGroups],
   )
   useEffect(() => { allColumnsRef.current = allColumns }, [allColumns])
 
@@ -1955,6 +1985,8 @@ export default function FlatFileGrid({
 
       // UFX P3 — any key closes the consumer context menu (Amazon parity).
       setCtxMenu((p) => (p ? null : p))
+      // UFX P7 (item 7) — and the column header menu.
+      setColMenu((p) => (p ? null : p))
 
       const mod = e.metaKey || e.ctrlKey
       if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return }
@@ -2352,6 +2384,9 @@ export default function FlatFileGrid({
             { separator: true },
             { label: 'Reset column group order', onClick: () => { setGroupOrder([]); try { localStorage.removeItem(`${storageKey}-group-order`) } catch {} onGroupStateChange?.(internalClosedGroups, []) }, disabled: !groupOrder.length },
             { label: 'Show all column groups', onClick: () => { setClosedGroups(new Set()); try { localStorage.removeItem(`${storageKey}-closed-groups`) } catch {} onGroupStateChange?.(new Set(), internalGroupOrder) }, disabled: !closedGroups.size },
+            // UFX P7 (item 7) — per-column layer escape hatches
+            { label: hiddenCols.size > 0 ? `Show ${hiddenCols.size} hidden column${hiddenCols.size === 1 ? '' : 's'}` : 'Show hidden columns', onClick: () => setHiddenCols(new Set()), disabled: !hiddenCols.size },
+            { label: 'Reset column order (within groups)', onClick: () => setColOrderByGroup({}), disabled: !Object.keys(colOrderByGroup).length },
             ...(editMenuItems?.(toolbarFetchCtx) ?? []),
           ]} />
           <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
@@ -2652,6 +2687,44 @@ export default function FlatFileGrid({
         },
       })}
 
+      {/* UFX P7 (item 7) — column header menu (hide / move within group) */}
+      {colMenu && (() => {
+        const group = colToGroup.get(colMenu.colId)
+        const groupColumnIds = group ? group.columns.map((c) => c.id) : []
+        const moveOpts = (dir: -1 | 1) => ({
+          groupColumnIds,
+          savedOrder: group ? colOrderByGroup[group.id] : undefined,
+          hidden: hiddenCols,
+          colId: colMenu.colId,
+          dir,
+        })
+        const applyMove = (dir: -1 | 1) => {
+          if (!group) return
+          const next = moveColumnInGroup(moveOpts(dir))
+          if (next) setColOrderByGroup((prev) => ({ ...prev, [group.id]: next }))
+        }
+        return (
+          <FlatFileContextMenu
+            x={colMenu.x}
+            y={colMenu.y}
+            onClose={() => setColMenu(null)}
+            items={[
+              { label: 'Hide column', disabled: allColumns.length <= 1,
+                onClick: () => setHiddenCols((prev) => new Set([...prev, colMenu.colId])) },
+              { separator: true },
+              { label: 'Move left', disabled: !group || !canMoveColumn(moveOpts(-1)), onClick: () => applyMove(-1) },
+              { label: 'Move right', disabled: !group || !canMoveColumn(moveOpts(1)), onClick: () => applyMove(1) },
+              { separator: true },
+              { label: hiddenCols.size > 0 ? `Show ${hiddenCols.size} hidden column${hiddenCols.size === 1 ? '' : 's'}` : 'Show hidden columns',
+                disabled: hiddenCols.size === 0, onClick: () => setHiddenCols(new Set()) },
+              { label: `Reset ${group?.label ?? 'group'} column order`,
+                disabled: !group || !(colOrderByGroup[group.id]?.length),
+                onClick: () => { if (group) setColOrderByGroup((prev) => { const n = { ...prev }; delete n[group.id]; return n }) } },
+            ]}
+          />
+        )
+      })()}
+
       {/* ── Main grid + optional AI panel ─────────────── */}
       <div className="flex-1 flex overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -2744,7 +2817,7 @@ export default function FlatFileGrid({
                     onChange={(e) => setSelectedRows(e.target.checked ? new Set(realDisplayRows.map((r) => r._rowId)) : new Set())} />
                 </th>
                 <th className="sticky left-9 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 text-xs text-slate-400 text-center font-normal" style={{ width: rowHeaderWidth, minWidth: rowHeaderWidth }} rowSpan={2}>#</th>
-                {visibleGroups.map((g) => (
+                {renderGroups.map((g) => (
                   <th key={g.id} colSpan={g.columns.length}
                     className={cn('px-2 py-1 text-xs font-bold border-b border-r border-slate-200 dark:border-slate-700 text-left whitespace-nowrap', gColor(g.color).header)}>
                     <button onClick={() => {
@@ -2779,9 +2852,24 @@ export default function FlatFileGrid({
                         const maxRi = displayRows.length - 1
                         setSelAnchor({ ri: 0, ci: colIdx }); setSelEnd({ ri: maxRi, ci: colIdx }); setIsEditing(false)
                         const firstRow = displayRows[0]; if (firstRow) setActiveCell({ rowId: firstRow._rowId, colId: col.id })
-                      }}>
+                      }}
+                      // UFX P7 (item 7) — right-click a column header opens its menu
+                      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setColMenu({ colId: col.id, x: e.clientX, y: e.clientY }) }}>
                       {col.label}{col.required && <span className="ml-0.5 text-red-500">*</span>}
                       {col.maxLength != null && <span className="ml-1 font-normal font-mono text-[10px] text-slate-300 dark:text-slate-600">max {col.maxLength}</span>}
+                      {/* Column menu (hide / reorder) — UFX P7 item 7 */}
+                      <button type="button"
+                        className={cn('ml-0.5 p-0.5 rounded-sm opacity-0 group-hover/th:opacity-100 transition-opacity flex-shrink-0',
+                          colMenu?.colId === col.id ? 'text-blue-500 opacity-100' : 'text-slate-400 hover:text-blue-500')}
+                        title="Column options (hide · move)"
+                        aria-label={`Column options for ${col.label}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                          setColMenu((p) => (p?.colId === col.id ? null : { colId: col.id, x: r.left, y: r.bottom + 2 }))
+                        }}>
+                        <ChevronDown className="w-3 h-3" />
+                      </button>
                       {/* Freeze pin */}
                       <button type="button"
                         className={cn('ml-1 p-0.5 rounded-sm opacity-0 group-hover/th:opacity-100 transition-opacity flex-shrink-0',
