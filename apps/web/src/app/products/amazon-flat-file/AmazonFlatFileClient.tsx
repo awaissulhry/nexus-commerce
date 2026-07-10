@@ -48,6 +48,10 @@ import { TagInput } from '@/design-system/primitives/TagInput'
 import { ChannelStrip } from '../ebay-flat-file/ChannelStrip'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import { categoryOf, assignCategory, productTypesInUse, formatNodeBreadcrumb } from './category-model'
+import {
+  sheetCompositionKey, serializeComposition, parseComposition,
+  compositionMatchesPrimary, compositionStorageType,
+} from './sheet-composition'
 
 // EH.5 — Lazy-loaded modals, panels, and bars. Each one only ships
 // to the browser when the operator first opens it, so the initial
@@ -706,9 +710,24 @@ export default function AmazonFlatFileClient({
       return a === b ? prev : next
     })
   }, [])
+  // UFX P4b — set by onGridReload when a composite (multi-category) draft was
+  // just restored for the CURRENT (marketplace, primaryType). The grid's mount
+  // load runs BEFORE the page's own (mp, pt)-change effects (child effects
+  // first), so those effects consult this ref instead of stomping the restored
+  // sheetTypes / loadedExtraTypesRef with single-type resets (the MT.4 race).
+  const restoredCompositionRef = useRef<{ mp: string; pt: string; types: string[] } | null>(null)
+  const restoredCompositionMatches = useCallback((mp: string, pt: string) => {
+    const r = restoredCompositionRef.current
+    return !!r && r.mp === mp.toUpperCase() && r.pt === pt.toUpperCase()
+  }, [])
+
   // productType/marketplace switches re-derive immediately (rows reload comes
   // separately through the grid's own reload).
   useEffect(() => {
+    // UFX P4b — a just-restored composite already set sheetTypes; deriving
+    // from latestRowsRef here would read the PREVIOUS market's rows and
+    // collapse the union (manifest flip churn).
+    if (restoredCompositionMatches(marketplace, productType)) return
     syncSheetTypesFromRows(latestRowsRef.current, productType)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productType, marketplace])
@@ -1193,6 +1212,24 @@ export default function AmazonFlatFileClient({
     } catch { return null }
   }
 
+  // UFX P4b — composition pointer: remembers, per market (family-scoped like
+  // rowStorageKey), that the last sheet was a union of which types, so the
+  // mount restore can find the composite "A+B" draft again. Written by the
+  // autosave flush + the explicit draft-save sites (always alongside saveRows,
+  // never from transient render states); a single-type storageType REMOVES the
+  // pointer, so leaving union mode stops the composite restore.
+  function persistSheetComposition(mp: string, storageType: string) {
+    try {
+      const key = sheetCompositionKey(mp, familyId)
+      const val = serializeComposition(storageType)
+      if (val) localStorage.setItem(key, val)
+      else localStorage.removeItem(key)
+    } catch { /* quota / private mode — pointer is best-effort */ }
+  }
+  function loadSheetComposition(mp: string): string[] | null {
+    try { return parseComposition(localStorage.getItem(sheetCompositionKey(mp, familyId))) } catch { return null }
+  }
+
   // MT.4 — the localStorage key suffix for the CURRENT grid. A union (mixed-
   // category) sheet persists under a composite "A+B" key derived from the rows'
   // ACTUAL product types, so a union sheet can NEVER overwrite a per-type sheet's
@@ -1225,6 +1262,10 @@ export default function AmazonFlatFileClient({
       const rows = latestRowsRef.current
       if (!productTypeRef.current || !rows.length) return
       saveRows(mpAt, storageTypeRef.current, rows)
+      // UFX P4b — keep the composition pointer in lockstep with the draft
+      // write itself (the flush reads fresh refs, so transient render states
+      // never clobber it).
+      persistSheetComposition(mpAt, storageTypeRef.current)
       setLastLocalSave(Date.now())
     }, 1000)
   }, [])
@@ -1257,7 +1298,16 @@ export default function AmazonFlatFileClient({
   // they're added (dedup by SKU). The rows-based storageType keeps the combined
   // sheet under its own "A+B" key — no per-type draft is ever corrupted.
   const loadedExtraTypesRef = useRef<Set<string>>(new Set())
-  useEffect(() => { loadedExtraTypesRef.current = new Set([productType.toUpperCase()]) }, [productType, marketplace])
+  useEffect(() => {
+    // UFX P4b — a just-restored composite draft already holds every member
+    // type's rows: mark them ALL loaded so the extras loader below doesn't
+    // re-append server rows over the draft (this effect runs AFTER the grid's
+    // mount load — the MT.4 reset must not undo the restore).
+    loadedExtraTypesRef.current = restoredCompositionMatches(marketplace, productType)
+      ? new Set(restoredCompositionRef.current!.types)
+      : new Set([productType.toUpperCase()])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productType, marketplace])
   useEffect(() => {
     if (sheetTypes.length <= 1) return
     const toLoad = sheetTypes.map((t) => t.toUpperCase()).filter((t) => !loadedExtraTypesRef.current.has(t))
@@ -1464,7 +1514,9 @@ export default function AmazonFlatFileClient({
         if (fromDB) {
           // Push server-fresh rows into the mounted grid + reset the draft so
           // grid == DB again (external invalidation / explicit refresh).
-          saveRows(mp, computeStorageType(freshRows, pt), freshRows)
+          const freshStorageType = computeStorageType(freshRows, pt)
+          saveRows(mp, freshStorageType, freshRows)
+          persistSheetComposition(mp, freshStorageType) // UFX P4b
           setDraftBanner(null)
           localDivergedRef.current = false
           latestSetRowsRef.current?.(freshRows)
@@ -1503,6 +1555,28 @@ export default function AmazonFlatFileClient({
     pageForceServerRef.current = false
 
     if (firstLoad && !forceServer) {
+      restoredCompositionRef.current = null
+      // UFX P4b — union sheet restore: the composition pointer says the last
+      // sheet on this market was a union whose members include the primary;
+      // its draft lives under the sorted composite "A+B" key (the exact
+      // write-side storageType). Restoring it brings back ALL types' rows and
+      // kicks the union-template fetch immediately (sheetTypes), so columns
+      // and rows land together.
+      const comp = loadSheetComposition(mp)
+      if (comp && compositionMatchesPrimary(comp, pt)) {
+        const compositeType = compositionStorageType(comp)
+        const savedUnion = loadSavedRows(mp, compositeType)
+        if (savedUnion && savedUnion.length > 0) {
+          restoredCompositionRef.current = { mp: mp.toUpperCase(), pt: pt.toUpperCase(), types: comp }
+          loadedExtraTypesRef.current = new Set(comp)
+          storageTypeRef.current = compositeType
+          setSheetTypes(comp)
+          if (savedUnion.some((r) => r._dirty)) setDraftBanner(savedUnion)
+          return mergeAsinCache(savedUnion, mp)
+        }
+        // Stale pointer (composite draft gone) — drop it and fall through.
+        persistSheetComposition(mp, pt)
+      }
       const saved = loadSavedRows(mp, pt)
       if (saved && saved.length > 0) {
         // Informational banner when the restored draft carries unsaved edits.
@@ -1523,8 +1597,11 @@ export default function AmazonFlatFileClient({
     const prev = _swr.get(cacheKey(mp, pt))
     if (prev) _swr.set(cacheKey(mp, pt), { ...prev, rows: freshRows, fetchedAt: Date.now() })
     // A server reload resets the draft to match the DB (the autosave loop
-    // would rewrite it from the fresh rows anyway).
-    saveRows(mp, computeStorageType(freshRows, pt), freshRows)
+    // would rewrite it from the fresh rows anyway). UFX P4b — the composition
+    // pointer resets with it (single-type fresh rows remove it).
+    const freshStorageType = computeStorageType(freshRows, pt)
+    saveRows(mp, freshStorageType, freshRows)
+    persistSheetComposition(mp, freshStorageType)
     setDraftBanner(null)
     localDivergedRef.current = false
     return freshRows
@@ -1609,6 +1686,7 @@ export default function AmazonFlatFileClient({
     // picture when the user returns.
     if (productType && rowsRef.current.some((r) => r._dirty || r._isNew)) {
       saveRows(marketplace, storageTypeRef.current, rowsRef.current)
+      persistSheetComposition(marketplace, storageTypeRef.current) // UFX P4b
     }
     // UFX P3 — the grid remounts for the new (mp, pt); its first load should
     // restore that market's draft (unsaved edits survive a switch).
@@ -2166,6 +2244,7 @@ export default function AmazonFlatFileClient({
     try {
       createVersion('Auto-save before submit')
       saveRows(marketplace, storageTypeRef.current, rows)
+      persistSheetComposition(marketplace, storageTypeRef.current) // UFX P4b
     } catch {
       // Persisting locally is best-effort; never block the submit
       // because the operator already committed to firing it.
@@ -2496,6 +2575,7 @@ export default function AmazonFlatFileClient({
   const onGridSave = useCallback(async (dirty: BaseRow[]): Promise<{ saved: number; createResult?: { errors?: unknown[] } }> => {
     createVersion('Manual save')
     saveRows(marketplaceRef.current, storageTypeRef.current, latestRowsRef.current)
+    persistSheetComposition(marketplaceRef.current, storageTypeRef.current) // UFX P4b
     const { errorSkus } = await syncToPlatform(dirty as Row[], false)
     if (errorSkus.length > 0) {
       // Suppress the grid's generic "Saved N rows" toast; the FFA.6 warning
