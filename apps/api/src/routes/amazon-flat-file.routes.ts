@@ -338,14 +338,26 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         // MT.1 union manifest across every product type in the batch → MT.2
         // per-type required + applicable sets.
         const union = await flatFileService.generateUnionManifest(mp, batchTypes)
-        const { requiredByType, applicableByType: appByType, lengthByType } = buildPerTypeValidation(union)
+        const { requiredByType, applicableByType: appByType, lengthByType, enumByType, subGroupsByType } = buildPerTypeValidation(union)
         applicableByType = appByType
+        // UFX P1 — raw schema defs for the conditional-requirement evaluation
+        // (allOf/if/then, dependentRequired) + labels for its messages.
+        const schemaDefByType = await flatFileService.getSchemaDefs(mp, batchTypes)
+        const unionLabelMap = new Map(union.groups.flatMap((g) => g.columns).map((c) => [c.id, c.labelEn]))
+        const labelOf = (id: string) => unionLabelMap.get(id) ?? id
         complianceBySku = await resolveComplianceForSkus(rows.map((r: any) => String(r.item_sku ?? '')))
         preflight = rows
           .map((r: any) => {
             // Validate each row against its OWN product type's required columns +
-            // byte/char length caps (Amazon enforces maxUtf8ByteLength, not chars).
-            const issues = preflightRow(r, requiredByType.get(rowType(r)) ?? [], lengthByType.get(rowType(r)) ?? [])
+            // byte/char length caps (Amazon enforces maxUtf8ByteLength, not chars)
+            // + UFX P1: enum sets, required-if-present sub-props, conditionals.
+            const t = rowType(r)
+            const schemaDef = schemaDefByType.get(t)
+            const issues = preflightRow(r, requiredByType.get(t) ?? [], lengthByType.get(t) ?? [], {
+              enumColumns: enumByType.get(t),
+              subRequiredGroups: subGroupsByType.get(t),
+              conditional: schemaDef ? { schema: schemaDef, expandedFields: union.expandedFields, labelOf } : undefined,
+            })
             const cp = complianceBySku.get(String(r.item_sku ?? ''))
             if (cp) {
               const cIssues = evaluateCompliance(cp, mp, 'AMAZON')
@@ -415,6 +427,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     const numericFields = new Set<string>()
     const booleanFields = new Set<string>()
     const wrappedSubPropFields: Record<string, { sub: string; localized: boolean }> = {}
+    let subPropTypes: Record<string, 'string' | 'number' | 'boolean'> | undefined
     try {
       const productTypes = [...new Set(
         rows.map((r) => String(r.product_type ?? productType ?? '').toUpperCase()).filter(Boolean),
@@ -427,6 +440,8 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         h.booleanFields.forEach((f) => booleanFields.add(f))
         // FFP.18 — nested single-sub-property attributes (closure→type …).
         Object.assign(wrappedSubPropFields, h.wrappedSubPropFields)
+        // UFX P1 (P0-2) — declared type per sub-property path (typed coercion).
+        subPropTypes = Object.assign(subPropTypes ?? {}, h.subPropTypes)
       }
     } catch (err: any) {
       request.log.warn({ err: err?.message }, 'flat-file/submit: schema hints unavailable — submitting values as-is')
@@ -480,6 +495,8 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       defaultProductType: productType,
       // FFP.18 — nested single-sub-property attributes (closure→type …).
       wrappedSubPropFields,
+      // UFX P1 (P0-2) — schema-typed sub-property coercion ("38" stays a string).
+      subPropTypes,
     })
 
     try {
@@ -567,7 +584,11 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     if (batchTypes.length === 0) return reply.send({ preflight: [], checkedRows: rows.length })
     try {
       const union = await flatFileService.generateUnionManifest(mp, batchTypes)
-      const { requiredByType, lengthByType } = buildPerTypeValidation(union)
+      const { requiredByType, lengthByType, enumByType, subGroupsByType } = buildPerTypeValidation(union)
+      // UFX P1 — schema defs + labels for conditional-requirement evaluation.
+      const schemaDefByType = await flatFileService.getSchemaDefs(mp, batchTypes)
+      const unionLabelMap = new Map(union.groups.flatMap((g) => g.columns).map((c) => [c.id, c.labelEn]))
+      const labelOf = (id: string) => unionLabelMap.get(id) ?? id
       // FFC — FBA rows that carry a quantity (Amazon manages FBA stock, so it must
       // not be sent). Merchant-channel+qty = error (would flip FBA→FBM, also hard-
       // blocked at /submit); other channels = warning (qty ignored — clear it).
@@ -583,7 +604,13 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       const preflight = rows
         .map((r: any) => {
           const sku = String(r?.item_sku ?? '')
-          const issues = preflightRow(r, requiredByType.get(rowType(r)) ?? [], lengthByType.get(rowType(r)) ?? [])
+          const t = rowType(r)
+          const schemaDef = schemaDefByType.get(t)
+          const issues = preflightRow(r, requiredByType.get(t) ?? [], lengthByType.get(t) ?? [], {
+            enumColumns: enumByType.get(t),
+            subRequiredGroups: subGroupsByType.get(t),
+            conditional: schemaDef ? { schema: schemaDef, expandedFields: union.expandedFields, labelOf } : undefined,
+          })
           const fba = fbaBySku.get(sku)
           if (fba) {
             issues.push(

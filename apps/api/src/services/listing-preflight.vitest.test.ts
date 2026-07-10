@@ -3,7 +3,7 @@
  * schema-required + GTIN + image checks are fully unit-testable.
  */
 import { describe, it, expect } from 'vitest'
-import { validateGtin, findMissingRequired, preflightRow, buildPerTypeValidation, validateImportRows, utf8ByteLength, checkLengthLimits, validateParentChildBatch } from './listing-preflight.service.js'
+import { validateGtin, findMissingRequired, preflightRow, buildPerTypeValidation, validateImportRows, utf8ByteLength, checkLengthLimits, validateParentChildBatch, checkEnumValues, checkRequiredWithParent } from './listing-preflight.service.js'
 
 describe('validateGtin (mod-10 check digit)', () => {
   it('valid EAN-13', () => expect(validateGtin('4006381333931').valid).toBe(true))
@@ -240,5 +240,156 @@ describe('FFP.2 — delete rows skip validation entirely', () => {
     expect(validateParentChildBatch([
       { item_sku: 'C1', parentage_level: 'child', parent_sku: 'GHOST', record_action: 'partial_update' },
     ])).toHaveLength(1)
+  })
+})
+
+// ── UFX P1 additions ────────────────────────────────────────────────────────
+
+describe('UFX MT.2b — per-type enum validation', () => {
+  // material: 'Leather' is valid for JACKET only, 'Denim' for PANTS only.
+  const union = {
+    productTypes: ['JACKET', 'PANTS'],
+    groups: [{ columns: [
+      {
+        id: 'material', labelEn: 'Material', kind: 'enum', selectionOnly: true,
+        applicableProductTypes: ['JACKET', 'PANTS'],
+        options: ['', 'Leather', 'Denim'], optionCodes: ['leather', 'denim'],
+        optionsByProductType: { JACKET: ['Leather'], PANTS: ['Denim'] },
+        optionCodesByProductType: { JACKET: ['leather'], PANTS: ['denim'] },
+      },
+      {
+        id: 'style_name', labelEn: 'Style', kind: 'enum', selectionOnly: false,
+        applicableProductTypes: ['JACKET'], options: ['', 'Racing'],
+      },
+      {
+        id: 'is_waterproof', labelEn: 'Waterproof', kind: 'enum', selectionOnly: true,
+        applicableProductTypes: ['JACKET'], options: ['', 'true', 'false'],
+      },
+    ] }],
+  }
+  const { enumByType } = buildPerTypeValidation(union)
+
+  it('same value passes on a JACKET row and fails on a PANTS row', () => {
+    const jacket = preflightRow({ material: 'Leather', item_name: 'x', main_product_image_locator: 'u' }, [], [], { enumColumns: enumByType.get('JACKET') })
+    expect(jacket.some((i) => i.field === 'material')).toBe(false)
+    const pants = preflightRow({ material: 'Leather', item_name: 'x', main_product_image_locator: 'u' }, [], [], { enumColumns: enumByType.get('PANTS') })
+    expect(pants.some((i) => i.field === 'material' && i.severity === 'error')).toBe(true)
+  })
+  it('accepts the underlying CODE (attrs/snapshot read-backs carry codes)', () => {
+    expect(checkEnumValues({ material: 'leather' }, enumByType.get('JACKET')!)).toEqual([])
+  })
+  it('accepts labels case-insensitively (import/paste)', () => {
+    expect(checkEnumValues({ material: 'LEATHER' }, enumByType.get('JACKET')!)).toEqual([])
+  })
+  it('closed list (SELECTION_ONLY) → error; open enum → warning', () => {
+    const closed = checkEnumValues({ material: 'Wool' }, enumByType.get('JACKET')!)
+    expect(closed[0]).toMatchObject({ field: 'material', severity: 'error' })
+    const open = checkEnumValues({ style_name: 'Touring' }, enumByType.get('JACKET')!)
+    expect(open[0]).toMatchObject({ field: 'style_name', severity: 'warning' })
+  })
+  it('boolean-ish option lists are skipped (localized truthy labels must not flag)', () => {
+    expect(enumByType.get('JACKET')!.some((c) => c.id === 'is_waterproof')).toBe(false)
+  })
+  it('variation_theme is skipped (legacy spellings are healed at feed time — FFP.19)', () => {
+    const u = {
+      productTypes: ['JACKET'],
+      groups: [{ columns: [
+        { id: 'variation_theme', labelEn: 'Variation Theme', kind: 'enum', selectionOnly: true, applicableProductTypes: ['JACKET'], options: ['', 'SIZE', 'COLOR'] },
+      ] }],
+    }
+    expect(buildPerTypeValidation(u).enumByType.get('JACKET')).toEqual([])
+  })
+  it('blank cells are never flagged', () => {
+    expect(checkEnumValues({ material: '  ' }, enumByType.get('PANTS')!)).toEqual([])
+  })
+})
+
+describe('UFX P0-1a — required-if-present sub-property enforcement', () => {
+  const union = {
+    productTypes: ['JACKET'],
+    groups: [{ columns: [
+      { id: 'item_weight__value', labelEn: 'Item Weight', applicableProductTypes: ['JACKET'], requiredWithParent: true, requiredWithParentForProductTypes: ['JACKET'] },
+      { id: 'item_weight__unit', labelEn: 'Item Weight Unit', applicableProductTypes: ['JACKET'], requiredWithParent: true, requiredWithParentForProductTypes: ['JACKET'] },
+      { id: 'warranty_bundle__duration', labelEn: 'Duration', applicableProductTypes: ['JACKET'] }, // optional member, no flag
+    ] }],
+  }
+  const { subGroupsByType } = buildPerTypeValidation(union)
+  const groups = subGroupsByType.get('JACKET')!
+
+  it('derives one group per base attribute, only where a required member exists', () => {
+    expect(groups).toHaveLength(1)
+    expect(groups[0].base).toBe('item_weight')
+    expect(groups[0].required.map((r) => r.id).sort()).toEqual(['item_weight__unit', 'item_weight__value'])
+  })
+  it('value filled without its required unit → error on the unit', () => {
+    const issues = checkRequiredWithParent({ item_weight__value: '5' }, groups)
+    expect(issues).toHaveLength(1)
+    expect(issues[0]).toMatchObject({ field: 'item_weight__unit', severity: 'error' })
+  })
+  it('untouched attribute → no error (optional stays optional)', () => {
+    expect(checkRequiredWithParent({ item_name: 'x' }, groups)).toEqual([])
+  })
+  it('fully filled attribute → no error', () => {
+    expect(checkRequiredWithParent({ item_weight__value: '5', item_weight__unit: 'grams' }, groups)).toEqual([])
+  })
+  it('flows through preflightRow extras', () => {
+    const issues = preflightRow({ item_name: 'x', main_product_image_locator: 'u', item_weight__unit: 'grams' }, [], [], { subRequiredGroups: groups })
+    expect(issues.some((i) => i.field === 'item_weight__value' && i.severity === 'error')).toBe(true)
+  })
+})
+
+describe('UFX P0-1b — conditional requireds in preflightRow', () => {
+  const schema = {
+    allOf: [
+      {
+        if: { required: ['parentage_level'], properties: { parentage_level: { items: { required: ['value'], properties: { value: { enum: ['child'] } } } } } },
+        then: { required: ['fabric_type'] },
+      },
+      { if: { required: ['bullet_point'] }, then: { required: ['special_feature'] } },
+    ],
+  }
+  const base = { item_name: 'x', main_product_image_locator: 'u' }
+
+  it('condition met + field empty → error', () => {
+    const issues = preflightRow({ ...base, parentage_level: 'child', parent_sku: 'P1' }, [], [], { conditional: { schema } })
+    expect(issues.some((i) => i.field === 'fabric_type' && i.severity === 'error')).toBe(true)
+  })
+  it('condition met + field filled → no error', () => {
+    const issues = preflightRow({ ...base, parentage_level: 'child', parent_sku: 'P1', fabric_type: 'Cordura' }, [], [], { conditional: { schema } })
+    expect(issues.some((i) => i.field === 'fabric_type')).toBe(false)
+  })
+  it('condition NOT met → no error (conservative)', () => {
+    const issues = preflightRow({ ...base }, [], [], { conditional: { schema } })
+    expect(issues.some((i) => i.field === 'fabric_type')).toBe(false)
+  })
+  it('expanded columns backfill the base attribute for presence conditions', () => {
+    const issues = preflightRow(
+      { ...base, bullet_point_1: 'First bullet' }, [], [],
+      { conditional: { schema, expandedFields: { bullet_point_1: 'bullet_point' } } },
+    )
+    expect(issues.some((i) => i.field === 'special_feature' && i.severity === 'error')).toBe(true)
+  })
+  it('child_parent_sku_relationship reads the grid parent_sku column (no false positive)', () => {
+    const s = {
+      allOf: [{
+        if: { required: ['parentage_level'] },
+        then: { required: ['child_parent_sku_relationship'] },
+      }],
+    }
+    const issues = preflightRow({ ...base, parentage_level: 'child', parent_sku: 'P1' }, [], [], { conditional: { schema: s } })
+    expect(issues.some((i) => i.field === 'parent_sku')).toBe(false)
+  })
+  it('deduplicates against the G.1 structural checks (one variation_theme error, not two)', () => {
+    const s = {
+      allOf: [{
+        if: { required: ['parentage_level'] },
+        then: { required: ['variation_theme'] },
+      }],
+    }
+    const issues = preflightRow({ ...base, parentage_level: 'parent' }, [], [], { conditional: { schema: s } })
+    expect(issues.filter((i) => i.field === 'variation_theme')).toHaveLength(1)
+  })
+  it('delete rows still skip every check', () => {
+    expect(preflightRow({ item_sku: 'X', record_action: 'delete', parentage_level: 'child' }, [], [], { conditional: { schema } })).toEqual([])
   })
 })

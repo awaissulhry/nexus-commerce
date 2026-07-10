@@ -8,6 +8,8 @@
  * columns), so it's accurate per market + product type, not a hardcoded guess.
  */
 
+import { conditionalRequiredErrors } from './listing-wizard/conditional-requirements.js'
+
 export type PreflightSeverity = 'error' | 'warning'
 export interface PreflightIssue {
   field: string
@@ -17,6 +19,45 @@ export interface PreflightIssue {
 export interface RequiredColumn {
   id: string
   label: string
+}
+
+/** UFX P1 (MT.2b) — an enum column with its accepted value set for ONE product type. */
+export interface EnumColumn {
+  id: string
+  label: string
+  /** Accepted values: schema option labels + underlying codes (rows carry either). */
+  values: string[]
+  /** Closed list (Amazon SELECTION_ONLY) → out-of-set is an error; open → warning. */
+  selectionOnly?: boolean
+}
+
+/** UFX P1 (P0-1a) — "required-if-present" sub-columns of one expanded attribute. */
+export interface SubRequiredGroup {
+  /** Base attribute id (e.g. item_package_dimensions). */
+  base: string
+  /** Human label for the base attribute (for the error message). */
+  baseLabel: string
+  /** Every sub-column id of the attribute present on the sheet. */
+  memberIds: string[]
+  /** Sub-columns that must be filled once ANY member of the group is filled. */
+  required: RequiredColumn[]
+}
+
+/** UFX P1 — optional extra checks for preflightRow (all default off → callers unchanged). */
+export interface PreflightExtras {
+  /** Enum validation for this row's product type (MT.2b). */
+  enumColumns?: EnumColumn[]
+  /** Required-if-present enforcement for optional parents' required sub-props (P0-1a). */
+  subRequiredGroups?: SubRequiredGroup[]
+  /** Conditional-requirement evaluation (allOf/if/then, dependentRequired) (P0-1b). */
+  conditional?: {
+    /** The product type's raw JSON schema definition. */
+    schema: any
+    /** Expanded column id → base field path, to backfill base-attribute values. */
+    expandedFields?: Record<string, string>
+    /** Column id → display label for messages. */
+    labelOf?: (fieldId: string) => string
+  }
 }
 
 /**
@@ -99,6 +140,56 @@ export function checkLengthLimits(row: Record<string, any>, lengthColumns: Lengt
   return issues
 }
 
+/**
+ * UFX P1 (MT.2b) — validate enum cells against the schema's accepted set for
+ * THIS row's product type. Rows can carry the display LABEL (grid dropdown) or
+ * the underlying CODE (attrs/snapshot read-backs), so both are accepted, labels
+ * case-insensitively. Closed lists (SELECTION_ONLY) error; open enums warn.
+ * Pure + testable.
+ */
+export function checkEnumValues(row: Record<string, any>, enumColumns: EnumColumn[]): PreflightIssue[] {
+  const issues: PreflightIssue[] = []
+  for (const c of enumColumns) {
+    const raw = row[c.id]
+    if (isBlank(raw)) continue
+    const s = String(raw).trim()
+    const sLc = s.toLowerCase()
+    const ok = c.values.some((v) => v === s || v.toLowerCase() === sLc)
+    if (!ok) {
+      issues.push({
+        field: c.id,
+        severity: c.selectionOnly ? 'error' : 'warning',
+        message: `"${c.label}" value "${s}" isn't an accepted option for this product type`,
+      })
+    }
+  }
+  return issues
+}
+
+/**
+ * UFX P1 (P0-1a) — "required-if-present": an OPTIONAL attribute whose schema
+ * marks sub-properties required (a value+unit pair's unit, dimensions'
+ * length/width/height…) demands those subs as soon as ANY of its sub-columns
+ * is filled — a half-filled attribute is exactly the "grid says filled, Amazon
+ * says 90220" failure. Untouched attributes stay untouched. Pure + testable.
+ */
+export function checkRequiredWithParent(row: Record<string, any>, groups: SubRequiredGroup[]): PreflightIssue[] {
+  const issues: PreflightIssue[] = []
+  for (const g of groups) {
+    if (!g.memberIds.some((id) => !isBlank(row[id]))) continue
+    for (const r of g.required) {
+      if (isBlank(row[r.id])) {
+        issues.push({
+          field: r.id,
+          severity: 'error',
+          message: `"${r.label}" is required when any "${g.baseLabel}" value is filled`,
+        })
+      }
+    }
+  }
+  return issues
+}
+
 // Common flat-file columns that may carry a product identifier.
 const GTIN_FIELDS = ['externally_assigned_product_identifier', 'gtin', 'ean', 'upc', 'barcode']
 
@@ -111,6 +202,7 @@ export function preflightRow(
   row: Record<string, any>,
   requiredColumns: RequiredColumn[],
   lengthColumns: LengthColumn[] = [],
+  extras: PreflightExtras = {},
 ): PreflightIssue[] {
   // FFP.2 — a DELETE feed message is `{sku, operationType: DELETE}` with NO
   // attributes, so there is nothing to validate. Requiring the full attribute
@@ -170,6 +262,46 @@ export function preflightRow(
     issues.push({ field: 'parent_sku', severity: 'error', message: 'Variant needs a parent_sku linking it to its parent' })
   }
 
+  // UFX P1 (MT.2b) — enum cells validated against THIS row type's accepted set.
+  if (extras.enumColumns?.length) {
+    issues.push(...checkEnumValues(row, extras.enumColumns))
+  }
+
+  // UFX P1 (P0-1a) — required-if-present sub-properties of optional attributes.
+  if (extras.subRequiredGroups?.length) {
+    issues.push(...checkRequiredWithParent(row, extras.subRequiredGroups))
+  }
+
+  // UFX P1 (P0-1b) — conditional requireds (allOf/if/then, dependentRequired),
+  // evaluated per row against the raw schema. Conservative by construction: the
+  // evaluator emits nothing for a rule it can't fully evaluate from row data.
+  if (extras.conditional?.schema) {
+    const { schema, expandedFields = {}, labelOf } = extras.conditional
+    // The schema names BASE attributes; the row carries expanded column ids
+    // (bullet_point_1, apparel_size__size…). Backfill each base with its first
+    // filled expansion so presence conditions see the truth.
+    const values: Record<string, unknown> = { ...row }
+    for (const [colId, path] of Object.entries(expandedFields)) {
+      const base = path.split('.')[0]
+      const v = row[colId]
+      if (v != null && String(v).trim() !== '' && (values[base] == null || String(values[base]).trim() === '')) {
+        values[base] = v
+      }
+    }
+    // The grid's parent_sku column IS the schema's child_parent_sku_relationship.
+    if (values['child_parent_sku_relationship'] == null || String(values['child_parent_sku_relationship']).trim() === '') {
+      values['child_parent_sku_relationship'] = row.parent_sku
+    }
+    const flagged = new Set(issues.map((i) => i.field))
+    for (const ci of conditionalRequiredErrors(schema, values, labelOf)) {
+      // Report on the grid's column where the schema field has a different face.
+      const field = ci.field === 'child_parent_sku_relationship' ? 'parent_sku' : ci.field
+      if (flagged.has(field)) continue // already flagged (e.g. G.1 structural checks)
+      flagged.add(field)
+      issues.push({ ...ci, field })
+    }
+  }
+
   return issues
 }
 
@@ -217,6 +349,16 @@ interface UnionManifestLike {
       requiredForProductTypes?: string[]
       maxLength?: number
       maxUtf8ByteLength?: number
+      // UFX P1 — enum + required-if-present metadata (see FlatFileColumn).
+      kind?: string
+      options?: string[]
+      optionCodes?: string[]
+      optionLabels?: Record<string, string>
+      optionsByProductType?: Record<string, string[]>
+      optionCodesByProductType?: Record<string, string[]>
+      selectionOnly?: boolean
+      requiredWithParent?: boolean
+      requiredWithParentForProductTypes?: string[]
     }>
   }>
 }
@@ -228,6 +370,10 @@ export interface PerTypeValidation {
   applicableByType: Map<string, Set<string>>
   /** Columns with a byte/char cap for each product type (length pre-validation). */
   lengthByType: Map<string, LengthColumn[]>
+  /** UFX P1 (MT.2b) — enum columns + their accepted value set per product type. */
+  enumByType: Map<string, EnumColumn[]>
+  /** UFX P1 (P0-1a) — required-if-present sub-column groups per product type. */
+  subGroupsByType: Map<string, SubRequiredGroup[]>
 }
 
 /**
@@ -243,6 +389,8 @@ export function buildPerTypeValidation(union: UnionManifestLike): PerTypeValidat
   const requiredByType = new Map<string, RequiredColumn[]>()
   const applicableByType = new Map<string, Set<string>>()
   const lengthByType = new Map<string, LengthColumn[]>()
+  const enumByType = new Map<string, EnumColumn[]>()
+  const subGroupsByType = new Map<string, SubRequiredGroup[]>()
   for (const t of types) {
     requiredByType.set(
       t,
@@ -260,8 +408,54 @@ export function buildPerTypeValidation(union: UnionManifestLike): PerTypeValidat
           (typeof c.maxUtf8ByteLength === 'number' || typeof c.maxLength === 'number'))
         .map((c) => ({ id: String(c.id), label: String(c.labelEn ?? c.id), maxLength: c.maxLength, maxUtf8ByteLength: c.maxUtf8ByteLength })),
     )
+    // UFX P1 (MT.2b) — per-type enum value sets. A type's OWN option list wins
+    // over the union superset (that's the whole point: valid-for-JACKET must
+    // still fail on a PANTS row). Accepted values = labels + codes (+ localized
+    // optionLabels), since rows carry any of those. Boolean-ish option lists
+    // (true/false) are skipped — rows may carry localized truthy labels and the
+    // feed builder coerces those separately. variation_theme is skipped too:
+    // rows carry every historical spelling ("SizeName-ColorName", "Taglia/
+    // Colore") which the feed builder normalizes to the approved enum (FFP.19),
+    // so validating the raw cell would flag rows that submit fine.
+    enumByType.set(
+      t,
+      cols
+        .filter((c) => c.kind === 'enum' && c.id !== 'variation_theme' && (!c.applicableProductTypes || c.applicableProductTypes.includes(t)))
+        .map((c): EnumColumn | null => {
+          const labels = (c.optionsByProductType?.[t] ?? c.options ?? []).filter((o) => o !== '')
+          const codes = c.optionCodesByProductType?.[t] ?? c.optionCodes ?? []
+          const localized = c.optionLabels ? Object.values(c.optionLabels) : []
+          const values = [...new Set([...labels, ...codes, ...localized])]
+          if (values.length === 0) return null
+          const nonBool = values.filter((v) => v !== 'true' && v !== 'false')
+          if (nonBool.length === 0) return null // boolean-ish enum → skip
+          return { id: String(c.id), label: String(c.labelEn ?? c.id), values, selectionOnly: c.selectionOnly }
+        })
+        .filter((c): c is EnumColumn => c !== null),
+    )
+    // UFX P1 (P0-1a) — required-if-present groups: sub-columns (base__sub ids)
+    // grouped by base attribute; a group only exists when at least one sub is
+    // flagged requiredWithParent for this type.
+    const groups = new Map<string, SubRequiredGroup>()
+    for (const c of cols) {
+      const id = String(c.id)
+      if (!id.includes('__')) continue
+      if (c.applicableProductTypes && !c.applicableProductTypes.includes(t)) continue
+      const base = id.split('__')[0]
+      let g = groups.get(base)
+      if (!g) {
+        g = { base, baseLabel: base.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()), memberIds: [], required: [] }
+        groups.set(base, g)
+      }
+      g.memberIds.push(id)
+      const rwp = c.requiredWithParentForProductTypes
+        ? c.requiredWithParentForProductTypes.includes(t)
+        : !!c.requiredWithParent
+      if (rwp) g.required.push({ id, label: String(c.labelEn ?? id) })
+    }
+    subGroupsByType.set(t, [...groups.values()].filter((g) => g.required.length > 0))
   }
-  return { requiredByType, applicableByType, lengthByType }
+  return { requiredByType, applicableByType, lengthByType, enumByType, subGroupsByType }
 }
 
 /**
