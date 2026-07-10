@@ -20,6 +20,7 @@ import { parseLocaleNumber, parseLocaleInt } from '../../lib/parse-locale-number
 import { casUpdateChannelListing, isVersionConflict } from '../channel-listing-cas.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
 import { extractBrowseNodes, browseNodeIdFromRow, resolveBrowseNodeId, buildPlatformAttributes, type BrowseNode } from './browse-nodes.js'
+import { extractConditionalFields } from '../listing-wizard/conditional-requirements.js'
 import { amazonMarketplaceId } from '../categories/marketplace-ids.js'
 import { buildListingScopeWhere, type ListingScope } from '../flat-file/listing-scope.js'
 
@@ -63,8 +64,29 @@ export interface FlatFileColumn {
   labelLocal: string
   description?: string
   required: boolean
+  /**
+   * UFX P1 — "required-if-present": this sub-column's parent attribute is
+   * OPTIONAL, but the schema's nested `items.required` lists this sub-property
+   * (e.g. a value+unit pair where `unit` is required). Once ANY sub-column of
+   * the attribute is filled, this one must be too — enforced in preflight,
+   * never a hard `required` (an untouched optional attribute stays optional).
+   */
+  requiredWithParent?: boolean
+  /**
+   * UFX P1 — the schema can make this attribute required CONDITIONALLY
+   * (allOf/if/then or dependentRequired). Tagged for the UI; the per-row
+   * evaluation happens in preflight (conditional-requirements evaluator).
+   */
+  conditional?: boolean
   kind: FlatFileColumnKind
   options?: string[]
+  /**
+   * UFX P1 — the schema CODES behind `options` (which prefer enumNames display
+   * labels). Only present when at least one code differs from its label. Rows
+   * can legitimately carry either (grid writes labels; snapshot/attrs
+   * read-backs carry codes), so enum validation accepts both.
+   */
+  optionCodes?: string[]
   /** true → must pick from list (Amazon SELECTION_ONLY); false → combobox (free text allowed) */
   selectionOnly?: boolean
   /**
@@ -81,6 +103,15 @@ export interface FlatFileColumn {
    */
   applicableProductTypes?: string[]
   requiredForProductTypes?: string[]
+  /** UFX P1 — union manifest only: types for which this column is required-if-present. */
+  requiredWithParentForProductTypes?: string[]
+  /**
+   * UFX P1 — union manifest only: per-product-type enum option labels/codes, so a
+   * value valid for JACKET but not PANTS can be validated per row type (the union
+   * `options` is the cross-type superset and can't catch that).
+   */
+  optionsByProductType?: Record<string, string[]>
+  optionCodesByProductType?: Record<string, string[]>
   /** Amazon field usage level from x-amazon-attributes.usage */
   guidance?: 'REQUIRED' | 'RECOMMENDED' | 'OPTIONAL'
   /** Max length in CHARACTERS (JSON Schema maxLength). */
@@ -201,10 +232,14 @@ function groupIdToEnglish(groupId: string): string {
  */
 function extractEnumOptions(inner: Record<string, any>): string[] {
   const enumNames: string[] = inner?.enumNames ?? []
-  if (enumNames.length > 0) return enumNames.map(String).filter(Boolean)
+  const enumValues: string[] = inner?.enum ?? []
+  // UFX P1 (P4) — enumNames is only trustworthy when it lines up 1:1 with enum.
+  // A length mismatch means the labels can't be mapped back to codes (the feed
+  // would submit an unconvertible label), so fall back to the codes themselves.
+  const namesAligned = enumValues.length === 0 || enumNames.length === enumValues.length
+  if (enumNames.length > 0 && namesAligned) return enumNames.map(String).filter(Boolean)
   const validValues: string[] = inner?.['x-amazon-attributes']?.validValues ?? []
   if (validValues.length > 0) return validValues.map(String).filter(Boolean)
-  const enumValues: string[] = inner?.enum ?? []
   return enumValues.map(String).filter(Boolean)
 }
 
@@ -285,7 +320,12 @@ export function buildSchemaEnums(properties: Record<string, any>): Record<string
 function extractEnumPairs(inner: Record<string, any>): Array<{ code: string; label: string }> {
   const codes: any[] = (inner?.enum ?? inner?.['x-amazon-attributes']?.validValues ?? []) as any[]
   if (!Array.isArray(codes) || codes.length === 0) return []
-  const names: any[] = Array.isArray(inner?.enumNames) ? inner.enumNames : []
+  // UFX P1 (P4) — the code↔label zip is positional, so it's only meaningful when
+  // enumNames lines up 1:1 with enum. On a length mismatch, pairing index i of
+  // one with index i of the other MIS-MAPS labels to the wrong codes (a wrong
+  // country/size submitted silently) — fall back to codes-as-labels instead.
+  const rawNames: any[] = Array.isArray(inner?.enumNames) ? inner.enumNames : []
+  const names: any[] = rawNames.length === codes.length ? rawNames : []
   return codes.map((c, i) => ({ code: String(c), label: String(names[i] ?? c) }))
 }
 
@@ -437,6 +477,8 @@ export function normalizeVariationTheme(raw: string, themeMap: Record<string, st
   return [...matches].sort((a, b) => rank(b) - rank(a))[0]
 }
 
+export type SubPropType = 'string' | 'number' | 'boolean'
+
 export function buildSchemaFieldHints(properties: Record<string, any>): {
   localizedFields: Set<string>; numericFields: Set<string>; booleanFields: Set<string>
   /** FFP.18 — attributes whose payload nests ONE wrapped sub-property
@@ -444,11 +486,26 @@ export function buildSchemaFieldHints(properties: Record<string, any>): {
    *  (`closure: [{value}]`) makes Amazon read them as EMPTY — the classic
    *  "filled in the grid but 'obbligatorio ma mancante'" (90220). */
   wrappedSubPropFields: Record<string, { sub: string; localized: boolean }>
+  /** UFX P1 (P0-2) — declared JSON type per SUB-PROPERTY path, keyed exactly like
+   *  expandedFields paths ("apparel_size.size", "item_package_dimensions.length.value",
+   *  "item_package_weight.value"/".unit"). The feed builder coerces sub-values by
+   *  THIS instead of Number() sniffing, so a string-typed all-digits value
+   *  (size "38", a leading-zero code) stays a string. */
+  subPropTypes: Record<string, SubPropType>
 } {
   const localizedFields = new Set<string>()
   const numericFields = new Set<string>()
   const booleanFields = new Set<string>()
   const wrappedSubPropFields: Record<string, { sub: string; localized: boolean }> = {}
+  const subPropTypes: Record<string, SubPropType> = {}
+  const INFRA = new Set(['marketplace_id', 'language_tag', 'audience'])
+  const classify = (node: any): SubPropType | undefined => {
+    const t = node?.type
+    if (t === 'number' || t === 'integer') return 'number'
+    if (t === 'boolean') return 'boolean'
+    if (t === 'string') return 'string'
+    return undefined
+  }
   for (const [fieldId, prop] of Object.entries(properties)) {
     const p = prop as Record<string, any>
     const itemProps: Record<string, any> = p?.items?.properties ?? {}
@@ -470,8 +527,59 @@ export function buildSchemaFieldHints(properties: Record<string, any>): {
         }
       }
     }
+    // UFX P1 (P0-2) — declared type per sub-property path, mirroring the paths
+    // expandSchemaField writes into expandedFields.
+    for (const [subId, subNode] of Object.entries(itemProps)) {
+      if (INFRA.has(subId)) continue
+      const sub = subNode as Record<string, any>
+      if (subId === 'value' || subId === 'unit') {
+        // top-level dimension pair {value, unit} → "field.value" / "field.unit"
+        const st = classify(sub)
+        if (st) subPropTypes[`${fieldId}.${subId}`] = st
+        continue
+      }
+      // named sub-property that is itself a {value, unit} pair →
+      // "field.sub.value" / "field.sub.unit"
+      const subSubProps: Record<string, any> = sub?.items?.properties ?? sub?.properties ?? {}
+      if (subSubProps.value && subSubProps.unit) {
+        const tv = classify(subSubProps.value)
+        if (tv) subPropTypes[`${fieldId}.${subId}.value`] = tv
+        const tu = classify(subSubProps.unit)
+        if (tu) subPropTypes[`${fieldId}.${subId}.unit`] = tu
+        continue
+      }
+      // simple / array-wrapped sub-property → "field.sub"
+      const st = classify(subSubProps.value ?? sub)
+      if (st) subPropTypes[`${fieldId}.${subId}`] = st
+    }
   }
-  return { localizedFields, numericFields, booleanFields, wrappedSubPropFields }
+  return { localizedFields, numericFields, booleanFields, wrappedSubPropFields, subPropTypes }
+}
+
+/**
+ * UFX P1 (P0-2) — coerce a sub-property cell by its DECLARED schema type. When a
+ * schema type map is available, a string-typed value is NEVER turned into a
+ * number (size "38", leading-zero codes stay strings) and unknown paths stay
+ * strings too (fail-safe: Amazon accepts a string where it expected one; the
+ * sniff corrupted real data). Only with NO schema at all does the legacy
+ * Number() sniff run, so schema-less callers behave exactly as before.
+ */
+export function coerceSubPropValue(
+  path: string,
+  raw: string,
+  subPropTypes?: Record<string, SubPropType>,
+): string | number | boolean {
+  if (subPropTypes) {
+    const t = subPropTypes[path]
+    if (t === 'number') {
+      const n = Number(raw)
+      return !isNaN(n) && raw.trim() !== '' ? n : raw
+    }
+    if (t === 'boolean') return raw === 'true' || raw === 'TRUE' || raw === '1'
+    return raw
+  }
+  const n = Number(raw)
+  return !isNaN(n) && raw.trim() !== '' ? n : raw
 }
 
 /**
@@ -524,11 +632,19 @@ function schemaFieldToColumn(
 
   let kind: FlatFileColumnKind = 'text'
   let options: string[] | undefined
+  let optionCodes: string[] | undefined
 
   const enumOpts = schemaEnums[fieldId]
   if (enumOpts && enumOpts.length > 0) {
     kind = 'enum'
     options = ['', ...enumOpts]
+    // UFX P1 — the underlying schema CODES (options prefer enumNames labels).
+    // Rows may carry either (grid writes labels; attrs read-backs carry codes),
+    // so validation needs both. Only stored when a code differs from its label.
+    const pairs = findEnumPairs(inner ?? prop)
+    if (pairs.length > 0 && pairs.some((pr) => pr.code !== pr.label)) {
+      optionCodes = pairs.map((pr) => pr.code)
+    }
   } else if (t === 'number' || t === 'integer' || topType === 'number' || topType === 'integer') {
     kind = 'number'
   } else if (t === 'boolean') {
@@ -567,6 +683,7 @@ function schemaFieldToColumn(
     required: isRequired,
     kind,
     options,
+    optionCodes,
     selectionOnly,
     guidance,
     maxLength: typeof inner?.maxLength === 'number' ? inner.maxLength : undefined,
@@ -723,14 +840,22 @@ function expandSchemaField(
       ?? fieldId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
     const unitLabel = (unitProp?.title as string | undefined) ?? `${fieldLabel} Unit`
 
+    // UFX P1 (P0-1) — nested items.required: a required `unit` on a value+unit
+    // pair was hard-coded optional, so the grid said "filled" while Amazon
+    // rejected 90220. Required-parent → hard required; optional parent →
+    // required-if-present (requiredWithParent, enforced in preflight).
+    const itemsRequired = new Set<string>(Array.isArray(prop?.items?.required) ? prop.items.required : [])
+    const unitInReq = itemsRequired.has('unit')
+    const valueInReq = itemsRequired.has('value')
+
     const vId = `${fieldId}__value`
     const uId = `${fieldId}__unit`
     expandedFields[vId] = `${fieldId}.value`
     expandedFields[uId] = `${fieldId}.unit`
 
     return [
-      { id: vId, fieldRef: `${fieldId}[marketplace_id]#1.value`, labelEn: fieldId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), labelLocal: fieldLabel, required: isRequired, kind: 'number', width: 100 },
-      { id: uId, fieldRef: `${fieldId}[marketplace_id]#1.unit`,  labelEn: `${fieldId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())} Unit`, labelLocal: unitLabel, required: false, kind: unitEnums.length > 0 ? 'enum' : 'text', options: unitEnums.length > 0 ? ['', ...unitEnums.map(String)] : undefined, width: 140 },
+      { id: vId, fieldRef: `${fieldId}[marketplace_id]#1.value`, labelEn: fieldId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), labelLocal: fieldLabel, required: isRequired, requiredWithParent: !isRequired && valueInReq ? true : undefined, kind: 'number', width: 100 },
+      { id: uId, fieldRef: `${fieldId}[marketplace_id]#1.unit`,  labelEn: `${fieldId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())} Unit`, labelLocal: unitLabel, required: isRequired && unitInReq, requiredWithParent: !isRequired && unitInReq ? true : undefined, kind: unitEnums.length > 0 ? 'enum' : 'text', options: unitEnums.length > 0 ? ['', ...unitEnums.map(String)] : undefined, width: 140 },
     ]
   }
 
@@ -740,12 +865,19 @@ function expandSchemaField(
   if (namedKeys.length >= 2 && !SKIP_SUB_EXPAND.has(fieldId)) {
     const columns: FlatFileColumn[] = []
 
+    // UFX P1 (P0-1) — nested items.required lists which named sub-properties the
+    // attribute demands (length/width/height on dimensions, size/size_system on
+    // apparel_size …). Required-parent → hard required; optional parent →
+    // required-if-present (requiredWithParent, enforced in preflight).
+    const itemsRequired = new Set<string>(Array.isArray(prop?.items?.required) ? prop.items.required : [])
+
     for (const subId of namedKeys) {
       const subProp = subProps[subId] as Record<string, any>
       const subTitle = (subProp?.title as string | undefined) ??
         (subProp?.items?.properties?.value?.title as string | undefined)
       const subEnLabel = `${subId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}`
       const subLoLabel = subTitle ?? subEnLabel
+      const subInReq = itemsRequired.has(subId)
 
       // Check if the sub-prop itself is a dimension pair {value, unit}
       const subSubProps: Record<string, any> =
@@ -757,6 +889,12 @@ function expandSchemaField(
         const unitProp = subSubProps.unit as Record<string, any>
         const unitEnums: string[] = unitProp?.enum ?? unitProp?.enumNames ?? []
         const unitTitle = (unitProp?.title as string | undefined) ?? `${subLoLabel} Unit`
+        // The sub-dimension's own required list ('value'/'unit').
+        const subSubRequired = new Set<string>(
+          Array.isArray(subProp?.items?.required) ? subProp.items.required
+            : Array.isArray(subProp?.required) ? subProp.required : [],
+        )
+        const unitInReq = subInReq && subSubRequired.has('unit')
 
         const vId = `${fieldId}__${subId}`
         const uId = `${fieldId}__${subId}_unit`
@@ -766,12 +904,16 @@ function expandSchemaField(
         columns.push({
           id: vId, fieldRef: `${fieldId}[marketplace_id]#1.${subId}.value`,
           labelEn: subEnLabel, labelLocal: subLoLabel,
-          required: false, kind: 'number', width: 100,
+          required: isRequired && subInReq,
+          requiredWithParent: !isRequired && subInReq ? true : undefined,
+          kind: 'number', width: 100,
         })
         columns.push({
           id: uId, fieldRef: `${fieldId}[marketplace_id]#1.${subId}.unit`,
           labelEn: `${subEnLabel} Unit`, labelLocal: unitTitle,
-          required: false, kind: unitEnums.length > 0 ? 'enum' : 'text',
+          required: isRequired && unitInReq,
+          requiredWithParent: !isRequired && unitInReq ? true : undefined,
+          kind: unitEnums.length > 0 ? 'enum' : 'text',
           options: unitEnums.length > 0 ? ['', ...unitEnums.map(String)] : undefined,
           width: 140,
         })
@@ -793,7 +935,16 @@ function expandSchemaField(
       const opts = schemaEnums[`${fieldId}.${subId}`] ?? []
       let kind: FlatFileColumnKind = 'text'
       let options: string[] | undefined
-      if (opts.length > 0) { kind = 'enum'; options = ['', ...opts] }
+      let optionCodes: string[] | undefined
+      if (opts.length > 0) {
+        kind = 'enum'
+        options = ['', ...opts]
+        // UFX P1 — codes behind the sub-prop enum labels (see schemaFieldToColumn).
+        const pairs = findEnumPairs(subProp)
+        if (pairs.length > 0 && pairs.some((pr) => pr.code !== pr.label)) {
+          optionCodes = pairs.map((pr) => pr.code)
+        }
+      }
       else if (subType === 'integer' || subType === 'number') kind = 'number'
       else if (subType === 'boolean') { kind = 'enum'; options = ['', 'true', 'false'] }
 
@@ -804,7 +955,9 @@ function expandSchemaField(
       columns.push({
         id: colId, fieldRef: `${fieldId}[marketplace_id]#1.${subId}`,
         labelEn: subEnLabel, labelLocal: subLoLabel,
-        required: false, kind, options,
+        required: isRequired && subInReq,
+        requiredWithParent: !isRequired && subInReq ? true : undefined,
+        kind, options, optionCodes,
         maxLength: typeof subInner?.maxLength === 'number' ? subInner.maxLength : undefined,
         maxUtf8ByteLength: typeof subInner?.maxUtf8ByteLength === 'number' ? subInner.maxUtf8ByteLength : undefined,
         minUtf8ByteLength: typeof subInner?.minUtf8ByteLength === 'number' ? subInner.minUtf8ByteLength : undefined,
@@ -974,7 +1127,15 @@ export function mergeManifestsIntoUnion(manifests: FlatFileManifest[], types: st
       for (const c of g.columns) {
         let mc = colMap.get(c.id)
         if (!mc) {
-          mc = { ...c, required: false, options: c.options ? [...c.options] : undefined, applicableProductTypes: [], requiredForProductTypes: [] }
+          mc = {
+            ...c, required: false, options: c.options ? [...c.options] : undefined,
+            applicableProductTypes: [], requiredForProductTypes: [],
+            // UFX P1 — per-manifest flags/lists are re-derived below (the spread
+            // above must not leak the FIRST type's view as the union's).
+            requiredWithParent: undefined, requiredWithParentForProductTypes: undefined,
+            conditional: undefined, optionCodes: undefined,
+            optionsByProductType: undefined, optionCodesByProductType: undefined,
+          }
           colMap.set(c.id, mc)
           outGroup.columns.push(mc)
         }
@@ -983,8 +1144,23 @@ export function mergeManifestsIntoUnion(manifests: FlatFileManifest[], types: st
           mc.required = true
           if (!mc.requiredForProductTypes!.includes(pt)) mc.requiredForProductTypes!.push(pt)
         }
+        // UFX P1 — required-if-present + conditional flags: OR across types, with
+        // the per-type list so validation stays per-row-type.
+        if (c.requiredWithParent) {
+          mc.requiredWithParent = true
+          mc.requiredWithParentForProductTypes = [...new Set([...(mc.requiredWithParentForProductTypes ?? []), pt])]
+        }
+        if (c.conditional) mc.conditional = true
         if (c.options && c.options.length) {
           mc.options = [...new Set([...(mc.options ?? []), ...c.options])]
+          // UFX P1 (MT.2b) — remember each type's OWN option set: a value valid
+          // for JACKET but not PANTS must error on a PANTS row, which the union
+          // superset can't express.
+          mc.optionsByProductType = { ...(mc.optionsByProductType ?? {}), [pt]: c.options.filter((o) => o !== '') }
+        }
+        if (c.optionCodes && c.optionCodes.length) {
+          mc.optionCodes = [...new Set([...(mc.optionCodes ?? []), ...c.optionCodes])]
+          mc.optionCodesByProductType = { ...(mc.optionCodesByProductType ?? {}), [pt]: [...c.optionCodes] }
         }
       }
     }
@@ -1408,6 +1584,22 @@ export class AmazonFlatFileService {
       }
     }
 
+    // UFX P1 (P0-1b) — tag columns whose attribute the schema can make required
+    // CONDITIONALLY (allOf/if/then, dependentRequired), for the UI. The per-row
+    // evaluation itself runs in preflight. Expanded columns resolve to their
+    // base attribute via expandedFields; parent_sku is the grid's face of
+    // child_parent_sku_relationship.
+    const conditionalFields = extractConditionalFields(def)
+    if (conditionalFields.size > 0) {
+      for (const g of allGroups) {
+        for (const c of g.columns) {
+          const base = (expandedFields[c.id] ?? c.id).split('.')[0]
+          if (conditionalFields.has(base)) c.conditional = true
+          if (c.id === 'parent_sku' && conditionalFields.has('child_parent_sku_relationship')) c.conditional = true
+        }
+      }
+    }
+
     return {
       marketplace: mp,
       productType: pt,
@@ -1807,6 +1999,8 @@ export class AmazonFlatFileService {
     booleanFields: Set<string>
     /** FFP.18 — single wrapped sub-property attributes (closure→type …). */
     wrappedSubPropFields: Record<string, { sub: string; localized: boolean }>
+    /** UFX P1 — declared type per sub-property path ("field.sub[.value|.unit]"). */
+    subPropTypes: Record<string, SubPropType>
     /** base field id → UTF-8 byte cap, for pre-submit byte-length validation. */
     byteLimits: Record<string, number>
   }> {
@@ -1820,6 +2014,24 @@ export class AmazonFlatFileService {
       ...buildSchemaFieldHints(properties),
       byteLimits: buildByteLimits(properties),
     }
+  }
+
+  /**
+   * UFX P1 — raw cached schema definitions per product type, for the preflight
+   * conditional-requirement evaluation (allOf/if/then, dependentRequired).
+   * Best-effort per type: a missing/failed schema is simply absent from the map
+   * (conditional checks are skipped for that type — never a false positive).
+   */
+  async getSchemaDefs(marketplace: string, productTypes: string[]): Promise<Map<string, Record<string, any>>> {
+    const mp = marketplace.toUpperCase()
+    const out = new Map<string, Record<string, any>>()
+    await Promise.all([...new Set(productTypes.map((t) => String(t).toUpperCase()).filter(Boolean))].map(async (pt) => {
+      try {
+        const cached = await this.schemas.getSchema({ channel: 'AMAZON', marketplace: mp, productType: pt })
+        out.set(pt, (cached.schemaDefinition ?? {}) as Record<string, any>)
+      } catch { /* conditional checks skip this type */ }
+    }))
+    return out
   }
 
   /**
@@ -1999,6 +2211,10 @@ export class AmazonFlatFileService {
       /** FFP.18 — attributes that nest ONE wrapped sub-property (closure→type,
        *  inner/outer→material …); emitted as `[{sub: [{value,…}]}]`. */
       wrappedSubPropFields?: Record<string, { sub: string; localized: boolean }>
+      /** UFX P1 (P0-2) — declared schema type per sub-property path; sub-values
+       *  are coerced by THIS (a string-typed "38" stays a string) instead of
+       *  Number() sniffing. Absent (no schema) → legacy sniff. */
+      subPropTypes?: Record<string, SubPropType>
       /** FFP.3 — fallback productType when a row's own cell is blank (a blank
        *  productType malformed the whole feed: 4002010 '#/productType'). */
       defaultProductType?: string
@@ -2015,6 +2231,7 @@ export class AmazonFlatFileService {
     const applicableByType = feedSchema.applicableByType
     const defaultProductType = (feedSchema.defaultProductType ?? '').toUpperCase()
     const wrappedSubPropFields = feedSchema.wrappedSubPropFields ?? {}
+    const subPropTypes = feedSchema.subPropTypes
 
     // Enum fields are shown in the editor as display LABELS (e.g. "Pakistan") but
     // Amazon's JSON feed requires the underlying CODE (e.g. "PK"). Convert
@@ -2237,11 +2454,16 @@ export class AmazonFlatFileService {
               if (!isNaN(idx)) (pendingArrays[path] ??= []).push({ idx, value: String(v) })
             } else {
               // Sub-property path: "field.sub" or "field.sub.value" or "field.sub.unit"
+              // UFX P1 (P0-2) — label→code first (sub-prop enums), then coerce by
+              // the DECLARED schema type: Number() sniffing turned string-typed
+              // all-digits values (size "38", leading-zero codes) into numbers
+              // Amazon rejects. With schema hints, only a declared number/boolean
+              // is coerced; unknown/string paths stay strings. No hints → legacy sniff.
               const parts = path.split('.')
               const base = parts[0]
               const obj = (subPropMap[base] ??= {})
-              const numV = Number(String(v))
-              const typedV = !isNaN(numV) && String(v).trim() !== '' ? numV : String(v)
+              const coded = String(enumCodeMap[path]?.[String(v)] ?? v)
+              const typedV = coerceSubPropValue(path, coded, subPropTypes)
               if (parts.length === 2) {
                 obj[parts[1]] = typedV
               } else if (parts.length === 3) {
@@ -2269,23 +2491,33 @@ export class AmazonFlatFileService {
             attrs[k] = [cell]
           }
         }
-        // Emit multi-instance arrays
+        // Emit multi-instance arrays. UFX P1 (P4) — emitValue applies the SAME
+        // enum-code + number/boolean schema typing the singleton path gets; the
+        // old toCode-only emit sent "5"/"true" strings for typed multi-instance
+        // attributes (Amazon ignores/rejects those).
         for (const [base, items] of Object.entries(pendingArrays)) {
           items.sort((a, b) => a.idx - b.idx)
           attrs[base] = items.map((item) => {
-            const cell: Record<string, any> = { value: toCode(base, item.value), marketplace_id: marketplaceId }
+            const cell: Record<string, any> = { value: emitValue(base, item.value), marketplace_id: marketplaceId }
             if (isLocalized(base)) cell.language_tag = languageTag
             return cell
           })
         }
         // Emit sub-property objects — convert any enum sub-value (e.g. closure.type,
         // apparel_size.size_system) from its display label to Amazon's code.
+        // UFX P1 (P2) — when the attribute's sub-schema declares a language_tag
+        // (items.properties.language_tag), the cell carries it like the wrapped /
+        // multi-instance paths do. Schema-gated on purpose: with no schema hints
+        // we keep the legacy untagged shape (a stray tag on a non-localized
+        // object attribute is a feed error, the opposite failure mode).
         for (const [base, val] of Object.entries(subPropMap)) {
           const coded: Record<string, any> = {}
           for (const [sub, sv] of Object.entries(val)) {
             coded[sub] = typeof sv === 'string' ? toCode(`${base}.${sub}`, sv) : sv
           }
-          attrs[base] = [{ ...coded, marketplace_id: marketplaceId }]
+          const cell: Record<string, any> = { ...coded, marketplace_id: marketplaceId }
+          if (localizedFields?.has(base)) cell.language_tag = languageTag
+          attrs[base] = [cell]
         }
 
         // FFA — drop any blank/whitespace attribute so a single empty pulled cell
@@ -2461,14 +2693,15 @@ export class AmazonFlatFileService {
     // when the operator selected from a schema-derived localized dropdown in an earlier
     // session. This map converts those labels → canonical 'parent'/'child' codes.
     const productTypeSet = new Set(validRows.map((r) => String(r.product_type ?? '').toUpperCase()).filter(Boolean))
-    const enumCodeMapByProductType = new Map<string, Record<string, Record<string, string>>>()
+    const hintsByProductType = new Map<string, { enumCodeMap: Record<string, Record<string, string>>; subPropTypes: Record<string, SubPropType> }>()
     await Promise.all([...productTypeSet].map(async (pt) => {
       try {
-        enumCodeMapByProductType.set(pt, (await this.getFeedSchemaHints(mp, pt)).enumCodeMap)
+        const h = await this.getFeedSchemaHints(mp, pt)
+        hintsByProductType.set(pt, { enumCodeMap: h.enumCodeMap, subPropTypes: h.subPropTypes })
       } catch { /* non-critical; normalizeParentage falls back to direct toLowerCase */ }
     }))
     const getParentageCode = (raw: string, productType: string): 'parent' | 'child' | '' =>
-      normalizeParentage(raw, (enumCodeMapByProductType.get(String(productType).toUpperCase()) ?? {})['parentage_level'] ?? {})
+      normalizeParentage(raw, (hintsByProductType.get(String(productType).toUpperCase())?.enumCodeMap ?? {})['parentage_level'] ?? {})
 
     // Bulk parent-SKU → parentId lookup for child rows
     const parentSkus = [...new Set(
@@ -2593,8 +2826,8 @@ export class AmazonFlatFileService {
         const qty         = qtyParsed !== null && qtyParsed >= 0 ? qtyParsed : null
 
         // Collapsed attributes (same format getExistingRows reads back)
-        const rowEnumCodeMap = enumCodeMapByProductType.get(String(row.product_type ?? '').toUpperCase()) ?? {}
-        const collapsedAttrs = this.buildCollapsedAttrs(row, expandedFields, mp, marketplaceId, languageTag, rowEnumCodeMap)
+        const rowHints = hintsByProductType.get(String(row.product_type ?? '').toUpperCase())
+        const collapsedAttrs = this.buildCollapsedAttrs(row, expandedFields, mp, marketplaceId, languageTag, rowHints?.enumCodeMap ?? {}, rowHints?.subPropTypes)
 
         // ── Upsert ChannelListing ───────────────────────────────────
         const existing = await this.prisma.channelListing.findFirst({
@@ -2742,6 +2975,8 @@ export class AmazonFlatFileService {
     marketplaceId: string,
     languageTag: string,
     enumCodeMap: Record<string, Record<string, string>> = {},
+    /** UFX P1 (P0-2) — declared type per sub-property path (see buildJsonFeedBody). */
+    subPropTypes?: Record<string, SubPropType>,
   ): Record<string, any> {
     const attrs: Record<string, any> = {}
     const wrap  = (v: string) => [{ value: v, marketplace_id: marketplaceId }]
@@ -2855,11 +3090,14 @@ export class AmazonFlatFileService {
           const idx = parseInt(k.slice(path.length + 1), 10)
           if (!isNaN(idx)) (pendingArrays[path] ??= []).push({ idx, value: String(v) })
         } else {
+          // UFX P1 (P0-2) — coerce by DECLARED schema type (twin of the
+          // buildJsonFeedBody path): a string-typed all-digits value must
+          // round-trip as a string here too, or the persisted attrs diverge
+          // from what the feed sends.
           const parts = path.split('.')
           const base  = parts[0]
           const obj   = (subPropMap[base] ??= {})
-          const numV  = Number(String(v))
-          const typedV = !isNaN(numV) && String(v).trim() !== '' ? numV : String(v)
+          const typedV = coerceSubPropValue(path, String(v), subPropTypes)
           if (parts.length === 2) {
             obj[parts[1]] = typedV
           } else if (parts.length === 3) {
