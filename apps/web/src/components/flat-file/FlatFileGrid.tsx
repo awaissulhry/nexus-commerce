@@ -30,6 +30,7 @@ import type {
   FooterActionsCtx,
 } from './FlatFileGrid.types'
 import { normalizeCellValue } from './normalizeCellValue'
+import { tokenizeClipboard } from './paste-tokenizer'
 import { dropReadOnlyCellChanges, typeApplicabilityGuidance, isRequiredForRow, enumOptionsForRow } from './cellFlags'
 import { countGhosts, makeGhostRows, materializeGhostPatch, pasteGrowCount, topUpGhosts } from './ghost-rows'
 import { SortPanel, applySortLevels, type SortLevel, type SortGroup } from './SortPanel'
@@ -1545,13 +1546,14 @@ export default function FlatFileGrid({
     try { text = await navigator.clipboard.readText() }
     catch { toast({ title: 'Clipboard access blocked', description: 'Allow clipboard permission for this site, then paste again.', tone: 'warning' }); return }
     if (!text) return
-    // #29 — normalize Windows/Mac line endings (Excel appends a stray \r to each
-    // row's last cell) and split; only drop a single trailing blank line, so
-    // interior blank rows are preserved instead of compacting everything up.
-    const pasteLines = text.replace(/\r\n?/g, '\n').split('\n')
-    while (pasteLines.length > 1 && pasteLines[pasteLines.length - 1] === '') pasteLines.pop()
-    if (!pasteLines.length) return
-    const firstRow = pasteLines[0].split('\t')
+    // #29 / UFX P7 — RFC-4180-aware tokenizer: quoted cells from Excel/Sheets
+    // (embedded newlines/tabs, "" escapes) stay ONE cell instead of exploding
+    // into rows. Line endings are normalized and trailing blank lines dropped
+    // (interior blank rows preserved) inside the tokenizer; unquoted input
+    // tokenizes exactly like the legacy split.
+    const pasteRows = tokenizeClipboard(text)
+    if (!pasteRows.length) return
+    const firstRow = pasteRows[0]
     const colLookup = new Map<string, number>()
     allColumnsRef.current.forEach((c, i) => {
       colLookup.set(c.id.toLowerCase(), i)
@@ -1564,7 +1566,7 @@ export default function FlatFileGrid({
       if (ci !== undefined) { headerMap.set(pi, ci); matchCount++ }
     })
     const hasHeaders = smartPasteEnabled && matchCount >= 2
-    const dataRows = hasHeaders ? pasteLines.slice(1) : pasteLines
+    const dataRows = hasHeaders ? pasteRows.slice(1) : pasteRows
     // #10 — anchor paste at the normalized TOP-LEFT of the selection, not the
     // drag-origin corner, so an up/left-dragged selection doesn't spill paste
     // onto unselected cells.
@@ -1587,15 +1589,14 @@ export default function FlatFileGrid({
       i < baseLen ? displayRowsRef.current[i] : extraRows[i - baseLen]
     if (hasHeaders) {
       if (canGrow) extraRows = makeGhostRows(pasteGrowCount(baseLen, startRi, dataRows.length), makeBlankRow)
-      dataRows.forEach((line, riOffset) => {
-        const pasteRow = line.split('\t')
+      dataRows.forEach((pasteRow, riOffset) => {
         const dr = rowAt(startRi + riOffset); if (!dr) return
         pasteRow.forEach((val, pi) => { const ci = headerMap.get(pi); if (ci !== undefined) { const col = allColumnsRef.current[ci]; if (isWritableCol(col)) changes.push({ rowId: dr._rowId, colId: col.id, value: val }) } })
       })
     } else {
       // #28 — tile a smaller copied block (or a single cell) across a larger
       // selection when it divides evenly; otherwise paste the block as-is.
-      const block = dataRows.map((l) => l.split('\t'))
+      const block = dataRows
       const dataH = block.length, dataW = Math.max(...block.map((r) => r.length))
       tgtH = dataH; tgtW = dataW
       if (normSel) {
