@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/Badge'
 import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
 import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx, RenderCellContent, GridContextMenuCtx } from '@/components/flat-file/FlatFileGrid.types'
 import { FlatFileContextMenu } from '@/components/flat-file/FlatFileContextMenu'
+import { materializeGhostPatch } from '@/components/flat-file/ghost-rows'
 import { Modal } from '@/design-system/components/Modal'
 import { Menu } from '@/design-system/components/Menu'
 import { Banner } from '@/design-system/components/Banner'
@@ -2875,7 +2876,10 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           row={aspectsRow}
           categoryGroup={itemSpecificsGroup}
           onSave={(rowId, values) => {
-            const next = rows.map((r) => r._rowId === rowId ? { ...r, ...values, _dirty: true } : r)
+            // UFX P7 (item 12) — a modal write into a ghost row must materialize
+            // it (same patch the grid's own write paths apply), or the edit is
+            // invisible to dirty counts / save / validation.
+            const next = rows.map((r) => r._rowId === rowId ? { ...r, ...materializeGhostPatch(r), ...values, _dirty: true } : r)
             pushHistory(next)
             setRows(next)
           }}
@@ -2886,7 +2890,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           <DescriptionModal
             value={String(desc.description ?? '')}
             onSave={(v) => {
-              const next = rows.map((r) => r._rowId === descModal.rowId ? { ...r, description: v, _dirty: true } : r)
+              // UFX P7 (item 12) — materialize a ghost target (see AspectsPanel note)
+              const next = rows.map((r) => r._rowId === descModal.rowId ? { ...r, ...materializeGhostPatch(r), description: v, _dirty: true } : r)
               pushHistory(next)
               setRows(next)
             }}
@@ -2898,7 +2903,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             marketplace={marketplace}
             onSelect={(id, _name) => {
               if (categorySearchRowId) {
-                const next = rows.map((r) => r._rowId === categorySearchRowId ? { ...r, category_id: id, _dirty: true } : r)
+                // UFX P7 (item 12) — P5 residual: applying a category to a GHOST
+                // row via this modal left it a ghost (excluded from dirty/save/
+                // validation). Materialize it exactly like the grid's write paths
+                // do; the grid's topup effect re-grows the blank canvas below.
+                const next = rows.map((r) => r._rowId === categorySearchRowId ? { ...r, ...materializeGhostPatch(r), category_id: id, _dirty: true } : r)
                 pushHistory(next)
                 setRows(next)
                 // EFX P4 — union across ALL categories on the updated rows
