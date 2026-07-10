@@ -383,6 +383,15 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
               enumColumns: enumByType.get(t),
               subRequiredGroups: subGroupsByType.get(t),
               conditional: schemaDef ? { schema: schemaDef, expandedFields: union.expandedFields, labelOf } : undefined,
+              // UFX P6f — GPSR EU product-safety warnings (warn-only). The
+              // missing-contact warning is suppressed when the C1 auto-fill
+              // will populate the contacts from Brand Settings at submit.
+              gpsr: {
+                marketplace: mp,
+                applicableColumns: appByType.get(t),
+                contentTypeValues: enumByType.get(t)?.find((c) => c.id === 'compliance_media__content_type')?.values,
+                contactAutoFill: Boolean(complianceBySku.get(String(r.item_sku ?? ''))?.responsiblePerson?.email?.trim()),
+              },
             })
             // UFX P6b — warn on a DETECTED change to a schema-locked attribute
             // of an existing listing (diff vs last-saved snapshot; warn-only).
@@ -455,7 +464,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     const localizedFields = new Set<string>()
     const numericFields = new Set<string>()
     const booleanFields = new Set<string>()
-    const wrappedSubPropFields: Record<string, { sub: string; localized: boolean }> = {}
+    const wrappedSubPropFields: Record<string, import('../services/amazon/flat-file.service.js').WrappedSubPropField> = {}
     let subPropTypes: Record<string, 'string' | 'number' | 'boolean'> | undefined
     try {
       const productTypes = [...new Set(
@@ -630,9 +639,12 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     if (batchTypes.length === 0) return reply.send({ preflight: [], checkedRows: rows.length })
     try {
       const union = await flatFileService.generateUnionManifest(mp, batchTypes)
-      const { requiredByType, lengthByType, enumByType, subGroupsByType, nonEditableByType } = buildPerTypeValidation(union)
+      const { requiredByType, applicableByType, lengthByType, enumByType, subGroupsByType, nonEditableByType } = buildPerTypeValidation(union)
       // UFX P1 — schema defs + labels for conditional-requirement evaluation.
       const schemaDefByType = await flatFileService.getSchemaDefs(mp, batchTypes)
+      // UFX P6f — Brand Settings contacts: when the C1 auto-fill will cover the
+      // GPSR contact columns at submit, don't warn that they're missing here.
+      const complianceBySku = await resolveComplianceForSkus(rows.map((r: any) => String(r?.item_sku ?? ''))).catch(() => new Map())
       const unionLabelMap = new Map(union.groups.flatMap((g) => g.columns).map((c) => [c.id, c.labelEn]))
       const labelOf = (id: string) => unionLabelMap.get(id) ?? id
       // UFX P6b — last-saved snapshots for the non-editable change warning
@@ -662,6 +674,13 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
             enumColumns: enumByType.get(t),
             subRequiredGroups: subGroupsByType.get(t),
             conditional: schemaDef ? { schema: schemaDef, expandedFields: union.expandedFields, labelOf } : undefined,
+            // UFX P6f — GPSR EU product-safety warnings (warn-only).
+            gpsr: {
+              marketplace: mp,
+              applicableColumns: applicableByType.get(t),
+              contentTypeValues: enumByType.get(t)?.find((c) => c.id === 'compliance_media__content_type')?.values,
+              contactAutoFill: Boolean(complianceBySku.get(sku)?.responsiblePerson?.email?.trim()),
+            },
           })
           // UFX P6b — warn on a DETECTED change to a schema-locked attribute
           // of an existing listing (diff vs last-saved snapshot; warn-only).

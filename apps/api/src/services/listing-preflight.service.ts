@@ -58,6 +58,8 @@ export interface PreflightExtras {
     /** Column id → display label for messages. */
     labelOf?: (fieldId: string) => string
   }
+  /** UFX P6f — GPSR/DSA product-safety warnings for EU marketplaces (warn-only). */
+  gpsr?: GpsrCheckContext
 }
 
 /**
@@ -228,6 +230,154 @@ export function checkNonEditableChanges(
   return issues
 }
 
+// ── UFX P6f — GPSR product-safety warnings (EU marketplaces, warn-only) ──────
+//
+// GPSR enforcement is live (2024-12-13): missing manufacturer/Responsible-Person
+// contact or safety documentation gets a listing SUPPRESSED on EU marketplaces.
+// No operator data exists in the system yet, so every check is WARNING severity —
+// nothing here may block a submit. Field spellings verified against the live
+// cached IT schemas (all 72 active defs carry gpsr_safety_attestation /
+// gpsr_manufacturer_reference / dsa_responsible_party_address / compliance_media).
+
+/** The EU marketplaces where Amazon enforces GPSR. */
+export const GPSR_EU_MARKETPLACES = new Set(['ES', 'FR', 'BE', 'NL', 'DE', 'IT', 'SE', 'PL'])
+
+/** Official marketplace language(s) — compliance_media.content_language must match. */
+export const GPSR_MARKETPLACE_LANGUAGES: Record<string, string[]> = {
+  IT: ['it_IT'],
+  DE: ['de_DE'],
+  FR: ['fr_FR'],
+  ES: ['es_ES'],
+  NL: ['nl_NL'],
+  SE: ['sv_SE'],
+  PL: ['pl_PL'],
+  BE: ['fr_BE', 'nl_BE'], // both official Amazon.com.be languages
+}
+
+/** Context for checkGpsrCompliance — everything schema/route-derived. */
+export interface GpsrCheckContext {
+  /** Target marketplace of the batch (route context). Non-EU → no checks. */
+  marketplace: string
+  /** Column ids applicable to this row's product type (applicableByType). A
+   *  check only runs when its fields exist on the type; absent set → run all
+   *  (every live schema carries the GPSR attributes). */
+  applicableColumns?: Set<string>
+  /** Accepted compliance_media.content_type values (the schema enum). */
+  contentTypeValues?: string[]
+  /** True when the submit-time compliance auto-fill can populate the GPSR
+   *  contacts (Brand Settings responsible-person email) — suppresses the
+   *  missing-contact warning for a row the fill will cover. */
+  contactAutoFill?: boolean
+}
+
+// Schema says both contact fields accept "e-mail o URL" — accept either shape.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+const URL_ISH_RE = /^(https?:\/\/|www\.)\S+$/i
+const looksLikeContact = (s: string) => EMAIL_RE.test(s) || URL_ISH_RE.test(s)
+
+const GPSR_TRUTHY = new Set(['true', '1', 'sì', 'si', 'yes'])
+
+/**
+ * UFX P6f — GPSR/DSA validation for one row, warnings only:
+ *  (a) both manufacturer reference AND Responsible-Person contact blank;
+ *  (b) safety attestation vs compliance media consistency (attest XOR attach);
+ *  (c) compliance_media integrity: https + pdf/jpg/jpeg/png source, content_type
+ *      in the schema enum, content_language matching the marketplace language;
+ *      plus an email/URL format check on the contact fields.
+ * Only fields the row's product type actually has are evaluated. Pure + testable.
+ */
+export function checkGpsrCompliance(row: Record<string, any>, ctx: GpsrCheckContext): PreflightIssue[] {
+  const mk = String(ctx.marketplace || '').toUpperCase()
+  if (!GPSR_EU_MARKETPLACES.has(mk)) return []
+  if (String(row.record_action ?? '').toLowerCase() === 'delete') return []
+
+  const has = (col: string) => !ctx.applicableColumns || ctx.applicableColumns.has(col)
+  const val = (col: string): string => (isBlank(row[col]) ? '' : String(row[col]).trim())
+
+  const MFG = 'gpsr_manufacturer_reference'
+  const RP = 'dsa_responsible_party_address'
+  const ATT = 'gpsr_safety_attestation'
+  const SDS = 'safety_data_sheet_url'
+  const CM_TYPE = 'compliance_media__content_type'
+  const CM_SRC = 'compliance_media__source_location'
+  const CM_LANG = 'compliance_media__content_language'
+
+  const issues: PreflightIssue[] = []
+
+  // (a) registered manufacturer / Responsible Person contact.
+  if (has(MFG) || has(RP)) {
+    const mfg = has(MFG) ? val(MFG) : ''
+    const rp = has(RP) ? val(RP) : ''
+    if (!mfg && !rp && !ctx.contactAutoFill) {
+      issues.push({
+        field: has(MFG) ? MFG : RP,
+        severity: 'warning',
+        message: 'GPSR: registered manufacturer/Responsible Person email missing — listing can be suppressed on EU marketplaces',
+      })
+    }
+    // Email/URL shape on whichever contact fields are filled (schema accepts either).
+    for (const [col, v] of [[MFG, mfg], [RP, rp]] as const) {
+      if (v && !looksLikeContact(v)) {
+        issues.push({
+          field: col,
+          severity: 'warning',
+          message: `GPSR: "${v}" doesn't look like an email address or URL — Amazon expects the contact registered in Seller Central`,
+        })
+      }
+    }
+  }
+
+  // (b) attestation XOR safety documentation.
+  const attTruthy = has(ATT) && GPSR_TRUTHY.has(val(ATT).toLowerCase())
+  const cmCols = [CM_TYPE, CM_SRC, CM_LANG].filter(has)
+  const cmPresent = cmCols.some((c) => val(c) !== '')
+  const sdsPresent = has(SDS) && val(SDS) !== ''
+  if (attTruthy && cmPresent) {
+    issues.push({
+      field: ATT,
+      severity: 'warning',
+      message: 'GPSR: safety attestation says no safety documentation is needed, but compliance media is attached — mutually inconsistent; clear one of the two',
+    })
+  }
+  if (has(ATT) && !attTruthy && !cmPresent && !sdsPresent) {
+    issues.push({
+      field: ATT,
+      severity: 'warning',
+      message: 'GPSR: no safety documentation — either set the safety attestation to Sì (product needs no warnings) or attach compliance media / a safety data sheet URL',
+    })
+  }
+
+  // (c) compliance_media integrity (only when an entry is present).
+  if (cmPresent) {
+    const src = has(CM_SRC) ? val(CM_SRC) : ''
+    if (src) {
+      if (!/^https:\/\//i.test(src)) {
+        issues.push({ field: CM_SRC, severity: 'warning', message: 'GPSR: compliance media URL must be a public https:// link' })
+      } else if (!/\.(pdf|jpe?g|png)$/i.test(src.split(/[?#]/)[0])) {
+        issues.push({ field: CM_SRC, severity: 'warning', message: 'GPSR: compliance media must be a .pdf, .jpg, .jpeg or .png file' })
+      }
+    }
+    const ct = has(CM_TYPE) ? val(CM_TYPE) : ''
+    if (ct && ctx.contentTypeValues?.length) {
+      const ctLc = ct.toLowerCase()
+      if (!ctx.contentTypeValues.some((v) => v === ct || v.toLowerCase() === ctLc)) {
+        issues.push({ field: CM_TYPE, severity: 'warning', message: `GPSR: "${ct}" isn't an accepted compliance-media content type for this product type` })
+      }
+    }
+    const lang = has(CM_LANG) ? val(CM_LANG) : ''
+    const expected = GPSR_MARKETPLACE_LANGUAGES[mk]
+    if (lang && expected && !expected.some((l) => l.toLowerCase() === lang.toLowerCase())) {
+      issues.push({
+        field: CM_LANG,
+        severity: 'warning',
+        message: `GPSR: compliance media language "${lang}" doesn't match the ${mk} marketplace language (expected ${expected.join(' or ')})`,
+      })
+    }
+  }
+
+  return issues
+}
+
 // Common flat-file columns that may carry a product identifier.
 const GTIN_FIELDS = ['externally_assigned_product_identifier', 'gtin', 'ean', 'upc', 'barcode']
 
@@ -337,6 +487,18 @@ export function preflightRow(
       if (flagged.has(field)) continue // already flagged (e.g. G.1 structural checks)
       flagged.add(field)
       issues.push({ ...ci, field })
+    }
+  }
+
+  // UFX P6f — GPSR EU product-safety warnings. Deduped per field against the
+  // earlier checks (checkEnumValues also validates compliance_media__content_type
+  // when the manifest carries the enum) so one bad cell yields one issue.
+  if (extras.gpsr) {
+    const flagged = new Set(issues.map((i) => i.field))
+    for (const gi of checkGpsrCompliance(row, extras.gpsr)) {
+      if (flagged.has(gi.field)) continue
+      flagged.add(gi.field)
+      issues.push(gi)
     }
   }
 
