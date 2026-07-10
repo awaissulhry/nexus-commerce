@@ -2723,96 +2723,136 @@ export default function AmazonFlatFileClient({
   }, [productType, marketplace, createVersion])
 
   // ── Copy to market ─────────────────────────────────────────────────
+  // UFX P4c — union-aware target helpers shared by replicate + copy-to-market.
+  // The copied rows' DISTINCT types drive the target schema: mixed types fetch
+  // the target's UNION template (that column set is what the target sheet can
+  // hold); target drafts are read under the target's own composition pointer
+  // and written back under the merge's composite storageType, so a mixed copy
+  // restores intact when the target market mounts.
+  const STRUCTURAL_COPY_COLS = new Set([
+    'item_sku', 'product_type', 'record_action',
+    'parentage_level', 'parent_sku', 'variation_theme',
+  ])
+
+  async function fetchTargetColIds(target: string, types: string[]): Promise<Set<string>> {
+    const backend = getBackendUrl()
+    const res = types.length > 1
+      ? await fetch(`${backend}/api/amazon/flat-file/union-template?marketplace=${target}&productTypes=${encodeURIComponent(types.join(','))}`)
+      : await fetch(`${backend}/api/amazon/flat-file/template?marketplace=${target}&productType=${encodeURIComponent(types[0] ?? productType)}`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const m: Manifest = await res.json()
+    return new Set(m.groups.flatMap((g) => g.columns.map((c) => c.id)))
+  }
+
+  // FFA.2 — the target's EXISTING rows: its composite draft (composition
+  // pointer), else its single-type draft, else server rows for EVERY copied
+  // type (parallel, dedup by SKU).
+  async function loadTargetRows(target: string, types: string[]): Promise<Row[]> {
+    const comp = loadSheetComposition(target)
+    if (comp) {
+      const saved = loadSavedRows(target, compositionStorageType(comp))
+      if (saved) return saved
+    }
+    const single = loadSavedRows(target, productType)
+    if (single) return single
+    const fetched = await Promise.all(types.map(async (t) => {
+      try {
+        const rq = new URLSearchParams({ marketplace: target, productType: t })
+        if (familyId) rq.set('productId', familyId)
+        const rr = await fetch(`${getBackendUrl()}/api/amazon/flat-file/rows?${rq}`)
+        return rr.ok ? (((await rr.json()).rows ?? []) as Row[]) : []
+      } catch { return [] as Row[] }
+    }))
+    const seen = new Set<string>()
+    const out: Row[] = []
+    for (const r of fetched.flat()) {
+      const sku = String(r.item_sku ?? '')
+      if (sku) {
+        if (seen.has(sku)) continue
+        seen.add(sku)
+      }
+      out.push(r)
+    }
+    return out
+  }
+
   // BM.2 — multi-target replicate used by FFReplicateModal
   const handleReplicate = useCallback(async (
     targets: string[],
     groupIds: Set<string>,
     selectedOnly: boolean,
   ): Promise<{ copied: number; skipped: number }> => {
-    if (!manifest) return { copied: 0, skipped: 0 }
+    const sourceManifest = effectiveManifest
+    if (!sourceManifest) return { copied: 0, skipped: 0 }
     const rows = latestRowsRef.current.filter((r) => !r._ghost)
     const selectedRows = latestSelectedRowsRef.current
-    const allColIds = manifest.groups
+    // UFX P4c — column ids come from the EFFECTIVE (union-aware) manifest, so
+    // replicating a mixed sheet offers every category's columns.
+    const allColIds = sourceManifest.groups
       .filter((g) => groupIds.has(g.id))
       .flatMap((g) => g.columns.map((c) => c.id))
     const colSet = new Set(allColIds)
     const sourceRows = selectedOnly && selectedRows.size > 0
       ? rows.filter((r) => selectedRows.has(r._rowId as string))
       : rows
+    const copyTypes = productTypesInUse(sourceRows as Array<Record<string, unknown>>)
+    const typesForTarget = copyTypes.length ? copyTypes : [productType.toUpperCase()]
     let copied = 0
     let skipped = 0
     for (const target of targets) {
       try {
-        const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/template?marketplace=${target}&productType=${productType}`)
-        if (!res.ok) { skipped += sourceRows.length; continue }
-        const targetManifest: Manifest = await res.json()
-        const targetColIds = new Set(targetManifest.groups.flatMap((g) => g.columns.map((c) => c.id)))
-        const STRUCTURAL = new Set(['item_sku', 'product_type', 'record_action', 'parentage_level', 'parent_sku', 'variation_theme'])
+        const targetColIds = await fetchTargetColIds(target, typesForTarget)
         const cols = new Set([...colSet].filter((c) => targetColIds.has(c)))
-        // FFA.2 — merge into the target's EXISTING rows (local draft, else DB) by
-        // SKU, instead of overwriting the target's whole row set with copies-only.
-        let existingTarget = loadSavedRows(target, productType)
-        if (!existingTarget) {
-          try {
-            const rq = new URLSearchParams({ marketplace: target, productType })
-            if (familyId) rq.set('productId', familyId)
-            const rr = await fetch(`${getBackendUrl()}/api/amazon/flat-file/rows?${rq}`)
-            existingTarget = rr.ok ? ((await rr.json()).rows ?? []) : []
-          } catch { existingTarget = [] }
-        }
-        const merged = mergeReplicatedRows(existingTarget ?? [], sourceRows, cols, STRUCTURAL)
-        saveRows(target, productType, merged)
+        const existingTarget = await loadTargetRows(target, typesForTarget)
+        const merged = mergeReplicatedRows(existingTarget, sourceRows, cols, STRUCTURAL_COPY_COLS)
+        // UFX P4c — persist under the merge's composite storageType + pointer
+        // (single-type merges keep the legacy per-type key, pointer removed).
+        const targetStorageType = computeStorageType(merged, productType)
+        saveRows(target, targetStorageType, merged)
+        persistSheetComposition(target, targetStorageType)
         copied += sourceRows.length
       } catch { skipped += sourceRows.length }
     }
     return { copied, skipped }
-  }, [manifest, productType, familyId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveManifest, productType, familyId, computeStorageType])
 
   const handleCopyToMarket = useCallback(async (
     targetMarket: string,
     colIds: Set<string>,
   ) => {
     const rows = latestRowsRef.current.filter((r) => !r._ghost)
-    if (!manifest || !rows.length) return
+    if (!effectiveManifest || !rows.length) return
     setPushPanel(null)
     try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/amazon/flat-file/template?marketplace=${targetMarket}&productType=${productType}`,
-      )
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const targetManifest: Manifest = await res.json()
-
-      const STRUCTURAL = new Set([
-        'item_sku', 'product_type', 'record_action',
-        'parentage_level', 'parent_sku', 'variation_theme',
-      ])
-      const targetColIds = new Set(targetManifest.groups.flatMap((g) => g.columns.map((c) => c.id)))
+      // UFX P4c — target template = UNION over the copied rows' distinct types
+      // (a JACKET+PANTS sheet copies both categories' columns); single-type
+      // sheets keep the plain template fetch.
+      const copyTypes = productTypesInUse(rows as Array<Record<string, unknown>>)
+      const typesForTarget = copyTypes.length ? copyTypes : [productType.toUpperCase()]
+      const targetColIds = await fetchTargetColIds(targetMarket, typesForTarget)
       const cols = new Set([...colIds].filter((c) => targetColIds.has(c)))
       // FFA.2 — merge into the target's existing rows by SKU (don't replace the
       // grid with copies-only, which shadowed the target's real rows).
-      let existingTarget = loadSavedRows(targetMarket, productType)
-      if (!existingTarget) {
-        try {
-          const rq = new URLSearchParams({ marketplace: targetMarket, productType })
-          if (familyId) rq.set('productId', familyId)
-          const rr = await fetch(`${getBackendUrl()}/api/amazon/flat-file/rows?${rq}`)
-          existingTarget = rr.ok ? ((await rr.json()).rows ?? []) : []
-        } catch { existingTarget = [] }
-      }
-      const merged = mergeReplicatedRows(existingTarget ?? [], rows, cols, STRUCTURAL)
+      const existingTarget = await loadTargetRows(targetMarket, typesForTarget)
+      const merged = mergeReplicatedRows(existingTarget, rows, cols, STRUCTURAL_COPY_COLS)
 
       // UFX P3 — persist the merge as the target market's draft and switch
       // through the normal navigation: the grid remounts for the new market
       // and its first load restores this draft (mergeReplicatedRows marked
       // the copies _dirty, so nothing publishes without an explicit Save).
-      saveRows(targetMarket, computeStorageType(merged, productType), merged)
+      // UFX P4c — the composition pointer makes that restore union-aware, and
+      // the CURRENT sheet's manifest/types are never touched.
+      const targetStorageType = computeStorageType(merged, productType)
+      saveRows(targetMarket, targetStorageType, merged)
+      persistSheetComposition(targetMarket, targetStorageType)
       setFeedEntries([])
       navigateTo(targetMarket, productType)
     } catch (e: any) {
       setLoadError({ message: e?.message ?? 'Copy failed', at: Date.now() })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [manifest, productType, familyId])
+  }, [effectiveManifest, productType, familyId])
 
   // ── Pull from Amazon (full attributes, in-editor, undoable) ─────────
   // Calls /api/amazon/flat-file/pull-preview which fetches live SP-API data
@@ -4051,11 +4091,13 @@ export default function AmazonFlatFileClient({
           />
         )}
 
-        {pushPanel && manifest && (
+        {/* UFX P4c — the panel sees the EFFECTIVE (union-aware) manifest so a
+            mixed sheet offers every category's columns for copying. */}
+        {pushPanel && effectiveManifest && (
           <PushToMarketsPanel
             initialTab={pushPanel.tab}
             preselectedCol={pushPanel.preselectedCol}
-            manifest={manifest}
+            manifest={effectiveManifest}
             rows={realRows}
             enumColumns={manifestColumns.filter((c) => c.kind === 'enum' && c.options && c.options.length > 0)}
             sourceMarket={marketplace}
