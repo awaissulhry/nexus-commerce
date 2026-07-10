@@ -38,6 +38,7 @@ import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { AxisValueOrderEditor, type AxisEntry } from '@/components/ebay/AxisValueOrderEditor'
 import { axisSynonymKey } from '@/app/products/ebay-flat-file/variationValueOrder.pure'
+import { mapResolvedToObservedKeys, type ResolvedAxis } from '@/app/products/ebay-flat-file/resolvedAxes.pure'
 
 const EBAY_VARIANT_CAP = 250
 
@@ -72,6 +73,13 @@ interface MatrixData {
   axisValueLabels?: Record<string, Record<string, string>>
   cells: Cell[]
   childCount: number
+  // EAC Layer A (additive) — theme-authoritative axes (declared-order,
+  // synonym+fingerprint-deduped, ghosts removed) + operator-facing warnings.
+  // Optional: older API responses omit them, and the card falls back to its
+  // prior declaredAxes ∩ observed derivation.
+  resolvedAxes?: ResolvedAxis[]
+  resolvedAxisWarnings?: string[]
+  resolvedAxisSuppressed?: string[]
 }
 
 interface DirtyCell {
@@ -169,17 +177,39 @@ export default function VariationsMatrixCard({
 
   useEffect(() => { refresh() }, [refresh])
 
-  // Available axes = declaredAxes ∩ (axes actually present in children).
+  // EAC Layer A — the axis list. When the server returns resolvedAxes (the
+  // theme-authoritative, ghost-free axes) we keep the list in OBSERVED-key
+  // space — cells are keyed by the observed attribute name, so cellAt / value
+  // derivation keep matching — but ordered by the resolved theme and filtered to
+  // the resolved set. This is what DROPS the "Team Name" ghost (the old
+  // `extras` concat re-added it) while keeping real axes. FALLBACK when the
+  // endpoint omits resolvedAxes: the prior declaredAxes ∩ observed derivation.
   const availableAxes = useMemo(() => {
     if (!data) return []
     const observed = new Set<string>()
     for (const c of data.cells) {
       for (const k of Object.keys(c.variationAttributes ?? {})) observed.add(k)
     }
+    const resolved = data.resolvedAxes ?? []
+    if (resolved.length) {
+      const mapped = mapResolvedToObservedKeys(resolved, [...observed])
+      // If none of the resolved axes have observed cell keys (data mismatch),
+      // fall back rather than render an empty grid.
+      if (mapped.length) return mapped
+    }
     // Honour declared order if present, else fall back to observation order.
     const declared = data.declaredAxes.filter((a) => observed.has(a))
     const extras = [...observed].filter((a) => !declared.includes(a))
     return [...declared, ...extras]
+  }, [data])
+
+  // EAC Layer A — resolved (clean) axis display name per synonym key. Used as
+  // the label DEFAULT (an eBay-only rename still overrides it); never touches
+  // cell lookup, which stays keyed by the raw observed name.
+  const resolvedNameByKey = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const a of data?.resolvedAxes ?? []) m.set(a.key, a.name)
+    return m
   }, [data])
 
   // Per-axis distinct values, ordered by the synonym-keyed valueOrderDraft
@@ -227,7 +257,13 @@ export default function VariationsMatrixCard({
   const colValues = colAxis ? axisValues[colAxis] ?? [] : []
 
   // EV.4 — eBay-only display labels (raw keys stay for lookup/publish data).
-  const axisLabel = useCallback((axis: string) => nameLabels[axis] || axis, [nameLabels])
+  // EAC Layer A — default to the resolved CLEAN axis name (e.g. "Color" for an
+  // observed "Colore") when the server provides it; an operator's eBay-only
+  // rename still wins over it.
+  const axisLabel = useCallback(
+    (axis: string) => nameLabels[axis] || resolvedNameByKey.get(axisSynonymKey(axis)) || axis,
+    [nameLabels, resolvedNameByKey],
+  )
   const valueLabel = useCallback(
     (axis: string, v: string) => valueLabels[axis]?.[v] || v,
     [valueLabels],
@@ -257,7 +293,9 @@ export default function VariationsMatrixCard({
   // axis name so the eBay-only rename slots stay keyed exactly as before.
   const editorAxes: AxisEntry[] = effectiveAxes.map((a) => ({
     key: axisSynonymKey(a),
-    displayName: a,
+    // EAC — panel heading shows the resolved clean name (or eBay rename);
+    // purely visual, the synonym key still identifies the axis for save.
+    displayName: axisLabel(a),
     values: axisValues[a] ?? [],
   }))
   const synToRaw = new Map(effectiveAxes.map((a) => [axisSynonymKey(a), a]))
@@ -270,7 +308,10 @@ export default function VariationsMatrixCard({
         <span className="inline-flex items-center gap-1">
           <Sparkles className="w-3 h-3 text-violet-500 flex-shrink-0" />
           <input
-            defaultValue={axisLabel(raw) === raw ? '' : axisLabel(raw)}
+            // EAC — prefill ONLY the operator's own eBay rename (not the
+            // resolved default), so the resolved label change can't leak into
+            // this field. placeholder shows the raw observed name.
+            defaultValue={nameLabels[raw] ?? ''}
             onBlur={(e) => handleRenameAxis(raw, e.target.value)}
             placeholder={raw}
             title={t('products.edit.cockpit.ebay.variations.renameAxisTitle', { axis: raw })}
@@ -470,6 +511,19 @@ export default function VariationsMatrixCard({
                 <span className="text-[10.5px] text-slate-500 dark:text-slate-400 block">
                   {t('products.edit.cockpit.ebay.variations.axisHint')}
                 </span>
+              </div>
+            )}
+
+            {/* ── EAC Layer A — theme-authoritative axis warnings (e.g.
+                "Tipo di prodotto has no clean values — needs data cleanup").
+                Never silent, never blocking. ── */}
+            {(data.resolvedAxisWarnings?.length ?? 0) > 0 && (
+              <div className="rounded-md border border-sky-200 dark:border-sky-900 bg-sky-50/60 dark:bg-sky-950/30 px-3 py-2 text-[11px] text-sky-800 dark:text-sky-300">
+                <ul className="space-y-0.5">
+                  {data.resolvedAxisWarnings!.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
               </div>
             )}
 

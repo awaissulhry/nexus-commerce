@@ -16,6 +16,7 @@ import ImagePickerModal from '@/app/products/[id]/edit/tabs/images/ImagePickerMo
 import type { WorkspaceData, ListingImage, VariantSummary, ProductImage } from '@/app/products/[id]/edit/tabs/images/types'
 import { Select } from '@/design-system/primitives/Select'
 import { axisSynonymKey, describeResolvedAxis, SHARED_GALLERY_AXIS, type ResolvedAxisFeedback } from './variationValueOrder.pure'
+import { buildImageBuckets, resolvedAxisFor } from './resolvedAxes.pure'
 import type { ImageFamilySummary } from './imageFamilies.pure'
 // EFX P7 — pure assign/copy/cap semantics (reuse allowed, in-bucket dedup,
 // 12-cap rejection). See imageBuckets.vitest.test.ts for the invariants.
@@ -209,6 +210,32 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
     const serverAxes = workspaceData?.availableAxes ?? []
     // EFX P5 — distinct value count per axis; annotates single-valued options.
     const axisValueCounts = workspaceData?.axisValueCounts ?? {}
+    // EAC Layer A — theme-authoritative axes + operator-facing warnings.
+    const resolvedAxes = workspaceData?.resolvedAxes ?? []
+    const resolvedAxisWarnings = workspaceData?.resolvedAxisWarnings ?? []
+
+    // EAC Layer A — the axis PICKER. Filter the observed axes to the resolved
+    // (theme-authoritative) set so ghosts (Team Name / Athlete / Body Type) stop
+    // appearing. CRITICAL: we filter but keep the OBSERVED spelling as the option
+    // value, because `axis` doubles as the storage/publish key
+    // (ListingImage.variantGroupKey) — swapping the name to the resolved spelling
+    // would orphan already-saved images keyed by the observed name. Falls back to
+    // all observed axes when the endpoint omits resolvedAxes (or the filter would
+    // empty the list).
+    const pickerAxes = useMemo(() => {
+      if (resolvedAxes.length === 0) return serverAxes
+      const keys = new Set(resolvedAxes.map(a => a.key))
+      const filtered = serverAxes.filter(a => keys.has(axisSynonymKey(a)))
+      return filtered.length ? filtered : serverAxes
+    }, [serverAxes, resolvedAxes])
+
+    // EAC Layer A — prefer the resolved axis's clean value count (so the picker
+    // annotation agrees with the buckets); fall back to the server's folded count.
+    const axisValueCount = useCallback((a: string): number | undefined => {
+      const r = resolvedAxisFor(resolvedAxes, a)
+      if (r) return r.values.length
+      return axisValueCounts[a]
+    }, [resolvedAxes, axisValueCounts])
 
     // Server-recommended axis (respects imageAxisPreference, falls back to colour dim).
     const defaultAxis = useMemo(() => {
@@ -216,11 +243,11 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
       // EFX P5 — '__shared__' stored as the preference = one shared gallery.
       if (pref === SHARED) return SHARED
       if (pref) {
-        const match = serverAxes.find(a => axisSynonymKey(a) === axisSynonymKey(pref))
+        const match = pickerAxes.find(a => axisSynonymKey(a) === axisSynonymKey(pref))
         if (match) return match
       }
-      return serverAxes.find(a => axisSynonymKey(a) === '__dim0__') ?? serverAxes[0] ?? 'Colore'
-    }, [product?.imageAxisPreference, serverAxes])
+      return pickerAxes.find(a => axisSynonymKey(a) === '__dim0__') ?? pickerAxes[0] ?? 'Colore'
+    }, [product?.imageAxisPreference, pickerAxes])
 
     // Operator-chosen override — resets to null on each fresh workspace load.
     const [axisOverride, setAxisOverride] = useState<string | null>(null)
@@ -242,7 +269,38 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
         .catch(() => toast.error('Could not save the axis preference — this pick still applies to publishes from this modal'))
     }, [productId, toast])
 
-    const colorValues = useMemo(() => getAxisValues(variants, axis), [variants, axis])
+    // EAC Layer A — bucket VALUES. Show the resolved CLEAN value list so the
+    // picker count and the bucket count finally agree, but SAFETY-union it with
+    // the values actually present in storage (variantGroupValue on saved images)
+    // and on the variants, so a still-polluted value (e.g. "Crema e Vino -
+    // Giacca") is never hidden — its bucket stays visible and publishes
+    // unchanged. Any value the clean list doesn't cover is returned as
+    // `unmatched` and surfaced as a visible warning (never silently remapped —
+    // that's the Layer-B data cleanup, out of scope here). No resolvedAxes →
+    // fallback to the prior getAxisValues behavior exactly.
+    const observedAxisValues = useMemo(() => getAxisValues(variants, axis), [variants, axis])
+    const storedBucketValues = useMemo(() => {
+      const out: string[] = []
+      const seen = new Set<string>()
+      for (const img of listingImages) {
+        if (img.platform !== 'EBAY' || img.variationId) continue
+        if (img.variantGroupKey == null || img.variantGroupKey !== axis) continue
+        const v = img.variantGroupValue
+        if (v && !seen.has(v)) { seen.add(v); out.push(v) }
+      }
+      return out
+    }, [listingImages, axis])
+    const resolvedForAxis = useMemo(() => resolvedAxisFor(resolvedAxes, axis), [resolvedAxes, axis])
+    const { values: colorValues, unmatched: unmatchedBucketValues } = useMemo(
+      () => buildImageBuckets(
+        // Shared-gallery mode has no per-value buckets — pass null so the helper
+        // returns the (empty) observed fallback rather than clean values.
+        axis === SHARED ? null : (resolvedForAxis?.values ?? null),
+        storedBucketValues,
+        observedAxisValues,
+      ),
+      [axis, resolvedForAxis, storedBucketValues, observedAxisValues],
+    )
 
     // ── Bucket state ─────────────────────────────────────────────────────────
 
@@ -513,7 +571,7 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
         setPublishState(body.success ? 'done' : 'failed')
         // EFX P5 — honest feedback: show what eBay actually got ("vary by X" /
         // shared gallery) and WARN visibly when it differs from the pick.
-        const fb = describeResolvedAxis(body.requestedAxis ?? axis, axisValueCounts[axis], body)
+        const fb = describeResolvedAxis(body.requestedAxis ?? axis, axisValueCount(axis), body)
         setAxisFeedback(fb)
         if (body.success) {
           if (fb?.mismatch && fb.warning) toast.warning(fb.warning)
@@ -524,7 +582,7 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
         setPublishResult({ success: false, message: msg, pictureCount: 0, colorSetCount: 0 })
         setPublishState('failed')
       }
-    }, [productId, marketplace, axis, axisValueCounts, hasDirty, flush, toast])
+    }, [productId, marketplace, axis, axisValueCount, hasDirty, flush, toast])
 
     // ── Imperative handle ─────────────────────────────────────────────────────
 
@@ -532,8 +590,8 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
       save: () => flush(false),
       saveSilent: () => flush(true),
       publish,
-      getAxisInfo: () => ({ axis, valueCount: axisValueCounts[axis], loaded: workspaceData != null }),
-    }), [flush, publish, axis, axisValueCounts, workspaceData])
+      getAxisInfo: () => ({ axis, valueCount: axisValueCount(axis), loaded: workspaceData != null }),
+    }), [flush, publish, axis, axisValueCount, workspaceData])
 
     // ── Render ────────────────────────────────────────────────────────────────
 
@@ -567,7 +625,7 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
               old >1 gate hid it exactly when operators needed to see/override
               the grouping) and always offers the explicit shared-gallery mode.
               Single-valued axes stay selectable, annotated with their outcome. */}
-          {!loading && serverAxes.length > 0 && (
+          {!loading && pickerAxes.length > 0 && (
             <>
               <Select
                 value={axis}
@@ -575,9 +633,11 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
                 className="text-xs ml-1 flex-shrink-0"
                 aria-label="Axis eBay images vary by"
               >
-                {serverAxes.map(a => (
+                {/* EAC — ghost axes (Team Name / Athlete / Body Type) filtered
+                    out; single-value count now the resolved (clean) count. */}
+                {pickerAxes.map(a => (
                   <option key={a} value={a}>
-                    {a}{(axisValueCounts[a] ?? 2) <= 1 ? ' (1 value — publishes as shared gallery)' : ''}
+                    {a}{(axisValueCount(a) ?? 2) <= 1 ? ' (1 value — publishes as shared gallery)' : ''}
                   </option>
                 ))}
                 <option value={SHARED}>One shared gallery (no per-variant images)</option>
@@ -691,6 +751,29 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
                     <ImageIcon className="w-6 h-6 mx-auto mb-1.5 text-slate-300 dark:text-slate-600" />
                     <p className="text-xs text-slate-400">No master images yet — upload from the product Images tab first.</p>
                   </div>
+                )}
+
+                {/* EAC Layer A — theme-authoritative axis warnings (e.g. a
+                    resolved axis with no clean values), never silent. */}
+                {resolvedAxisWarnings.length > 0 && (
+                  <div className="rounded-lg border border-sky-200 dark:border-sky-900 bg-sky-50/60 dark:bg-sky-950/30 px-3 py-2 text-[11px] text-sky-800 dark:text-sky-300">
+                    <ul className="space-y-0.5">
+                      {resolvedAxisWarnings.map((w, i) => (
+                        <li key={i}>{w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {/* EAC Layer A — a bucket whose value isn't in the resolved
+                    (clean) list. Its images are STILL shown and published
+                    unchanged (never silently dropped/remapped) — this flags the
+                    data mismatch for the operator to clean up (Layer B). */}
+                {axis !== SHARED && unmatchedBucketValues.length > 0 && (
+                  <Banner variant="warning" title="Some image sets don't match the resolved values yet">
+                    These {axis} values aren&rsquo;t in the clean list, so their image sets show below the resolved
+                    ones and publish exactly as stored: {unmatchedBucketValues.join(', ')}. Align them in the
+                    variation data (or the eBay push will keep grouping images by these exact values).
+                  </Banner>
                 )}
 
                 {/* Bucket grid — always rendered in shared-gallery mode so the

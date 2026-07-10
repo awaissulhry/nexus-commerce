@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useToast } from '@/components/ui/Toast'
 import type { EbayRow } from './EbayFlatFileClient'
-import { deriveAxes, axisSynonymKey, shouldInitModal } from './variationValueOrder.pure'
-import { AxisValueOrderEditor } from '@/components/ebay/AxisValueOrderEditor'
+import { deriveAxes, shouldInitModal } from './variationValueOrder.pure'
+import { intersectPickedWithResolved, type ResolvedAxis } from './resolvedAxes.pure'
+import { AxisValueOrderEditor, type AxisEntry } from '@/components/ebay/AxisValueOrderEditor'
 
 // ── Main modal ────────────────────────────────────────────────────────────
 
@@ -31,8 +32,21 @@ export function VariationValueOrderModal({
   const { toast } = useToast()
   const BACKEND = getBackendUrl()
 
-  // Derived from current rows — one entry per semantic dimension, synonyms collapsed
-  const axes = useMemo(() => deriveAxes(rows), [rows])
+  // EAC Layer A — prefer the server's theme-authoritative axes (declared-order,
+  // synonym+fingerprint-deduped, ghosts like "Team Name" already removed) when
+  // the variation-cells fetch returns them; fall back to the local
+  // deriveAxes(rows) so an OLD endpoint (no resolvedAxes) still works exactly as
+  // before. resolvedAxes lands via the same fetch below.
+  const derivedAxes = useMemo(() => deriveAxes(rows), [rows])
+  const [resolvedAxes, setResolvedAxes] = useState<ResolvedAxis[] | null>(null)
+  const [axisWarnings, setAxisWarnings] = useState<string[]>([])
+  const axes = useMemo<AxisEntry[]>(
+    () =>
+      resolvedAxes && resolvedAxes.length
+        ? resolvedAxes.map((a) => ({ key: a.key, displayName: a.name, values: a.values }))
+        : derivedAxes,
+    [resolvedAxes, derivedAxes],
+  )
 
   // axisOrder keyed by axis.key (__dim0__ / __dim1__ / raw-lowercase for custom axes)
   const [axisOrder, setAxisOrder] = useState<Record<string, string[]>>(() =>
@@ -60,10 +74,13 @@ export function VariationValueOrderModal({
     }
     if (shouldInitModal(open, wasOpenRef.current)) {
       wasOpenRef.current = true
-      // Base: derived value order per axis (stands if the fetch fails).
-      setAxisOrder(Object.fromEntries(axes.map((a) => [a.key, a.values])))
-      const derived = axes.map((a) => a.displayName)
-      setAxisSeq(derived)
+      // Base: LOCALLY-derived value order per axis (stands if the fetch fails or
+      // the endpoint is old). resolvedAxes is reset so `axes` falls back to
+      // derivedAxes until (and unless) the fetch returns the authoritative list.
+      setResolvedAxes(null)
+      setAxisWarnings([])
+      setAxisOrder(Object.fromEntries(derivedAxes.map((a) => [a.key, a.values])))
+      setAxisSeq(derivedAxes.map((a) => a.displayName))
       // EFX D1/D9 — seed BOTH the axis order (pickedAxes) and the per-axis value
       // order (axisValueOrder) from the stored per-market config so the modal
       // reloads exactly what was saved / what the push will use. Best-effort —
@@ -74,37 +91,48 @@ export function VariationValueOrderModal({
       if (parentProductId) {
         void fetch(`${BACKEND}/api/ebay/cockpit/variation-cells?parentProductId=${encodeURIComponent(parentProductId)}&marketplace=${encodeURIComponent(marketplace)}`)
           .then((r) => (r.ok ? r.json() : null))
-          .then((d: { pickedAxes?: string[]; axisValueOrder?: Record<string, string[]> } | null) => {
+          .then((d: {
+            pickedAxes?: string[]
+            axisValueOrder?: Record<string, string[]>
+            resolvedAxes?: ResolvedAxis[]
+            resolvedAxisWarnings?: string[]
+          } | null) => {
             if (!d) return
-            // Axis ORDER — order the derived axes by the stored pickedAxes.
-            const stored = d.pickedAxes
-            if (stored?.length) {
-              const rank = new Map(stored.map((a, i) => [axisSynonymKey(a), i]))
-              setAxisSeq([...derived].sort(
-                (a, b) => (rank.get(axisSynonymKey(a)) ?? Number.MAX_SAFE_INTEGER) - (rank.get(axisSynonymKey(b)) ?? Number.MAX_SAFE_INTEGER),
-              ))
-            }
-            // VALUE order — within each axis, apply the stored value order first
-            // (keyed by axis.key: __dim0__/__dim1__/lowercase-custom — the SAME
-            // keys the modal saves with), appending any new/unknown values after
-            // in derived order. Stable sort keeps derived order among unknowns.
+            // EAC Layer A — prefer the authoritative axes for BOTH the axis list
+            // and each axis's value list; fall back to the locally-derived axes
+            // when the endpoint omits them (backward-safe). This is the ONLY
+            // place `axes` swaps to resolved, so the init guard can't re-run it.
+            const resolved = Array.isArray(d.resolvedAxes) ? d.resolvedAxes : []
+            const eff: AxisEntry[] = resolved.length
+              ? resolved.map((a) => ({ key: a.key, displayName: a.name, values: a.values }))
+              : derivedAxes
+            if (resolved.length) setResolvedAxes(resolved)
+            setAxisWarnings(Array.isArray(d.resolvedAxisWarnings) ? d.resolvedAxisWarnings : [])
+
+            // Axis ORDER — seed pickedAxes but INTERSECT with the authoritative
+            // axes: a ghost still lingering in pickedAxes (e.g. "Team Name") is
+            // dropped because it has no resolved match, so it can't re-appear.
+            setAxisSeq(intersectPickedWithResolved(d.pickedAxes ?? [], resolved.length ? resolved : eff.map((a) => ({ name: a.displayName, key: a.key, values: a.values }))))
+
+            // VALUE order — start from eff's value lists (authoritative when
+            // present), then apply the stored per-axis order (keyed by axis.key:
+            // __dim0__/__dim1__/lowercase-custom — the SAME keys the modal saves
+            // with), appending any new/unknown values after in eff order.
+            const base = Object.fromEntries(eff.map((a) => [a.key, a.values])) as Record<string, string[]>
             const storedValues = d.axisValueOrder
             if (storedValues && Object.keys(storedValues).length) {
-              setAxisOrder((prev) => {
-                const next: Record<string, string[]> = { ...prev }
-                for (const a of axes) {
-                  const order = storedValues[a.key]
-                  if (!order?.length) continue
-                  const rank = new Map(order.map((v, i) => [v.toLowerCase(), i]))
-                  next[a.key] = [...(prev[a.key] ?? a.values)].sort((x, y) => {
-                    const xi = rank.get(x.toLowerCase()) ?? Number.MAX_SAFE_INTEGER
-                    const yi = rank.get(y.toLowerCase()) ?? Number.MAX_SAFE_INTEGER
-                    return xi - yi
-                  })
-                }
-                return next
-              })
+              for (const a of eff) {
+                const order = storedValues[a.key]
+                if (!order?.length) continue
+                const rank = new Map(order.map((v, i) => [v.toLowerCase(), i]))
+                base[a.key] = [...(base[a.key] ?? a.values)].sort((x, y) => {
+                  const xi = rank.get(x.toLowerCase()) ?? Number.MAX_SAFE_INTEGER
+                  const yi = rank.get(y.toLowerCase()) ?? Number.MAX_SAFE_INTEGER
+                  return xi - yi
+                })
+              }
             }
+            setAxisOrder(base)
           })
           .catch(() => {})
       }
@@ -174,6 +202,15 @@ export function VariationValueOrderModal({
         </p>
       ) : (
         <div className="py-2">
+          {axisWarnings.length > 0 && (
+            <div className="mb-3 rounded-md border border-amber-200 dark:border-amber-900 bg-amber-50/60 dark:bg-amber-950/30 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300">
+              <ul className="space-y-0.5">
+                {axisWarnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <AxisValueOrderEditor
             axes={axes}
             axisSeq={axisSeq}

@@ -22,6 +22,7 @@ import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { pinBlankRowsLast } from './rowOrder'
 import { moveRowsToParent, detachRowsToStandalone } from './moveRows'
 import { parseThemeAxes } from './themeAxes'
+import { unionThemeOptions } from './resolvedAxes.pure'
 import { AddListingPopover } from './AddListingPopover'
 import { EbayImportWizard } from './EbayImportWizard'
 import { stampUnderParent } from './importUnderParent'
@@ -879,6 +880,19 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     return ghostAspectColumns.length ? { ...base, columns: [...base.columns, ...ghostAspectColumns] } : base
   }, [categoryUnionGroup, ghostAspectColumns])
 
+  // EAC Layer A (task 4) — widen the Variation Theme combobox. The old options
+  // were ONLY the variation-eligible schema aspects (Size/Colour/Scollatura), so
+  // custom axes an operator legitimately uses (e.g. "Tipo di prodotto") weren't
+  // discoverable even though enumMode:'open' let them be typed. Union the schema
+  // axes with every axis OBSERVED on the loaded rows (aspect_* keys, already
+  // client-side via ghostAspectSig), synonym-deduped. enumMode stays 'open'
+  // below so free text is always still allowed.
+  const variationThemeOptions = useMemo(() => {
+    let observed: string[] = []
+    try { observed = JSON.parse(ghostAspectSig) as string[] } catch { observed = [] }
+    return unionThemeOptions(variantAxisNames, observed)
+  }, [variantAxisNames, ghostAspectSig])
+
   // Inject policy IDs as enum options into the Policies column group,
   // and (FF-EN.2) narrow the Condition column to the category's allowed set.
   const columnGroups = useMemo(() => {
@@ -906,7 +920,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     //  - Variation Theme → a multi-pick of variant-eligible axis names (open).
     // With nothing loaded the static columns (open) are kept.
     const patchListing = (groups: EbayColumnGroup[]): EbayColumnGroup[] =>
-      (conditionOptions.length === 0 && variantAxisNames.length === 0) ? groups : groups.map((g) => {
+      (conditionOptions.length === 0 && variationThemeOptions.length === 0) ? groups : groups.map((g) => {
         if (g.id !== 'listing') return g
         return {
           ...g,
@@ -923,11 +937,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                 enumMode: 'strict' as const,
               }
             }
-            if (col.id === 'variation_theme' && variantAxisNames.length) {
+            if (col.id === 'variation_theme' && variationThemeOptions.length) {
               return {
                 ...col,
                 kind: 'enum' as const,
-                options: variantAxisNames,
+                // EAC — widest discoverable axis set (schema ∪ observed),
+                // enumMode:'open' so custom/free-text axes still work.
+                options: variationThemeOptions,
                 enumMode: 'open' as const,
                 multiValue: true,
               }
@@ -951,7 +967,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       itemSpecificsGroup,
       ...patch(marketGroups),
     ]
-  }, [itemSpecificsGroup, policyOptions, conditionOptions, variantAxisNames, marketplace])
+  }, [itemSpecificsGroup, policyOptions, conditionOptions, variationThemeOptions, marketplace])
 
   // ── Shared flat-file core (columns modal state, filter state) ─────────
   // initialGroups: the static base groups without category columns or policy
