@@ -188,6 +188,22 @@ export interface FlatFileGridProps {
    */
   getCellGuidance?: (col: FlatFileColumn, row: BaseRow) => 'not-applicable' | 'optional' | null
 
+  /**
+   * UFX P2b — per-CELL read-only predicate (e.g. Amazon's FBA-managed quantity:
+   * the column is editable for FBM rows but locked for FBA rows). When it
+   * returns true for a cell:
+   * - every edit entry path is blocked (double-click, typing, F2, Alt+Down)
+   * - every bulk write path skips it (Delete/Backspace clear, paste, fill-down,
+   *   fill-right, drag-fill, fill-to-bottom, Find&Replace, AI apply) — enforced
+   *   centrally in the grid's single write path (commitCells)
+   * - it renders with read-only styling (cursor-not-allowed, select-none) and
+   *   an em-dash '—' when empty
+   * Selection and copy still work. Unlike getCellGuidance (which shades but
+   * stays editable), this HARD-blocks writes. Column-level `readOnly` /
+   * kind:'readonly' behavior is unchanged.
+   */
+  getCellReadOnly?: (col: FlatFileColumn, row: BaseRow) => boolean
+
   // Extra content rendered below row # in the row header cell
   renderRowMeta?: (row: BaseRow, rowIdx: number) => React.ReactNode
 

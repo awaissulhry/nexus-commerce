@@ -29,6 +29,7 @@ import type {
   ValidationIssue, RenderCellContent, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, ReplicateCtx,
 } from './FlatFileGrid.types'
 import { normalizeCellValue } from './normalizeCellValue'
+import { dropReadOnlyCellChanges } from './cellFlags'
 import { SortPanel, applySortLevels, type SortLevel, type SortGroup } from './SortPanel'
 import {
   loadGroups, saveGroups, loadGroupMode, saveGroupMode, loadCollapsedGroups, saveCollapsedGroups,
@@ -351,6 +352,8 @@ interface CellInternalProps {
   validIssue?: ValidationIssue; stickyLeft?: number
   isMatch?: boolean; toneCls?: string
   guidanceLevel?: 'not-applicable' | 'optional' | null
+  /** UFX P2b — per-cell lock from getCellReadOnly (e.g. FBA-managed quantity). */
+  cellReadOnly: boolean
   renderCellContent?: RenderCellContent
   onCellPointerDown: (shiftKey: boolean) => void
   onCellDoubleClick: () => void
@@ -368,7 +371,7 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
   isSelected, selEdges, isCorner, isFillTarget, fillTargetEdges,
   isEditing, editInitialChar, isClipboard, clipboardEdges,
   validIssue, stickyLeft, isMatch, toneCls,
-  guidanceLevel,
+  guidanceLevel, cellReadOnly,
   renderCellContent,
   onCellPointerDown, onCellDoubleClick, onFillHandlePointerDown, onFillToBottom, onFillDrop,
   onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate,
@@ -382,7 +385,11 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
   const originalValueRef = useRef('')
   const snapshotPushedRef = useRef(false)
 
-  const isReadOnly = col.readOnly || col.kind === 'readonly'
+  const isReadOnly = col.readOnly || col.kind === 'readonly' || cellReadOnly
+
+  // UFX P2b — safety net (mirrors the Amazon FBA cell): if the grid somehow
+  // starts editing a per-cell-locked cell, deactivate immediately.
+  useEffect(() => { if (isEditing && cellReadOnly) onDeactivate() }, [isEditing, cellReadOnly, onDeactivate])
 
   useEffect(() => {
     if (!isEditing || col.kind === 'enum' || col.kind === 'boolean' || !inputRef.current) return
@@ -526,14 +533,17 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
     },
   }
 
-  // Readonly cell
+  // Readonly cell — column-level (readOnly / kind:'readonly') renders exactly as
+  // before; a per-CELL lock (cellReadOnly) additionally gets cursor-not-allowed +
+  // select-none and shows an em-dash when empty (Amazon FBA-cell parity).
   if (isReadOnly) {
     const custom = renderCellContent?.(col, row, value, displayValue)
     return (
-      <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}>
+      <td {...tdShared} className={cn(baseCls, cellReadOnly && 'cursor-not-allowed')} style={{ ...cellStyle, ...selStyle }}
+        title={cellReadOnly ? (col.description ?? 'Read-only for this row') : undefined}>
         {fillHandle}
-        <div className="px-1.5 flex items-center text-xs truncate text-slate-500 dark:text-slate-400" style={hStyle}>
-          {custom ?? displayValue}
+        <div className={cn('px-1.5 flex items-center text-xs truncate text-slate-500 dark:text-slate-400', cellReadOnly && 'select-none')} style={hStyle}>
+          {custom ?? (cellReadOnly && isEmpty ? '—' : displayValue)}
         </div>
       </td>
     )
@@ -716,6 +726,7 @@ function areCellPropsEqual(a: CellInternalProps, b: CellInternalProps): boolean 
     a.isMatch === b.isMatch &&
     a.toneCls === b.toneCls &&
     a.guidanceLevel === b.guidanceLevel &&
+    a.cellReadOnly === b.cellReadOnly &&
     a.stickyLeft === b.stickyLeft &&
     a.renderCellContent === b.renderCellContent &&
     edgesEqual(a.selEdges, b.selEdges) &&
@@ -769,7 +780,7 @@ export default function FlatFileGrid({
   columnGroups, initialRows, makeBlankRow, minRows = 15,
   getGroupKey, validate,
   onSave, onReload, onCellChange,
-  renderCellContent, renderRowMeta, onBeforeEditCell, getCellGuidance,
+  renderCellContent, renderRowMeta, onBeforeEditCell, getCellGuidance, getCellReadOnly,
   onReplicate,
   renderChannelStrip, renderPushExtras, renderFeedBanner, renderModals,
   renderToolbarFetch, renderToolbarImport, renderBar3Left,
@@ -999,12 +1010,14 @@ export default function FlatFileGrid({
   const isFillDraggingRef    = useRef(false)
   const onBeforeEditCellRef  = useRef(onBeforeEditCell)
   const getCellGuidanceRef   = useRef(getCellGuidance)
+  const getCellReadOnlyRef   = useRef(getCellReadOnly)
 
   useEffect(() => { selAnchorRef.current = selAnchor }, [selAnchor])
   useEffect(() => { selEndRef.current    = selEnd }, [selEnd])
   useEffect(() => { isEditingRef.current = isEditing }, [isEditing])
   useEffect(() => { onBeforeEditCellRef.current = onBeforeEditCell }, [onBeforeEditCell])
   useEffect(() => { getCellGuidanceRef.current  = getCellGuidance },  [getCellGuidance])
+  useEffect(() => { getCellReadOnlyRef.current  = getCellReadOnly },  [getCellReadOnly])
 
   // ── Derived state ──────────────────────────────────────────────────────
 
@@ -1331,7 +1344,11 @@ export default function FlatFileGrid({
     // #30 — drop no-op changes (delete-empty, fill-same, re-pick same enum) so
     // rows aren't falsely marked dirty and undo isn't polluted with dead steps.
     const rowById = new Map(rowsRef.current.map((r) => [r._rowId, r]))
-    const real = normalized.filter((ch) => {
+    // UFX P2b — central per-CELL read-only guard: since commitCells is the single
+    // write path for paste/fill/delete/replace/AI, filtering here means no bulk
+    // path can write a cell the getCellReadOnly predicate locks.
+    const writable = dropReadOnlyCellChanges(normalized, colById, rowById, getCellReadOnlyRef.current)
+    const real = writable.filter((ch) => {
       const r = rowById.get(ch.rowId)
       return !!r && (r[ch.colId] ?? '') !== (ch.value ?? '')
     })
@@ -1607,6 +1624,7 @@ export default function FlatFileGrid({
 
   const handleCellDoubleClick = useCallback((ri: number, ci: number) => {
     const row = displayRowsRef.current[ri]; const col = allColumnsRef.current[ci]
+    if (row && col && getCellReadOnlyRef.current?.(col, row)) return  // UFX P2b — locked cell: no edit entry
     if (row && col && onBeforeEditCellRef.current?.(col, row)) return
     setSelAnchor({ ri, ci }); setSelEnd({ ri, ci }); setIsEditing(true); setEditInitialChar(null)
     if (row && col) setActiveCell({ rowId: row._rowId, colId: col.id })
@@ -1739,6 +1757,8 @@ export default function FlatFileGrid({
       if (e.altKey && e.key === 'ArrowDown') {
         const a = selAnchorRef.current
         const col = a ? allColumnsRef.current[a.ci] : null
+        const row = a ? displayRowsRef.current[a.ri] : null
+        if (col && row && getCellReadOnlyRef.current?.(col, row)) return  // UFX P2b
         if (col && (col.kind === 'enum' || col.kind === 'boolean')) { e.preventDefault(); setIsEditing(true); setEditInitialChar(null) }
         return
       }
@@ -1795,6 +1815,7 @@ export default function FlatFileGrid({
         const anchor = selAnchorRef.current
         if (anchor) {
           const row = displayRowsRef.current[anchor.ri]; const col = allColumnsRef.current[anchor.ci]
+          if (row && col && getCellReadOnlyRef.current?.(col, row)) return  // UFX P2b
           if (row && col && onBeforeEditCellRef.current?.(col, row)) return
         }
         setIsEditing(true); setEditInitialChar(null); return
@@ -1816,6 +1837,7 @@ export default function FlatFileGrid({
         const anchor = selAnchorRef.current
         if (anchor) {
           const row = displayRowsRef.current[anchor.ri]; const col = allColumnsRef.current[anchor.ci]
+          if (row && col && getCellReadOnlyRef.current?.(col, row)) return  // UFX P2b
           if (row && col && onBeforeEditCellRef.current?.(col, row)) return
         }
         // preventDefault so the browser doesn't ALSO type the char into the freshly-
@@ -2567,6 +2589,7 @@ export default function FlatFileGrid({
                           const toneCls     = toneMap.get(`${ri}:${col.id}`) ? TONE_CLASSES[toneMap.get(`${ri}:${col.id}`)! as keyof typeof TONE_CLASSES] : undefined
                           const cellBg      = stickyLeft !== undefined ? gColor(groupColor).band : gColor(groupColor).cell
                           const guidanceLevel = getCellGuidanceRef.current?.(col, row) ?? null
+                          const cellReadOnly  = getCellReadOnlyRef.current?.(col, row) ?? false
 
                           return (
                             <SpreadsheetCell key={`${row._rowId}-${col.id}`}
@@ -2581,6 +2604,7 @@ export default function FlatFileGrid({
                               isMatch={isMatch} toneCls={toneCls}
                               stickyLeft={stickyLeft}
                               guidanceLevel={guidanceLevel}
+                              cellReadOnly={cellReadOnly}
                               renderCellContent={renderCellContent}
                               onCellPointerDown={(shiftKey) => handleCellPointerDown(ri, ci, shiftKey)}
                               onCellDoubleClick={() => handleCellDoubleClick(ri, ci)}
