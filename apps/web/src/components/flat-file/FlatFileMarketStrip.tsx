@@ -12,6 +12,7 @@
 import { useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { matchMarketShortcut } from './market-strip-shortcut'
 
 interface Props {
   markets: string[]
@@ -42,13 +43,15 @@ export function FlatFileMarketStrip({
   useEffect(() => {
     if (!enableShortcuts) return
     function onKey(e: KeyboardEvent) {
-      if (!e.altKey || e.metaKey || e.ctrlKey) return
-      // Don't hijack Alt+digit while the operator is typing in a field.
+      // Don't hijack Alt+digit while the operator is typing in a field —
+      // covers the grid's inline cell editor too (it renders INPUT/TEXTAREA).
       const t = e.target as HTMLElement | null
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
-      const n = parseInt(e.key, 10)
-      if (Number.isNaN(n) || n < 1 || n > Math.min(markets.length, 9)) return
-      const m = markets[n - 1]
+      const tag = t?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (t?.isContentEditable) return
+      const idx = matchMarketShortcut(e, markets.length)
+      if (idx === null) return
+      const m = markets[idx]
       if (m && m !== active) { e.preventDefault(); onSelect(m) }
     }
     window.addEventListener('keydown', onKey)
