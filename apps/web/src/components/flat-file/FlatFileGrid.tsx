@@ -460,7 +460,7 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
 
   const guidanceTitle = guidanceLevel === 'not-applicable'
     ? typeApplicabilityGuidance(col, row) === 'not-applicable'
-      ? `Not applicable to ${String(row.product_type)} — this category doesn't use this field (still editable)`
+      ? `Not applicable to ${String(row.product_type)} — this category doesn't use this field, so a value here is NOT submitted for this row (still editable)`
       : col.applicableParentage?.length
         ? `Not needed for this row type — typically set on ${col.applicableParentage.map((p) => p.replace('VARIATION_', '').toLowerCase()).join(' or ')} rows only`
         : 'Not applicable for this row / product configuration'
@@ -2538,6 +2538,7 @@ export default function FlatFileGrid({
           copy: () => { handleCopy(); setClipboardRange(normSel) },
           paste: () => { void handlePaste(); setClipboardRange(null) },
           clearCells: handleDeleteCells,
+          groupFromSelection,
         },
       })}
 

@@ -195,6 +195,8 @@ export interface GridContextMenuCtx {
     copy: () => void
     paste: () => void
     clearCells: () => void
+    /** Opens the grid's Create-group popover for the current selection. */
+    groupFromSelection: () => void
   }
 }
 
