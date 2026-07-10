@@ -1324,7 +1324,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         // clear per-SKU reason and skip this row. NOT applied to the deactivate/offer
         // path, which legitimately sets availableQuantity 0 to keep the ItemID.
         const buffer = row._productId ? (bufferByListing.get(`${row._productId}::${mp.toUpperCase()}`) ?? 0) : 0;
-        if (Number(qty) <= 0) {
+        // !(> 0), not `<= 0`, so a non-finite quantity (NaN/null) is also caught.
+        if (!(Number(qty) > 0)) {
           perRowResults.push({ sku, market: mp, status: 'ERROR', message: `Out of stock — the shared pool has 0 available for this variant${buffer > 0 ? ` (buffer ${buffer})` : ''}. eBay can't list a 0-quantity variant (error 25004); restock or lower the buffer, then re-push.` });
           continue;
         }
@@ -1466,7 +1467,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               sku,
               market: mp,
               status: 'ERROR',
-              message: `Inventory API error ${invRes.status}: ${errBody.slice(0, 200)}`,
+              message: `Inventory API error ${invRes.status} (we sent quantity=${Number(qty)}): ${errBody.slice(0, 200)}`,
             });
             continue;
           }

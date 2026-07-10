@@ -1077,8 +1077,11 @@ export async function pushVariationGroup(
     // per-SKU reason — mirrors the no-images guard below. The blanket integrity
     // guard after the loop (results.filter status ERROR → abort) then keeps this
     // SKU out of the group PUT, so no 25701 can follow.
+    // Use !(> 0) — NOT `<= 0` — so a non-finite quantity (NaN/null from an
+    // upstream compute) is ALSO caught here instead of serializing to `null`
+    // and drawing eBay's 25004 ("quantità non valida").
     const buffer = Number(row[`${mp.toLowerCase()}_buffer`] ?? 0) || 0
-    if (Number(qty) <= 0) {
+    if (!(Number(qty) > 0)) {
       results.push({ sku, market: mp, status: 'ERROR', message: `Out of stock — the shared pool has 0 available for this variant${buffer > 0 ? ` (buffer ${buffer})` : ''}. eBay can't list a 0-quantity variant (error 25004); restock or lower the buffer, then re-push.` })
       continue
     }
@@ -1165,7 +1168,7 @@ export async function pushVariationGroup(
       if (isTransientItemErr) transientItemFailures.push({ sku, url: itemUrl, body: itemBodyJson })
       results.push({
         sku, market: mp, status: 'ERROR',
-        message: `inventory_item PUT ${itemRes.status}: ${err.slice(0, 300)}${isTransientItemErr ? ' — eBay inventory-service hiccup (their own message says retry); auto-retries ran, press Publish again in ~30s if this variant is still listed as blocked.' : ''}`,
+        message: `inventory_item PUT ${itemRes.status} (we sent quantity=${Number(qty)}): ${err.slice(0, 300)}${isTransientItemErr ? ' — eBay inventory-service hiccup (their own message says retry); auto-retries ran, press Publish again in ~30s if this variant is still listed as blocked.' : ''}`,
       })
       continue
     }
